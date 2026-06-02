@@ -3,20 +3,20 @@ export default function Home() {
     <div
       style={{
         minHeight: "100vh",
-        background: "#f3f4f6",
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        fontFamily: "Arial",
+        background: "#f5f7fb",
+        fontFamily: "Arial, sans-serif",
       }}
     >
       <div
         style={{
-          width: "500px",
-          background: "#fff",
+          width: "420px",
+          background: "#ffffff",
           padding: "40px",
           borderRadius: "12px",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+          boxShadow: "0 4px 15px rgba(0,0,0,0.08)",
         }}
       >
         <h1
@@ -35,37 +35,11 @@ export default function Home() {
             marginBottom: "30px",
           }}
         >
-          Registro de Empresa
+          Crear cuenta
         </p>
 
         <div style={{ marginBottom: "15px" }}>
-          <label>Nombre de la Empresa</label>
-          <input
-            type="text"
-            placeholder="Ej. Financiera López"
-            style={{
-              width: "100%",
-              padding: "12px",
-              marginTop: "5px",
-            }}
-          />
-        </div>
-
-        <div style={{ marginBottom: "15px" }}>
-          <label>Nombre del Administrador</label>
-          <input
-            type="text"
-            placeholder="Ej. Juan Pérez"
-            style={{
-              width: "100%",
-              padding: "12px",
-              marginTop: "5px",
-            }}
-          />
-        </div>
-
-        <div style={{ marginBottom: "15px" }}>
-          <label>Correo Electrónico</label>
+          <label>Correo electrónico</label>
           <input
             type="email"
             placeholder="correo@empresa.com"
@@ -73,6 +47,8 @@ export default function Home() {
               width: "100%",
               padding: "12px",
               marginTop: "5px",
+              borderRadius: "8px",
+              border: "1px solid #ccc",
             }}
           />
         </div>
@@ -86,12 +62,14 @@ export default function Home() {
               width: "100%",
               padding: "12px",
               marginTop: "5px",
+              borderRadius: "8px",
+              border: "1px solid #ccc",
             }}
           />
         </div>
 
         <div style={{ marginBottom: "25px" }}>
-          <label>Confirmar Contraseña</label>
+          <label>Confirmar contraseña</label>
           <input
             type="password"
             placeholder="********"
@@ -99,6 +77,8 @@ export default function Home() {
               width: "100%",
               padding: "12px",
               marginTop: "5px",
+              borderRadius: "8px",
+              border: "1px solid #ccc",
             }}
           />
         </div>
@@ -111,17 +91,18 @@ export default function Home() {
             color: "white",
             border: "none",
             borderRadius: "8px",
-            cursor: "pointer",
             fontSize: "16px",
+            cursor: "pointer",
           }}
         >
-          Crear Cuenta
+          Crear cuenta
         </button>
 
         <p
           style={{
             textAlign: "center",
             marginTop: "20px",
+            color: "#666",
           }}
         >
           ¿Ya tienes cuenta? Iniciar sesión
