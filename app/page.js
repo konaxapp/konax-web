@@ -37,8 +37,71 @@ export default function Home() {
 
         {/* Contenido */}
         <div style={{ padding: "20px" }}>
+
+          {/* Tarjetas */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(4, 1fr)",
+              gap: "20px",
+              marginBottom: "30px",
+            }}
+          >
+
+            <div
+              style={{
+                background: "white",
+                padding: "20px",
+                borderRadius: "12px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+              }}
+            >
+              <h3>Cartera total</h3>
+              <h2>$18,420</h2>
+            </div>
+
+            <div
+              style={{
+                background: "white",
+                padding: "20px",
+                borderRadius: "12px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+              }}
+            >
+              <h3>Clientes en mora</h3>
+              <h2>24</h2>
+            </div>
+
+            <div
+              style={{
+                background: "white",
+                padding: "20px",
+                borderRadius: "12px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+              }}
+            >
+              <h3>Promesas hoy</h3>
+              <h2>6</h2>
+            </div>
+
+            <div
+              style={{
+                background: "white",
+                padding: "20px",
+                borderRadius: "12px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+              }}
+            >
+              <h3>Pagos del día</h3>
+              <h2>$1,250</h2>
+            </div>
+
+          </div>
+
+          {/* Bienvenida */}
           <h2>Bienvenido a KONAX</h2>
           <p>Sistema de gestión comercial, crédito y cobranza.</p>
+
         </div>
       </main>
     </div>
