@@ -1,6 +1,8 @@
+"use client";
+
 export default function Empresas() {
   const irAPlanes = () => {
-    windows.location.href = "/planes"
+    window.location.href = "/planes";
   };
 
   return (
