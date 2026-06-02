@@ -1,4 +1,10 @@
+"use client";
+
+import { useState } from "react";
+
 export default function Planes() {
+  const [tipoPlan, setTipoPlan] = useState("mensual");
+
   return (
     <div
       style={{
@@ -37,35 +43,52 @@ export default function Planes() {
           Elige el plan que mejor se adapte a tu negocio
         </p>
 
-        {/* Tipo de facturación */}
-
+        {/* Selector */}
         <div
           style={{
             display: "flex",
             justifyContent: "center",
-            gap: "15px",
+            gap: "10px",
             marginBottom: "40px",
           }}
         >
           <button
+            onClick={() => setTipoPlan("mensual")}
             style={{
-              padding: "10px 20px",
-              borderRadius: "8px",
-              border: "none",
-              background: "#2563eb",
-              color: "white",
+              padding: "12px 25px",
+              borderRadius: "10px",
+              border: "1px solid #2563eb",
+              background:
+                tipoPlan === "mensual"
+                  ? "#2563eb"
+                  : "white",
+              color:
+                tipoPlan === "mensual"
+                  ? "white"
+                  : "#2563eb",
               fontWeight: "bold",
+              cursor: "pointer",
             }}
           >
             Mensual
           </button>
 
           <button
+            onClick={() => setTipoPlan("anual")}
             style={{
-              padding: "10px 20px",
-              borderRadius: "8px",
-              border: "1px solid #d1d5db",
-              background: "white",
+              padding: "12px 25px",
+              borderRadius: "10px",
+              border: "1px solid #2563eb",
+              background:
+                tipoPlan === "anual"
+                  ? "#2563eb"
+                  : "white",
+              color:
+                tipoPlan === "anual"
+                  ? "white"
+                  : "#2563eb",
+              fontWeight: "bold",
+              cursor: "pointer",
             }}
           >
             Anual
@@ -76,13 +99,14 @@ export default function Planes() {
           style={{
             display: "flex",
             gap: "20px",
+            flexWrap: "wrap",
           }}
         >
-          {/* KONAX COBROS */}
-
+          {/* COBROS */}
           <div
             style={{
               flex: 1,
+              minWidth: "300px",
               border: "2px solid #2563eb",
               borderRadius: "12px",
               padding: "25px",
@@ -90,11 +114,16 @@ export default function Planes() {
           >
             <h2>KONAX Cobros</h2>
 
-            <h1>$29</h1>
+            <h1>
+              $
+              {tipoPlan === "mensual"
+                ? "29"
+                : "299"}
+            </h1>
 
             <p style={{ color: "#666" }}>
-              Control de clientes, créditos,
-              pagos, gestores y promesas de pago.
+              Clientes, créditos, pagos,
+              gestores y promesas de pago.
             </p>
 
             <button
@@ -113,40 +142,28 @@ export default function Planes() {
             </button>
           </div>
 
-          {/* KONAX GESTIÓN */}
-
+          {/* GESTIÓN */}
           <div
             style={{
               flex: 1,
+              minWidth: "300px",
               border: "2px solid #10b981",
               borderRadius: "12px",
               padding: "25px",
-              position: "relative",
             }}
           >
-            <div
-              style={{
-                position: "absolute",
-                top: "-12px",
-                right: "15px",
-                background: "#10b981",
-                color: "white",
-                padding: "4px 10px",
-                borderRadius: "20px",
-                fontSize: "12px",
-                fontWeight: "bold",
-              }}
-            >
-              MÁS POPULAR
-            </div>
-
             <h2>KONAX Gestión</h2>
 
-            <h1>$59</h1>
+            <h1>
+              $
+              {tipoPlan === "mensual"
+                ? "59"
+                : "595"}
+            </h1>
 
             <p style={{ color: "#666" }}>
-              Todo lo de Cobros más ventas,
-              caja, usuarios y administración.
+              Cobros + ventas + caja +
+              administración.
             </p>
 
             <button
@@ -165,11 +182,11 @@ export default function Planes() {
             </button>
           </div>
 
-          {/* KONAX EMPRESARIAL */}
-
+          {/* EMPRESARIAL */}
           <div
             style={{
               flex: 1,
+              minWidth: "300px",
               border: "2px solid #111827",
               borderRadius: "12px",
               padding: "25px",
@@ -177,12 +194,16 @@ export default function Planes() {
           >
             <h2>KONAX Empresarial</h2>
 
-            <h1>$99</h1>
+            <h1>
+              $
+              {tipoPlan === "mensual"
+                ? "99"
+                : "990"}
+            </h1>
 
             <p style={{ color: "#666" }}>
-              Gestión avanzada con indicadores,
-              reportes ejecutivos, multiempresa
-              e integraciones.
+              Indicadores, reportes,
+              multiempresa e integraciones.
             </p>
 
             <button
@@ -200,18 +221,6 @@ export default function Planes() {
               Seleccionar
             </button>
           </div>
-        </div>
-
-        <div
-          style={{
-            textAlign: "center",
-            marginTop: "30px",
-            color: "#666",
-            fontSize: "14px",
-          }}
-        >
-          Precios mensuales mostrados. Planes anuales:
-          Cobros $299 · Gestión $595 · Empresarial $990
         </div>
       </div>
     </div>
