@@ -1,6 +1,6 @@
 export default function Empresas() {
   const irAPlanes = () => {
-    location.assign("/planes");
+    windows.location.href = "/planes"
   };
 
   return (
