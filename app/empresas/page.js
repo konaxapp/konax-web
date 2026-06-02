@@ -1,4 +1,8 @@
 export default function Empresas() {
+  const irAPlanes = () => {
+    location.assign("/planes");
+  };
+
   return (
     <div
       style={{
@@ -100,9 +104,7 @@ export default function Empresas() {
         </div>
 
         <button
-          onClick={() => {
-            window.location.href = "/planes";
-          }}
+          onClick={irAPlanes}
           style={{
             width: "100%",
             background: "#2563eb",
