@@ -1,203 +1,133 @@
-export default function Home() {
+export default function Empresas() {
   return (
     <div
       style={{
-        display: "flex",
         minHeight: "100vh",
-        fontFamily: "Arial",
+        background: "#f5f7fb",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        fontFamily: "Arial, sans-serif",
       }}
     >
-      {/* Menú lateral */}
-      <aside
+      <div
         style={{
-          width: "240px",
-          background: "#111827",
-          color: "white",
-          padding: "20px",
+          width: "700px",
+          background: "#fff",
+          padding: "40px",
+          borderRadius: "12px",
+          boxShadow: "0 4px 15px rgba(0,0,0,0.08)",
         }}
       >
-        <h2 style={{ marginBottom: "30px" }}>
+        <h1 style={{ textAlign: "center" }}>
           KONAX
-        </h2>
+        </h1>
 
         <p
           style={{
-            fontSize: "18px",
-            fontWeight: "bold",
-            background: "#1f2937",
-            padding: "12px",
-            borderRadius: "8px",
+            textAlign: "center",
+            color: "#666",
+            marginBottom: "30px",
           }}
         >
-          🏢 Empresas
+          Configuración Inicial de Empresa
         </p>
-      </aside>
 
-      {/* Área principal */}
-      <main
-        style={{
-          flex: 1,
-          background: "#f5f5f5",
-          padding: "30px",
-        }}
-      >
-        {/* Encabezado */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "25px",
-          }}
-        >
-          <div>
-            <h1
-              style={{
-                margin: 0,
-              }}
-            >
-              Empresas
-            </h1>
-
-            <p
-              style={{
-                color: "#666",
-                marginTop: "8px",
-              }}
-            >
-              Administración multiempresa de KONAX
-            </p>
-          </div>
-
-          <button
-            style={{
-              background: "#2563eb",
-              color: "white",
-              border: "none",
-              padding: "12px 18px",
-              borderRadius: "10px",
-              fontWeight: "bold",
-              cursor: "pointer",
-            }}
-          >
-            + Nueva empresa
-          </button>
+        <div style={{ marginBottom: "15px" }}>
+          <label>Nombre de la empresa</label>
+          <input
+            type="text"
+            placeholder="Ej. Mueblería Central"
+            style={inputStyle}
+          />
         </div>
 
-        {/* Tabla */}
-        <div
+        <div style={{ marginBottom: "15px" }}>
+          <label>Teléfono</label>
+          <input
+            type="text"
+            placeholder="6000-0000"
+            style={inputStyle}
+          />
+        </div>
+
+        <div style={{ marginBottom: "15px" }}>
+          <label>Correo</label>
+          <input
+            type="email"
+            placeholder="info@empresa.com"
+            style={inputStyle}
+          />
+        </div>
+
+        <div style={{ marginBottom: "15px" }}>
+          <label>Dirección</label>
+          <input
+            type="text"
+            placeholder="Dirección del negocio"
+            style={inputStyle}
+          />
+        </div>
+
+        <div style={{ marginBottom: "15px" }}>
+          <label>Tipo de negocio</label>
+          <select style={inputStyle}>
+            <option>Mueblería</option>
+            <option>Financiera</option>
+            <option>Ferretería</option>
+            <option>Electrónica</option>
+            <option>Supermercado</option>
+            <option>Otro</option>
+          </select>
+        </div>
+
+        <div style={{ marginBottom: "15px" }}>
+          <label>Plan contratado</label>
+          <select style={inputStyle}>
+            <option>Cobros</option>
+          </select>
+        </div>
+
+        <div style={{ marginBottom: "15px" }}>
+          <label>Tipo de recargo</label>
+          <select style={inputStyle}>
+            <option>Mensual</option>
+            <option>Por vencimiento</option>
+          </select>
+        </div>
+
+        <div style={{ marginBottom: "25px" }}>
+          <label>Porcentaje de recargo</label>
+          <input
+            type="number"
+            placeholder="5"
+            style={inputStyle}
+          />
+        </div>
+
+        <button
           style={{
-            background: "white",
-            borderRadius: "12px",
-            overflow: "hidden",
-            boxShadow:
-              "0 2px 8px rgba(0,0,0,0.08)",
+            width: "100%",
+            padding: "14px",
+            background: "#111827",
+            color: "white",
+            border: "none",
+            borderRadius: "8px",
+            fontSize: "16px",
+            cursor: "pointer",
           }}
         >
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-            }}
-          >
-            <thead
-              style={{
-                background: "#f9fafb",
-              }}
-            >
-              <tr>
-                <th
-                  style={{
-                    textAlign: "left",
-                    padding: "16px",
-                  }}
-                >
-                  Empresa
-                </th>
-
-                <th
-                  style={{
-                    textAlign: "left",
-                    padding: "16px",
-                  }}
-                >
-                  Teléfono
-                </th>
-
-                <th
-                  style={{
-                    textAlign: "left",
-                    padding: "16px",
-                  }}
-                >
-                  Correo
-                </th>
-
-                <th
-                  style={{
-                    textAlign: "left",
-                    padding: "16px",
-                  }}
-                >
-                  Plan
-                </th>
-
-                <th
-                  style={{
-                    textAlign: "left",
-                    padding: "16px",
-                  }}
-                >
-                  Tipo recargo
-                </th>
-
-                <th
-                  style={{
-                    textAlign: "left",
-                    padding: "16px",
-                  }}
-                >
-                  Estado
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              <tr>
-                <td style={{ padding: "16px" }}>
-                  Mueblería Central
-                </td>
-
-                <td style={{ padding: "16px" }}>
-                  6000-0000
-                </td>
-
-                <td style={{ padding: "16px" }}>
-                  ventas@muebleria.com
-                </td>
-
-                <td style={{ padding: "16px" }}>
-                  Premium
-                </td>
-
-                <td style={{ padding: "16px" }}>
-                  Vencimiento mensual
-                </td>
-
-                <td
-                  style={{
-                    padding: "16px",
-                    color: "green",
-                    fontWeight: "bold",
-                  }}
-                >
-                  Activa
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </main>
+          Guardar Empresa
+        </button>
+      </div>
     </div>
   );
 }
+
+const inputStyle = {
+  width: "100%",
+  padding: "12px",
+  marginTop: "5px",
+  borderRadius: "8px",
+  border: "1px solid #ccc",
+};
