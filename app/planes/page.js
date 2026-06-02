@@ -37,7 +37,8 @@ export default function Planes() {
           Elige el plan que mejor se adapte a tu negocio
         </p>
 
-        {/* Opciones de facturación */}
+        {/* Tipo de facturación */}
+
         <div
           style={{
             display: "flex",
@@ -67,18 +68,7 @@ export default function Planes() {
               background: "white",
             }}
           >
-            Trimestral (-10%)
-          </button>
-
-          <button
-            style={{
-              padding: "10px 20px",
-              borderRadius: "8px",
-              border: "1px solid #d1d5db",
-              background: "white",
-            }}
-          >
-            Anual (-20%)
+            Anual
           </button>
         </div>
 
@@ -89,6 +79,7 @@ export default function Planes() {
           }}
         >
           {/* KONAX COBROS */}
+
           <div
             style={{
               flex: 1,
@@ -99,20 +90,12 @@ export default function Planes() {
           >
             <h2>KONAX Cobros</h2>
 
-            <h1>$0</h1>
+            <h1>$29</h1>
 
             <p style={{ color: "#666" }}>
-              Especializado en cartera y cobranza.
+              Control de clientes, créditos,
+              pagos, gestores y promesas de pago.
             </p>
-
-            <ul>
-              <li>Clientes</li>
-              <li>Créditos</li>
-              <li>Pagos</li>
-              <li>Gestores</li>
-              <li>Promesas de pago</li>
-              <li>Dashboard de cobranza</li>
-            </ul>
 
             <button
               style={{
@@ -131,30 +114,40 @@ export default function Planes() {
           </div>
 
           {/* KONAX GESTIÓN */}
+
           <div
             style={{
               flex: 1,
               border: "2px solid #10b981",
               borderRadius: "12px",
               padding: "25px",
+              position: "relative",
             }}
           >
+            <div
+              style={{
+                position: "absolute",
+                top: "-12px",
+                right: "15px",
+                background: "#10b981",
+                color: "white",
+                padding: "4px 10px",
+                borderRadius: "20px",
+                fontSize: "12px",
+                fontWeight: "bold",
+              }}
+            >
+              MÁS POPULAR
+            </div>
+
             <h2>KONAX Gestión</h2>
 
-            <h1>$0</h1>
+            <h1>$59</h1>
 
             <p style={{ color: "#666" }}>
-              Ventas + Cobranza + Administración.
+              Todo lo de Cobros más ventas,
+              caja, usuarios y administración.
             </p>
-
-            <ul>
-              <li>Todo lo de KONAX Cobros</li>
-              <li>Ventas</li>
-              <li>Caja</li>
-              <li>Usuarios y Roles</li>
-              <li>Reportes operativos</li>
-              <li>Administración del negocio</li>
-            </ul>
 
             <button
               style={{
@@ -172,7 +165,8 @@ export default function Planes() {
             </button>
           </div>
 
-          {/* KONAX PRO */}
+          {/* KONAX EMPRESARIAL */}
+
           <div
             style={{
               flex: 1,
@@ -181,23 +175,15 @@ export default function Planes() {
               padding: "25px",
             }}
           >
-            <h2>KONAX Pro</h2>
+            <h2>KONAX Empresarial</h2>
 
-            <h1>$0</h1>
+            <h1>$99</h1>
 
             <p style={{ color: "#666" }}>
-              Solución empresarial avanzada.
+              Gestión avanzada con indicadores,
+              reportes ejecutivos, multiempresa
+              e integraciones.
             </p>
-
-            <ul>
-              <li>Todo lo de KONAX Gestión</li>
-              <li>Indicadores gerenciales</li>
-              <li>Reportes avanzados</li>
-              <li>Multiempresa</li>
-              <li>Permisos avanzados</li>
-              <li>Integraciones futuras</li>
-              <li>WhatsApp y automatizaciones</li>
-            </ul>
 
             <button
               style={{
@@ -214,6 +200,18 @@ export default function Planes() {
               Seleccionar
             </button>
           </div>
+        </div>
+
+        <div
+          style={{
+            textAlign: "center",
+            marginTop: "30px",
+            color: "#666",
+            fontSize: "14px",
+          }}
+        >
+          Precios mensuales mostrados. Planes anuales:
+          Cobros $299 · Gestión $595 · Empresarial $990
         </div>
       </div>
     </div>
