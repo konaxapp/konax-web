@@ -100,6 +100,9 @@ export default function Empresas() {
         </div>
 
         <button
+          onClick={() => {
+            window.location.href = "/planes";
+          }}
           style={{
             width: "100%",
             background: "#2563eb",
