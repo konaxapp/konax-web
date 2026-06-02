@@ -3,107 +3,129 @@ export default function Home() {
     <div
       style={{
         minHeight: "100vh",
-        background: "#f5f7fb",
+        background: "#f3f4f6",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
         fontFamily: "Arial",
-        padding: "30px",
       }}
     >
-      {/* Encabezado */}
       <div
         style={{
-          background: "white",
-          borderRadius: "14px",
-          padding: "24px",
-          marginBottom: "24px",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
+          width: "500px",
+          background: "#fff",
+          padding: "40px",
+          borderRadius: "12px",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
         }}
       >
-        <h1 style={{ margin: 0 }}>
-          KONAX • Empresas
+        <h1
+          style={{
+            textAlign: "center",
+            marginBottom: "10px",
+          }}
+        >
+          KONAX
         </h1>
 
         <p
           style={{
+            textAlign: "center",
             color: "#666",
-            marginTop: "10px",
+            marginBottom: "30px",
           }}
         >
-          Fase 1 • Gestión Multiempresa
+          Registro de Empresa
         </p>
-      </div>
 
-      {/* Botón */}
-      <div
-        style={{
-          marginBottom: "24px",
-        }}
-      >
+        <div style={{ marginBottom: "15px" }}>
+          <label>Nombre de la Empresa</label>
+          <input
+            type="text"
+            placeholder="Ej. Financiera López"
+            style={{
+              width: "100%",
+              padding: "12px",
+              marginTop: "5px",
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: "15px" }}>
+          <label>Nombre del Administrador</label>
+          <input
+            type="text"
+            placeholder="Ej. Juan Pérez"
+            style={{
+              width: "100%",
+              padding: "12px",
+              marginTop: "5px",
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: "15px" }}>
+          <label>Correo Electrónico</label>
+          <input
+            type="email"
+            placeholder="correo@empresa.com"
+            style={{
+              width: "100%",
+              padding: "12px",
+              marginTop: "5px",
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: "15px" }}>
+          <label>Contraseña</label>
+          <input
+            type="password"
+            placeholder="********"
+            style={{
+              width: "100%",
+              padding: "12px",
+              marginTop: "5px",
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: "25px" }}>
+          <label>Confirmar Contraseña</label>
+          <input
+            type="password"
+            placeholder="********"
+            style={{
+              width: "100%",
+              padding: "12px",
+              marginTop: "5px",
+            }}
+          />
+        </div>
+
         <button
           style={{
-            background: "#0f172a",
+            width: "100%",
+            padding: "14px",
+            background: "#111827",
             color: "white",
             border: "none",
-            borderRadius: "10px",
-            padding: "14px 22px",
-            fontSize: "16px",
+            borderRadius: "8px",
             cursor: "pointer",
+            fontSize: "16px",
           }}
         >
-          + Crear empresa
+          Crear Cuenta
         </button>
-      </div>
 
-      {/* Tabla */}
-      <div
-        style={{
-          background: "white",
-          borderRadius: "14px",
-          padding: "20px",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
-        }}
-      >
-        <table
+        <p
           style={{
-            width: "100%",
-            borderCollapse: "collapse",
+            textAlign: "center",
+            marginTop: "20px",
           }}
         >
-          <thead>
-            <tr
-              style={{
-                textAlign: "left",
-                borderBottom: "1px solid #ddd",
-              }}
-            >
-              <th>Empresa</th>
-              <th>Teléfono</th>
-              <th>Correo</th>
-              <th>Plan</th>
-              <th>Tipo Recargo</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            <tr>
-              <td>Mueblería Central</td>
-              <td>6000-0000</td>
-              <td>info@muebleria.com</td>
-              <td>Premium</td>
-              <td>Mensual</td>
-              <td>Activo</td>
-            </tr>
-
-            <tr>
-              <td>Electro Hogar</td>
-              <td>6123-4567</td>
-              <td>ventas@electro.com</td>
-              <td>Básico</td>
-              <td>Vencimiento</td>
-              <td>Activo</td>
-            </tr>
-          </tbody>
-        </table>
+          ¿Ya tienes cuenta? Iniciar sesión
+        </p>
       </div>
     </div>
   );
