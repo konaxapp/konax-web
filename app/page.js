@@ -1,7 +1,12 @@
 export default function Home() {
   return (
-    <div style={{ display: "flex", minHeight: "100vh", fontFamily: "Arial" }}>
-      
+    <div
+      style={{
+        display: "flex",
+        minHeight: "100vh",
+        fontFamily: "Arial",
+      }}
+    >
       {/* Menú lateral */}
       <aside
         style={{
@@ -11,97 +16,186 @@ export default function Home() {
           padding: "20px",
         }}
       >
-        <h2>KONAX</h2>
+        <h2 style={{ marginBottom: "30px" }}>
+          KONAX
+        </h2>
 
-        <p>📊 Dashboard</p>
-        <p>👥 Clientes</p>
-        <p>💳 Créditos</p>
-        <p>💵 Cobros</p>
-        <p>📄 Reportes</p>
-        <p>⚙️ Configuración</p>
+        <p
+          style={{
+            fontSize: "18px",
+            fontWeight: "bold",
+            background: "#1f2937",
+            padding: "12px",
+            borderRadius: "8px",
+          }}
+        >
+          🏢 Empresas
+        </p>
       </aside>
 
       {/* Área principal */}
-      <main style={{ flex: 1, background: "#f5f5f5" }}>
-        
+      <main
+        style={{
+          flex: 1,
+          background: "#f5f5f5",
+          padding: "30px",
+        }}
+      >
         {/* Encabezado */}
         <div
           style={{
-            background: "white",
-            padding: "20px",
-            borderBottom: "1px solid #ddd",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "25px",
           }}
         >
-          <h1>Panel principal</h1>
-        </div>
-
-        {/* Contenido */}
-        <div style={{ padding: "20px" }}>
-
-          {/* Tarjetas */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gap: "20px",
-              marginBottom: "30px",
-            }}
-          >
-
-            <div
+          <div>
+            <h1
               style={{
-                background: "white",
-                padding: "20px",
-                borderRadius: "12px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                margin: 0,
               }}
             >
-              <h3>Cartera total</h3>
-              <h2>$18,420</h2>
-            </div>
+              Empresas
+            </h1>
 
-            <div
+            <p
               style={{
-                background: "white",
-                padding: "20px",
-                borderRadius: "12px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                color: "#666",
+                marginTop: "8px",
               }}
             >
-              <h3>Clientes en mora</h3>
-              <h2>24</h2>
-            </div>
-
-            <div
-              style={{
-                background: "white",
-                padding: "20px",
-                borderRadius: "12px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-              }}
-            >
-              <h3>Promesas hoy</h3>
-              <h2>6</h2>
-            </div>
-
-            <div
-              style={{
-                background: "white",
-                padding: "20px",
-                borderRadius: "12px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-              }}
-            >
-              <h3>Pagos del día</h3>
-              <h2>$1,250</h2>
-            </div>
-
+              Administración multiempresa de KONAX
+            </p>
           </div>
 
-          {/* Bienvenida */}
-          <h2>Bienvenido a KONAX</h2>
-          <p>Sistema de gestión comercial, crédito y cobranza.</p>
+          <button
+            style={{
+              background: "#2563eb",
+              color: "white",
+              border: "none",
+              padding: "12px 18px",
+              borderRadius: "10px",
+              fontWeight: "bold",
+              cursor: "pointer",
+            }}
+          >
+            + Nueva empresa
+          </button>
+        </div>
 
+        {/* Tabla */}
+        <div
+          style={{
+            background: "white",
+            borderRadius: "12px",
+            overflow: "hidden",
+            boxShadow:
+              "0 2px 8px rgba(0,0,0,0.08)",
+          }}
+        >
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+            }}
+          >
+            <thead
+              style={{
+                background: "#f9fafb",
+              }}
+            >
+              <tr>
+                <th
+                  style={{
+                    textAlign: "left",
+                    padding: "16px",
+                  }}
+                >
+                  Empresa
+                </th>
+
+                <th
+                  style={{
+                    textAlign: "left",
+                    padding: "16px",
+                  }}
+                >
+                  Teléfono
+                </th>
+
+                <th
+                  style={{
+                    textAlign: "left",
+                    padding: "16px",
+                  }}
+                >
+                  Correo
+                </th>
+
+                <th
+                  style={{
+                    textAlign: "left",
+                    padding: "16px",
+                  }}
+                >
+                  Plan
+                </th>
+
+                <th
+                  style={{
+                    textAlign: "left",
+                    padding: "16px",
+                  }}
+                >
+                  Tipo recargo
+                </th>
+
+                <th
+                  style={{
+                    textAlign: "left",
+                    padding: "16px",
+                  }}
+                >
+                  Estado
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              <tr>
+                <td style={{ padding: "16px" }}>
+                  Mueblería Central
+                </td>
+
+                <td style={{ padding: "16px" }}>
+                  6000-0000
+                </td>
+
+                <td style={{ padding: "16px" }}>
+                  ventas@muebleria.com
+                </td>
+
+                <td style={{ padding: "16px" }}>
+                  Premium
+                </td>
+
+                <td style={{ padding: "16px" }}>
+                  Vencimiento mensual
+                </td>
+
+                <td
+                  style={{
+                    padding: "16px",
+                    color: "green",
+                    fontWeight: "bold",
+                  }}
+                >
+                  Activa
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </main>
     </div>
