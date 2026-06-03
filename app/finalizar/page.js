@@ -10,29 +10,25 @@ export default function Finalizar() {
         justifyContent: "center",
         alignItems: "center",
         padding: "30px",
-        fontFamily: "Arial",
+        fontFamily: "Arial, sans-serif",
       }}
     >
       <div
         style={{
           width: "850px",
-          background: "white",
+          background: "#ffffff",
           borderRadius: "20px",
           padding: "50px",
           textAlign: "center",
           boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
         }}
       >
-        {/* Barra de progreso */}
-        <div
-          style={{
-            marginBottom: "30px",
-          }}
-        >
+        {/* Progreso */}
+        <div style={{ marginBottom: "30px" }}>
           <p
             style={{
-              color: "#666",
               fontWeight: "bold",
+              color: "#666",
               marginBottom: "10px",
             }}
           >
@@ -59,7 +55,7 @@ export default function Finalizar() {
 
           <p
             style={{
-              marginTop: "8px",
+              marginTop: "10px",
               color: "#16a34a",
               fontWeight: "bold",
             }}
@@ -73,15 +69,19 @@ export default function Finalizar() {
           src="/konax-logo.png"
           alt="KONAX"
           style={{
-            width: "300px",
+            width: "500px",
+            maxWidth: "100%",
+            height: "auto",
             marginBottom: "30px",
           }}
         />
 
+        {/* Título */}
         <h1
           style={{
             color: "#16a34a",
             marginBottom: "15px",
+            fontSize: "36px",
           }}
         >
           Configuración completada
@@ -97,6 +97,7 @@ export default function Finalizar() {
           Tu empresa ha sido configurada correctamente y ya está lista para utilizar KONAX.
         </p>
 
+        {/* Resumen */}
         <div
           style={{
             background: "#f9fafb",
@@ -107,91 +108,31 @@ export default function Finalizar() {
           }}
         >
           <div style={{ marginBottom: "20px" }}>
-            <div
-              style={{
-                color: "#666",
-                fontSize: "14px",
-              }}
-            >
-              🏢 Empresa
-            </div>
-
-            <div
-              style={{
-                fontSize: "20px",
-                fontWeight: "bold",
-              }}
-            >
-              KONAX
-            </div>
+            <strong>🏢 Empresa</strong>
+            <div>KONAX</div>
           </div>
 
           <div style={{ marginBottom: "20px" }}>
-            <div
-              style={{
-                color: "#666",
-                fontSize: "14px",
-              }}
-            >
-              📦 Plan
-            </div>
-
-            <div
-              style={{
-                fontSize: "20px",
-                fontWeight: "bold",
-              }}
-            >
-              KONAX Gestión
-            </div>
+            <strong>📦 Plan</strong>
+            <div>KONAX Gestión</div>
           </div>
 
           <div style={{ marginBottom: "20px" }}>
-            <div
-              style={{
-                color: "#666",
-                fontSize: "14px",
-              }}
-            >
-              👥 Usuarios
-            </div>
-
-            <div
-              style={{
-                fontSize: "20px",
-                fontWeight: "bold",
-              }}
-            >
-              2 registrados
-            </div>
+            <strong>👥 Usuarios</strong>
+            <div>2 registrados</div>
           </div>
 
           <div>
-            <div
-              style={{
-                color: "#666",
-                fontSize: "14px",
-              }}
-            >
-              🟢 Estado
-            </div>
-
-            <div
-              style={{
-                fontSize: "20px",
-                fontWeight: "bold",
-                color: "#16a34a",
-              }}
-            >
+            <strong>🟢 Estado</strong>
+            <div style={{ color: "#16a34a", fontWeight: "bold" }}>
               Activo
             </div>
           </div>
         </div>
 
+        {/* Botón */}
         <button
-          onClick={() =>
-            (window.location.href = "/inicio")
-          }
+          onClick={() => (window.location.href = "/inicio")}
           style={{
             width: "100%",
             background: "#16a34a",
@@ -202,8 +143,7 @@ export default function Finalizar() {
             fontSize: "18px",
             fontWeight: "bold",
             cursor: "pointer",
-            boxShadow:
-              "0 4px 12px rgba(22,163,74,0.30)",
+            boxShadow: "0 4px 12px rgba(22,163,74,0.25)",
           }}
         >
           Ingresar a KONAX
