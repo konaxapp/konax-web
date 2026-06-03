@@ -19,7 +19,7 @@ export default function Inicio() {
           maxWidth: "100%",
           background: "#ffffff",
           borderRadius: "24px",
-          padding: "50px",
+          padding: "60px",
           textAlign: "center",
           boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
         }}
@@ -32,26 +32,29 @@ export default function Inicio() {
             width: "700px",
             maxWidth: "100%",
             height: "auto",
-            marginBottom: "20px",
+            marginBottom: "25px",
           }}
         />
 
-        {/* Bienvenida */}
+        {/* Título */}
         <h1
           style={{
-            fontSize: "42px",
+            fontSize: "44px",
             color: "#111827",
-            marginBottom: "10px",
+            marginBottom: "15px",
+            fontWeight: "700",
           }}
         >
-          Bienvenido Noriel
+          Bienvenido a KONAX
         </h1>
 
+        {/* Mensajes */}
         <p
           style={{
-            color: "#6b7280",
-            fontSize: "18px",
-            marginBottom: "10px",
+            color: "#374151",
+            fontSize: "22px",
+            fontWeight: "500",
+            marginBottom: "12px",
           }}
         >
           Tu empresa ha sido configurada correctamente.
@@ -60,7 +63,7 @@ export default function Inicio() {
         <p
           style={{
             color: "#6b7280",
-            fontSize: "16px",
+            fontSize: "20px",
             marginBottom: "50px",
           }}
         >
@@ -88,8 +91,8 @@ export default function Inicio() {
           >
             <div
               style={{
-                fontSize: "14px",
                 color: "#6b7280",
+                fontSize: "14px",
                 marginBottom: "8px",
               }}
             >
@@ -116,8 +119,8 @@ export default function Inicio() {
           >
             <div
               style={{
-                fontSize: "14px",
                 color: "#6b7280",
+                fontSize: "14px",
                 marginBottom: "8px",
               }}
             >
@@ -144,8 +147,8 @@ export default function Inicio() {
           >
             <div
               style={{
-                fontSize: "14px",
                 color: "#6b7280",
+                fontSize: "14px",
                 marginBottom: "8px",
               }}
             >
@@ -172,8 +175,8 @@ export default function Inicio() {
           >
             <div
               style={{
-                fontSize: "14px",
                 color: "#6b7280",
+                fontSize: "14px",
                 marginBottom: "8px",
               }}
             >
@@ -199,16 +202,16 @@ export default function Inicio() {
           }
           style={{
             width: "100%",
-            background: "#2563eb",
-            color: "white",
+            background: "#16a34a",
+            color: "#ffffff",
             border: "none",
-            padding: "20px",
+            padding: "22px",
             borderRadius: "14px",
             fontSize: "20px",
             fontWeight: "bold",
             cursor: "pointer",
             boxShadow:
-              "0 6px 16px rgba(37,99,235,0.25)",
+              "0 6px 16px rgba(22,163,74,0.30)",
           }}
         >
           Ingresar al Sistema
