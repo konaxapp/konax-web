@@ -15,7 +15,7 @@ export default function Finalizar() {
     >
       <div
         style={{
-          width: "800px",
+          width: "850px",
           background: "white",
           borderRadius: "20px",
           padding: "50px",
@@ -23,14 +23,60 @@ export default function Finalizar() {
           boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
         }}
       >
+        {/* Barra de progreso */}
         <div
           style={{
-            fontSize: "80px",
-            marginBottom: "20px",
+            marginBottom: "30px",
           }}
         >
-          ✅
+          <p
+            style={{
+              color: "#666",
+              fontWeight: "bold",
+              marginBottom: "10px",
+            }}
+          >
+            Paso 6 de 6
+          </p>
+
+          <div
+            style={{
+              width: "100%",
+              height: "12px",
+              background: "#e5e7eb",
+              borderRadius: "999px",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                background: "#16a34a",
+              }}
+            />
+          </div>
+
+          <p
+            style={{
+              marginTop: "8px",
+              color: "#16a34a",
+              fontWeight: "bold",
+            }}
+          >
+            100%
+          </p>
         </div>
+
+        {/* Logo KONAX */}
+        <img
+          src="/konax-logo.png"
+          alt="KONAX"
+          style={{
+            width: "300px",
+            marginBottom: "30px",
+          }}
+        />
 
         <h1
           style={{
@@ -45,7 +91,7 @@ export default function Finalizar() {
           style={{
             color: "#666",
             fontSize: "16px",
-            marginBottom: "40px",
+            marginBottom: "35px",
           }}
         >
           Tu empresa ha sido configurada correctamente y ya está lista para utilizar KONAX.
@@ -55,34 +101,91 @@ export default function Finalizar() {
           style={{
             background: "#f9fafb",
             borderRadius: "12px",
-            padding: "25px",
+            padding: "30px",
             textAlign: "left",
             marginBottom: "35px",
           }}
         >
-          <p>
-            <strong>Empresa:</strong> Empresa Demo
-          </p>
-
-          <p>
-            <strong>Plan:</strong> KONAX Gestión
-          </p>
-
-          <p>
-            <strong>Usuarios:</strong> 2 usuarios registrados
-          </p>
-
-          <p>
-            <strong>Estado:</strong>{" "}
-            <span
+          <div style={{ marginBottom: "20px" }}>
+            <div
               style={{
-                color: "#16a34a",
+                color: "#666",
+                fontSize: "14px",
+              }}
+            >
+              🏢 Empresa
+            </div>
+
+            <div
+              style={{
+                fontSize: "20px",
                 fontWeight: "bold",
               }}
             >
+              KONAX
+            </div>
+          </div>
+
+          <div style={{ marginBottom: "20px" }}>
+            <div
+              style={{
+                color: "#666",
+                fontSize: "14px",
+              }}
+            >
+              📦 Plan
+            </div>
+
+            <div
+              style={{
+                fontSize: "20px",
+                fontWeight: "bold",
+              }}
+            >
+              KONAX Gestión
+            </div>
+          </div>
+
+          <div style={{ marginBottom: "20px" }}>
+            <div
+              style={{
+                color: "#666",
+                fontSize: "14px",
+              }}
+            >
+              👥 Usuarios
+            </div>
+
+            <div
+              style={{
+                fontSize: "20px",
+                fontWeight: "bold",
+              }}
+            >
+              2 registrados
+            </div>
+          </div>
+
+          <div>
+            <div
+              style={{
+                color: "#666",
+                fontSize: "14px",
+              }}
+            >
+              🟢 Estado
+            </div>
+
+            <div
+              style={{
+                fontSize: "20px",
+                fontWeight: "bold",
+                color: "#16a34a",
+              }}
+            >
               Activo
-            </span>
-          </p>
+            </div>
+          </div>
         </div>
 
         <button
