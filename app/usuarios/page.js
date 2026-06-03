@@ -83,7 +83,7 @@ export default function Usuarios() {
             marginBottom: "40px",
           }}
         >
-          Guardar Usuario
+          Agregar Usuario
         </button>
 
         <h2
@@ -117,6 +117,7 @@ export default function Usuarios() {
                 <th style={thStyle}>Nombre</th>
                 <th style={thStyle}>Correo</th>
                 <th style={thStyle}>Rol</th>
+                <th style={thStyle}>Acciones</th>
               </tr>
             </thead>
 
@@ -125,32 +126,33 @@ export default function Usuarios() {
                 <td style={tdStyle}>Katherine</td>
                 <td style={tdStyle}>correo@empresa.com</td>
                 <td style={tdStyle}>Administrador</td>
+                <td style={tdStyle}>
+                  Editar | Eliminar
+                </td>
               </tr>
 
               <tr>
                 <td style={tdStyle}>Noriel</td>
                 <td style={tdStyle}>correo@empresa.com</td>
                 <td style={tdStyle}>Supervisor</td>
+                <td style={tdStyle}>
+                  Editar | Eliminar
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <button
+        <p
           style={{
-            width: "100%",
-            background: "#ffffff",
-            color: "#2563eb",
-            border: "1px solid #2563eb",
-            padding: "14px",
-            borderRadius: "10px",
-            fontWeight: "bold",
-            cursor: "pointer",
+            color: "#666",
+            fontSize: "14px",
             marginBottom: "20px",
           }}
         >
-          + Agregar otro usuario
-        </button>
+          Debe existir al menos un usuario con rol
+          Administrador para continuar.
+        </p>
 
         <button
           onClick={() =>
