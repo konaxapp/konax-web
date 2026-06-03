@@ -5,6 +5,10 @@ import { useState } from "react";
 export default function Planes() {
   const [tipoPlan, setTipoPlan] = useState("mensual");
 
+  const irAConfirmacion = () => {
+    window.location.href = "/confirmacion";
+  };
+
   return (
     <div
       style={{
@@ -43,7 +47,6 @@ export default function Planes() {
           Elige el plan que mejor se adapte a tu negocio
         </p>
 
-        {/* Selector */}
         <div
           style={{
             display: "flex",
@@ -102,7 +105,7 @@ export default function Planes() {
             flexWrap: "wrap",
           }}
         >
-          {/* COBROS */}
+          {/* KONAX COBROS */}
           <div
             style={{
               flex: 1,
@@ -115,18 +118,26 @@ export default function Planes() {
             <h2>KONAX Cobros</h2>
 
             <h1>
-              $
-              {tipoPlan === "mensual"
-                ? "29"
-                : "299"}
+              ${tipoPlan === "mensual" ? "29" : "299"}
             </h1>
 
-            <p style={{ color: "#666" }}>
-              Clientes, créditos, pagos,
-              gestores y promesas de pago.
-            </p>
+            <ul
+              style={{
+                color: "#666",
+                paddingLeft: "20px",
+                minHeight: "160px",
+              }}
+            >
+              <li>Clientes</li>
+              <li>Créditos</li>
+              <li>Pagos</li>
+              <li>Gestores</li>
+              <li>Promesas de pago</li>
+              <li>Soporte especializado</li>
+            </ul>
 
             <button
+              onClick={irAConfirmacion}
               style={{
                 width: "100%",
                 padding: "12px",
@@ -142,7 +153,7 @@ export default function Planes() {
             </button>
           </div>
 
-          {/* GESTIÓN */}
+          {/* KONAX GESTIÓN */}
           <div
             style={{
               flex: 1,
@@ -155,18 +166,26 @@ export default function Planes() {
             <h2>KONAX Gestión</h2>
 
             <h1>
-              $
-              {tipoPlan === "mensual"
-                ? "59"
-                : "595"}
+              ${tipoPlan === "mensual" ? "59" : "595"}
             </h1>
 
-            <p style={{ color: "#666" }}>
-              Cobros + ventas + caja +
-              administración.
-            </p>
+            <ul
+              style={{
+                color: "#666",
+                paddingLeft: "20px",
+                minHeight: "160px",
+              }}
+            >
+              <li>Cobranza</li>
+              <li>Ventas</li>
+              <li>Caja</li>
+              <li>Usuarios</li>
+              <li>Administración</li>
+              <li>Soporte especializado</li>
+            </ul>
 
             <button
+              onClick={irAConfirmacion}
               style={{
                 width: "100%",
                 padding: "12px",
@@ -182,7 +201,7 @@ export default function Planes() {
             </button>
           </div>
 
-          {/* EMPRESARIAL */}
+          {/* KONAX EMPRESARIAL */}
           <div
             style={{
               flex: 1,
@@ -195,18 +214,26 @@ export default function Planes() {
             <h2>KONAX Empresarial</h2>
 
             <h1>
-              $
-              {tipoPlan === "mensual"
-                ? "99"
-                : "990"}
+              ${tipoPlan === "mensual" ? "99" : "990"}
             </h1>
 
-            <p style={{ color: "#666" }}>
-              Indicadores, reportes,
-              multiempresa e integraciones.
-            </p>
+            <ul
+              style={{
+                color: "#666",
+                paddingLeft: "20px",
+                minHeight: "160px",
+              }}
+            >
+              <li>Gestión empresarial</li>
+              <li>Indicadores gerenciales</li>
+              <li>Reportes avanzados</li>
+              <li>Multiempresa</li>
+              <li>Integraciones</li>
+              <li>Soporte especializado</li>
+            </ul>
 
             <button
+              onClick={irAConfirmacion}
               style={{
                 width: "100%",
                 padding: "12px",
@@ -222,6 +249,18 @@ export default function Planes() {
             </button>
           </div>
         </div>
+
+        <p
+          style={{
+            textAlign: "center",
+            marginTop: "30px",
+            color: "#777",
+            fontSize: "14px",
+          }}
+        >
+          Precios mensuales mostrados. Planes anuales:
+          Cobros $299 · Gestión $595 · Empresarial $990
+        </p>
       </div>
     </div>
   );
