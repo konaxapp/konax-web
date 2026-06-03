@@ -127,7 +127,24 @@ export default function Usuarios() {
                 <td style={tdStyle}>correo@empresa.com</td>
                 <td style={tdStyle}>Administrador</td>
                 <td style={tdStyle}>
-                  Editar | Eliminar
+                  <span
+                    style={{
+                      color: "#2563eb",
+                      cursor: "pointer",
+                      marginRight: "12px",
+                    }}
+                  >
+                    Editar
+                  </span>
+
+                  <span
+                    style={{
+                      color: "#dc2626",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Eliminar
+                  </span>
                 </td>
               </tr>
 
@@ -136,7 +153,24 @@ export default function Usuarios() {
                 <td style={tdStyle}>correo@empresa.com</td>
                 <td style={tdStyle}>Supervisor</td>
                 <td style={tdStyle}>
-                  Editar | Eliminar
+                  <span
+                    style={{
+                      color: "#2563eb",
+                      cursor: "pointer",
+                      marginRight: "12px",
+                    }}
+                  >
+                    Editar
+                  </span>
+
+                  <span
+                    style={{
+                      color: "#dc2626",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Eliminar
+                  </span>
                 </td>
               </tr>
             </tbody>
@@ -147,11 +181,11 @@ export default function Usuarios() {
           style={{
             color: "#666",
             fontSize: "14px",
-            marginBottom: "20px",
+            marginBottom: "25px",
+            textAlign: "center",
           }}
         >
-          Debe existir al menos un usuario con rol
-          Administrador para continuar.
+          Se requiere al menos un Administrador para finalizar la configuración.
         </p>
 
         <button
@@ -163,11 +197,13 @@ export default function Usuarios() {
             background: "#16a34a",
             color: "white",
             border: "none",
-            padding: "16px",
-            borderRadius: "10px",
-            fontSize: "16px",
+            padding: "18px",
+            borderRadius: "12px",
+            fontSize: "18px",
             fontWeight: "bold",
             cursor: "pointer",
+            boxShadow:
+              "0 4px 12px rgba(22,163,74,0.30)",
           }}
         >
           Finalizar Configuración
