@@ -53,6 +53,21 @@ export default function VistaCliente() {
     },
   ];
 
+  const documentos = [
+    {
+      nombre: "Cedula.pdf",
+      tipo: "Cédula",
+      fecha: "02/06/2026",
+      usuario: "Administrador",
+    },
+    {
+      nombre: "Contrato_credito.pdf",
+      tipo: "Contrato",
+      fecha: "02/06/2026",
+      usuario: "Gestor 1",
+    },
+  ];
+
   const descargarEstadoCuenta = () => {
     alert("Aquí se generará/descargará el Estado de Cuenta PDF.");
   };
@@ -64,6 +79,10 @@ export default function VistaCliente() {
   const guardarInformacion = () => {
     alert("Información del cliente guardada correctamente.");
     setModoEdicion(false);
+  };
+
+  const subirDocumento = () => {
+    alert("Aquí se subirá un documento al expediente digital.");
   };
 
   return (
@@ -322,6 +341,47 @@ export default function VistaCliente() {
             ))}
           </div>
         </div>
+
+        <div style={card}>
+          <h2 style={tituloSeccion}>📁 Expediente Digital</h2>
+
+          <button
+            style={boton}
+            onClick={subirDocumento}
+          >
+            + Subir Documento
+          </button>
+
+          <div style={{ marginTop: "20px", overflowX: "auto" }}>
+            <table style={tabla}>
+              <thead>
+                <tr>
+                  <th style={th}>Nombre del archivo</th>
+                  <th style={th}>Tipo</th>
+                  <th style={th}>Fecha de carga</th>
+                  <th style={th}>Usuario</th>
+                  <th style={th}>Acciones</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {documentos.map((documento, index) => (
+                  <tr key={index}>
+                    <td style={td}>{documento.nombre}</td>
+                    <td style={td}>{documento.tipo}</td>
+                    <td style={td}>{documento.fecha}</td>
+                    <td style={td}>{documento.usuario}</td>
+                    <td style={td}>
+                      <button style={accionBtn}>Ver</button>
+                      <button style={accionBtn}>Descargar</button>
+                      <button style={accionBtn}>Eliminar</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -464,5 +524,14 @@ const botonSecundario = {
   padding: "14px 24px",
   borderRadius: "10px",
   fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const accionBtn = {
+  padding: "8px 14px",
+  marginRight: "8px",
+  borderRadius: "8px",
+  border: "1px solid #d1d5db",
+  background: "#ffffff",
   cursor: "pointer",
 };
