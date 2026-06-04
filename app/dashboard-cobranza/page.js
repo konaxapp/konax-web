@@ -13,18 +13,15 @@ export default function DashboardCobranza() {
     carteraAlDia: 65000,
     carteraMora: 45000,
     porcentajeMora: 40.9,
-
     cobradoHoy: 2500,
     cobradoMes: 18500,
     metaMes: 40000,
     recuperacionMes: 16.8,
-
     promesasActivas: 12,
     promesasCumplidas: 8,
     promesasIncumplidas: 4,
     montoPromesasActivas: 6200,
     montoPromesasIncumplidas: 2400,
-
     clientesActivos: 120,
     clientesMora: 34,
 
@@ -82,8 +79,22 @@ export default function DashboardCobranza() {
     setFiltroEstado("Todos");
   };
 
-  const avanceMeta = Math.min((data.cobradoMes / data.metaMes) * 100, 100);
+  const colorGestor = (index) => {
+    const colores = [
+      "#16a34a",
+      "#2563eb",
+      "#f97316",
+      "#7c3aed",
+      "#dc2626",
+      "#0891b2",
+      "#ca8a04",
+      "#be185d",
+    ];
 
+    return colores[index % colores.length];
+  };
+
+  const avanceMeta = Math.min((data.cobradoMes / data.metaMes) * 100, 100);
   const maxGestor = Math.max(...data.gestores.map((g) => g.cobrado));
   const maxMora = Math.max(...data.moraAntiguedad.map((m) => m.monto));
 
@@ -107,13 +118,8 @@ export default function DashboardCobranza() {
               Imprimir Reporte
             </button>
 
-            <button style={botonSecundario}>
-              Exportar PDF
-            </button>
-
-            <button style={botonSecundario}>
-              Exportar Excel
-            </button>
+            <button style={botonSecundario}>Exportar PDF</button>
+            <button style={botonSecundario}>Exportar Excel</button>
           </div>
         </div>
 
@@ -286,9 +292,14 @@ export default function DashboardCobranza() {
                     style={{
                       ...barraProgreso,
                       width: `${(g.cobrado / maxGestor) * 100}%`,
+                      background: colorGestor(index),
                     }}
                   />
                 </div>
+
+                <p style={{ ...nota, marginTop: "5px" }}>
+                  Recuperación: {g.recuperacion}%
+                </p>
               </div>
             ))}
           </div>
