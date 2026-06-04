@@ -311,8 +311,7 @@ export default function Caja() {
             </table>
           </div>
 
-          <p style={nota}>
-            Esta tabla mostrará los movimientos procesados de caja. Los gastos y egresos administrativos irán en una pantalla aparte.
+          <p style={nota}
           </p>
         </div>
       </div>
