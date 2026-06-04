@@ -7,6 +7,8 @@ export default function Cartera() {
   const [filtroGestor, setFiltroGestor] = useState("Todos");
   const [filtroEstado, setFiltroEstado] = useState("Todos");
   const [filtroAtraso, setFiltroAtraso] = useState("Todos");
+  const [filtroProximoPago, setFiltroProximoPago] = useState("");
+  const [filtroPromesaPago, setFiltroPromesaPago] = useState("");
   const [ultimaEjecucionRecargos, setUltimaEjecucionRecargos] = useState("");
 
   const [clientes, setClientes] = useState([
@@ -18,8 +20,9 @@ export default function Cartera() {
       cuota: 125,
       recargoValor: 0,
       recargoAplicado: "",
-      ultimoPago: "01/06/2026",
-      proximoPago: "15/06/2026",
+      ultimoPago: "2026-06-01",
+      proximoPago: "2026-06-15",
+      promesaPago: "",
       diasAtraso: 0,
       estado: "Al Día",
       semaforo: "🟢",
@@ -33,8 +36,9 @@ export default function Cartera() {
       cuota: 100,
       recargoValor: 25,
       recargoAplicado: "",
-      ultimoPago: "15/05/2026",
-      proximoPago: "30/05/2026",
+      ultimoPago: "2026-05-15",
+      proximoPago: "2026-05-30",
+      promesaPago: "2026-06-10",
       diasAtraso: 18,
       estado: "Pendiente",
       semaforo: "🟡",
@@ -48,8 +52,9 @@ export default function Cartera() {
       cuota: 150,
       recargoValor: 50,
       recargoAplicado: "",
-      ultimoPago: "01/04/2026",
-      proximoPago: "15/04/2026",
+      ultimoPago: "2026-04-01",
+      proximoPago: "2026-04-15",
+      promesaPago: "2026-06-12",
       diasAtraso: 55,
       estado: "Mora",
       semaforo: "🟠",
@@ -63,8 +68,9 @@ export default function Cartera() {
       cuota: 200,
       recargoValor: 75,
       recargoAplicado: "",
-      ultimoPago: "01/02/2026",
-      proximoPago: "15/02/2026",
+      ultimoPago: "2026-02-01",
+      proximoPago: "2026-02-15",
+      promesaPago: "",
       diasAtraso: 120,
       estado: "Crítico",
       semaforo: "🔴",
@@ -130,13 +136,25 @@ export default function Cartera() {
 
     const coincideAtraso = cumpleRangoAtraso(item.diasAtraso);
 
+    const coincideProximoPago =
+      !filtroProximoPago || item.proximoPago === filtroProximoPago;
+
+    const coincidePromesaPago =
+      !filtroPromesaPago || item.promesaPago === filtroPromesaPago;
+
     return (
       coincideBusqueda &&
       coincideGestor &&
       coincideEstado &&
-      coincideAtraso
+      coincideAtraso &&
+      coincideProximoPago &&
+      coincidePromesaPago
     );
   });
+
+  const verCliente = (cedula) => {
+    alert("Aquí abrirá Vista Cliente para la cédula: " + cedula);
+  };
 
   const registrarPromesa = () => {
     alert("Aquí se registrará una promesa de pago.");
@@ -144,6 +162,10 @@ export default function Cartera() {
 
   const enviarWhatsApp = () => {
     alert("Aquí se abrirá WhatsApp para contactar al cliente.");
+  };
+
+  const imprimirCartera = () => {
+    window.print();
   };
 
   return (
@@ -163,7 +185,8 @@ export default function Cartera() {
           <h2 style={tituloSeccion}>Recargos del mes</h2>
 
           <p style={texto}>
-            Última ejecución: {ultimaEjecucionRecargos || "No ejecutado este mes"}
+            Última ejecución:{" "}
+            {ultimaEjecucionRecargos || "No ejecutado este mes"}
           </p>
 
           <button style={boton} onClick={aplicarRecargosDelMes}>
@@ -217,6 +240,32 @@ export default function Cartera() {
               <option>60-89</option>
               <option>90+</option>
             </select>
+
+            <div>
+              <label style={label}>Fecha próximo pago</label>
+              <input
+                type="date"
+                value={filtroProximoPago}
+                onChange={(e) => setFiltroProximoPago(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+
+            <div>
+              <label style={label}>Fecha promesa de pago</label>
+              <input
+                type="date"
+                value={filtroPromesaPago}
+                onChange={(e) => setFiltroPromesaPago(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+          </div>
+
+          <div style={acciones}>
+            <button style={botonSecundario} onClick={imprimirCartera}>
+              Imprimir cartera filtrada
+            </button>
           </div>
         </div>
 
@@ -236,6 +285,7 @@ export default function Cartera() {
                   <th style={th}>Recargo</th>
                   <th style={th}>Último pago</th>
                   <th style={th}>Próximo pago</th>
+                  <th style={th}>Promesa</th>
                   <th style={th}>Días atraso</th>
                   <th style={th}>Gestor</th>
                   <th style={th}>Acciones</th>
@@ -245,7 +295,10 @@ export default function Cartera() {
               <tbody>
                 {clientesFiltrados.map((item, index) => (
                   <tr key={index}>
-                    <td style={td}>{item.semaforo} {item.estado}</td>
+                    <td style={td}>
+                      {item.semaforo} {item.estado}
+                    </td>
+
                     <td style={td}>{item.cliente}</td>
                     <td style={td}>{item.cedula}</td>
                     <td style={td}>{item.telefono}</td>
@@ -254,11 +307,17 @@ export default function Cartera() {
                     <td style={td}>${item.recargoValor.toLocaleString()}</td>
                     <td style={td}>{item.ultimoPago}</td>
                     <td style={td}>{item.proximoPago}</td>
+                    <td style={td}>{item.promesaPago || "Sin promesa"}</td>
                     <td style={td}>{item.diasAtraso}</td>
                     <td style={td}>{item.gestor}</td>
 
                     <td style={td}>
-                      <button style={accionBtn}>Ver Cliente</button>
+                      <button
+                        style={accionBtn}
+                        onClick={() => verCliente(item.cedula)}
+                      >
+                        Ver Cliente
+                      </button>
 
                       <button style={accionBtn} onClick={registrarPromesa}>
                         Promesa
@@ -273,7 +332,7 @@ export default function Cartera() {
 
                 {clientesFiltrados.length === 0 && (
                   <tr>
-                    <td style={td} colSpan="12">
+                    <td style={td} colSpan="13">
                       No se encontraron clientes con los filtros seleccionados.
                     </td>
                   </tr>
@@ -346,6 +405,14 @@ const grid = {
   gap: "15px",
 };
 
+const label = {
+  display: "block",
+  marginBottom: "6px",
+  fontSize: "14px",
+  color: "#374151",
+  fontWeight: "bold",
+};
+
 const inputStyle = {
   width: "100%",
   padding: "12px",
@@ -355,11 +422,28 @@ const inputStyle = {
   boxSizing: "border-box",
 };
 
+const acciones = {
+  marginTop: "20px",
+  display: "flex",
+  gap: "15px",
+  flexWrap: "wrap",
+};
+
 const boton = {
   background: "#16a34a",
   color: "#ffffff",
   border: "none",
   padding: "14px 28px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonSecundario = {
+  background: "#111827",
+  color: "#ffffff",
+  border: "none",
+  padding: "14px 24px",
   borderRadius: "10px",
   fontWeight: "bold",
   cursor: "pointer",
