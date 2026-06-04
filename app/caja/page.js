@@ -6,9 +6,11 @@ export default function Caja() {
   const [tipoMovimiento, setTipoMovimiento] = useState("Pago");
   const [buscarCliente, setBuscarCliente] = useState("");
 
+  const fechaHoy = new Date().toLocaleDateString("es-PA");
+
   const [movimientos, setMovimientos] = useState([
     {
-      fecha: "06/06/2026",
+      fecha: fechaHoy,
       transaccion: "TX-001",
       cliente: "Juan Pérez",
       cedula: "8-123-456",
@@ -20,7 +22,7 @@ export default function Caja() {
       estado: "Procesado",
     },
     {
-      fecha: "06/06/2026",
+      fecha: fechaHoy,
       transaccion: "TX-002",
       cliente: "María Díaz",
       cedula: "8-456-789",
@@ -33,12 +35,16 @@ export default function Caja() {
     },
   ]);
 
+  const movimientosDelDia = movimientos.filter(
+    (movimiento) => movimiento.fecha === fechaHoy
+  );
+
   const generarTransaccion = () => {
     return "TX-" + String(movimientos.length + 1).padStart(3, "0");
   };
 
   const guardarMovimiento = () => {
-    alert("Movimiento guardado correctamente.");
+    alert("Pago registrado correctamente.");
   };
 
   const limpiarFormulario = () => {
@@ -69,10 +75,7 @@ export default function Caja() {
           <div style={grid}>
             <div>
               <label style={label}>Fecha</label>
-              <input
-                type="date"
-                style={inputStyle}
-              />
+              <input type="date" style={inputStyle} />
             </div>
 
             <div>
@@ -114,20 +117,9 @@ export default function Caja() {
           />
 
           <div style={grid}>
-            <input
-              placeholder="Nombre del cliente"
-              style={inputStyle}
-            />
-
-            <input
-              placeholder="Cédula"
-              style={inputStyle}
-            />
-
-            <input
-              placeholder="Teléfono"
-              style={inputStyle}
-            />
+            <input placeholder="Nombre del cliente" style={inputStyle} />
+            <input placeholder="Cédula" style={inputStyle} />
+            <input placeholder="Teléfono" style={inputStyle} />
           </div>
         </div>
 
@@ -147,74 +139,33 @@ export default function Caja() {
               </select>
             </div>
 
-            <input
-              placeholder="Monto pagado"
-              style={inputStyle}
-            />
-
-            <input
-              placeholder="Concepto / Descripción"
-              style={inputStyle}
-            />
-
-            <input
-              placeholder="Vendedor / Responsable"
-              style={inputStyle}
-            />
+            <input placeholder="Monto pagado" style={inputStyle} />
+            <input placeholder="Concepto / Descripción" style={inputStyle} />
+            <input placeholder="Vendedor / Responsable" style={inputStyle} />
           </div>
 
           {(tipoMovimiento === "Venta Crédito" ||
             tipoMovimiento === "Abono") && (
             <div style={{ marginTop: "20px" }}>
-              <h3 style={subtituloBloque}>
-                Información del Producto
-              </h3>
+              <h3 style={subtituloBloque}>Información del Producto</h3>
 
               <div style={grid}>
-                <input
-                  placeholder="Código del producto"
-                  style={inputStyle}
-                />
-
-                <input
-                  placeholder="Producto"
-                  style={inputStyle}
-                />
-
-                <input
-                  placeholder="Cantidad"
-                  style={inputStyle}
-                />
-
-                <input
-                  placeholder="Valor del producto"
-                  style={inputStyle}
-                />
+                <input placeholder="Código del producto" style={inputStyle} />
+                <input placeholder="Producto" style={inputStyle} />
+                <input placeholder="Cantidad" style={inputStyle} />
+                <input placeholder="Valor del producto" style={inputStyle} />
               </div>
             </div>
           )}
 
           {tipoMovimiento === "Abono" && (
             <div style={{ marginTop: "20px" }}>
-              <h3 style={subtituloBloque}>
-                Información del Abono
-              </h3>
+              <h3 style={subtituloBloque}>Información del Abono</h3>
 
               <div style={grid}>
-                <input
-                  placeholder="Abono recibido"
-                  style={inputStyle}
-                />
-
-                <input
-                  placeholder="Saldo pendiente"
-                  style={inputStyle}
-                />
-
-                <input
-                  type="date"
-                  style={inputStyle}
-                />
+                <input placeholder="Abono recibido" style={inputStyle} />
+                <input placeholder="Saldo pendiente" style={inputStyle} />
+                <input type="date" style={inputStyle} />
               </div>
 
               <p style={nota}>
@@ -225,25 +176,12 @@ export default function Caja() {
 
           {tipoMovimiento === "Pago Crédito" && (
             <div style={{ marginTop: "20px" }}>
-              <h3 style={subtituloBloque}>
-                Información del Crédito
-              </h3>
+              <h3 style={subtituloBloque}>Información del Crédito</h3>
 
               <div style={grid}>
-                <input
-                  placeholder="Crédito asociado"
-                  style={inputStyle}
-                />
-
-                <input
-                  placeholder="Saldo actual"
-                  style={inputStyle}
-                />
-
-                <input
-                  placeholder="Nuevo saldo"
-                  style={inputStyle}
-                />
+                <input placeholder="Crédito asociado" style={inputStyle} />
+                <input placeholder="Saldo actual" style={inputStyle} />
+                <input placeholder="Nuevo saldo" style={inputStyle} />
               </div>
             </div>
           )}
@@ -254,24 +192,18 @@ export default function Caja() {
           />
 
           <div style={acciones}>
-            <button
-              style={boton}
-              onClick={guardarMovimiento}
-            >
-              Guardar Movimiento
+            <button style={boton} onClick={guardarMovimiento}>
+              Registrar Pago
             </button>
 
-            <button
-              style={botonSecundario}
-              onClick={limpiarFormulario}
-            >
+            <button style={botonSecundario} onClick={limpiarFormulario}>
               Limpiar
             </button>
           </div>
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>Movimientos Recientes</h2>
+          <h2 style={tituloSeccion}>Movimientos del día</h2>
 
           <div style={{ overflowX: "auto" }}>
             <table style={tabla}>
@@ -291,7 +223,7 @@ export default function Caja() {
               </thead>
 
               <tbody>
-                {movimientos.map((movimiento, index) => (
+                {movimientosDelDia.map((movimiento, index) => (
                   <tr key={index}>
                     <td style={td}>{movimiento.fecha}</td>
                     <td style={td}>{movimiento.transaccion}</td>
@@ -299,9 +231,7 @@ export default function Caja() {
                     <td style={td}>{movimiento.cedula}</td>
                     <td style={td}>{movimiento.tipo}</td>
                     <td style={td}>{movimiento.metodo}</td>
-                    <td style={td}>
-                      ${movimiento.monto.toLocaleString()}
-                    </td>
+                    <td style={td}>${movimiento.monto.toLocaleString()}</td>
                     <td style={td}>{movimiento.concepto}</td>
                     <td style={td}>{movimiento.vendedor}</td>
                     <td style={td}>{movimiento.estado}</td>
@@ -310,9 +240,6 @@ export default function Caja() {
               </tbody>
             </table>
           </div>
-
-          <p style={nota}
-          </p>
         </div>
       </div>
     </div>
