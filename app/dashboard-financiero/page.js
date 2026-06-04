@@ -1,7 +1,13 @@
 "use client";
+
 import { useState } from "react";
-export default function DashboardFinanciero() { return (  
-<div style={logoBox}>
+
+export default function DashboardFinanciero() {
+return (
+<div style={pagina}>
+<div style={contenedor}>
+
+    <div style={logoBox}>
       <img
         src="/konax-logo.png"
         alt="KONAX"
@@ -133,19 +139,97 @@ export default function DashboardFinanciero() { return (
 
   </div>
 </div>
-); }
-const pagina = { minHeight: "100vh", background: "#f3f4f6", padding: "40px", fontFamily: "Arial, sans-serif", };
-const contenedor = { maxWidth: "1300px", margin: "0 auto", };
-const logoBox = { textAlign: "center", marginBottom: "25px", };
-const logo = { width: "260px", maxWidth: "100%", height: "auto", };
-const titulo = { fontSize: "40px", marginBottom: "10px", color: "#111827", };
-const subtitulo = { color: "#6b7280", fontSize: "18px", marginBottom: "30px", };
-const card = { background: "#ffffff", padding: "25px", borderRadius: "16px", marginBottom: "20px", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", };
-const tituloSeccion = { marginBottom: "20px", color: "#111827", };
-const cardsGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "20px", marginBottom: "20px", };
-const cardKpi = { background: "#ffffff", padding: "25px", borderRadius: "16px", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", };
-const kpiTitulo = { color: "#6b7280", marginBottom: "10px", fontSize: "15px", };
-const kpiValor = { fontSize: "32px", fontWeight: "bold", color: "#111827", };
-const tabla = { width: "100%", borderCollapse: "collapse", };
-const th = { textAlign: "left", padding: "15px", borderBottom: "1px solid #e5e7eb", background: "#f9fafb", };
-const td = { padding: "15px", borderBottom: "1px solid #f3f4f6", };
+
+);
+}
+
+const pagina = {
+minHeight: "100vh",
+background: "#f3f4f6",
+padding: "40px",
+fontFamily: "Arial, sans-serif",
+};
+
+const contenedor = {
+maxWidth: "1300px",
+margin: "0 auto",
+};
+
+const logoBox = {
+textAlign: "center",
+marginBottom: "25px",
+};
+
+const logo = {
+width: "260px",
+maxWidth: "100%",
+height: "auto",
+};
+
+const titulo = {
+fontSize: "40px",
+marginBottom: "10px",
+color: "#111827",
+};
+
+const subtitulo = {
+color: "#6b7280",
+fontSize: "18px",
+marginBottom: "30px",
+};
+
+const card = {
+background: "#ffffff",
+padding: "25px",
+borderRadius: "16px",
+marginBottom: "20px",
+boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+};
+
+const tituloSeccion = {
+marginBottom: "20px",
+color: "#111827",
+};
+
+const cardsGrid = {
+display: "grid",
+gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+gap: "20px",
+marginBottom: "20px",
+};
+
+const cardKpi = {
+background: "#ffffff",
+padding: "25px",
+borderRadius: "16px",
+boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+};
+
+const kpiTitulo = {
+color: "#6b7280",
+marginBottom: "10px",
+fontSize: "15px",
+};
+
+const kpiValor = {
+fontSize: "32px",
+fontWeight: "bold",
+color: "#111827",
+};
+
+const tabla = {
+width: "100%",
+borderCollapse: "collapse",
+};
+
+const th = {
+textAlign: "left",
+padding: "15px",
+borderBottom: "1px solid #e5e7eb",
+background: "#f9fafb",
+};
+
+const td = {
+padding: "15px",
+borderBottom: "1px solid #f3f4f6",
+};
