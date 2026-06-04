@@ -14,6 +14,7 @@ export default function VistaCliente() {
     cedula: "8-123-456",
     telefono: "6000-0000",
     estado: "Al Día",
+    semaforo: "🟢",
     direccion: "La Chorrera, Panamá",
     producto: "Sala Modelo Roma",
     clasificacion: "Cliente regular",
@@ -135,63 +136,50 @@ export default function VistaCliente() {
   return (
     <div style={pagina}>
       <div style={contenedor}>
-        <div style={logoBox}>
+        <div style={encabezado}>
           <img
             src="/konax-logo.png"
             alt="KONAX"
             style={logo}
           />
+
+          <div>
+            <h1 style={titulo}>Vista Cliente</h1>
+            <div style={estadoPrincipal}>
+              <span>{cliente.semaforo}</span>
+              <strong>{cliente.estado}</strong>
+              <span>Saldo: ${cliente.saldo.toLocaleString()}</span>
+              <span>Atraso: {cliente.diasAtraso} días</span>
+            </div>
+          </div>
         </div>
 
-        <h1 style={titulo}>Vista Cliente</h1>
-        <p style={subtitulo}>
-          Expediente completo del cliente
-        </p>
-
         <div style={acciones}>
-          <button
-            style={botonSecundario}
-            onClick={descargarEstadoCuenta}
-          >
+          <button style={botonSecundario} onClick={descargarEstadoCuenta}>
             Descargar Estado de Cuenta
           </button>
 
-          <button
-            style={botonSecundario}
-            onClick={generarCartaMora}
-          >
+          <button style={botonSecundario} onClick={generarCartaMora}>
             Generar Carta de Mora
           </button>
 
-          <button
-            style={botonSecundario}
-            onClick={abrirWhatsApp}
-          >
+          <button style={botonSecundario} onClick={abrirWhatsApp}>
             WhatsApp
           </button>
 
           {!modoEdicion && (
-            <button
-              style={botonSecundario}
-              onClick={() => setModoEdicion(true)}
-            >
+            <button style={botonSecundario} onClick={() => setModoEdicion(true)}>
               Editar Cliente
             </button>
           )}
 
           {modoEdicion && (
             <>
-              <button
-                style={boton}
-                onClick={guardarInformacion}
-              >
+              <button style={boton} onClick={guardarInformacion}>
                 Guardar Información
               </button>
 
-              <button
-                style={botonCancelar}
-                onClick={() => setModoEdicion(false)}
-              >
+              <button style={botonCancelar} onClick={() => setModoEdicion(false)}>
                 Cancelar Edición
               </button>
             </>
@@ -221,7 +209,11 @@ export default function VistaCliente() {
                 <p><strong>{cliente.nombre}</strong></p>
                 <p>Cédula: {cliente.cedula}</p>
                 <p>Teléfono: {cliente.telefono}</p>
-                <p>Estado: {cliente.estado}</p>
+                <p>Estado: {cliente.semaforo} {cliente.estado}</p>
+
+                <button style={whatsappBtn} onClick={abrirWhatsApp}>
+                  WhatsApp
+                </button>
               </>
             )}
           </div>
@@ -259,7 +251,7 @@ export default function VistaCliente() {
             ) : (
               <>
                 <p>Gestor: {cliente.cobrador}</p>
-                <p>Días de atraso: {cliente.diasAtraso}</p>
+                <p><strong>Días de atraso:</strong> {cliente.diasAtraso}</p>
                 <p>Prioridad: {cliente.prioridad}</p>
                 <p>Clasificación: {cliente.clasificacion}</p>
               </>
@@ -317,7 +309,7 @@ export default function VistaCliente() {
             Registrar Promesa
           </button>
 
-          <h3 style={{ marginTop: "25px" }}>Historial de Promesas</h3>
+          <h3 style={tituloTabla}>Historial de Promesas</h3>
 
           <table style={tabla}>
             <thead>
@@ -393,7 +385,7 @@ export default function VistaCliente() {
             Guardar Observación
           </button>
 
-          <div style={{ marginTop: "25px" }}>
+          <div style={{ marginTop: "14px" }}>
             {observaciones.map((item, index) => (
               <div key={index} style={observacionBox}>
                 <strong>{item.fecha} — {item.usuario}</strong>
@@ -410,7 +402,7 @@ export default function VistaCliente() {
             + Subir Documento
           </button>
 
-          <div style={{ marginTop: "20px", overflowX: "auto" }}>
+          <div style={{ marginTop: "14px", overflowX: "auto" }}>
             <table style={tabla}>
               <thead>
                 <tr>
@@ -448,7 +440,7 @@ export default function VistaCliente() {
 const pagina = {
   minHeight: "100vh",
   background: "#f3f4f6",
-  padding: "40px",
+  padding: "15px",
   fontFamily: "Arial, sans-serif",
 };
 
@@ -457,53 +449,62 @@ const contenedor = {
   margin: "0 auto",
 };
 
-const logoBox = {
-  textAlign: "center",
-  marginBottom: "25px",
+const encabezado = {
+  display: "flex",
+  alignItems: "center",
+  gap: "14px",
+  marginBottom: "10px",
 };
 
 const logo = {
-  width: "260px",
+  width: "110px",
   maxWidth: "100%",
   height: "auto",
 };
 
 const titulo = {
-  fontSize: "40px",
-  marginBottom: "10px",
+  fontSize: "28px",
+  marginBottom: "4px",
   color: "#111827",
 };
 
-const subtitulo = {
-  color: "#6b7280",
-  fontSize: "18px",
-  marginBottom: "30px",
+const estadoPrincipal = {
+  display: "flex",
+  gap: "12px",
+  flexWrap: "wrap",
+  color: "#374151",
+  fontSize: "14px",
 };
 
 const gridResumen = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
-  gap: "20px",
-  marginBottom: "20px",
+  gap: "12px",
+  marginBottom: "12px",
 };
 
 const gridFormulario = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: "15px",
+  gap: "12px",
 };
 
 const card = {
   background: "#ffffff",
-  padding: "25px",
-  borderRadius: "16px",
-  marginBottom: "20px",
+  padding: "16px",
+  borderRadius: "14px",
+  marginBottom: "12px",
   boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
 };
 
 const tituloSeccion = {
-  marginBottom: "20px",
+  marginBottom: "12px",
   color: "#111827",
+};
+
+const tituloTabla = {
+  marginTop: "18px",
+  marginBottom: "10px",
 };
 
 const tabla = {
@@ -513,44 +514,44 @@ const tabla = {
 
 const th = {
   textAlign: "left",
-  padding: "15px",
+  padding: "10px",
   borderBottom: "1px solid #e5e7eb",
   background: "#f9fafb",
 };
 
 const td = {
-  padding: "15px",
+  padding: "10px",
   borderBottom: "1px solid #f3f4f6",
 };
 
 const textarea = {
   width: "100%",
-  padding: "12px",
+  padding: "10px",
   borderRadius: "8px",
   border: "1px solid #d1d5db",
   fontSize: "14px",
   boxSizing: "border-box",
-  minHeight: "120px",
-  marginBottom: "12px",
+  minHeight: "90px",
+  marginBottom: "10px",
 };
 
 const inputStyle = {
   width: "100%",
-  padding: "12px",
+  padding: "10px",
   borderRadius: "8px",
   border: "1px solid #d1d5db",
   fontSize: "14px",
   boxSizing: "border-box",
-  marginBottom: "12px",
+  marginBottom: "10px",
 };
 
 const boton = {
-  marginTop: "15px",
+  marginTop: "10px",
   background: "#16a34a",
   color: "#ffffff",
   border: "none",
-  padding: "14px 28px",
-  borderRadius: "10px",
+  padding: "11px 22px",
+  borderRadius: "9px",
   fontWeight: "bold",
   cursor: "pointer",
 };
@@ -559,43 +560,54 @@ const botonCancelar = {
   background: "#6b7280",
   color: "#ffffff",
   border: "none",
-  padding: "14px 24px",
-  borderRadius: "10px",
+  padding: "11px 20px",
+  borderRadius: "9px",
   fontWeight: "bold",
   cursor: "pointer",
 };
 
 const observacionBox = {
   background: "#f9fafb",
-  padding: "15px",
+  padding: "12px",
   borderRadius: "10px",
-  marginBottom: "10px",
+  marginBottom: "8px",
   border: "1px solid #e5e7eb",
 };
 
 const acciones = {
   display: "flex",
-  gap: "15px",
+  gap: "10px",
   flexWrap: "wrap",
-  marginTop: "20px",
-  marginBottom: "20px",
+  marginTop: "10px",
+  marginBottom: "12px",
 };
 
 const botonSecundario = {
   background: "#111827",
   color: "#ffffff",
   border: "none",
-  padding: "14px 24px",
-  borderRadius: "10px",
+  padding: "11px 20px",
+  borderRadius: "9px",
   fontWeight: "bold",
   cursor: "pointer",
 };
 
 const accionBtn = {
-  padding: "8px 14px",
-  marginRight: "8px",
+  padding: "7px 12px",
+  marginRight: "6px",
   borderRadius: "8px",
   border: "1px solid #d1d5db",
   background: "#ffffff",
+  cursor: "pointer",
+};
+
+const whatsappBtn = {
+  marginTop: "8px",
+  padding: "7px 14px",
+  borderRadius: "8px",
+  border: "none",
+  background: "#25D366",
+  color: "#ffffff",
+  fontWeight: "bold",
   cursor: "pointer",
 };
