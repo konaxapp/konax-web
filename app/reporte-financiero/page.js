@@ -142,3 +142,114 @@ return (
 
 );
 }
+const pagina = {
+  minHeight: "100vh",
+  background: "#f3f4f6",
+  padding: "18px",
+  fontFamily: "Arial, sans-serif",
+};
+
+const contenedor = {
+  maxWidth: "1300px",
+  margin: "0 auto",
+};
+
+const logoBox = {
+  textAlign: "center",
+  marginBottom: "20px",
+};
+
+const logo = {
+  width: "110px",
+  height: "auto",
+};
+
+const titulo = {
+  fontSize: "32px",
+  color: "#111827",
+  marginBottom: "10px",
+};
+
+const subtitulo = {
+  color: "#6b7280",
+  marginBottom: "20px",
+};
+
+const card = {
+  background: "#ffffff",
+  padding: "18px",
+  borderRadius: "16px",
+  marginBottom: "20px",
+  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+};
+
+const filtros = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap",
+};
+
+const input = {
+  padding: "10px",
+  border: "1px solid #d1d5db",
+  borderRadius: "8px",
+};
+
+const boton = {
+  background: "#16a34a",
+  color: "#ffffff",
+  border: "none",
+  padding: "10px 20px",
+  borderRadius: "8px",
+  cursor: "pointer",
+};
+
+const cardsGrid = {
+  display: "grid",
+  gridTemplateColumns:
+    "repeat(auto-fit,minmax(220px,1fr))",
+  gap: "20px",
+  marginBottom: "20px",
+};
+
+const cardKpi = {
+  background: "#ffffff",
+  padding: "18px",
+  borderRadius: "16px",
+  boxShadow:
+    "0 2px 10px rgba(0,0,0,0.05)",
+};
+
+const kpiTitulo = {
+  color: "#6b7280",
+  marginBottom: "10px",
+  fontSize: "15px",
+};
+
+const kpiValor = {
+  fontSize: "32px",
+  fontWeight: "bold",
+  color: "#111827",
+};
+
+const tituloSeccion = {
+  marginBottom: "20px",
+  color: "#111827",
+};
+
+const tabla = {
+  width: "100%",
+  borderCollapse: "collapse",
+};
+
+const th = {
+  textAlign: "left",
+  padding: "12px",
+  borderBottom: "1px solid #e5e7eb",
+  background: "#f9fafb",
+};
+
+const td = {
+  padding: "12px",
+  borderBottom: "1px solid #f3f4f6",
+};
