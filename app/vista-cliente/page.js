@@ -145,12 +145,6 @@ export default function VistaCliente() {
 
           <div>
             <h1 style={titulo}>Vista Cliente</h1>
-            <div style={estadoPrincipal}>
-              <span>{cliente.semaforo}</span>
-              <strong>{cliente.estado}</strong>
-              <span>Saldo: ${cliente.saldo.toLocaleString()}</span>
-              <span>Atraso: {cliente.diasAtraso} días</span>
-            </div>
           </div>
         </div>
 
@@ -466,14 +460,6 @@ const titulo = {
   fontSize: "28px",
   marginBottom: "4px",
   color: "#111827",
-};
-
-const estadoPrincipal = {
-  display: "flex",
-  gap: "12px",
-  flexWrap: "wrap",
-  color: "#374151",
-  fontSize: "14px",
 };
 
 const gridResumen = {
