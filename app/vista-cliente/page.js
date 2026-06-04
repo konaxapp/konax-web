@@ -5,6 +5,9 @@ import { useState } from "react";
 export default function VistaCliente() {
   const [observacion, setObservacion] = useState("");
   const [modoEdicion, setModoEdicion] = useState(false);
+  const [fechaPromesa, setFechaPromesa] = useState("");
+  const [montoPromesa, setMontoPromesa] = useState("");
+  const [observacionPromesa, setObservacionPromesa] = useState("");
 
   const cliente = {
     nombre: "Juan Pérez",
@@ -53,6 +56,39 @@ export default function VistaCliente() {
     },
   ];
 
+  const promesas = [
+    {
+      fecha: "20/06/2026",
+      monto: 125,
+      estado: "Vigente",
+      observacion: "Cliente promete pagar por transferencia.",
+    },
+    {
+      fecha: "10/06/2026",
+      monto: 100,
+      estado: "Cumplida",
+      observacion: "Promesa cumplida parcialmente.",
+    },
+  ];
+
+  const ultimasGestiones = [
+    {
+      fecha: "15/06/2026",
+      usuario: "Gestor 1",
+      accion: "WhatsApp enviado",
+    },
+    {
+      fecha: "10/06/2026",
+      usuario: "Gestor 1",
+      accion: "Promesa de pago registrada",
+    },
+    {
+      fecha: "05/06/2026",
+      usuario: "Gestor 1",
+      accion: "Llamada de seguimiento realizada",
+    },
+  ];
+
   const documentos = [
     {
       nombre: "Cedula.pdf",
@@ -76,6 +112,10 @@ export default function VistaCliente() {
     alert("Aquí se generará la Carta de Mora PDF.");
   };
 
+  const abrirWhatsApp = () => {
+    alert("Aquí se abrirá WhatsApp para contactar al cliente.");
+  };
+
   const guardarInformacion = () => {
     alert("Información del cliente guardada correctamente.");
     setModoEdicion(false);
@@ -83,6 +123,13 @@ export default function VistaCliente() {
 
   const subirDocumento = () => {
     alert("Aquí se subirá un documento al expediente digital.");
+  };
+
+  const registrarPromesa = () => {
+    alert("Promesa de pago registrada.");
+    setFechaPromesa("");
+    setMontoPromesa("");
+    setObservacionPromesa("");
   };
 
   return (
@@ -114,6 +161,13 @@ export default function VistaCliente() {
             onClick={generarCartaMora}
           >
             Generar Carta de Mora
+          </button>
+
+          <button
+            style={botonSecundario}
+            onClick={abrirWhatsApp}
+          >
+            WhatsApp
           </button>
 
           {!modoEdicion && (
@@ -150,25 +204,11 @@ export default function VistaCliente() {
 
             {modoEdicion ? (
               <>
-                <input
-                  defaultValue={cliente.nombre}
-                  style={inputStyle}
-                />
+                <input defaultValue={cliente.nombre} style={inputStyle} />
+                <input defaultValue={cliente.cedula} style={inputStyle} />
+                <input defaultValue={cliente.telefono} style={inputStyle} />
 
-                <input
-                  defaultValue={cliente.cedula}
-                  style={inputStyle}
-                />
-
-                <input
-                  defaultValue={cliente.telefono}
-                  style={inputStyle}
-                />
-
-                <select
-                  defaultValue={cliente.estado}
-                  style={inputStyle}
-                >
+                <select defaultValue={cliente.estado} style={inputStyle}>
                   <option>Al Día</option>
                   <option>Mora</option>
                   <option>Promesa de Pago</option>
@@ -191,25 +231,10 @@ export default function VistaCliente() {
 
             {modoEdicion ? (
               <>
-                <input
-                  defaultValue={cliente.producto}
-                  style={inputStyle}
-                />
-
-                <input
-                  defaultValue={cliente.saldo}
-                  style={inputStyle}
-                />
-
-                <input
-                  defaultValue={cliente.cuotaPendiente}
-                  style={inputStyle}
-                />
-
-                <input
-                  defaultValue={cliente.recargo}
-                  style={inputStyle}
-                />
+                <input defaultValue={cliente.producto} style={inputStyle} />
+                <input defaultValue={cliente.saldo} style={inputStyle} />
+                <input defaultValue={cliente.cuotaPendiente} style={inputStyle} />
+                <input defaultValue={cliente.recargo} style={inputStyle} />
               </>
             ) : (
               <>
@@ -226,25 +251,10 @@ export default function VistaCliente() {
 
             {modoEdicion ? (
               <>
-                <input
-                  defaultValue={cliente.cobrador}
-                  style={inputStyle}
-                />
-
-                <input
-                  defaultValue={cliente.diasAtraso}
-                  style={inputStyle}
-                />
-
-                <input
-                  defaultValue={cliente.prioridad}
-                  style={inputStyle}
-                />
-
-                <input
-                  defaultValue={cliente.clasificacion}
-                  style={inputStyle}
-                />
+                <input defaultValue={cliente.cobrador} style={inputStyle} />
+                <input defaultValue={cliente.diasAtraso} style={inputStyle} />
+                <input defaultValue={cliente.prioridad} style={inputStyle} />
+                <input defaultValue={cliente.clasificacion} style={inputStyle} />
               </>
             ) : (
               <>
@@ -262,34 +272,85 @@ export default function VistaCliente() {
 
           {modoEdicion ? (
             <>
-              <textarea
-                defaultValue={cliente.direccion}
-                style={textarea}
-              />
-
-              <input
-                defaultValue={cliente.fechaPago}
-                style={inputStyle}
-              />
-
-              <input
-                defaultValue={cliente.proximoPago}
-                style={inputStyle}
-              />
-
-              <textarea
-                defaultValue={cliente.observacionInicial}
-                style={textarea}
-              />
+              <textarea defaultValue={cliente.direccion} style={textarea} />
+              <input defaultValue={cliente.fechaPago} style={inputStyle} />
+              <input defaultValue={cliente.proximoPago} style={inputStyle} />
+              <textarea defaultValue={cliente.observacionInicial} style={textarea} />
             </>
           ) : (
             <>
               <p><strong>Dirección:</strong> {cliente.direccion}</p>
-              <p><strong>Fecha de pago:</strong> {cliente.fechaPago}</p>
+              <p><strong>Último pago:</strong> {cliente.fechaPago}</p>
               <p><strong>Próximo pago:</strong> {cliente.proximoPago}</p>
               <p><strong>Observación inicial:</strong> {cliente.observacionInicial}</p>
             </>
           )}
+        </div>
+
+        <div style={card}>
+          <h2 style={tituloSeccion}>Promesa de Pago</h2>
+
+          <div style={gridFormulario}>
+            <input
+              type="date"
+              value={fechaPromesa}
+              onChange={(e) => setFechaPromesa(e.target.value)}
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="Monto prometido"
+              value={montoPromesa}
+              onChange={(e) => setMontoPromesa(e.target.value)}
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="Observación de la promesa"
+              value={observacionPromesa}
+              onChange={(e) => setObservacionPromesa(e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+
+          <button style={boton} onClick={registrarPromesa}>
+            Registrar Promesa
+          </button>
+
+          <h3 style={{ marginTop: "25px" }}>Historial de Promesas</h3>
+
+          <table style={tabla}>
+            <thead>
+              <tr>
+                <th style={th}>Fecha</th>
+                <th style={th}>Monto</th>
+                <th style={th}>Estado</th>
+                <th style={th}>Observación</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {promesas.map((promesa, index) => (
+                <tr key={index}>
+                  <td style={td}>{promesa.fecha}</td>
+                  <td style={td}>${promesa.monto}</td>
+                  <td style={td}>{promesa.estado}</td>
+                  <td style={td}>{promesa.observacion}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={card}>
+          <h2 style={tituloSeccion}>Últimas Gestiones</h2>
+
+          {ultimasGestiones.slice(0, 3).map((gestion, index) => (
+            <div key={index} style={observacionBox}>
+              <strong>{gestion.fecha} — {gestion.usuario}</strong>
+              <p>{gestion.accion}</p>
+            </div>
+          ))}
         </div>
 
         <div style={card}>
@@ -345,10 +406,7 @@ export default function VistaCliente() {
         <div style={card}>
           <h2 style={tituloSeccion}>📁 Expediente Digital</h2>
 
-          <button
-            style={boton}
-            onClick={subirDocumento}
-          >
+          <button style={boton} onClick={subirDocumento}>
             + Subir Documento
           </button>
 
@@ -427,6 +485,12 @@ const gridResumen = {
   gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
   gap: "20px",
   marginBottom: "20px",
+};
+
+const gridFormulario = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: "15px",
 };
 
 const card = {
