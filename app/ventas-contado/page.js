@@ -38,11 +38,9 @@ export default function VentasContado() {
     },
   ];
 
-  const subtotal =
-    Number(venta.cantidad || 0) * Number(venta.precio || 0);
-
-  const total =
-    subtotal - Number(venta.descuento || 0);
+  const subtotal = Number(venta.cantidad || 0) * Number(venta.precio || 0);
+  const total = subtotal - Number(venta.descuento || 0);
+  const mostrarTotales = venta.cantidad !== "" || venta.precio !== "";
 
   const formato = (numero) =>
     "$" +
@@ -96,7 +94,7 @@ export default function VentasContado() {
 
           <div style={grid}>
             <input
-              placeholder="Nombre del cliente"
+              placeholder="Buscar cliente por nombre, cédula o teléfono"
               value={venta.cliente}
               onChange={(e) =>
                 setVenta({ ...venta, cliente: e.target.value })
@@ -192,23 +190,21 @@ export default function VentasContado() {
               }
               style={inputStyle}
             />
-
-            <input
-              value={formato(subtotal)}
-              readOnly
-              style={inputStyle}
-            />
-
-            <input
-              value={formato(total)}
-              readOnly
-              style={{
-                ...inputStyle,
-                fontWeight: "bold",
-                color: "#16a34a",
-              }}
-            />
           </div>
+
+          {mostrarTotales && (
+            <div style={resumenVenta}>
+              <div style={totalCard}>
+                <span style={totalLabel}>Subtotal</span>
+                <strong style={totalValor}>{formato(subtotal)}</strong>
+              </div>
+
+              <div style={totalCardPrincipal}>
+                <span style={totalLabel}>Total Venta</span>
+                <strong style={totalValorPrincipal}>{formato(total)}</strong>
+              </div>
+            </div>
+          )}
 
           <textarea
             placeholder="Observación de la venta..."
@@ -257,20 +253,13 @@ export default function VentasContado() {
                     <td style={td}>{item.metodo}</td>
                     <td style={td}>{formato(item.total)}</td>
                     <td style={td}>
-                      <span style={estadoBadge}>
-                        {item.estado}
-                      </span>
+                      <span style={estadoBadge}>{item.estado}</span>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-
-          <p style={nota}>
-            Cuando conectemos Supabase, estas ventas alimentarán Caja,
-            Inventario, Reportes y Ranking de vendedores.
-          </p>
         </div>
       </div>
     </div>
@@ -280,7 +269,9 @@ export default function VentasContado() {
 function KPI({ titulo, valor, icono }) {
   return (
     <div style={cardKpi}>
-      <div style={kpiTitulo}>{icono} {titulo}</div>
+      <div style={kpiTitulo}>
+        {icono} {titulo}
+      </div>
       <div style={kpiValor}>{valor}</div>
     </div>
   );
@@ -376,6 +367,44 @@ const inputStyle = {
   fontSize: "14px",
 };
 
+const resumenVenta = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: "14px",
+  marginTop: "16px",
+};
+
+const totalCard = {
+  background: "#f9fafb",
+  padding: "16px",
+  borderRadius: "14px",
+  border: "1px solid #e5e7eb",
+};
+
+const totalCardPrincipal = {
+  background: "#ecfdf5",
+  padding: "16px",
+  borderRadius: "14px",
+  border: "1px solid #bbf7d0",
+};
+
+const totalLabel = {
+  display: "block",
+  color: "#6b7280",
+  fontSize: "14px",
+  marginBottom: "6px",
+};
+
+const totalValor = {
+  color: "#111827",
+  fontSize: "24px",
+};
+
+const totalValorPrincipal = {
+  color: "#16a34a",
+  fontSize: "26px",
+};
+
 const textarea = {
   width: "100%",
   padding: "12px",
@@ -438,10 +467,4 @@ const estadoBadge = {
   borderRadius: "999px",
   fontSize: "13px",
   fontWeight: "bold",
-};
-
-const nota = {
-  marginTop: "14px",
-  color: "#6b7280",
-  fontSize: "14px",
 };
