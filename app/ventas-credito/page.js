@@ -1,115 +1,280 @@
 "use client";
 
+import { useState } from "react";
+
 export default function VentasCredito() {
+  const [credito, setCredito] = useState({
+    cliente: "",
+    cedula: "",
+    telefono: "",
+    vendedor: "",
+    codigo: "",
+    producto: "",
+    precioVenta: "",
+    inicial: "",
+    plazo: "",
+    frecuencia: "Semanal",
+    cuota: "",
+    primerPago: "",
+    observacion: "",
+  });
 
   const creditos = [
     {
       fecha: "04/06/2026",
+      transaccion: "CR-001",
       cliente: "Juan Pérez",
       producto: "Televisor 55",
-      saldo: "$500",
-      cuota: "$50",
+      saldo: 500,
+      cuota: 50,
       proximoPago: "11/06/2026",
       estado: "Activo",
     },
     {
       fecha: "03/06/2026",
+      transaccion: "CR-002",
       cliente: "María Gómez",
       producto: "Nevera",
-      saldo: "$850",
-      cuota: "$85",
+      saldo: 850,
+      cuota: 85,
       proximoPago: "10/06/2026",
       estado: "Activo",
     },
   ];
 
+  const precioVenta = Number(credito.precioVenta || 0);
+  const inicial = Number(credito.inicial || 0);
+  const plazo = Number(credito.plazo || 0);
+  const montoFinanciar = precioVenta - inicial;
+  const cuotaCalculada = plazo > 0 ? montoFinanciar / plazo : 0;
+  const mostrarResumen = credito.precioVenta !== "" || credito.inicial !== "";
+
+  const formato = (numero) =>
+    "$" +
+    Number(numero || 0).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+    });
+
+  const guardarCredito = () => {
+    alert("Crédito creado correctamente.");
+  };
+
+  const limpiarFormulario = () => {
+    setCredito({
+      cliente: "",
+      cedula: "",
+      telefono: "",
+      vendedor: "",
+      codigo: "",
+      producto: "",
+      precioVenta: "",
+      inicial: "",
+      plazo: "",
+      frecuencia: "Semanal",
+      cuota: "",
+      primerPago: "",
+      observacion: "",
+    });
+  };
+
   return (
     <div style={pagina}>
       <div style={contenedor}>
+        <div style={encabezado}>
+          <img src="/konax-logo.png" alt="KONAX" style={logo} />
 
-        <div style={logoBox}>
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            style={logo}
-          />
+          <div>
+            <h1 style={titulo}>Ventas Crédito</h1>
+            <p style={subtitulo}>
+              Registro de ventas financiadas, cuotas, saldos y próximos pagos.
+            </p>
+          </div>
         </div>
 
-        <h1 style={titulo}>
-          Ventas Crédito
-        </h1>
-
-        <p style={subtitulo}>
-          Registro y administración de créditos
-        </p>
-
         <div style={cardsGrid}>
-          <div style={cardKpi}>
-            <div style={kpiTitulo}>📄 Créditos Activos</div>
-            <div style={kpiValor}>85</div>
-          </div>
-
-          <div style={cardKpi}>
-            <div style={kpiTitulo}>📈 Créditos Mes</div>
-            <div style={kpiValor}>18</div>
-          </div>
-
-          <div style={cardKpi}>
-            <div style={kpiTitulo}>💰 Cartera Activa</div>
-            <div style={kpiValor}>$350,000</div>
-          </div>
-
-          <div style={cardKpi}>
-            <div style={kpiTitulo}>🚨 Clientes Mora</div>
-            <div style={kpiValor}>25</div>
-          </div>
+          <KPI titulo="Créditos Activos" valor="85" icono="📄" />
+          <KPI titulo="Créditos Mes" valor="18" icono="📈" />
+          <KPI titulo="Cartera Activa" valor="$350,000.00" icono="💰" />
+          <KPI titulo="Clientes Mora" valor="25" icono="🚨" />
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>
-            Nuevo Crédito
-          </h2>
+          <h2 style={tituloSeccion}>Nuevo Crédito</h2>
 
           <div style={grid}>
-            <input placeholder="Cliente" style={inputStyle} />
-            <input placeholder="Vendedor" style={inputStyle} />
-            <input placeholder="Producto" style={inputStyle} />
-            <input placeholder="Precio Venta" style={inputStyle} />
-            <input placeholder="Inicial" style={inputStyle} />
-            <input placeholder="Monto Financiar" style={inputStyle} />
-            <input placeholder="Plazo" style={inputStyle} />
+            <input
+              placeholder="Buscar cliente por nombre, cédula o teléfono"
+              value={credito.cliente}
+              onChange={(e) =>
+                setCredito({ ...credito, cliente: e.target.value })
+              }
+              style={inputStyle}
+            />
 
-            <select style={inputStyle}>
+            <input
+              placeholder="Cédula"
+              value={credito.cedula}
+              onChange={(e) =>
+                setCredito({ ...credito, cedula: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="Teléfono"
+              value={credito.telefono}
+              onChange={(e) =>
+                setCredito({ ...credito, telefono: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="Vendedor"
+              value={credito.vendedor}
+              onChange={(e) =>
+                setCredito({ ...credito, vendedor: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="Código del producto"
+              value={credito.codigo}
+              onChange={(e) =>
+                setCredito({ ...credito, codigo: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="Producto"
+              value={credito.producto}
+              onChange={(e) =>
+                setCredito({ ...credito, producto: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            <input
+              type="number"
+              placeholder="Precio de venta"
+              value={credito.precioVenta}
+              onChange={(e) =>
+                setCredito({ ...credito, precioVenta: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            <input
+              type="number"
+              placeholder="Inicial / Abono inicial"
+              value={credito.inicial}
+              onChange={(e) =>
+                setCredito({ ...credito, inicial: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            <input
+              type="number"
+              placeholder="Plazo / cantidad de cuotas"
+              value={credito.plazo}
+              onChange={(e) =>
+                setCredito({ ...credito, plazo: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            <select
+              value={credito.frecuencia}
+              onChange={(e) =>
+                setCredito({ ...credito, frecuencia: e.target.value })
+              }
+              style={inputStyle}
+            >
               <option>Semanal</option>
               <option>Quincenal</option>
               <option>Mensual</option>
             </select>
 
-            <input placeholder="Cuota" style={inputStyle} />
-            <input type="date" style={inputStyle} />
+            <input
+              value={formato(cuotaCalculada)}
+              readOnly
+              style={{
+                ...inputStyle,
+                fontWeight: "bold",
+                color: "#16a34a",
+              }}
+            />
+
+            <input
+              type="date"
+              value={credito.primerPago}
+              onChange={(e) =>
+                setCredito({ ...credito, primerPago: e.target.value })
+              }
+              style={inputStyle}
+            />
           </div>
 
+          {mostrarResumen && (
+            <div style={resumenCredito}>
+              <div style={totalCard}>
+                <span style={totalLabel}>Precio Venta</span>
+                <strong style={totalValor}>{formato(precioVenta)}</strong>
+              </div>
+
+              <div style={totalCard}>
+                <span style={totalLabel}>Inicial</span>
+                <strong style={totalValor}>{formato(inicial)}</strong>
+              </div>
+
+              <div style={totalCardPrincipal}>
+                <span style={totalLabel}>Monto a Financiar</span>
+                <strong style={totalValorPrincipal}>
+                  {formato(montoFinanciar)}
+                </strong>
+              </div>
+
+              <div style={totalCardPrincipal}>
+                <span style={totalLabel}>Cuota Sugerida</span>
+                <strong style={totalValorPrincipal}>
+                  {formato(cuotaCalculada)}
+                </strong>
+              </div>
+            </div>
+          )}
+
+          <textarea
+            placeholder="Observación del crédito..."
+            value={credito.observacion}
+            onChange={(e) =>
+              setCredito({ ...credito, observacion: e.target.value })
+            }
+            style={textarea}
+          />
+
           <div style={acciones}>
-            <button style={boton}>
+            <button style={boton} onClick={guardarCredito}>
               Crear Crédito
             </button>
 
-            <button style={botonGris}>
+            <button style={botonGris} onClick={limpiarFormulario}>
               Limpiar
             </button>
           </div>
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>
-            Historial de Créditos
-          </h2>
+          <h2 style={tituloSeccion}>Historial de Créditos</h2>
 
           <div style={{ overflowX: "auto" }}>
             <table style={tabla}>
               <thead>
                 <tr>
                   <th style={th}>Fecha</th>
+                  <th style={th}>Transacción</th>
                   <th style={th}>Cliente</th>
                   <th style={th}>Producto</th>
                   <th style={th}>Saldo</th>
@@ -123,20 +288,33 @@ export default function VentasCredito() {
                 {creditos.map((item, index) => (
                   <tr key={index}>
                     <td style={td}>{item.fecha}</td>
+                    <td style={td}>{item.transaccion}</td>
                     <td style={td}>{item.cliente}</td>
                     <td style={td}>{item.producto}</td>
-                    <td style={td}>{item.saldo}</td>
-                    <td style={td}>{item.cuota}</td>
+                    <td style={td}>{formato(item.saldo)}</td>
+                    <td style={td}>{formato(item.cuota)}</td>
                     <td style={td}>{item.proximoPago}</td>
-                    <td style={td}>{item.estado}</td>
+                    <td style={td}>
+                      <span style={estadoBadge}>{item.estado}</span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </div>
-
       </div>
+    </div>
+  );
+}
+
+function KPI({ titulo, valor, icono }) {
+  return (
+    <div style={cardKpi}>
+      <div style={kpiTitulo}>
+        {icono} {titulo}
+      </div>
+      <div style={kpiValor}>{valor}</div>
     </div>
   );
 }
@@ -149,51 +327,43 @@ const pagina = {
 };
 
 const contenedor = {
-  maxWidth: "1300px",
+  maxWidth: "1400px",
   margin: "0 auto",
 };
 
-const logoBox = {
-  textAlign: "center",
-  marginBottom: "20px",
+const encabezado = {
+  display: "flex",
+  alignItems: "center",
+  gap: "14px",
+  marginBottom: "18px",
 };
 
 const logo = {
   width: "110px",
+  height: "auto",
 };
 
 const titulo = {
   fontSize: "32px",
+  margin: 0,
   color: "#111827",
-  marginBottom: "10px",
 };
 
 const subtitulo = {
   color: "#6b7280",
-  marginBottom: "20px",
-};
-
-const card = {
-  background: "#fff",
-  padding: "18px",
-  borderRadius: "16px",
-  marginBottom: "20px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-};
-
-const tituloSeccion = {
-  marginBottom: "20px",
+  marginTop: "5px",
+  fontSize: "15px",
 };
 
 const cardsGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: "20px",
-  marginBottom: "20px",
+  gap: "16px",
+  marginBottom: "16px",
 };
 
 const cardKpi = {
-  background: "#fff",
+  background: "#ffffff",
   padding: "18px",
   borderRadius: "16px",
   boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
@@ -201,18 +371,33 @@ const cardKpi = {
 
 const kpiTitulo = {
   color: "#6b7280",
+  marginBottom: "8px",
+  fontSize: "14px",
 };
 
 const kpiValor = {
   fontSize: "28px",
   fontWeight: "bold",
+  color: "#111827",
+};
+
+const card = {
+  background: "#ffffff",
+  padding: "18px",
+  borderRadius: "16px",
+  marginBottom: "16px",
+  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+};
+
+const tituloSeccion = {
+  marginBottom: "16px",
+  color: "#111827",
 };
 
 const grid = {
   display: "grid",
-  gridTemplateColumns:
-    "repeat(auto-fit,minmax(220px,1fr))",
-  gap: "15px",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: "14px",
 };
 
 const inputStyle = {
@@ -221,29 +406,82 @@ const inputStyle = {
   borderRadius: "8px",
   border: "1px solid #d1d5db",
   boxSizing: "border-box",
+  fontSize: "14px",
+};
+
+const resumenCredito = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: "14px",
+  marginTop: "16px",
+};
+
+const totalCard = {
+  background: "#f9fafb",
+  padding: "16px",
+  borderRadius: "14px",
+  border: "1px solid #e5e7eb",
+};
+
+const totalCardPrincipal = {
+  background: "#ecfdf5",
+  padding: "16px",
+  borderRadius: "14px",
+  border: "1px solid #bbf7d0",
+};
+
+const totalLabel = {
+  display: "block",
+  color: "#6b7280",
+  fontSize: "14px",
+  marginBottom: "6px",
+};
+
+const totalValor = {
+  color: "#111827",
+  fontSize: "24px",
+};
+
+const totalValorPrincipal = {
+  color: "#16a34a",
+  fontSize: "26px",
+};
+
+const textarea = {
+  width: "100%",
+  padding: "12px",
+  borderRadius: "8px",
+  border: "1px solid #d1d5db",
+  boxSizing: "border-box",
+  fontSize: "14px",
+  minHeight: "90px",
+  marginTop: "16px",
 };
 
 const acciones = {
   display: "flex",
   gap: "10px",
-  marginTop: "20px",
+  marginTop: "16px",
+  flexWrap: "wrap",
 };
 
 const boton = {
   background: "#16a34a",
-  color: "#fff",
+  color: "#ffffff",
   border: "none",
   padding: "12px 24px",
-  borderRadius: "8px",
+  borderRadius: "9px",
+  fontWeight: "bold",
   cursor: "pointer",
 };
 
 const botonGris = {
   background: "#6b7280",
-  color: "#fff",
+  color: "#ffffff",
   border: "none",
   padding: "12px 24px",
-  borderRadius: "8px",
+  borderRadius: "9px",
+  fontWeight: "bold",
   cursor: "pointer",
 };
 
@@ -262,4 +500,13 @@ const th = {
 const td = {
   padding: "12px",
   borderBottom: "1px solid #f3f4f6",
+};
+
+const estadoBadge = {
+  background: "#dcfce7",
+  color: "#166534",
+  padding: "6px 10px",
+  borderRadius: "999px",
+  fontSize: "13px",
+  fontWeight: "bold",
 };
