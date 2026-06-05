@@ -3,6 +3,12 @@
 import { useState } from "react";
 
 export default function Abonos() {
+  const calcularVencimiento = () => {
+    const fecha = new Date();
+    fecha.setMonth(fecha.getMonth() + 3);
+    return fecha.toISOString().split("T")[0];
+  };
+
   const [abono, setAbono] = useState({
     cliente: "",
     cedula: "",
@@ -12,7 +18,7 @@ export default function Abonos() {
     producto: "",
     valorProducto: "",
     abonoRecibido: "",
-    fechaVencimiento: "",
+    fechaVencimiento: calcularVencimiento(),
     metodo: "Efectivo",
     observacion: "",
   });
@@ -47,6 +53,7 @@ export default function Abonos() {
   const valorProducto = Number(abono.valorProducto || 0);
   const abonoRecibido = Number(abono.abonoRecibido || 0);
   const saldoPendiente = valorProducto - abonoRecibido;
+
   const mostrarResumen =
     abono.valorProducto !== "" || abono.abonoRecibido !== "";
 
@@ -70,7 +77,7 @@ export default function Abonos() {
       producto: "",
       valorProducto: "",
       abonoRecibido: "",
-      fechaVencimiento: "",
+      fechaVencimiento: calcularVencimiento(),
       metodo: "Efectivo",
       observacion: "",
     });
@@ -102,7 +109,7 @@ export default function Abonos() {
 
           <div style={grid}>
             <input
-              placeholder="Buscar cliente por nombre, cédula o teléfono"
+              placeholder="Buscar cliente..."
               value={abono.cliente}
               onChange={(e) =>
                 setAbono({ ...abono, cliente: e.target.value })
@@ -192,10 +199,13 @@ export default function Abonos() {
             <input
               type="date"
               value={abono.fechaVencimiento}
-              onChange={(e) =>
-                setAbono({ ...abono, fechaVencimiento: e.target.value })
-              }
-              style={inputStyle}
+              readOnly
+              style={{
+                ...inputStyle,
+                background: "#f9fafb",
+                color: "#374151",
+                fontWeight: "bold",
+              }}
             />
           </div>
 
@@ -219,8 +229,8 @@ export default function Abonos() {
               </div>
 
               <div style={totalCard}>
-                <span style={totalLabel}>Estado</span>
-                <strong style={totalValor}>Activo</strong>
+                <span style={totalLabel}>Vencimiento</span>
+                <strong style={totalValor}>{abono.fechaVencimiento}</strong>
               </div>
             </div>
           )}
@@ -422,12 +432,12 @@ const totalLabel = {
 
 const totalValor = {
   color: "#111827",
-  fontSize: "24px",
+  fontSize: "22px",
 };
 
 const totalValorPrincipal = {
   color: "#16a34a",
-  fontSize: "26px",
+  fontSize: "24px",
 };
 
 const textarea = {
