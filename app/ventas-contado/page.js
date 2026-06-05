@@ -1,136 +1,244 @@
 "use client";
 
+import { useState } from "react";
+
 export default function VentasContado() {
+  const [venta, setVenta] = useState({
+    cliente: "",
+    cedula: "",
+    telefono: "",
+    vendedor: "",
+    metodo: "Efectivo",
+    producto: "",
+    codigo: "",
+    cantidad: "",
+    precio: "",
+    descuento: "",
+    observacion: "",
+  });
+
   const ventas = [
     {
       fecha: "04/06/2026",
+      transaccion: "VC-001",
       cliente: "Juan Pérez",
       vendedor: "Noriel",
       metodo: "Yappy",
-      total: "$250",
+      total: 250,
       estado: "Completada",
     },
     {
       fecha: "04/06/2026",
+      transaccion: "VC-002",
       cliente: "María Gómez",
       vendedor: "Noriel",
       metodo: "Efectivo",
-      total: "$480",
+      total: 480,
       estado: "Completada",
     },
   ];
 
+  const subtotal =
+    Number(venta.cantidad || 0) * Number(venta.precio || 0);
+
+  const total =
+    subtotal - Number(venta.descuento || 0);
+
+  const formato = (numero) =>
+    "$" +
+    Number(numero || 0).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+    });
+
+  const guardarVenta = () => {
+    alert("Venta contado registrada correctamente.");
+  };
+
+  const limpiarFormulario = () => {
+    setVenta({
+      cliente: "",
+      cedula: "",
+      telefono: "",
+      vendedor: "",
+      metodo: "Efectivo",
+      producto: "",
+      codigo: "",
+      cantidad: "",
+      precio: "",
+      descuento: "",
+      observacion: "",
+    });
+  };
+
   return (
     <div style={pagina}>
       <div style={contenedor}>
-        <div style={logoBox}>
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            style={logo}
-          />
+        <div style={encabezado}>
+          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+
+          <div>
+            <h1 style={titulo}>Ventas Contado</h1>
+            <p style={subtitulo}>
+              Registro, control y seguimiento de ventas pagadas al contado.
+            </p>
+          </div>
         </div>
 
-        <h1 style={titulo}>
-          Ventas Contado
-        </h1>
-
-        <p style={subtitulo}>
-          Registro y control de ventas al contado
-        </p>
-
         <div style={cardsGrid}>
-          <div style={cardKpi}>
-            <div style={kpiTitulo}>💰 Ventas Hoy</div>
-            <div style={kpiValor}>$1,250</div>
-          </div>
-
-          <div style={cardKpi}>
-            <div style={kpiTitulo}>📈 Ventas Mes</div>
-            <div style={kpiValor}>$18,500</div>
-          </div>
-
-          <div style={cardKpi}>
-            <div style={kpiTitulo}>🧾 Facturas</div>
-            <div style={kpiValor}>45</div>
-          </div>
-
-          <div style={cardKpi}>
-            <div style={kpiTitulo}>👥 Clientes</div>
-            <div style={kpiValor}>32</div>
-          </div>
+          <KPI titulo="Ventas Hoy" valor="$1,250.00" icono="💰" />
+          <KPI titulo="Ventas Mes" valor="$18,500.00" icono="📈" />
+          <KPI titulo="Facturas" valor="45" icono="🧾" />
+          <KPI titulo="Clientes" valor="32" icono="👥" />
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>
-            Nueva Venta
-          </h2>
+          <h2 style={tituloSeccion}>Nueva Venta Contado</h2>
 
           <div style={grid}>
             <input
-              placeholder="Cliente"
+              placeholder="Nombre del cliente"
+              value={venta.cliente}
+              onChange={(e) =>
+                setVenta({ ...venta, cliente: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="Cédula"
+              value={venta.cedula}
+              onChange={(e) =>
+                setVenta({ ...venta, cedula: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="Teléfono"
+              value={venta.telefono}
+              onChange={(e) =>
+                setVenta({ ...venta, telefono: e.target.value })
+              }
               style={inputStyle}
             />
 
             <input
               placeholder="Vendedor"
+              value={venta.vendedor}
+              onChange={(e) =>
+                setVenta({ ...venta, vendedor: e.target.value })
+              }
               style={inputStyle}
             />
 
-            <select style={inputStyle}>
+            <select
+              value={venta.metodo}
+              onChange={(e) =>
+                setVenta({ ...venta, metodo: e.target.value })
+              }
+              style={inputStyle}
+            >
               <option>Efectivo</option>
               <option>Transferencia</option>
               <option>Yappy</option>
               <option>Tarjeta</option>
+              <option>Otro</option>
             </select>
 
             <input
+              placeholder="Código del producto"
+              value={venta.codigo}
+              onChange={(e) =>
+                setVenta({ ...venta, codigo: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            <input
               placeholder="Producto"
+              value={venta.producto}
+              onChange={(e) =>
+                setVenta({ ...venta, producto: e.target.value })
+              }
               style={inputStyle}
             />
 
             <input
+              type="number"
               placeholder="Cantidad"
+              value={venta.cantidad}
+              onChange={(e) =>
+                setVenta({ ...venta, cantidad: e.target.value })
+              }
               style={inputStyle}
             />
 
             <input
-              placeholder="Precio"
+              type="number"
+              placeholder="Precio unitario"
+              value={venta.precio}
+              onChange={(e) =>
+                setVenta({ ...venta, precio: e.target.value })
+              }
               style={inputStyle}
             />
 
             <input
+              type="number"
               placeholder="Descuento"
+              value={venta.descuento}
+              onChange={(e) =>
+                setVenta({ ...venta, descuento: e.target.value })
+              }
               style={inputStyle}
             />
 
             <input
-              placeholder="Total"
+              value={formato(subtotal)}
+              readOnly
               style={inputStyle}
+            />
+
+            <input
+              value={formato(total)}
+              readOnly
+              style={{
+                ...inputStyle,
+                fontWeight: "bold",
+                color: "#16a34a",
+              }}
             />
           </div>
 
+          <textarea
+            placeholder="Observación de la venta..."
+            value={venta.observacion}
+            onChange={(e) =>
+              setVenta({ ...venta, observacion: e.target.value })
+            }
+            style={textarea}
+          />
+
           <div style={acciones}>
-            <button style={boton}>
-              Guardar Venta
+            <button style={boton} onClick={guardarVenta}>
+              Registrar Venta
             </button>
 
-            <button style={botonGris}>
+            <button style={botonGris} onClick={limpiarFormulario}>
               Limpiar
             </button>
           </div>
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>
-            Historial de Ventas
-          </h2>
+          <h2 style={tituloSeccion}>Historial de Ventas</h2>
 
           <div style={{ overflowX: "auto" }}>
             <table style={tabla}>
               <thead>
                 <tr>
                   <th style={th}>Fecha</th>
+                  <th style={th}>Transacción</th>
                   <th style={th}>Cliente</th>
                   <th style={th}>Vendedor</th>
                   <th style={th}>Método</th>
@@ -143,18 +251,37 @@ export default function VentasContado() {
                 {ventas.map((item, index) => (
                   <tr key={index}>
                     <td style={td}>{item.fecha}</td>
+                    <td style={td}>{item.transaccion}</td>
                     <td style={td}>{item.cliente}</td>
                     <td style={td}>{item.vendedor}</td>
                     <td style={td}>{item.metodo}</td>
-                    <td style={td}>{item.total}</td>
-                    <td style={td}>{item.estado}</td>
+                    <td style={td}>{formato(item.total)}</td>
+                    <td style={td}>
+                      <span style={estadoBadge}>
+                        {item.estado}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          <p style={nota}>
+            Cuando conectemos Supabase, estas ventas alimentarán Caja,
+            Inventario, Reportes y Ranking de vendedores.
+          </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function KPI({ titulo, valor, icono }) {
+  return (
+    <div style={cardKpi}>
+      <div style={kpiTitulo}>{icono} {titulo}</div>
+      <div style={kpiValor}>{valor}</div>
     </div>
   );
 }
@@ -167,47 +294,39 @@ const pagina = {
 };
 
 const contenedor = {
-  maxWidth: "1300px",
+  maxWidth: "1400px",
   margin: "0 auto",
 };
 
-const logoBox = {
-  textAlign: "center",
-  marginBottom: "20px",
+const encabezado = {
+  display: "flex",
+  alignItems: "center",
+  gap: "14px",
+  marginBottom: "18px",
 };
 
 const logo = {
   width: "110px",
+  height: "auto",
 };
 
 const titulo = {
   fontSize: "32px",
+  margin: 0,
   color: "#111827",
-  marginBottom: "10px",
 };
 
 const subtitulo = {
   color: "#6b7280",
-  marginBottom: "20px",
-};
-
-const card = {
-  background: "#ffffff",
-  padding: "18px",
-  borderRadius: "16px",
-  marginBottom: "20px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-};
-
-const tituloSeccion = {
-  marginBottom: "20px",
+  marginTop: "5px",
+  fontSize: "15px",
 };
 
 const cardsGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: "20px",
-  marginBottom: "20px",
+  gap: "16px",
+  marginBottom: "16px",
 };
 
 const cardKpi = {
@@ -219,19 +338,33 @@ const cardKpi = {
 
 const kpiTitulo = {
   color: "#6b7280",
-  marginBottom: "10px",
+  marginBottom: "8px",
+  fontSize: "14px",
 };
 
 const kpiValor = {
   fontSize: "28px",
   fontWeight: "bold",
+  color: "#111827",
+};
+
+const card = {
+  background: "#ffffff",
+  padding: "18px",
+  borderRadius: "16px",
+  marginBottom: "16px",
+  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+};
+
+const tituloSeccion = {
+  marginBottom: "16px",
+  color: "#111827",
 };
 
 const grid = {
   display: "grid",
-  gridTemplateColumns:
-    "repeat(auto-fit,minmax(220px,1fr))",
-  gap: "15px",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: "14px",
 };
 
 const inputStyle = {
@@ -240,29 +373,44 @@ const inputStyle = {
   borderRadius: "8px",
   border: "1px solid #d1d5db",
   boxSizing: "border-box",
+  fontSize: "14px",
+};
+
+const textarea = {
+  width: "100%",
+  padding: "12px",
+  borderRadius: "8px",
+  border: "1px solid #d1d5db",
+  boxSizing: "border-box",
+  fontSize: "14px",
+  minHeight: "90px",
+  marginTop: "16px",
 };
 
 const acciones = {
   display: "flex",
   gap: "10px",
-  marginTop: "20px",
+  marginTop: "16px",
+  flexWrap: "wrap",
 };
 
 const boton = {
   background: "#16a34a",
-  color: "#fff",
+  color: "#ffffff",
   border: "none",
   padding: "12px 24px",
-  borderRadius: "8px",
+  borderRadius: "9px",
+  fontWeight: "bold",
   cursor: "pointer",
 };
 
 const botonGris = {
   background: "#6b7280",
-  color: "#fff",
+  color: "#ffffff",
   border: "none",
   padding: "12px 24px",
-  borderRadius: "8px",
+  borderRadius: "9px",
+  fontWeight: "bold",
   cursor: "pointer",
 };
 
@@ -281,4 +429,19 @@ const th = {
 const td = {
   padding: "12px",
   borderBottom: "1px solid #f3f4f6",
+};
+
+const estadoBadge = {
+  background: "#dcfce7",
+  color: "#166534",
+  padding: "6px 10px",
+  borderRadius: "999px",
+  fontSize: "13px",
+  fontWeight: "bold",
+};
+
+const nota = {
+  marginTop: "14px",
+  color: "#6b7280",
+  fontSize: "14px",
 };
