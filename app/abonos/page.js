@@ -195,18 +195,6 @@ export default function Abonos() {
               <option>Tarjeta</option>
               <option>Otro</option>
             </select>
-
-            <input
-              type="date"
-              value={abono.fechaVencimiento}
-              readOnly
-              style={{
-                ...inputStyle,
-                background: "#f9fafb",
-                color: "#374151",
-                fontWeight: "bold",
-              }}
-            />
           </div>
 
           {mostrarResumen && (
@@ -228,9 +216,11 @@ export default function Abonos() {
                 </strong>
               </div>
 
-              <div style={totalCard}>
-                <span style={totalLabel}>Vencimiento</span>
-                <strong style={totalValor}>{abono.fechaVencimiento}</strong>
+              <div style={totalCardFecha}>
+                <span style={totalLabel}>📅 Vence el</span>
+                <strong style={totalValorFecha}>
+                  {abono.fechaVencimiento}
+                </strong>
               </div>
             </div>
           )}
@@ -423,6 +413,13 @@ const totalCardPrincipal = {
   border: "1px solid #bbf7d0",
 };
 
+const totalCardFecha = {
+  background: "#eff6ff",
+  padding: "16px",
+  borderRadius: "14px",
+  border: "1px solid #bfdbfe",
+};
+
 const totalLabel = {
   display: "block",
   color: "#6b7280",
@@ -438,6 +435,11 @@ const totalValor = {
 const totalValorPrincipal = {
   color: "#16a34a",
   fontSize: "24px",
+};
+
+const totalValorFecha = {
+  color: "#1e40af",
+  fontSize: "22px",
 };
 
 const textarea = {
