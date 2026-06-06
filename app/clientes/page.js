@@ -15,6 +15,12 @@ export default function Clientes() {
   const [direccion, setDireccion] = useState("");
   const [estado, setEstado] = useState("Activo");
 
+  const [montoOriginal, setMontoOriginal] = useState("");
+  const [saldoActual, setSaldoActual] = useState("");
+  const [cuota, setCuota] = useState("");
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaVencimiento, setFechaVencimiento] = useState("");
+
   useEffect(() => {
     cargarClientes();
   }, []);
@@ -83,6 +89,12 @@ export default function Clientes() {
     setTelefono("");
     setDireccion("");
     setEstado("Activo");
+
+    setMontoOriginal("");
+    setSaldoActual("");
+    setCuota("");
+    setFechaInicio("");
+    setFechaVencimiento("");
 
     cargarClientes();
   }
@@ -235,18 +247,45 @@ export default function Clientes() {
               <option>Descuento Directo</option>
             </select>
 
-            <input placeholder="Monto Original" style={inputStyle} />
-            <input placeholder="Saldo Actual" style={inputStyle} />
-            <input placeholder="Cuota" style={inputStyle} />
+            <input
+              placeholder="Monto Original"
+              value={montoOriginal}
+              onChange={(e) => setMontoOriginal(e.target.value)}
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="Saldo Actual"
+              value={saldoActual}
+              onChange={(e) => setSaldoActual(e.target.value)}
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="Cuota"
+              value={cuota}
+              onChange={(e) => setCuota(e.target.value)}
+              style={inputStyle}
+            />
 
             <div>
               <label style={labelStyle}>Fecha de inicio</label>
-              <input type="date" style={inputStyle} />
+              <input
+                type="date"
+                value={fechaInicio}
+                onChange={(e) => setFechaInicio(e.target.value)}
+                style={inputStyle}
+              />
             </div>
 
             <div>
               <label style={labelStyle}>Fecha de vencimiento</label>
-              <input type="date" style={inputStyle} />
+              <input
+                type="date"
+                value={fechaVencimiento}
+                onChange={(e) => setFechaVencimiento(e.target.value)}
+                style={inputStyle}
+              />
             </div>
           </div>
         </div>
