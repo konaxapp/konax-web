@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 
 export default function Clientes() {
   const [buscar, setBuscar] = useState("");
+  const [buscarEjecutado, setBuscarEjecutado] = useState(false);
   const [clientes, setClientes] = useState([]);
 
   const [cedula, setCedula] = useState("");
@@ -41,6 +42,15 @@ export default function Clientes() {
       (cliente.telefono || "").toLowerCase().includes(texto)
     );
   });
+
+  function ejecutarBusqueda() {
+    if (buscar.trim().length < 4) {
+      alert("Ingrese mínimo 4 caracteres.");
+      return;
+    }
+
+    setBuscarEjecutado(true);
+  }
 
   async function guardarCliente() {
     if (!cedula || !nombre || !telefono) {
@@ -117,17 +127,20 @@ export default function Clientes() {
           <input
             placeholder="Buscar por nombre, cédula o teléfono..."
             value={buscar}
-            onChange={(e) => setBuscar(e.target.value)}
+            onChange={(e) => {
+              setBuscar(e.target.value);
+              setBuscarEjecutado(false);
+            }}
             style={inputStyle}
           />
 
-          {buscar.trim() !== "" && buscar.trim().length < 4 && (
-            <p style={mensajeAyuda}>
-              Escribe al menos 4 caracteres para buscar.
-            </p>
-          )}
+          <div style={{ marginTop: "15px" }}>
+            <button onClick={ejecutarBusqueda} style={botonBuscar}>
+              Buscar
+            </button>
+          </div>
 
-          {buscar.trim().length >= 4 && (
+          {buscarEjecutado && (
             <div style={{ marginTop: "20px", overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
@@ -322,10 +335,14 @@ const inputStyle = {
   boxSizing: "border-box",
 };
 
-const mensajeAyuda = {
-  marginTop: "12px",
-  color: "#6b7280",
-  fontSize: "14px",
+const botonBuscar = {
+  background: "#2563eb",
+  color: "#ffffff",
+  border: "none",
+  padding: "12px 25px",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontWeight: "bold",
 };
 
 const labelStyle = {
