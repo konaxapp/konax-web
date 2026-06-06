@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function Clientes() {
   const [buscar, setBuscar] = useState("");
+  const [clientes, setClientes] = useState([]);
 
   const [cedula, setCedula] = useState("");
   const [nombre, setNombre] = useState("");
@@ -13,33 +14,33 @@ export default function Clientes() {
   const [direccion, setDireccion] = useState("");
   const [estado, setEstado] = useState("Activo");
 
-  const clientes = [
-    {
-      nombre: "Juan Pérez",
-      cedula: "8-123-456",
-      telefono: "6000-0000",
-      gestor: "Gestor 1",
-      saldo: 1500,
-      atraso: 0,
-      estado: "Al Día",
-    },
-    {
-      nombre: "María Díaz",
-      cedula: "8-456-789",
-      telefono: "6999-9999",
-      gestor: "Gestor 2",
-      saldo: 800,
-      atraso: 15,
-      estado: "Mora",
-    },
-  ];
+  useEffect(() => {
+    cargarClientes();
+  }, []);
 
-  const clientesFiltrados = clientes.filter(
-    (cliente) =>
-      cliente.nombre.toLowerCase().includes(buscar.toLowerCase()) ||
-      cliente.cedula.toLowerCase().includes(buscar.toLowerCase()) ||
-      cliente.telefono.toLowerCase().includes(buscar.toLowerCase())
-  );
+  async function cargarClientes() {
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setClientes(data || []);
+  }
+
+  const clientesFiltrados = clientes.filter((cliente) => {
+    const texto = buscar.toLowerCase();
+
+    return (
+      (cliente.nombre || "").toLowerCase().includes(texto) ||
+      (cliente.cedula || "").toLowerCase().includes(texto) ||
+      (cliente.telefono || "").toLowerCase().includes(texto)
+    );
+  });
 
   async function guardarCliente() {
     if (!cedula || !nombre || !telefono) {
@@ -72,6 +73,8 @@ export default function Clientes() {
     setTelefono("");
     setDireccion("");
     setEstado("Activo");
+
+    cargarClientes();
   }
 
   return (
@@ -120,9 +123,7 @@ export default function Clientes() {
                     <th style={thStyle}>Nombre</th>
                     <th style={thStyle}>Cédula</th>
                     <th style={thStyle}>Teléfono</th>
-                    <th style={thStyle}>Gestor</th>
                     <th style={thStyle}>Saldo</th>
-                    <th style={thStyle}>Días Atraso</th>
                     <th style={thStyle}>Estado</th>
                     <th style={thStyle}>Acciones</th>
                   </tr>
@@ -130,14 +131,12 @@ export default function Clientes() {
 
                 <tbody>
                   {clientesFiltrados.length > 0 ? (
-                    clientesFiltrados.map((cliente, index) => (
-                      <tr key={index}>
+                    clientesFiltrados.map((cliente) => (
+                      <tr key={cliente.id}>
                         <td style={tdStyle}>{cliente.nombre}</td>
                         <td style={tdStyle}>{cliente.cedula}</td>
                         <td style={tdStyle}>{cliente.telefono}</td>
-                        <td style={tdStyle}>{cliente.gestor}</td>
-                        <td style={tdStyle}>${cliente.saldo.toLocaleString()}</td>
-                        <td style={tdStyle}>{cliente.atraso}</td>
+                        <td style={tdStyle}>$0.00</td>
                         <td style={tdStyle}>{cliente.estado}</td>
                         <td style={tdStyle}>
                           <button style={accionBtn}>Ver</button>
@@ -147,7 +146,7 @@ export default function Clientes() {
                     ))
                   ) : (
                     <tr>
-                      <td style={tdStyle} colSpan="8">
+                      <td style={tdStyle} colSpan="6">
                         No se encontraron clientes.
                       </td>
                     </tr>
@@ -200,7 +199,6 @@ export default function Clientes() {
             />
 
             <input placeholder="Nombre referencia personal" style={inputStyle} />
-
             <input placeholder="Teléfono referencia" style={inputStyle} />
           </div>
         </div>
