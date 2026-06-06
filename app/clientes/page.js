@@ -96,7 +96,13 @@ export default function Clientes() {
         </div>
 
         <div style={{ marginBottom: "30px" }}>
-          <h1 style={{ fontSize: "40px", marginBottom: "10px", color: "#111827" }}>
+          <h1
+            style={{
+              fontSize: "40px",
+              marginBottom: "10px",
+              color: "#111827",
+            }}
+          >
             Clientes
           </h1>
 
@@ -115,7 +121,13 @@ export default function Clientes() {
             style={inputStyle}
           />
 
-          {buscar.trim() !== "" && (
+          {buscar.trim() !== "" && buscar.trim().length < 4 && (
+            <p style={mensajeAyuda}>
+              Escribe al menos 4 caracteres para buscar.
+            </p>
+          )}
+
+          {buscar.trim().length >= 4 && (
             <div style={{ marginTop: "20px", overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
@@ -123,9 +135,7 @@ export default function Clientes() {
                     <th style={thStyle}>Nombre</th>
                     <th style={thStyle}>Cédula</th>
                     <th style={thStyle}>Teléfono</th>
-                    <th style={thStyle}>Saldo</th>
                     <th style={thStyle}>Estado</th>
-                    <th style={thStyle}>Acciones</th>
                   </tr>
                 </thead>
 
@@ -136,17 +146,12 @@ export default function Clientes() {
                         <td style={tdStyle}>{cliente.nombre}</td>
                         <td style={tdStyle}>{cliente.cedula}</td>
                         <td style={tdStyle}>{cliente.telefono}</td>
-                        <td style={tdStyle}>$0.00</td>
                         <td style={tdStyle}>{cliente.estado}</td>
-                        <td style={tdStyle}>
-                          <button style={accionBtn}>Ver</button>
-                          <button style={accionBtn}>Editar</button>
-                        </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td style={tdStyle} colSpan="6">
+                      <td style={tdStyle} colSpan="4">
                         No se encontraron clientes.
                       </td>
                     </tr>
@@ -199,6 +204,7 @@ export default function Clientes() {
             />
 
             <input placeholder="Nombre referencia personal" style={inputStyle} />
+
             <input placeholder="Teléfono referencia" style={inputStyle} />
           </div>
         </div>
@@ -316,6 +322,12 @@ const inputStyle = {
   boxSizing: "border-box",
 };
 
+const mensajeAyuda = {
+  marginTop: "12px",
+  color: "#6b7280",
+  fontSize: "14px",
+};
+
 const labelStyle = {
   display: "block",
   marginBottom: "6px",
@@ -334,13 +346,4 @@ const thStyle = {
 const tdStyle = {
   padding: "15px",
   borderBottom: "1px solid #f3f4f6",
-};
-
-const accionBtn = {
-  padding: "8px 14px",
-  marginRight: "8px",
-  borderRadius: "8px",
-  border: "1px solid #d1d5db",
-  background: "#ffffff",
-  cursor: "pointer",
 };
