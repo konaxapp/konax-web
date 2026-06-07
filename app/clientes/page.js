@@ -14,14 +14,20 @@ export default function Clientes() {
   const [referenciaTelefono, setReferenciaTelefono] = useState("");
   const [estado, setEstado] = useState("Activo");
 
-  const [concepto, setConcepto] = useState("");
+  const [tipoProducto, setTipoProducto] = useState("");
+  const [descripcion, setDescripcion] = useState("");
   const [modalidad, setModalidad] = useState("");
-  const [montoOriginal, setMontoOriginal] = useState("");
+  const [montoTotal, setMontoTotal] = useState("");
   const [saldoActual, setSaldoActual] = useState("");
   const [cuota, setCuota] = useState("");
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaVencimiento, setFechaVencimiento] = useState("");
+  const [responsable, setResponsable] = useState("");
   const [observacion, setObservacion] = useState("");
+
+  function generarNumeroCuenta() {
+    return "KX-" + Date.now();
+  }
 
   async function guardarCliente() {
     if (!cedula || !nombre || !telefono) {
@@ -29,24 +35,60 @@ export default function Clientes() {
       return;
     }
 
-    const { error } = await supabase.from("clientes").insert([
-      {
-        cedula,
-        nombre,
-        telefono,
-        direccion,
-        correo,
-        estado,
-      },
-    ]);
+    const { data: clienteCreado, error: errorCliente } = await supabase
+      .from("clientes")
+      .insert([
+        {
+          cedula,
+          nombre,
+          telefono,
+          telefono_secundario: telefonoSecundario,
+          direccion,
+          correo,
+          referencia_nombre: referenciaNombre,
+          referencia_telefono: referenciaTelefono,
+          estado,
+          observacion,
+        },
+      ])
+      .select()
+      .single();
 
-    if (error) {
-      console.error(error);
-      alert("Error al guardar cliente: " + error.message);
+    if (errorCliente) {
+      console.error(errorCliente);
+      alert("Error al guardar cliente: " + errorCliente.message);
       return;
     }
 
-    alert("Cliente creado correctamente.");
+    const numeroCuenta = generarNumeroCuenta();
+
+    const { error: errorComercial } = await supabase
+      .from("informacion_comercial")
+      .insert([
+        {
+          cliente_id: clienteCreado.id,
+          numero_cuenta: numeroCuenta,
+          tipo_producto: tipoProducto,
+          descripcion,
+          modalidad,
+          monto_total: montoTotal || 0,
+          saldo_actual: saldoActual || 0,
+          cuota: cuota || 0,
+          fecha_inicio: fechaInicio || null,
+          fecha_vencimiento: fechaVencimiento || null,
+          responsable,
+          estado,
+          observacion,
+        },
+      ]);
+
+    if (errorComercial) {
+      console.error(errorComercial);
+      alert("Cliente creado, pero error en información comercial: " + errorComercial.message);
+      return;
+    }
+
+    alert("Cliente creado correctamente. Cuenta: " + numeroCuenta);
 
     setCedula("");
     setNombre("");
@@ -57,14 +99,15 @@ export default function Clientes() {
     setReferenciaNombre("");
     setReferenciaTelefono("");
     setEstado("Activo");
-
-    setConcepto("");
+    setTipoProducto("");
+    setDescripcion("");
     setModalidad("");
-    setMontoOriginal("");
+    setMontoTotal("");
     setSaldoActual("");
     setCuota("");
     setFechaInicio("");
     setFechaVencimiento("");
+    setResponsable("");
     setObservacion("");
   }
 
@@ -86,61 +129,14 @@ export default function Clientes() {
           <h2 style={tituloSeccion}>👤 Información del Cliente</h2>
 
           <div style={grid}>
-            <input
-              placeholder="Cédula / Identificación *"
-              value={cedula}
-              onChange={(e) => setCedula(e.target.value)}
-              style={inputStyle}
-            />
-
-            <input
-              placeholder="Nombre completo *"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              style={inputStyle}
-            />
-
-            <input
-              placeholder="Correo electrónico"
-              value={correo}
-              onChange={(e) => setCorreo(e.target.value)}
-              style={inputStyle}
-            />
-
-            <input
-              placeholder="Teléfono principal *"
-              value={telefono}
-              onChange={(e) => setTelefono(e.target.value)}
-              style={inputStyle}
-            />
-
-            <input
-              placeholder="Teléfono secundario"
-              value={telefonoSecundario}
-              onChange={(e) => setTelefonoSecundario(e.target.value)}
-              style={inputStyle}
-            />
-
-            <input
-              placeholder="Dirección completa"
-              value={direccion}
-              onChange={(e) => setDireccion(e.target.value)}
-              style={inputStyle}
-            />
-
-            <input
-              placeholder="Nombre de referencia"
-              value={referenciaNombre}
-              onChange={(e) => setReferenciaNombre(e.target.value)}
-              style={inputStyle}
-            />
-
-            <input
-              placeholder="Teléfono de referencia"
-              value={referenciaTelefono}
-              onChange={(e) => setReferenciaTelefono(e.target.value)}
-              style={inputStyle}
-            />
+            <input placeholder="Cédula / Identificación *" value={cedula} onChange={(e) => setCedula(e.target.value)} style={inputStyle} />
+            <input placeholder="Nombre completo *" value={nombre} onChange={(e) => setNombre(e.target.value)} style={inputStyle} />
+            <input placeholder="Correo electrónico" value={correo} onChange={(e) => setCorreo(e.target.value)} style={inputStyle} />
+            <input placeholder="Teléfono principal *" value={telefono} onChange={(e) => setTelefono(e.target.value)} style={inputStyle} />
+            <input placeholder="Teléfono secundario" value={telefonoSecundario} onChange={(e) => setTelefonoSecundario(e.target.value)} style={inputStyle} />
+            <input placeholder="Dirección completa" value={direccion} onChange={(e) => setDireccion(e.target.value)} style={inputStyle} />
+            <input placeholder="Nombre de referencia" value={referenciaNombre} onChange={(e) => setReferenciaNombre(e.target.value)} style={inputStyle} />
+            <input placeholder="Teléfono de referencia" value={referenciaTelefono} onChange={(e) => setReferenciaTelefono(e.target.value)} style={inputStyle} />
           </div>
         </div>
 
@@ -148,96 +144,60 @@ export default function Clientes() {
           <h2 style={tituloSeccion}>📦 Información Comercial</h2>
 
           <div style={grid}>
-            <select
-              value={concepto}
-              onChange={(e) => setConcepto(e.target.value)}
-              style={inputStyle}
-            >
-              <option value="">Seleccione producto, servicio, plan o concepto</option>
-              <option>Producto</option>
-              <option>Servicio</option>
-              <option>Plan mensual</option>
-              <option>Membresía</option>
-              <option>Mensualidad</option>
-              <option>Contrato</option>
-              <option>Otro</option>
-            </select>
-
-            <select
-              value={modalidad}
-              onChange={(e) => setModalidad(e.target.value)}
-              style={inputStyle}
-            >
-              <option value="">Seleccione modalidad</option>
-              <option>Crédito</option>
-              <option>Contado</option>
-              <option>Mensualidad</option>
+            <select value={tipoProducto} onChange={(e) => setTipoProducto(e.target.value)} style={inputStyle}>
+              <option value="">Seleccione tipo de producto o servicio</option>
+              <option>Venta a Crédito</option>
               <option>Suscripción</option>
+              <option>Mensualidad</option>
               <option>Contrato</option>
-              <option>Pago único</option>
               <option>Financiamiento</option>
             </select>
 
-            <input
-              placeholder="Monto / Valor"
-              value={montoOriginal}
-              onChange={(e) => setMontoOriginal(e.target.value)}
-              style={inputStyle}
-            />
+            <select value={modalidad} onChange={(e) => setModalidad(e.target.value)} style={inputStyle}>
+              <option value="">Seleccione modalidad</option>
+              <option>Crédito</option>
+              <option>Mensualidad</option>
+              <option>Suscripción</option>
+              <option>Contrato</option>
+              <option>Financiamiento</option>
+            </select>
 
-            <input
-              placeholder="Saldo pendiente"
-              value={saldoActual}
-              onChange={(e) => setSaldoActual(e.target.value)}
-              style={inputStyle}
-            />
-
-            <input
-              placeholder="Cuota / Mensualidad"
-              value={cuota}
-              onChange={(e) => setCuota(e.target.value)}
-              style={inputStyle}
-            />
+            <input placeholder="Monto total" value={montoTotal} onChange={(e) => setMontoTotal(e.target.value)} style={inputStyle} />
+            <input placeholder="Saldo actual" value={saldoActual} onChange={(e) => setSaldoActual(e.target.value)} style={inputStyle} />
+            <input placeholder="Cuota / Mensualidad" value={cuota} onChange={(e) => setCuota(e.target.value)} style={inputStyle} />
 
             <div>
               <label style={labelStyle}>Fecha de inicio</label>
-              <input
-                type="date"
-                value={fechaInicio}
-                onChange={(e) => setFechaInicio(e.target.value)}
-                style={inputStyle}
-              />
+              <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} style={inputStyle} />
             </div>
 
             <div>
               <label style={labelStyle}>Fecha de vencimiento</label>
-              <input
-                type="date"
-                value={fechaVencimiento}
-                onChange={(e) => setFechaVencimiento(e.target.value)}
-                style={inputStyle}
-              />
+              <input type="date" value={fechaVencimiento} onChange={(e) => setFechaVencimiento(e.target.value)} style={inputStyle} />
             </div>
           </div>
+
+          <textarea
+            placeholder="Descripción del producto, servicio o plan. Ej: Nevera, estufa y cama / Plan IPTV Premium / Mensualidad escolar 2026"
+            value={descripcion}
+            onChange={(e) => setDescripcion(e.target.value)}
+            style={{ ...inputStyle, marginTop: "15px", minHeight: "90px" }}
+          />
         </div>
 
         <div style={card}>
           <h2 style={tituloSeccion}>📋 Información de Gestión</h2>
 
           <div style={grid}>
-            <select style={inputStyle}>
-              <option>Responsable asignado</option>
+            <select value={responsable} onChange={(e) => setResponsable(e.target.value)} style={inputStyle}>
+              <option value="">Responsable asignado</option>
               <option>Gestor 1</option>
               <option>Gestor 2</option>
               <option>Administrador</option>
               <option>Vendedor</option>
             </select>
 
-            <select
-              value={estado}
-              onChange={(e) => setEstado(e.target.value)}
-              style={inputStyle}
-            >
+            <select value={estado} onChange={(e) => setEstado(e.target.value)} style={inputStyle}>
               <option>Activo</option>
               <option>Al Día</option>
               <option>Pendiente</option>
@@ -253,11 +213,7 @@ export default function Clientes() {
             placeholder="Observación inicial"
             value={observacion}
             onChange={(e) => setObservacion(e.target.value)}
-            style={{
-              ...inputStyle,
-              marginTop: "15px",
-              minHeight: "120px",
-            }}
+            style={{ ...inputStyle, marginTop: "15px", minHeight: "120px" }}
           />
 
           <button onClick={guardarCliente} style={botonGuardar}>
