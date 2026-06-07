@@ -1,62 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function Clientes() {
-  const [buscar, setBuscar] = useState("");
-  const [buscarEjecutado, setBuscarEjecutado] = useState(false);
-  const [clientes, setClientes] = useState([]);
-
   const [cedula, setCedula] = useState("");
   const [nombre, setNombre] = useState("");
   const [correo, setCorreo] = useState("");
   const [telefono, setTelefono] = useState("");
+  const [telefonoSecundario, setTelefonoSecundario] = useState("");
   const [direccion, setDireccion] = useState("");
+  const [referenciaNombre, setReferenciaNombre] = useState("");
+  const [referenciaTelefono, setReferenciaTelefono] = useState("");
   const [estado, setEstado] = useState("Activo");
 
+  const [concepto, setConcepto] = useState("");
+  const [modalidad, setModalidad] = useState("");
   const [montoOriginal, setMontoOriginal] = useState("");
   const [saldoActual, setSaldoActual] = useState("");
   const [cuota, setCuota] = useState("");
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaVencimiento, setFechaVencimiento] = useState("");
-
-  useEffect(() => {
-    cargarClientes();
-  }, []);
-
-  async function cargarClientes() {
-    const { data, error } = await supabase
-      .from("clientes")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error(error);
-      return;
-    }
-
-    setClientes(data || []);
-  }
-
-  const clientesFiltrados = clientes.filter((cliente) => {
-    const texto = buscar.toLowerCase();
-
-    return (
-      (cliente.nombre || "").toLowerCase().includes(texto) ||
-      (cliente.cedula || "").toLowerCase().includes(texto) ||
-      (cliente.telefono || "").toLowerCase().includes(texto)
-    );
-  });
-
-  function ejecutarBusqueda() {
-    if (buscar.trim().length < 4) {
-      alert("Ingrese mínimo 4 caracteres.");
-      return;
-    }
-
-    setBuscarEjecutado(true);
-  }
+  const [observacion, setObservacion] = useState("");
 
   async function guardarCliente() {
     if (!cedula || !nombre || !telefono) {
@@ -87,112 +52,42 @@ export default function Clientes() {
     setNombre("");
     setCorreo("");
     setTelefono("");
+    setTelefonoSecundario("");
     setDireccion("");
+    setReferenciaNombre("");
+    setReferenciaTelefono("");
     setEstado("Activo");
 
+    setConcepto("");
+    setModalidad("");
     setMontoOriginal("");
     setSaldoActual("");
     setCuota("");
     setFechaInicio("");
     setFechaVencimiento("");
-
-    cargarClientes();
+    setObservacion("");
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#f3f4f6",
-        padding: "40px",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      <div style={{ maxWidth: "1300px", margin: "0 auto" }}>
-        <div style={{ textAlign: "center", marginBottom: "25px" }}>
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            style={{ width: "350px", maxWidth: "100%", height: "auto" }}
-          />
+    <div style={pagina}>
+      <div style={contenedor}>
+        <div style={logoBox}>
+          <img src="/konax-logo.png" alt="KONAX" style={logo} />
         </div>
 
-        <div style={{ marginBottom: "30px" }}>
-          <h1
-            style={{
-              fontSize: "40px",
-              marginBottom: "10px",
-              color: "#111827",
-            }}
-          >
-            Clientes
-          </h1>
-
-          <p style={{ color: "#6b7280", fontSize: "18px" }}>
-            Administración y seguimiento de clientes
+        <div style={encabezado}>
+          <h1 style={titulo}>Crear Cliente</h1>
+          <p style={subtitulo}>
+            Registro de clientes, información comercial y seguimiento inicial.
           </p>
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>🔍 Buscar Cliente</h2>
-
-          <input
-            placeholder="Buscar por nombre, cédula o teléfono..."
-            value={buscar}
-            onChange={(e) => {
-              setBuscar(e.target.value);
-              setBuscarEjecutado(false);
-            }}
-            style={inputStyle}
-          />
-
-          <div style={{ marginTop: "15px" }}>
-            <button onClick={ejecutarBusqueda} style={botonBuscar}>
-              Buscar
-            </button>
-          </div>
-
-          {buscarEjecutado && (
-            <div style={{ marginTop: "20px", overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>Nombre</th>
-                    <th style={thStyle}>Cédula</th>
-                    <th style={thStyle}>Teléfono</th>
-                    <th style={thStyle}>Estado</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {clientesFiltrados.length > 0 ? (
-                    clientesFiltrados.map((cliente) => (
-                      <tr key={cliente.id}>
-                        <td style={tdStyle}>{cliente.nombre}</td>
-                        <td style={tdStyle}>{cliente.cedula}</td>
-                        <td style={tdStyle}>{cliente.telefono}</td>
-                        <td style={tdStyle}>{cliente.estado}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td style={tdStyle} colSpan="4">
-                        No se encontraron clientes.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        <div style={card}>
-          <h2 style={tituloSeccion}>👤 Información Personal</h2>
+          <h2 style={tituloSeccion}>👤 Información del Cliente</h2>
 
           <div style={grid}>
             <input
-              placeholder="Cédula *"
+              placeholder="Cédula / Identificación *"
               value={cedula}
               onChange={(e) => setCedula(e.target.value)}
               style={inputStyle}
@@ -206,7 +101,7 @@ export default function Clientes() {
             />
 
             <input
-              placeholder="Correo Electrónico"
+              placeholder="Correo electrónico"
               value={correo}
               onChange={(e) => setCorreo(e.target.value)}
               style={inputStyle}
@@ -219,7 +114,12 @@ export default function Clientes() {
               style={inputStyle}
             />
 
-            <input placeholder="Teléfono secundario" style={inputStyle} />
+            <input
+              placeholder="Teléfono secundario"
+              value={telefonoSecundario}
+              onChange={(e) => setTelefonoSecundario(e.target.value)}
+              style={inputStyle}
+            />
 
             <input
               placeholder="Dirección completa"
@@ -228,41 +128,72 @@ export default function Clientes() {
               style={inputStyle}
             />
 
-            <input placeholder="Nombre referencia personal" style={inputStyle} />
+            <input
+              placeholder="Nombre de referencia"
+              value={referenciaNombre}
+              onChange={(e) => setReferenciaNombre(e.target.value)}
+              style={inputStyle}
+            />
 
-            <input placeholder="Teléfono referencia" style={inputStyle} />
+            <input
+              placeholder="Teléfono de referencia"
+              value={referenciaTelefono}
+              onChange={(e) => setReferenciaTelefono(e.target.value)}
+              style={inputStyle}
+            />
           </div>
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>💳 Información del Crédito</h2>
+          <h2 style={tituloSeccion}>📦 Información Comercial</h2>
 
           <div style={grid}>
-            <input placeholder="Producto o servicio" style={inputStyle} />
+            <select
+              value={concepto}
+              onChange={(e) => setConcepto(e.target.value)}
+              style={inputStyle}
+            >
+              <option value="">Seleccione producto, servicio, plan o concepto</option>
+              <option>Producto</option>
+              <option>Servicio</option>
+              <option>Plan mensual</option>
+              <option>Membresía</option>
+              <option>Mensualidad</option>
+              <option>Contrato</option>
+              <option>Otro</option>
+            </select>
 
-            <select style={inputStyle}>
-              <option>Seleccione tipo de crédito</option>
+            <select
+              value={modalidad}
+              onChange={(e) => setModalidad(e.target.value)}
+              style={inputStyle}
+            >
+              <option value="">Seleccione modalidad</option>
               <option>Crédito</option>
-              <option>Pago Voluntario</option>
-              <option>Descuento Directo</option>
+              <option>Contado</option>
+              <option>Mensualidad</option>
+              <option>Suscripción</option>
+              <option>Contrato</option>
+              <option>Pago único</option>
+              <option>Financiamiento</option>
             </select>
 
             <input
-              placeholder="Monto Original"
+              placeholder="Monto / Valor"
               value={montoOriginal}
               onChange={(e) => setMontoOriginal(e.target.value)}
               style={inputStyle}
             />
 
             <input
-              placeholder="Saldo Actual"
+              placeholder="Saldo pendiente"
               value={saldoActual}
               onChange={(e) => setSaldoActual(e.target.value)}
               style={inputStyle}
             />
 
             <input
-              placeholder="Cuota"
+              placeholder="Cuota / Mensualidad"
               value={cuota}
               onChange={(e) => setCuota(e.target.value)}
               style={inputStyle}
@@ -295,9 +226,11 @@ export default function Clientes() {
 
           <div style={grid}>
             <select style={inputStyle}>
-              <option>Gestor asignado</option>
+              <option>Responsable asignado</option>
               <option>Gestor 1</option>
               <option>Gestor 2</option>
+              <option>Administrador</option>
+              <option>Vendedor</option>
             </select>
 
             <select
@@ -307,15 +240,19 @@ export default function Clientes() {
             >
               <option>Activo</option>
               <option>Al Día</option>
+              <option>Pendiente</option>
               <option>Mora</option>
               <option>Promesa de Pago</option>
+              <option>Suspendido</option>
               <option>Cancelado</option>
               <option>Legal</option>
             </select>
           </div>
 
           <textarea
-            placeholder="Observación Inicial"
+            placeholder="Observación inicial"
+            value={observacion}
+            onChange={(e) => setObservacion(e.target.value)}
             style={{
               ...inputStyle,
               marginTop: "15px",
@@ -323,21 +260,7 @@ export default function Clientes() {
             }}
           />
 
-          <button
-            onClick={guardarCliente}
-            style={{
-              marginTop: "20px",
-              background: "#16a34a",
-              color: "#ffffff",
-              border: "none",
-              padding: "15px 30px",
-              borderRadius: "10px",
-              fontWeight: "bold",
-              fontSize: "16px",
-              cursor: "pointer",
-              boxShadow: "0 4px 12px rgba(22,163,74,0.25)",
-            }}
-          >
+          <button onClick={guardarCliente} style={botonGuardar}>
             + Crear Cliente
           </button>
         </div>
@@ -345,6 +268,44 @@ export default function Clientes() {
     </div>
   );
 }
+
+const pagina = {
+  minHeight: "100vh",
+  background: "#f3f4f6",
+  padding: "40px",
+  fontFamily: "Arial, sans-serif",
+};
+
+const contenedor = {
+  maxWidth: "1300px",
+  margin: "0 auto",
+};
+
+const logoBox = {
+  textAlign: "center",
+  marginBottom: "25px",
+};
+
+const logo = {
+  width: "350px",
+  maxWidth: "100%",
+  height: "auto",
+};
+
+const encabezado = {
+  marginBottom: "30px",
+};
+
+const titulo = {
+  fontSize: "40px",
+  marginBottom: "10px",
+  color: "#111827",
+};
+
+const subtitulo = {
+  color: "#6b7280",
+  fontSize: "18px",
+};
 
 const card = {
   background: "#ffffff",
@@ -374,16 +335,6 @@ const inputStyle = {
   boxSizing: "border-box",
 };
 
-const botonBuscar = {
-  background: "#2563eb",
-  color: "#ffffff",
-  border: "none",
-  padding: "12px 25px",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "bold",
-};
-
 const labelStyle = {
   display: "block",
   marginBottom: "6px",
@@ -392,14 +343,15 @@ const labelStyle = {
   fontWeight: "bold",
 };
 
-const thStyle = {
-  textAlign: "left",
-  padding: "15px",
-  borderBottom: "1px solid #e5e7eb",
-  background: "#f9fafb",
-};
-
-const tdStyle = {
-  padding: "15px",
-  borderBottom: "1px solid #f3f4f6",
+const botonGuardar = {
+  marginTop: "20px",
+  background: "#16a34a",
+  color: "#ffffff",
+  border: "none",
+  padding: "15px 30px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  fontSize: "16px",
+  cursor: "pointer",
+  boxShadow: "0 4px 12px rgba(22,163,74,0.25)",
 };
