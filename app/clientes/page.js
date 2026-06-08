@@ -28,7 +28,6 @@ export default function Clientes() {
   const [fechaUltimoPago, setFechaUltimoPago] = useState("");
   const [montoUltimoPago, setMontoUltimoPago] = useState("");
   const [responsableCobro, setResponsableCobro] = useState("");
-  const [observacionCobranza, setObservacionCobranza] = useState("");
 
   const [documentos, setDocumentos] = useState([]);
 
@@ -118,8 +117,7 @@ export default function Clientes() {
       estadoCobranza ||
       fechaUltimoPago ||
       montoUltimoPago ||
-      responsableCobro ||
-      observacionCobranza;
+      responsableCobro;
 
     if (hayCobranza) {
       const { error: errorCobranza } = await supabase
@@ -132,7 +130,6 @@ export default function Clientes() {
             fecha_ultimo_pago: fechaUltimoPago || null,
             monto_ultimo_pago: montoUltimoPago || 0,
             responsable_cobro: responsableCobro || null,
-            observacion_cobranza: observacionCobranza || null,
           },
         ]);
 
@@ -181,7 +178,6 @@ export default function Clientes() {
     setFechaUltimoPago("");
     setMontoUltimoPago("");
     setResponsableCobro("");
-    setObservacionCobranza("");
     setDocumentos([]);
   }
 
@@ -280,11 +276,6 @@ export default function Clientes() {
 
             <input placeholder="Responsable de cartera" value={responsableCobro} onChange={(e) => setResponsableCobro(e.target.value)} style={inputStyle} />
           </div>
-
-            value={observacionCobranza}
-            onChange={(e) => setObservacionCobranza(e.target.value)}
-            style={{ ...inputStyle, marginTop: "15px", minHeight: "100px" }}
-          />
 
           <textarea
             placeholder="Observación inicial general"
