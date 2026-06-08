@@ -22,11 +22,35 @@ export default function Clientes() {
   const [cuota, setCuota] = useState("");
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaVencimiento, setFechaVencimiento] = useState("");
-  const [responsable, setResponsable] = useState("");
   const [observacion, setObservacion] = useState("");
+
+  const [estadoCobranza, setEstadoCobranza] = useState("");
+  const [fechaUltimoPago, setFechaUltimoPago] = useState("");
+  const [montoUltimoPago, setMontoUltimoPago] = useState("");
+  const [responsableCobro, setResponsableCobro] = useState("");
+  const [observacionCobranza, setObservacionCobranza] = useState("");
+
+  const [documentos, setDocumentos] = useState([]);
 
   function generarNumeroCuenta() {
     return "KX-" + Date.now();
+  }
+
+  async function subirDocumentos(clienteId) {
+    if (documentos.length === 0) return;
+
+    for (const archivo of documentos) {
+      const nombreLimpio = archivo.name.replace(/\s+/g, "_");
+      const ruta = `clientes/${clienteId}/${Date.now()}-${nombreLimpio}`;
+
+      const { error } = await supabase.storage
+        .from("documentos-clientes")
+        .upload(ruta, archivo);
+
+      if (error) {
+        throw error;
+      }
+    }
   }
 
   async function guardarCliente() {
@@ -55,14 +79,13 @@ export default function Clientes() {
       .single();
 
     if (errorCliente) {
-      console.error(errorCliente);
       alert("Error al guardar cliente: " + errorCliente.message);
       return;
     }
 
     const numeroCuenta = generarNumeroCuenta();
 
-    const { error: errorComercial } = await supabase
+    const { data: comercialCreado, error: errorComercial } = await supabase
       .from("informacion_comercial")
       .insert([
         {
@@ -76,15 +99,59 @@ export default function Clientes() {
           cuota: cuota || 0,
           fecha_inicio: fechaInicio || null,
           fecha_vencimiento: fechaVencimiento || null,
-          responsable,
           estado,
           observacion,
         },
-      ]);
+      ])
+      .select()
+      .single();
 
     if (errorComercial) {
-      console.error(errorComercial);
-      alert("Cliente creado, pero error en información comercial: " + errorComercial.message);
+      alert(
+        "Cliente creado, pero error en información comercial: " +
+          errorComercial.message
+      );
+      return;
+    }
+
+    const hayCobranza =
+      estadoCobranza ||
+      fechaUltimoPago ||
+      montoUltimoPago ||
+      responsableCobro ||
+      observacionCobranza;
+
+    if (hayCobranza) {
+      const { error: errorCobranza } = await supabase
+        .from("informacion_cobranza")
+        .insert([
+          {
+            cliente_id: clienteCreado.id,
+            informacion_comercial_id: comercialCreado.id,
+            estado_cobranza: estadoCobranza || null,
+            fecha_ultimo_pago: fechaUltimoPago || null,
+            monto_ultimo_pago: montoUltimoPago || 0,
+            responsable_cobro: responsableCobro || null,
+            observacion_cobranza: observacionCobranza || null,
+          },
+        ]);
+
+      if (errorCobranza) {
+        alert(
+          "Cliente creado, pero error en cobranza inicial: " +
+            errorCobranza.message
+        );
+        return;
+      }
+    }
+
+    try {
+      await subirDocumentos(clienteCreado.id);
+    } catch (error) {
+      alert(
+        "Cliente creado, pero hubo error subiendo documentos: " +
+          error.message
+      );
       return;
     }
 
@@ -99,6 +166,7 @@ export default function Clientes() {
     setReferenciaNombre("");
     setReferenciaTelefono("");
     setEstado("Activo");
+
     setTipoProducto("");
     setDescripcion("");
     setModalidad("");
@@ -107,8 +175,14 @@ export default function Clientes() {
     setCuota("");
     setFechaInicio("");
     setFechaVencimiento("");
-    setResponsable("");
     setObservacion("");
+
+    setEstadoCobranza("");
+    setFechaUltimoPago("");
+    setMontoUltimoPago("");
+    setResponsableCobro("");
+    setObservacionCobranza("");
+    setDocumentos([]);
   }
 
   return (
@@ -121,7 +195,7 @@ export default function Clientes() {
         <div style={encabezado}>
           <h1 style={titulo}>Crear Cliente</h1>
           <p style={subtitulo}>
-            Registro de clientes, información comercial y seguimiento inicial.
+            Registro de cliente, información comercial, cobranza inicial y documentos.
           </p>
         </div>
 
@@ -178,7 +252,7 @@ export default function Clientes() {
           </div>
 
           <textarea
-            placeholder="Descripción del producto, servicio o plan. Ej: Nevera, estufa y cama / Plan IPTV Premium / Mensualidad escolar 2026"
+            placeholder="Descripción del producto, servicio o plan"
             value={descripcion}
             onChange={(e) => setDescripcion(e.target.value)}
             style={{ ...inputStyle, marginTop: "15px", minHeight: "90px" }}
@@ -186,35 +260,55 @@ export default function Clientes() {
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>📋 Información de Gestión</h2>
+          <h2 style={tituloSeccion}>📋 Información de Cobranza Inicial (Opcional)</h2>
 
           <div style={grid}>
-            <select value={responsable} onChange={(e) => setResponsable(e.target.value)} style={inputStyle}>
-              <option value="">Responsable asignado</option>
-              <option>Gestor 1</option>
-              <option>Gestor 2</option>
-              <option>Administrador</option>
-              <option>Vendedor</option>
+            <select value={estadoCobranza} onChange={(e) => setEstadoCobranza(e.target.value)} style={inputStyle}>
+              <option value="">Seleccione estado de cobranza</option>
+              <option>Al Día</option>
+              <option>Mora</option>
+              <option>Legal</option>
+              <option>Suspendido</option>
             </select>
 
-            <select value={estado} onChange={(e) => setEstado(e.target.value)} style={inputStyle}>
-              <option>Activo</option>
-              <option>Al Día</option>
-              <option>Pendiente</option>
-              <option>Mora</option>
-              <option>Promesa de Pago</option>
-              <option>Suspendido</option>
-              <option>Cancelado</option>
-              <option>Legal</option>
-            </select>
+            <div>
+              <label style={labelStyle}>Fecha último pago</label>
+              <input type="date" value={fechaUltimoPago} onChange={(e) => setFechaUltimoPago(e.target.value)} style={inputStyle} />
+            </div>
+
+            <input placeholder="Monto último pago" value={montoUltimoPago} onChange={(e) => setMontoUltimoPago(e.target.value)} style={inputStyle} />
+
+            <input placeholder="Responsable de cartera" value={responsableCobro} onChange={(e) => setResponsableCobro(e.target.value)} style={inputStyle} />
           </div>
 
           <textarea
-            placeholder="Observación inicial"
+            placeholder="Observación de cobranza"
+            value={observacionCobranza}
+            onChange={(e) => setObservacionCobranza(e.target.value)}
+            style={{ ...inputStyle, marginTop: "15px", minHeight: "100px" }}
+          />
+
+          <textarea
+            placeholder="Observación inicial general"
             value={observacion}
             onChange={(e) => setObservacion(e.target.value)}
-            style={{ ...inputStyle, marginTop: "15px", minHeight: "120px" }}
+            style={{ ...inputStyle, marginTop: "15px", minHeight: "100px" }}
           />
+
+          <div style={{ marginTop: "20px" }}>
+            <label style={labelStyle}>Documentos del Cliente</label>
+
+            <input
+              type="file"
+              multiple
+              onChange={(e) => setDocumentos(Array.from(e.target.files))}
+              style={inputStyle}
+            />
+
+            <p style={{ fontSize: "13px", color: "#6b7280", marginTop: "8px" }}>
+              Puede subir cédula, contrato, ficha, comprobantes, recibos o cualquier documento.
+            </p>
+          </div>
 
           <button onClick={guardarCliente} style={botonGuardar}>
             + Crear Cliente
