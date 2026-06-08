@@ -65,7 +65,7 @@ export default function Clientes() {
 
     for (const archivo of documentos) {
       const nombreLimpio = archivo.name.replace(/\s+/g, "_");
-      const ruta = clientes/${clienteId}/${Date.now()}-${nombreLimpio};
+      const ruta = `clientes/${clienteId}/${Date.now()}-${nombreLimpio}`;
 
       const { error } = await supabase.storage
         .from("documentos-clientes")
