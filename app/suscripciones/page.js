@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { supabase } from "../../lib/supabase";
 
 export default function Suscripciones() {
   const [formulario, setFormulario] = useState({
@@ -40,9 +41,47 @@ export default function Suscripciones() {
     return fecha.toISOString().split("T")[0];
   };
 
-  const guardar = () => {
-    alert("Suscripción creada correctamente");
-  };
+  const guardar = async () => {
+  if (!formulario.cliente || !formulario.plan || !formulario.precio) {
+    alert("Complete Cliente, Plan y Precio");
+    return;
+  }
+
+  const { error } = await supabase
+    .from("suscripciones")
+    .insert([
+      {
+        cliente: formulario.cliente,
+        plan: formulario.plan,
+        descripcion: formulario.descripcion,
+        precio: formulario.precio,
+        vendedor: formulario.vendedor,
+        fecha_inicio: formulario.fechaInicio,
+        fecha_vencimiento: calcularVencimiento(),
+        periodicidad: formulario.periodicidad,
+        estado: formulario.estado,
+      },
+    ]);
+
+  if (error) {
+    console.error(error);
+    alert("Error: " + error.message);
+    return;
+  }
+
+  alert("Suscripción creada correctamente");
+
+  setFormulario({
+    cliente: "",
+    plan: "",
+    descripcion: "",
+    precio: "",
+    vendedor: "",
+    fechaInicio: "",
+    periodicidad: "Mensual",
+    estado: "Activo",
+  });
+};
 
   return (
     <div style={pagina}>
