@@ -274,7 +274,7 @@ export default function Caja() {
 
         {!requiereCliente && (
           <div style={card}>
-            <h2 style={tituloSeccion}>Cliente Opcional</h2>
+            <h2 style={tituloSeccion}>Cliente</h2>
 
             <div style={grid}>
               <input
