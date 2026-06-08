@@ -1,35 +1,111 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
 
 export default function ControlCaja() {
-  const [arqueo, setArqueo] = useState({
-    sistema: 8000,
-    contado: "",
-    observacion: "",
-  });
+  const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
+  const [movimientos, setMovimientos] = useState([]);
+  const [cierres, setCierres] = useState([]);
 
-  const cierres = [
-    {
-      fecha: "04/06/2026",
-      inicial: 6500,
-      final: 8000,
-      diferencia: 0,
-      usuario: "Administrador",
-      estado: "Cerrado",
-    },
-    {
-      fecha: "03/06/2026",
-      inicial: 6200,
-      final: 6500,
-      diferencia: -10,
-      usuario: "Administrador",
-      estado: "Cerrado",
-    },
-  ];
+  const [efectivoContado, setEfectivoContado] = useState("");
+  const [observacion, setObservacion] = useState("");
+  const [usuario, setUsuario] = useState("Administrador");
 
-  const diferencia =
-    Number(arqueo.contado || 0) - Number(arqueo.sistema || 0);
+  useEffect(() => {
+    cargarDatos();
+  }, [fecha]);
+
+  async function cargarDatos() {
+    await cargarMovimientos();
+    await cargarCierres();
+  }
+
+  async function cargarMovimientos() {
+    const { data, error } = await supabase
+      .from("caja")
+      .select("*")
+      .eq("fecha_pago", fecha)
+      .eq("estado", "Procesado");
+
+    if (error) {
+      alert("Error cargando movimientos: " + error.message);
+      return;
+    }
+
+    setMovimientos(data || []);
+  }
+
+  async function cargarCierres() {
+    const { data, error } = await supabase
+      .from("control_caja")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      alert("Error cargando cierres: " + error.message);
+      return;
+    }
+
+    setCierres(data || []);
+  }
+
+  function totalPorMetodo(metodo) {
+    return movimientos
+      .filter((item) => item.metodo_pago === metodo)
+      .reduce((sum, item) => sum + Number(item.monto || 0), 0);
+  }
+
+  const totalEfectivo = totalPorMetodo("Efectivo");
+  const totalTransferencia = totalPorMetodo("Transferencia");
+  const totalYappy = totalPorMetodo("Yappy");
+  const totalTarjeta = totalPorMetodo("Tarjeta");
+  const totalCheque = totalPorMetodo("Cheque");
+
+  const totalSistema =
+    totalEfectivo +
+    totalTransferencia +
+    totalYappy +
+    totalTarjeta +
+    totalCheque;
+
+  const diferencia = Number(efectivoContado || 0) - Number(totalEfectivo || 0);
+
+  async function cerrarCaja() {
+    if (efectivoContado === "") {
+      alert("Ingrese el efectivo contado.");
+      return;
+    }
+
+    const { error } = await supabase.from("control_caja").insert([
+      {
+        fecha,
+        total_sistema: totalSistema,
+        efectivo_sistema: totalEfectivo,
+        efectivo_contado: Number(efectivoContado),
+        diferencia,
+        total_transferencia: totalTransferencia,
+        total_yappy: totalYappy,
+        total_tarjeta: totalTarjeta,
+        total_cheque: totalCheque,
+        total_transacciones: movimientos.length,
+        observacion,
+        usuario,
+        estado: "Cerrado",
+      },
+    ]);
+
+    if (error) {
+      alert("Error al cerrar caja: " + error.message);
+      return;
+    }
+
+    alert("Caja cerrada correctamente.");
+
+    setEfectivoContado("");
+    setObservacion("");
+    cargarCierres();
+  }
 
   return (
     <div style={pagina}>
@@ -40,29 +116,38 @@ export default function ControlCaja() {
 
         <h1 style={titulo}>Control de Caja</h1>
 
-        <p style={subtitulo}>
-          Arqueo y cierre diario de operaciones
-        </p>
+        <p style={subtitulo}>Arqueo y cierre diario de operaciones.</p>
+
+        <div style={card}>
+          <h2 style={tituloSeccion}>Fecha de control</h2>
+
+          <input
+            type="date"
+            value={fecha}
+            onChange={(e) => setFecha(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
 
         <div style={cardsGrid}>
           <div style={cardKpi}>
-            <div style={kpiTitulo}>💵 Efectivo</div>
-            <div style={kpiValor}>$2,500</div>
+            <div style={kpiTitulo}>💵 Efectivo Sistema</div>
+            <div style={kpiValor}>${totalEfectivo.toLocaleString()}</div>
           </div>
 
           <div style={cardKpi}>
             <div style={kpiTitulo}>🏦 Transferencias</div>
-            <div style={kpiValor}>$4,300</div>
+            <div style={kpiValor}>${totalTransferencia.toLocaleString()}</div>
           </div>
 
           <div style={cardKpi}>
             <div style={kpiTitulo}>📱 Yappy</div>
-            <div style={kpiValor}>$1,200</div>
+            <div style={kpiValor}>${totalYappy.toLocaleString()}</div>
           </div>
 
           <div style={cardKpi}>
-            <div style={kpiTitulo}>💰 Total Caja</div>
-            <div style={kpiValor}>$8,000</div>
+            <div style={kpiTitulo}>💰 Total Sistema</div>
+            <div style={kpiValor}>${totalSistema.toLocaleString()}</div>
           </div>
         </div>
 
@@ -72,29 +157,21 @@ export default function ControlCaja() {
           <div style={grid}>
             <div>
               <label style={label}>Efectivo Sistema</label>
-
-              <input value={arqueo.sistema} readOnly style={inputStyle} />
+              <input value={totalEfectivo} readOnly style={inputStyle} />
             </div>
 
             <div>
               <label style={label}>Efectivo Contado</label>
-
               <input
                 type="number"
-                value={arqueo.contado}
-                onChange={(e) =>
-                  setArqueo({
-                    ...arqueo,
-                    contado: e.target.value,
-                  })
-                }
+                value={efectivoContado}
+                onChange={(e) => setEfectivoContado(e.target.value)}
                 style={inputStyle}
               />
             </div>
 
             <div>
               <label style={label}>Diferencia</label>
-
               <input
                 value={diferencia}
                 readOnly
@@ -110,52 +187,56 @@ export default function ControlCaja() {
                 }}
               />
             </div>
+
+            <div>
+              <label style={label}>Usuario</label>
+              <input
+                value={usuario}
+                onChange={(e) => setUsuario(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
           </div>
 
           <textarea
             placeholder="Observación del arqueo..."
+            value={observacion}
+            onChange={(e) => setObservacion(e.target.value)}
             style={textarea}
-            value={arqueo.observacion}
-            onChange={(e) =>
-              setArqueo({
-                ...arqueo,
-                observacion: e.target.value,
-              })
-            }
           />
 
           <div style={acciones}>
-            <button style={boton}>Realizar Arqueo</button>
+            <button style={boton} onClick={cerrarCaja}>
+              Cerrar Caja
+            </button>
           </div>
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>Cierre Diario</h2>
+          <h2 style={tituloSeccion}>Resumen del Día</h2>
 
           <div style={cardsGrid}>
             <div style={cardKpi}>
               <div style={kpiTitulo}>Total Cobrado</div>
-              <div style={kpiValor}>$8,000</div>
-            </div>
-
-            <div style={cardKpi}>
-              <div style={kpiTitulo}>Total Efectivo</div>
-              <div style={kpiValor}>$2,500</div>
+              <div style={kpiValor}>${totalSistema.toLocaleString()}</div>
             </div>
 
             <div style={cardKpi}>
               <div style={kpiTitulo}>Total Digital</div>
-              <div style={kpiValor}>$5,500</div>
+              <div style={kpiValor}>
+                ${(totalTransferencia + totalYappy + totalTarjeta + totalCheque).toLocaleString()}
+              </div>
+            </div>
+
+            <div style={cardKpi}>
+              <div style={kpiTitulo}>Tarjeta</div>
+              <div style={kpiValor}>${totalTarjeta.toLocaleString()}</div>
             </div>
 
             <div style={cardKpi}>
               <div style={kpiTitulo}>Transacciones</div>
-              <div style={kpiValor}>35</div>
+              <div style={kpiValor}>{movimientos.length}</div>
             </div>
-          </div>
-
-          <div style={acciones}>
-            <button style={boton}>Cerrar Caja</button>
           </div>
         </div>
 
@@ -167,8 +248,9 @@ export default function ControlCaja() {
               <thead>
                 <tr>
                   <th style={th}>Fecha</th>
-                  <th style={th}>Caja Inicial</th>
-                  <th style={th}>Caja Final</th>
+                  <th style={th}>Total Sistema</th>
+                  <th style={th}>Efectivo Sistema</th>
+                  <th style={th}>Efectivo Contado</th>
                   <th style={th}>Diferencia</th>
                   <th style={th}>Usuario</th>
                   <th style={th}>Estado</th>
@@ -176,24 +258,25 @@ export default function ControlCaja() {
               </thead>
 
               <tbody>
-                {cierres.map((item, index) => (
-                  <tr key={index}>
+                {cierres.map((item) => (
+                  <tr key={item.id}>
                     <td style={td}>{item.fecha}</td>
-                    <td style={td}>${item.inicial}</td>
-                    <td style={td}>${item.final}</td>
+                    <td style={td}>${Number(item.total_sistema || 0).toLocaleString()}</td>
+                    <td style={td}>${Number(item.efectivo_sistema || 0).toLocaleString()}</td>
+                    <td style={td}>${Number(item.efectivo_contado || 0).toLocaleString()}</td>
                     <td
                       style={{
                         ...td,
                         fontWeight: "bold",
                         color:
-                          item.diferencia === 0
+                          Number(item.diferencia) === 0
                             ? "#16a34a"
-                            : item.diferencia > 0
+                            : Number(item.diferencia) > 0
                             ? "#2563eb"
                             : "#dc2626",
                       }}
                     >
-                      ${item.diferencia}
+                      ${Number(item.diferencia || 0).toLocaleString()}
                     </td>
                     <td style={td}>{item.usuario}</td>
                     <td style={td}>{item.estado}</td>
