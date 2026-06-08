@@ -28,7 +28,6 @@ export default function Clientes() {
   const [fechaUltimoPago, setFechaUltimoPago] = useState("");
   const [montoUltimoPago, setMontoUltimoPago] = useState("");
   const [responsableCobro, setResponsableCobro] = useState("");
-
   const [documentos, setDocumentos] = useState([]);
 
   function generarNumeroCuenta() {
@@ -45,7 +44,6 @@ export default function Clientes() {
     setReferenciaNombre("");
     setReferenciaTelefono("");
     setEstado("Activo");
-
     setTipoProducto("");
     setDescripcion("");
     setModalidad("");
@@ -55,7 +53,6 @@ export default function Clientes() {
     setFechaInicio("");
     setFechaVencimiento("");
     setObservacion("");
-
     setEstadoCobranza("");
     setFechaUltimoPago("");
     setMontoUltimoPago("");
@@ -85,7 +82,7 @@ export default function Clientes() {
     }
 
     if (!tipoProducto || !modalidad) {
-      alert("Complete tipo de producto y modalidad.");
+      alert("Complete tipo de cuenta y frecuencia de cobro.");
       return;
     }
 
@@ -186,22 +183,22 @@ export default function Clientes() {
       return;
     }
 
-    alert("Cliente/cuenta creado correctamente. Cuenta: " + numeroCuenta);
+    alert("Carga inicial registrada correctamente. Cuenta: " + numeroCuenta);
     limpiarFormulario();
   }
 
   return (
     <div style={pagina}>
       <div style={contenedor}>
-        <div style={logoBox}>
-          <img src="/konax-logo.png" alt="KONAX" style={logo} />
-        </div>
-
         <div style={encabezado}>
-          <h1 style={titulo}>Crear Cliente</h1>
-          <p style={subtitulo}>
-            Registro de cliente, información comercial, cobranza inicial y documentos.
-          </p>
+          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+
+          <div>
+            <h1 style={titulo}>Carga Inicial / Clientes Existentes</h1>
+            <p style={subtitulo}>
+              Registro de clientes, cuentas existentes, cobranza inicial y documentos.
+            </p>
+          </div>
         </div>
 
         <div style={card}>
@@ -220,28 +217,29 @@ export default function Clientes() {
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>📦 Información Comercial</h2>
+          <h2 style={tituloSeccion}>📦 Información Comercial Existente</h2>
 
           <div style={grid}>
             <select value={tipoProducto} onChange={(e) => setTipoProducto(e.target.value)} style={inputStyle}>
-              <option value="">Seleccione tipo de producto o servicio</option>
-              <option>Venta a Crédito</option>
-              <option>Suscripción</option>
-              <option>Mensualidad</option>
-              <option>Contrato</option>
-              <option>Financiamiento</option>
+              <option value="">Seleccione tipo de cuenta</option>
+              <option>Crédito existente</option>
+              <option>Membresía existente</option>
+              <option>Suscripción existente</option>
+              <option>Mensualidad existente</option>
+              <option>Refinanciamiento existente</option>
+              <option>Servicio pendiente</option>
             </select>
 
             <select value={modalidad} onChange={(e) => setModalidad(e.target.value)} style={inputStyle}>
-              <option value="">Seleccione modalidad</option>
-              <option>Crédito</option>
-              <option>Mensualidad</option>
-              <option>Suscripción</option>
-              <option>Contrato</option>
-              <option>Financiamiento</option>
+              <option value="">Seleccione frecuencia de cobro</option>
+              <option>Semanal</option>
+              <option>Quincenal</option>
+              <option>Mensual</option>
+              <option>Anual</option>
+              <option>Personalizada</option>
             </select>
 
-            <input placeholder="Monto total" value={montoTotal} onChange={(e) => setMontoTotal(e.target.value)} style={inputStyle} />
+            <input placeholder="Monto total original" value={montoTotal} onChange={(e) => setMontoTotal(e.target.value)} style={inputStyle} />
             <input placeholder="Saldo actual" value={saldoActual} onChange={(e) => setSaldoActual(e.target.value)} style={inputStyle} />
             <input placeholder="Cuota / Mensualidad" value={cuota} onChange={(e) => setCuota(e.target.value)} style={inputStyle} />
 
@@ -257,7 +255,7 @@ export default function Clientes() {
           </div>
 
           <textarea
-            placeholder="Descripción del producto, servicio o plan"
+            placeholder="Descripción. Ej: Sala Roma, mensualidad escolar, membresía anual, servicio pendiente..."
             value={descripcion}
             onChange={(e) => setDescripcion(e.target.value)}
             style={{ ...inputStyle, marginTop: "15px", minHeight: "90px" }}
@@ -274,6 +272,7 @@ export default function Clientes() {
               <option>Mora</option>
               <option>Legal</option>
               <option>Suspendido</option>
+              <option>Cancelado</option>
             </select>
 
             <div>
@@ -286,7 +285,7 @@ export default function Clientes() {
           </div>
 
           <textarea
-            placeholder="Observación inicial general"
+            placeholder="Observación inicial / historial previo de cobro"
             value={observacion}
             onChange={(e) => setObservacion(e.target.value)}
             style={{ ...inputStyle, marginTop: "15px", minHeight: "100px" }}
@@ -301,15 +300,11 @@ export default function Clientes() {
               onChange={(e) => setDocumentos(Array.from(e.target.files))}
               style={inputStyle}
             />
-
-            <p style={{ fontSize: "13px", color: "#6b7280", marginTop: "8px" }}>
-              Puede subir cédula, contrato, ficha, comprobantes, recibos o cualquier documento.
-            </p>
           </div>
 
           <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
             <button onClick={guardarCliente} style={botonGuardar}>
-              + Crear Cliente / Cuenta
+              + Guardar Carga Inicial
             </button>
 
             <button onClick={limpiarFormulario} style={botonLimpiar}>
@@ -325,7 +320,7 @@ export default function Clientes() {
 const pagina = {
   minHeight: "100vh",
   background: "#f3f4f6",
-  padding: "40px",
+  padding: "28px",
   fontFamily: "Arial, sans-serif",
 };
 
@@ -334,30 +329,28 @@ const contenedor = {
   margin: "0 auto",
 };
 
-const logoBox = {
-  textAlign: "center",
-  marginBottom: "25px",
+const encabezado = {
+  display: "flex",
+  alignItems: "center",
+  gap: "16px",
+  marginBottom: "24px",
 };
 
 const logo = {
-  width: "350px",
-  maxWidth: "100%",
+  width: "90px",
   height: "auto",
 };
 
-const encabezado = {
-  marginBottom: "30px",
-};
-
 const titulo = {
-  fontSize: "40px",
-  marginBottom: "10px",
+  fontSize: "32px",
+  margin: "0 0 6px 0",
   color: "#111827",
 };
 
 const subtitulo = {
   color: "#6b7280",
-  fontSize: "18px",
+  fontSize: "16px",
+  margin: 0,
 };
 
 const card = {
@@ -406,7 +399,6 @@ const botonGuardar = {
   fontWeight: "bold",
   fontSize: "16px",
   cursor: "pointer",
-  boxShadow: "0 4px 12px rgba(22,163,74,0.25)",
 };
 
 const botonLimpiar = {
