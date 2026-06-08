@@ -35,125 +35,7 @@ export default function Clientes() {
     return "KX-" + Date.now();
   }
 
-  async function subirDocumentos(clienteId) {
-    if (documentos.length === 0) return;
-
-    for (const archivo of documentos) {
-      const nombreLimpio = archivo.name.replace(/\s+/g, "_");
-      const ruta = `clientes/${clienteId}/${Date.now()}-${nombreLimpio}`;
-
-      const { error } = await supabase.storage
-        .from("documentos-clientes")
-        .upload(ruta, archivo);
-
-      if (error) {
-        throw error;
-      }
-    }
-  }
-
-  async function guardarCliente() {
-    if (!cedula || !nombre || !telefono) {
-      alert("Complete cédula, nombre y teléfono.");
-      return;
-    }
-
-    const { data: clienteCreado, error: errorCliente } = await supabase
-      .from("clientes")
-      .insert([
-        {
-          cedula,
-          nombre,
-          telefono,
-          telefono_secundario: telefonoSecundario,
-          direccion,
-          correo,
-          referencia_nombre: referenciaNombre,
-          referencia_telefono: referenciaTelefono,
-          estado,
-          observacion,
-        },
-      ])
-      .select()
-      .single();
-
-    if (errorCliente) {
-      alert("Error al guardar cliente: " + errorCliente.message);
-      return;
-    }
-
-    const numeroCuenta = generarNumeroCuenta();
-
-    const { data: comercialCreado, error: errorComercial } = await supabase
-      .from("informacion_comercial")
-      .insert([
-        {
-          cliente_id: clienteCreado.id,
-          numero_cuenta: numeroCuenta,
-          tipo_producto: tipoProducto,
-          descripcion,
-          modalidad,
-          monto_total: montoTotal || 0,
-          saldo_actual: saldoActual || 0,
-          cuota: cuota || 0,
-          fecha_inicio: fechaInicio || null,
-          fecha_vencimiento: fechaVencimiento || null,
-          estado,
-          observacion,
-        },
-      ])
-      .select()
-      .single();
-
-    if (errorComercial) {
-      alert(
-        "Cliente creado, pero error en información comercial: " +
-          errorComercial.message
-      );
-      return;
-    }
-
-    const hayCobranza =
-      estadoCobranza ||
-      fechaUltimoPago ||
-      montoUltimoPago ||
-      responsableCobro;
-
-    if (hayCobranza) {
-      const { error: errorCobranza } = await supabase
-        .from("informacion_cobranza")
-        .insert([
-          {
-            cliente_id: clienteCreado.id,
-            informacion_comercial_id: comercialCreado.id,
-            estado_cobranza: estadoCobranza || null,
-            fecha_ultimo_pago: fechaUltimoPago || null,
-            monto_ultimo_pago: montoUltimoPago || 0,
-            responsable_cobro: responsableCobro || null,
-          },
-        ]);
-
-      if (errorCobranza) {
-        alert(
-          "Cliente creado, pero error en cobranza inicial: " +
-            errorCobranza.message
-        );
-        return;
-      }
-    }
-
-    try {
-      await subirDocumentos(clienteCreado.id);
-    } catch (error) {
-      alert(
-        "Cliente creado, pero hubo error subiendo documentos: " +
-          error.message
-      );
-      return;
-    }
-
-    alert("Cliente creado correctamente. Cuenta: " + numeroCuenta);
-
+  function limpiarFormulario() {
     setCedula("");
     setNombre("");
     setCorreo("");
@@ -179,6 +61,133 @@ export default function Clientes() {
     setMontoUltimoPago("");
     setResponsableCobro("");
     setDocumentos([]);
+  }
+
+  async function subirDocumentos(clienteId) {
+    if (documentos.length === 0) return;
+
+    for (const archivo of documentos) {
+      const nombreLimpio = archivo.name.replace(/\s+/g, "_");
+      const ruta = `clientes/${clienteId}/${Date.now()}-${nombreLimpio}`;
+
+      const { error } = await supabase.storage
+        .from("documentos-clientes")
+        .upload(ruta, archivo);
+
+      if (error) throw error;
+    }
+  }
+
+  async function guardarCliente() {
+    if (!cedula || !nombre || !telefono) {
+      alert("Complete cédula, nombre y teléfono.");
+      return;
+    }
+
+    if (!tipoProducto || !modalidad) {
+      alert("Complete tipo de producto y modalidad.");
+      return;
+    }
+
+    let clienteCreado = null;
+
+    const { data: clienteExistente } = await supabase
+      .from("clientes")
+      .select("*")
+      .eq("cedula", cedula)
+      .maybeSingle();
+
+    if (clienteExistente) {
+      clienteCreado = clienteExistente;
+    } else {
+      const { data, error } = await supabase
+        .from("clientes")
+        .insert([
+          {
+            cedula,
+            nombre,
+            telefono,
+            telefono_secundario: telefonoSecundario,
+            direccion,
+            correo,
+            referencia_nombre: referenciaNombre,
+            referencia_telefono: referenciaTelefono,
+            estado,
+            observacion,
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        alert("Error al guardar cliente: " + error.message);
+        return;
+      }
+
+      clienteCreado = data;
+    }
+
+    const numeroCuenta = generarNumeroCuenta();
+
+    const { data: comercialCreado, error: errorComercial } = await supabase
+      .from("informacion_comercial")
+      .insert([
+        {
+          cliente_id: clienteCreado.id,
+          numero_cuenta: numeroCuenta,
+          tipo_producto: tipoProducto,
+          descripcion,
+          modalidad,
+          monto_total: montoTotal || 0,
+          saldo_actual: saldoActual || montoTotal || 0,
+          cuota: cuota || 0,
+          fecha_inicio: fechaInicio || null,
+          fecha_vencimiento: fechaVencimiento || null,
+          responsable: responsableCobro || null,
+          estado,
+          observacion,
+        },
+      ])
+      .select()
+      .single();
+
+    if (errorComercial) {
+      alert("Error en información comercial: " + errorComercial.message);
+      return;
+    }
+
+    const hayCobranza =
+      estadoCobranza || fechaUltimoPago || montoUltimoPago || responsableCobro;
+
+    if (hayCobranza) {
+      const { error: errorCobranza } = await supabase
+        .from("informacion_cobranza")
+        .insert([
+          {
+            cliente_id: clienteCreado.id,
+            informacion_comercial_id: comercialCreado.id,
+            estado_cobranza: estadoCobranza || null,
+            fecha_ultimo_pago: fechaUltimoPago || null,
+            monto_ultimo_pago: montoUltimoPago || 0,
+            responsable_cobro: responsableCobro || null,
+          },
+        ]);
+
+      if (errorCobranza) {
+        alert("Error en cobranza inicial: " + errorCobranza.message);
+        return;
+      }
+    }
+
+    try {
+      await subirDocumentos(clienteCreado.id);
+    } catch (error) {
+      alert("Cuenta creada, pero hubo error subiendo documentos: " + error.message);
+      return;
+    }
+
+    alert("Cliente/cuenta creado correctamente. Cuenta: " + numeroCuenta);
+    limpiarFormulario();
   }
 
   return (
@@ -256,7 +265,7 @@ export default function Clientes() {
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>📋 Información de Cobranza Inicial (Opcional)</h2>
+          <h2 style={tituloSeccion}>📋 Información de Cobranza Inicial</h2>
 
           <div style={grid}>
             <select value={estadoCobranza} onChange={(e) => setEstadoCobranza(e.target.value)} style={inputStyle}>
@@ -273,7 +282,6 @@ export default function Clientes() {
             </div>
 
             <input placeholder="Monto último pago" value={montoUltimoPago} onChange={(e) => setMontoUltimoPago(e.target.value)} style={inputStyle} />
-
             <input placeholder="Responsable de cartera" value={responsableCobro} onChange={(e) => setResponsableCobro(e.target.value)} style={inputStyle} />
           </div>
 
@@ -299,9 +307,15 @@ export default function Clientes() {
             </p>
           </div>
 
-          <button onClick={guardarCliente} style={botonGuardar}>
-            + Crear Cliente
-          </button>
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <button onClick={guardarCliente} style={botonGuardar}>
+              + Crear Cliente / Cuenta
+            </button>
+
+            <button onClick={limpiarFormulario} style={botonLimpiar}>
+              Limpiar
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -393,4 +407,16 @@ const botonGuardar = {
   fontSize: "16px",
   cursor: "pointer",
   boxShadow: "0 4px 12px rgba(22,163,74,0.25)",
+};
+
+const botonLimpiar = {
+  marginTop: "20px",
+  background: "#111827",
+  color: "#ffffff",
+  border: "none",
+  padding: "15px 30px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  fontSize: "16px",
+  cursor: "pointer",
 };
