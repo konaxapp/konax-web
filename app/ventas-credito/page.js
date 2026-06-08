@@ -78,7 +78,7 @@ const totalPagar = totalFinanciado;
 
 const cuotaCalculada =
   plazo > 0 ? totalPagar / plazo : 0;
-  const mostrarResumen = credito.precioVenta !== "" || credito.inicial !== "";
+  const mostrarResumen = credito.precioCredito !== "" || credito.inicial !== "";
 
   const formato = (numero) =>
     "$" +
@@ -98,7 +98,8 @@ const cuotaCalculada =
       vendedor: "",
       codigo: "",
       producto: "",
-      precioVenta: "",
+      precioContado: "",
+      precioCredito: "",
       inicial: "",
       plazo: "",
       frecuencia: "Semanal",
@@ -133,14 +134,25 @@ const cuotaCalculada =
           <h2 style={tituloSeccion}>Nuevo Crédito</h2>
 
           <div style={grid}>
-            <input
-              placeholder="Buscar cliente por nombre, cédula o teléfono"
-              value={credito.cliente}
-              onChange={(e) =>
-                setCredito({ ...credito, cliente: e.target.value })
-              }
-              style={inputStyle}
-            />
+          <input
+  type="number"
+  placeholder="Precio Contado"
+  value={credito.precioContado}
+  onChange={(e) =>
+    setCredito({ ...credito, precioContado: e.target.value })
+  }
+  style={inputStyle}
+/>
+
+<input
+  type="number"
+  placeholder="Precio Crédito"
+  value={credito.precioCredito}
+  onChange={(e) =>
+    setCredito({ ...credito, precioCredito: e.target.value })
+  }
+  style={inputStyle}
+/>  
 
             <input
               placeholder="Cédula"
@@ -252,8 +264,8 @@ const cuotaCalculada =
           {mostrarResumen && (
             <div style={resumenCredito}>
               <div style={totalCard}>
-                <span style={totalLabel}>Precio Venta</span>
-                <strong style={totalValor}>{formato(precioVenta)}</strong>
+                <span style={totalLabel}>Precio Crédito</span>
+<strong style={totalValor}>{formato(precioCredito)}</strong>
               </div>
 
               <div style={totalCard}>
