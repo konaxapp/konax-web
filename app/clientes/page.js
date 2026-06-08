@@ -281,8 +281,6 @@ export default function Clientes() {
             <input placeholder="Responsable de cartera" value={responsableCobro} onChange={(e) => setResponsableCobro(e.target.value)} style={inputStyle} />
           </div>
 
-          <textarea
-            placeholder="Observación de cobranza"
             value={observacionCobranza}
             onChange={(e) => setObservacionCobranza(e.target.value)}
             style={{ ...inputStyle, marginTop: "15px", minHeight: "100px" }}
