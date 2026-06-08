@@ -65,7 +65,7 @@ export default function Clientes() {
 
     for (const archivo of documentos) {
       const nombreLimpio = archivo.name.replace(/\s+/g, "_");
-      const ruta = `clientes/${clienteId}/${Date.now()}-${nombreLimpio}`;
+      const ruta = clientes/${clienteId}/${Date.now()}-${nombreLimpio};
 
       const { error } = await supabase.storage
         .from("documentos-clientes")
@@ -183,7 +183,7 @@ export default function Clientes() {
       return;
     }
 
-    alert("Carga inicial registrada correctamente. Cuenta: " + numeroCuenta);
+    alert("Cliente registrado correctamente. Cuenta: " + numeroCuenta);
     limpiarFormulario();
   }
 
@@ -194,9 +194,9 @@ export default function Clientes() {
           <img src="/konax-logo.png" alt="KONAX" style={logo} />
 
           <div>
-            <h1 style={titulo}>Carga Inicial / Clientes Existentes</h1>
+            <h1 style={titulo}>Carga Inicial de Clientes</h1>
             <p style={subtitulo}>
-              Registro de clientes, cuentas existentes, cobranza inicial y documentos.
+              Carga de clientes, información comercial, cobranza inicial y documentos.
             </p>
           </div>
         </div>
@@ -217,16 +217,16 @@ export default function Clientes() {
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>📦 Información Comercial Existente</h2>
+          <h2 style={tituloSeccion}>📦 Información Comercial</h2>
 
           <div style={grid}>
             <select value={tipoProducto} onChange={(e) => setTipoProducto(e.target.value)} style={inputStyle}>
               <option value="">Seleccione tipo de cuenta</option>
-              <option>Crédito existente</option>
-              <option>Membresía existente</option>
-              <option>Suscripción existente</option>
-              <option>Mensualidad existente</option>
-              <option>Refinanciamiento existente</option>
+              <option>Crédito</option>
+              <option>Membresía</option>
+              <option>Suscripción</option>
+              <option>Mensualidad</option>
+              <option>Refinanciamiento</option>
               <option>Servicio pendiente</option>
             </select>
 
@@ -235,6 +235,8 @@ export default function Clientes() {
               <option>Semanal</option>
               <option>Quincenal</option>
               <option>Mensual</option>
+              <option>Trimestral</option>
+              <option>Semestral</option>
               <option>Anual</option>
               <option>Personalizada</option>
             </select>
@@ -304,7 +306,7 @@ export default function Clientes() {
 
           <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
             <button onClick={guardarCliente} style={botonGuardar}>
-              + Guardar Carga Inicial
+              + Guardar Cliente
             </button>
 
             <button onClick={limpiarFormulario} style={botonLimpiar}>
@@ -337,12 +339,12 @@ const encabezado = {
 };
 
 const logo = {
-  width: "90px",
+  width: "75px",
   height: "auto",
 };
 
 const titulo = {
-  fontSize: "32px",
+  fontSize: "30px",
   margin: "0 0 6px 0",
   color: "#111827",
 };
