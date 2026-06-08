@@ -4,20 +4,33 @@ import { useState } from "react";
 
 export default function VentasCredito() {
   const [credito, setCredito] = useState({
-    cliente: "",
-    cedula: "",
-    telefono: "",
-    vendedor: "",
-    codigo: "",
-    producto: "",
-    precioVenta: "",
-    inicial: "",
-    plazo: "",
-    frecuencia: "Semanal",
-    cuota: "",
-    primerPago: "",
-    observacion: "",
-  });
+  cliente: "",
+  cedula: "",
+  telefono: "",
+
+  vendedor: "",
+  gestor: "",
+
+  codigo: "",
+  producto: "",
+  descripcion: "",
+
+  precioContado: "",
+  precioCredito: "",
+
+  inicial: "",
+  plazo: "",
+  frecuencia: "Semanal",
+
+  tasaInteres: "",
+  gastosManejo: "",
+  seguro: "",
+  comision: "",
+
+  cuota: "",
+  primerPago: "",
+  observacion: "",
+});
 
   const creditos = [
     {
@@ -42,11 +55,29 @@ export default function VentasCredito() {
     },
   ];
 
-  const precioVenta = Number(credito.precioVenta || 0);
-  const inicial = Number(credito.inicial || 0);
-  const plazo = Number(credito.plazo || 0);
-  const montoFinanciar = precioVenta - inicial;
-  const cuotaCalculada = plazo > 0 ? montoFinanciar / plazo : 0;
+  const precioCredito = Number(credito.precioCredito || 0);
+const inicial = Number(credito.inicial || 0);
+const plazo = Number(credito.plazo || 0);
+
+const tasaInteres = Number(credito.tasaInteres || 0);
+const gastosManejo = Number(credito.gastosManejo || 0);
+const seguro = Number(credito.seguro || 0);
+
+const montoFinanciado = precioCredito - inicial;
+
+const interesTotal =
+  montoFinanciado * (tasaInteres / 100) * plazo;
+
+const totalFinanciado =
+  montoFinanciado +
+  interesTotal +
+  gastosManejo +
+  seguro;
+
+const totalPagar = totalFinanciado;
+
+const cuotaCalculada =
+  plazo > 0 ? totalPagar / plazo : 0;
   const mostrarResumen = credito.precioVenta !== "" || credito.inicial !== "";
 
   const formato = (numero) =>
