@@ -1,431 +1,503 @@
 "use client";
 
 import { useState } from "react";
+import { supabase } from "../../lib/supabase";
 
 export default function VistaCliente() {
+  const [buscar, setBuscar] = useState("");
+  const [resultados, setResultados] = useState([]);
+
+  const [cliente, setCliente] = useState(null);
+  const [cuentas, setCuentas] = useState([]);
+  const [cuenta, setCuenta] = useState(null);
+  const [cobranza, setCobranza] = useState(null);
+  const [pagos, setPagos] = useState([]);
+  const [gestiones, setGestiones] = useState([]);
+  const [documentos, setDocumentos] = useState([]);
+
+  const [tipoGestion, setTipoGestion] = useState("Llamada");
+  const [resultadoGestion, setResultadoGestion] = useState("Pendiente");
   const [observacion, setObservacion] = useState("");
-  const [modoEdicion, setModoEdicion] = useState(false);
+
   const [fechaPromesa, setFechaPromesa] = useState("");
   const [montoPromesa, setMontoPromesa] = useState("");
   const [observacionPromesa, setObservacionPromesa] = useState("");
 
-  const cliente = {
-    nombre: "Juan Pérez",
-    cedula: "8-123-456",
-    telefono: "6000-0000",
-    estado: "Al Día",
-    semaforo: "🟢",
-    direccion: "La Chorrera, Panamá",
-    producto: "Sala Modelo Roma",
-    clasificacion: "Cliente regular",
-    prioridad: "Normal",
-    cobrador: "Gestor 1",
-    saldo: 1500,
-    recargo: 0,
-    fechaPago: "15/06/2026",
-    cuotaPendiente: 125,
-    proximoPago: "30/06/2026",
-    diasAtraso: 0,
-    observacionInicial: "Cliente creado correctamente.",
-  };
+  const [archivo, setArchivo] = useState(null);
 
-  const historialPagos = [
-    {
-      fecha: "01/06/2026",
-      monto: 125,
-      metodo: "Efectivo",
-      observacion: "Pago recibido en caja",
-    },
-    {
-      fecha: "15/06/2026",
-      monto: 125,
-      metodo: "Transferencia",
-      observacion: "Pago enviado por WhatsApp",
-    },
-  ];
+  function calcularDiasAtraso(fechaVencimiento, saldoActual) {
+    if (!fechaVencimiento || Number(saldoActual || 0) <= 0) return 0;
 
-  const observaciones = [
-    {
-      fecha: "02/06/2026",
-      usuario: "Gestor 1",
-      detalle: "Cliente indica que pagará el viernes.",
-    },
-    {
-      fecha: "05/06/2026",
-      usuario: "Gestor 1",
-      detalle: "Se realizó seguimiento por llamada.",
-    },
-  ];
+    const hoy = new Date();
+    const vencimiento = new Date(fechaVencimiento);
+    const diferencia = hoy - vencimiento;
 
-  const promesas = [
-    {
-      fecha: "20/06/2026",
-      monto: 125,
-      estado: "Vigente",
-      observacion: "Cliente promete pagar por transferencia.",
-    },
-    {
-      fecha: "10/06/2026",
-      monto: 100,
-      estado: "Cumplida",
-      observacion: "Promesa cumplida parcialmente.",
-    },
-  ];
+    if (diferencia <= 0) return 0;
 
-  const ultimasGestiones = [
-    {
-      fecha: "15/06/2026",
-      usuario: "Gestor 1",
-      accion: "WhatsApp enviado",
-    },
-    {
-      fecha: "10/06/2026",
-      usuario: "Gestor 1",
-      accion: "Promesa de pago registrada",
-    },
-    {
-      fecha: "05/06/2026",
-      usuario: "Gestor 1",
-      accion: "Llamada de seguimiento realizada",
-    },
-  ];
+    return Math.floor(diferencia / (1000 * 60 * 60 * 24));
+  }
 
-  const documentos = [
-    {
-      nombre: "Cedula.pdf",
-      tipo: "Cédula",
-      fecha: "02/06/2026",
-      usuario: "Administrador",
-    },
-    {
-      nombre: "Contrato_credito.pdf",
-      tipo: "Contrato",
-      fecha: "02/06/2026",
-      usuario: "Gestor 1",
-    },
-  ];
+  function obtenerSemaforo(dias) {
+    if (dias <= 0) return "🟢";
+    if (dias <= 30) return "🟡";
+    if (dias <= 60) return "🟠";
+    return "🔴";
+  }
 
-  const descargarEstadoCuenta = () => {
-    alert("Aquí se generará/descargará el Estado de Cuenta PDF.");
-  };
+  async function buscarCliente() {
+    if (buscar.trim().length < 3) {
+      alert("Escriba mínimo 3 caracteres.");
+      return;
+    }
 
-  const generarCartaMora = () => {
-    alert("Aquí se generará la Carta de Mora PDF.");
-  };
+    let encontrados = [];
 
-  const abrirWhatsApp = () => {
-    alert("Aquí se abrirá WhatsApp para contactar al cliente.");
-  };
+    const { data: clientesData } = await supabase
+      .from("clientes")
+      .select("*")
+      .or(`nombre.ilike.%${buscar}%,cedula.ilike.%${buscar}%`);
 
-  const guardarInformacion = () => {
-    alert("Información del cliente guardada correctamente.");
-    setModoEdicion(false);
-  };
+    if (clientesData) {
+      encontrados = clientesData.map((cliente) => ({
+        cliente,
+        cuenta: null,
+      }));
+    }
 
-  const subirDocumento = () => {
-    alert("Aquí se subirá un documento al expediente digital.");
-  };
+    const { data: cuentasData } = await supabase
+      .from("informacion_comercial")
+      .select("*")
+      .ilike("numero_cuenta", `%${buscar}%`);
 
-  const registrarPromesa = () => {
-    alert("Promesa de pago registrada.");
+    if (cuentasData && cuentasData.length > 0) {
+      const ids = cuentasData.map((item) => item.cliente_id);
+
+      const { data: clientesDeCuentas } = await supabase
+        .from("clientes")
+        .select("*")
+        .in("id", ids);
+
+      cuentasData.forEach((cuenta) => {
+        const cliente = clientesDeCuentas?.find(
+          (item) => item.id === cuenta.cliente_id
+        );
+
+        if (cliente) {
+          encontrados.push({ cliente, cuenta });
+        }
+      });
+    }
+
+    setResultados(encontrados);
+  }
+
+  async function seleccionarCliente(resultado) {
+    const clienteBase = resultado.cliente;
+
+    setCliente(clienteBase);
+    setResultados([]);
+    setBuscar(clienteBase.nombre);
+
+    const { data: cuentasData } = await supabase
+      .from("informacion_comercial")
+      .select("*")
+      .eq("cliente_id", clienteBase.id)
+      .order("created_at", { ascending: false });
+
+    const cuentaSeleccionada = resultado.cuenta || cuentasData?.[0] || null;
+
+    setCuentas(cuentasData || []);
+    setCuenta(cuentaSeleccionada);
+
+    await cargarDatosRelacionados(clienteBase.id, cuentaSeleccionada?.id);
+    await cargarDocumentos(clienteBase.id);
+  }
+
+  async function cargarDatosRelacionados(clienteId, cuentaId) {
+    if (!cuentaId) return;
+
+    const { data: cobranzaData } = await supabase
+      .from("informacion_cobranza")
+      .select("*")
+      .eq("informacion_comercial_id", cuentaId)
+      .maybeSingle();
+
+    setCobranza(cobranzaData || null);
+
+    const { data: pagosData } = await supabase
+      .from("caja")
+      .select("*")
+      .eq("informacion_comercial_id", cuentaId)
+      .order("created_at", { ascending: false });
+
+    setPagos(pagosData || []);
+
+    const { data: gestionesData } = await supabase
+      .from("bitacora_cliente")
+      .select("*")
+      .eq("cliente_id", clienteId)
+      .order("fecha_gestion", { ascending: false });
+
+    setGestiones(gestionesData || []);
+  }
+
+  async function cambiarCuenta(cuentaId) {
+    const nuevaCuenta = cuentas.find((item) => item.id === cuentaId);
+    setCuenta(nuevaCuenta);
+    await cargarDatosRelacionados(cliente.id, nuevaCuenta.id);
+  }
+
+  async function guardarGestion() {
+    if (!cliente || !cuenta) {
+      alert("Seleccione un cliente.");
+      return;
+    }
+
+    if (!observacion) {
+      alert("Escriba una observación.");
+      return;
+    }
+
+    const { error } = await supabase.from("bitacora_cliente").insert([
+      {
+        cliente_id: cliente.id,
+        informacion_comercial_id: cuenta.id,
+        tipo_gestion: tipoGestion,
+        resultado_gestion: resultadoGestion,
+        observacion,
+        usuario: "Usuario",
+      },
+    ]);
+
+    if (error) {
+      alert("Error guardando gestión: " + error.message);
+      return;
+    }
+
+    setObservacion("");
+    await cargarDatosRelacionados(cliente.id, cuenta.id);
+  }
+
+  async function registrarPromesa() {
+    if (!cliente || !cuenta) {
+      alert("Seleccione un cliente.");
+      return;
+    }
+
+    if (!fechaPromesa || !montoPromesa) {
+      alert("Complete fecha y monto de promesa.");
+      return;
+    }
+
+    const textoPromesa = `Promesa de pago para ${fechaPromesa} por $${montoPromesa}. ${observacionPromesa}`;
+
+    const { error } = await supabase.from("bitacora_cliente").insert([
+      {
+        cliente_id: cliente.id,
+        informacion_comercial_id: cuenta.id,
+        tipo_gestion: "Promesa de Pago",
+        resultado_gestion: "Promesa registrada",
+        observacion: textoPromesa,
+        usuario: "Usuario",
+      },
+    ]);
+
+    if (error) {
+      alert("Error registrando promesa: " + error.message);
+      return;
+    }
+
     setFechaPromesa("");
     setMontoPromesa("");
     setObservacionPromesa("");
-  };
+    await cargarDatosRelacionados(cliente.id, cuenta.id);
+  }
+
+  async function cargarDocumentos(clienteId) {
+    const { data, error } = await supabase.storage
+      .from("documentos-clientes")
+      .list(`clientes/${clienteId}`);
+
+    if (!error) {
+      setDocumentos(data || []);
+    }
+  }
+
+  async function subirDocumento() {
+    if (!cliente) {
+      alert("Seleccione un cliente.");
+      return;
+    }
+
+    if (!archivo) {
+      alert("Seleccione un documento.");
+      return;
+    }
+
+    const nombreLimpio = archivo.name.replace(/\s+/g, "_");
+    const ruta = `clientes/${cliente.id}/${Date.now()}-${nombreLimpio}`;
+
+    const { error } = await supabase.storage
+      .from("documentos-clientes")
+      .upload(ruta, archivo);
+
+    if (error) {
+      alert("Error subiendo documento: " + error.message);
+      return;
+    }
+
+    setArchivo(null);
+    await cargarDocumentos(cliente.id);
+  }
+
+  async function verDocumento(nombre) {
+    const ruta = `clientes/${cliente.id}/${nombre}`;
+
+    const { data, error } = await supabase.storage
+      .from("documentos-clientes")
+      .createSignedUrl(ruta, 60);
+
+    if (error) {
+      alert("Error abriendo documento: " + error.message);
+      return;
+    }
+
+    window.open(data.signedUrl, "_blank");
+  }
+
+  const diasAtraso = calcularDiasAtraso(
+    cuenta?.fecha_vencimiento,
+    cuenta?.saldo_actual
+  );
+
+  const semaforo = obtenerSemaforo(diasAtraso);
 
   return (
     <div style={pagina}>
       <div style={contenedor}>
         <div style={encabezado}>
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            style={logo}
-          />
-
-          <div>
-            <h1 style={titulo}>Vista Cliente</h1>
-          </div>
-        </div>
-
-        <div style={acciones}>
-          <button style={botonSecundario} onClick={descargarEstadoCuenta}>
-            Descargar Estado de Cuenta
-          </button>
-
-          <button style={botonSecundario} onClick={generarCartaMora}>
-            Generar Carta de Mora
-          </button>
-
-          <button style={botonSecundario} onClick={abrirWhatsApp}>
-            WhatsApp
-          </button>
-
-          {!modoEdicion && (
-            <button style={botonSecundario} onClick={() => setModoEdicion(true)}>
-              Editar Cliente
-            </button>
-          )}
-
-          {modoEdicion && (
-            <>
-              <button style={boton} onClick={guardarInformacion}>
-                Guardar Información
-              </button>
-
-              <button style={botonCancelar} onClick={() => setModoEdicion(false)}>
-                Cancelar Edición
-              </button>
-            </>
-          )}
-        </div>
-
-        <div style={gridResumen}>
-          <div style={card}>
-            <h3>Cliente</h3>
-
-            {modoEdicion ? (
-              <>
-                <input defaultValue={cliente.nombre} style={inputStyle} />
-                <input defaultValue={cliente.cedula} style={inputStyle} />
-                <input defaultValue={cliente.telefono} style={inputStyle} />
-
-                <select defaultValue={cliente.estado} style={inputStyle}>
-                  <option>Al Día</option>
-                  <option>Mora</option>
-                  <option>Promesa de Pago</option>
-                  <option>Cancelado</option>
-                  <option>Legal</option>
-                </select>
-              </>
-            ) : (
-              <>
-                <p><strong>{cliente.nombre}</strong></p>
-                <p>Cédula: {cliente.cedula}</p>
-                <p>Teléfono: {cliente.telefono}</p>
-                <p>Estado: {cliente.semaforo} {cliente.estado}</p>
-
-                <button style={whatsappBtn} onClick={abrirWhatsApp}>
-                  WhatsApp
-                </button>
-              </>
-            )}
-          </div>
-
-          <div style={card}>
-            <h3>Crédito</h3>
-
-            {modoEdicion ? (
-              <>
-                <input defaultValue={cliente.producto} style={inputStyle} />
-                <input defaultValue={cliente.saldo} style={inputStyle} />
-                <input defaultValue={cliente.cuotaPendiente} style={inputStyle} />
-                <input defaultValue={cliente.recargo} style={inputStyle} />
-              </>
-            ) : (
-              <>
-                <p>Producto: {cliente.producto}</p>
-                <p>Saldo: ${cliente.saldo.toLocaleString()}</p>
-                <p>Cuota pendiente: ${cliente.cuotaPendiente}</p>
-                <p>Recargo: ${cliente.recargo}</p>
-              </>
-            )}
-          </div>
-
-          <div style={card}>
-            <h3>Gestión</h3>
-
-            {modoEdicion ? (
-              <>
-                <input defaultValue={cliente.cobrador} style={inputStyle} />
-                <input defaultValue={cliente.diasAtraso} style={inputStyle} />
-                <input defaultValue={cliente.prioridad} style={inputStyle} />
-                <input defaultValue={cliente.clasificacion} style={inputStyle} />
-              </>
-            ) : (
-              <>
-                <p>Gestor: {cliente.cobrador}</p>
-                <p><strong>Días de atraso:</strong> {cliente.diasAtraso}</p>
-                <p>Prioridad: {cliente.prioridad}</p>
-                <p>Clasificación: {cliente.clasificacion}</p>
-              </>
-            )}
-          </div>
+          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+          <h1 style={titulo}>Vista Cliente</h1>
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>Información General</h2>
-
-          {modoEdicion ? (
-            <>
-              <textarea defaultValue={cliente.direccion} style={textarea} />
-              <input defaultValue={cliente.fechaPago} style={inputStyle} />
-              <input defaultValue={cliente.proximoPago} style={inputStyle} />
-              <textarea defaultValue={cliente.observacionInicial} style={textarea} />
-            </>
-          ) : (
-            <>
-              <p><strong>Dirección:</strong> {cliente.direccion}</p>
-              <p><strong>Último pago:</strong> {cliente.fechaPago}</p>
-              <p><strong>Próximo pago:</strong> {cliente.proximoPago}</p>
-              <p><strong>Observación inicial:</strong> {cliente.observacionInicial}</p>
-            </>
-          )}
-        </div>
-
-        <div style={card}>
-          <h2 style={tituloSeccion}>Promesa de Pago</h2>
+          <h2 style={tituloSeccion}>Buscar Cliente</h2>
 
           <div style={gridFormulario}>
             <input
-              type="date"
-              value={fechaPromesa}
-              onChange={(e) => setFechaPromesa(e.target.value)}
+              placeholder="Buscar por nombre, cédula o número de cuenta"
+              value={buscar}
+              onChange={(e) => setBuscar(e.target.value)}
               style={inputStyle}
             />
 
-            <input
-              placeholder="Monto prometido"
-              value={montoPromesa}
-              onChange={(e) => setMontoPromesa(e.target.value)}
-              style={inputStyle}
-            />
-
-            <input
-              placeholder="Observación de la promesa"
-              value={observacionPromesa}
-              onChange={(e) => setObservacionPromesa(e.target.value)}
-              style={inputStyle}
-            />
+            <button style={botonSecundario} onClick={buscarCliente}>
+              Buscar
+            </button>
           </div>
 
-          <button style={boton} onClick={registrarPromesa}>
-            Registrar Promesa
-          </button>
-
-          <h3 style={tituloTabla}>Historial de Promesas</h3>
-
-          <table style={tabla}>
-            <thead>
-              <tr>
-                <th style={th}>Fecha</th>
-                <th style={th}>Monto</th>
-                <th style={th}>Estado</th>
-                <th style={th}>Observación</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {promesas.map((promesa, index) => (
-                <tr key={index}>
-                  <td style={td}>{promesa.fecha}</td>
-                  <td style={td}>${promesa.monto}</td>
-                  <td style={td}>{promesa.estado}</td>
-                  <td style={td}>{promesa.observacion}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div style={card}>
-          <h2 style={tituloSeccion}>Últimas Gestiones</h2>
-
-          {ultimasGestiones.slice(0, 3).map((gestion, index) => (
-            <div key={index} style={observacionBox}>
-              <strong>{gestion.fecha} — {gestion.usuario}</strong>
-              <p>{gestion.accion}</p>
-            </div>
-          ))}
-        </div>
-
-        <div style={card}>
-          <h2 style={tituloSeccion}>Historial de Pagos</h2>
-
-          <table style={tabla}>
-            <thead>
-              <tr>
-                <th style={th}>Fecha</th>
-                <th style={th}>Monto</th>
-                <th style={th}>Método</th>
-                <th style={th}>Observación</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {historialPagos.map((pago, index) => (
-                <tr key={index}>
-                  <td style={td}>{pago.fecha}</td>
-                  <td style={td}>${pago.monto}</td>
-                  <td style={td}>{pago.metodo}</td>
-                  <td style={td}>{pago.observacion}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div style={card}>
-          <h2 style={tituloSeccion}>Observaciones de Gestión</h2>
-
-          <textarea
-            placeholder="Agregar nueva observación..."
-            value={observacion}
-            onChange={(e) => setObservacion(e.target.value)}
-            style={textarea}
-          />
-
-          <button style={boton}>
-            Guardar Observación
-          </button>
-
-          <div style={{ marginTop: "14px" }}>
-            {observaciones.map((item, index) => (
-              <div key={index} style={observacionBox}>
-                <strong>{item.fecha} — {item.usuario}</strong>
-                <p>{item.detalle}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div style={card}>
-          <h2 style={tituloSeccion}>📁 Expediente Digital</h2>
-
-          <button style={boton} onClick={subirDocumento}>
-            + Subir Documento
-          </button>
-
-          <div style={{ marginTop: "14px", overflowX: "auto" }}>
+          {resultados.length > 0 && (
             <table style={tabla}>
-              <thead>
-                <tr>
-                  <th style={th}>Nombre del archivo</th>
-                  <th style={th}>Tipo</th>
-                  <th style={th}>Fecha de carga</th>
-                  <th style={th}>Usuario</th>
-                  <th style={th}>Acciones</th>
-                </tr>
-              </thead>
-
               <tbody>
-                {documentos.map((documento, index) => (
+                {resultados.map((item, index) => (
                   <tr key={index}>
-                    <td style={td}>{documento.nombre}</td>
-                    <td style={td}>{documento.tipo}</td>
-                    <td style={td}>{documento.fecha}</td>
-                    <td style={td}>{documento.usuario}</td>
+                    <td style={td}>{item.cliente.nombre}</td>
+                    <td style={td}>{item.cliente.cedula}</td>
+                    <td style={td}>{item.cuenta?.numero_cuenta || "Ver cuentas"}</td>
                     <td style={td}>
-                      <button style={accionBtn}>Ver</button>
-                      <button style={accionBtn}>Descargar</button>
-                      <button style={accionBtn}>Eliminar</button>
+                      <button style={boton} onClick={() => seleccionarCliente(item)}>
+                        Seleccionar
+                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          )}
         </div>
+
+        {cliente && (
+          <>
+            <div style={acciones}>
+              <button style={botonSecundario}>Descargar Estado de Cuenta</button>
+              <button style={botonSecundario}>Generar Carta de Mora</button>
+              <button style={whatsappBtn}>WhatsApp</button>
+            </div>
+
+            <div style={gridResumen}>
+              <div style={card}>
+                <h3>Cliente</h3>
+                <p><strong>{cliente.nombre}</strong></p>
+                <p>Cédula: {cliente.cedula}</p>
+                <p>Teléfono: {cliente.telefono}</p>
+                <p>Correo: {cliente.correo || "-"}</p>
+                <p>Dirección: {cliente.direccion || "-"}</p>
+              </div>
+
+              <div style={card}>
+                <h3>Información Comercial</h3>
+
+                {cuentas.length > 1 && (
+                  <select
+                    value={cuenta?.id || ""}
+                    onChange={(e) => cambiarCuenta(e.target.value)}
+                    style={inputStyle}
+                  >
+                    {cuentas.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.numero_cuenta} - {item.descripcion}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                <p>Cuenta: {cuenta?.numero_cuenta || "-"}</p>
+                <p>Tipo: {cuenta?.tipo_producto || "-"}</p>
+                <p>Descripción: {cuenta?.descripcion || "-"}</p>
+                <p>Modalidad: {cuenta?.modalidad || "-"}</p>
+                <p>Monto total: ${Number(cuenta?.monto_total || 0).toLocaleString()}</p>
+                <p>Saldo actual: ${Number(cuenta?.saldo_actual || 0).toLocaleString()}</p>
+                <p>Cuota: ${Number(cuenta?.cuota || 0).toLocaleString()}</p>
+              </div>
+
+              <div style={card}>
+                <h3>Cobranza</h3>
+                <p>Estado: {semaforo} {cobranza?.estado_cobranza || cuenta?.estado || "-"}</p>
+                <p><strong>Días de atraso:</strong> {diasAtraso}</p>
+                <p>Fecha último pago: {cobranza?.fecha_ultimo_pago || "-"}</p>
+                <p>Monto último pago: ${Number(cobranza?.monto_ultimo_pago || 0).toLocaleString()}</p>
+                <p>Responsable: {cobranza?.responsable_cobro || "-"}</p>
+              </div>
+            </div>
+
+            <div style={card}>
+              <h2 style={tituloSeccion}>Información General</h2>
+              <p><strong>Fecha inicio:</strong> {cuenta?.fecha_inicio || "-"}</p>
+              <p><strong>Fecha vencimiento:</strong> {cuenta?.fecha_vencimiento || "-"}</p>
+              <p><strong>Observación inicial:</strong> {cliente.observacion || cuenta?.observacion || "-"}</p>
+            </div>
+
+            <div style={card}>
+              <h2 style={tituloSeccion}>Promesa de Pago</h2>
+
+              <div style={gridFormulario}>
+                <input type="date" value={fechaPromesa} onChange={(e) => setFechaPromesa(e.target.value)} style={inputStyle} />
+                <input placeholder="Monto prometido" value={montoPromesa} onChange={(e) => setMontoPromesa(e.target.value)} style={inputStyle} />
+                <input placeholder="Observación de la promesa" value={observacionPromesa} onChange={(e) => setObservacionPromesa(e.target.value)} style={inputStyle} />
+              </div>
+
+              <button style={boton} onClick={registrarPromesa}>
+                Registrar Promesa
+              </button>
+            </div>
+
+            <div style={card}>
+              <h2 style={tituloSeccion}>Historial de Pagos</h2>
+
+              <table style={tabla}>
+                <thead>
+                  <tr>
+                    <th style={th}>Fecha</th>
+                    <th style={th}>Monto</th>
+                    <th style={th}>Método</th>
+                    <th style={th}>Observación</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {pagos.map((pago) => (
+                    <tr key={pago.id}>
+                      <td style={td}>{pago.fecha_pago || pago.created_at}</td>
+                      <td style={td}>${Number(pago.monto || 0).toLocaleString()}</td>
+                      <td style={td}>{pago.metodo_pago}</td>
+                      <td style={td}>{pago.descripcion}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={card}>
+              <h2 style={tituloSeccion}>Observaciones de Gestión</h2>
+
+              <div style={gridFormulario}>
+                <select value={tipoGestion} onChange={(e) => setTipoGestion(e.target.value)} style={inputStyle}>
+                  <option>Llamada</option>
+                  <option>WhatsApp</option>
+                  <option>Visita</option>
+                  <option>Correo</option>
+                  <option>Seguimiento</option>
+                  <option>Promesa de Pago</option>
+                </select>
+
+                <select value={resultadoGestion} onChange={(e) => setResultadoGestion(e.target.value)} style={inputStyle}>
+                  <option>Pendiente</option>
+                  <option>Contestó</option>
+                  <option>No contestó</option>
+                  <option>Promesa de Pago</option>
+                  <option>Pago Realizado</option>
+                </select>
+              </div>
+
+              <textarea
+                placeholder="Agregar nueva observación..."
+                value={observacion}
+                onChange={(e) => setObservacion(e.target.value)}
+                style={textarea}
+              />
+
+              <button style={boton} onClick={guardarGestion}>
+                Guardar Observación
+              </button>
+
+              <div style={{ marginTop: "14px" }}>
+                {gestiones.map((item) => (
+                  <div key={item.id} style={observacionBox}>
+                    <strong>{item.fecha_gestion} — {item.usuario}</strong>
+                    <p>{item.tipo_gestion} / {item.resultado_gestion}</p>
+                    <p>{item.observacion}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={card}>
+              <h2 style={tituloSeccion}>📁 Expediente Digital</h2>
+
+              <input
+                type="file"
+                onChange={(e) => setArchivo(e.target.files[0])}
+                style={inputStyle}
+              />
+
+              <button style={boton} onClick={subirDocumento}>
+                + Subir Documento
+              </button>
+
+              <table style={tabla}>
+                <thead>
+                  <tr>
+                    <th style={th}>Archivo</th>
+                    <th style={th}>Acción</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {documentos.map((doc) => (
+                    <tr key={doc.name}>
+                      <td style={td}>{doc.name}</td>
+                      <td style={td}>
+                        <button style={accionBtn} onClick={() => verDocumento(doc.name)}>
+                          Ver
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -488,14 +560,10 @@ const tituloSeccion = {
   color: "#111827",
 };
 
-const tituloTabla = {
-  marginTop: "18px",
-  marginBottom: "10px",
-};
-
 const tabla = {
   width: "100%",
   borderCollapse: "collapse",
+  marginTop: "14px",
 };
 
 const th = {
@@ -537,16 +605,6 @@ const boton = {
   color: "#ffffff",
   border: "none",
   padding: "11px 22px",
-  borderRadius: "9px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const botonCancelar = {
-  background: "#6b7280",
-  color: "#ffffff",
-  border: "none",
-  padding: "11px 20px",
   borderRadius: "9px",
   fontWeight: "bold",
   cursor: "pointer",
