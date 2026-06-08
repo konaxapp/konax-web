@@ -6,10 +6,15 @@ import { supabase } from "../../lib/supabase";
 export default function Caja() {
   const [tipoMovimiento, setTipoMovimiento] = useState("Venta Contado");
   const [fechaPago, setFechaPago] = useState(new Date().toISOString().split("T")[0]);
+
   const [buscarCliente, setBuscarCliente] = useState("");
-  const [clientes, setClientes] = useState([]);
+  const [resultadosBusqueda, setResultadosBusqueda] = useState([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
+  const [cuentasCliente, setCuentasCliente] = useState([]);
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
+
+  const [nombreContado, setNombreContado] = useState("");
+  const [cedulaContado, setCedulaContado] = useState("");
 
   const [metodoPago, setMetodoPago] = useState("Efectivo");
   const [monto, setMonto] = useState("");
@@ -18,57 +23,14 @@ export default function Caja() {
   const [observacion, setObservacion] = useState("");
   const [movimientos, setMovimientos] = useState([]);
 
+  const requiereCliente = tipoMovimiento !== "Venta Contado";
+
   useEffect(() => {
     cargarMovimientos();
   }, []);
 
-  const requiereCliente = tipoMovimiento !== "Venta Contado";
-
   function generarTransaccion() {
     return "TX-" + Date.now();
-  }
-
-  async function buscarClientes() {
-    if (buscarCliente.trim().length < 3) {
-      alert("Escriba mínimo 3 caracteres para buscar.");
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("clientes")
-      .select("*")
-      .or(
-        `nombre.ilike.%${buscarCliente}%,cedula.ilike.%${buscarCliente}%,telefono.ilike.%${buscarCliente}%`
-      );
-
-    if (error) {
-      alert("Error buscando cliente: " + error.message);
-      return;
-    }
-
-    setClientes(data || []);
-  }
-
-  async function seleccionarCliente(cliente) {
-    setClienteSeleccionado(cliente);
-    setBuscarCliente(cliente.nombre);
-    setClientes([]);
-
-    const { data, error } = await supabase
-      .from("informacion_comercial")
-      .select("*")
-      .eq("cliente_id", cliente.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
-
-    if (error) {
-      alert("Cliente seleccionado, pero no tiene cuenta comercial.");
-      setCuentaSeleccionada(null);
-      return;
-    }
-
-    setCuentaSeleccionada(data);
   }
 
   async function cargarMovimientos() {
@@ -77,8 +39,97 @@ export default function Caja() {
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (!error) {
-      setMovimientos(data || []);
+    if (!error) setMovimientos(data || []);
+  }
+
+  async function buscarClientes() {
+    const texto = buscarCliente.trim();
+
+    if (texto.length < 3) {
+      alert("Escriba mínimo 3 caracteres para buscar.");
+      return;
+    }
+
+    let resultados = [];
+
+    const { data: clientesData, error: errorClientes } = await supabase
+      .from("clientes")
+      .select("*")
+      .or(`nombre.ilike.%${texto}%,cedula.ilike.%${texto}%`);
+
+    if (errorClientes) {
+      alert("Error buscando cliente: " + errorClientes.message);
+      return;
+    }
+
+    if (clientesData && clientesData.length > 0) {
+      resultados = clientesData.map((cliente) => ({
+        cliente,
+        cuenta: null,
+      }));
+    }
+
+    const { data: cuentasData, error: errorCuentas } = await supabase
+      .from("informacion_comercial")
+      .select("*")
+      .ilike("numero_cuenta", `%${texto}%`);
+
+    if (errorCuentas) {
+      alert("Error buscando cuenta: " + errorCuentas.message);
+      return;
+    }
+
+    if (cuentasData && cuentasData.length > 0) {
+      const idsClientes = cuentasData.map((cuenta) => cuenta.cliente_id);
+
+      const { data: clientesDeCuentas } = await supabase
+        .from("clientes")
+        .select("*")
+        .in("id", idsClientes);
+
+      cuentasData.forEach((cuenta) => {
+        const cliente = clientesDeCuentas?.find(
+          (item) => item.id === cuenta.cliente_id
+        );
+
+        if (cliente) {
+          resultados.push({
+            cliente,
+            cuenta,
+          });
+        }
+      });
+    }
+
+    setResultadosBusqueda(resultados);
+  }
+
+  async function seleccionarResultado(resultado) {
+    const cliente = resultado.cliente;
+
+    setClienteSeleccionado(cliente);
+    setBuscarCliente(cliente.nombre);
+    setResultadosBusqueda([]);
+
+    const { data, error } = await supabase
+      .from("informacion_comercial")
+      .select("*")
+      .eq("cliente_id", cliente.id)
+      .order("created_at", { ascending: false });
+
+    if (error || !data || data.length === 0) {
+      alert("Cliente seleccionado, pero no tiene cuenta comercial.");
+      setCuentasCliente([]);
+      setCuentaSeleccionada(null);
+      return;
+    }
+
+    setCuentasCliente(data);
+
+    if (resultado.cuenta) {
+      setCuentaSeleccionada(resultado.cuenta);
+    } else {
+      setCuentaSeleccionada(data[0]);
     }
   }
 
@@ -94,7 +145,7 @@ export default function Caja() {
     }
 
     if (requiereCliente && !cuentaSeleccionada) {
-      alert("Este cliente no tiene cuenta comercial asociada.");
+      alert("Seleccione una cuenta.");
       return;
     }
 
@@ -113,6 +164,12 @@ export default function Caja() {
         metodo_pago: metodoPago,
         usuario: responsable || "Caja",
         estado: "Procesado",
+        cliente_nombre: requiereCliente
+          ? clienteSeleccionado?.nombre
+          : nombreContado || null,
+        cliente_cedula: requiereCliente
+          ? clienteSeleccionado?.cedula
+          : cedulaContado || null,
       },
     ]);
 
@@ -121,13 +178,24 @@ export default function Caja() {
       return;
     }
 
-    if (requiereCliente && cuentaSeleccionada?.saldo_actual !== null) {
-      const nuevoSaldo = Number(cuentaSeleccionada.saldo_actual || 0) - Number(monto);
+    if (requiereCliente && cuentaSeleccionada) {
+      const nuevoSaldo =
+        Number(cuentaSeleccionada.saldo_actual || 0) - Number(monto);
 
       await supabase
         .from("informacion_comercial")
-        .update({ saldo_actual: nuevoSaldo < 0 ? 0 : nuevoSaldo })
+        .update({
+          saldo_actual: nuevoSaldo < 0 ? 0 : nuevoSaldo,
+        })
         .eq("id", cuentaSeleccionada.id);
+
+      await supabase
+        .from("informacion_cobranza")
+        .update({
+          fecha_ultimo_pago: fechaPago,
+          monto_ultimo_pago: Number(monto),
+        })
+        .eq("informacion_comercial_id", cuentaSeleccionada.id);
     }
 
     alert("Movimiento registrado correctamente.");
@@ -139,9 +207,12 @@ export default function Caja() {
     setTipoMovimiento("Venta Contado");
     setFechaPago(new Date().toISOString().split("T")[0]);
     setBuscarCliente("");
-    setClientes([]);
+    setResultadosBusqueda([]);
     setClienteSeleccionado(null);
+    setCuentasCliente([]);
     setCuentaSeleccionada(null);
+    setNombreContado("");
+    setCedulaContado("");
     setMetodoPago("Efectivo");
     setMonto("");
     setConcepto("");
@@ -159,7 +230,8 @@ export default function Caja() {
         <h1 style={titulo}>Caja</h1>
 
         <p style={subtitulo}>
-          Registro de ventas contado, pagos, abonos, mensualidades, suscripciones y contratos.
+          Registro de ventas contado, pagos, abonos, mensualidades,
+          suscripciones y contratos.
         </p>
 
         <div style={card}>
@@ -200,36 +272,60 @@ export default function Caja() {
           </div>
         </div>
 
-        {requiereCliente && (
+        {!requiereCliente && (
           <div style={card}>
-            <h2 style={tituloSeccion}>Cliente</h2>
+            <h2 style={tituloSeccion}>Cliente Opcional</h2>
 
             <div style={grid}>
               <input
-                placeholder="Buscar cliente por nombre, cédula o teléfono..."
+                placeholder="Nombre del cliente (opcional)"
+                value={nombreContado}
+                onChange={(e) => setNombreContado(e.target.value)}
+                style={inputStyle}
+              />
+
+              <input
+                placeholder="Cédula (opcional)"
+                value={cedulaContado}
+                onChange={(e) => setCedulaContado(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+          </div>
+        )}
+
+        {requiereCliente && (
+          <div style={card}>
+            <h2 style={tituloSeccion}>Cliente / Cuenta</h2>
+
+            <div style={grid}>
+              <input
+                placeholder="Buscar por nombre, cédula o número de cuenta..."
                 value={buscarCliente}
                 onChange={(e) => setBuscarCliente(e.target.value)}
                 style={inputStyle}
               />
 
               <button style={botonSecundario} onClick={buscarClientes}>
-                Buscar Cliente
+                Buscar
               </button>
             </div>
 
-            {clientes.length > 0 && (
+            {resultadosBusqueda.length > 0 && (
               <div style={{ marginTop: "15px", overflowX: "auto" }}>
                 <table style={tabla}>
                   <tbody>
-                    {clientes.map((cliente) => (
-                      <tr key={cliente.id}>
-                        <td style={td}>{cliente.nombre}</td>
-                        <td style={td}>{cliente.cedula}</td>
-                        <td style={td}>{cliente.telefono}</td>
+                    {resultadosBusqueda.map((item, index) => (
+                      <tr key={index}>
+                        <td style={td}>{item.cliente.nombre}</td>
+                        <td style={td}>{item.cliente.cedula}</td>
+                        <td style={td}>
+                          {item.cuenta?.numero_cuenta || "Ver cuentas"}
+                        </td>
                         <td style={td}>
                           <button
                             style={boton}
-                            onClick={() => seleccionarCliente(cliente)}
+                            onClick={() => seleccionarResultado(item)}
                           >
                             Seleccionar
                           </button>
@@ -243,11 +339,45 @@ export default function Caja() {
 
             {clienteSeleccionado && (
               <div style={{ marginTop: "15px" }}>
-                <p><strong>Cliente:</strong> {clienteSeleccionado.nombre}</p>
-                <p><strong>Cédula:</strong> {clienteSeleccionado.cedula}</p>
-                <p><strong>Teléfono:</strong> {clienteSeleccionado.telefono}</p>
-                <p><strong>Cuenta:</strong> {cuentaSeleccionada?.numero_cuenta || "Sin cuenta"}</p>
-                <p><strong>Saldo actual:</strong> ${Number(cuentaSeleccionada?.saldo_actual || 0).toLocaleString()}</p>
+                <p>
+                  <strong>Cliente:</strong> {clienteSeleccionado.nombre}
+                </p>
+                <p>
+                  <strong>Cédula:</strong> {clienteSeleccionado.cedula}
+                </p>
+
+                {cuentasCliente.length > 1 && (
+                  <div style={{ marginTop: "12px" }}>
+                    <label style={label}>Seleccionar cuenta</label>
+
+                    <select
+                      value={cuentaSeleccionada?.id || ""}
+                      onChange={(e) => {
+                        const cuenta = cuentasCliente.find(
+                          (item) => item.id === e.target.value
+                        );
+                        setCuentaSeleccionada(cuenta);
+                      }}
+                      style={inputStyle}
+                    >
+                      {cuentasCliente.map((cuenta) => (
+                        <option key={cuenta.id} value={cuenta.id}>
+                          {cuenta.numero_cuenta} - {cuenta.descripcion} - Saldo $
+                          {Number(cuenta.saldo_actual || 0).toLocaleString()}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <p>
+                  <strong>Cuenta:</strong>{" "}
+                  {cuentaSeleccionada?.numero_cuenta || "Sin cuenta"}
+                </p>
+                <p>
+                  <strong>Saldo actual:</strong> $
+                  {Number(cuentaSeleccionada?.saldo_actual || 0).toLocaleString()}
+                </p>
               </div>
             )}
           </div>
@@ -322,6 +452,9 @@ export default function Caja() {
                 <tr>
                   <th style={th}>Fecha</th>
                   <th style={th}>Transacción</th>
+                  <th style={th}>Cliente</th>
+                  <th style={th}>Cédula</th>
+                  <th style={th}>Cuenta</th>
                   <th style={th}>Tipo</th>
                   <th style={th}>Método</th>
                   <th style={th}>Monto</th>
@@ -336,6 +469,9 @@ export default function Caja() {
                   <tr key={movimiento.id}>
                     <td style={td}>{movimiento.fecha_pago || movimiento.created_at}</td>
                     <td style={td}>{movimiento.numero_transaccion}</td>
+                    <td style={td}>{movimiento.cliente_nombre || "-"}</td>
+                    <td style={td}>{movimiento.cliente_cedula || "-"}</td>
+                    <td style={td}>{movimiento.numero_cuenta || "-"}</td>
                     <td style={td}>{movimiento.tipo}</td>
                     <td style={td}>{movimiento.metodo_pago}</td>
                     <td style={td}>${Number(movimiento.monto || 0).toLocaleString()}</td>
