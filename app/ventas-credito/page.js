@@ -134,15 +134,7 @@ const cuotaCalculada =
           <h2 style={tituloSeccion}>Nuevo Crédito</h2>
 
           <div style={grid}>
-          <input
-  type="number"
-  placeholder="Precio Contado"
-  value={credito.precioContado}
-  onChange={(e) =>
-    setCredito({ ...credito, precioContado: e.target.value })
-  }
-  style={inputStyle}
-/>
+          
 
 <input
   type="number"
@@ -276,7 +268,7 @@ const cuotaCalculada =
               <div style={totalCardPrincipal}>
                 <span style={totalLabel}>Monto a Financiar</span>
                 <strong style={totalValorPrincipal}>
-                  {formato(montoFinanciar)}
+                  {formato(montoFinanciado)}
                 </strong>
               </div>
 
@@ -286,6 +278,33 @@ const cuotaCalculada =
                   {formato(cuotaCalculada)}
                 </strong>
               </div>
+            <div style={totalCard}>
+  <span style={totalLabel}>Interés Total</span>
+  <strong style={totalValor}>
+    {formato(interesTotal)}
+  </strong>
+</div>
+
+<div style={totalCard}>
+  <span style={totalLabel}>Total Financiado</span>
+  <strong style={totalValor}>
+    {formato(totalFinanciado)}
+  </strong>
+</div>
+
+<div style={totalCardPrincipal}>
+  <span style={totalLabel}>Total a Pagar</span>
+  <strong style={totalValorPrincipal}>
+    {formato(totalPagar)}
+  </strong>
+</div>
+
+<div style={totalCardPrincipal}>
+  <span style={totalLabel}>Saldo Inicial</span>
+  <strong style={totalValorPrincipal}>
+    {formato(montoFinanciado)}
+  </strong>
+</div>
             </div>
           )}
 
