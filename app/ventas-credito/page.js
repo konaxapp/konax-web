@@ -32,28 +32,7 @@ export default function VentasCredito() {
   observacion: "",
 });
 
-  const creditos = [
-    {
-      fecha: "04/06/2026",
-      transaccion: "CR-001",
-      cliente: "Juan Pérez",
-      producto: "Televisor 55",
-      saldo: 500,
-      cuota: 50,
-      proximoPago: "11/06/2026",
-      estado: "Activo",
-    },
-    {
-      fecha: "03/06/2026",
-      transaccion: "CR-002",
-      cliente: "María Gómez",
-      producto: "Nevera",
-      saldo: 850,
-      cuota: 85,
-      proximoPago: "10/06/2026",
-      estado: "Activo",
-    },
-  ];
+  
 
   const precioCredito = Number(credito.precioCredito || 0);
 const inicial = Number(credito.inicial || 0);
@@ -123,13 +102,6 @@ const cuotaCalculada =
           </div>
         </div>
 
-        <div style={cardsGrid}>
-          <KPI titulo="Créditos Activos" valor="85" icono="📄" />
-          <KPI titulo="Créditos Mes" valor="18" icono="📈" />
-          <KPI titulo="Cartera Activa" valor="$350,000.00" icono="💰" />
-          <KPI titulo="Clientes Mora" valor="25" icono="🚨" />
-        </div>
-
         <div style={card}>
           <h2 style={tituloSeccion}>Nuevo Crédito</h2>
 
@@ -187,16 +159,6 @@ const cuotaCalculada =
               value={credito.producto}
               onChange={(e) =>
                 setCredito({ ...credito, producto: e.target.value })
-              }
-              style={inputStyle}
-            />
-
-            <input
-              type="number"
-              placeholder="Precio de venta"
-              value={credito.precioVenta}
-              onChange={(e) =>
-                setCredito({ ...credito, precioVenta: e.target.value })
               }
               style={inputStyle}
             />
