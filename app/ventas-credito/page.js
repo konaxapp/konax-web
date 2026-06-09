@@ -290,43 +290,8 @@ const cuotaCalculada =
           </div>
         </div>
 
-        <div style={card}>
-          <h2 style={tituloSeccion}>Historial de Créditos</h2>
 
-          <div style={{ overflowX: "auto" }}>
-            <table style={tabla}>
-              <thead>
-                <tr>
-                  <th style={th}>Fecha</th>
-                  <th style={th}>Transacción</th>
-                  <th style={th}>Cliente</th>
-                  <th style={th}>Producto</th>
-                  <th style={th}>Saldo</th>
-                  <th style={th}>Cuota</th>
-                  <th style={th}>Próximo Pago</th>
-                  <th style={th}>Estado</th>
-                </tr>
-              </thead>
 
-              <tbody>
-                {creditos.map((item, index) => (
-                  <tr key={index}>
-                    <td style={td}>{item.fecha}</td>
-                    <td style={td}>{item.transaccion}</td>
-                    <td style={td}>{item.cliente}</td>
-                    <td style={td}>{item.producto}</td>
-                    <td style={td}>{formato(item.saldo)}</td>
-                    <td style={td}>{formato(item.cuota)}</td>
-                    <td style={td}>{item.proximoPago}</td>
-                    <td style={td}>
-                      <span style={estadoBadge}>{item.estado}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
     </div>
   );
