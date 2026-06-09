@@ -75,12 +75,6 @@ const cuotaCalculada =
       cedula: "",
       telefono: "",
       vendedor: "",
-      gestor: "",
-      descripcion: "",
-      taxaInteres: "",
-      gastosManejo: "",
-      seguro: "",
-      comision: "",
       codigo: "",
       producto: "",
       precioContado: "",
@@ -113,6 +107,84 @@ const cuotaCalculada =
 
           <div style={grid}>
           
+
+
+<input
+  placeholder="Cliente"
+  value={credito.cliente}
+  onChange={(e) =>
+    setCredito({ ...credito, cliente: e.target.value })
+  }
+  style={inputStyle}
+/>
+
+<input
+  placeholder="Gestor Asignado"
+  value={credito.gestor}
+  onChange={(e) =>
+    setCredito({ ...credito, gestor: e.target.value })
+  }
+  style={inputStyle}
+/>
+
+<input
+  placeholder="Descripción"
+  value={credito.descripcion}
+  onChange={(e) =>
+    setCredito({ ...credito, descripcion: e.target.value })
+  }
+  style={inputStyle}
+/>
+
+<input
+  type="number"
+  placeholder="Precio Contado"
+  value={credito.precioContado}
+  onChange={(e) =>
+    setCredito({ ...credito, precioContado: e.target.value })
+  }
+  style={inputStyle}
+/>
+
+<input
+  type="number"
+  placeholder="Tasa de Interés Mensual %"
+  value={credito.tasaInteres}
+  onChange={(e) =>
+    setCredito({ ...credito, tasaInteres: e.target.value })
+  }
+  style={inputStyle}
+/>
+
+<input
+  type="number"
+  placeholder="Gastos de Manejo"
+  value={credito.gastosManejo}
+  onChange={(e) =>
+    setCredito({ ...credito, gastosManejo: e.target.value })
+  }
+  style={inputStyle}
+/>
+
+<input
+  type="number"
+  placeholder="Seguro"
+  value={credito.seguro}
+  onChange={(e) =>
+    setCredito({ ...credito, seguro: e.target.value })
+  }
+  style={inputStyle}
+/>
+
+<input
+  type="number"
+  placeholder="Comisión"
+  value={credito.comision}
+  onChange={(e) =>
+    setCredito({ ...credito, comision: e.target.value })
+  }
+  style={inputStyle}
+/>
 
 <input
   type="number"
