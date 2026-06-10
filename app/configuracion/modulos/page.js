@@ -12,9 +12,8 @@ export default function ModulosPage() {
 
   async function cargarModulos() {
     const { data, error } = await supabase
-      .from("empresa_modulos")
-      .select("*")
-      .single();
+  .from("empresa_modulos")
+  .select("*");
 
     if (error) {
   console.log("ERROR MODULOS:", error);
@@ -22,7 +21,7 @@ export default function ModulosPage() {
   return;
 }
 
-    setModulos(data);
+    setModulos(data?.[0]);
   }
 
   if (!modulos) {
