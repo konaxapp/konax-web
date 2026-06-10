@@ -24,9 +24,9 @@ export default function ModulosPage() {
     setModulos(data?.[0]);
   }
 
-  if (!modulos) {
-    return <div>Cargando módulos...</div>;
-  }
+ if (!modulos) {
+  return <div>NO HAY DATOS DE MODULOS</div>;
+}
 
   return (
     <div style={{ padding: "20px" }}>
