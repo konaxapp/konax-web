@@ -107,3 +107,86 @@ export default function Home() {
                 : "Mostrar"}
             </button>
           </div>
+        </div>
+
+        <div style={{ marginBottom: "25px" }}>
+          <label>Confirmar contraseña</label>
+
+          <div
+            style={{
+              position: "relative",
+              marginTop: "5px",
+            }}
+          >
+            <input
+              type={
+                mostrarConfirmacion
+                  ? "text"
+                  : "password"
+              }
+              placeholder="********"
+              style={{
+                width: "100%",
+                padding: "12px",
+                paddingRight: "80px",
+                borderRadius: "8px",
+                border: "1px solid #ccc",
+                boxSizing: "border-box",
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                setMostrarConfirmacion(
+                  !mostrarConfirmacion
+                )
+              }
+              style={{
+                position: "absolute",
+                right: "10px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                color: "#2563eb",
+                fontWeight: "600",
+                fontSize: "13px",
+              }}
+            >
+              {mostrarConfirmacion
+                ? "Ocultar"
+                : "Mostrar"}
+            </button>
+          </div>
+        </div>
+
+        <button
+          style={{
+            width: "100%",
+            padding: "14px",
+            background: "#111827",
+            color: "white",
+            border: "none",
+            borderRadius: "8px",
+            fontSize: "16px",
+            cursor: "pointer",
+          }}
+        >
+          Crear cuenta
+        </button>
+
+        <p
+          style={{
+            textAlign: "center",
+            marginTop: "20px",
+            color: "#666",
+          }}
+        >
+          ¿Ya tienes cuenta? Iniciar sesión
+        </p>
+      </div>
+    </div>
+  );
+}
