@@ -11,6 +11,7 @@ export default function ModulosPage() {
   }, []);
 
   async function cargarModulos() {
+    alert("URL: " + process.env.NEXT_PUBLIC_SUPABASE_URL);
   const { data, error } = await supabase
     .from("empresa_modulos")
     .select("*");
