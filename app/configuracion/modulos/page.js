@@ -63,9 +63,15 @@ export default function ModulosPage() {
               alignItems: "center",
             }}
           >
-            <label style={{ width: "200px" }}>
-              {key}
-            </label>
+            <label
+  style={{
+    width: "220px",
+    textTransform: "capitalize",
+    fontWeight: "600",
+  }}
+>
+  {key.replaceAll("_", " ")}
+</label>
 
             <input
               type="checkbox"
