@@ -4,7 +4,7 @@ import { useState } from "react";
 
 export default function Home() {
   const [mostrarPassword, setMostrarPassword] = useState(false);
-  const [mostrarConfirmar, setMostrarConfirmar] = useState(false);
+  const [mostrarConfirmacion, setMostrarConfirmacion] = useState(false);
 
   return (
     <div
@@ -47,6 +47,7 @@ export default function Home() {
 
         <div style={{ marginBottom: "15px" }}>
           <label>Correo electrónico</label>
+
           <input
             type="email"
             placeholder="correo@empresa.com"
@@ -56,6 +57,7 @@ export default function Home() {
               marginTop: "5px",
               borderRadius: "8px",
               border: "1px solid #ccc",
+              boxSizing: "border-box",
             }}
           />
         </div>
@@ -65,20 +67,20 @@ export default function Home() {
 
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
+              position: "relative",
+              marginTop: "5px",
             }}
           >
             <input
               type={mostrarPassword ? "text" : "password"}
               placeholder="********"
               style={{
-                flex: 1,
+                width: "100%",
                 padding: "12px",
-                marginTop: "5px",
+                paddingRight: "80px",
                 borderRadius: "8px",
                 border: "1px solid #ccc",
+                boxSizing: "border-box",
               }}
             />
 
@@ -88,79 +90,20 @@ export default function Home() {
                 setMostrarPassword(!mostrarPassword)
               }
               style={{
-                marginTop: "5px",
-                padding: "10px",
+                position: "absolute",
+                right: "10px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                border: "none",
+                background: "transparent",
                 cursor: "pointer",
+                color: "#2563eb",
+                fontWeight: "600",
+                fontSize: "13px",
               }}
             >
-              👁️
+              {mostrarPassword
+                ? "Ocultar"
+                : "Mostrar"}
             </button>
           </div>
-        </div>
-
-        <div style={{ marginBottom: "25px" }}>
-          <label>Confirmar contraseña</label>
-
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-            }}
-          >
-            <input
-              type={mostrarConfirmar ? "text" : "password"}
-              placeholder="********"
-              style={{
-                flex: 1,
-                padding: "12px",
-                marginTop: "5px",
-                borderRadius: "8px",
-                border: "1px solid #ccc",
-              }}
-            />
-
-            <button
-              type="button"
-              onClick={() =>
-                setMostrarConfirmar(!mostrarConfirmar)
-              }
-              style={{
-                marginTop: "5px",
-                padding: "10px",
-                cursor: "pointer",
-              }}
-            >
-              👁️
-            </button>
-          </div>
-        </div>
-
-        <button
-          style={{
-            width: "100%",
-            padding: "14px",
-            background: "#111827",
-            color: "white",
-            border: "none",
-            borderRadius: "8px",
-            fontSize: "16px",
-            cursor: "pointer",
-          }}
-        >
-          Crear cuenta
-        </button>
-
-        <p
-          style={{
-            textAlign: "center",
-            marginTop: "20px",
-            color: "#666",
-          }}
-        >
-          ¿Ya tienes cuenta? Iniciar sesión
-        </p>
-      </div>
-    </div>
-  );
-}
