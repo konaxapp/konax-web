@@ -11,18 +11,17 @@ export default function ModulosPage() {
   }, []);
 
   async function cargarModulos() {
-    const { data, error } = await supabase
-  .from("empresa_modulos")
-  .select("*");
+  const { data, error } = await supabase
+    .from("empresa_modulos")
+    .select("*");
 
-    if (error) {
-  console.log("ERROR MODULOS:", error);
-  alert(JSON.stringify(error));
-  return;
+  alert("DATA: " + JSON.stringify(data));
+  alert("ERROR: " + JSON.stringify(error));
+
+  if (error) return;
+
+  setModulos(data?.[0]);
 }
-
-    setModulos(data?.[0]);
-  }
 
  if (!modulos) {
   return <div>NO HAY DATOS DE MODULOS</div>;
