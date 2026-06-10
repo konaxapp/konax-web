@@ -17,9 +17,10 @@ export default function ModulosPage() {
       .single();
 
     if (error) {
-      console.error(error);
-      return;
-    }
+  console.log("ERROR MODULOS:", error);
+  alert(JSON.stringify(error));
+  return;
+}
 
     setModulos(data);
   }
