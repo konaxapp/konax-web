@@ -1,26 +1,43 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
+
 export default function Dashboard() {
-  const modulos = {
-    clientes: true,
-    caja: true,
-    control_caja: true,
-    vista_cliente: true,
-    cobranza: true,
-    inventario: true,
-    venta_credito: true,
-    suscripciones: false,
-    recargos: false,
-    dashboard_ventas: false,
-    dashboard_cobros: false,
-    egresos: false,
-  };
+  const [modulos, setModulos] = useState(null);
+
+  useEffect(() => {
+    cargarModulos();
+  }, []);
+
+  async function cargarModulos() {
+    const { data, error } = await supabase
+      .from("empresa_modulos")
+      .select("*")
+      .limit(1);
+
+    if (error) {
+      console.log(error);
+      return;
+    }
+
+    setModulos(data?.[0]);
+  }
+
+  if (!modulos) {
+    return <div>Cargando Dashboard...</div>;
+  }
 
   const tarjetas = [
     {
       nombre: "Clientes",
       ruta: "/clientes",
       activo: modulos.clientes,
+    },
+    {
+      nombre: "Vista Cliente",
+      ruta: "/vista-cliente",
+      activo: modulos.vista_cliente,
     },
     {
       nombre: "Caja",
@@ -34,19 +51,49 @@ export default function Dashboard() {
     },
     {
       nombre: "Cobranza",
-      ruta: "/dashboard-cobranza",
+      ruta: "/cartera",
       activo: modulos.cobranza,
     },
     {
-      nombre: "Dashboard Financiero",
-      ruta: "/dashboard-financiero",
-      activo: true,
+      nombre: "Inventario",
+      ruta: "/inventario",
+      activo: modulos.inventario,
+    },
+    {
+      nombre: "Venta Crédito",
+      ruta: "/ventas-credito",
+      activo: modulos.venta_credito,
+    },
+    {
+      nombre: "Suscripciones",
+      ruta: "/suscripciones",
+      activo: modulos.suscripciones,
+    },
+    {
+      nombre: "Recargos",
+      ruta: "/recargos",
+      activo: modulos.recargos,
+    },
+    {
+      nombre: "Dashboard Ventas",
+      ruta: "/dashboard-ventas",
+      activo: modulos.dashboard_ventas,
+    },
+    {
+      nombre: "Dashboard Cobros",
+      ruta: "/dashboard-cobranza",
+      activo: modulos.dashboard_cobros,
+    },
+    {
+      nombre: "Egresos",
+      ruta: "/egresos",
+      activo: modulos.egresos,
     },
   ];
 
   return (
     <div style={{ padding: "30px" }}>
-      <h1>Dashboard Principal</h1>
+      <h1>Centro de Operaciones KONAX</h1>
 
       <div
         style={{
@@ -65,7 +112,7 @@ export default function Dashboard() {
               href={item.ruta}
               style={{
                 border: "1px solid #ddd",
-                borderRadius: "10px",
+                borderRadius: "12px",
                 padding: "20px",
                 textDecoration: "none",
                 color: "#000",
