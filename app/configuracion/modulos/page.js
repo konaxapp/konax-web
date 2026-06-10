@@ -11,43 +11,74 @@ export default function ModulosPage() {
   }, []);
 
   async function cargarModulos() {
-    alert("URL: " + process.env.NEXT_PUBLIC_SUPABASE_URL);
-  const { data, error } = await supabase
-    .from("empresa_modulos")
-    .select("*");
+    const { data, error } = await supabase
+      .from("empresa_modulos")
+      .select("*")
+      .limit(1);
 
-  alert("DATA: " + JSON.stringify(data));
-  alert("ERROR: " + JSON.stringify(error));
+    if (error) {
+      console.log(error);
+      return;
+    }
 
-  if (error) return;
+    setModulos(data?.[0]);
+  }
 
-  setModulos(data?.[0]);
-}
+  async function actualizarModulo(campo, valor) {
+    const { error } = await supabase
+      .from("empresa_modulos")
+      .update({
+        [campo]: valor,
+      })
+      .eq("id", modulos.id);
 
- if (!modulos) {
-  return <div>NO HAY DATOS DE MODULOS</div>;
-}
+    if (!error) {
+      setModulos({
+        ...modulos,
+        [campo]: valor,
+      });
+    }
+  }
+
+  if (!modulos) {
+    return <div>Cargando módulos...</div>;
+  }
 
   return (
     <div style={{ padding: "20px" }}>
       <h1>Configuración de Módulos</h1>
 
-      <ul>
-        <li>Clientes: {modulos.clientes ? "✅" : "❌"}</li>
-        <li>Caja: {modulos.caja ? "✅" : "❌"}</li>
-        <li>Control Caja: {modulos.control_caja ? "✅" : "❌"}</li>
-        <li>Vista Cliente: {modulos.vista_cliente ? "✅" : "❌"}</li>
+      {Object.keys(modulos)
+        .filter(
+          (key) =>
+            !["id", "empresa_id", "created_at"].includes(key)
+        )
+        .map((key) => (
+          <div
+            key={key}
+            style={{
+              display: "flex",
+              gap: "10px",
+              marginBottom: "10px",
+              alignItems: "center",
+            }}
+          >
+            <label style={{ width: "200px" }}>
+              {key}
+            </label>
 
-        <li>Cobranza: {modulos.cobranza ? "✅" : "❌"}</li>
-        <li>Inventario: {modulos.inventario ? "✅" : "❌"}</li>
-        <li>Venta Crédito: {modulos.venta_credito ? "✅" : "❌"}</li>
-
-        <li>Suscripciones: {modulos.suscripciones ? "✅" : "❌"}</li>
-        <li>Recargos: {modulos.recargos ? "✅" : "❌"}</li>
-        <li>Dashboard Ventas: {modulos.dashboard_ventas ? "✅" : "❌"}</li>
-        <li>Dashboard Cobros: {modulos.dashboard_cobros ? "✅" : "❌"}</li>
-        <li>Egresos: {modulos.egresos ? "✅" : "❌"}</li>
-      </ul>
+            <input
+              type="checkbox"
+              checked={modulos[key]}
+              onChange={(e) =>
+                actualizarModulo(
+                  key,
+                  e.target.checked
+                )
+              }
+            />
+          </div>
+        ))}
     </div>
   );
 }
