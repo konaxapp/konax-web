@@ -1,4 +1,11 @@
+"use client";
+
+import { useState } from "react";
+
 export default function Home() {
+  const [mostrarPassword, setMostrarPassword] = useState(false);
+  const [mostrarConfirmar, setMostrarConfirmar] = useState(false);
+
   return (
     <div
       style={{
@@ -55,32 +62,78 @@ export default function Home() {
 
         <div style={{ marginBottom: "15px" }}>
           <label>Contraseña</label>
-          <input
-            type="password"
-            placeholder="********"
+
+          <div
             style={{
-              width: "100%",
-              padding: "12px",
-              marginTop: "5px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
             }}
-          />
+          >
+            <input
+              type={mostrarPassword ? "text" : "password"}
+              placeholder="********"
+              style={{
+                flex: 1,
+                padding: "12px",
+                marginTop: "5px",
+                borderRadius: "8px",
+                border: "1px solid #ccc",
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                setMostrarPassword(!mostrarPassword)
+              }
+              style={{
+                marginTop: "5px",
+                padding: "10px",
+                cursor: "pointer",
+              }}
+            >
+              👁️
+            </button>
+          </div>
         </div>
 
         <div style={{ marginBottom: "25px" }}>
           <label>Confirmar contraseña</label>
-          <input
-            type="password"
-            placeholder="********"
+
+          <div
             style={{
-              width: "100%",
-              padding: "12px",
-              marginTop: "5px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
             }}
-          />
+          >
+            <input
+              type={mostrarConfirmar ? "text" : "password"}
+              placeholder="********"
+              style={{
+                flex: 1,
+                padding: "12px",
+                marginTop: "5px",
+                borderRadius: "8px",
+                border: "1px solid #ccc",
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                setMostrarConfirmar(!mostrarConfirmar)
+              }
+              style={{
+                marginTop: "5px",
+                padding: "10px",
+                cursor: "pointer",
+              }}
+            >
+              👁️
+            </button>
+          </div>
         </div>
 
         <button
