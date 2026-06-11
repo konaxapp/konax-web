@@ -27,18 +27,10 @@ export default function NuevoProducto() {
           descripcion: form.descripcion,
           categoria: form.categoria,
           costo: Number(form.costo || 0),
-          precio_contado: Number(
-            form.precio_contado || 0
-          ),
-          precio_credito: Number(
-            form.precio_credito || 0
-          ),
-          stock_actual: Number(
-            form.stock_inicial || 0
-          ),
-          stock_minimo: Number(
-            form.stock_minimo || 0
-          ),
+          precio_contado: Number(form.precio_contado || 0),
+          precio_credito: Number(form.precio_credito || 0),
+          stock_actual: Number(form.stock_inicial || 0),
+          stock_minimo: Number(form.stock_minimo || 0),
         },
       ])
       .select()
@@ -56,13 +48,9 @@ export default function NuevoProducto() {
           empresa_id: null,
           producto_id: data.id,
           tipo_movimiento: "ENTRADA",
-          cantidad: Number(
-            form.stock_inicial || 0
-          ),
+          cantidad: Number(form.stock_inicial || 0),
           stock_anterior: 0,
-          stock_nuevo: Number(
-            form.stock_inicial || 0
-          ),
+          stock_nuevo: Number(form.stock_inicial || 0),
           observacion: "Stock inicial",
         },
       ]);
@@ -90,12 +78,12 @@ export default function NuevoProducto() {
         style={{
           display: "grid",
           gap: "12px",
-          maxWidth: "600px",
+          maxWidth: "700px",
           marginTop: "20px",
         }}
       >
+        <label>Código *</label>
         <input
-          placeholder="Código"
           value={form.codigo}
           onChange={(e) =>
             setForm({
@@ -105,8 +93,8 @@ export default function NuevoProducto() {
           }
         />
 
+        <label>Nombre *</label>
         <input
-          placeholder="Nombre"
           value={form.nombre}
           onChange={(e) =>
             setForm({
@@ -116,8 +104,8 @@ export default function NuevoProducto() {
           }
         />
 
+        <label>Descripción</label>
         <input
-          placeholder="Descripción"
           value={form.descripcion}
           onChange={(e) =>
             setForm({
@@ -127,8 +115,8 @@ export default function NuevoProducto() {
           }
         />
 
+        <label>Categoría</label>
         <input
-          placeholder="Categoría"
           value={form.categoria}
           onChange={(e) =>
             setForm({
@@ -138,9 +126,9 @@ export default function NuevoProducto() {
           }
         />
 
+        <label>Costo</label>
         <input
           type="number"
-          placeholder="Costo"
           value={form.costo}
           onChange={(e) =>
             setForm({
@@ -150,9 +138,9 @@ export default function NuevoProducto() {
           }
         />
 
+        <label>Precio Contado</label>
         <input
           type="number"
-          placeholder="Precio Contado"
           value={form.precio_contado}
           onChange={(e) =>
             setForm({
@@ -162,9 +150,9 @@ export default function NuevoProducto() {
           }
         />
 
+        <label>Precio Crédito</label>
         <input
           type="number"
-          placeholder="Precio Crédito"
           value={form.precio_credito}
           onChange={(e) =>
             setForm({
@@ -174,9 +162,9 @@ export default function NuevoProducto() {
           }
         />
 
+        <label>Stock Inicial</label>
         <input
           type="number"
-          placeholder="Stock Inicial"
           value={form.stock_inicial}
           onChange={(e) =>
             setForm({
@@ -186,9 +174,9 @@ export default function NuevoProducto() {
           }
         />
 
+        <label>Stock Mínimo</label>
         <input
           type="number"
-          placeholder="Stock Mínimo"
           value={form.stock_minimo}
           onChange={(e) =>
             setForm({
@@ -203,9 +191,11 @@ export default function NuevoProducto() {
           style={{
             padding: "12px",
             cursor: "pointer",
+            fontWeight: "bold",
+            marginTop: "10px",
           }}
         >
-          Guardar Producto
+          💾 Guardar Producto
         </button>
       </div>
     </div>
