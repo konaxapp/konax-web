@@ -27,23 +27,30 @@ export default function Inventario() {
 
   const productosFiltrados = productos.filter(
     (p) =>
-      p.nombre
-        ?.toLowerCase()
-        .includes(busqueda.toLowerCase()) ||
-      p.codigo
-        ?.toLowerCase()
-        .includes(busqueda.toLowerCase())
+      p.nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
+      p.codigo?.toLowerCase().includes(busqueda.toLowerCase())
   );
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h1>Inventario</h1>
+    <div
+      style={{
+        padding: "30px",
+        background: "#f5f7fb",
+        minHeight: "100vh",
+      }}
+    >
+      <h1
+        style={{
+          marginBottom: "20px",
+        }}
+      >
+        Inventario
+      </h1>
 
       <div
         style={{
           display: "flex",
-          gap: "10px",
-          marginTop: "20px",
+          justifyContent: "space-between",
           marginBottom: "20px",
         }}
       >
@@ -55,54 +62,118 @@ export default function Inventario() {
             setBusqueda(e.target.value)
           }
           style={{
-            padding: "10px",
-            width: "300px",
+            padding: "12px",
+            width: "350px",
+            border: "1px solid #ccc",
+            borderRadius: "8px",
           }}
         />
 
-        <button>
+        <a
+          href="/inventario/nuevo"
+          style={{
+            background: "#16a34a",
+            color: "#fff",
+            padding: "12px 20px",
+            borderRadius: "8px",
+            textDecoration: "none",
+            fontWeight: "bold",
+          }}
+        >
           + Nuevo Producto
-        </button>
+        </a>
       </div>
 
-      <table
+      <div
         style={{
-          width: "100%",
-          borderCollapse: "collapse",
+          background: "#fff",
+          borderRadius: "12px",
+          overflow: "hidden",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
         }}
       >
-        <thead>
-          <tr>
-            <th>Código</th>
-            <th>Producto</th>
-            <th>Categoría</th>
-            <th>Stock</th>
-            <th>Precio Contado</th>
-            <th>Precio Crédito</th>
-          </tr>
-        </thead>
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+          }}
+        >
+          <thead>
+            <tr
+              style={{
+                background: "#f1f5f9",
+              }}
+            >
+              <th style={th}>Código</th>
+              <th style={th}>Producto</th>
+              <th style={th}>Categoría</th>
+              <th style={th}>Stock</th>
+              <th style={th}>Precio Contado</th>
+              <th style={th}>Precio Crédito</th>
+              <th style={th}>Estado</th>
+            </tr>
+          </thead>
 
-        <tbody>
-          {productosFiltrados.map(
-            (producto) => (
+          <tbody>
+            {productosFiltrados.map((producto) => (
               <tr key={producto.id}>
-                <td>{producto.codigo}</td>
-                <td>{producto.nombre}</td>
-                <td>{producto.categoria}</td>
-                <td>{producto.stock_actual}</td>
-                <td>
+                <td style={td}>{producto.codigo}</td>
+                <td style={td}>{producto.nombre}</td>
+                <td style={td}>{producto.categoria}</td>
+                <td style={td}>{producto.stock_actual}</td>
+
+                <td style={td}>
                   $
-                  {producto.precio_contado}
+                  {Number(
+                    producto.precio_contado || 0
+                  ).toFixed(2)}
                 </td>
-                <td>
+
+                <td style={td}>
                   $
-                  {producto.precio_credito}
+                  {Number(
+                    producto.precio_credito || 0
+                  ).toFixed(2)}
+                </td>
+
+                <td style={td}>
+                  {producto.stock_actual <=
+                  producto.stock_minimo ? (
+                    <span
+                      style={{
+                        color: "red",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      Stock Bajo
+                    </span>
+                  ) : (
+                    <span
+                      style={{
+                        color: "green",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      Disponible
+                    </span>
+                  )}
                 </td>
               </tr>
-            )
-          )}
-        </tbody>
-      </table>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
+
+const th = {
+  padding: "15px",
+  textAlign: "left",
+  borderBottom: "1px solid #ddd",
+};
+
+const td = {
+  padding: "15px",
+  borderBottom: "1px solid #eee",
+};
