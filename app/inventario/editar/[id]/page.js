@@ -26,7 +26,7 @@ export default function EditarProducto() {
     }
   }, [params?.id]);
 
-  async function cargarProducto() {
+   function cargarProducto() {
     const { data, error } = await supabase
       .from("productos")
       .select("*")
@@ -51,31 +51,35 @@ export default function EditarProducto() {
     });
   }
 
-  async function actualizarProducto() {
-    const { error } = await supabase
-      .from("productos")
-      .update({
-        codigo: form.codigo,
-        nombre: form.nombre,
-        descripcion: form.descripcion,
-        categoria: form.categoria,
-        proveedor: form.proveedor,
-        precio_compra: Number(form.precio_compra || 0),
-        precio_venta: Number(form.precio_venta || 0),
-        precio_credito: Number(form.precio_credito || 0),
-        stock_minimo: Number(form.stock_minimo || 0),
-      })
-      .eq("id", params.id);
+async function actualizarProducto() {
+  const { data, error } = await supabase
+    .from("productos")
+    .update({
+      codigo: form.codigo,
+      nombre: form.nombre,
+      descripcion: form.descripcion,
+      categoria: form.categoria,
+      proveedor: form.proveedor,
+      precio_compra: Number(form.precio_compra || 0),
+      precio_venta: Number(form.precio_venta || 0),
+      precio_credito: Number(form.precio_credito || 0),
+      stock_minimo: Number(form.stock_minimo || 0),
+    })
+    .eq("id", params.id)
+    .select();
 
-    if (error) {
-      alert(error.message);
-      return;
-    }
+  alert("ID = " + params.id);
 
-    alert("Producto actualizado correctamente");
-
-    router.push("/inventario");
+  if (error) {
+    alert("ERROR = " + error.message);
+    return;
   }
+
+  alert("DATA = " + JSON.stringify(data));
+
+  router.push("/inventario");
+}
+
 
   return (
     <div style={{ padding: "20px" }}>
