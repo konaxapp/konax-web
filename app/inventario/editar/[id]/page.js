@@ -52,6 +52,7 @@ export default function EditarProducto() {
   }
 
 async function actualizarProducto() {
+  console.log("FORM =", form);
   const { data, error } = await supabase
     .from("productos")
     .update({
