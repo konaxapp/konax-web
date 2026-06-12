@@ -107,10 +107,12 @@ export default function Inventario() {
               <th style={th}>Código</th>
               <th style={th}>Producto</th>
               <th style={th}>Categoría</th>
+              <th style={th}>Proveedor</th>
               <th style={th}>Stock</th>
-              <th style={th}>Precio Contado</th>
+              <th style={th}>Precio Venta</th>
               <th style={th}>Precio Crédito</th>
               <th style={th}>Estado</th>
+              <th style={th}>Acciones</th>
             </tr>
           </thead>
 
@@ -118,14 +120,19 @@ export default function Inventario() {
             {productosFiltrados.map((producto) => (
               <tr key={producto.id}>
                 <td style={td}>{producto.codigo}</td>
+
                 <td style={td}>{producto.nombre}</td>
+
                 <td style={td}>{producto.categoria}</td>
+
+                <td style={td}>{producto.proveedor}</td>
+
                 <td style={td}>{producto.stock_actual}</td>
 
                 <td style={td}>
                   $
                   {Number(
-                    producto.precio_contado || 0
+                    producto.precio_venta || 0
                   ).toFixed(2)}
                 </td>
 
@@ -157,6 +164,19 @@ export default function Inventario() {
                       Disponible
                     </span>
                   )}
+                </td>
+
+                <td style={td}>
+                  <a
+                    href={`/inventario/editar/${producto.id}`}
+                    style={{
+                      color: "#2563eb",
+                      fontWeight: "bold",
+                      textDecoration: "none",
+                    }}
+                  >
+                    ✏️ Editar
+                  </a>
                 </td>
               </tr>
             ))}
