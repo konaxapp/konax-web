@@ -13,15 +13,18 @@ export default function EditarProducto() {
     nombre: "",
     descripcion: "",
     categoria: "",
-    costo: "",
-    precio_contado: "",
+    proveedor: "",
+    precio_compra: "",
+    precio_venta: "",
     precio_credito: "",
     stock_minimo: "",
   });
 
   useEffect(() => {
-    cargarProducto();
-  }, []);
+    if (params?.id) {
+      cargarProducto();
+    }
+  }, [params?.id]);
 
   async function cargarProducto() {
     const { data, error } = await supabase
@@ -40,8 +43,9 @@ export default function EditarProducto() {
       nombre: data.nombre || "",
       descripcion: data.descripcion || "",
       categoria: data.categoria || "",
-      costo: data.costo || "",
-      precio_contado: data.precio_contado || "",
+      proveedor: data.proveedor || "",
+      precio_compra: data.precio_compra || "",
+      precio_venta: data.precio_venta || "",
       precio_credito: data.precio_credito || "",
       stock_minimo: data.stock_minimo || "",
     });
@@ -55,8 +59,9 @@ export default function EditarProducto() {
         nombre: form.nombre,
         descripcion: form.descripcion,
         categoria: form.categoria,
-        costo: Number(form.costo || 0),
-        precio_contado: Number(form.precio_contado || 0),
+        proveedor: form.proveedor,
+        precio_compra: Number(form.precio_compra || 0),
+        precio_venta: Number(form.precio_venta || 0),
         precio_credito: Number(form.precio_credito || 0),
         stock_minimo: Number(form.stock_minimo || 0),
       })
@@ -128,26 +133,37 @@ export default function EditarProducto() {
           }
         />
 
-        <label>Costo</label>
+        <label>Proveedor</label>
         <input
-          type="number"
-          value={form.costo}
+          value={form.proveedor}
           onChange={(e) =>
             setForm({
               ...form,
-              costo: e.target.value,
+              proveedor: e.target.value,
             })
           }
         />
 
-        <label>Precio Contado</label>
+        <label>Precio Compra</label>
         <input
           type="number"
-          value={form.precio_contado}
+          value={form.precio_compra}
           onChange={(e) =>
             setForm({
               ...form,
-              precio_contado: e.target.value,
+              precio_compra: e.target.value,
+            })
+          }
+        />
+
+        <label>Precio Venta</label>
+        <input
+          type="number"
+          value={form.precio_venta}
+          onChange={(e) =>
+            setForm({
+              ...form,
+              precio_venta: e.target.value,
             })
           }
         />
