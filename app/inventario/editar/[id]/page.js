@@ -26,7 +26,7 @@ export default function EditarProducto() {
     }
   }, [params?.id]);
 
-   function cargarProducto() {
+   async function cargarProducto() {
     const { data, error } = await supabase
       .from("productos")
       .select("*")
