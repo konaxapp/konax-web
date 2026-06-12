@@ -9,8 +9,9 @@ export default function NuevoProducto() {
     nombre: "",
     descripcion: "",
     categoria: "",
-    costo: "",
-    precio_contado: "",
+    proveedor: "",
+    precio_compra: "",
+    precio_venta: "",
     precio_credito: "",
     stock_inicial: "",
     stock_minimo: "",
@@ -25,8 +26,9 @@ export default function NuevoProducto() {
           nombre: form.nombre,
           descripcion: form.descripcion,
           categoria: form.categoria,
-          costo: Number(form.costo || 0),
-          precio_contado: Number(form.precio_contado || 0),
+          proveedor: form.proveedor,
+          precio_compra: Number(form.precio_compra || 0),
+          precio_venta: Number(form.precio_venta || 0),
           precio_credito: Number(form.precio_credito || 0),
           stock_actual: Number(form.stock_inicial || 0),
           stock_minimo: Number(form.stock_minimo || 0),
@@ -60,8 +62,9 @@ export default function NuevoProducto() {
       nombre: "",
       descripcion: "",
       categoria: "",
-      costo: "",
-      precio_contado: "",
+      proveedor: "",
+      precio_compra: "",
+      precio_venta: "",
       precio_credito: "",
       stock_inicial: "",
       stock_minimo: "",
@@ -124,31 +127,42 @@ export default function NuevoProducto() {
           }
         />
 
-        <label>Costo</label>
+        <label>Proveedor</label>
         <input
-          type="number"
-          value={form.costo}
+          value={form.proveedor}
           onChange={(e) =>
             setForm({
               ...form,
-              costo: e.target.value,
+              proveedor: e.target.value,
             })
           }
         />
 
-        <label>Precio Contado</label>
+        <label>Precio Compra</label>
         <input
           type="number"
-          value={form.precio_contado}
+          value={form.precio_compra}
           onChange={(e) =>
             setForm({
               ...form,
-              precio_contado: e.target.value,
+              precio_compra: e.target.value,
             })
           }
         />
 
-        <label>Precio Crédito</label>
+        <label>Precio Venta</label>
+        <input
+          type="number"
+          value={form.precio_venta}
+          onChange={(e) =>
+            setForm({
+              ...form,
+              precio_venta: e.target.value,
+            })
+          }
+        />
+
+        <label>Precio Crédito (Opcional)</label>
         <input
           type="number"
           value={form.precio_credito}
