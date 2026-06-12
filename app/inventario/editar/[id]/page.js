@@ -65,19 +65,17 @@ async function actualizarProducto() {
       precio_credito: Number(form.precio_credito || 0),
       stock_minimo: Number(form.stock_minimo || 0),
     })
-    .eq("id", params.id)
-    .select();
-
-  alert("ID = " + params.id);
+    .match({ id: params.id })
+.select();
 
   if (error) {
-    alert("ERROR = " + error.message);
-    return;
-  }
+  alert("ERROR = " + error.message);
+  return;
+}
 
-  alert("DATA = " + JSON.stringify(data));
+alert("Producto actualizado correctamente");
 
-  router.push("/inventario");
+router.push("/inventario");
 }
 
 
