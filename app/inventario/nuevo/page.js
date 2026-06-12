@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { supabase } from "../../../lib/supabase";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { supabase } from "../../../../lib/supabase";
 
-export default function NuevoProducto() {
+export default function EditarProducto() {
+  const params = useParams();
+  const router = useRouter();
+
   const [form, setForm] = useState({
     codigo: "",
     nombre: "",
@@ -12,28 +16,18 @@ export default function NuevoProducto() {
     costo: "",
     precio_contado: "",
     precio_credito: "",
-    stock_inicial: "",
     stock_minimo: "",
   });
 
-  async function guardarProducto() {
+  useEffect(() => {
+    cargarProducto();
+  }, []);
+
+  async function cargarProducto() {
     const { data, error } = await supabase
       .from("productos")
-      .insert([
-        {
-          empresa_id: null,
-          codigo: form.codigo,
-          nombre: form.nombre,
-          descripcion: form.descripcion,
-          categoria: form.categoria,
-          costo: Number(form.costo || 0),
-          precio_contado: Number(form.precio_contado || 0),
-          precio_credito: Number(form.precio_credito || 0),
-          stock_actual: Number(form.stock_inicial || 0),
-          stock_minimo: Number(form.stock_minimo || 0),
-        },
-      ])
-      .select()
+      .select("*")
+      .eq("id", params.id)
       .single();
 
     if (error) {
@@ -41,38 +35,46 @@ export default function NuevoProducto() {
       return;
     }
 
-    await supabase
-      .from("movimientos_inventario")
-      .insert([
-        {
-          empresa_id: null,
-          producto_id: data.id,
-          tipo_movimiento: "ENTRADA",
-          cantidad: Number(form.stock_inicial || 0),
-          stock_anterior: 0,
-          stock_nuevo: Number(form.stock_inicial || 0),
-          observacion: "Stock inicial",
-        },
-      ]);
-
-    alert("Producto guardado correctamente");
-
     setForm({
-      codigo: "",
-      nombre: "",
-      descripcion: "",
-      categoria: "",
-      costo: "",
-      precio_contado: "",
-      precio_credito: "",
-      stock_inicial: "",
-      stock_minimo: "",
+      codigo: data.codigo || "",
+      nombre: data.nombre || "",
+      descripcion: data.descripcion || "",
+      categoria: data.categoria || "",
+      costo: data.costo || "",
+      precio_contado: data.precio_contado || "",
+      precio_credito: data.precio_credito || "",
+      stock_minimo: data.stock_minimo || "",
     });
+  }
+
+  async function actualizarProducto() {
+    const { error } = await supabase
+      .from("productos")
+      .update({
+        codigo: form.codigo,
+        nombre: form.nombre,
+        descripcion: form.descripcion,
+        categoria: form.categoria,
+        costo: Number(form.costo || 0),
+        precio_contado: Number(form.precio_contado || 0),
+        precio_credito: Number(form.precio_credito || 0),
+        stock_minimo: Number(form.stock_minimo || 0),
+      })
+      .eq("id", params.id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    alert("Producto actualizado correctamente");
+
+    router.push("/inventario");
   }
 
   return (
     <div style={{ padding: "20px" }}>
-      <h1>Nuevo Producto</h1>
+      <h1>Editar Producto</h1>
 
       <div
         style={{
@@ -162,18 +164,6 @@ export default function NuevoProducto() {
           }
         />
 
-        <label>Stock Inicial</label>
-        <input
-          type="number"
-          value={form.stock_inicial}
-          onChange={(e) =>
-            setForm({
-              ...form,
-              stock_inicial: e.target.value,
-            })
-          }
-        />
-
         <label>Stock Mínimo</label>
         <input
           type="number"
@@ -187,15 +177,18 @@ export default function NuevoProducto() {
         />
 
         <button
-          onClick={guardarProducto}
+          onClick={actualizarProducto}
           style={{
             padding: "12px",
+            background: "#2563eb",
+            color: "#fff",
+            border: "none",
+            borderRadius: "6px",
             cursor: "pointer",
             fontWeight: "bold",
-            marginTop: "10px",
           }}
         >
-          💾 Guardar Producto
+          💾 Actualizar Producto
         </button>
       </div>
     </div>
