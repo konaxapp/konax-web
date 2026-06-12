@@ -66,8 +66,11 @@ async function actualizarProducto() {
       precio_credito: Number(form.precio_credito || 0),
       stock_minimo: Number(form.stock_minimo || 0),
     })
-    .match({ id: params.id })
+    .eq("id", params.id)
 .select();
+  console.log("PARAMS ID =", params.id);
+console.log("DATA =", data);
+console.log("ERROR =", error);
 
   if (error) {
   alert("ERROR = " + error.message);
