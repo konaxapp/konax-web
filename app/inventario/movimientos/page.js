@@ -11,6 +11,9 @@ export default function MovimientosInventario() {
   const [tipoMovimiento, setTipoMovimiento] = useState("ENTRADA");
   const [cantidad, setCantidad] = useState("");
   const [observacion, setObservacion] = useState("");
+  const productoSeleccionado = productos.find(
+  (p) => String(p.id) === String(productoId)
+);
 
   useEffect(() => {
     cargarProductos();
@@ -162,6 +165,19 @@ export default function MovimientosInventario() {
         <label>Tipo Movimiento</label>
 
         <select
+        {productoSeleccionado && (
+  <div
+    style={{
+      background: "#f3f4f6",
+      padding: "10px",
+      borderRadius: "8px",
+      marginBottom: "15px",
+      fontWeight: "bold",
+    }}
+  >
+    Stock actual: {productoSeleccionado.stock_actual}
+  </div>
+)}
           value={tipoMovimiento}
           onChange={(e) =>
             setTipoMovimiento(e.target.value)
