@@ -99,10 +99,14 @@ export default function MovimientosInventario() {
       ]);
 
     if (errorMovimiento) {
-      console.log(errorMovimiento);
-      alert("Error guardando movimiento");
-      return;
-    }
+  console.error(errorMovimiento);
+
+  alert(
+    JSON.stringify(errorMovimiento, null, 2)
+  );
+
+  return;
+}
 
     alert("Movimiento guardado");
 
