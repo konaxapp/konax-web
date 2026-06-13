@@ -6,10 +6,14 @@ import { supabase } from "../../lib/supabase";
 export default function Inventario() {
   const [productos, setProductos] = useState([]);
   const [busqueda, setBusqueda] = useState("");
+  const [rolUsuario, setRolUsuario] = useState("Vendedor");
 
   useEffect(() => {
-    cargarProductos();
-  }, []);
+  cargarProductos();
+
+  // Prueba temporal
+  setRolUsuario("Supervisor");
+}, []);
 
   async function cargarProductos() {
     const { data, error } = await supabase
@@ -167,17 +171,20 @@ export default function Inventario() {
                 </td>
 
                 <td style={td}>
-                  <a
-                    href={`/inventario/editar/${producto.id}`}
-                    style={{
-                      color: "#2563eb",
-                      fontWeight: "bold",
-                      textDecoration: "none",
-                    }}
-                  >
-                    ✏️ Editar
-                  </a>
-                </td>
+  {(rolUsuario === "Administrador" ||
+    rolUsuario === "Supervisor") && (
+    <a
+      href={`/inventario/editar/${producto.id}`}
+      style={{
+        color: "#2563eb",
+        fontWeight: "bold",
+        textDecoration: "none",
+      }}
+    >
+      ✏️ Editar
+    </a>
+  )}
+</td>
               </tr>
             ))}
           </tbody>
