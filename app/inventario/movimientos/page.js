@@ -86,17 +86,18 @@ export default function MovimientosInventario() {
     }
 
     const { error: errorMovimiento } = await supabase
-      .from("movimientos_inventario")
-      .insert([
-        {
-          producto_id: productoId,
-          tipo_movimiento: tipoMovimiento,
-          cantidad: Number(cantidad),
-          stock_anterior: stockAnterior,
-          stock_nuevo: stockNuevo,
-          observacion,
-        },
-      ]);
+  .from("movimientos_inventario")
+  .insert([
+    {
+      empresa_id: "71f45220-5274-491a-8dd0-a549a1f1c3a6",
+      producto_id: productoId,
+      tipo_movimiento: tipoMovimiento,
+      cantidad: Number(cantidad),
+      stock_anterior: stockAnterior,
+      stock_nuevo: stockNuevo,
+      observacion,
+    },
+  ]);
 
     if (errorMovimiento) {
   console.error(errorMovimiento);
