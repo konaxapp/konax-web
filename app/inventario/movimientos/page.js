@@ -89,7 +89,7 @@ export default function MovimientosInventario() {
   .from("movimientos_inventario")
   .insert([
     {
-      empresa_id: "71f45220-5274-491a-8dd0-a549a1f1c3a6",
+      empresa_id: "7d12452b-5274-401a-8dc0-25d92af1c3a6",
       producto_id: productoId,
       tipo_movimiento: tipoMovimiento,
       cantidad: Number(cantidad),
