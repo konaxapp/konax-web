@@ -77,9 +77,8 @@ console.log("ERROR =", error);
   return;
 }
 
-alert("Producto actualizado correctamente");
-
-router.push("/inventario");
+alert("DATA = " + JSON.stringify(data));
+return;
 }
 
 
