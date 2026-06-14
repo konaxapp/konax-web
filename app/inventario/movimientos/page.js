@@ -11,9 +11,10 @@ export default function MovimientosInventario() {
   const [tipoMovimiento, setTipoMovimiento] = useState("ENTRADA");
   const [cantidad, setCantidad] = useState("");
   const [observacion, setObservacion] = useState("");
+
   const productoSeleccionado = productos.find(
-  (p) => String(p.id) === String(productoId)
-);
+    (p) => String(p.id) === String(productoId)
+  );
 
   useEffect(() => {
     cargarProductos();
@@ -26,7 +27,9 @@ export default function MovimientosInventario() {
       .select("*")
       .order("nombre");
 
-    if (!error) setProductos(data || []);
+    if (!error) {
+      setProductos(data || []);
+    }
   }
 
   async function cargarHistorial() {
@@ -35,17 +38,19 @@ export default function MovimientosInventario() {
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (!error) setHistorial(data || []);
+    if (!error) {
+      setHistorial(data || []);
+    }
   }
 
   async function guardarMovimiento() {
     if (!productoId) {
-      alert("Seleccione un producto");
+      alert("Seleccione un producto.");
       return;
     }
 
     if (!cantidad || Number(cantidad) <= 0) {
-      alert("Ingrese una cantidad válida");
+      alert("Ingrese una cantidad válida.");
       return;
     }
 
@@ -54,23 +59,22 @@ export default function MovimientosInventario() {
     );
 
     if (!producto) {
-      alert("Producto no encontrado");
+      alert("Producto no encontrado.");
       return;
     }
 
     const stockAnterior = Number(producto.stock_actual || 0);
-
     let stockNuevo = stockAnterior;
 
     if (tipoMovimiento === "ENTRADA") {
-      stockNuevo += Number(cantidad);
+      stockNuevo = stockAnterior + Number(cantidad);
     }
 
     if (tipoMovimiento === "SALIDA") {
-      stockNuevo -= Number(cantidad);
+      stockNuevo = stockAnterior - Number(cantidad);
 
       if (stockNuevo < 0) {
-        alert("No hay suficiente inventario");
+        alert("No hay suficiente inventario.");
         return;
       }
     }
@@ -83,114 +87,82 @@ export default function MovimientosInventario() {
       .eq("id", productoId);
 
     if (errorUpdate) {
-      console.log(errorUpdate);
-      alert("Error actualizando inventario");
+      alert("Error actualizando inventario: " + errorUpdate.message);
       return;
     }
 
     const { error: errorMovimiento } = await supabase
-  .from("movimientos_inventario")
-  .insert([
-    {
-      empresa_id: "7d12452b-5274-401a-8dc0-25d92af1c3a6",
-      producto_id: productoId,
-      tipo_movimiento: tipoMovimiento,
-      cantidad: Number(cantidad),
-      stock_anterior: stockAnterior,
-      stock_nuevo: stockNuevo,
-      observacion,
-    },
-  ]);
+      .from("movimientos_inventario")
+      .insert([
+        {
+          empresa_id: "7d12452b-5274-401a-8dc0-25d92af1c3a6",
+          producto_id: productoId,
+          tipo_movimiento: tipoMovimiento,
+          cantidad: Number(cantidad),
+          stock_anterior: stockAnterior,
+          stock_nuevo: stockNuevo,
+          observacion,
+        },
+      ]);
 
     if (errorMovimiento) {
-  console.error(errorMovimiento);
+      alert("Error guardando movimiento: " + errorMovimiento.message);
+      return;
+    }
 
-  alert(
-    JSON.stringify(errorMovimiento, null, 2)
-  );
-
-  return;
-}
-
-    alert("Movimiento guardado");
+    alert("Movimiento guardado correctamente.");
 
     setCantidad("");
     setObservacion("");
+    setProductoId("");
+    setTipoMovimiento("ENTRADA");
 
     cargarProductos();
     cargarHistorial();
   }
 
   return (
-    <div
-      style={{
-        maxWidth: "900px",
-        margin: "30px auto",
-        padding: "20px",
-      }}
-    >
+    <div style={pagina}>
       <h1>Movimientos de Inventario</h1>
 
-      <div
-        style={{
-          background: "#fff",
-          padding: "20px",
-          borderRadius: "10px",
-          marginBottom: "30px",
-        }}
-      >
+      <div style={card}>
         <label>Producto</label>
 
         <select
           value={productoId}
-          onChange={(e) =>
-            setProductoId(e.target.value)
-          }
+          onChange={(e) => setProductoId(e.target.value)}
           style={input}
         >
-          <option value="">
-            Seleccione producto
-          </option>
+          <option value="">Seleccione producto</option>
 
           {productos.map((p) => (
-            <option
-              key={p.id}
-              value={p.id}
-            >
-              {p.nombre}
+            <option key={p.id} value={p.id}>
+              {p.codigo} - {p.nombre}
             </option>
           ))}
         </select>
 
+        {productoSeleccionado && (
+          <div style={stockBox}>
+            <p>
+              <strong>Producto:</strong> {productoSeleccionado.nombre}
+            </p>
+            <p>
+              <strong>Stock actual:</strong>{" "}
+              {productoSeleccionado.stock_actual}
+            </p>
+          </div>
+        )}
+
         <label>Tipo Movimiento</label>
 
         <select
-        {productoSeleccionado && (
-  <div
-    style={{
-      background: "#f3f4f6",
-      padding: "10px",
-      borderRadius: "8px",
-      marginBottom: "15px",
-      fontWeight: "bold",
-    }}
-  >
-    Stock actual: {productoSeleccionado.stock_actual}
-  </div>
-)}
           value={tipoMovimiento}
-          onChange={(e) =>
-            setTipoMovimiento(e.target.value)
-          }
+          onChange={(e) => setTipoMovimiento(e.target.value)}
           style={input}
         >
-          <option value="ENTRADA">
-            Entrada
-          </option>
-
-          <option value="SALIDA">
-            Salida
-          </option>
+          <option value="ENTRADA">Entrada</option>
+          <option value="SALIDA">Salida</option>
         </select>
 
         <label>Cantidad</label>
@@ -198,9 +170,7 @@ export default function MovimientosInventario() {
         <input
           type="number"
           value={cantidad}
-          onChange={(e) =>
-            setCantidad(e.target.value)
-          }
+          onChange={(e) => setCantidad(e.target.value)}
           style={input}
         />
 
@@ -208,38 +178,18 @@ export default function MovimientosInventario() {
 
         <textarea
           value={observacion}
-          onChange={(e) =>
-            setObservacion(e.target.value)
-          }
-          style={{
-            ...input,
-            height: "80px",
-          }}
+          onChange={(e) => setObservacion(e.target.value)}
+          style={textarea}
         />
 
-        <button
-          onClick={guardarMovimiento}
-          style={{
-            background: "#16a34a",
-            color: "#fff",
-            border: "none",
-            padding: "12px 20px",
-            borderRadius: "8px",
-            cursor: "pointer",
-          }}
-        >
+        <button onClick={guardarMovimiento} style={boton}>
           Guardar Movimiento
         </button>
       </div>
 
       <h2>Historial</h2>
 
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-        }}
-      >
+      <table style={tabla}>
         <thead>
           <tr>
             <th style={th}>Tipo</th>
@@ -253,25 +203,11 @@ export default function MovimientosInventario() {
         <tbody>
           {historial.map((m) => (
             <tr key={m.id}>
-              <td style={td}>
-                {m.tipo_movimiento}
-              </td>
-
-              <td style={td}>
-                {m.cantidad}
-              </td>
-
-              <td style={td}>
-                {m.stock_anterior}
-              </td>
-
-              <td style={td}>
-                {m.stock_nuevo}
-              </td>
-
-              <td style={td}>
-                {m.observacion}
-              </td>
+              <td style={td}>{m.tipo_movimiento}</td>
+              <td style={td}>{m.cantidad}</td>
+              <td style={td}>{m.stock_anterior}</td>
+              <td style={td}>{m.stock_nuevo}</td>
+              <td style={td}>{m.observacion}</td>
             </tr>
           ))}
         </tbody>
@@ -280,12 +216,52 @@ export default function MovimientosInventario() {
   );
 }
 
+const pagina = {
+  maxWidth: "900px",
+  margin: "30px auto",
+  padding: "20px",
+};
+
+const card = {
+  background: "#fff",
+  padding: "20px",
+  borderRadius: "10px",
+  marginBottom: "30px",
+};
+
 const input = {
   width: "100%",
   padding: "10px",
   marginBottom: "15px",
   border: "1px solid #ddd",
   borderRadius: "6px",
+  boxSizing: "border-box",
+};
+
+const textarea = {
+  ...input,
+  height: "80px",
+};
+
+const stockBox = {
+  background: "#f3f4f6",
+  padding: "12px",
+  borderRadius: "8px",
+  marginBottom: "15px",
+};
+
+const boton = {
+  background: "#16a34a",
+  color: "#fff",
+  border: "none",
+  padding: "12px 20px",
+  borderRadius: "8px",
+  cursor: "pointer",
+};
+
+const tabla = {
+  width: "100%",
+  borderCollapse: "collapse",
 };
 
 const th = {
