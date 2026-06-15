@@ -5,263 +5,211 @@ import { useState } from "react";
 export default function Planes() {
   const [tipoPlan, setTipoPlan] = useState("mensual");
 
-  const irAConfirmacion = () => {
+  function seleccionarPlan(plan) {
+    localStorage.setItem("planNombre", plan.nombre);
+    localStorage.setItem("planCodigo", plan.codigo);
+    localStorage.setItem("planTipo", tipoPlan);
+    localStorage.setItem(
+      "planPrecio",
+      tipoPlan === "mensual" ? plan.precioMensual : plan.precioAnual
+    );
+
     window.location.href = "/confirmacion";
-  };
+  }
+
+  const planes = [
+    {
+      nombre: "KONAX Básico",
+      codigo: "basico",
+      precioMensual: "49",
+      precioAnual: "499",
+      color: "#2563eb",
+      incluye: [
+        "Clientes",
+        "Créditos",
+        "Cobranza",
+        "Pagos",
+        "Promesas de pago",
+        "Bitácora básica",
+      ],
+    },
+    {
+      nombre: "KONAX Gestión",
+      codigo: "gestion",
+      precioMensual: "99",
+      precioAnual: "999",
+      color: "#10b981",
+      incluye: [
+        "Todo Básico",
+        "Inventario",
+        "Ventas crédito",
+        "Caja",
+        "Usuarios",
+        "Reportes básicos",
+      ],
+    },
+    {
+      nombre: "KONAX Empresarial",
+      codigo: "empresarial",
+      precioMensual: "499",
+      precioAnual: "4990",
+      color: "#111827",
+      incluye: [
+        "Todo Gestión",
+        "Multiempresa",
+        "Dashboard gerencial",
+        "Reportes avanzados",
+        "Módulos personalizados",
+        "Soporte especializado",
+      ],
+    },
+  ];
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#f5f7fb",
-        padding: "40px",
-        fontFamily: "Arial",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: "1200px",
-          margin: "0 auto",
-          background: "white",
-          borderRadius: "16px",
-          padding: "40px",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-        }}
-      >
-        <h1
-          style={{
-            textAlign: "center",
-            marginBottom: "10px",
-          }}
-        >
-          Selecciona tu Plan
-        </h1>
+    <div style={pagina}>
+      <div style={card}>
+        <h1 style={titulo}>Selecciona tu Plan</h1>
 
-        <p
-          style={{
-            textAlign: "center",
-            color: "#666",
-            marginBottom: "40px",
-          }}
-        >
-          Elige el plan que mejor se adapte a tu negocio
+        <p style={subtitulo}>
+          Elige el plan que mejor se adapte a tu negocio.
         </p>
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            gap: "10px",
-            marginBottom: "40px",
-          }}
-        >
+        <div style={toggleBox}>
           <button
             onClick={() => setTipoPlan("mensual")}
-            style={{
-              padding: "12px 25px",
-              borderRadius: "10px",
-              border: "1px solid #2563eb",
-              background:
-                tipoPlan === "mensual"
-                  ? "#2563eb"
-                  : "white",
-              color:
-                tipoPlan === "mensual"
-                  ? "white"
-                  : "#2563eb",
-              fontWeight: "bold",
-              cursor: "pointer",
-            }}
+            style={tipoPlan === "mensual" ? botonActivo : botonInactivo}
           >
             Mensual
           </button>
 
           <button
             onClick={() => setTipoPlan("anual")}
-            style={{
-              padding: "12px 25px",
-              borderRadius: "10px",
-              border: "1px solid #2563eb",
-              background:
-                tipoPlan === "anual"
-                  ? "#2563eb"
-                  : "white",
-              color:
-                tipoPlan === "anual"
-                  ? "white"
-                  : "#2563eb",
-              fontWeight: "bold",
-              cursor: "pointer",
-            }}
+            style={tipoPlan === "anual" ? botonActivo : botonInactivo}
           >
             Anual
           </button>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: "20px",
-            flexWrap: "wrap",
-          }}
-        >
-          {/* KONAX COBROS */}
-          <div
-            style={{
-              flex: 1,
-              minWidth: "300px",
-              border: "2px solid #2563eb",
-              borderRadius: "12px",
-              padding: "25px",
-            }}
-          >
-            <h2>KONAX Cobros</h2>
-
-            <h1>
-              ${tipoPlan === "mensual" ? "29" : "299"}
-            </h1>
-
-            <ul
+        <div style={planesBox}>
+          {planes.map((plan) => (
+            <div
+              key={plan.codigo}
               style={{
-                color: "#666",
-                paddingLeft: "20px",
-                minHeight: "160px",
+                flex: 1,
+                minWidth: "300px",
+                border: `2px solid ${plan.color}`,
+                borderRadius: "12px",
+                padding: "25px",
               }}
             >
-              <li>Clientes</li>
-              <li>Créditos</li>
-              <li>Pagos</li>
-              <li>Gestores</li>
-              <li>Promesas de pago</li>
-              <li>Soporte especializado</li>
-            </ul>
+              <h2>{plan.nombre}</h2>
 
-            <button
-              onClick={irAConfirmacion}
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "none",
-                background: "#2563eb",
-                color: "white",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: "bold",
-              }}
-            >
-              Seleccionar
-            </button>
-          </div>
+              <h1>
+                ${tipoPlan === "mensual" ? plan.precioMensual : plan.precioAnual}
+              </h1>
 
-          {/* KONAX GESTIÓN */}
-          <div
-            style={{
-              flex: 1,
-              minWidth: "300px",
-              border: "2px solid #10b981",
-              borderRadius: "12px",
-              padding: "25px",
-            }}
-          >
-            <h2>KONAX Gestión</h2>
+              <ul style={lista}>
+                {plan.incluye.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
 
-            <h1>
-              ${tipoPlan === "mensual" ? "59" : "595"}
-            </h1>
-
-            <ul
-              style={{
-                color: "#666",
-                paddingLeft: "20px",
-                minHeight: "160px",
-              }}
-            >
-              <li>Cobranza</li>
-              <li>Ventas</li>
-              <li>Caja</li>
-              <li>Usuarios</li>
-              <li>Administración</li>
-              <li>Soporte especializado</li>
-            </ul>
-
-            <button
-              onClick={irAConfirmacion}
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "none",
-                background: "#10b981",
-                color: "white",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: "bold",
-              }}
-            >
-              Seleccionar
-            </button>
-          </div>
-
-          {/* KONAX EMPRESARIAL */}
-          <div
-            style={{
-              flex: 1,
-              minWidth: "300px",
-              border: "2px solid #111827",
-              borderRadius: "12px",
-              padding: "25px",
-            }}
-          >
-            <h2>KONAX Empresarial</h2>
-
-            <h1>
-              ${tipoPlan === "mensual" ? "99" : "990"}
-            </h1>
-
-            <ul
-              style={{
-                color: "#666",
-                paddingLeft: "20px",
-                minHeight: "160px",
-              }}
-            >
-              <li>Gestión empresarial</li>
-              <li>Indicadores gerenciales</li>
-              <li>Reportes avanzados</li>
-              <li>Multiempresa</li>
-              <li>Integraciones</li>
-              <li>Soporte especializado</li>
-            </ul>
-
-            <button
-              onClick={irAConfirmacion}
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "none",
-                background: "#111827",
-                color: "white",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: "bold",
-              }}
-            >
-              Seleccionar
-            </button>
-          </div>
+              <button
+                onClick={() => seleccionarPlan(plan)}
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  border: "none",
+                  background: plan.color,
+                  color: "white",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                }}
+              >
+                Seleccionar
+              </button>
+            </div>
+          ))}
         </div>
 
-        <p
-          style={{
-            textAlign: "center",
-            marginTop: "30px",
-            color: "#777",
-            fontSize: "14px",
-          }}
-        >
-          Precios mensuales mostrados. Planes anuales:
-          Cobros $299 · Gestión $595 · Empresarial $990
+        <p style={nota}>
+          Precios mensuales: Básico $49 · Gestión $99 · Empresarial $499
         </p>
       </div>
     </div>
   );
 }
+
+const pagina = {
+  minHeight: "100vh",
+  background: "#f5f7fb",
+  padding: "40px",
+  fontFamily: "Arial",
+};
+
+const card = {
+  maxWidth: "1200px",
+  margin: "0 auto",
+  background: "white",
+  borderRadius: "16px",
+  padding: "40px",
+  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+};
+
+const titulo = {
+  textAlign: "center",
+  marginBottom: "10px",
+};
+
+const subtitulo = {
+  textAlign: "center",
+  color: "#666",
+  marginBottom: "40px",
+};
+
+const toggleBox = {
+  display: "flex",
+  justifyContent: "center",
+  gap: "10px",
+  marginBottom: "40px",
+};
+
+const botonActivo = {
+  padding: "12px 25px",
+  borderRadius: "10px",
+  border: "1px solid #2563eb",
+  background: "#2563eb",
+  color: "white",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonInactivo = {
+  padding: "12px 25px",
+  borderRadius: "10px",
+  border: "1px solid #2563eb",
+  background: "white",
+  color: "#2563eb",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const planesBox = {
+  display: "flex",
+  gap: "20px",
+  flexWrap: "wrap",
+};
+
+const lista = {
+  color: "#666",
+  paddingLeft: "20px",
+  minHeight: "160px",
+};
+
+const nota = {
+  textAlign: "center",
+  marginTop: "30px",
+  color: "#777",
+  fontSize: "14px",
+};
