@@ -1,192 +1,172 @@
 "use client";
 
 import { useState } from "react";
+import { supabase } from "../lib/supabase";
 
 export default function Home() {
+  const [correo, setCorreo] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmarPassword, setConfirmarPassword] = useState("");
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [mostrarConfirmacion, setMostrarConfirmacion] = useState(false);
+  const [cargando, setCargando] = useState(false);
+
+  async function crearCuenta() {
+    if (!correo || !password || !confirmarPassword) {
+      alert("Complete correo, contraseña y confirmación.");
+      return;
+    }
+
+    if (password !== confirmarPassword) {
+      alert("Las contraseñas no coinciden.");
+      return;
+    }
+
+    if (password.length < 6) {
+      alert("La contraseña debe tener mínimo 6 caracteres.");
+      return;
+    }
+
+    setCargando(true);
+
+    const { data, error } = await supabase.auth.signUp({
+      email: correo,
+      password,
+    });
+
+    setCargando(false);
+
+    if (error) {
+      alert("Error al crear cuenta: " + error.message);
+      return;
+    }
+
+    if (data?.user?.id) {
+      localStorage.setItem("usuarioId", data.user.id);
+      localStorage.setItem("correoUsuario", correo);
+    }
+
+    window.location.href = "/empresas";
+  }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        background: "#f5f7fb",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      <div
-        style={{
-          width: "420px",
-          background: "#ffffff",
-          padding: "40px",
-          borderRadius: "12px",
-          boxShadow: "0 4px 15px rgba(0,0,0,0.08)",
-        }}
-      >
-        <h1
-          style={{
-            textAlign: "center",
-            marginBottom: "10px",
-          }}
-        >
-          KONAX
-        </h1>
+    <div style={pagina}>
+      <div style={card}>
+        <h1 style={titulo}>KONAX</h1>
 
-        <p
-          style={{
-            textAlign: "center",
-            color: "#666",
-            marginBottom: "30px",
-          }}
-        >
-          Crear cuenta
-        </p>
+        <p style={subtitulo}>Crear cuenta</p>
 
-        <div style={{ marginBottom: "15px" }}>
+        <div style={campo}>
           <label>Correo electrónico</label>
-
           <input
             type="email"
             placeholder="correo@empresa.com"
-            style={{
-              width: "100%",
-              padding: "12px",
-              marginTop: "5px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-              boxSizing: "border-box",
-            }}
+            value={correo}
+            onChange={(e) => setCorreo(e.target.value)}
+            style={inputStyle}
           />
         </div>
 
-        <div style={{ marginBottom: "15px" }}>
+        <div style={campo}>
           <label>Contraseña</label>
 
-          <div
-            style={{
-              position: "relative",
-              marginTop: "5px",
-            }}
-          >
+          <div style={passwordBox}>
             <input
               type={mostrarPassword ? "text" : "password"}
               placeholder="********"
-              style={{
-                width: "100%",
-                padding: "12px",
-                paddingRight: "80px",
-                borderRadius: "8px",
-                border: "1px solid #ccc",
-                boxSizing: "border-box",
-              }}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={inputPassword}
             />
 
             <button
               type="button"
-              onClick={() =>
-                setMostrarPassword(!mostrarPassword)
-              }
-              style={{
-                position: "absolute",
-                right: "10px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                border: "none",
-                background: "transparent",
-                cursor: "pointer",
-                color: "#2563eb",
-                fontWeight: "600",
-                fontSize: "13px",
-              }}
+              onClick={() => setMostrarPassword(!mostrarPassword)}
+              style={botonMostrar}
             >
-              {mostrarPassword
-                ? "Ocultar"
-                : "Mostrar"}
+              {mostrarPassword ? "Ocultar" : "Mostrar"}
             </button>
           </div>
         </div>
 
-        <div style={{ marginBottom: "25px" }}>
+        <div style={campo}>
           <label>Confirmar contraseña</label>
 
-          <div
-            style={{
-              position: "relative",
-              marginTop: "5px",
-            }}
-          >
+          <div style={passwordBox}>
             <input
-              type={
-                mostrarConfirmacion
-                  ? "text"
-                  : "password"
-              }
+              type={mostrarConfirmacion ? "text" : "password"}
               placeholder="********"
-              style={{
-                width: "100%",
-                padding: "12px",
-                paddingRight: "80px",
-                borderRadius: "8px",
-                border: "1px solid #ccc",
-                boxSizing: "border-box",
-              }}
+              value={confirmarPassword}
+              onChange={(e) => setConfirmarPassword(e.target.value)}
+              style={inputPassword}
             />
 
             <button
               type="button"
-              onClick={() =>
-                setMostrarConfirmacion(
-                  !mostrarConfirmacion
-                )
-              }
-              style={{
-                position: "absolute",
-                right: "10px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                border: "none",
-                background: "transparent",
-                cursor: "pointer",
-                color: "#2563eb",
-                fontWeight: "600",
-                fontSize: "13px",
-              }}
+              onClick={() => setMostrarConfirmacion(!mostrarConfirmacion)}
+              style={botonMostrar}
             >
-              {mostrarConfirmacion
-                ? "Ocultar"
-                : "Mostrar"}
+              {mostrarConfirmacion ? "Ocultar" : "Mostrar"}
             </button>
           </div>
         </div>
 
-        <button
-          style={{
-            width: "100%",
-            padding: "14px",
-            background: "#111827",
-            color: "white",
-            border: "none",
-            borderRadius: "8px",
-            fontSize: "16px",
-            cursor: "pointer",
-          }}
-        >
-          Crear cuenta
+        <button onClick={crearCuenta} style={boton}>
+          {cargando ? "Creando cuenta..." : "Crear cuenta"}
         </button>
 
-        <p
-          style={{
-            textAlign: "center",
-            marginTop: "20px",
-            color: "#666",
-          }}
-        >
-          ¿Ya tienes cuenta? Iniciar sesión
+        <p style={login}>
+          ¿Ya tienes cuenta?{" "}
+          <span onClick={() => (window.location.href = "/login")} style={link}>
+            Iniciar sesión
+          </span>
+        </p>
+
+        <p style={login}>
+          <span
+            onClick={() => (window.location.href = "/recuperar-password")}
+            style={link}
+          >
+            ¿Olvidaste tu contraseña?
+          </span>
         </p>
       </div>
     </div>
   );
 }
+
+const pagina = {
+  minHeight: "100vh",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  background: "#f5f7fb",
+  fontFamily: "Arial, sans-serif",
+};
+
+const card = {
+  width: "420px",
+  background: "#ffffff",
+  padding: "40px",
+  borderRadius: "12px",
+  boxShadow: "0 4px 15px rgba(0,0,0,0.08)",
+};
+
+const titulo = {
+  textAlign: "center",
+  marginBottom: "10px",
+};
+
+const subtitulo = {
+  textAlign: "center",
+  color: "#666",
+  marginBottom: "30px",
+};
+
+const campo = {
+  marginBottom: "15px",
+};
+
+const inputStyle = {
+  width: "100%",
+  padding: "12
