@@ -9,20 +9,35 @@ export default function Inventario() {
   const [rolUsuario, setRolUsuario] = useState("Vendedor");
 
   useEffect(() => {
-  cargarProductos();
+    cargarProductos();
 
-  // Prueba temporal
-  setRolUsuario("Supervisor");
-}, []);
+    // Prueba temporal
+    setRolUsuario("Supervisor");
+  }, []);
+
+  function obtenerEmpresaId() {
+    const empresaId = localStorage.getItem("empresaId");
+
+    if (!empresaId) {
+      alert("No hay empresa activa. Configure la empresa antes de usar inventario.");
+      return null;
+    }
+
+    return empresaId;
+  }
 
   async function cargarProductos() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     const { data, error } = await supabase
       .from("productos")
       .select("*")
+      .eq("empresa_id", empresaId)
       .order("nombre");
 
     if (error) {
-      console.log(error);
+      alert("Error cargando productos: " + error.message);
       return;
     }
 
@@ -43,13 +58,7 @@ export default function Inventario() {
         minHeight: "100vh",
       }}
     >
-      <h1
-        style={{
-          marginBottom: "20px",
-        }}
-      >
-        Inventario
-      </h1>
+      <h1 style={{ marginBottom: "20px" }}>Inventario</h1>
 
       <div
         style={{
@@ -62,9 +71,7 @@ export default function Inventario() {
           type="text"
           placeholder="Buscar producto..."
           value={busqueda}
-          onChange={(e) =>
-            setBusqueda(e.target.value)
-          }
+          onChange={(e) => setBusqueda(e.target.value)}
           style={{
             padding: "12px",
             width: "350px",
@@ -73,19 +80,21 @@ export default function Inventario() {
           }}
         />
 
-        <a
-          href="/inventario/nuevo"
-          style={{
-            background: "#16a34a",
-            color: "#fff",
-            padding: "12px 20px",
-            borderRadius: "8px",
-            textDecoration: "none",
-            fontWeight: "bold",
-          }}
-        >
-          + Nuevo Producto
-        </a>
+        {(rolUsuario === "Administrador" || rolUsuario === "Supervisor") && (
+          <a
+            href="/inventario/nuevo"
+            style={{
+              background: "#16a34a",
+              color: "#fff",
+              padding: "12px 20px",
+              borderRadius: "8px",
+              textDecoration: "none",
+              fontWeight: "bold",
+            }}
+          >
+            + Nuevo Producto
+          </a>
+        )}
       </div>
 
       <div
@@ -96,18 +105,9 @@ export default function Inventario() {
           boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
         }}
       >
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-          }}
-        >
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr
-              style={{
-                background: "#f1f5f9",
-              }}
-            >
+            <tr style={{ background: "#f1f5f9" }}>
               <th style={th}>Código</th>
               <th style={th}>Producto</th>
               <th style={th}>Categoría</th>
@@ -121,70 +121,58 @@ export default function Inventario() {
           </thead>
 
           <tbody>
+            {productosFiltrados.length === 0 && (
+              <tr>
+                <td style={td} colSpan="9">
+                  No hay productos registrados.
+                </td>
+              </tr>
+            )}
+
             {productosFiltrados.map((producto) => (
               <tr key={producto.id}>
                 <td style={td}>{producto.codigo}</td>
-
                 <td style={td}>{producto.nombre}</td>
-
                 <td style={td}>{producto.categoria}</td>
-
                 <td style={td}>{producto.proveedor}</td>
-
                 <td style={td}>{producto.stock_actual}</td>
 
                 <td style={td}>
-                  $
-                  {Number(
-                    producto.precio_venta || 0
-                  ).toFixed(2)}
+                  ${Number(producto.precio_venta || 0).toFixed(2)}
                 </td>
 
                 <td style={td}>
-                  $
-                  {Number(
-                    producto.precio_credito || 0
-                  ).toFixed(2)}
+                  ${Number(producto.precio_credito || 0).toFixed(2)}
                 </td>
 
                 <td style={td}>
-                  {producto.stock_actual <=
-                  producto.stock_minimo ? (
-                    <span
-                      style={{
-                        color: "red",
-                        fontWeight: "bold",
-                      }}
-                    >
+                  {Number(producto.stock_actual || 0) <=
+                  Number(producto.stock_minimo || 0) ? (
+                    <span style={{ color: "red", fontWeight: "bold" }}>
                       Stock Bajo
                     </span>
                   ) : (
-                    <span
-                      style={{
-                        color: "green",
-                        fontWeight: "bold",
-                      }}
-                    >
+                    <span style={{ color: "green", fontWeight: "bold" }}>
                       Disponible
                     </span>
                   )}
                 </td>
 
                 <td style={td}>
-  {(rolUsuario === "Administrador" ||
-    rolUsuario === "Supervisor") && (
-    <a
-      href={`/inventario/editar/${producto.id}`}
-      style={{
-        color: "#2563eb",
-        fontWeight: "bold",
-        textDecoration: "none",
-      }}
-    >
-      ✏️ Editar
-    </a>
-  )}
-</td>
+                  {(rolUsuario === "Administrador" ||
+                    rolUsuario === "Supervisor") && (
+                    <a
+                      href={/inventario/editar/${producto.id}}
+                      style={{
+                        color: "#2563eb",
+                        fontWeight: "bold",
+                        textDecoration: "none",
+                      }}
+                    >
+                      ✏️ Editar
+                    </a>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
