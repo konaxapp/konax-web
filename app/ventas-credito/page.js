@@ -31,6 +31,9 @@ export default function VentasCredito() {
 
   const [stockDisponible, setStockDisponible] = useState(0);
   const [productoId, setProductoId] = useState(null);
+  const [busquedaProducto, setBusquedaProducto] = useState("");
+  const [resultadosProductos, setResultadosProductos] = useState([]);
+  const [mostrarCotizacion, setMostrarCotizacion] = useState(false);
 
   const precioCompra = Number(credito.precioCompra || 0);
   const precioVenta = Number(credito.precioVenta || 0);
@@ -57,15 +60,12 @@ export default function VentasCredito() {
       : plazo;
 
   const interesTotal = montoBase * (tasaInteres / 100) * mesesEquivalentes;
-
   const totalCredito = montoBase + interesTotal + gastosManejo + comision;
 
   const cuotaCredito = plazo > 0 ? totalCredito / plazo : 0;
   const seguroPorCuota = plazo > 0 ? seguro / plazo : 0;
   const cuotaFinal = cuotaCredito + seguroPorCuota;
-
   const totalPagar = cuotaFinal * plazo;
-  const mostrarResumen = credito.precioCredito !== "" || credito.inicial !== "";
 
   const formato = (numero) =>
     "$" +
@@ -108,47 +108,87 @@ export default function VentasCredito() {
 
     setStockDisponible(0);
     setProductoId(null);
+    setBusquedaProducto("");
+    setResultadosProductos([]);
+    setMostrarCotizacion(false);
   }
 
-  async function buscarProductoPorCodigo() {
-    if (!credito.codigo) {
-      alert("Ingrese el código del producto.");
+  function limpiarProducto() {
+    setProductoId(null);
+    setStockDisponible(0);
+    setBusquedaProducto("");
+    setResultadosProductos([]);
+
+    setCredito((prev) => ({
+      ...prev,
+      codigo: "",
+      producto: "",
+      descripcion: "",
+      cantidad: "1",
+      precioCompra: "",
+      precioVenta: "",
+      precioCredito: "",
+    }));
+  }
+
+  async function buscarProductos() {
+    const texto = busquedaProducto.trim();
+
+    if (texto.length < 2) {
+      alert("Escriba al menos 2 caracteres para buscar.");
       return;
     }
 
     const { data, error } = await supabase
       .from("productos")
       .select("*")
-      .eq("codigo", credito.codigo)
-      .maybeSingle();
+      .or(
+        `codigo.ilike.%${texto}%,nombre.ilike.%${texto}%,descripcion.ilike.%${texto}%`
+      )
+      .order("nombre");
 
     if (error) {
       alert("Error buscando producto: " + error.message);
       return;
     }
 
-    if (!data) {
-      alert("No se encontró el producto en inventario.");
-      setProductoId(null);
-      return;
-    }
+    setResultadosProductos(data || []);
+  }
 
-    setProductoId(data.id);
-    setStockDisponible(Number(data.stock_actual || 0));
+  function seleccionarProducto(producto) {
+    setProductoId(producto.id);
+    setStockDisponible(Number(producto.stock_actual || 0));
+    setBusquedaProducto("");
+    setResultadosProductos([]);
 
     setCredito((prev) => ({
       ...prev,
-      producto: data.nombre || "",
-      descripcion: data.descripcion || "",
-      precioCompra: data.precio_compra || "",
-      precioVenta: data.precio_venta || "",
-      precioCredito: data.precio_credito || "",
+      codigo: producto.codigo || "",
+      producto: producto.nombre || "",
+      descripcion: producto.descripcion || "",
+      precioCompra: producto.precio_compra || "",
+      precioVenta: producto.precio_venta || "",
+      precioCredito: producto.precio_credito || "",
     }));
   }
 
+  function cotizarCredito() {
+    if (!productoId || !credito.precioCredito) {
+      alert("Primero seleccione un producto del inventario.");
+      return;
+    }
+
+    if (!plazo || plazo <= 0) {
+      alert("Ingrese el plazo o cantidad de cuotas.");
+      return;
+    }
+
+    setMostrarCotizacion(true);
+  }
+
   async function guardarCredito() {
-    if (!credito.cliente || !credito.cedula || !credito.codigo || !productoId) {
-      alert("Complete cliente, cédula y código de producto válido.");
+    if (!credito.cliente || !credito.cedula || !productoId) {
+      alert("Complete cliente, cédula y producto válido.");
       return;
     }
 
@@ -167,19 +207,15 @@ export default function VentasCredito() {
       return;
     }
 
-    if (!credito.precioCredito || precioCredito <= 0) {
-      alert("El producto no tiene precio crédito válido.");
-      return;
-    }
-
     if (!plazo || plazo <= 0) {
       alert("Ingrese el plazo o cantidad de cuotas.");
       return;
     }
 
     const numeroCuenta = "KX-" + Date.now();
-    const usuario = localStorage.getItem("usuarioNombre") || credito.vendedor || "Administrador";
+    const usuario = credito.vendedor || "Administrador";
     const fechaMovimiento = new Date().toISOString();
+    const nuevoStock = stockDisponible - cantidad;
 
     const { error: errorCredito } = await supabase.from("creditos").insert([
       {
@@ -230,8 +266,6 @@ export default function VentasCredito() {
       return;
     }
 
-    const nuevoStock = stockDisponible - cantidad;
-
     const { error: errorStock } = await supabase
       .from("productos")
       .update({
@@ -242,7 +276,10 @@ export default function VentasCredito() {
       .eq("id", productoId);
 
     if (errorStock) {
-      alert("Crédito creado, pero hubo error al descontar inventario: " + errorStock.message);
+      alert(
+        "Crédito creado, pero hubo error al descontar inventario: " +
+          errorStock.message
+      );
       return;
     }
 
@@ -261,7 +298,10 @@ export default function VentasCredito() {
       ]);
 
     if (errorMovimiento) {
-      alert("Crédito creado, inventario descontado, pero no se registró movimiento: " + errorMovimiento.message);
+      alert(
+        "Crédito creado, inventario descontado, pero no se registró movimiento: " +
+          errorMovimiento.message
+      );
       return;
     }
 
@@ -278,7 +318,7 @@ export default function VentasCredito() {
           <div>
             <h1 style={titulo}>Venta Crédito</h1>
             <p style={subtitulo}>
-              Creación de crédito, cálculo de cuota y descuento de inventario.
+              Busque productos, cotice cuotas, cree créditos y descuente inventario.
             </p>
           </div>
         </div>
@@ -288,19 +328,41 @@ export default function VentasCredito() {
 
           <div style={grid}>
             <Campo label="Nombre del cliente">
-              <input value={credito.cliente} onChange={(e) => actualizar("cliente", e.target.value)} style={inputStyle} />
+              <input
+                value={credito.cliente}
+                onChange={(e) => actualizar("cliente", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Cédula">
-              <input value={credito.cedula} onChange={(e) => actualizar("cedula", e.target.value)} style={inputStyle} />
+              <input
+                value={credito.cedula}
+                onChange={(e) => actualizar("cedula", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Teléfono">
-              <input value={credito.telefono} onChange={(e) => actualizar("telefono", e.target.value)} style={inputStyle} />
+              <input
+                value={credito.telefono}
+                onChange={(e) => actualizar("telefono", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
+          </div>
+        </div>
 
+        <div style={card}>
+          <h2 style={tituloSeccion}>Información de la Venta</h2>
+
+          <div style={grid}>
             <Campo label="Vendedor">
-              <input value={credito.vendedor} onChange={(e) => actualizar("vendedor", e.target.value)} style={inputStyle} />
+              <input
+                value={credito.vendedor}
+                onChange={(e) => actualizar("vendedor", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
           </div>
         </div>
@@ -309,13 +371,22 @@ export default function VentasCredito() {
           <h2 style={tituloSeccion}>Producto</h2>
 
           <div style={grid}>
-            <Campo label="Código de producto">
+            <Campo label="Buscar artículo por código, nombre o descripción">
               <div style={{ display: "flex", gap: "8px" }}>
-                <input value={credito.codigo} onChange={(e) => actualizar("codigo", e.target.value)} style={inputStyle} />
-                <button onClick={buscarProductoPorCodigo} style={botonBuscar}>
+                <input
+                  value={busquedaProducto}
+                  onChange={(e) => setBusquedaProducto(e.target.value)}
+                  style={inputStyle}
+                />
+
+                <button onClick={buscarProductos} style={botonBuscar}>
                   Buscar
                 </button>
               </div>
+            </Campo>
+
+            <Campo label="Código">
+              <input value={credito.codigo} readOnly style={inputReadOnly} />
             </Campo>
 
             <Campo label="Producto">
@@ -331,7 +402,12 @@ export default function VentasCredito() {
             </Campo>
 
             <Campo label="Cantidad">
-              <input type="number" value={credito.cantidad} onChange={(e) => actualizar("cantidad", e.target.value)} style={inputStyle} />
+              <input
+                type="number"
+                value={credito.cantidad}
+                onChange={(e) => actualizar("cantidad", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Precio compra">
@@ -347,9 +423,54 @@ export default function VentasCredito() {
             </Campo>
 
             <Campo label="% Ganancia sobre venta">
-              <input value={`${porcentajeGanancia.toFixed(2)}%`} readOnly style={inputReadOnly} />
+              <input
+                value={`${porcentajeGanancia.toFixed(2)}%`}
+                readOnly
+                style={inputReadOnly}
+              />
             </Campo>
           </div>
+
+          {resultadosProductos.length > 0 && (
+            <div style={tablaBox}>
+              <table style={tabla}>
+                <thead>
+                  <tr>
+                    <th style={th}>Código</th>
+                    <th style={th}>Producto</th>
+                    <th style={th}>Stock</th>
+                    <th style={th}>Precio Crédito</th>
+                    <th style={th}>Acción</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {resultadosProductos.map((p) => (
+                    <tr key={p.id}>
+                      <td style={td}>{p.codigo}</td>
+                      <td style={td}>{p.nombre}</td>
+                      <td style={td}>{p.stock_actual}</td>
+                      <td style={td}>{formato(p.precio_credito)}</td>
+                      <td style={td}>
+                        <button
+                          style={botonMini}
+                          onClick={() => seleccionarProducto(p)}
+                        >
+                          Seleccionar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {productoId && (
+            <button onClick={limpiarProducto} style={botonGrisPequeno}>
+              Limpiar Producto
+            </button>
+          )}
         </div>
 
         <div style={card}>
@@ -357,22 +478,40 @@ export default function VentasCredito() {
 
           <div style={grid}>
             <Campo label="Abono inicial">
-              <input type="number" value={credito.inicial} onChange={(e) => actualizar("inicial", e.target.value)} style={inputStyle} />
+              <input
+                type="number"
+                value={credito.inicial}
+                onChange={(e) => actualizar("inicial", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Plazo / cantidad de cuotas">
-              <input type="number" value={credito.plazo} onChange={(e) => actualizar("plazo", e.target.value)} style={inputStyle} />
+              <input
+                type="number"
+                value={credito.plazo}
+                onChange={(e) => actualizar("plazo", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Modalidad">
-              <select value={credito.modalidad} onChange={(e) => actualizar("modalidad", e.target.value)} style={inputStyle}>
+              <select
+                value={credito.modalidad}
+                onChange={(e) => actualizar("modalidad", e.target.value)}
+                style={inputStyle}
+              >
                 <option>Pago voluntario</option>
                 <option>Descuento directo</option>
               </select>
             </Campo>
 
             <Campo label="Frecuencia">
-              <select value={credito.frecuencia} onChange={(e) => actualizar("frecuencia", e.target.value)} style={inputStyle}>
+              <select
+                value={credito.frecuencia}
+                onChange={(e) => actualizar("frecuencia", e.target.value)}
+                style={inputStyle}
+              >
                 <option>Semanal</option>
                 <option>Quincenal</option>
                 <option>Mensual</option>
@@ -380,11 +519,20 @@ export default function VentasCredito() {
             </Campo>
 
             <Campo label="Días de pago">
-              <input value={credito.diasPago} onChange={(e) => actualizar("diasPago", e.target.value)} style={inputStyle} />
+              <input
+                value={credito.diasPago}
+                onChange={(e) => actualizar("diasPago", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Primer pago">
-              <input type="date" value={credito.primerPago} onChange={(e) => actualizar("primerPago", e.target.value)} style={inputStyle} />
+              <input
+                type="date"
+                value={credito.primerPago}
+                onChange={(e) => actualizar("primerPago", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
           </div>
         </div>
@@ -394,27 +542,61 @@ export default function VentasCredito() {
 
           <div style={grid}>
             <Campo label="Tasa de interés mensual %">
-              <input type="number" value={credito.tasaInteres} onChange={(e) => actualizar("tasaInteres", e.target.value)} style={inputStyle} />
+              <input
+                type="number"
+                value={credito.tasaInteres}
+                onChange={(e) => actualizar("tasaInteres", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Gastos de manejo">
-              <input type="number" value={credito.gastosManejo} onChange={(e) => actualizar("gastosManejo", e.target.value)} style={inputStyle} />
+              <input
+                type="number"
+                value={credito.gastosManejo}
+                onChange={(e) => actualizar("gastosManejo", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Comisión">
-              <input type="number" value={credito.comision} onChange={(e) => actualizar("comision", e.target.value)} style={inputStyle} />
+              <input
+                type="number"
+                value={credito.comision}
+                onChange={(e) => actualizar("comision", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Seguro total">
-              <input type="number" value={credito.seguro} onChange={(e) => actualizar("seguro", e.target.value)} style={inputStyle} />
+              <input
+                type="number"
+                value={credito.seguro}
+                onChange={(e) => actualizar("seguro", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Cuota final">
-              <input value={formato(cuotaFinal)} readOnly style={{ ...inputReadOnly, fontWeight: "bold", color: "#16a34a" }} />
+              <input
+                value={formato(cuotaFinal)}
+                readOnly
+                style={{
+                  ...inputReadOnly,
+                  fontWeight: "bold",
+                  color: "#16a34a",
+                }}
+              />
             </Campo>
           </div>
 
-          {mostrarResumen && (
+          <div style={acciones}>
+            <button style={botonAzul} onClick={cotizarCredito}>
+              Cotización
+            </button>
+          </div>
+
+          {mostrarCotizacion && (
             <div style={resumenCredito}>
               <Resumen label="Monto base" valor={formato(montoBase)} principal />
               <Resumen label="Interés total" valor={formato(interesTotal)} />
@@ -429,7 +611,11 @@ export default function VentasCredito() {
           )}
 
           <Campo label="Observación">
-            <textarea value={credito.observacion} onChange={(e) => actualizar("observacion", e.target.value)} style={textarea} />
+            <textarea
+              value={credito.observacion}
+              onChange={(e) => actualizar("observacion", e.target.value)}
+              style={textarea}
+            />
           </Campo>
 
           <div style={acciones}>
@@ -552,6 +738,37 @@ const botonBuscar = {
   cursor: "pointer",
 };
 
+const botonMini = {
+  background: "#16a34a",
+  color: "#ffffff",
+  border: "none",
+  padding: "8px 12px",
+  borderRadius: "8px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonAzul = {
+  background: "#2563eb",
+  color: "#ffffff",
+  border: "none",
+  padding: "12px 24px",
+  borderRadius: "9px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonGrisPequeno = {
+  marginTop: "14px",
+  background: "#6b7280",
+  color: "#ffffff",
+  border: "none",
+  padding: "10px 18px",
+  borderRadius: "9px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
 const resumenCredito = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
@@ -625,4 +842,28 @@ const botonGris = {
   borderRadius: "9px",
   fontWeight: "bold",
   cursor: "pointer",
+};
+
+const tablaBox = {
+  marginTop: "18px",
+  border: "1px solid #e5e7eb",
+  borderRadius: "12px",
+  overflowX: "auto",
+};
+
+const tabla = {
+  width: "100%",
+  borderCollapse: "collapse",
+};
+
+const th = {
+  textAlign: "left",
+  padding: "12px",
+  background: "#f9fafb",
+  borderBottom: "1px solid #e5e7eb",
+};
+
+const td = {
+  padding: "12px",
+  borderBottom: "1px solid #f3f4f6",
 };
