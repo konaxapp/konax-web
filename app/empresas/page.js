@@ -1,10 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { supabase } from "../../lib/supabase";
 
 export default function Empresas() {
+  const [nombre, setNombre] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [correo, setCorreo] = useState("");
+  const [direccion, setDireccion] = useState("");
   const [categoria, setCategoria] = useState("");
   const [tipoNegocio, setTipoNegocio] = useState("");
+  const [tipoRecargo, setTipoRecargo] = useState("Sin recargo");
+  const [guardando, setGuardando] = useState(false);
 
   const categorias = {
     "Ventas a Crédito": [
@@ -48,17 +55,45 @@ export default function Empresas() {
     ],
   };
 
-  const irAPlanes = () => {
-    if (!categoria || !tipoNegocio) {
-      alert("Seleccione la categoría y el tipo de negocio.");
+  async function guardarEmpresa() {
+    if (!nombre || !telefono || !categoria || !tipoNegocio) {
+      alert("Complete nombre, teléfono, categoría y tipo de negocio.");
       return;
     }
 
+    setGuardando(true);
+
+    const { data, error } = await supabase
+      .from("empresas")
+      .insert([
+        {
+          nombre,
+          telefono,
+          correo,
+          direccion,
+          categoria_negocio: categoria,
+          tipo_negocio: tipoNegocio,
+          tipo_recargo: tipoRecargo,
+          estado: "Activa",
+        },
+      ])
+      .select()
+      .single();
+
+    setGuardando(false);
+
+    if (error) {
+      alert("Error al guardar empresa: " + error.message);
+      return;
+    }
+
+    localStorage.setItem("empresaId", data.id);
+    localStorage.setItem("empresaNombre", data.nombre);
     localStorage.setItem("categoriaNegocio", categoria);
     localStorage.setItem("tipoNegocio", tipoNegocio);
 
     window.location.href = "/planes";
-  };
+  }
 
   return (
     <div style={pagina}>
@@ -72,6 +107,8 @@ export default function Empresas() {
           <input
             type="text"
             placeholder="Ej. Mueblería Central"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
             style={inputStyle}
           />
         </div>
@@ -81,6 +118,8 @@ export default function Empresas() {
           <input
             type="text"
             placeholder="Ej. 6000-0000"
+            value={telefono}
+            onChange={(e) => setTelefono(e.target.value)}
             style={inputStyle}
           />
         </div>
@@ -90,6 +129,8 @@ export default function Empresas() {
           <input
             type="email"
             placeholder="empresa@correo.com"
+            value={correo}
+            onChange={(e) => setCorreo(e.target.value)}
             style={inputStyle}
           />
         </div>
@@ -99,6 +140,8 @@ export default function Empresas() {
           <input
             type="text"
             placeholder="Dirección del negocio"
+            value={direccion}
+            onChange={(e) => setDireccion(e.target.value)}
             style={inputStyle}
           />
         </div>
@@ -142,7 +185,11 @@ export default function Empresas() {
 
         <div style={campo}>
           <label>Tipo de Recargo</label>
-          <select style={inputStyle}>
+          <select
+            value={tipoRecargo}
+            onChange={(e) => setTipoRecargo(e.target.value)}
+            style={inputStyle}
+          >
             <option>Sin recargo</option>
             <option>Mensual</option>
             <option>Semanal</option>
@@ -151,8 +198,8 @@ export default function Empresas() {
           </select>
         </div>
 
-        <button onClick={irAPlanes} style={boton}>
-          Guardar Configuración
+        <button onClick={guardarEmpresa} style={boton} disabled={guardando}>
+          {guardando ? "Guardando..." : "Guardar Configuración"}
         </button>
       </div>
     </div>
