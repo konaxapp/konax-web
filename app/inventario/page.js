@@ -162,7 +162,7 @@ export default function Inventario() {
                   {(rolUsuario === "Administrador" ||
                     rolUsuario === "Supervisor") && (
                     <a
-                      href={/inventario/editar/${producto.id}}
+                      href={`/inventario/editar/${producto.id}`}
                       style={{
                         color: "#2563eb",
                         fontWeight: "bold",
