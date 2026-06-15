@@ -5,7 +5,9 @@ import { supabase } from "../../lib/supabase";
 
 export default function Caja() {
   const [tipoMovimiento, setTipoMovimiento] = useState("Venta Contado");
-  const [fechaPago, setFechaPago] = useState(new Date().toISOString().split("T")[0]);
+  const [fechaPago, setFechaPago] = useState(
+    new Date().toISOString().split("T")[0]
+  );
 
   const [buscarCliente, setBuscarCliente] = useState("");
   const [resultadosBusqueda, setResultadosBusqueda] = useState([]);
@@ -29,20 +31,43 @@ export default function Caja() {
     cargarMovimientos();
   }, []);
 
+  function obtenerEmpresaId() {
+    const empresaId = localStorage.getItem("empresaId");
+
+    if (!empresaId) {
+      alert("No hay empresa activa. Configure la empresa antes de usar Caja.");
+      return null;
+    }
+
+    return empresaId;
+  }
+
   function generarTransaccion() {
     return "TX-" + Date.now();
   }
 
   async function cargarMovimientos() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     const { data, error } = await supabase
       .from("caja")
       .select("*")
+      .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false });
 
-    if (!error) setMovimientos(data || []);
+    if (error) {
+      alert("Error cargando movimientos: " + error.message);
+      return;
+    }
+
+    setMovimientos(data || []);
   }
 
   async function buscarClientes() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     const texto = buscarCliente.trim();
 
     if (texto.length < 3) {
@@ -55,6 +80,7 @@ export default function Caja() {
     const { data: clientesData, error: errorClientes } = await supabase
       .from("clientes")
       .select("*")
+      .eq("empresa_id", empresaId)
       .or(`nombre.ilike.%${texto}%,cedula.ilike.%${texto}%`);
 
     if (errorClientes) {
@@ -72,6 +98,7 @@ export default function Caja() {
     const { data: cuentasData, error: errorCuentas } = await supabase
       .from("informacion_comercial")
       .select("*")
+      .eq("empresa_id", empresaId)
       .ilike("numero_cuenta", `%${texto}%`);
 
     if (errorCuentas) {
@@ -82,10 +109,17 @@ export default function Caja() {
     if (cuentasData && cuentasData.length > 0) {
       const idsClientes = cuentasData.map((cuenta) => cuenta.cliente_id);
 
-      const { data: clientesDeCuentas } = await supabase
-        .from("clientes")
-        .select("*")
-        .in("id", idsClientes);
+      const { data: clientesDeCuentas, error: errorClientesCuentas } =
+        await supabase
+          .from("clientes")
+          .select("*")
+          .eq("empresa_id", empresaId)
+          .in("id", idsClientes);
+
+      if (errorClientesCuentas) {
+        alert("Error buscando clientes de cuentas: " + errorClientesCuentas.message);
+        return;
+      }
 
       cuentasData.forEach((cuenta) => {
         const cliente = clientesDeCuentas?.find(
@@ -105,6 +139,9 @@ export default function Caja() {
   }
 
   async function seleccionarResultado(resultado) {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     const cliente = resultado.cliente;
 
     setClienteSeleccionado(cliente);
@@ -114,6 +151,7 @@ export default function Caja() {
     const { data, error } = await supabase
       .from("informacion_comercial")
       .select("*")
+      .eq("empresa_id", empresaId)
       .eq("cliente_id", cliente.id)
       .order("created_at", { ascending: false });
 
@@ -134,6 +172,9 @@ export default function Caja() {
   }
 
   async function guardarMovimiento() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     if (!monto) {
       alert("Ingrese el monto.");
       return;
@@ -153,6 +194,7 @@ export default function Caja() {
 
     const { error } = await supabase.from("caja").insert([
       {
+        empresa_id: empresaId,
         numero_transaccion: numeroTransaccion,
         cliente_id: clienteSeleccionado?.id || null,
         informacion_comercial_id: cuentaSeleccionada?.id || null,
@@ -182,20 +224,32 @@ export default function Caja() {
       const nuevoSaldo =
         Number(cuentaSeleccionada.saldo_actual || 0) - Number(monto);
 
-      await supabase
+      const { error: errorSaldo } = await supabase
         .from("informacion_comercial")
         .update({
           saldo_actual: nuevoSaldo < 0 ? 0 : nuevoSaldo,
         })
+        .eq("empresa_id", empresaId)
         .eq("id", cuentaSeleccionada.id);
 
-      await supabase
+      if (errorSaldo) {
+        alert("Movimiento registrado, pero error actualizando saldo: " + errorSaldo.message);
+        return;
+      }
+
+      const { error: errorCobranza } = await supabase
         .from("informacion_cobranza")
         .update({
           fecha_ultimo_pago: fechaPago,
           monto_ultimo_pago: Number(monto),
         })
+        .eq("empresa_id", empresaId)
         .eq("informacion_comercial_id", cuentaSeleccionada.id);
+
+      if (errorCobranza) {
+        alert("Movimiento registrado, pero error actualizando cobranza: " + errorCobranza.message);
+        return;
+      }
     }
 
     alert("Movimiento registrado correctamente.");
