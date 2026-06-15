@@ -11,7 +11,7 @@ export default function Usuarios() {
   const [usuarios, setUsuarios] = useState([]);
 
   useEffect(() => {
-    cargarEmpresa();
+    cargarEmpresaActiva();
   }, []);
 
   useEffect(() => {
@@ -20,20 +20,15 @@ export default function Usuarios() {
     }
   }, [empresaId]);
 
-  async function cargarEmpresa() {
-    const { data, error } = await supabase
-      .from("empresas")
-      .select("id")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
+  function cargarEmpresaActiva() {
+    const empresaIdGuardado = localStorage.getItem("empresaId");
 
-    if (error) {
-      alert("No se encontró empresa configurada.");
+    if (!empresaIdGuardado) {
+      alert("No hay empresa activa. Configure la empresa antes de agregar usuarios.");
       return;
     }
 
-    setEmpresaId(data.id);
+    setEmpresaId(empresaIdGuardado);
   }
 
   async function cargarUsuarios() {
@@ -52,6 +47,11 @@ export default function Usuarios() {
   }
 
   async function agregarUsuario() {
+    if (!empresaId) {
+      alert("No hay empresa activa.");
+      return;
+    }
+
     if (!nombre || !correo || !rol) {
       alert("Complete nombre, correo y rol.");
       return;
@@ -83,7 +83,11 @@ export default function Usuarios() {
 
     if (!confirmar) return;
 
-    const { error } = await supabase.from("usuarios").delete().eq("id", id);
+    const { error } = await supabase
+      .from("usuarios")
+      .delete()
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
 
     if (error) {
       alert("Error al eliminar usuario: " + error.message);
