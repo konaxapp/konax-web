@@ -12,123 +12,99 @@ export default function MovimientosInventario() {
   const [cantidad, setCantidad] = useState("");
   const [observacion, setObservacion] = useState("");
 
-  const productoSeleccionado = productos.find(
-    (p) => String(p.id) === String(productoId)
-  );
+  const productoSeleccionado = productos.find(p => String(p.id) === String(productoId));
 
   useEffect(() => {
-    cargarProductos();
-    cargarHistorial();
+    cargarDatos();
   }, []);
+
+  async function cargarDatos() {
+    await Promise.all([cargarProductos(), cargarHistorial()]);
+  }
 
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
-
     if (!empresaId) {
-      alert("No hay empresa activa. Configure la empresa antes de usar inventario.");
+      console.error("No hay empresa activa. Configure la empresa antes de usar inventario.");
       return null;
     }
-
     return empresaId;
   }
 
   async function cargarProductos() {
-    const empresaId = obtenerEmpresaId();
-    if (!empresaId) return;
+    try {
+      const empresaId = obtenerEmpresaId();
+      if (!empresaId) return;
 
-    const { data, error } = await supabase
-      .from("productos")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .order("nombre");
+      const { data, error } = await supabase
+        .from("productos")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .order("nombre");
 
-    if (error) {
-      alert("Error cargando productos: " + error.message);
-      return;
+      if (error) throw error;
+      setProductos(data || []);
+    } catch (err) {
+      console.error("Error cargando productos:", err.message);
     }
-
-    setProductos(data || []);
   }
 
   async function cargarHistorial() {
-    const empresaId = obtenerEmpresaId();
-    if (!empresaId) return;
+    try {
+      const empresaId = obtenerEmpresaId();
+      if (!empresaId) return;
 
-    const { data, error } = await supabase
-      .from("movimientos_inventario")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("movimientos_inventario")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .order("created_at", { ascending: false });
 
-    if (error) {
-      alert("Error cargando historial: " + error.message);
-      return;
+      if (error) throw error;
+      setHistorial(data || []);
+    } catch (err) {
+      console.error("Error cargando historial:", err.message);
     }
-
-    setHistorial(data || []);
   }
 
   async function guardarMovimiento() {
-    const empresaId = obtenerEmpresaId();
-    if (!empresaId) return;
+    try {
+      const empresaId = obtenerEmpresaId();
+      if (!empresaId) return;
 
-    if (!productoId) {
-      alert("Seleccione un producto.");
-      return;
-    }
+      if (!productoId) throw new Error("Seleccione un producto.");
+      if (!cantidad || Number(cantidad) <= 0) throw new Error("Ingrese una cantidad válida.");
 
-    if (!cantidad || Number(cantidad) <= 0) {
-      alert("Ingrese una cantidad válida.");
-      return;
-    }
+      const producto = productoSeleccionado;
+      if (!producto) throw new Error("Producto no encontrado.");
 
-    const producto = productos.find(
-      (p) => String(p.id) === String(productoId)
-    );
+      const stockAnterior = Number(producto.stock_actual || 0);
+      let stockNuevo = tipoMovimiento === "ENTRADA"
+        ? stockAnterior + Number(cantidad)
+        : stockAnterior - Number(cantidad);
 
-    if (!producto) {
-      alert("Producto no encontrado.");
-      return;
-    }
+      if (stockNuevo < 0) throw new Error("No hay suficiente inventario.");
 
-    const stockAnterior = Number(producto.stock_actual || 0);
-    let stockNuevo = stockAnterior;
+      const fechaMovimiento = new Date().toISOString();
+      const usuario = "Sistema";
 
-    if (tipoMovimiento === "ENTRADA") {
-      stockNuevo = stockAnterior + Number(cantidad);
-    }
+      // Actualizar stock
+      const { error: errorUpdate } = await supabase
+        .from("productos")
+        .update({
+          stock_actual: stockNuevo,
+          ultimo_movimiento_usuario: usuario,
+          ultimo_movimiento_fecha: fechaMovimiento,
+        })
+        .eq("id", productoId)
+        .eq("empresa_id", empresaId);
 
-    if (tipoMovimiento === "SALIDA") {
-      stockNuevo = stockAnterior - Number(cantidad);
+      if (errorUpdate) throw errorUpdate;
 
-      if (stockNuevo < 0) {
-        alert("No hay suficiente inventario.");
-        return;
-      }
-    }
-
-    const fechaMovimiento = new Date().toISOString();
-    const usuario = "Sistema";
-
-    const { error: errorUpdate } = await supabase
-      .from("productos")
-      .update({
-        stock_actual: stockNuevo,
-        ultimo_movimiento_usuario: usuario,
-        ultimo_movimiento_fecha: fechaMovimiento,
-      })
-      .eq("id", productoId)
-      .eq("empresa_id", empresaId);
-
-    if (errorUpdate) {
-      alert("Error actualizando inventario: " + errorUpdate.message);
-      return;
-    }
-
-    const { error: errorMovimiento } = await supabase
-      .from("movimientos_inventario")
-      .insert([
-        {
+      // Insertar movimiento
+      const { error: errorMovimiento } = await supabase
+        .from("movimientos_inventario")
+        .insert([{
           empresa_id: empresaId,
           producto_id: productoId,
           tipo_movimiento: tipoMovimiento,
@@ -137,23 +113,22 @@ export default function MovimientosInventario() {
           stock_nuevo: stockNuevo,
           observacion,
           usuario,
-        },
-      ]);
+        }]);
 
-    if (errorMovimiento) {
-      alert("Error guardando movimiento: " + errorMovimiento.message);
-      return;
+      if (errorMovimiento) throw errorMovimiento;
+
+      console.log("✅ Movimiento guardado correctamente.");
+
+      // Resetear formulario
+      setCantidad("");
+      setObservacion("");
+      setProductoId("");
+      setTipoMovimiento("ENTRADA");
+
+      cargarDatos();
+    } catch (err) {
+      console.error("Error guardando movimiento:", err.message);
     }
-
-    alert("Movimiento guardado correctamente.");
-
-    setCantidad("");
-    setObservacion("");
-    setProductoId("");
-    setTipoMovimiento("ENTRADA");
-
-    cargarProductos();
-    cargarHistorial();
   }
 
   return (
@@ -162,14 +137,8 @@ export default function MovimientosInventario() {
 
       <div style={card}>
         <label>Producto</label>
-
-        <select
-          value={productoId}
-          onChange={(e) => setProductoId(e.target.value)}
-          style={input}
-        >
+        <select value={productoId} onChange={(e) => setProductoId(e.target.value)} style={input}>
           <option value="">Seleccione producto</option>
-
           {productos.map((p) => (
             <option key={p.id} value={p.id}>
               {p.codigo} - {p.nombre}
@@ -179,51 +148,27 @@ export default function MovimientosInventario() {
 
         {productoSeleccionado && (
           <div style={stockBox}>
-            <p>
-              <strong>Producto:</strong> {productoSeleccionado.nombre}
-            </p>
-            <p>
-              <strong>Stock actual:</strong>{" "}
-              {productoSeleccionado.stock_actual}
-            </p>
+            <p><strong>Producto:</strong> {productoSeleccionado.nombre}</p>
+            <p><strong>Stock actual:</strong> {productoSeleccionado.stock_actual}</p>
           </div>
         )}
 
         <label>Tipo Movimiento</label>
-
-        <select
-          value={tipoMovimiento}
-          onChange={(e) => setTipoMovimiento(e.target.value)}
-          style={input}
-        >
+        <select value={tipoMovimiento} onChange={(e) => setTipoMovimiento(e.target.value)} style={input}>
           <option value="ENTRADA">Entrada</option>
           <option value="SALIDA">Salida</option>
         </select>
 
         <label>Cantidad</label>
-
-        <input
-          type="number"
-          value={cantidad}
-          onChange={(e) => setCantidad(e.target.value)}
-          style={input}
-        />
+        <input type="number" value={cantidad} onChange={(e) => setCantidad(e.target.value)} style={input} />
 
         <label>Observación</label>
+        <textarea value={observacion} onChange={(e) => setObservacion(e.target.value)} style={textarea} />
 
-        <textarea
-          value={observacion}
-          onChange={(e) => setObservacion(e.target.value)}
-          style={textarea}
-        />
-
-        <button onClick={guardarMovimiento} style={boton}>
-          Guardar Movimiento
-        </button>
+        <button onClick={guardarMovimiento} style={boton}>Guardar Movimiento</button>
       </div>
 
       <h2>Historial</h2>
-
       <table style={tabla}>
         <thead>
           <tr>
@@ -235,87 +180,34 @@ export default function MovimientosInventario() {
             <th style={th}>Observación</th>
           </tr>
         </thead>
-
         <tbody>
-          {historial.length === 0 && (
-            <tr>
-              <td style={td} colSpan="6">
-                No hay movimientos registrados.
-              </td>
-            </tr>
+          {historial.length === 0 ? (
+            <tr><td style={td} colSpan="6">No hay movimientos registrados.</td></tr>
+          ) : (
+            historial.map((m) => (
+              <tr key={m.id}>
+                <td style={td}>{m.tipo_movimiento}</td>
+                <td style={td}>{m.cantidad}</td>
+                <td style={td}>{m.stock_anterior}</td>
+                <td style={td}>{m.stock_nuevo}</td>
+                <td style={td}>{m.usuario}</td>
+                <td style={td}>{m.observacion}</td>
+              </tr>
+            ))
           )}
-
-          {historial.map((m) => (
-            <tr key={m.id}>
-              <td style={td}>{m.tipo_movimiento}</td>
-              <td style={td}>{m.cantidad}</td>
-              <td style={td}>{m.stock_anterior}</td>
-              <td style={td}>{m.stock_nuevo}</td>
-              <td style={td}>{m.usuario}</td>
-              <td style={td}>{m.observacion}</td>
-            </tr>
-          ))}
         </tbody>
       </table>
     </div>
   );
 }
 
-const pagina = {
-  maxWidth: "900px",
-  margin: "30px auto",
-  padding: "20px",
-};
-
-const card = {
-  background: "#fff",
-  padding: "20px",
-  borderRadius: "10px",
-  marginBottom: "30px",
-};
-
-const input = {
-  width: "100%",
-  padding: "10px",
-  marginBottom: "15px",
-  border: "1px solid #ddd",
-  borderRadius: "6px",
-  boxSizing: "border-box",
-};
-
-const textarea = {
-  ...input,
-  height: "80px",
-};
-
-const stockBox = {
-  background: "#f3f4f6",
-  padding: "12px",
-  borderRadius: "8px",
-  marginBottom: "15px",
-};
-
-const boton = {
-  background: "#16a34a",
-  color: "#fff",
-  border: "none",
-  padding: "12px 20px",
-  borderRadius: "8px",
-  cursor: "pointer",
-};
-
-const tabla = {
-  width: "100%",
-  borderCollapse: "collapse",
-};
-
-const th = {
-  borderBottom: "1px solid #ddd",
-  padding: "10px",
-  textAlign: "left",
-};
-
-const td = {
-  borderBottom: "1px solid #eee",
-  padding: "10px",
-};
+// 🎨 Estilos
+const pagina = { maxWidth: "900px", margin: "30px auto", padding: "20px" };
+const card = { background: "#fff", padding: "20px", borderRadius: "10px", marginBottom: "30px" };
+const input = { width: "100%", padding: "10px", marginBottom: "15px", border: "1px solid #ddd", borderRadius: "6px", boxSizing: "border-box" };
+const textarea = { ...input, height: "80px" };
+const stockBox = { background: "#f3f4f6", padding: "12px", borderRadius: "8px", marginBottom: "15px" };
+const boton = { background: "#16a34a", color: "#fff", border: "none", padding: "12px 20px", borderRadius: "8px", cursor: "pointer" };
+const tabla = { width: "100%", borderCollapse: "collapse" };
+const th = { borderBottom: "1px solid #ddd", padding: "10px", textAlign: "left" };
+const td = { borderBottom: "1px solid #eee", padding: "10px" };
