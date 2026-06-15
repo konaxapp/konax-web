@@ -21,29 +21,57 @@ export default function MovimientosInventario() {
     cargarHistorial();
   }, []);
 
+  function obtenerEmpresaId() {
+    const empresaId = localStorage.getItem("empresaId");
+
+    if (!empresaId) {
+      alert("No hay empresa activa. Configure la empresa antes de usar inventario.");
+      return null;
+    }
+
+    return empresaId;
+  }
+
   async function cargarProductos() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     const { data, error } = await supabase
       .from("productos")
       .select("*")
+      .eq("empresa_id", empresaId)
       .order("nombre");
 
-    if (!error) {
-      setProductos(data || []);
+    if (error) {
+      alert("Error cargando productos: " + error.message);
+      return;
     }
+
+    setProductos(data || []);
   }
 
   async function cargarHistorial() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     const { data, error } = await supabase
       .from("movimientos_inventario")
       .select("*")
+      .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false });
 
-    if (!error) {
-      setHistorial(data || []);
+    if (error) {
+      alert("Error cargando historial: " + error.message);
+      return;
     }
+
+    setHistorial(data || []);
   }
 
   async function guardarMovimiento() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     if (!productoId) {
       alert("Seleccione un producto.");
       return;
@@ -79,12 +107,18 @@ export default function MovimientosInventario() {
       }
     }
 
+    const fechaMovimiento = new Date().toISOString();
+    const usuario = "Sistema";
+
     const { error: errorUpdate } = await supabase
       .from("productos")
       .update({
         stock_actual: stockNuevo,
+        ultimo_movimiento_usuario: usuario,
+        ultimo_movimiento_fecha: fechaMovimiento,
       })
-      .eq("id", productoId);
+      .eq("id", productoId)
+      .eq("empresa_id", empresaId);
 
     if (errorUpdate) {
       alert("Error actualizando inventario: " + errorUpdate.message);
@@ -95,13 +129,14 @@ export default function MovimientosInventario() {
       .from("movimientos_inventario")
       .insert([
         {
-          empresa_id: "7d12452b-5274-401a-8dc0-25d92af1c3a6",
+          empresa_id: empresaId,
           producto_id: productoId,
           tipo_movimiento: tipoMovimiento,
           cantidad: Number(cantidad),
           stock_anterior: stockAnterior,
           stock_nuevo: stockNuevo,
           observacion,
+          usuario,
         },
       ]);
 
@@ -196,17 +231,27 @@ export default function MovimientosInventario() {
             <th style={th}>Cantidad</th>
             <th style={th}>Antes</th>
             <th style={th}>Después</th>
+            <th style={th}>Usuario</th>
             <th style={th}>Observación</th>
           </tr>
         </thead>
 
         <tbody>
+          {historial.length === 0 && (
+            <tr>
+              <td style={td} colSpan="6">
+                No hay movimientos registrados.
+              </td>
+            </tr>
+          )}
+
           {historial.map((m) => (
             <tr key={m.id}>
               <td style={td}>{m.tipo_movimiento}</td>
               <td style={td}>{m.cantidad}</td>
               <td style={td}>{m.stock_anterior}</td>
               <td style={td}>{m.stock_nuevo}</td>
+              <td style={td}>{m.usuario}</td>
               <td style={td}>{m.observacion}</td>
             </tr>
           ))}
