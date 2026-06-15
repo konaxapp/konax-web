@@ -11,6 +11,7 @@ export default function MovimientosInventario() {
   const [tipoMovimiento, setTipoMovimiento] = useState("ENTRADA");
   const [cantidad, setCantidad] = useState("");
   const [observacion, setObservacion] = useState("");
+  const [fechaMovimiento, setFechaMovimiento] = useState(""); // nuevo estado
 
   const productoSeleccionado = productos.find(
     (p) => String(p.id) === String(productoId)
@@ -101,7 +102,11 @@ export default function MovimientosInventario() {
       }
     }
 
-    const fechaMovimiento = new Date().toISOString();
+    // Si el usuario selecciona fecha, se usa esa; si no, se usa la actual
+    const fechaMovimientoFinal = fechaMovimiento
+      ? new Date(fechaMovimiento).toISOString()
+      : new Date().toISOString();
+
     const usuario = "Sistema";
 
     const { error: errorUpdate } = await supabase
@@ -109,7 +114,7 @@ export default function MovimientosInventario() {
       .update({
         stock_actual: stockNuevo,
         ultimo_movimiento_usuario: usuario,
-        ultimo_movimiento_fecha: fechaMovimiento,
+        ultimo_movimiento_fecha: fechaMovimientoFinal,
       })
       .eq("id", productoId)
       .eq("empresa_id", empresaId);
@@ -131,7 +136,7 @@ export default function MovimientosInventario() {
           stock_nuevo: stockNuevo,
           observacion,
           usuario,
-          created_at: fechaMovimiento, // aseguramos que se guarde la fecha
+          created_at: fechaMovimientoFinal,
         },
       ]);
 
@@ -146,6 +151,7 @@ export default function MovimientosInventario() {
     setObservacion("");
     setProductoId("");
     setTipoMovimiento("ENTRADA");
+    setFechaMovimiento("");
 
     cargarProductos();
     cargarHistorial();
@@ -202,6 +208,15 @@ export default function MovimientosInventario() {
           style={textarea}
         />
 
+        {/* Nuevo campo de calendario */}
+        <label>Fecha del Movimiento</label>
+        <input
+          type="date"
+          value={fechaMovimiento}
+          onChange={(e) => setFechaMovimiento(e.target.value)}
+          style={input}
+        />
+
         <button onClick={guardarMovimiento} style={boton}>
           Guardar Movimiento
         </button>
@@ -217,7 +232,7 @@ export default function MovimientosInventario() {
             <th style={th}>Después</th>
             <th style={th}>Usuario</th>
             <th style={th}>Observación</th>
-            <th style={th}>Fecha</th> {/* Nueva columna */}
+            <th style={th}>Fecha</th>
           </tr>
         </thead>
         <tbody>
@@ -236,7 +251,7 @@ export default function MovimientosInventario() {
                 <td style={td}>{m.stock_nuevo}</td>
                 <td style={td}>{m.usuario}</td>
                 <td style={td}>{m.observacion}</td>
-                <td style={td}>{new Date(m.created_at).toLocaleString()}</td> {/* Mostrar fecha */}
+                <td style={td}>{new Date(m.created_at).toLocaleString()}</td>
               </tr>
             ))
           )}
