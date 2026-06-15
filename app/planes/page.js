@@ -1,18 +1,46 @@
 "use client";
 
 import { useState } from "react";
+import { supabase } from "../../lib/supabase";
 
 export default function Planes() {
   const [tipoPlan, setTipoPlan] = useState("mensual");
 
-  function seleccionarPlan(plan) {
-    localStorage.setItem("planNombre", plan.nombre);
-    localStorage.setItem("planCodigo", plan.codigo);
-    localStorage.setItem("planTipo", tipoPlan);
-    localStorage.setItem(
-      "planPrecio",
-      tipoPlan === "mensual" ? plan.precioMensual : plan.precioAnual
-    );
+  function obtenerEmpresaId() {
+    const empresaId = localStorage.getItem("empresaId");
+
+    if (!empresaId) {
+      alert("No hay empresa activa. Configure la empresa antes de seleccionar un plan.");
+      return null;
+    }
+
+    return empresaId;
+  }
+
+  async function seleccionarPlan(plan) {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    const precio =
+      tipoPlan === "mensual"
+        ? Number(plan.precioMensual)
+        : Number(plan.precioAnual);
+
+    const { error } = await supabase
+      .from("empresas")
+      .update({
+        plan_codigo: plan.codigo,
+        plan_nombre: plan.nombre,
+        plan_tipo: tipoPlan,
+        plan_precio: precio,
+        estado_plan: "Activo",
+      })
+      .eq("id", empresaId);
+
+    if (error) {
+      alert("Error al guardar el plan en Supabase: " + error.message);
+      return;
+    }
 
     window.location.href = "/confirmacion";
   }
