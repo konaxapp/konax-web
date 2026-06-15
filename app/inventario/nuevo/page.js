@@ -17,6 +17,8 @@ export default function NuevoProducto() {
     stock_minimo: "",
   });
 
+  const [imagen, setImagen] = useState(null);
+
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
 
@@ -35,6 +37,31 @@ export default function NuevoProducto() {
     }));
   }
 
+  async function subirImagen(empresaId) {
+    if (!imagen) return null;
+
+    const nombreArchivo =
+      empresaId +
+      "/" +
+      Date.now() +
+      "-" +
+      imagen.name.replace(/\s/g, "_");
+
+    const { error: uploadError } = await supabase.storage
+      .from("inventario")
+      .upload(nombreArchivo, imagen);
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage
+      .from("inventario")
+      .getPublicUrl(nombreArchivo);
+
+    return data.publicUrl;
+  }
+
   async function guardarProducto() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
@@ -45,6 +72,15 @@ export default function NuevoProducto() {
     }
 
     const stockInicial = Number(form.stock_inicial || 0);
+
+    let imagenUrl = null;
+
+    try {
+      imagenUrl = await subirImagen(empresaId);
+    } catch (error) {
+      alert("Error subiendo imagen: " + error.message);
+      return;
+    }
 
     const { data, error } = await supabase
       .from("productos")
@@ -61,6 +97,7 @@ export default function NuevoProducto() {
           precio_credito: Number(form.precio_credito || 0),
           stock_actual: stockInicial,
           stock_minimo: Number(form.stock_minimo || 0),
+          imagen_url: imagenUrl,
         },
       ])
       .select()
@@ -108,6 +145,8 @@ export default function NuevoProducto() {
       stock_inicial: "",
       stock_minimo: "",
     });
+
+    setImagen(null);
   }
 
   return (
@@ -185,6 +224,13 @@ export default function NuevoProducto() {
           type="number"
           value={form.stock_minimo}
           onChange={(e) => actualizar("stock_minimo", e.target.value)}
+        />
+
+        <label>Foto del Producto</label>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => setImagen(e.target.files[0])}
         />
 
         <button
