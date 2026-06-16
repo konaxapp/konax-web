@@ -358,6 +358,13 @@ export default function MovimientosInventario() {
       <div style={card}>
         <h2>Producto</h2>
 
+        <label>Número de Factura</label>
+        <input
+          value={numeroFactura}
+          onChange={(e) => setNumeroFactura(e.target.value)}
+          style={input}
+        />
+
         <label>Seleccionar Producto Existente</label>
         <select
           value={productoId}
@@ -510,13 +517,6 @@ export default function MovimientosInventario() {
           type="number"
           value={precioCompra}
           onChange={(e) => setPrecioCompra(e.target.value)}
-          style={input}
-        />
-
-        <label>Número de Factura</label>
-        <input
-          value={numeroFactura}
-          onChange={(e) => setNumeroFactura(e.target.value)}
           style={input}
         />
 
