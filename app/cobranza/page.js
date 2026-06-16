@@ -22,12 +22,10 @@ export default function CobranzaGeneral() {
 
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
-
     if (!empresaId) {
       alert("No hay empresa activa. Configure la empresa antes de usar Cobranza.");
       return null;
     }
-
     return empresaId;
   }
 
@@ -37,13 +35,10 @@ export default function CobranzaGeneral() {
 
   function calcularDiasAtraso(fechaVencimiento, saldoActual) {
     if (!fechaVencimiento || Number(saldoActual || 0) <= 0) return 0;
-
     const hoy = new Date();
     const vencimiento = new Date(fechaVencimiento);
     const diferencia = hoy - vencimiento;
-
     if (diferencia <= 0) return 0;
-
     return Math.floor(diferencia / (1000 * 60 * 60 * 24));
   }
 
@@ -105,7 +100,6 @@ export default function CobranzaGeneral() {
         .select("*")
         .eq("empresa_id", empresaId)
         .in("id", clienteIds);
-
       clientes = data || [];
     }
 
@@ -115,20 +109,14 @@ export default function CobranzaGeneral() {
         .select("*")
         .eq("empresa_id", empresaId)
         .in("informacion_comercial_id", cuentaIds);
-
       cobranzas = data || [];
     }
 
     const carteraArmada = cuentas.map((cuenta) => {
       const cliente = clientes.find((c) => c.id === cuenta.cliente_id);
-      const cobranza = cobranzas.find(
-        (c) => c.informacion_comercial_id === cuenta.id
-      );
+      const cobranza = cobranzas.find((c) => c.informacion_comercial_id === cuenta.id);
 
-      const dias = calcularDiasAtraso(
-        cuenta.fecha_vencimiento,
-        cuenta.saldo_actual
-      );
+      const dias = calcularDiasAtraso(cuenta.fecha_vencimiento, cuenta.saldo_actual);
 
       const estado =
         cobranza?.estado_cobranza ||
@@ -161,9 +149,7 @@ export default function CobranzaGeneral() {
       .eq("estado", "Procesado")
       .order("fecha_pago", { ascending: false });
 
-    if (!error) {
-      setPagosCobranza(data || []);
-    }
+    if (!error) setPagosCobranza(data || []);
   }
 
   async function cargarGestiones() {
@@ -176,9 +162,7 @@ export default function CobranzaGeneral() {
       .eq("empresa_id", empresaId)
       .order("fecha_gestion", { ascending: false });
 
-    if (!error) {
-      setGestiones(data || []);
-    }
+    if (!error) setGestiones(data || []);
   }
 
   const gestores = [
@@ -271,7 +255,7 @@ export default function CobranzaGeneral() {
   const llamadas = gestionesFiltradas.filter((g) => g.tipo_gestion === "Llamada").length;
   const noContesto = gestionesFiltradas.filter((g) => g.resultado_gestion === "No contestó").length;
   const noLocalizado = gestionesFiltradas.filter((g) => g.resultado_gestion === "No localizado").length;
-  const telefonoApagado = gestionesFiltradas.filter((g) => g.resultado_gestion === "Teléfono apagado").length;
+  const telefonoApagado = gestionesFiltradas.filter((g) => g.resultado_gestion === "Teléfono apagado" || g.resultado_gestion === "Número apagado").length;
   const seMudo = gestionesFiltradas.filter((g) => g.resultado_gestion === "Se mudó").length;
   const whatsapp = gestionesFiltradas.filter((g) => g.resultado_gestion === "WhatsApp enviado").length;
 
@@ -332,7 +316,7 @@ export default function CobranzaGeneral() {
         llamadas: gestionesGestor.filter((g) => g.tipo_gestion === "Llamada").length,
         noContesto: gestionesGestor.filter((g) => g.resultado_gestion === "No contestó").length,
         noLocalizado: gestionesGestor.filter((g) => g.resultado_gestion === "No localizado").length,
-        telefonoApagado: gestionesGestor.filter((g) => g.resultado_gestion === "Teléfono apagado").length,
+        telefonoApagado: gestionesGestor.filter((g) => g.resultado_gestion === "Teléfono apagado" || g.resultado_gestion === "Número apagado").length,
         seMudo: gestionesGestor.filter((g) => g.resultado_gestion === "Se mudó").length,
         whatsapp: gestionesGestor.filter((g) => g.resultado_gestion === "WhatsApp enviado").length,
         promesas: gestionesGestor.filter((g) => g.tipo_gestion === "Promesa de Pago").length,
@@ -350,7 +334,6 @@ export default function CobranzaGeneral() {
     pagos.forEach((pago) => {
       const mes = String(pago.fecha_pago || pago.created_at || "").slice(0, 7);
       if (!mes) return;
-
       if (!mapa[mes]) mapa[mes] = 0;
       mapa[mes] += Number(pago.monto || 0);
     });
@@ -385,6 +368,11 @@ export default function CobranzaGeneral() {
     window.location.href = "/vista-cliente";
   }
 
+  const textoPeriodo =
+    fechaDesde || fechaHasta
+      ? `${fechaDesde || "inicio"} hasta ${fechaHasta || "hoy"}`
+      : "Sin rango de fecha aplicado";
+
   return (
     <div style={pagina}>
       <div style={contenedor}>
@@ -394,17 +382,19 @@ export default function CobranzaGeneral() {
           <div style={{ flex: 1 }}>
             <h1 style={titulo}>Cobranza General</h1>
             <p style={subtitulo}>
-              Dashboard, cartera, supervisión de gestores y seguimiento de cobros.
+              Control general de cartera, cobros, mora y productividad de gestores.
             </p>
+            <p style={periodo}>Periodo del reporte: {textoPeriodo}</p>
           </div>
 
           <button style={botonNegro} onClick={imprimirReporte}>
-            Imprimir / Guardar PDF
+            Imprimir reporte filtrado
           </button>
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>Filtros de consulta</h2>
+          <h2 style={tituloSeccion}>Filtros del reporte</h2>
+          <p style={ayuda}>Selecciona fechas, gestor o resultado para imprimir un reporte específico.</p>
 
           <div style={gridFiltros}>
             <Campo label="Buscar cliente, cédula o cuenta">
@@ -453,6 +443,7 @@ export default function CobranzaGeneral() {
                 <option>No contestó</option>
                 <option>No localizado</option>
                 <option>Teléfono apagado</option>
+                <option>Número apagado</option>
                 <option>Se mudó</option>
                 <option>WhatsApp enviado</option>
                 <option>Promesa registrada</option>
@@ -499,11 +490,13 @@ export default function CobranzaGeneral() {
         <div style={gridTres}>
           <div style={card}>
             <h2 style={tituloSeccion}>Cobros últimos meses</h2>
+            <p style={ayuda}>Compara los cobros de crédito registrados en los últimos meses.</p>
             <GraficaBarras data={pagosPorMes} max={maxPagoMes} />
           </div>
 
           <div style={card}>
             <h2 style={tituloSeccion}>Mora por antigüedad</h2>
+            <p style={ayuda}>Distribución actual de saldos según días de atraso.</p>
             {moraRangos.map((item) => (
               <Barra key={item.label} label={item.label} valor={item.monto} max={maxMora} />
             ))}
@@ -511,8 +504,9 @@ export default function CobranzaGeneral() {
 
           <div style={card}>
             <h2 style={tituloSeccion}>Gestión por gestor</h2>
+            <p style={ayuda}>Clientes gestionados según el periodo y filtros seleccionados.</p>
             {actividadPorGestor.length === 0 && (
-              <p style={nota}>No hay actividad registrada por gestor.</p>
+              <p style={nota}>No hay actividad registrada para este filtro.</p>
             )}
             {actividadPorGestor.map((item) => (
               <BarraNumero
@@ -527,6 +521,7 @@ export default function CobranzaGeneral() {
 
         <div style={card}>
           <h2 style={tituloSeccion}>Supervisión por Gestor</h2>
+          <p style={ayuda}>Resumen de productividad por gestor según las gestiones registradas en bitácora.</p>
 
           <div style={{ overflowX: "auto" }}>
             <table style={tabla}>
@@ -566,7 +561,7 @@ export default function CobranzaGeneral() {
                 {actividadPorGestor.length === 0 && (
                   <tr>
                     <td style={td} colSpan="11">
-                      No hay gestores con cartera asignada.
+                      No hay gestiones registradas para el periodo seleccionado.
                     </td>
                   </tr>
                 )}
@@ -577,6 +572,7 @@ export default function CobranzaGeneral() {
 
         <div style={card}>
           <h2 style={tituloSeccion}>Cartera</h2>
+          <p style={ayuda}>Listado de cuentas filtradas por empresa, gestor, estado y rango de mora.</p>
 
           <div style={{ overflowX: "auto" }}>
             <table style={tabla}>
@@ -620,7 +616,7 @@ export default function CobranzaGeneral() {
                 {carteraFiltrada.length === 0 && (
                   <tr>
                     <td style={td} colSpan="11">
-                      No hay registros para mostrar.
+                      No hay registros para mostrar con estos filtros.
                     </td>
                   </tr>
                 )}
@@ -691,13 +687,17 @@ function BarraNumero({ label, valor, max }) {
 
 function GraficaBarras({ data, max }) {
   if (!data || data.length === 0) {
-    return <p style={nota}>No hay cobros registrados todavía.</p>;
+    return (
+      <div style={emptyBox}>
+        Aún no hay cobros registrados. Cuando entren pagos de crédito, aquí verás la comparación mensual.
+      </div>
+    );
   }
 
   return (
     <div style={graficaMeses}>
       {data.map((item) => {
-        const alto = max > 0 ? Math.max((item.total / max) * 160, 8) : 8;
+        const alto = max > 0 ? Math.max((item.total / max) * 160, 12) : 12;
 
         return (
           <div key={item.mes} style={barraMesBox}>
@@ -744,8 +744,16 @@ const titulo = {
 
 const subtitulo = {
   marginTop: "5px",
+  marginBottom: "4px",
   color: "#6b7280",
   fontSize: "15px",
+};
+
+const periodo = {
+  margin: 0,
+  color: "#16a34a",
+  fontSize: "13px",
+  fontWeight: "bold",
 };
 
 const kpiGrid = {
@@ -789,8 +797,15 @@ const card = {
 };
 
 const tituloSeccion = {
-  marginBottom: "14px",
+  marginBottom: "6px",
   color: "#111827",
+};
+
+const ayuda = {
+  marginTop: 0,
+  marginBottom: "14px",
+  color: "#6b7280",
+  fontSize: "13px",
 };
 
 const gridFiltros = {
@@ -899,7 +914,7 @@ const barraMesBox = {
 };
 
 const barraMes = {
-  width: "32px",
+  width: "34px",
   background: "#111827",
   borderRadius: "8px 8px 0 0",
 };
@@ -915,6 +930,15 @@ const barraMesLabel = {
   marginTop: "8px",
   fontSize: "12px",
   color: "#6b7280",
+};
+
+const emptyBox = {
+  background: "#f9fafb",
+  border: "1px dashed #d1d5db",
+  borderRadius: "12px",
+  padding: "18px",
+  color: "#6b7280",
+  fontSize: "14px",
 };
 
 const nota = {
