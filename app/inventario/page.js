@@ -133,7 +133,7 @@ export default function Inventario() {
               <th style={th}>Ganancia</th>
               <th style={th}>Estado</th>
               <th style={th}>Último Mov.</th>
-              <th style={th}>Acciones</th>
+              <th style={th}>Acción</th>
             </tr>
           </thead>
 
@@ -213,18 +213,9 @@ export default function Inventario() {
                 <td style={td}>
                   {(rolUsuario === "Administrador" ||
                     rolUsuario === "Supervisor") && (
-                    <div style={{ display: "grid", gap: "8px" }}>
-                      <a
-                        href={`/inventario/editar/${producto.id}`}
-                        style={linkEditar}
-                      >
-                        ✏️ Editar
-                      </a>
-
-                      <a href="/inventario/movimientos" style={linkMovimiento}>
-                        ➕ Movimiento
-                      </a>
-                    </div>
+                    <a href="/inventario/movimientos" style={linkMovimiento}>
+                      ➕ Movimiento
+                    </a>
                   )}
                 </td>
               </tr>
@@ -370,12 +361,6 @@ const oferta = {
   padding: "4px 8px",
   borderRadius: "999px",
   fontWeight: "bold",
-};
-
-const linkEditar = {
-  color: "#2563eb",
-  fontWeight: "bold",
-  textDecoration: "none",
 };
 
 const linkMovimiento = {
