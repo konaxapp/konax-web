@@ -35,13 +35,10 @@ export default function CobranzaGeneral() {
 
   function calcularDiasAtraso(fechaVencimiento, saldoActual) {
     if (!fechaVencimiento || Number(saldoActual || 0) <= 0) return 0;
-
     const hoy = new Date();
     const vencimiento = new Date(fechaVencimiento);
     const diferencia = hoy - vencimiento;
-
     if (diferencia <= 0) return 0;
-
     return Math.floor(diferencia / (1000 * 60 * 60 * 24));
   }
 
@@ -59,14 +56,6 @@ export default function CobranzaGeneral() {
     if (dias <= 0) return "Al Día";
     if (dias <= 90) return "Mora";
     return "Legal";
-  }
-
-  function obtenerSemaforo(dias, saldo) {
-    if (Number(saldo || 0) <= 0) return "⚫";
-    if (dias <= 0) return "🟢";
-    if (dias <= 30) return "🟡";
-    if (dias <= 90) return "🟠";
-    return "🔴";
   }
 
   async function cargarDatos() {
@@ -123,10 +112,7 @@ export default function CobranzaGeneral() {
         (c) => c.informacion_comercial_id === cuenta.id
       );
 
-      const dias = calcularDiasAtraso(
-        cuenta.fecha_vencimiento,
-        cuenta.saldo_actual
-      );
+      const dias = calcularDiasAtraso(cuenta.fecha_vencimiento, cuenta.saldo_actual);
 
       const estado =
         cobranza?.estado_cobranza ||
@@ -140,7 +126,6 @@ export default function CobranzaGeneral() {
         dias,
         estado,
         rangoMora: obtenerRangoMora(dias, cuenta.saldo_actual),
-        semaforo: obtenerSemaforo(dias, cuenta.saldo_actual),
       };
     });
 
@@ -218,7 +203,6 @@ export default function CobranzaGeneral() {
     const fecha = fechaSimple(p.fecha_pago);
     const coincideDesde = !fechaDesde || fecha >= fechaDesde;
     const coincideHasta = !fechaHasta || fecha <= fechaHasta;
-
     return coincideDesde && coincideHasta;
   });
 
@@ -259,16 +243,26 @@ export default function CobranzaGeneral() {
     (item) => item.estado === "Mora" || item.estado === "Legal"
   ).length;
 
-  const clientesGestionados = [
-    ...new Set(gestionesFiltradas.map((g) => g.cliente_id).filter(Boolean)),
-  ].length;
+  const moraRangos = [
+    "Al Día",
+    "1-30 días",
+    "31-90 días",
+    "91-180 días",
+    "181+ días",
+  ].map((label) => ({
+    label,
+    monto: carteraFiltrada
+      .filter((i) => i.rangoMora === label)
+      .reduce((s, i) => s + Number(i.cuenta?.saldo_actual || 0), 0),
+  }));
+
+  const maxMora = Math.max(...moraRangos.map((r) => r.monto), 1);
 
   const actividadPorGestor = gestores
     .filter((g) => g !== "Todos")
     .map((gestor) => {
       const carteraGestor = cartera.filter(
-        (item) =>
-          (item.cobranza?.responsable_cobro || "Sin asignar") === gestor
+        (item) => (item.cobranza?.responsable_cobro || "Sin asignar") === gestor
       );
 
       const gestionesGestor = gestionesFiltradas.filter(
@@ -288,25 +282,11 @@ export default function CobranzaGeneral() {
         gestor,
         asignados: carteraGestor.length,
         gestionados: clientesUnicos,
-        porcentaje,
+        noGestionados: Math.max(carteraGestor.length - clientesUnicos, 0),
         totalGestiones: gestionesGestor.length,
+        porcentaje,
       };
     });
-
-  const moraRangos = [
-    "Al Día",
-    "1-30 días",
-    "31-90 días",
-    "91-180 días",
-    "181+ días",
-  ].map((label) => ({
-    label,
-    monto: carteraFiltrada
-      .filter((i) => i.rangoMora === label)
-      .reduce((s, i) => s + Number(i.cuenta?.saldo_actual || 0), 0),
-  }));
-
-  const maxMora = Math.max(...moraRangos.map((r) => r.monto), 1);
 
   const pagosPorMes = agruparPagosPorMes(pagosCobranza).slice(-6);
   const maxPagoMes = Math.max(...pagosPorMes.map((m) => m.total), 1);
@@ -317,7 +297,6 @@ export default function CobranzaGeneral() {
     pagos.forEach((pago) => {
       const mes = String(pago.fecha_pago || pago.created_at || "").slice(0, 7);
       if (!mes) return;
-
       if (!mapa[mes]) mapa[mes] = 0;
       mapa[mes] += Number(pago.monto || 0);
     });
@@ -347,7 +326,7 @@ export default function CobranzaGeneral() {
   const textoPeriodo =
     fechaDesde || fechaHasta
       ? `${fechaDesde || "inicio"} hasta ${fechaHasta || "hoy"}`
-      : "Sin rango de fecha aplicado";
+      : "Mes actual / sin rango aplicado";
 
   return (
     <div style={pagina}>
@@ -358,7 +337,7 @@ export default function CobranzaGeneral() {
           <div style={{ flex: 1 }}>
             <h1 style={titulo}>Cobranza General</h1>
             <p style={subtitulo}>
-              Supervisión de cartera, cobros, mora y actividad de gestores.
+              Supervisión ejecutiva de cartera, cobros y productividad de gestores.
             </p>
             <p style={periodo}>Periodo del reporte: {textoPeriodo}</p>
           </div>
@@ -370,9 +349,6 @@ export default function CobranzaGeneral() {
 
         <div style={card}>
           <h2 style={tituloSeccion}>Filtros de supervisión</h2>
-          <p style={ayuda}>
-            Filtra por gestor, fecha, estado o resultado para revisar la gestión.
-          </p>
 
           <div style={gridFiltros}>
             <Campo label="Buscar cliente, cédula o cuenta">
@@ -384,7 +360,19 @@ export default function CobranzaGeneral() {
               />
             </Campo>
 
-            <Campo label="Estado de cartera">
+            <Campo label="Gestor">
+              <select
+                value={filtroGestor}
+                onChange={(e) => setFiltroGestor(e.target.value)}
+                style={inputStyle}
+              >
+                {gestores.map((gestor) => (
+                  <option key={gestor}>{gestor}</option>
+                ))}
+              </select>
+            </Campo>
+
+            <Campo label="Estado">
               <select
                 value={filtroEstado}
                 onChange={(e) => setFiltroEstado(e.target.value)}
@@ -399,19 +387,7 @@ export default function CobranzaGeneral() {
               </select>
             </Campo>
 
-            <Campo label="Gestor de cobro">
-              <select
-                value={filtroGestor}
-                onChange={(e) => setFiltroGestor(e.target.value)}
-                style={inputStyle}
-              >
-                {gestores.map((gestor) => (
-                  <option key={gestor}>{gestor}</option>
-                ))}
-              </select>
-            </Campo>
-
-            <Campo label="Rango de mora">
+            <Campo label="Mora">
               <select
                 value={filtroMora}
                 onChange={(e) => setFiltroMora(e.target.value)}
@@ -426,26 +402,25 @@ export default function CobranzaGeneral() {
               </select>
             </Campo>
 
-            <Campo label="Resultado de gestión">
+            <Campo label="Resultado">
               <select
                 value={filtroResultado}
                 onChange={(e) => setFiltroResultado(e.target.value)}
                 style={inputStyle}
               >
                 <option>Todos</option>
-                <option>Contestó</option>
                 <option>No contestó</option>
                 <option>No localizado</option>
                 <option>Teléfono apagado</option>
                 <option>Número apagado</option>
                 <option>Se mudó</option>
                 <option>WhatsApp enviado</option>
-                <option>Promesa registrada</option>
+                <option>Promesa de pago</option>
                 <option>Pago realizado</option>
               </select>
             </Campo>
 
-            <Campo label="Fecha desde">
+            <Campo label="Desde">
               <input
                 type="date"
                 value={fechaDesde}
@@ -454,7 +429,7 @@ export default function CobranzaGeneral() {
               />
             </Campo>
 
-            <Campo label="Fecha hasta">
+            <Campo label="Hasta">
               <input
                 type="date"
                 value={fechaHasta}
@@ -463,9 +438,9 @@ export default function CobranzaGeneral() {
               />
             </Campo>
 
-            <Campo label="Acciones">
-              <button style={botonNegro} onClick={limpiarFiltros}>
-                Limpiar filtros
+            <Campo label="Acción">
+              <button style={botonSecundario} onClick={limpiarFiltros}>
+                Limpiar
               </button>
             </Campo>
           </div>
@@ -479,25 +454,19 @@ export default function CobranzaGeneral() {
           <KPI titulo="Cobrado Hoy" valor={cobradoHoy} />
           <KPI titulo="Cobrado Mes" valor={cobradoMes} />
           <KPI titulo="Cobrado Periodo" valor={cobradoPeriodo} />
-          <KPI titulo="Clientes en Mora" valor={clientesMora} tipo="numero" />
-          <KPI titulo="Clientes Gestionados" valor={clientesGestionados} tipo="numero" />
+          <KPI titulo="Clientes Mora" valor={clientesMora} tipo="numero" />
         </div>
 
         <div style={gridDos}>
           <div style={card}>
             <h2 style={tituloSeccion}>Cobros últimos meses</h2>
-            <p style={ayuda}>
-              Comparativo de cobros registrados en caja.
-            </p>
+            <p style={ayuda}>Comparativo de cobros registrados en caja.</p>
             <GraficaBarras data={pagosPorMes} max={maxPagoMes} />
           </div>
 
           <div style={card}>
             <h2 style={tituloSeccion}>Mora por antigüedad</h2>
-            <p style={ayuda}>
-              Distribución actual de saldos según días de atraso.
-            </p>
-
+            <p style={ayuda}>Distribución actual de saldos según días de atraso.</p>
             {moraRangos.map((item) => (
               <Barra
                 key={item.label}
@@ -512,7 +481,7 @@ export default function CobranzaGeneral() {
         <div style={card}>
           <h2 style={tituloSeccion}>Supervisión por Gestor</h2>
           <p style={ayuda}>
-            Resumen de clientes asignados y gestionados según el periodo seleccionado.
+            Resumen ejecutivo de productividad según gestor y periodo seleccionado.
           </p>
 
           <div style={{ overflowX: "auto" }}>
@@ -521,9 +490,10 @@ export default function CobranzaGeneral() {
                 <tr>
                   <th style={th}>Gestor</th>
                   <th style={th}>Asignados</th>
-                  <th style={th}>Clientes Gestionados</th>
-                  <th style={th}>Total Gestiones</th>
-                  <th style={th}>% Gestionado</th>
+                  <th style={th}>Gestionados</th>
+                  <th style={th}>No gestionados</th>
+                  <th style={th}>Total gestiones</th>
+                  <th style={th}>% gestionado</th>
                 </tr>
               </thead>
 
@@ -533,66 +503,18 @@ export default function CobranzaGeneral() {
                     <td style={td}>{item.gestor}</td>
                     <td style={td}>{item.asignados}</td>
                     <td style={td}>{item.gestionados}</td>
+                    <td style={td}>{item.noGestionados}</td>
                     <td style={td}>{item.totalGestiones}</td>
-                    <td style={td}>{item.porcentaje}%</td>
+                    <td style={td}>
+                      <strong>{item.porcentaje}%</strong>
+                    </td>
                   </tr>
                 ))}
 
                 {actividadPorGestor.length === 0 && (
                   <tr>
-                    <td style={td} colSpan="5">
+                    <td style={td} colSpan="6">
                       No hay gestiones registradas para el periodo seleccionado.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div style={card}>
-          <h2 style={tituloSeccion}>Detalle de Gestión del Gestor</h2>
-          <p style={ayuda}>
-            Aquí se muestra la actividad realizada por el gestor según fecha y resultado.
-          </p>
-
-          <div style={{ marginBottom: "14px" }}>
-            <button style={botonNegro} onClick={imprimirReporte}>
-              Imprimir gestión del gestor
-            </button>
-          </div>
-
-          <div style={{ overflowX: "auto" }}>
-            <table style={tabla}>
-              <thead>
-                <tr>
-                  <th style={th}>Fecha</th>
-                  <th style={th}>Gestor</th>
-                  <th style={th}>Cliente</th>
-                  <th style={th}>Tipo de Gestión</th>
-                  <th style={th}>Resultado</th>
-                  <th style={th}>Próxima Gestión</th>
-                  <th style={th}>Comentario</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {gestionesFiltradas.map((g) => (
-                  <tr key={g.id}>
-                    <td style={td}>{fechaSimple(g.fecha_gestion)}</td>
-                    <td style={td}>{g.usuario || "Sin asignar"}</td>
-                    <td style={td}>{g.nombre_cliente || g.cliente_id || "-"}</td>
-                    <td style={td}>{g.tipo_gestion || "-"}</td>
-                    <td style={td}>{g.resultado_gestion || "-"}</td>
-                    <td style={td}>{g.proxima_gestion || "-"}</td>
-                    <td style={td}>{g.comentario || g.observacion || "-"}</td>
-                  </tr>
-                ))}
-
-                {gestionesFiltradas.length === 0 && (
-                  <tr>
-                    <td style={td} colSpan="7">
-                      No hay gestiones registradas con estos filtros.
                     </td>
                   </tr>
                 )}
@@ -648,7 +570,7 @@ function GraficaBarras({ data, max }) {
   if (!data || data.length === 0) {
     return (
       <div style={emptyBox}>
-        Aún no hay cobros registrados. Cuando entren pagos de crédito, aquí verás la comparación mensual.
+        Aún no hay cobros registrados.
       </div>
     );
   }
@@ -771,7 +693,7 @@ const ayuda = {
 
 const gridFiltros = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))",
   gap: "14px",
   alignItems: "end",
 };
@@ -800,6 +722,17 @@ const botonNegro = {
   borderRadius: "8px",
   fontWeight: "bold",
   cursor: "pointer",
+};
+
+const botonSecundario = {
+  background: "#16a34a",
+  color: "#ffffff",
+  border: "none",
+  padding: "11px 20px",
+  borderRadius: "8px",
+  fontWeight: "bold",
+  cursor: "pointer",
+  width: "100%",
 };
 
 const tabla = {
