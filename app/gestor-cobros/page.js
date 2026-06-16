@@ -142,6 +142,7 @@ export default function GestorCobros() {
     if (resultado === "WhatsApp enviado") return "WhatsApp";
     if (resultado === "Promesa de pago") return "Promesa de Pago";
     if (resultado === "Pago realizado") return "Pago Realizado";
+    if (resultado === "Seguimiento pendiente") return "Seguimiento";
     return "Llamada";
   }
 
@@ -160,7 +161,7 @@ export default function GestorCobros() {
         informacion_comercial_id: item.cuenta?.id,
         tipo_gestion: tipoGestion,
         resultado_gestion: resultado,
-        observacion: `Gestión registrada desde pantalla de gestor: ${resultado}`,
+        observacion: `Gestión rápida registrada desde cartera: ${resultado}`,
         usuario: gestor,
         fecha_gestion: new Date().toISOString(),
         origen: "Gestor",
@@ -177,26 +178,7 @@ export default function GestorCobros() {
     cargarGestiones();
   }
 
-  async function verCliente(item) {
-    const empresaId = obtenerEmpresaId();
-    const gestor = obtenerGestor();
-
-    if (!empresaId) return;
-
-    await supabase.from("bitacora_cliente").insert([
-      {
-        empresa_id: empresaId,
-        cliente_id: item.cliente?.id,
-        informacion_comercial_id: item.cuenta?.id,
-        tipo_gestion: "Vista Cliente",
-        resultado_gestion: "Cliente revisado",
-        observacion: "El gestor abrió la ficha del cliente desde su cartera.",
-        usuario: gestor,
-        fecha_gestion: new Date().toISOString(),
-        origen: "Gestor",
-      },
-    ]);
-
+  function verCliente(item) {
     localStorage.setItem(
       "busquedaVistaCliente",
       item.cuenta?.numero_cuenta || item.cliente?.cedula || item.cliente?.nombre || ""
@@ -264,10 +246,12 @@ export default function GestorCobros() {
     ...new Set(gestionesHoy.map((g) => g.cliente_id).filter(Boolean)),
   ].length;
 
+  const clientesNoGestionadosHoy = Math.max(
+    clientesAsignados - clientesGestionadosHoy,
+    0
+  );
+
   const llamadasHoy = gestionesHoy.filter((g) => g.tipo_gestion === "Llamada").length;
-  const noContestoHoy = gestionesHoy.filter((g) => g.resultado_gestion === "No contestó").length;
-  const noLocalizadoHoy = gestionesHoy.filter((g) => g.resultado_gestion === "No localizable").length;
-  const telefonoApagadoHoy = gestionesHoy.filter((g) => g.resultado_gestion === "Número apagado").length;
   const whatsappHoy = gestionesHoy.filter((g) => g.resultado_gestion === "WhatsApp enviado").length;
 
   return (
@@ -275,6 +259,7 @@ export default function GestorCobros() {
       <div style={contenedor}>
         <div style={encabezado}>
           <img src="/konax-logo.png" alt="KONAX" style={logo} />
+
           <div style={{ flex: 1 }}>
             <h1 style={titulo}>Mi Cartera de Cobro</h1>
             <p style={subtitulo}>Espacio de trabajo del gestor de cobranza.</p>
@@ -288,14 +273,12 @@ export default function GestorCobros() {
         <div style={kpiGrid}>
           <KPI titulo="Clientes asignados" valor={clientesAsignados} />
           <KPI titulo="Gestionados hoy" valor={clientesGestionadosHoy} />
+          <KPI titulo="No gestionados hoy" valor={clientesNoGestionadosHoy} />
           <KPI titulo="Gestiones hoy" valor={gestionesHoy.length} />
           <KPI titulo="Promesas hoy" valor={promesasHoy} />
           <KPI titulo="Promesas vencidas" valor={promesasVencidas} />
-          <KPI titulo="Llamadas" valor={llamadasHoy} />
-          <KPI titulo="No contestó" valor={noContestoHoy} />
-          <KPI titulo="No localizable" valor={noLocalizadoHoy} />
-          <KPI titulo="Número apagado" valor={telefonoApagadoHoy} />
-          <KPI titulo="WhatsApp" valor={whatsappHoy} />
+          <KPI titulo="Llamadas hoy" valor={llamadasHoy} />
+          <KPI titulo="WhatsApp hoy" valor={whatsappHoy} />
         </div>
 
         <div style={card}>
@@ -343,8 +326,8 @@ export default function GestorCobros() {
                   <th style={th}>Cuota</th>
                   <th style={th}>Días mora</th>
                   <th style={th}>Próxima gestión</th>
-                  <th style={th}>Gestión realizada</th>
                   <th style={th}>Acciones</th>
+                  <th style={th}>Tipo de gestión</th>
                 </tr>
               </thead>
 
@@ -353,18 +336,28 @@ export default function GestorCobros() {
                   <tr key={item.cobranza.id}>
                     <td style={td}>{item.semaforo}</td>
                     <td style={td}>{item.cliente?.nombre || "-"}</td>
-                    <td
-                      style={{ ...td, color: "#2563eb", fontWeight: "bold", cursor: "pointer" }}
-                      onClick={() => verCliente(item)}
-                    >
-                      {item.cliente?.cedula || "-"}
-                    </td>
+                    <td style={td}>{item.cliente?.cedula || "-"}</td>
                     <td style={td}>{item.cliente?.telefono || "-"}</td>
                     <td style={td}>{item.cuenta?.numero_cuenta || "-"}</td>
-                    <td style={td}>${Number(item.cuenta?.saldo_actual || 0).toLocaleString()}</td>
-                    <td style={td}>${Number(item.cuenta?.cuota || 0).toLocaleString()}</td>
+                    <td style={td}>
+                      ${Number(item.cuenta?.saldo_actual || 0).toLocaleString()}
+                    </td>
+                    <td style={td}>
+                      ${Number(item.cuenta?.cuota || 0).toLocaleString()}
+                    </td>
                     <td style={td}>{item.dias}</td>
                     <td style={td}>{item.cobranza?.proxima_gestion || "-"}</td>
+
+                    <td style={td}>
+                      <button style={boton} onClick={() => verCliente(item)}>
+                        Ver cliente
+                      </button>
+
+                      <button style={whatsappBtn} onClick={() => abrirWhatsApp(item.cliente)}>
+                        WhatsApp
+                      </button>
+                    </td>
+
                     <td style={td}>
                       <select
                         style={inputMini}
@@ -374,11 +367,11 @@ export default function GestorCobros() {
                           e.target.value = "";
                         }}
                       >
-                        <option value="">Registrar gestión</option>
+                        <option value="">Seleccionar gestión</option>
                         <option>Llamada realizada</option>
                         <option>WhatsApp enviado</option>
                         <option>No contestó</option>
-                        <option>No localizable</option>
+                        <option>No localizado</option>
                         <option>Número apagado</option>
                         <option>Se conversó con cliente</option>
                         <option>Promesa de pago</option>
@@ -386,15 +379,6 @@ export default function GestorCobros() {
                         <option>Se mudó</option>
                         <option>Seguimiento pendiente</option>
                       </select>
-                    </td>
-                    <td style={td}>
-                      <button style={boton} onClick={() => verCliente(item)}>
-                        Ver cliente
-                      </button>
-
-                      <button style={whatsappBtn} onClick={() => abrirWhatsApp(item.cliente)}>
-                        WhatsApp
-                      </button>
                     </td>
                   </tr>
                 ))}
@@ -411,7 +395,7 @@ export default function GestorCobros() {
           </div>
 
           <p style={nota}>
-            La promesa de pago y la observación completa se registran desde Vista Cliente.
+            Ver cliente no cuenta como gestión. La gestión solo se registra cuando el gestor selecciona una opción en el menú desplegable.
           </p>
         </div>
       </div>
