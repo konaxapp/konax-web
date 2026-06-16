@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function VistaCliente() {
@@ -24,6 +24,16 @@ export default function VistaCliente() {
   const [observacionPromesa, setObservacionPromesa] = useState("");
 
   const [archivo, setArchivo] = useState(null);
+
+  useEffect(() => {
+    const busquedaGuardada = localStorage.getItem("busquedaVistaCliente");
+
+    if (busquedaGuardada) {
+      setBuscar(busquedaGuardada);
+      localStorage.removeItem("busquedaVistaCliente");
+      buscarClienteAutomatico(busquedaGuardada);
+    }
+  }, []);
 
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
@@ -55,14 +65,11 @@ export default function VistaCliente() {
     return "🔴";
   }
 
-  async function buscarCliente() {
+  async function buscarClienteAutomatico(valorBusqueda) {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
 
-    if (buscar.trim().length < 3) {
-      alert("Escriba mínimo 3 caracteres.");
-      return;
-    }
+    if (!valorBusqueda || valorBusqueda.trim().length < 3) return;
 
     let encontrados = [];
 
@@ -70,7 +77,7 @@ export default function VistaCliente() {
       .from("clientes")
       .select("*")
       .eq("empresa_id", empresaId)
-      .or(`nombre.ilike.%${buscar}%,cedula.ilike.%${buscar}%`);
+      .or(`nombre.ilike.%${valorBusqueda}%,cedula.ilike.%${valorBusqueda}%`);
 
     if (errorClientes) {
       alert("Error buscando cliente: " + errorClientes.message);
@@ -88,7 +95,7 @@ export default function VistaCliente() {
       .from("informacion_comercial")
       .select("*")
       .eq("empresa_id", empresaId)
-      .ilike("numero_cuenta", `%${buscar}%`);
+      .ilike("numero_cuenta", `%${valorBusqueda}%`);
 
     if (errorCuentas) {
       alert("Error buscando cuenta: " + errorCuentas.message);
@@ -121,7 +128,15 @@ export default function VistaCliente() {
       });
     }
 
-    setResultados(encontrados);
+    if (encontrados.length === 1) {
+      await seleccionarCliente(encontrados[0]);
+    } else {
+      setResultados(encontrados);
+    }
+  }
+
+  async function buscarCliente() {
+    await buscarClienteAutomatico(buscar);
   }
 
   async function seleccionarCliente(resultado) {
@@ -443,13 +458,6 @@ export default function VistaCliente() {
                 <p>Monto último pago: ${Number(cobranza?.monto_ultimo_pago || 0).toLocaleString()}</p>
                 <p>Responsable: {cobranza?.responsable_cobro || "-"}</p>
               </div>
-            </div>
-
-            <div style={card}>
-              <h2 style={tituloSeccion}>Información General</h2>
-              <p><strong>Fecha inicio:</strong> {cuenta?.fecha_inicio || "-"}</p>
-              <p><strong>Fecha vencimiento:</strong> {cuenta?.fecha_vencimiento || "-"}</p>
-              <p><strong>Observación inicial:</strong> {cliente.observacion || cuenta?.observacion || "-"}</p>
             </div>
 
             <div style={card}>
