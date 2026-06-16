@@ -5,29 +5,63 @@ import { supabase } from "../../../lib/supabase";
 
 export default function MovimientosInventario() {
   const [productos, setProductos] = useState([]);
+  const [proveedores, setProveedores] = useState([]);
   const [historial, setHistorial] = useState([]);
 
   const [productoId, setProductoId] = useState("");
+  const [proveedorId, setProveedorId] = useState("");
   const [tipoMovimiento, setTipoMovimiento] = useState("ENTRADA");
+
   const [cantidad, setCantidad] = useState("");
+  const [precioCompra, setPrecioCompra] = useState("");
+  const [numeroFactura, setNumeroFactura] = useState("");
+  const [precioVenta, setPrecioVenta] = useState("");
+  const [precioOferta, setPrecioOferta] = useState("");
   const [observacion, setObservacion] = useState("");
-  const [fechaMovimiento, setFechaMovimiento] = useState(""); // nuevo estado
+  const [fechaMovimiento, setFechaMovimiento] = useState("");
+
+  const [nuevoProveedor, setNuevoProveedor] = useState("");
+  const [mostrarNuevoProveedor, setMostrarNuevoProveedor] = useState(false);
+
+  const [nuevoProducto, setNuevoProducto] = useState({
+    codigo: "",
+    nombre: "",
+    descripcion: "",
+  });
 
   const productoSeleccionado = productos.find(
     (p) => String(p.id) === String(productoId)
   );
 
+  const totalCompra = Number(cantidad || 0) * Number(precioCompra || 0);
+
+  const porcentajeGanancia =
+    Number(precioCompra || 0) > 0 && Number(precioVenta || 0) > 0
+      ? (((Number(precioVenta) - Number(precioCompra)) / Number(precioCompra)) * 100).toFixed(2)
+      : "0.00";
+
   useEffect(() => {
     cargarProductos();
+    cargarProveedores();
     cargarHistorial();
   }, []);
 
+  useEffect(() => {
+    if (productoSeleccionado) {
+      setPrecioCompra(productoSeleccionado.precio_compra || "");
+      setPrecioVenta(productoSeleccionado.precio_venta || "");
+      setPrecioOferta(productoSeleccionado.precio_oferta || "");
+    }
+  }, [productoId]);
+
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
+
     if (!empresaId) {
-      alert("No hay empresa activa. Configure la empresa antes de usar inventario.");
+      alert("No hay empresa activa.");
       return null;
     }
+
     return empresaId;
   }
 
@@ -49,6 +83,24 @@ export default function MovimientosInventario() {
     setProductos(data || []);
   }
 
+  async function cargarProveedores() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    const { data, error } = await supabase
+      .from("proveedores")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .order("nombre");
+
+    if (error) {
+      alert("Error cargando proveedores: " + error.message);
+      return;
+    }
+
+    setProveedores(data || []);
+  }
+
   async function cargarHistorial() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
@@ -67,13 +119,98 @@ export default function MovimientosInventario() {
     setHistorial(data || []);
   }
 
+  async function crearProveedorNuevo() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return null;
+
+    if (!nuevoProveedor) {
+      alert("Escriba el nombre del proveedor.");
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from("proveedores")
+      .insert([
+        {
+          empresa_id: empresaId,
+          nombre: nuevoProveedor,
+          estado: "Activo",
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      alert("Error creando proveedor: " + error.message);
+      return null;
+    }
+
+    setNuevoProveedor("");
+    setMostrarNuevoProveedor(false);
+    await cargarProveedores();
+
+    return data.id;
+  }
+
+  async function crearProductoNuevo() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return null;
+
+    if (!nuevoProducto.codigo || !nuevoProducto.nombre) {
+      alert("Complete código y nombre del producto nuevo.");
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from("productos")
+      .insert([
+        {
+          empresa_id: empresaId,
+          codigo: nuevoProducto.codigo,
+          nombre: nuevoProducto.nombre,
+          descripcion: nuevoProducto.descripcion,
+          precio_compra: Number(precioCompra || 0),
+          precio_venta: Number(precioVenta || 0),
+          precio_oferta: Number(precioOferta || 0),
+          stock_actual: 0,
+          stock_minimo: 0,
+          estado: "Activo",
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      alert("Error creando producto: " + error.message);
+      return null;
+    }
+
+    setNuevoProducto({
+      codigo: "",
+      nombre: "",
+      descripcion: "",
+    });
+
+    await cargarProductos();
+    setProductoId(data.id);
+
+    return data.id;
+  }
+
   async function guardarMovimiento() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
 
-    if (!productoId) {
-      alert("Seleccione un producto.");
-      return;
+    let productoFinalId = productoId;
+    let proveedorFinalId = proveedorId;
+
+    if (!productoFinalId) {
+      productoFinalId = await crearProductoNuevo();
+      if (!productoFinalId) return;
+    }
+
+    if (!proveedorFinalId && nuevoProveedor) {
+      proveedorFinalId = await crearProveedorNuevo();
     }
 
     if (!cantidad || Number(cantidad) <= 0) {
@@ -81,46 +218,40 @@ export default function MovimientosInventario() {
       return;
     }
 
-    const producto = productos.find((p) => String(p.id) === String(productoId));
-    if (!producto) {
-      alert("Producto no encontrado.");
-      return;
-    }
+    const producto = productos.find((p) => String(p.id) === String(productoFinalId));
 
-    const stockAnterior = Number(producto.stock_actual || 0);
+    const stockAnterior = Number(producto?.stock_actual || 0);
     let stockNuevo = stockAnterior;
 
-    if (tipoMovimiento === "ENTRADA") {
+    if (
+      tipoMovimiento === "ENTRADA" ||
+      tipoMovimiento === "TRANSFERENCIA" ||
+      tipoMovimiento === "NOTA_CREDITO"
+    ) {
       stockNuevo = stockAnterior + Number(cantidad);
     }
 
-    if (tipoMovimiento === "SALIDA") {
-      stockNuevo = stockAnterior - Number(cantidad);
-      if (stockNuevo < 0) {
-        alert("No hay suficiente inventario.");
-        return;
-      }
-    }
-
-    // Si el usuario selecciona fecha, se usa esa; si no, se usa la actual
-    const fechaMovimientoFinal = fechaMovimiento
+    const fechaFinal = fechaMovimiento
       ? new Date(fechaMovimiento).toISOString()
       : new Date().toISOString();
 
-    const usuario = "Sistema";
+    const usuario = localStorage.getItem("usuarioNombre") || "Sistema";
 
-    const { error: errorUpdate } = await supabase
+    const { error: errorProducto } = await supabase
       .from("productos")
       .update({
         stock_actual: stockNuevo,
+        precio_compra: Number(precioCompra || 0),
+        precio_venta: Number(precioVenta || 0),
+        precio_oferta: Number(precioOferta || 0),
         ultimo_movimiento_usuario: usuario,
-        ultimo_movimiento_fecha: fechaMovimientoFinal,
+        ultimo_movimiento_fecha: fechaFinal,
       })
-      .eq("id", productoId)
+      .eq("id", productoFinalId)
       .eq("empresa_id", empresaId);
 
-    if (errorUpdate) {
-      alert("Error actualizando inventario: " + errorUpdate.message);
+    if (errorProducto) {
+      alert("Error actualizando producto: " + errorProducto.message);
       return;
     }
 
@@ -129,14 +260,21 @@ export default function MovimientosInventario() {
       .insert([
         {
           empresa_id: empresaId,
-          producto_id: productoId,
+          producto_id: productoFinalId,
+          proveedor_id: proveedorFinalId || null,
           tipo_movimiento: tipoMovimiento,
           cantidad: Number(cantidad),
+          precio_compra: Number(precioCompra || 0),
+          numero_factura: numeroFactura,
+          total_compra: totalCompra,
+          precio_venta: Number(precioVenta || 0),
+          precio_oferta: Number(precioOferta || 0),
+          porcentaje_ganancia: Number(porcentajeGanancia || 0),
           stock_anterior: stockAnterior,
           stock_nuevo: stockNuevo,
           observacion,
           usuario,
-          created_at: fechaMovimientoFinal,
+          created_at: fechaFinal,
         },
       ]);
 
@@ -147,10 +285,15 @@ export default function MovimientosInventario() {
 
     alert("Movimiento guardado correctamente.");
 
-    setCantidad("");
-    setObservacion("");
     setProductoId("");
+    setProveedorId("");
     setTipoMovimiento("ENTRADA");
+    setCantidad("");
+    setPrecioCompra("");
+    setNumeroFactura("");
+    setPrecioVenta("");
+    setPrecioOferta("");
+    setObservacion("");
     setFechaMovimiento("");
 
     cargarProductos();
@@ -162,13 +305,15 @@ export default function MovimientosInventario() {
       <h1>Movimientos de Inventario</h1>
 
       <div style={card}>
-        <label>Producto</label>
+        <h2>Producto</h2>
+
+        <label>Seleccionar Producto Existente</label>
         <select
           value={productoId}
           onChange={(e) => setProductoId(e.target.value)}
           style={input}
         >
-          <option value="">Seleccione producto</option>
+          <option value="">Crear producto nuevo / seleccionar producto</option>
           {productos.map((p) => (
             <option key={p.id} value={p.id}>
               {p.codigo} - {p.nombre}
@@ -176,21 +321,91 @@ export default function MovimientosInventario() {
           ))}
         </select>
 
+        {!productoId && (
+          <>
+            <label>Código del Producto</label>
+            <input
+              value={nuevoProducto.codigo}
+              onChange={(e) =>
+                setNuevoProducto({ ...nuevoProducto, codigo: e.target.value })
+              }
+              style={input}
+            />
+
+            <label>Nombre del Producto</label>
+            <input
+              value={nuevoProducto.nombre}
+              onChange={(e) =>
+                setNuevoProducto({ ...nuevoProducto, nombre: e.target.value })
+              }
+              style={input}
+            />
+
+            <label>Descripción del Producto</label>
+            <textarea
+              value={nuevoProducto.descripcion}
+              onChange={(e) =>
+                setNuevoProducto({ ...nuevoProducto, descripcion: e.target.value })
+              }
+              style={textarea}
+            />
+          </>
+        )}
+
         {productoSeleccionado && (
           <div style={stockBox}>
-            <p><strong>Producto:</strong> {productoSeleccionado.nombre}</p>
+            <p><strong>Código:</strong> {productoSeleccionado.codigo}</p>
+            <p><strong>Nombre:</strong> {productoSeleccionado.nombre}</p>
+            <p><strong>Descripción:</strong> {productoSeleccionado.descripcion}</p>
             <p><strong>Stock actual:</strong> {productoSeleccionado.stock_actual}</p>
           </div>
         )}
 
-        <label>Tipo Movimiento</label>
+        <h2>Proveedor</h2>
+
+        <label>Proveedor</label>
+        <select
+          value={proveedorId}
+          onChange={(e) => setProveedorId(e.target.value)}
+          style={input}
+        >
+          <option value="">Seleccione proveedor</option>
+          {proveedores.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.nombre}
+            </option>
+          ))}
+        </select>
+
+        <button
+          onClick={() => setMostrarNuevoProveedor(!mostrarNuevoProveedor)}
+          style={botonSecundario}
+        >
+          Crear Proveedor Nuevo
+        </button>
+
+        {mostrarNuevoProveedor && (
+          <>
+            <label>Nombre del Nuevo Proveedor</label>
+            <input
+              value={nuevoProveedor}
+              onChange={(e) => setNuevoProveedor(e.target.value)}
+              style={input}
+            />
+          </>
+        )}
+
+        <h2>Datos de Compra</h2>
+
+        <label>Tipo de Movimiento</label>
         <select
           value={tipoMovimiento}
           onChange={(e) => setTipoMovimiento(e.target.value)}
           style={input}
         >
           <option value="ENTRADA">Entrada</option>
-          <option value="SALIDA">Salida</option>
+          <option value="TRANSFERENCIA">Transferencia</option>
+          <option value="NOTA_CREDITO">Nota de Crédito</option>
         </select>
 
         <label>Cantidad</label>
@@ -201,6 +416,52 @@ export default function MovimientosInventario() {
           style={input}
         />
 
+        <label>Precio de Compra</label>
+        <input
+          type="number"
+          value={precioCompra}
+          onChange={(e) => setPrecioCompra(e.target.value)}
+          style={input}
+        />
+
+        <label>Número de Factura</label>
+        <input
+          value={numeroFactura}
+          onChange={(e) => setNumeroFactura(e.target.value)}
+          style={input}
+        />
+
+        <label>Total Compra</label>
+        <input value={totalCompra.toFixed(2)} disabled style={input} />
+
+        <h2>Precio de Venta</h2>
+
+        <label>Editar Precio de Venta</label>
+        <input
+          type="number"
+          value={precioVenta}
+          onChange={(e) => setPrecioVenta(e.target.value)}
+          style={input}
+        />
+
+        <label>Porcentaje de Ganancia vs Precio de Venta</label>
+        <input value={`${porcentajeGanancia}%`} disabled style={input} />
+
+        <label>Precio de Oferta</label>
+        <input
+          type="number"
+          value={precioOferta}
+          onChange={(e) => setPrecioOferta(e.target.value)}
+          style={input}
+        />
+
+        {Number(precioOferta || 0) > 0 &&
+          Number(precioOferta || 0) >= Number(precioVenta || 0) && (
+            <p style={{ color: "#dc2626", fontWeight: "bold" }}>
+              El precio de oferta debe ser menor que el precio de venta.
+            </p>
+          )}
+
         <label>Observación</label>
         <textarea
           value={observacion}
@@ -208,7 +469,6 @@ export default function MovimientosInventario() {
           style={textarea}
         />
 
-        {/* Nuevo campo de calendario */}
         <label>Fecha del Movimiento</label>
         <input
           type="date"
@@ -223,22 +483,29 @@ export default function MovimientosInventario() {
       </div>
 
       <h2>Historial</h2>
+
       <table style={tabla}>
         <thead>
           <tr>
             <th style={th}>Tipo</th>
             <th style={th}>Cantidad</th>
+            <th style={th}>Precio Compra</th>
+            <th style={th}>Factura</th>
+            <th style={th}>Total Compra</th>
+            <th style={th}>Precio Venta</th>
+            <th style={th}>Oferta</th>
+            <th style={th}>Ganancia</th>
             <th style={th}>Antes</th>
             <th style={th}>Después</th>
             <th style={th}>Usuario</th>
-            <th style={th}>Observación</th>
             <th style={th}>Fecha</th>
           </tr>
         </thead>
+
         <tbody>
           {historial.length === 0 ? (
             <tr>
-              <td style={td} colSpan="7">
+              <td style={td} colSpan="12">
                 No hay movimientos registrados.
               </td>
             </tr>
@@ -247,10 +514,15 @@ export default function MovimientosInventario() {
               <tr key={m.id}>
                 <td style={td}>{m.tipo_movimiento}</td>
                 <td style={td}>{m.cantidad}</td>
+                <td style={td}>${Number(m.precio_compra || 0).toFixed(2)}</td>
+                <td style={td}>{m.numero_factura}</td>
+                <td style={td}>${Number(m.total_compra || 0).toFixed(2)}</td>
+                <td style={td}>${Number(m.precio_venta || 0).toFixed(2)}</td>
+                <td style={td}>${Number(m.precio_oferta || 0).toFixed(2)}</td>
+                <td style={td}>{m.porcentaje_ganancia || 0}%</td>
                 <td style={td}>{m.stock_anterior}</td>
                 <td style={td}>{m.stock_nuevo}</td>
                 <td style={td}>{m.usuario}</td>
-                <td style={td}>{m.observacion}</td>
                 <td style={td}>{new Date(m.created_at).toLocaleString()}</td>
               </tr>
             ))
@@ -261,13 +533,72 @@ export default function MovimientosInventario() {
   );
 }
 
-// 🎨 Estilos
-const pagina = { maxWidth: "900px", margin: "30px auto", padding: "20px" };
-const card = { background: "#fff", padding: "20px", borderRadius: "10px", marginBottom: "30px" };
-const input = { width: "100%", padding: "10px", marginBottom: "15px", border: "1px solid #ddd", borderRadius: "6px", boxSizing: "border-box" };
-const textarea = { ...input, height: "80px" };
-const stockBox = { background: "#f3f4f6", padding: "12px", borderRadius: "8px", marginBottom: "15px" };
-const boton = { background: "#16a34a", color: "#fff", border: "none", padding: "12px 20px", borderRadius: "8px", cursor: "pointer" };
-const tabla = { width: "100%", borderCollapse: "collapse" };
-const th = { borderBottom: "1px solid #ddd", padding: "10px", textAlign: "left" };
-const td = { borderBottom: "1px solid #eee", padding: "10px" };
+const pagina = {
+  maxWidth: "1100px",
+  margin: "30px auto",
+  padding: "20px",
+};
+
+const card = {
+  background: "#fff",
+  padding: "20px",
+  borderRadius: "10px",
+  marginBottom: "30px",
+};
+
+const input = {
+  width: "100%",
+  padding: "10px",
+  marginBottom: "15px",
+  border: "1px solid #ddd",
+  borderRadius: "6px",
+  boxSizing: "border-box",
+};
+
+const textarea = {
+  ...input,
+  height: "80px",
+};
+
+const stockBox = {
+  background: "#f3f4f6",
+  padding: "12px",
+  borderRadius: "8px",
+  marginBottom: "15px",
+};
+
+const boton = {
+  background: "#16a34a",
+  color: "#fff",
+  border: "none",
+  padding: "12px 20px",
+  borderRadius: "8px",
+  cursor: "pointer",
+};
+
+const botonSecundario = {
+  background: "#2563eb",
+  color: "#fff",
+  border: "none",
+  padding: "10px 15px",
+  borderRadius: "8px",
+  cursor: "pointer",
+  marginBottom: "15px",
+};
+
+const tabla = {
+  width: "100%",
+  borderCollapse: "collapse",
+  fontSize: "14px",
+};
+
+const th = {
+  borderBottom: "1px solid #ddd",
+  padding: "10px",
+  textAlign: "left",
+};
+
+const td = {
+  borderBottom: "1px solid #eee",
+  padding: "10px",
+};
