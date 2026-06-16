@@ -25,6 +25,17 @@ export default function VistaCliente() {
 
   const [archivo, setArchivo] = useState(null);
 
+  function obtenerEmpresaId() {
+    const empresaId = localStorage.getItem("empresaId");
+
+    if (!empresaId) {
+      alert("No hay empresa activa. Configure la empresa antes de usar Vista Cliente.");
+      return null;
+    }
+
+    return empresaId;
+  }
+
   function calcularDiasAtraso(fechaVencimiento, saldoActual) {
     if (!fechaVencimiento || Number(saldoActual || 0) <= 0) return 0;
 
@@ -45,6 +56,9 @@ export default function VistaCliente() {
   }
 
   async function buscarCliente() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     if (buscar.trim().length < 3) {
       alert("Escriba mínimo 3 caracteres.");
       return;
@@ -52,10 +66,16 @@ export default function VistaCliente() {
 
     let encontrados = [];
 
-    const { data: clientesData } = await supabase
+    const { data: clientesData, error: errorClientes } = await supabase
       .from("clientes")
       .select("*")
+      .eq("empresa_id", empresaId)
       .or(`nombre.ilike.%${buscar}%,cedula.ilike.%${buscar}%`);
+
+    if (errorClientes) {
+      alert("Error buscando cliente: " + errorClientes.message);
+      return;
+    }
 
     if (clientesData) {
       encontrados = clientesData.map((cliente) => ({
@@ -64,18 +84,31 @@ export default function VistaCliente() {
       }));
     }
 
-    const { data: cuentasData } = await supabase
+    const { data: cuentasData, error: errorCuentas } = await supabase
       .from("informacion_comercial")
       .select("*")
+      .eq("empresa_id", empresaId)
       .ilike("numero_cuenta", `%${buscar}%`);
+
+    if (errorCuentas) {
+      alert("Error buscando cuenta: " + errorCuentas.message);
+      return;
+    }
 
     if (cuentasData && cuentasData.length > 0) {
       const ids = cuentasData.map((item) => item.cliente_id);
 
-      const { data: clientesDeCuentas } = await supabase
-        .from("clientes")
-        .select("*")
-        .in("id", ids);
+      const { data: clientesDeCuentas, error: errorClientesCuentas } =
+        await supabase
+          .from("clientes")
+          .select("*")
+          .eq("empresa_id", empresaId)
+          .in("id", ids);
+
+      if (errorClientesCuentas) {
+        alert("Error buscando clientes de cuentas: " + errorClientesCuentas.message);
+        return;
+      }
 
       cuentasData.forEach((cuenta) => {
         const cliente = clientesDeCuentas?.find(
@@ -92,17 +125,26 @@ export default function VistaCliente() {
   }
 
   async function seleccionarCliente(resultado) {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     const clienteBase = resultado.cliente;
 
     setCliente(clienteBase);
     setResultados([]);
     setBuscar(clienteBase.nombre);
 
-    const { data: cuentasData } = await supabase
+    const { data: cuentasData, error } = await supabase
       .from("informacion_comercial")
       .select("*")
+      .eq("empresa_id", empresaId)
       .eq("cliente_id", clienteBase.id)
       .order("created_at", { ascending: false });
+
+    if (error) {
+      alert("Error cargando cuentas: " + error.message);
+      return;
+    }
 
     const cuentaSeleccionada = resultado.cuenta || cuentasData?.[0] || null;
 
@@ -114,11 +156,13 @@ export default function VistaCliente() {
   }
 
   async function cargarDatosRelacionados(clienteId, cuentaId) {
-    if (!cuentaId) return;
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId || !cuentaId) return;
 
     const { data: cobranzaData } = await supabase
       .from("informacion_cobranza")
       .select("*")
+      .eq("empresa_id", empresaId)
       .eq("informacion_comercial_id", cuentaId)
       .maybeSingle();
 
@@ -127,6 +171,7 @@ export default function VistaCliente() {
     const { data: pagosData } = await supabase
       .from("caja")
       .select("*")
+      .eq("empresa_id", empresaId)
       .eq("informacion_comercial_id", cuentaId)
       .order("created_at", { ascending: false });
 
@@ -135,6 +180,7 @@ export default function VistaCliente() {
     const { data: gestionesData } = await supabase
       .from("bitacora_cliente")
       .select("*")
+      .eq("empresa_id", empresaId)
       .eq("cliente_id", clienteId)
       .order("fecha_gestion", { ascending: false });
 
@@ -148,6 +194,9 @@ export default function VistaCliente() {
   }
 
   async function guardarGestion() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     if (!cliente || !cuenta) {
       alert("Seleccione un cliente.");
       return;
@@ -160,12 +209,14 @@ export default function VistaCliente() {
 
     const { error } = await supabase.from("bitacora_cliente").insert([
       {
+        empresa_id: empresaId,
         cliente_id: cliente.id,
         informacion_comercial_id: cuenta.id,
         tipo_gestion: tipoGestion,
         resultado_gestion: resultadoGestion,
         observacion,
         usuario: "Usuario",
+        fecha_gestion: new Date().toISOString(),
       },
     ]);
 
@@ -179,6 +230,9 @@ export default function VistaCliente() {
   }
 
   async function registrarPromesa() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     if (!cliente || !cuenta) {
       alert("Seleccione un cliente.");
       return;
@@ -193,12 +247,15 @@ export default function VistaCliente() {
 
     const { error } = await supabase.from("bitacora_cliente").insert([
       {
+        empresa_id: empresaId,
         cliente_id: cliente.id,
         informacion_comercial_id: cuenta.id,
         tipo_gestion: "Promesa de Pago",
         resultado_gestion: "Promesa registrada",
         observacion: textoPromesa,
         usuario: "Usuario",
+        fecha_gestion: new Date().toISOString(),
+        proxima_gestion: fechaPromesa,
       },
     ]);
 
@@ -207,6 +264,15 @@ export default function VistaCliente() {
       return;
     }
 
+    await supabase
+      .from("informacion_cobranza")
+      .update({
+        proxima_gestion: fechaPromesa,
+        observacion_cobro: textoPromesa,
+      })
+      .eq("empresa_id", empresaId)
+      .eq("informacion_comercial_id", cuenta.id);
+
     setFechaPromesa("");
     setMontoPromesa("");
     setObservacionPromesa("");
@@ -214,9 +280,12 @@ export default function VistaCliente() {
   }
 
   async function cargarDocumentos(clienteId) {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     const { data, error } = await supabase.storage
       .from("documentos-clientes")
-      .list(`clientes/${clienteId}`);
+      .list(`empresas/${empresaId}/clientes/${clienteId}`);
 
     if (!error) {
       setDocumentos(data || []);
@@ -224,6 +293,9 @@ export default function VistaCliente() {
   }
 
   async function subirDocumento() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     if (!cliente) {
       alert("Seleccione un cliente.");
       return;
@@ -235,7 +307,7 @@ export default function VistaCliente() {
     }
 
     const nombreLimpio = archivo.name.replace(/\s+/g, "_");
-    const ruta = `clientes/${cliente.id}/${Date.now()}-${nombreLimpio}`;
+    const ruta = `empresas/${empresaId}/clientes/${cliente.id}/${Date.now()}-${nombreLimpio}`;
 
     const { error } = await supabase.storage
       .from("documentos-clientes")
@@ -251,7 +323,10 @@ export default function VistaCliente() {
   }
 
   async function verDocumento(nombre) {
-    const ruta = `clientes/${cliente.id}/${nombre}`;
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    const ruta = `empresas/${empresaId}/clientes/${cliente.id}/${nombre}`;
 
     const { data, error } = await supabase.storage
       .from("documentos-clientes")
