@@ -1,6 +1,39 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 export default function Finalizar() {
+  const [empresa, setEmpresa] = useState({
+    nombre: "Cargando empresa...",
+    plan: "KONAX Gestión",
+    usuarios: 2,
+    estado: "Activo",
+  });
+
+  useEffect(() => {
+    const datosGuardados = localStorage.getItem("empresaConfigurada");
+
+    if (datosGuardados) {
+      const datos = JSON.parse(datosGuardados);
+
+      setEmpresa({
+        nombre: datos.nombreEmpresa || datos.nombre || "Empresa sin nombre",
+        plan: datos.plan || "KONAX Gestión",
+        usuarios: datos.usuarios || 2,
+        estado: datos.estado || "Activo",
+      });
+    } else {
+      const nombreEmpresa = localStorage.getItem("empresaNombre");
+
+      setEmpresa({
+        nombre: nombreEmpresa || "Empresa no encontrada",
+        plan: "KONAX Gestión",
+        usuarios: 2,
+        estado: "Activo",
+      });
+    }
+  }, []);
+
   return (
     <div
       style={{
@@ -24,12 +57,7 @@ export default function Finalizar() {
           boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
         }}
       >
-        {/* Progreso */}
-        <div
-          style={{
-            marginBottom: "60px",
-          }}
-        >
+        <div style={{ marginBottom: "60px" }}>
           <p
             style={{
               fontWeight: "bold",
@@ -71,7 +99,6 @@ export default function Finalizar() {
           </p>
         </div>
 
-        {/* Logo KONAX */}
         <img
           src="/konax-logo.png"
           alt="KONAX"
@@ -83,7 +110,6 @@ export default function Finalizar() {
           }}
         />
 
-        {/* Título */}
         <h1
           style={{
             color: "#16a34a",
@@ -105,7 +131,6 @@ export default function Finalizar() {
           Tu empresa ha sido configurada correctamente y ya está lista para utilizar KONAX.
         </p>
 
-        {/* Resumen */}
         <div
           style={{
             background: "#f9fafb",
@@ -121,21 +146,21 @@ export default function Finalizar() {
             <strong style={{ display: "block", marginBottom: "5px" }}>
               🏢 Empresa
             </strong>
-            <div>KONAX</div>
+            <div>{empresa.nombre}</div>
           </div>
 
           <div style={{ marginBottom: "25px" }}>
             <strong style={{ display: "block", marginBottom: "5px" }}>
               📦 Plan
             </strong>
-            <div>KONAX Gestión</div>
+            <div>{empresa.plan}</div>
           </div>
 
           <div style={{ marginBottom: "25px" }}>
             <strong style={{ display: "block", marginBottom: "5px" }}>
               👥 Usuarios
             </strong>
-            <div>2 registrados</div>
+            <div>{empresa.usuarios} registrados</div>
           </div>
 
           <div>
@@ -148,12 +173,11 @@ export default function Finalizar() {
                 fontWeight: "bold",
               }}
             >
-              Activo
+              {empresa.estado}
             </div>
           </div>
         </div>
 
-        {/* Botón */}
         <button
           onClick={() => (window.location.href = "/inicio")}
           style={{
