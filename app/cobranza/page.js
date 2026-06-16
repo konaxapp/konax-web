@@ -3,319 +3,243 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-export default function CobranzaGeneral() {
-  const [cartera, setCartera] = useState([]);
-  const [busqueda, setBusqueda] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState("Todos");
-  const [filtroGestor, setFiltroGestor] = useState("Todos");
+export default function Usuarios() {
+  const [empresaId, setEmpresaId] = useState(null);
+  const [nombre, setNombre] = useState("");
+  const [correo, setCorreo] = useState("");
+  const [rol, setRol] = useState("Administrador");
+  const [usuarios, setUsuarios] = useState([]);
 
   useEffect(() => {
-    cargarCartera();
+    cargarEmpresaActiva();
   }, []);
 
-  function obtenerEmpresaId() {
-    const empresaId = localStorage.getItem("empresaId");
-
-    if (!empresaId) {
-      alert("No hay empresa activa. Configure la empresa antes de usar Cobranza.");
-      return null;
+  useEffect(() => {
+    if (empresaId) {
+      cargarUsuarios();
     }
+  }, [empresaId]);
 
-    return empresaId;
+  function actualizarCantidadUsuarios(listaUsuarios) {
+    const totalUsuarios = listaUsuarios.length;
+
+    localStorage.setItem("cantidadUsuarios", String(totalUsuarios));
+
+    const empresaConfigurada = localStorage.getItem("empresaConfigurada");
+
+    if (empresaConfigurada) {
+      const datosEmpresa = JSON.parse(empresaConfigurada);
+
+      localStorage.setItem(
+        "empresaConfigurada",
+        JSON.stringify({
+          ...datosEmpresa,
+          usuarios: totalUsuarios,
+        })
+      );
+    }
   }
 
-  function calcularDiasAtraso(fechaVencimiento, saldoActual) {
-    if (!fechaVencimiento || Number(saldoActual || 0) <= 0) return 0;
+  function cargarEmpresaActiva() {
+    const empresaIdGuardado = localStorage.getItem("empresaId");
 
-    const hoy = new Date();
-    const vencimiento = new Date(fechaVencimiento);
-    const diferencia = hoy - vencimiento;
-
-    if (diferencia <= 0) return 0;
-
-    return Math.floor(diferencia / (1000 * 60 * 60 * 24));
-  }
-
-  function obtenerEstadoPorDias(dias, saldo) {
-    if (Number(saldo || 0) <= 0) return "Cancelado";
-    if (dias <= 0) return "Al Día";
-    if (dias <= 60) return "Mora";
-    if (dias > 60) return "Legal";
-    return "Mora";
-  }
-
-  function obtenerSemaforo(dias, saldo) {
-    if (Number(saldo || 0) <= 0) return "⚫";
-    if (dias <= 0) return "🟢";
-    if (dias <= 30) return "🟡";
-    if (dias <= 60) return "🟠";
-    return "🔴";
-  }
-
-  async function cargarCartera() {
-    const empresaId = obtenerEmpresaId();
-    if (!empresaId) return;
-
-    const { data: cuentasData, error: errorCuentas } = await supabase
-      .from("informacion_comercial")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .order("created_at", { ascending: false });
-
-    if (errorCuentas) {
-      alert("Error cargando cartera: " + errorCuentas.message);
+    if (!empresaIdGuardado) {
+      alert("No hay empresa activa. Configure la empresa antes de agregar usuarios.");
       return;
     }
 
-    const cuentas = cuentasData || [];
-    const clienteIds = [...new Set(cuentas.map((c) => c.cliente_id).filter(Boolean))];
-    const cuentaIds = cuentas.map((c) => c.id);
-
-    let clientes = [];
-    let cobranzas = [];
-
-    if (clienteIds.length > 0) {
-      const { data } = await supabase
-        .from("clientes")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .in("id", clienteIds);
-
-      clientes = data || [];
-    }
-
-    if (cuentaIds.length > 0) {
-      const { data } = await supabase
-        .from("informacion_cobranza")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .in("informacion_comercial_id", cuentaIds);
-
-      cobranzas = data || [];
-    }
-
-    const carteraArmada = cuentas.map((cuenta) => {
-      const cliente = clientes.find((c) => c.id === cuenta.cliente_id);
-      const cobranza = cobranzas.find(
-        (c) => c.informacion_comercial_id === cuenta.id
-      );
-
-      const dias = calcularDiasAtraso(
-        cuenta.fecha_vencimiento,
-        cuenta.saldo_actual
-      );
-
-      const estado =
-        cobranza?.estado_cobranza ||
-        cuenta.estado ||
-        obtenerEstadoPorDias(dias, cuenta.saldo_actual);
-
-      return {
-        cuenta,
-        cliente,
-        cobranza,
-        dias,
-        estado,
-        semaforo: obtenerSemaforo(dias, cuenta.saldo_actual),
-      };
-    });
-
-    setCartera(carteraArmada);
+    setEmpresaId(empresaIdGuardado);
   }
 
-  const carteraFiltrada = cartera.filter((item) => {
-    const texto = busqueda.toLowerCase();
+  async function cargarUsuarios() {
+    const { data, error } = await supabase
+      .from("usuarios")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .order("created_at", { ascending: true });
 
-    const coincideBusqueda =
-      !texto ||
-      item.cliente?.nombre?.toLowerCase().includes(texto) ||
-      item.cliente?.cedula?.toLowerCase().includes(texto) ||
-      item.cuenta?.numero_cuenta?.toLowerCase().includes(texto);
+    if (error) {
+      alert("Error cargando usuarios: " + error.message);
+      return;
+    }
 
-    const coincideEstado =
-      filtroEstado === "Todos" || item.estado === filtroEstado;
+    const listaUsuarios = data || [];
 
-    const gestor = item.cobranza?.responsable_cobro || "Sin asignar";
-
-    const coincideGestor =
-      filtroGestor === "Todos" || gestor === filtroGestor;
-
-    return coincideBusqueda && coincideEstado && coincideGestor;
-  });
-
-  const gestores = [
-    "Todos",
-    ...new Set(
-      cartera
-        .map((item) => item.cobranza?.responsable_cobro || "Sin asignar")
-        .filter(Boolean)
-    ),
-  ];
-
-  const totalCartera = carteraFiltrada.reduce(
-    (sum, item) => sum + Number(item.cuenta?.saldo_actual || 0),
-    0
-  );
-
-  const totalAlDia = carteraFiltrada
-    .filter((item) => item.estado === "Al Día")
-    .reduce((sum, item) => sum + Number(item.cuenta?.saldo_actual || 0), 0);
-
-  const totalMora = carteraFiltrada
-    .filter((item) => item.estado === "Mora")
-    .reduce((sum, item) => sum + Number(item.cuenta?.saldo_actual || 0), 0);
-
-  const totalLegal = carteraFiltrada
-    .filter((item) => item.estado === "Legal")
-    .reduce((sum, item) => sum + Number(item.cuenta?.saldo_actual || 0), 0);
-
-  function limpiarFiltros() {
-    setBusqueda("");
-    setFiltroEstado("Todos");
-    setFiltroGestor("Todos");
+    setUsuarios(listaUsuarios);
+    actualizarCantidadUsuarios(listaUsuarios);
   }
 
-  function verCliente(item) {
-    const texto =
-      item.cuenta?.numero_cuenta || item.cliente?.cedula || item.cliente?.nombre;
+  async function agregarUsuario() {
+    if (!empresaId) {
+      alert("No hay empresa activa.");
+      return;
+    }
 
-    localStorage.setItem("busquedaVistaCliente", texto || "");
-    window.location.href = "/vista-cliente";
+    if (!nombre || !correo || !rol) {
+      alert("Complete nombre, correo y rol.");
+      return;
+    }
+
+    const { error } = await supabase.from("usuarios").insert([
+      {
+        empresa_id: empresaId,
+        nombre,
+        correo,
+        rol,
+        estado: "Activo",
+      },
+    ]);
+
+    if (error) {
+      alert("Error al agregar usuario: " + error.message);
+      return;
+    }
+
+    setNombre("");
+    setCorreo("");
+    setRol("Administrador");
+
+    await cargarUsuarios();
+  }
+
+  async function eliminarUsuario(id) {
+    const confirmar = confirm("¿Desea eliminar este usuario?");
+
+    if (!confirmar) return;
+
+    const { error } = await supabase
+      .from("usuarios")
+      .delete()
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
+
+    if (error) {
+      alert("Error al eliminar usuario: " + error.message);
+      return;
+    }
+
+    await cargarUsuarios();
+  }
+
+  function finalizarConfiguracion() {
+    const tieneAdministrador = usuarios.some(
+      (usuario) => usuario.rol === "Administrador"
+    );
+
+    if (!tieneAdministrador) {
+      alert("Debe agregar al menos un Administrador.");
+      return;
+    }
+
+    actualizarCantidadUsuarios(usuarios);
+
+    window.location.href = "/finalizar";
   }
 
   return (
     <div style={pagina}>
-      <div style={contenedor}>
-        <div style={encabezado}>
-          <img src="/konax-logo.png" alt="KONAX" style={logo} />
-          <div>
-            <h1 style={titulo}>Cobranza General</h1>
-            <p style={subtitulo}>
-              Cartera, mora, estados, responsables y seguimiento de clientes.
-            </p>
-          </div>
+      <div style={card}>
+        <h1 style={titulo}>Configura tu equipo de trabajo</h1>
+
+        <p style={subtitulo}>Agrega los usuarios que utilizarán KONAX</p>
+
+        <div style={campo}>
+          <label>Nombre</label>
+          <input
+            type="text"
+            placeholder="Nombre completo"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            style={inputStyle}
+          />
         </div>
 
-        <div style={kpiGrid}>
-          <KPI titulo="Cartera Total" valor={totalCartera} />
-          <KPI titulo="Al Día" valor={totalAlDia} />
-          <KPI titulo="En Mora" valor={totalMora} />
-          <KPI titulo="Legal" valor={totalLegal} />
+        <div style={campo}>
+          <label>Correo Electrónico</label>
+          <input
+            type="email"
+            placeholder="correo@empresa.com"
+            value={correo}
+            onChange={(e) => setCorreo(e.target.value)}
+            style={inputStyle}
+          />
         </div>
 
-        <div style={card}>
-          <h2 style={tituloSeccion}>Filtros</h2>
-
-          <div style={gridFiltros}>
-            <input
-              placeholder="Buscar por nombre, cédula o número de cuenta..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              style={inputStyle}
-            />
-
-            <select
-              value={filtroEstado}
-              onChange={(e) => setFiltroEstado(e.target.value)}
-              style={inputStyle}
-            >
-              <option>Todos</option>
-              <option>Al Día</option>
-              <option>Mora</option>
-              <option>Legal</option>
-              <option>Suspendido</option>
-              <option>Cancelado</option>
-            </select>
-
-            <select
-              value={filtroGestor}
-              onChange={(e) => setFiltroGestor(e.target.value)}
-              style={inputStyle}
-            >
-              {gestores.map((gestor) => (
-                <option key={gestor}>{gestor}</option>
-              ))}
-            </select>
-
-            <button style={botonNegro} onClick={limpiarFiltros}>
-              Limpiar
-            </button>
-          </div>
+        <div style={campo}>
+          <label>Rol</label>
+          <select
+            value={rol}
+            onChange={(e) => setRol(e.target.value)}
+            style={inputStyle}
+          >
+            <option>Administrador</option>
+            <option>Supervisor</option>
+            <option>Gestor</option>
+            <option>Caja</option>
+            <option>Vendedor</option>
+          </select>
         </div>
 
-        <div style={card}>
-          <h2 style={tituloSeccion}>Cartera</h2>
+        <button onClick={agregarUsuario} style={botonAzul}>
+          Agregar Usuario
+        </button>
 
-          <div style={{ overflowX: "auto" }}>
-            <table style={tabla}>
-              <thead>
+        <h2 style={{ marginBottom: "20px" }}>
+          Usuarios agregados ({usuarios.length})
+        </h2>
+
+        <div style={tablaBox}>
+          <table style={tabla}>
+            <thead style={{ background: "#f9fafb" }}>
+              <tr>
+                <th style={thStyle}>Nombre</th>
+                <th style={thStyle}>Correo</th>
+                <th style={thStyle}>Rol</th>
+                <th style={thStyle}>Estado</th>
+                <th style={thStyle}>Acciones</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {usuarios.length === 0 && (
                 <tr>
-                  <th style={th}>Estado</th>
-                  <th style={th}>Cliente</th>
-                  <th style={th}>Cédula</th>
-                  <th style={th}>Cuenta</th>
-                  <th style={th}>Producto</th>
-                  <th style={th}>Saldo</th>
-                  <th style={th}>Cuota</th>
-                  <th style={th}>Días</th>
-                  <th style={th}>Gestor</th>
-                  <th style={th}>Próxima Gestión</th>
-                  <th style={th}>Acción</th>
+                  <td style={tdStyle} colSpan="5">
+                    No hay usuarios agregados.
+                  </td>
                 </tr>
-              </thead>
+              )}
 
-              <tbody>
-                {carteraFiltrada.map((item) => (
-                  <tr key={item.cuenta.id}>
-                    <td style={td}>
-                      {item.semaforo} {item.estado}
-                    </td>
-                    <td style={td}>{item.cliente?.nombre || "-"}</td>
-                    <td style={td}>{item.cliente?.cedula || "-"}</td>
-                    <td style={td}>{item.cuenta?.numero_cuenta || "-"}</td>
-                    <td style={td}>{item.cuenta?.descripcion || "-"}</td>
-                    <td style={td}>
-                      ${Number(item.cuenta?.saldo_actual || 0).toLocaleString()}
-                    </td>
-                    <td style={td}>
-                      ${Number(item.cuenta?.cuota || 0).toLocaleString()}
-                    </td>
-                    <td style={td}>{item.dias}</td>
-                    <td style={td}>
-                      {item.cobranza?.responsable_cobro || "Sin asignar"}
-                    </td>
-                    <td style={td}>
-                      {item.cobranza?.proxima_gestion || "-"}
-                    </td>
-                    <td style={td}>
-                      <button style={boton} onClick={() => verCliente(item)}>
-                        Ver cliente
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-
-                {carteraFiltrada.length === 0 && (
-                  <tr>
-                    <td style={td} colSpan="11">
-                      No hay registros para mostrar.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+              {usuarios.map((usuario) => (
+                <tr key={usuario.id}>
+                  <td style={tdStyle}>{usuario.nombre}</td>
+                  <td style={tdStyle}>{usuario.correo}</td>
+                  <td style={tdStyle}>{usuario.rol}</td>
+                  <td style={tdStyle}>{usuario.estado}</td>
+                  <td style={tdStyle}>
+                    <span
+                      style={{
+                        color: "#dc2626",
+                        cursor: "pointer",
+                      }}
+                      onClick={() => eliminarUsuario(usuario.id)}
+                    >
+                      Eliminar
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
-    </div>
-  );
-}
 
-function KPI({ titulo, valor }) {
-  return (
-    <div style={cardKpi}>
-      <p style={kpiTitulo}>{titulo}</p>
-      <h2 style={kpiValor}>${Number(valor || 0).toLocaleString()}</h2>
+        <p style={nota}>
+          Se requiere al menos un Administrador para finalizar la configuración.
+        </p>
+
+        <button onClick={finalizarConfiguracion} style={botonVerde}>
+          Finalizar Configuración
+        </button>
+      </div>
     </div>
   );
 }
@@ -323,110 +247,63 @@ function KPI({ titulo, valor }) {
 const pagina = {
   minHeight: "100vh",
   background: "#f3f4f6",
-  padding: "18px",
-  fontFamily: "Arial, sans-serif",
-};
-
-const contenedor = {
-  maxWidth: "1500px",
-  margin: "0 auto",
-};
-
-const encabezado = {
   display: "flex",
-  alignItems: "center",
-  gap: "14px",
-  marginBottom: "18px",
-};
-
-const logo = {
-  width: "110px",
-  height: "auto",
-};
-
-const titulo = {
-  fontSize: "32px",
-  margin: 0,
-  color: "#111827",
-};
-
-const subtitulo = {
-  marginTop: "5px",
-  color: "#6b7280",
-  fontSize: "15px",
-};
-
-const kpiGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: "14px",
-  marginBottom: "16px",
-};
-
-const cardKpi = {
-  background: "#ffffff",
-  padding: "18px",
-  borderRadius: "16px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
-};
-
-const kpiTitulo = {
-  margin: 0,
-  color: "#6b7280",
-  fontSize: "14px",
-};
-
-const kpiValor = {
-  marginTop: "8px",
-  color: "#111827",
-  fontSize: "26px",
+  justifyContent: "center",
+  padding: "40px",
+  fontFamily: "Arial",
 };
 
 const card = {
-  background: "#ffffff",
-  padding: "18px",
+  width: "900px",
+  background: "white",
   borderRadius: "16px",
-  marginBottom: "16px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+  padding: "40px",
+  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
 };
 
-const tituloSeccion = {
-  marginBottom: "14px",
-  color: "#111827",
+const titulo = {
+  textAlign: "center",
+  marginBottom: "10px",
 };
 
-const gridFiltros = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: "12px",
+const subtitulo = {
+  textAlign: "center",
+  color: "#666",
+  marginBottom: "40px",
+};
+
+const campo = {
+  marginBottom: "20px",
 };
 
 const inputStyle = {
   width: "100%",
-  padding: "11px",
+  padding: "12px",
+  marginTop: "8px",
   borderRadius: "8px",
   border: "1px solid #d1d5db",
+  fontSize: "14px",
   boxSizing: "border-box",
 };
 
-const boton = {
-  background: "#16a34a",
-  color: "#ffffff",
+const botonAzul = {
+  width: "100%",
+  background: "#2563eb",
+  color: "white",
   border: "none",
-  padding: "9px 16px",
-  borderRadius: "8px",
+  padding: "15px",
+  borderRadius: "10px",
+  fontSize: "16px",
   fontWeight: "bold",
   cursor: "pointer",
+  marginBottom: "40px",
 };
 
-const botonNegro = {
-  background: "#111827",
-  color: "#ffffff",
-  border: "none",
-  padding: "11px 20px",
-  borderRadius: "8px",
-  fontWeight: "bold",
-  cursor: "pointer",
+const tablaBox = {
+  border: "1px solid #e5e7eb",
+  borderRadius: "10px",
+  overflow: "hidden",
+  marginBottom: "25px",
 };
 
 const tabla = {
@@ -434,14 +311,33 @@ const tabla = {
   borderCollapse: "collapse",
 };
 
-const th = {
-  background: "#111827",
-  color: "#ffffff",
-  padding: "12px",
+const thStyle = {
   textAlign: "left",
+  padding: "15px",
+  borderBottom: "1px solid #e5e7eb",
 };
 
-const td = {
-  padding: "11px",
-  borderBottom: "1px solid #e5e7eb",
+const tdStyle = {
+  padding: "15px",
+  borderBottom: "1px solid #f3f4f6",
+};
+
+const nota = {
+  color: "#666",
+  fontSize: "14px",
+  marginBottom: "25px",
+  textAlign: "center",
+};
+
+const botonVerde = {
+  width: "100%",
+  background: "#16a34a",
+  color: "white",
+  border: "none",
+  padding: "18px",
+  borderRadius: "12px",
+  fontSize: "18px",
+  fontWeight: "bold",
+  cursor: "pointer",
+  boxShadow: "0 4px 12px rgba(22,163,74,0.30)",
 };
