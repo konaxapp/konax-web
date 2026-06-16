@@ -20,6 +20,26 @@ export default function Usuarios() {
     }
   }, [empresaId]);
 
+  function actualizarCantidadUsuarios(listaUsuarios) {
+    const totalUsuarios = listaUsuarios.length;
+
+    localStorage.setItem("cantidadUsuarios", String(totalUsuarios));
+
+    const empresaConfigurada = localStorage.getItem("empresaConfigurada");
+
+    if (empresaConfigurada) {
+      const datosEmpresa = JSON.parse(empresaConfigurada);
+
+      localStorage.setItem(
+        "empresaConfigurada",
+        JSON.stringify({
+          ...datosEmpresa,
+          usuarios: totalUsuarios,
+        })
+      );
+    }
+  }
+
   function cargarEmpresaActiva() {
     const empresaIdGuardado = localStorage.getItem("empresaId");
 
@@ -43,7 +63,10 @@ export default function Usuarios() {
       return;
     }
 
-    setUsuarios(data || []);
+    const listaUsuarios = data || [];
+
+    setUsuarios(listaUsuarios);
+    actualizarCantidadUsuarios(listaUsuarios);
   }
 
   async function agregarUsuario() {
@@ -75,7 +98,8 @@ export default function Usuarios() {
     setNombre("");
     setCorreo("");
     setRol("Administrador");
-    cargarUsuarios();
+
+    await cargarUsuarios();
   }
 
   async function eliminarUsuario(id) {
@@ -94,7 +118,7 @@ export default function Usuarios() {
       return;
     }
 
-    cargarUsuarios();
+    await cargarUsuarios();
   }
 
   function finalizarConfiguracion() {
@@ -106,6 +130,8 @@ export default function Usuarios() {
       alert("Debe agregar al menos un Administrador.");
       return;
     }
+
+    actualizarCantidadUsuarios(usuarios);
 
     window.location.href = "/finalizar";
   }
@@ -158,7 +184,9 @@ export default function Usuarios() {
           Agregar Usuario
         </button>
 
-        <h2 style={{ marginBottom: "20px" }}>Usuarios agregados</h2>
+        <h2 style={{ marginBottom: "20px" }}>
+          Usuarios agregados ({usuarios.length})
+        </h2>
 
         <div style={tablaBox}>
           <table style={tabla}>
