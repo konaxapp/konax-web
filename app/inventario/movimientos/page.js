@@ -30,6 +30,7 @@ export default function MovimientosInventario() {
     codigo: "",
     nombre: "",
     descripcion: "",
+    stock_minimo: "",
   });
 
   const productoSeleccionado = productos.find(
@@ -140,9 +141,7 @@ export default function MovimientosInventario() {
         upsert: false,
       });
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     const { data } = supabase.storage
       .from("inventario")
@@ -211,7 +210,7 @@ export default function MovimientosInventario() {
           precio_venta: Number(precioVenta || 0),
           precio_oferta: Number(precioOferta || 0),
           stock_actual: 0,
-          stock_minimo: 0,
+          stock_minimo: Number(nuevoProducto.stock_minimo || 0),
           imagen_url: imagenUrl,
           estado: "Activo",
         },
@@ -228,10 +227,10 @@ export default function MovimientosInventario() {
       codigo: "",
       nombre: "",
       descripcion: "",
+      stock_minimo: "",
     });
 
     setImagen(null);
-
     await cargarProductos();
     setProductoId(data.id);
 
@@ -358,13 +357,6 @@ export default function MovimientosInventario() {
       <div style={card}>
         <h2>Producto</h2>
 
-        <label>Número de Factura</label>
-        <input
-          value={numeroFactura}
-          onChange={(e) => setNumeroFactura(e.target.value)}
-          style={input}
-        />
-
         <label>Seleccionar Producto Existente</label>
         <select
           value={productoId}
@@ -385,10 +377,7 @@ export default function MovimientosInventario() {
             <input
               value={nuevoProducto.codigo}
               onChange={(e) =>
-                setNuevoProducto({
-                  ...nuevoProducto,
-                  codigo: e.target.value,
-                })
+                setNuevoProducto({ ...nuevoProducto, codigo: e.target.value })
               }
               style={input}
             />
@@ -397,10 +386,7 @@ export default function MovimientosInventario() {
             <input
               value={nuevoProducto.nombre}
               onChange={(e) =>
-                setNuevoProducto({
-                  ...nuevoProducto,
-                  nombre: e.target.value,
-                })
+                setNuevoProducto({ ...nuevoProducto, nombre: e.target.value })
               }
               style={input}
             />
@@ -417,6 +403,29 @@ export default function MovimientosInventario() {
               style={textarea}
             />
 
+            <label>Stock disponible inicial</label>
+            <input
+              type="number"
+              value={cantidad}
+              onChange={(e) => setCantidad(e.target.value)}
+              style={input}
+              placeholder="Ejemplo: 10"
+            />
+
+            <label>Stock mínimo para alerta</label>
+            <input
+              type="number"
+              value={nuevoProducto.stock_minimo}
+              onChange={(e) =>
+                setNuevoProducto({
+                  ...nuevoProducto,
+                  stock_minimo: e.target.value,
+                })
+              }
+              style={input}
+              placeholder="Ejemplo: 5"
+            />
+
             <label>Foto del Producto</label>
             <div style={fotoBox}>
               <input
@@ -426,13 +435,7 @@ export default function MovimientosInventario() {
               />
 
               {imagen && (
-                <p
-                  style={{
-                    marginTop: "10px",
-                    color: "#16a34a",
-                    fontWeight: "bold",
-                  }}
-                >
+                <p style={{ marginTop: "10px", color: "#16a34a", fontWeight: "bold" }}>
                   Imagen seleccionada: {imagen.name}
                 </p>
               )}
@@ -442,18 +445,11 @@ export default function MovimientosInventario() {
 
         {productoSeleccionado && (
           <div style={stockBox}>
-            <p>
-              <strong>Código:</strong> {productoSeleccionado.codigo}
-            </p>
-            <p>
-              <strong>Nombre:</strong> {productoSeleccionado.nombre}
-            </p>
-            <p>
-              <strong>Descripción:</strong> {productoSeleccionado.descripcion}
-            </p>
-            <p>
-              <strong>Stock actual:</strong> {productoSeleccionado.stock_actual}
-            </p>
+            <p><strong>Código:</strong> {productoSeleccionado.codigo}</p>
+            <p><strong>Nombre:</strong> {productoSeleccionado.nombre}</p>
+            <p><strong>Descripción:</strong> {productoSeleccionado.descripcion}</p>
+            <p><strong>Stock actual:</strong> {productoSeleccionado.stock_actual}</p>
+            <p><strong>Stock mínimo:</strong> {productoSeleccionado.stock_minimo || 0}</p>
           </div>
         )}
 
@@ -493,6 +489,13 @@ export default function MovimientosInventario() {
 
         <h2>Datos de Compra</h2>
 
+        <label>Número de Factura</label>
+        <input
+          value={numeroFactura}
+          onChange={(e) => setNumeroFactura(e.target.value)}
+          style={input}
+        />
+
         <label>Tipo de Movimiento</label>
         <select
           value={tipoMovimiento}
@@ -504,13 +507,17 @@ export default function MovimientosInventario() {
           <option value="NOTA_CREDITO">Nota de Crédito</option>
         </select>
 
-        <label>Cantidad</label>
-        <input
-          type="number"
-          value={cantidad}
-          onChange={(e) => setCantidad(e.target.value)}
-          style={input}
-        />
+        {productoId && (
+          <>
+            <label>Cantidad</label>
+            <input
+              type="number"
+              value={cantidad}
+              onChange={(e) => setCantidad(e.target.value)}
+              style={input}
+            />
+          </>
+        )}
 
         <label>Precio de Compra</label>
         <input
@@ -609,9 +616,7 @@ export default function MovimientosInventario() {
         <tbody>
           {historial.length === 0 ? (
             <tr>
-              <td style={td} colSpan="12">
-                No hay movimientos registrados.
-              </td>
+              <td style={td} colSpan="12">No hay movimientos registrados.</td>
             </tr>
           ) : (
             historial.map((m) => (
