@@ -92,6 +92,23 @@ export default function Empresas() {
     localStorage.setItem("categoriaNegocio", categoria);
     localStorage.setItem("tipoNegocio", tipoNegocio);
 
+    localStorage.setItem(
+      "empresaConfigurada",
+      JSON.stringify({
+        id: data.id,
+        nombreEmpresa: data.nombre,
+        telefono: data.telefono,
+        correo: data.correo,
+        direccion: data.direccion,
+        categoria: data.categoria_negocio,
+        tipoNegocio: data.tipo_negocio,
+        tipoRecargo: data.tipo_recargo,
+        plan: "KONAX Gestión",
+        usuarios: 2,
+        estado: data.estado || "Activa",
+      })
+    );
+
     window.location.href = "/planes";
   }
 
