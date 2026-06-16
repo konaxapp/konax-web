@@ -111,7 +111,7 @@ export default function Home() {
           </div>
         </div>
 
-        <button onClick={crearCuenta} style={boton}>
+        <button onClick={crearCuenta} style={boton} disabled={cargando}>
           {cargando ? "Creando cuenta..." : "Crear cuenta"}
         </button>
 
@@ -169,4 +169,59 @@ const campo = {
 
 const inputStyle = {
   width: "100%",
-  padding: "12
+  padding: "12px",
+  marginTop: "5px",
+  borderRadius: "8px",
+  border: "1px solid #ccc",
+  boxSizing: "border-box",
+};
+
+const passwordBox = {
+  position: "relative",
+  marginTop: "5px",
+};
+
+const inputPassword = {
+  width: "100%",
+  padding: "12px",
+  paddingRight: "80px",
+  borderRadius: "8px",
+  border: "1px solid #ccc",
+  boxSizing: "border-box",
+};
+
+const botonMostrar = {
+  position: "absolute",
+  right: "10px",
+  top: "50%",
+  transform: "translateY(-50%)",
+  border: "none",
+  background: "transparent",
+  cursor: "pointer",
+  color: "#2563eb",
+  fontWeight: "600",
+  fontSize: "13px",
+};
+
+const boton = {
+  width: "100%",
+  padding: "14px",
+  background: "#111827",
+  color: "white",
+  border: "none",
+  borderRadius: "8px",
+  fontSize: "16px",
+  cursor: "pointer",
+};
+
+const login = {
+  textAlign: "center",
+  marginTop: "18px",
+  color: "#666",
+};
+
+const link = {
+  color: "#2563eb",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
