@@ -6,11 +6,9 @@ import { supabase } from "../../lib/supabase";
 export default function Inventario() {
   const [productos, setProductos] = useState([]);
   const [busqueda, setBusqueda] = useState("");
-  const [rolUsuario, setRolUsuario] = useState("Vendedor");
 
   useEffect(() => {
     cargarProductos();
-    setRolUsuario(localStorage.getItem("usuarioRol") || "Supervisor");
   }, []);
 
   function obtenerEmpresaId() {
@@ -42,6 +40,14 @@ export default function Inventario() {
     setProductos(data || []);
   }
 
+  const productosAlerta = productos.filter(
+    (p) => Number(p.stock_actual || 0) <= Number(p.stock_minimo || 0)
+  );
+
+  const productosAgotados = productos.filter(
+    (p) => Number(p.stock_actual || 0) <= 0
+  );
+
   const productosFiltrados = productos.filter(
     (p) =>
       p.nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -58,6 +64,24 @@ export default function Inventario() {
     return (((venta - compra) / compra) * 100).toFixed(2);
   }
 
+  function obtenerEstadoStock(producto) {
+    const stock = Number(producto.stock_actual || 0);
+    const minimo = Number(producto.stock_minimo || 0);
+
+    if (stock <= 0) return "AGOTADO";
+    if (stock <= minimo) return "BAJO";
+    return "DISPONIBLE";
+  }
+
+  function obtenerEstiloFila(producto) {
+    const estado = obtenerEstadoStock(producto);
+
+    if (estado === "AGOTADO") return filaAgotado;
+    if (estado === "BAJO") return filaStockBajo;
+
+    return {};
+  }
+
   return (
     <div style={pagina}>
       <div style={header}>
@@ -69,21 +93,31 @@ export default function Inventario() {
         </div>
       </div>
 
+      {productosAlerta.length > 0 && (
+        <div style={alertaStock}>
+          <strong>⚠️ Alerta de inventario</strong>
+          <p style={{ margin: "6px 0 0" }}>
+            Tienes {productosAlerta.length} producto(s) con stock bajo o agotado.
+            {productosAgotados.length > 0 &&
+              ` ${productosAgotados.length} producto(s) están agotados.`}
+          </p>
+        </div>
+      )}
+
       <div style={cardResumen}>
         <div style={resumenItem}>
           <span style={resumenLabel}>Productos</span>
           <strong>{productos.length}</strong>
         </div>
 
-        <div style={resumenItem}>
+        <div style={resumenItemAlerta}>
           <span style={resumenLabel}>Stock bajo</span>
-          <strong>
-            {
-              productos.filter(
-                (p) => Number(p.stock_actual || 0) <= Number(p.stock_minimo || 0)
-              ).length
-            }
-          </strong>
+          <strong>{productosAlerta.length}</strong>
+        </div>
+
+        <div style={resumenItemAgotado}>
+          <span style={resumenLabel}>Agotados</span>
+          <strong>{productosAgotados.length}</strong>
         </div>
 
         <div style={resumenItem}>
@@ -135,71 +169,80 @@ export default function Inventario() {
               </tr>
             )}
 
-            {productosFiltrados.map((producto) => (
-              <tr key={producto.id}>
-                <td style={td}>
-                  {producto.imagen_url ? (
-                    <img
-                      src={producto.imagen_url}
-                      alt={producto.nombre}
-                      style={imagenProducto}
-                    />
-                  ) : (
-                    <div style={sinImagen}>Sin foto</div>
-                  )}
-                </td>
+            {productosFiltrados.map((producto) => {
+              const estadoStock = obtenerEstadoStock(producto);
 
-                <td style={td}>{producto.codigo}</td>
+              return (
+                <tr key={producto.id} style={obtenerEstiloFila(producto)}>
+                  <td style={td}>
+                    {producto.imagen_url ? (
+                      <img
+                        src={producto.imagen_url}
+                        alt={producto.nombre}
+                        style={imagenProducto}
+                      />
+                    ) : (
+                      <div style={sinImagen}>Sin foto</div>
+                    )}
+                  </td>
 
-                <td style={td}>
-                  <strong>{producto.nombre}</strong>
-                </td>
+                  <td style={td}>{producto.codigo}</td>
 
-                <td style={td}>{producto.descripcion || "-"}</td>
+                  <td style={td}>
+                    <strong>{producto.nombre}</strong>
+                  </td>
 
-                <td style={td}>
-                  <strong>{producto.stock_actual || 0}</strong>
-                  <div style={{ fontSize: "12px", color: "#6b7280" }}>
-                    Mín: {producto.stock_minimo || 0}
-                  </div>
-                </td>
+                  <td style={td}>{producto.descripcion || "-"}</td>
 
-                <td style={td}>
-                  ${Number(producto.precio_compra || 0).toFixed(2)}
-                </td>
+                  <td style={td}>
+                    <strong>{producto.stock_actual || 0}</strong>
+                    <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                      Mín: {producto.stock_minimo || 0}
+                    </div>
+                  </td>
 
-                <td style={td}>
-                  ${Number(producto.precio_venta || 0).toFixed(2)}
-                </td>
+                  <td style={td}>
+                    ${Number(producto.precio_compra || 0).toFixed(2)}
+                  </td>
 
-                <td style={td}>
-                  {Number(producto.precio_oferta || 0) > 0 ? (
-                    <span style={oferta}>
-                      ${Number(producto.precio_oferta || 0).toFixed(2)}
-                    </span>
-                  ) : (
-                    "-"
-                  )}
-                </td>
+                  <td style={td}>
+                    ${Number(producto.precio_venta || 0).toFixed(2)}
+                  </td>
 
-                <td style={td}>{calcularGanancia(producto)}%</td>
+                  <td style={td}>
+                    {Number(producto.precio_oferta || 0) > 0 ? (
+                      <span style={oferta}>
+                        ${Number(producto.precio_oferta || 0).toFixed(2)}
+                      </span>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
 
-                <td style={td}>
-                  {Number(producto.stock_actual || 0) <=
-                  Number(producto.stock_minimo || 0) ? (
-                    <span style={stockBajo}>Stock Bajo</span>
-                  ) : (
-                    <span style={disponible}>Disponible</span>
-                  )}
-                </td>
+                  <td style={td}>{calcularGanancia(producto)}%</td>
 
-                <td style={td}>
-                  {producto.ultimo_movimiento_fecha
-                    ? new Date(producto.ultimo_movimiento_fecha).toLocaleDateString()
-                    : "-"}
-                </td>
-              </tr>
-            ))}
+                  <td style={td}>
+                    {estadoStock === "AGOTADO" && (
+                      <span style={agotado}>🔴 Agotado</span>
+                    )}
+
+                    {estadoStock === "BAJO" && (
+                      <span style={stockBajo}>🟡 Stock Bajo</span>
+                    )}
+
+                    {estadoStock === "DISPONIBLE" && (
+                      <span style={disponible}>🟢 Disponible</span>
+                    )}
+                  </td>
+
+                  <td style={td}>
+                    {producto.ultimo_movimiento_fecha
+                      ? new Date(producto.ultimo_movimiento_fecha).toLocaleDateString()
+                      : "-"}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -221,6 +264,15 @@ const header = {
   gap: "15px",
 };
 
+const alertaStock = {
+  background: "#fef2f2",
+  border: "1px solid #fecaca",
+  color: "#991b1b",
+  padding: "15px",
+  borderRadius: "12px",
+  marginBottom: "20px",
+};
+
 const cardResumen = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
@@ -235,6 +287,18 @@ const resumenItem = {
   boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
   display: "grid",
   gap: "6px",
+};
+
+const resumenItemAlerta = {
+  ...resumenItem,
+  background: "#fffbeb",
+  border: "1px solid #fde68a",
+};
+
+const resumenItemAgotado = {
+  ...resumenItem,
+  background: "#fef2f2",
+  border: "1px solid #fecaca",
 };
 
 const resumenLabel = {
@@ -284,6 +348,14 @@ const td = {
   fontSize: "14px",
 };
 
+const filaStockBajo = {
+  background: "#fffbeb",
+};
+
+const filaAgotado = {
+  background: "#fef2f2",
+};
+
 const imagenProducto = {
   width: "55px",
   height: "55px",
@@ -306,13 +378,30 @@ const sinImagen = {
 };
 
 const stockBajo = {
-  color: "#dc2626",
+  background: "#fef3c7",
+  color: "#92400e",
+  padding: "5px 9px",
+  borderRadius: "999px",
   fontWeight: "bold",
+  fontSize: "12px",
+};
+
+const agotado = {
+  background: "#fee2e2",
+  color: "#991b1b",
+  padding: "5px 9px",
+  borderRadius: "999px",
+  fontWeight: "bold",
+  fontSize: "12px",
 };
 
 const disponible = {
-  color: "#16a34a",
+  background: "#dcfce7",
+  color: "#166534",
+  padding: "5px 9px",
+  borderRadius: "999px",
   fontWeight: "bold",
+  fontSize: "12px",
 };
 
 const oferta = {
