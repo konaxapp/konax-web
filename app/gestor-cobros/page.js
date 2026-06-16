@@ -7,7 +7,7 @@ export default function GestorCobros() {
   const [cartera, setCartera] = useState([]);
   const [gestiones, setGestiones] = useState([]);
   const [busqueda, setBusqueda] = useState("");
-  const [filtro, setFiltro] = useState("Todos");
+  const [filtroCartera, setFiltroCartera] = useState("Todos");
 
   useEffect(() => {
     cargarDatos();
@@ -138,25 +138,33 @@ export default function GestorCobros() {
     setGestiones(data || []);
   }
 
-  async function registrarGestionRapida(item, resultado) {
+  function obtenerTipoGestion(resultado) {
+    if (resultado === "WhatsApp enviado") return "WhatsApp";
+    if (resultado === "Promesa de pago") return "Promesa de Pago";
+    if (resultado === "Pago realizado") return "Pago Realizado";
+    return "Llamada";
+  }
+
+  async function registrarGestionRealizada(item, resultado) {
     const empresaId = obtenerEmpresaId();
     const gestor = obtenerGestor();
 
-    if (!empresaId) return;
+    if (!empresaId || !resultado) return;
 
-    if (!resultado) return;
+    const tipoGestion = obtenerTipoGestion(resultado);
 
     const { error } = await supabase.from("bitacora_cliente").insert([
       {
         empresa_id: empresaId,
         cliente_id: item.cliente?.id,
         informacion_comercial_id: item.cuenta?.id,
-        tipo_gestion: "Gestión rápida",
+        tipo_gestion: tipoGestion,
         resultado_gestion: resultado,
-        observacion: `Gestión rápida registrada desde pantalla de gestor: ${resultado}`,
+        observacion: `Gestión registrada desde pantalla de gestor: ${resultado}`,
         usuario: gestor,
         fecha_gestion: new Date().toISOString(),
         origen: "Gestor",
+        estado_promesa: resultado === "Promesa de pago" ? "Activa" : "Sin promesa",
       },
     ]);
 
@@ -165,7 +173,7 @@ export default function GestorCobros() {
       return;
     }
 
-    alert("Gestión registrada.");
+    alert("Gestión registrada correctamente.");
     cargarGestiones();
   }
 
@@ -231,10 +239,10 @@ export default function GestorCobros() {
     const mas30 = item.dias > 30;
     const mas90 = item.dias > 90;
 
-    if (filtro === "Promesas hoy") return coincideBusqueda && promesaHoy;
-    if (filtro === "Promesas vencidas") return coincideBusqueda && promesaVencida;
-    if (filtro === "Más de 30 días") return coincideBusqueda && mas30;
-    if (filtro === "Más de 90 días") return coincideBusqueda && mas90;
+    if (filtroCartera === "Promesas hoy") return coincideBusqueda && promesaHoy;
+    if (filtroCartera === "Promesas vencidas") return coincideBusqueda && promesaVencida;
+    if (filtroCartera === "Más de 30 días") return coincideBusqueda && mas30;
+    if (filtroCartera === "Más de 90 días") return coincideBusqueda && mas90;
 
     return coincideBusqueda;
   });
@@ -256,9 +264,10 @@ export default function GestorCobros() {
     ...new Set(gestionesHoy.map((g) => g.cliente_id).filter(Boolean)),
   ].length;
 
-  const llamadasHoy = gestionesHoy.filter((g) => g.resultado_gestion === "Contestó").length;
+  const llamadasHoy = gestionesHoy.filter((g) => g.tipo_gestion === "Llamada").length;
   const noContestoHoy = gestionesHoy.filter((g) => g.resultado_gestion === "No contestó").length;
-  const noLocalizadoHoy = gestionesHoy.filter((g) => g.resultado_gestion === "No localizado").length;
+  const noLocalizadoHoy = gestionesHoy.filter((g) => g.resultado_gestion === "No localizable").length;
+  const telefonoApagadoHoy = gestionesHoy.filter((g) => g.resultado_gestion === "Número apagado").length;
   const whatsappHoy = gestionesHoy.filter((g) => g.resultado_gestion === "WhatsApp enviado").length;
 
   return (
@@ -266,7 +275,7 @@ export default function GestorCobros() {
       <div style={contenedor}>
         <div style={encabezado}>
           <img src="/konax-logo.png" alt="KONAX" style={logo} />
-          <div>
+          <div style={{ flex: 1 }}>
             <h1 style={titulo}>Mi Cartera de Cobro</h1>
             <p style={subtitulo}>Espacio de trabajo del gestor de cobranza.</p>
           </div>
@@ -277,14 +286,15 @@ export default function GestorCobros() {
         </div>
 
         <div style={kpiGrid}>
-          <KPI titulo="Mis clientes" valor={clientesAsignados} />
+          <KPI titulo="Clientes asignados" valor={clientesAsignados} />
           <KPI titulo="Gestionados hoy" valor={clientesGestionadosHoy} />
           <KPI titulo="Gestiones hoy" valor={gestionesHoy.length} />
           <KPI titulo="Promesas hoy" valor={promesasHoy} />
           <KPI titulo="Promesas vencidas" valor={promesasVencidas} />
-          <KPI titulo="Contestó" valor={llamadasHoy} />
+          <KPI titulo="Llamadas" valor={llamadasHoy} />
           <KPI titulo="No contestó" valor={noContestoHoy} />
-          <KPI titulo="No localizado" valor={noLocalizadoHoy} />
+          <KPI titulo="No localizable" valor={noLocalizadoHoy} />
+          <KPI titulo="Número apagado" valor={telefonoApagadoHoy} />
           <KPI titulo="WhatsApp" valor={whatsappHoy} />
         </div>
 
@@ -292,24 +302,28 @@ export default function GestorCobros() {
           <h2 style={tituloSeccion}>Filtros</h2>
 
           <div style={gridFiltros}>
-            <input
-              placeholder="Buscar por nombre, cédula o cuenta..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              style={inputStyle}
-            />
+            <Campo label="Buscar cliente, cédula o cuenta">
+              <input
+                placeholder="Ejemplo: Ana, 8-888, CTA-001"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                style={inputStyle}
+              />
+            </Campo>
 
-            <select
-              value={filtro}
-              onChange={(e) => setFiltro(e.target.value)}
-              style={inputStyle}
-            >
-              <option>Todos</option>
-              <option>Promesas hoy</option>
-              <option>Promesas vencidas</option>
-              <option>Más de 30 días</option>
-              <option>Más de 90 días</option>
-            </select>
+            <Campo label="Filtrar cartera">
+              <select
+                value={filtroCartera}
+                onChange={(e) => setFiltroCartera(e.target.value)}
+                style={inputStyle}
+              >
+                <option>Todos</option>
+                <option>Promesas hoy</option>
+                <option>Promesas vencidas</option>
+                <option>Más de 30 días</option>
+                <option>Más de 90 días</option>
+              </select>
+            </Campo>
           </div>
         </div>
 
@@ -327,9 +341,9 @@ export default function GestorCobros() {
                   <th style={th}>Cuenta</th>
                   <th style={th}>Saldo</th>
                   <th style={th}>Cuota</th>
-                  <th style={th}>Días</th>
+                  <th style={th}>Días mora</th>
                   <th style={th}>Próxima gestión</th>
-                  <th style={th}>Gestión rápida</th>
+                  <th style={th}>Gestión realizada</th>
                   <th style={th}>Acciones</th>
                 </tr>
               </thead>
@@ -355,22 +369,27 @@ export default function GestorCobros() {
                       <select
                         style={inputMini}
                         defaultValue=""
-                        onChange={(e) => registrarGestionRapida(item, e.target.value)}
+                        onChange={(e) => {
+                          registrarGestionRealizada(item, e.target.value);
+                          e.target.value = "";
+                        }}
                       >
-                        <option value="">Seleccionar</option>
-                        <option>Contestó</option>
-                        <option>No contestó</option>
-                        <option>No localizado</option>
-                        <option>Teléfono apagado</option>
-                        <option>Se mudó</option>
+                        <option value="">Registrar gestión</option>
+                        <option>Llamada realizada</option>
                         <option>WhatsApp enviado</option>
-                        <option>Promesa registrada</option>
+                        <option>No contestó</option>
+                        <option>No localizable</option>
+                        <option>Número apagado</option>
+                        <option>Se conversó con cliente</option>
+                        <option>Promesa de pago</option>
                         <option>Pago realizado</option>
+                        <option>Se mudó</option>
+                        <option>Seguimiento pendiente</option>
                       </select>
                     </td>
                     <td style={td}>
                       <button style={boton} onClick={() => verCliente(item)}>
-                        Ver
+                        Ver cliente
                       </button>
 
                       <button style={whatsappBtn} onClick={() => abrirWhatsApp(item.cliente)}>
@@ -383,15 +402,28 @@ export default function GestorCobros() {
                 {carteraFiltrada.length === 0 && (
                   <tr>
                     <td style={td} colSpan="11">
-                      No hay clientes asignados.
+                      No hay clientes asignados para este gestor.
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+
+          <p style={nota}>
+            La promesa de pago y la observación completa se registran desde Vista Cliente.
+          </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Campo({ label, children }) {
+  return (
+    <div>
+      <label style={labelStyle}>{label}</label>
+      {children}
     </div>
   );
 }
@@ -426,7 +458,7 @@ const encabezado = {
 };
 
 const logo = {
-  width: "110px",
+  width: "105px",
   height: "auto",
 };
 
@@ -444,14 +476,14 @@ const subtitulo = {
 
 const kpiGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))",
   gap: "14px",
   marginBottom: "16px",
 };
 
 const cardKpi = {
   background: "#ffffff",
-  padding: "18px",
+  padding: "17px",
   borderRadius: "16px",
   boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
 };
@@ -459,13 +491,13 @@ const cardKpi = {
 const kpiTitulo = {
   margin: 0,
   color: "#6b7280",
-  fontSize: "14px",
+  fontSize: "13px",
 };
 
 const kpiValor = {
   marginTop: "8px",
   color: "#111827",
-  fontSize: "24px",
+  fontSize: "23px",
 };
 
 const card = {
@@ -483,8 +515,16 @@ const tituloSeccion = {
 
 const gridFiltros = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: "12px",
+  gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
+  gap: "14px",
+};
+
+const labelStyle = {
+  display: "block",
+  marginBottom: "6px",
+  color: "#374151",
+  fontSize: "13px",
+  fontWeight: "bold",
 };
 
 const inputStyle = {
@@ -496,7 +536,7 @@ const inputStyle = {
 };
 
 const inputMini = {
-  width: "170px",
+  width: "190px",
   padding: "8px",
   borderRadius: "8px",
   border: "1px solid #d1d5db",
@@ -543,9 +583,17 @@ const th = {
   color: "#ffffff",
   padding: "12px",
   textAlign: "left",
+  fontSize: "13px",
 };
 
 const td = {
   padding: "11px",
   borderBottom: "1px solid #e5e7eb",
+  fontSize: "13px",
+};
+
+const nota = {
+  marginTop: "12px",
+  color: "#6b7280",
+  fontSize: "13px",
 };
