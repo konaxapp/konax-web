@@ -309,6 +309,62 @@ export default function CobranzaGeneral() {
       }));
   }
 
+  async function guardarCorteHistorico() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    const confirmar = confirm(
+      "¿Deseas guardar el corte histórico de cartera con la información actual?"
+    );
+
+    if (!confirmar) return;
+
+    const fechaCorte = new Date().toISOString().split("T")[0];
+
+    const clientesLegal = carteraFiltrada.filter(
+      (item) => item.estado === "Legal"
+    ).length;
+
+    const clientesAlDia = carteraFiltrada.filter(
+      (item) => item.estado === "Al Día"
+    ).length;
+
+    const { error } = await supabase.from("historial_cartera").upsert(
+      [
+        {
+          empresa_id: empresaId,
+          fecha_corte: fechaCorte,
+
+          cartera_total: totalCartera,
+          total_al_dia: totalAlDia,
+          total_mora: totalMora,
+          total_legal: totalLegal,
+
+          clientes_total: carteraFiltrada.length,
+          clientes_al_dia: clientesAlDia,
+          clientes_mora: clientesMora,
+          clientes_legal: clientesLegal,
+
+          cobrado_hoy: cobradoHoy,
+          cobrado_mes: cobradoMes,
+          cobrado_periodo: cobradoPeriodo,
+
+          gestiones_periodo: gestionesFiltradas.length,
+        },
+      ],
+      {
+        onConflict: "empresa_id,fecha_corte",
+      }
+    );
+
+    if (error) {
+      alert("Error guardando corte histórico: " + error.message);
+      return;
+    }
+
+    alert("Corte histórico guardado correctamente.");
+  }
+
   function limpiarFiltros() {
     setBusqueda("");
     setFiltroEstado("Todos");
@@ -342,9 +398,15 @@ export default function CobranzaGeneral() {
             <p style={periodo}>Periodo del reporte: {textoPeriodo}</p>
           </div>
 
-          <button style={botonNegro} onClick={imprimirReporte}>
-            Imprimir reporte
-          </button>
+          <div style={accionesHeader}>
+            <button style={botonVerde} onClick={guardarCorteHistorico}>
+              Guardar corte histórico
+            </button>
+
+            <button style={botonNegro} onClick={imprimirReporte}>
+              Imprimir reporte
+            </button>
+          </div>
         </div>
 
         <div style={card}>
@@ -568,11 +630,7 @@ function Barra({ label, valor, max }) {
 
 function GraficaBarras({ data, max }) {
   if (!data || data.length === 0) {
-    return (
-      <div style={emptyBox}>
-        Aún no hay cobros registrados.
-      </div>
-    );
+    return <div style={emptyBox}>Aún no hay cobros registrados.</div>;
   }
 
   return (
@@ -611,6 +669,12 @@ const encabezado = {
   alignItems: "center",
   gap: "14px",
   marginBottom: "18px",
+  flexWrap: "wrap",
+};
+
+const accionesHeader = {
+  display: "flex",
+  gap: "10px",
   flexWrap: "wrap",
 };
 
@@ -716,6 +780,16 @@ const inputStyle = {
 
 const botonNegro = {
   background: "#111827",
+  color: "#ffffff",
+  border: "none",
+  padding: "11px 20px",
+  borderRadius: "8px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonVerde = {
+  background: "#16a34a",
   color: "#ffffff",
   border: "none",
   padding: "11px 20px",
