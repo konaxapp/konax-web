@@ -274,7 +274,30 @@ export default function MovimientosInventario() {
     );
 
     const stockAnterior = Number(producto?.stock_actual || 0);
-    const stockNuevo = stockAnterior + Number(cantidad);
+    const cantidadMovimiento = Number(cantidad || 0);
+
+    let stockNuevo = stockAnterior;
+
+    if (tipoMovimiento === "ENTRADA") {
+      stockNuevo = stockAnterior + cantidadMovimiento;
+    }
+
+    if (tipoMovimiento === "TRANSFERENCIA") {
+      stockNuevo = stockAnterior - cantidadMovimiento;
+    }
+
+    if (tipoMovimiento === "NOTA_CREDITO") {
+      stockNuevo = stockAnterior - cantidadMovimiento;
+    }
+
+    if (
+      (tipoMovimiento === "TRANSFERENCIA" || tipoMovimiento === "NOTA_CREDITO") &&
+      cantidadMovimiento > stockAnterior
+    ) {
+      setGuardando(false);
+      alert("No puede salir más cantidad que el stock disponible.");
+      return;
+    }
 
     const fechaFinal = fechaMovimiento
       ? new Date(fechaMovimiento).toISOString()
@@ -309,7 +332,7 @@ export default function MovimientosInventario() {
           producto_id: productoFinalId,
           proveedor_id: proveedorFinalId || null,
           tipo_movimiento: tipoMovimiento,
-          cantidad: Number(cantidad),
+          cantidad: cantidadMovimiento,
           precio_compra: Number(precioCompra || 0),
           numero_factura: numeroFactura,
           total_compra: totalCompra,
