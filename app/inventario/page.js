@@ -67,12 +67,6 @@ export default function Inventario() {
             Consulta general de productos, precios, stock y ofertas.
           </p>
         </div>
-
-        {(rolUsuario === "Administrador" || rolUsuario === "Supervisor") && (
-          <a href="/inventario/movimientos" style={botonVerde}>
-            + Producto / Movimiento
-          </a>
-        )}
       </div>
 
       <div style={cardResumen}>
@@ -112,10 +106,6 @@ export default function Inventario() {
           onChange={(e) => setBusqueda(e.target.value)}
           style={buscador}
         />
-
-        <button onClick={cargarProductos} style={botonAzul}>
-          🔄 Actualizar
-        </button>
       </div>
 
       <div style={tablaBox}>
@@ -133,14 +123,13 @@ export default function Inventario() {
               <th style={th}>Ganancia</th>
               <th style={th}>Estado</th>
               <th style={th}>Último Mov.</th>
-              <th style={th}>Acción</th>
             </tr>
           </thead>
 
           <tbody>
             {productosFiltrados.length === 0 && (
               <tr>
-                <td style={td} colSpan="12">
+                <td style={td} colSpan="11">
                   No hay productos registrados.
                 </td>
               </tr>
@@ -209,15 +198,6 @@ export default function Inventario() {
                     ? new Date(producto.ultimo_movimiento_fecha).toLocaleDateString()
                     : "-"}
                 </td>
-
-                <td style={td}>
-                  {(rolUsuario === "Administrador" ||
-                    rolUsuario === "Supervisor") && (
-                    <a href="/inventario/movimientos" style={linkMovimiento}>
-                      ➕ Movimiento
-                    </a>
-                  )}
-                </td>
               </tr>
             ))}
           </tbody>
@@ -239,16 +219,6 @@ const header = {
   alignItems: "center",
   marginBottom: "20px",
   gap: "15px",
-};
-
-const botonVerde = {
-  background: "#16a34a",
-  color: "#fff",
-  padding: "13px 20px",
-  borderRadius: "10px",
-  textDecoration: "none",
-  fontWeight: "bold",
-  boxShadow: "0 5px 14px rgba(22,163,74,0.25)",
 };
 
 const cardResumen = {
@@ -274,7 +244,7 @@ const resumenLabel = {
 
 const toolbar = {
   display: "flex",
-  justifyContent: "space-between",
+  justifyContent: "flex-start",
   marginBottom: "20px",
   gap: "15px",
 };
@@ -285,16 +255,6 @@ const buscador = {
   maxWidth: "100%",
   border: "1px solid #ccc",
   borderRadius: "8px",
-};
-
-const botonAzul = {
-  background: "#2563eb",
-  color: "#fff",
-  border: "none",
-  padding: "12px 18px",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "bold",
 };
 
 const tablaBox = {
@@ -361,10 +321,4 @@ const oferta = {
   padding: "4px 8px",
   borderRadius: "999px",
   fontWeight: "bold",
-};
-
-const linkMovimiento = {
-  color: "#16a34a",
-  fontWeight: "bold",
-  textDecoration: "none",
 };
