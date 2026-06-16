@@ -16,15 +16,30 @@ export default function ControlCaja() {
     cargarDatos();
   }, [fecha]);
 
+  function obtenerEmpresaId() {
+    const empresaId = localStorage.getItem("empresaId");
+
+    if (!empresaId) {
+      alert("No hay empresa activa. Configure la empresa antes de usar Control de Caja.");
+      return null;
+    }
+
+    return empresaId;
+  }
+
   async function cargarDatos() {
     await cargarMovimientos();
     await cargarCierres();
   }
 
   async function cargarMovimientos() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     const { data, error } = await supabase
       .from("caja")
       .select("*")
+      .eq("empresa_id", empresaId)
       .eq("fecha_pago", fecha)
       .eq("estado", "Procesado");
 
@@ -37,9 +52,13 @@ export default function ControlCaja() {
   }
 
   async function cargarCierres() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     const { data, error } = await supabase
       .from("control_caja")
       .select("*")
+      .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -72,13 +91,17 @@ export default function ControlCaja() {
   const diferencia = Number(efectivoContado || 0) - Number(totalEfectivo || 0);
 
   async function cerrarCaja() {
-    if (efectivoContado === "") {
-      alert("Ingrese el efectivo contado.");
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    if (efectivoContado === "" || Number(efectivoContado) < 0) {
+      alert("Ingrese un efectivo contado válido.");
       return;
     }
 
     const { error } = await supabase.from("control_caja").insert([
       {
+        empresa_id: empresaId,
         fecha,
         total_sistema: totalSistema,
         efectivo_sistema: totalEfectivo,
@@ -115,7 +138,6 @@ export default function ControlCaja() {
         </div>
 
         <h1 style={titulo}>Control de Caja</h1>
-
         <p style={subtitulo}>Arqueo y cierre diario de operaciones.</p>
 
         <div style={card}>
@@ -282,6 +304,14 @@ export default function ControlCaja() {
                     <td style={td}>{item.estado}</td>
                   </tr>
                 ))}
+
+                {cierres.length === 0 && (
+                  <tr>
+                    <td style={td} colSpan="7">
+                      No hay cierres registrados.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
