@@ -163,20 +163,15 @@ export default function Caja() {
     }
 
     setCuentasCliente(data);
-
-    if (resultado.cuenta) {
-      setCuentaSeleccionada(resultado.cuenta);
-    } else {
-      setCuentaSeleccionada(data[0]);
-    }
+    setCuentaSeleccionada(resultado.cuenta || data[0]);
   }
 
   async function guardarMovimiento() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
 
-    if (!monto) {
-      alert("Ingrese el monto.");
+    if (!monto || Number(monto) <= 0) {
+      alert("Ingrese un monto válido mayor a cero.");
       return;
     }
 
@@ -354,7 +349,7 @@ export default function Caja() {
 
             <div style={grid}>
               <input
-                placeholder="Buscar por nombre, cédula o número de cuenta..."
+                placeholder="Buscar cliente por nombre, cédula o número de cuenta..."
                 value={buscarCliente}
                 onChange={(e) => setBuscarCliente(e.target.value)}
                 style={inputStyle}
