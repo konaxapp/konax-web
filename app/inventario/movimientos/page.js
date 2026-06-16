@@ -23,6 +23,9 @@ export default function MovimientosInventario() {
   const [nuevoProveedor, setNuevoProveedor] = useState("");
   const [mostrarNuevoProveedor, setMostrarNuevoProveedor] = useState(false);
 
+  const [imagen, setImagen] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+
   const [nuevoProducto, setNuevoProducto] = useState({
     codigo: "",
     nombre: "",
@@ -37,7 +40,11 @@ export default function MovimientosInventario() {
 
   const porcentajeGanancia =
     Number(precioCompra || 0) > 0 && Number(precioVenta || 0) > 0
-      ? (((Number(precioVenta) - Number(precioCompra)) / Number(precioCompra)) * 100).toFixed(2)
+      ? (
+          ((Number(precioVenta) - Number(precioCompra)) /
+            Number(precioCompra)) *
+          100
+        ).toFixed(2)
       : "0.00";
 
   useEffect(() => {
@@ -119,6 +126,31 @@ export default function MovimientosInventario() {
     setHistorial(data || []);
   }
 
+  async function subirImagen(empresaId, codigoProducto) {
+    if (!imagen) return null;
+
+    const extension = imagen.name.split(".").pop();
+    const codigoLimpio = codigoProducto.replace(/\s/g, "_").toLowerCase();
+    const nombreArchivo = `${empresaId}/${Date.now()}-${codigoLimpio}.${extension}`;
+
+    const { error } = await supabase.storage
+      .from("inventario")
+      .upload(nombreArchivo, imagen, {
+        cacheControl: "3600",
+        upsert: false,
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    const { data } = supabase.storage
+      .from("inventario")
+      .getPublicUrl(nombreArchivo);
+
+    return data.publicUrl;
+  }
+
   async function crearProveedorNuevo() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return null;
@@ -152,12 +184,18 @@ export default function MovimientosInventario() {
     return data.id;
   }
 
-  async function crearProductoNuevo() {
-    const empresaId = obtenerEmpresaId();
-    if (!empresaId) return null;
-
+  async function crearProductoNuevo(empresaId) {
     if (!nuevoProducto.codigo || !nuevoProducto.nombre) {
       alert("Complete código y nombre del producto nuevo.");
+      return null;
+    }
+
+    let imagenUrl = null;
+
+    try {
+      imagenUrl = await subirImagen(empresaId, nuevoProducto.codigo);
+    } catch (error) {
+      alert("Error subiendo imagen: " + error.message);
       return null;
     }
 
@@ -174,6 +212,7 @@ export default function MovimientosInventario() {
           precio_oferta: Number(precioOferta || 0),
           stock_actual: 0,
           stock_minimo: 0,
+          imagen_url: imagenUrl,
           estado: "Activo",
         },
       ])
@@ -191,6 +230,8 @@ export default function MovimientosInventario() {
       descripcion: "",
     });
 
+    setImagen(null);
+
     await cargarProductos();
     setProductoId(data.id);
 
@@ -201,16 +242,9 @@ export default function MovimientosInventario() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
 
-    let productoFinalId = productoId;
-    let proveedorFinalId = proveedorId;
-
-    if (!productoFinalId) {
-      productoFinalId = await crearProductoNuevo();
-      if (!productoFinalId) return;
-    }
-
-    if (!proveedorFinalId && nuevoProveedor) {
-      proveedorFinalId = await crearProveedorNuevo();
+    if (Number(precioOferta || 0) > 0 && Number(precioOferta) >= Number(precioVenta)) {
+      alert("El precio de oferta debe ser menor que el precio de venta.");
+      return;
     }
 
     if (!cantidad || Number(cantidad) <= 0) {
@@ -218,18 +252,30 @@ export default function MovimientosInventario() {
       return;
     }
 
-    const producto = productos.find((p) => String(p.id) === String(productoFinalId));
+    setGuardando(true);
+
+    let productoFinalId = productoId;
+    let proveedorFinalId = proveedorId;
+
+    if (!proveedorFinalId && nuevoProveedor) {
+      proveedorFinalId = await crearProveedorNuevo();
+    }
+
+    if (!productoFinalId) {
+      productoFinalId = await crearProductoNuevo(empresaId);
+
+      if (!productoFinalId) {
+        setGuardando(false);
+        return;
+      }
+    }
+
+    const producto = productos.find(
+      (p) => String(p.id) === String(productoFinalId)
+    );
 
     const stockAnterior = Number(producto?.stock_actual || 0);
-    let stockNuevo = stockAnterior;
-
-    if (
-      tipoMovimiento === "ENTRADA" ||
-      tipoMovimiento === "TRANSFERENCIA" ||
-      tipoMovimiento === "NOTA_CREDITO"
-    ) {
-      stockNuevo = stockAnterior + Number(cantidad);
-    }
+    const stockNuevo = stockAnterior + Number(cantidad);
 
     const fechaFinal = fechaMovimiento
       ? new Date(fechaMovimiento).toISOString()
@@ -251,6 +297,7 @@ export default function MovimientosInventario() {
       .eq("empresa_id", empresaId);
 
     if (errorProducto) {
+      setGuardando(false);
       alert("Error actualizando producto: " + errorProducto.message);
       return;
     }
@@ -279,11 +326,14 @@ export default function MovimientosInventario() {
       ]);
 
     if (errorMovimiento) {
+      setGuardando(false);
       alert("Error guardando movimiento: " + errorMovimiento.message);
       return;
     }
 
-    alert("Movimiento guardado correctamente.");
+    setGuardando(false);
+
+    alert("Producto / movimiento guardado correctamente.");
 
     setProductoId("");
     setProveedorId("");
@@ -295,6 +345,7 @@ export default function MovimientosInventario() {
     setPrecioOferta("");
     setObservacion("");
     setFechaMovimiento("");
+    setImagen(null);
 
     cargarProductos();
     cargarHistorial();
@@ -327,7 +378,10 @@ export default function MovimientosInventario() {
             <input
               value={nuevoProducto.codigo}
               onChange={(e) =>
-                setNuevoProducto({ ...nuevoProducto, codigo: e.target.value })
+                setNuevoProducto({
+                  ...nuevoProducto,
+                  codigo: e.target.value,
+                })
               }
               style={input}
             />
@@ -336,7 +390,10 @@ export default function MovimientosInventario() {
             <input
               value={nuevoProducto.nombre}
               onChange={(e) =>
-                setNuevoProducto({ ...nuevoProducto, nombre: e.target.value })
+                setNuevoProducto({
+                  ...nuevoProducto,
+                  nombre: e.target.value,
+                })
               }
               style={input}
             />
@@ -345,19 +402,51 @@ export default function MovimientosInventario() {
             <textarea
               value={nuevoProducto.descripcion}
               onChange={(e) =>
-                setNuevoProducto({ ...nuevoProducto, descripcion: e.target.value })
+                setNuevoProducto({
+                  ...nuevoProducto,
+                  descripcion: e.target.value,
+                })
               }
               style={textarea}
             />
+
+            <label>Foto del Producto</label>
+            <div style={fotoBox}>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setImagen(e.target.files[0])}
+              />
+
+              {imagen && (
+                <p
+                  style={{
+                    marginTop: "10px",
+                    color: "#16a34a",
+                    fontWeight: "bold",
+                  }}
+                >
+                  Imagen seleccionada: {imagen.name}
+                </p>
+              )}
+            </div>
           </>
         )}
 
         {productoSeleccionado && (
           <div style={stockBox}>
-            <p><strong>Código:</strong> {productoSeleccionado.codigo}</p>
-            <p><strong>Nombre:</strong> {productoSeleccionado.nombre}</p>
-            <p><strong>Descripción:</strong> {productoSeleccionado.descripcion}</p>
-            <p><strong>Stock actual:</strong> {productoSeleccionado.stock_actual}</p>
+            <p>
+              <strong>Código:</strong> {productoSeleccionado.codigo}
+            </p>
+            <p>
+              <strong>Nombre:</strong> {productoSeleccionado.nombre}
+            </p>
+            <p>
+              <strong>Descripción:</strong> {productoSeleccionado.descripcion}
+            </p>
+            <p>
+              <strong>Stock actual:</strong> {productoSeleccionado.stock_actual}
+            </p>
           </div>
         )}
 
@@ -432,7 +521,7 @@ export default function MovimientosInventario() {
         />
 
         <label>Total Compra</label>
-        <input value={totalCompra.toFixed(2)} disabled style={input} />
+        <input value={`$${totalCompra.toFixed(2)}`} disabled style={input} />
 
         <h2>Precio de Venta</h2>
 
@@ -477,8 +566,23 @@ export default function MovimientosInventario() {
           style={input}
         />
 
-        <button onClick={guardarMovimiento} style={boton}>
-          Guardar Movimiento
+        <button
+          onClick={guardarMovimiento}
+          disabled={guardando}
+          style={{
+            width: "100%",
+            background: guardando ? "#9ca3af" : "#16a34a",
+            color: "#fff",
+            border: "none",
+            padding: "16px",
+            borderRadius: "12px",
+            cursor: guardando ? "not-allowed" : "pointer",
+            fontSize: "17px",
+            fontWeight: "bold",
+            boxShadow: "0 6px 14px rgba(22,163,74,0.25)",
+          }}
+        >
+          {guardando ? "Guardando producto..." : "💾 Guardar Producto / Movimiento"}
         </button>
       </div>
 
@@ -541,17 +645,18 @@ const pagina = {
 
 const card = {
   background: "#fff",
-  padding: "20px",
-  borderRadius: "10px",
+  padding: "25px",
+  borderRadius: "14px",
   marginBottom: "30px",
+  boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
 };
 
 const input = {
   width: "100%",
-  padding: "10px",
+  padding: "11px",
   marginBottom: "15px",
   border: "1px solid #ddd",
-  borderRadius: "6px",
+  borderRadius: "8px",
   boxSizing: "border-box",
 };
 
@@ -560,20 +665,20 @@ const textarea = {
   height: "80px",
 };
 
+const fotoBox = {
+  border: "2px dashed #d1d5db",
+  borderRadius: "12px",
+  padding: "20px",
+  textAlign: "center",
+  marginBottom: "15px",
+  background: "#f9fafb",
+};
+
 const stockBox = {
   background: "#f3f4f6",
   padding: "12px",
   borderRadius: "8px",
   marginBottom: "15px",
-};
-
-const boton = {
-  background: "#16a34a",
-  color: "#fff",
-  border: "none",
-  padding: "12px 20px",
-  borderRadius: "8px",
-  cursor: "pointer",
 };
 
 const botonSecundario = {
