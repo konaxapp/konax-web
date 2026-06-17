@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
 export default function MovimientosInventario() {
+  const router = useRouter();
+
   const [productos, setProductos] = useState([]);
   const [proveedores, setProveedores] = useState([]);
   const [historial, setHistorial] = useState([]);
@@ -223,17 +226,6 @@ export default function MovimientosInventario() {
       return null;
     }
 
-    setNuevoProducto({
-      codigo: "",
-      nombre: "",
-      descripcion: "",
-      stock_minimo: "",
-    });
-
-    setImagen(null);
-    await cargarProductos();
-    setProductoId(data.id);
-
     return data.id;
   }
 
@@ -357,20 +349,7 @@ export default function MovimientosInventario() {
 
     alert("Producto / movimiento guardado correctamente.");
 
-    setProductoId("");
-    setProveedorId("");
-    setTipoMovimiento("ENTRADA");
-    setCantidad("");
-    setPrecioCompra("");
-    setNumeroFactura("");
-    setPrecioVenta("");
-    setPrecioOferta("");
-    setObservacion("");
-    setFechaMovimiento("");
-    setImagen(null);
-
-    cargarProductos();
-    cargarHistorial();
+    router.push("/inventario");
   }
 
   return (
@@ -615,52 +594,6 @@ export default function MovimientosInventario() {
           {guardando ? "Guardando producto..." : "💾 Guardar Producto / Movimiento"}
         </button>
       </div>
-
-      <h2>Historial</h2>
-
-      <table style={tabla}>
-        <thead>
-          <tr>
-            <th style={th}>Tipo</th>
-            <th style={th}>Cantidad</th>
-            <th style={th}>Precio Compra</th>
-            <th style={th}>Factura</th>
-            <th style={th}>Total Compra</th>
-            <th style={th}>Precio Venta</th>
-            <th style={th}>Oferta</th>
-            <th style={th}>Ganancia</th>
-            <th style={th}>Antes</th>
-            <th style={th}>Después</th>
-            <th style={th}>Usuario</th>
-            <th style={th}>Fecha</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {historial.length === 0 ? (
-            <tr>
-              <td style={td} colSpan="12">No hay movimientos registrados.</td>
-            </tr>
-          ) : (
-            historial.map((m) => (
-              <tr key={m.id}>
-                <td style={td}>{m.tipo_movimiento}</td>
-                <td style={td}>{m.cantidad}</td>
-                <td style={td}>${Number(m.precio_compra || 0).toFixed(2)}</td>
-                <td style={td}>{m.numero_factura}</td>
-                <td style={td}>${Number(m.total_compra || 0).toFixed(2)}</td>
-                <td style={td}>${Number(m.precio_venta || 0).toFixed(2)}</td>
-                <td style={td}>${Number(m.precio_oferta || 0).toFixed(2)}</td>
-                <td style={td}>{m.porcentaje_ganancia || 0}%</td>
-                <td style={td}>{m.stock_anterior}</td>
-                <td style={td}>{m.stock_nuevo}</td>
-                <td style={td}>{m.usuario}</td>
-                <td style={td}>{new Date(m.created_at).toLocaleString()}</td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
     </div>
   );
 }
@@ -717,21 +650,4 @@ const botonSecundario = {
   borderRadius: "8px",
   cursor: "pointer",
   marginBottom: "15px",
-};
-
-const tabla = {
-  width: "100%",
-  borderCollapse: "collapse",
-  fontSize: "14px",
-};
-
-const th = {
-  borderBottom: "1px solid #ddd",
-  padding: "10px",
-  textAlign: "left",
-};
-
-const td = {
-  borderBottom: "1px solid #eee",
-  padding: "10px",
 };
