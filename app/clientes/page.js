@@ -30,6 +30,17 @@ export default function Clientes() {
   const [responsableCobro, setResponsableCobro] = useState("");
   const [documentos, setDocumentos] = useState([]);
 
+  function obtenerEmpresaId() {
+    const empresaId = localStorage.getItem("empresaId");
+
+    if (!empresaId) {
+      alert("No hay empresa activa. Configure la empresa antes de guardar clientes.");
+      return null;
+    }
+
+    return empresaId;
+  }
+
   function generarNumeroCuenta() {
     return "KX-" + Date.now();
   }
@@ -60,12 +71,12 @@ export default function Clientes() {
     setDocumentos([]);
   }
 
-  async function subirDocumentos(clienteId) {
+  async function subirDocumentos(clienteId, empresaId) {
     if (documentos.length === 0) return;
 
     for (const archivo of documentos) {
       const nombreLimpio = archivo.name.replace(/\s+/g, "_");
-      const ruta = `clientes/${clienteId}/${Date.now()}-${nombreLimpio}`;
+      const ruta = `empresas/${empresaId}/clientes/${clienteId}/${Date.now()}-${nombreLimpio}`;
 
       const { error } = await supabase.storage
         .from("documentos-clientes")
@@ -76,6 +87,9 @@ export default function Clientes() {
   }
 
   async function guardarCliente() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     if (!cedula || !nombre || !telefono) {
       alert("Complete cédula, nombre y teléfono.");
       return;
@@ -88,11 +102,17 @@ export default function Clientes() {
 
     let clienteCreado = null;
 
-    const { data: clienteExistente } = await supabase
+    const { data: clienteExistente, error: errorBuscarCliente } = await supabase
       .from("clientes")
       .select("*")
+      .eq("empresa_id", empresaId)
       .eq("cedula", cedula)
       .maybeSingle();
+
+    if (errorBuscarCliente) {
+      alert("Error buscando cliente: " + errorBuscarCliente.message);
+      return;
+    }
 
     if (clienteExistente) {
       clienteCreado = clienteExistente;
@@ -101,6 +121,7 @@ export default function Clientes() {
         .from("clientes")
         .insert([
           {
+            empresa_id: empresaId,
             cedula,
             nombre,
             telefono,
@@ -126,18 +147,23 @@ export default function Clientes() {
 
     const numeroCuenta = generarNumeroCuenta();
 
+    const montoTotalNumero = Number(montoTotal || 0);
+    const saldoActualNumero =
+      saldoActual !== "" ? Number(saldoActual || 0) : montoTotalNumero;
+
     const { data: comercialCreado, error: errorComercial } = await supabase
       .from("informacion_comercial")
       .insert([
         {
+          empresa_id: empresaId,
           cliente_id: clienteCreado.id,
           numero_cuenta: numeroCuenta,
           tipo_producto: tipoProducto,
           descripcion,
           modalidad,
-          monto_total: montoTotal || 0,
-          saldo_actual: saldoActual || montoTotal || 0,
-          cuota: cuota || 0,
+          monto_total: montoTotalNumero,
+          saldo_actual: saldoActualNumero,
+          cuota: Number(cuota || 0),
           fecha_inicio: fechaInicio || null,
           fecha_vencimiento: fechaVencimiento || null,
           responsable: responsableCobro || null,
@@ -161,11 +187,12 @@ export default function Clientes() {
         .from("informacion_cobranza")
         .insert([
           {
+            empresa_id: empresaId,
             cliente_id: clienteCreado.id,
             informacion_comercial_id: comercialCreado.id,
             estado_cobranza: estadoCobranza || null,
             fecha_ultimo_pago: fechaUltimoPago || null,
-            monto_ultimo_pago: montoUltimoPago || 0,
+            monto_ultimo_pago: Number(montoUltimoPago || 0),
             responsable_cobro: responsableCobro || null,
           },
         ]);
@@ -177,7 +204,7 @@ export default function Clientes() {
     }
 
     try {
-      await subirDocumentos(clienteCreado.id);
+      await subirDocumentos(clienteCreado.id, empresaId);
     } catch (error) {
       alert("Cuenta creada, pero hubo error subiendo documentos: " + error.message);
       return;
