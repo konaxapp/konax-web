@@ -200,4 +200,10 @@ export default function Suscripciones() {
         return clienteActualizado;
       }
 
-      if (String(clienteExistente.empresa_id) !== String(empresa
+     if (String(clienteExistente.empresa_id) !== String(empresaId)) {
+        alert("Esta cédula ya existe asociada a otra empresa.");
+        return null;
+      }
+
+      return clienteExistente;
+                                                      
