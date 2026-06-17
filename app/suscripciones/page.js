@@ -245,4 +245,4 @@ export default function Suscripciones() {
 
     const numeroCuenta = generarNumeroCuenta();
     const precio = Number(formulario.precio || 0);
-    const fechaVencimiento = calcular
+    const fechaVencimiento = calcularVencimiento();
