@@ -263,7 +263,7 @@ export default function Recargos() {
     }
 
     if (mostrarAlerta) {
-      alert("Recargo aplicado correctamente.");
+      alert("Recargo individual aplicado correctamente.");
       cargarCuentasEnMora();
       cargarHistorial();
     }
@@ -304,7 +304,10 @@ export default function Recargos() {
 
         <p>
           <strong>Empresa activa:</strong>{" "}
-          {empresa?.nombre || empresa?.nombre_empresa || empresa?.razon_social || "Empresa no identificada"}
+          {empresa?.nombre ||
+            empresa?.nombre_empresa ||
+            empresa?.razon_social ||
+            "Empresa no identificada"}
         </p>
 
         <p style={{ color: "#6b7280", marginBottom: 0 }}>
@@ -406,8 +409,8 @@ export default function Recargos() {
               <th style={th}>Cuota</th>
               <th style={th}>Vencimiento</th>
               <th style={th}>Días atraso</th>
-              <th style={th}>Recargo</th>
-              <th style={th}>Acción</th>
+              <th style={th}>Recargo calculado</th>
+              <th style={th}>Recargo Individual</th>
             </tr>
           </thead>
 
@@ -441,7 +444,7 @@ export default function Recargos() {
                         onClick={() => aplicarRecargoCuenta(cuenta)}
                         style={botonPequeno}
                       >
-                        Aplicar
+                        Aplicar recargo
                       </button>
                     </td>
                   </tr>
@@ -587,6 +590,7 @@ const botonPequeno = {
   padding: "8px 12px",
   borderRadius: "7px",
   cursor: "pointer",
+  fontWeight: "bold",
 };
 
 const tabla = {
