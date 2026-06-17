@@ -276,7 +276,7 @@ export default function Suscripciones() {
       return;
     }
 
-    const { data: suscripcionCreada, error: errorSuscripcion } = await supabase
+    const { error: errorSuscripcion } = await supabase
       .from("suscripciones")
       .insert([
         {
@@ -296,9 +296,7 @@ export default function Suscripciones() {
           periodicidad: formulario.periodicidad,
           estado: formulario.estado,
         },
-      ])
-      .select()
-      .single();
+      ]);
 
     if (errorSuscripcion) {
       setCargando(false);
@@ -443,7 +441,12 @@ export default function Suscripciones() {
   return (
     <div style={pagina}>
       <div style={contenedor}>
+        <div style={logoBox}>
+          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+        </div>
+
         <h1 style={titulo}>Suscripciones y Membresías</h1>
+
         <p style={subtitulo}>
           Control de membresías, vencimientos, renovaciones y suspensiones.
         </p>
@@ -726,7 +729,8 @@ export default function Suscripciones() {
 const pagina = {
   minHeight: "100vh",
   background: "#f3f4f6",
-  padding: "20px",
+  padding: "40px",
+  fontFamily: "Arial, sans-serif",
 };
 
 const contenedor = {
@@ -734,19 +738,32 @@ const contenedor = {
   margin: "0 auto",
 };
 
+const logoBox = {
+  textAlign: "center",
+  marginBottom: "25px",
+};
+
+const logo = {
+  width: "260px",
+  maxWidth: "100%",
+  height: "auto",
+};
+
 const titulo = {
-  fontSize: "32px",
-  marginBottom: "5px",
+  fontSize: "40px",
+  marginBottom: "10px",
+  color: "#111827",
 };
 
 const subtitulo = {
   color: "#6b7280",
-  marginBottom: "20px",
+  fontSize: "18px",
+  marginBottom: "30px",
 };
 
 const card = {
   background: "#ffffff",
-  padding: "20px",
+  padding: "25px",
   borderRadius: "16px",
   marginBottom: "20px",
   boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
