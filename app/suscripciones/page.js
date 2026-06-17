@@ -40,7 +40,6 @@ export default function Suscripciones() {
 
   function convertirFechaLocal(fechaTexto) {
     if (!fechaTexto) return null;
-
     const [anio, mes, dia] = fechaTexto.split("-").map(Number);
     return new Date(anio, mes - 1, dia);
   }
@@ -94,7 +93,6 @@ export default function Suscripciones() {
     vence.setHours(0, 0, 0, 0);
 
     const diferencia = vence - hoy;
-
     return Math.ceil(diferencia / (1000 * 60 * 60 * 24));
   }
 
@@ -202,46 +200,4 @@ export default function Suscripciones() {
         return clienteActualizado;
       }
 
-      if (String(clienteExistente.empresa_id) !== String(empresaId)) {
-        alert("Esta cédula ya existe asociada a otra empresa.");
-        return null;
-      }
-
-      return clienteExistente;
-    }
-
-    const { data: clienteNuevo, error: errorCrear } = await supabase
-      .from("clientes")
-      .insert([
-        {
-          empresa_id: empresaId,
-          cedula: formulario.cedula,
-          nombre: formulario.cliente,
-          telefono: formulario.telefono,
-          correo: formulario.correo,
-          estado: "Activo",
-        },
-      ])
-      .select()
-      .single();
-
-    if (errorCrear) {
-      alert("Error creando cliente: " + errorCrear.message);
-      return null;
-    }
-
-    return clienteNuevo;
-  }
-
-  async function crearSuscripcion() {
-    const empresaId = obtenerEmpresaId();
-    if (!empresaId) return;
-
-    if (
-      !formulario.cedula ||
-      !formulario.cliente ||
-      !formulario.plan ||
-      !formulario.precio ||
-      !formulario.fechaInicio
-    ) {
-      alert("Complete cédula, cliente, plan, precio y fecha
+      if (String(clienteExistente.empresa_id) !== String(empresa
