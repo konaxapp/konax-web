@@ -1,21 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function Suscripciones() {
+  const [suscripciones, setSuscripciones] = useState([]);
+  const [pagos, setPagos] = useState([]);
+  const [cargando, setCargando] = useState(false);
+
   const [formulario, setFormulario] = useState({
     cedula: "",
     cliente: "",
     telefono: "",
     correo: "",
     plan: "",
-    tipoServicio: "Membresía",
     descripcion: "",
     precio: "",
     vendedor: "",
     fechaInicio: "",
     periodicidad: "Mensual",
+    formaPago: "Efectivo",
     estado: "Activo",
   });
 
@@ -31,15 +35,15 @@ export default function Suscripciones() {
   }
 
   function generarNumeroCuenta() {
-    return "SUB-" + Date.now();
+    return "MEM-" + Date.now();
   }
 
-  function calcularVencimiento() {
-    if (!formulario.fechaInicio) return "";
+  function calcularVencimientoDesde(fechaBase, periodicidad) {
+    if (!fechaBase) return "";
 
-    const fecha = new Date(formulario.fechaInicio);
+    const fecha = new Date(fechaBase);
 
-    switch (formulario.periodicidad) {
+    switch (periodicidad) {
       case "Mensual":
         fecha.setMonth(fecha.getMonth() + 1);
         break;
@@ -59,6 +63,39 @@ export default function Suscripciones() {
     return fecha.toISOString().split("T")[0];
   }
 
+  function calcularVencimiento() {
+    return calcularVencimientoDesde(
+      formulario.fechaInicio,
+      formulario.periodicidad
+    );
+  }
+
+  function calcularDiasParaVencer(fechaVencimiento) {
+    if (!fechaVencimiento) return 0;
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const vence = new Date(fechaVencimiento);
+    vence.setHours(0, 0, 0, 0);
+
+    const diferencia = vence - hoy;
+
+    return Math.ceil(diferencia / (1000 * 60 * 60 * 24));
+  }
+
+  function obtenerEstadoVisual(item) {
+    if (item.estado === "Suspendido") return "Suspendido";
+    if (item.estado === "Cancelado") return "Cancelado";
+
+    const dias = calcularDiasParaVencer(item.fecha_vencimiento);
+
+    if (dias < 0) return "Vencida";
+    if (dias <= 3) return "Por vencer";
+
+    return item.estado || "Activo";
+  }
+
   function limpiarFormulario() {
     setFormulario({
       cedula: "",
@@ -66,14 +103,53 @@ export default function Suscripciones() {
       telefono: "",
       correo: "",
       plan: "",
-      tipoServicio: "Membresía",
       descripcion: "",
       precio: "",
       vendedor: "",
       fechaInicio: "",
       periodicidad: "Mensual",
+      formaPago: "Efectivo",
       estado: "Activo",
     });
+  }
+
+  useEffect(() => {
+    cargarSuscripciones();
+    cargarPagos();
+  }, []);
+
+  async function cargarSuscripciones() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    const { data, error } = await supabase
+      .from("suscripciones")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .order("fecha_vencimiento", { ascending: true });
+
+    if (error) {
+      alert("Error cargando suscripciones: " + error.message);
+      return;
+    }
+
+    setSuscripciones(data || []);
+  }
+
+  async function cargarPagos() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    const { data, error } = await supabase
+      .from("caja")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (!error) {
+      setPagos(data || []);
+    }
   }
 
   async function obtenerOCrearCliente(empresaId) {
@@ -90,7 +166,7 @@ export default function Suscripciones() {
 
     if (clienteExistente) {
       if (!clienteExistente.empresa_id) {
-        const { data: clienteActualizado, error: errorActualizarCliente } =
+        const { data: clienteActualizado, error: errorActualizar } =
           await supabase
             .from("clientes")
             .update({
@@ -104,11 +180,8 @@ export default function Suscripciones() {
             .select()
             .single();
 
-        if (errorActualizarCliente) {
-          alert(
-            "Error actualizando empresa del cliente: " +
-              errorActualizarCliente.message
-          );
+        if (errorActualizar) {
+          alert("Error actualizando cliente: " + errorActualizar.message);
           return null;
         }
 
@@ -116,16 +189,14 @@ export default function Suscripciones() {
       }
 
       if (String(clienteExistente.empresa_id) !== String(empresaId)) {
-        alert(
-          "Esta cédula ya existe asociada a otra empresa. Verifique el cliente."
-        );
+        alert("Esta cédula ya existe asociada a otra empresa.");
         return null;
       }
 
       return clienteExistente;
     }
 
-    const { data: clienteNuevo, error: errorCrearCliente } = await supabase
+    const { data: clienteNuevo, error: errorCrear } = await supabase
       .from("clientes")
       .insert([
         {
@@ -140,15 +211,15 @@ export default function Suscripciones() {
       .select()
       .single();
 
-    if (errorCrearCliente) {
-      alert("Error creando cliente: " + errorCrearCliente.message);
+    if (errorCrear) {
+      alert("Error creando cliente: " + errorCrear.message);
       return null;
     }
 
     return clienteNuevo;
   }
 
-  async function guardar() {
+  async function crearSuscripcion() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
 
@@ -156,317 +227,22 @@ export default function Suscripciones() {
       !formulario.cedula ||
       !formulario.cliente ||
       !formulario.plan ||
-      !formulario.precio
+      !formulario.precio ||
+      !formulario.fechaInicio
     ) {
-      alert("Complete cédula, cliente, plan y precio.");
+      alert("Complete cédula, cliente, plan, precio y fecha de inicio.");
       return;
     }
+
+    setCargando(true);
 
     const clienteCreado = await obtenerOCrearCliente(empresaId);
 
-    if (!clienteCreado) return;
+    if (!clienteCreado) {
+      setCargando(false);
+      return;
+    }
 
     const numeroCuenta = generarNumeroCuenta();
-    const fechaVencimiento = calcularVencimiento();
     const precio = Number(formulario.precio || 0);
-
-    const { data: comercialCreado, error: errorComercial } = await supabase
-      .from("informacion_comercial")
-      .insert([
-        {
-          empresa_id: empresaId,
-          cliente_id: clienteCreado.id,
-          numero_cuenta: numeroCuenta,
-          tipo_producto: formulario.tipoServicio,
-          descripcion: `${formulario.plan} - ${formulario.descripcion}`,
-          modalidad: formulario.periodicidad,
-          monto_total: precio,
-          saldo_actual: precio,
-          cuota: precio,
-          fecha_inicio: formulario.fechaInicio || null,
-          fecha_vencimiento: fechaVencimiento || null,
-          responsable: formulario.vendedor || null,
-          estado: formulario.estado,
-          observacion: formulario.descripcion,
-        },
-      ])
-      .select()
-      .single();
-
-    if (errorComercial) {
-      alert("Error creando información comercial: " + errorComercial.message);
-      return;
-    }
-
-    const { error: errorSuscripcion } = await supabase
-      .from("suscripciones")
-      .insert([
-        {
-          empresa_id: empresaId,
-          cliente_id: clienteCreado.id,
-          informacion_comercial_id: comercialCreado.id,
-          cliente: formulario.cliente,
-          cedula: formulario.cedula,
-          plan: formulario.plan,
-          tipo_servicio: formulario.tipoServicio,
-          descripcion: formulario.descripcion,
-          precio,
-          vendedor: formulario.vendedor,
-          fecha_inicio: formulario.fechaInicio || null,
-          fecha_vencimiento: fechaVencimiento || null,
-          periodicidad: formulario.periodicidad,
-          estado: formulario.estado,
-        },
-      ]);
-
-    if (errorSuscripcion) {
-      alert("Error creando suscripción: " + errorSuscripcion.message);
-      return;
-    }
-
-    const { error: errorCobranza } = await supabase
-      .from("informacion_cobranza")
-      .insert([
-        {
-          empresa_id: empresaId,
-          cliente_id: clienteCreado.id,
-          informacion_comercial_id: comercialCreado.id,
-          estado_cobranza:
-            formulario.estado === "Activo" ? "Al Día" : formulario.estado,
-          responsable_cobro: formulario.vendedor || null,
-        },
-      ]);
-
-    if (errorCobranza) {
-      alert(
-        "Suscripción creada, pero hubo error creando cobranza: " +
-          errorCobranza.message
-      );
-      return;
-    }
-
-    alert("Suscripción creada correctamente. Cuenta: " + numeroCuenta);
-    limpiarFormulario();
-  }
-
-  return (
-    <div style={pagina}>
-      <div style={contenedor}>
-        <h1 style={titulo}>Suscripciones y Membresías</h1>
-
-        <div style={card}>
-          <h2>Crear Suscripción</h2>
-
-          <div style={grid}>
-            <input
-              placeholder="Cédula / Identificación"
-              value={formulario.cedula}
-              onChange={(e) =>
-                setFormulario({ ...formulario, cedula: e.target.value })
-              }
-              style={input}
-            />
-
-            <input
-              placeholder="Cliente"
-              value={formulario.cliente}
-              onChange={(e) =>
-                setFormulario({ ...formulario, cliente: e.target.value })
-              }
-              style={input}
-            />
-
-            <input
-              placeholder="Teléfono"
-              value={formulario.telefono}
-              onChange={(e) =>
-                setFormulario({ ...formulario, telefono: e.target.value })
-              }
-              style={input}
-            />
-
-            <input
-              placeholder="Correo"
-              value={formulario.correo}
-              onChange={(e) =>
-                setFormulario({ ...formulario, correo: e.target.value })
-              }
-              style={input}
-            />
-
-            <select
-              value={formulario.tipoServicio}
-              onChange={(e) =>
-                setFormulario({
-                  ...formulario,
-                  tipoServicio: e.target.value,
-                })
-              }
-              style={input}
-            >
-              <option>Gimnasio</option>
-              <option>Academia</option>
-              <option>Escuela</option>
-              <option>Membresía</option>
-              <option>Software SaaS</option>
-              <option>Servicio Recurrente</option>
-            </select>
-
-            <input
-              placeholder="Plan"
-              value={formulario.plan}
-              onChange={(e) =>
-                setFormulario({ ...formulario, plan: e.target.value })
-              }
-              style={input}
-            />
-
-            <input
-              placeholder="Precio"
-              type="number"
-              value={formulario.precio}
-              onChange={(e) =>
-                setFormulario({ ...formulario, precio: e.target.value })
-              }
-              style={input}
-            />
-
-            <input
-              placeholder="Vendedor / Responsable"
-              value={formulario.vendedor}
-              onChange={(e) =>
-                setFormulario({ ...formulario, vendedor: e.target.value })
-              }
-              style={input}
-            />
-
-            <input
-              type="date"
-              value={formulario.fechaInicio}
-              onChange={(e) =>
-                setFormulario({
-                  ...formulario,
-                  fechaInicio: e.target.value,
-                })
-              }
-              style={input}
-            />
-
-            <select
-              value={formulario.periodicidad}
-              onChange={(e) =>
-                setFormulario({
-                  ...formulario,
-                  periodicidad: e.target.value,
-                })
-              }
-              style={input}
-            >
-              <option>Mensual</option>
-              <option>Trimestral</option>
-              <option>Semestral</option>
-              <option>Anual</option>
-            </select>
-
-            <input
-              value={calcularVencimiento()}
-              readOnly
-              placeholder="Fecha vencimiento"
-              style={{
-                ...input,
-                background: "#f3f4f6",
-                fontWeight: "bold",
-              }}
-            />
-
-            <select
-              value={formulario.estado}
-              onChange={(e) =>
-                setFormulario({ ...formulario, estado: e.target.value })
-              }
-              style={input}
-            >
-              <option>Activo</option>
-              <option>Pendiente</option>
-              <option>Suspendido</option>
-              <option>Cancelado</option>
-            </select>
-          </div>
-
-          <textarea
-            placeholder="Descripción"
-            value={formulario.descripcion}
-            onChange={(e) =>
-              setFormulario({
-                ...formulario,
-                descripcion: e.target.value,
-              })
-            }
-            style={textarea}
-          />
-
-          <button onClick={guardar} style={boton}>
-            Crear Suscripción
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const pagina = {
-  minHeight: "100vh",
-  background: "#f3f4f6",
-  padding: "20px",
-};
-
-const contenedor = {
-  maxWidth: "1200px",
-  margin: "0 auto",
-};
-
-const titulo = {
-  fontSize: "32px",
-  marginBottom: "20px",
-};
-
-const card = {
-  background: "#ffffff",
-  padding: "20px",
-  borderRadius: "16px",
-};
-
-const grid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))",
-  gap: "15px",
-};
-
-const input = {
-  width: "100%",
-  padding: "12px",
-  borderRadius: "8px",
-  border: "1px solid #d1d5db",
-  boxSizing: "border-box",
-};
-
-const textarea = {
-  width: "100%",
-  minHeight: "100px",
-  marginTop: "15px",
-  padding: "12px",
-  borderRadius: "8px",
-  border: "1px solid #d1d5db",
-  boxSizing: "border-box",
-};
-
-const boton = {
-  marginTop: "15px",
-  background: "#16a34a",
-  color: "#fff",
-  border: "none",
-  padding: "12px 25px",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "bold",
-};
+    const fechaVencimiento = calcular
