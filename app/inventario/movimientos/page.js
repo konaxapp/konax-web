@@ -24,6 +24,11 @@ export default function MovimientosInventario() {
   const [observacion, setObservacion] = useState("");
   const [fechaMovimiento, setFechaMovimiento] = useState("");
 
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
+  const [mostrarBusquedaHistorial, setMostrarBusquedaHistorial] = useState(false);
+  const [modoBusquedaHistorial, setModoBusquedaHistorial] = useState(false);
+
   const [nuevoProveedor, setNuevoProveedor] = useState("");
   const [mostrarNuevoProveedor, setMostrarNuevoProveedor] = useState(false);
 
@@ -55,7 +60,7 @@ export default function MovimientosInventario() {
   useEffect(() => {
     cargarProductos();
     cargarProveedores();
-    cargarHistorial();
+    cargarHistorialUltimos5();
   }, []);
 
   useEffect(() => {
@@ -113,7 +118,7 @@ export default function MovimientosInventario() {
     setProveedores(data || []);
   }
 
-  async function cargarHistorial() {
+  async function cargarHistorialUltimos5() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
 
@@ -121,7 +126,8 @@ export default function MovimientosInventario() {
       .from("movimientos_inventario")
       .select("*")
       .eq("empresa_id", empresaId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(5);
 
     if (error) {
       alert("Error cargando historial: " + error.message);
@@ -129,6 +135,39 @@ export default function MovimientosInventario() {
     }
 
     setHistorial(data || []);
+    setModoBusquedaHistorial(false);
+  }
+
+  async function buscarHistorialPorFechas() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    if (!fechaDesde || !fechaHasta) {
+      alert("Seleccione fecha desde y fecha hasta.");
+      return;
+    }
+
+    const desde = new Date(fechaDesde);
+    desde.setHours(0, 0, 0, 0);
+
+    const hasta = new Date(fechaHasta);
+    hasta.setHours(23, 59, 59, 999);
+
+    const { data, error } = await supabase
+      .from("movimientos_inventario")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .gte("created_at", desde.toISOString())
+      .lte("created_at", hasta.toISOString())
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      alert("Error buscando historial: " + error.message);
+      return;
+    }
+
+    setHistorial(data || []);
+    setModoBusquedaHistorial(true);
   }
 
   async function subirImagen(empresaId, codigoProducto) {
@@ -279,11 +318,10 @@ export default function MovimientosInventario() {
     }
 
     if (tipoMovimiento === "NOTA_CREDITO") {
-      if (accionNotaCredito === "SUMA") {
-        stockNuevo = stockAnterior + cantidadMovimiento;
-      } else {
-        stockNuevo = stockAnterior - cantidadMovimiento;
-      }
+      stockNuevo =
+        accionNotaCredito === "SUMA"
+          ? stockAnterior + cantidadMovimiento
+          : stockAnterior - cantidadMovimiento;
     }
 
     if (stockNuevo < 0) {
@@ -317,17 +355,17 @@ export default function MovimientosInventario() {
       return;
     }
 
+    const tipoMovimientoFinal =
+      tipoMovimiento === "NOTA_CREDITO"
+        ? `NOTA_CREDITO_${accionNotaCredito}`
+        : tipoMovimiento;
+
     const observacionFinal =
       tipoMovimiento === "NOTA_CREDITO"
         ? `${observacion} | Nota de crédito: ${
             accionNotaCredito === "SUMA" ? "suma stock" : "resta stock"
           }`
         : observacion;
-
-    const tipoMovimientoFinal =
-      tipoMovimiento === "NOTA_CREDITO"
-        ? `NOTA_CREDITO_${accionNotaCredito}`
-        : tipoMovimiento;
 
     const { error: errorMovimiento } = await supabase
       .from("movimientos_inventario")
@@ -454,13 +492,7 @@ export default function MovimientosInventario() {
               />
 
               {imagen && (
-                <p
-                  style={{
-                    marginTop: "10px",
-                    color: "#16a34a",
-                    fontWeight: "bold",
-                  }}
-                >
+                <p style={{ marginTop: "10px", color: "#16a34a", fontWeight: "bold" }}>
                   Imagen seleccionada: {imagen.name}
                 </p>
               )}
@@ -470,21 +502,11 @@ export default function MovimientosInventario() {
 
         {productoSeleccionado && (
           <div style={stockBox}>
-            <p>
-              <strong>Código:</strong> {productoSeleccionado.codigo}
-            </p>
-            <p>
-              <strong>Nombre:</strong> {productoSeleccionado.nombre}
-            </p>
-            <p>
-              <strong>Descripción:</strong> {productoSeleccionado.descripcion}
-            </p>
-            <p>
-              <strong>Stock actual:</strong> {productoSeleccionado.stock_actual}
-            </p>
-            <p>
-              <strong>Stock mínimo:</strong> {productoSeleccionado.stock_minimo || 0}
-            </p>
+            <p><strong>Código:</strong> {productoSeleccionado.codigo}</p>
+            <p><strong>Nombre:</strong> {productoSeleccionado.nombre}</p>
+            <p><strong>Descripción:</strong> {productoSeleccionado.descripcion}</p>
+            <p><strong>Stock actual:</strong> {productoSeleccionado.stock_actual}</p>
+            <p><strong>Stock mínimo:</strong> {productoSeleccionado.stock_minimo || 0}</p>
           </div>
         )}
 
@@ -635,14 +657,48 @@ export default function MovimientosInventario() {
             cursor: guardando ? "not-allowed" : "pointer",
             fontSize: "17px",
             fontWeight: "bold",
-            boxShadow: "0 6px 14px rgba(22,163,74,0.25)",
           }}
         >
           {guardando ? "Guardando producto..." : "💾 Guardar Producto / Movimiento"}
         </button>
       </div>
 
-      <h2>Historial</h2>
+      <h2>{modoBusquedaHistorial ? "Historial por rango" : "Últimos 5 movimientos"}</h2>
+
+      <button
+        onClick={() => setMostrarBusquedaHistorial(!mostrarBusquedaHistorial)}
+        style={botonSecundario}
+      >
+        Buscar historial por fechas
+      </button>
+
+      {mostrarBusquedaHistorial && (
+        <div style={cardFiltro}>
+          <label>Fecha desde</label>
+          <input
+            type="date"
+            value={fechaDesde}
+            onChange={(e) => setFechaDesde(e.target.value)}
+            style={input}
+          />
+
+          <label>Fecha hasta</label>
+          <input
+            type="date"
+            value={fechaHasta}
+            onChange={(e) => setFechaHasta(e.target.value)}
+            style={input}
+          />
+
+          <button onClick={buscarHistorialPorFechas} style={botonBuscar}>
+            Buscar
+          </button>
+
+          <button onClick={cargarHistorialUltimos5} style={botonLimpiar}>
+            Ver últimos 5
+          </button>
+        </div>
+      )}
 
       <table style={tabla}>
         <thead>
@@ -683,7 +739,9 @@ export default function MovimientosInventario() {
                 <td style={td}>{m.stock_anterior}</td>
                 <td style={td}>{m.stock_nuevo}</td>
                 <td style={td}>{m.usuario}</td>
-                <td style={td}>{new Date(m.created_at).toLocaleString()}</td>
+                <td style={td}>
+                  {m.created_at ? new Date(m.created_at).toLocaleString() : "-"}
+                </td>
               </tr>
             ))
           )}
@@ -705,6 +763,14 @@ const card = {
   borderRadius: "14px",
   marginBottom: "30px",
   boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+};
+
+const cardFiltro = {
+  background: "#fff",
+  padding: "18px",
+  borderRadius: "12px",
+  marginBottom: "20px",
+  boxShadow: "0 3px 10px rgba(0,0,0,0.05)",
 };
 
 const input = {
@@ -747,10 +813,32 @@ const botonSecundario = {
   marginBottom: "15px",
 };
 
+const botonBuscar = {
+  background: "#16a34a",
+  color: "#fff",
+  border: "none",
+  padding: "11px 18px",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontWeight: "bold",
+  marginRight: "10px",
+};
+
+const botonLimpiar = {
+  background: "#6b7280",
+  color: "#fff",
+  border: "none",
+  padding: "11px 18px",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontWeight: "bold",
+};
+
 const tabla = {
   width: "100%",
   borderCollapse: "collapse",
   fontSize: "14px",
+  background: "#fff",
 };
 
 const th = {
