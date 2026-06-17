@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function Recargos() {
+  const [empresa, setEmpresa] = useState(null);
   const [configuracion, setConfiguracion] = useState(null);
   const [cuentasMora, setCuentasMora] = useState([]);
   const [historial, setHistorial] = useState([]);
@@ -19,6 +20,7 @@ export default function Recargos() {
   const [aplicando, setAplicando] = useState(false);
 
   useEffect(() => {
+    cargarEmpresa();
     cargarConfiguracion();
     cargarCuentasEnMora();
     cargarHistorial();
@@ -33,6 +35,24 @@ export default function Recargos() {
     }
 
     return empresaId;
+  }
+
+  async function cargarEmpresa() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    const { data, error } = await supabase
+      .from("empresas")
+      .select("*")
+      .eq("id", empresaId)
+      .maybeSingle();
+
+    if (error) {
+      alert("Error cargando empresa: " + error.message);
+      return;
+    }
+
+    setEmpresa(data || null);
   }
 
   function calcularDiasAtraso(fechaVencimiento, saldoActual) {
@@ -129,8 +149,9 @@ export default function Recargos() {
       return;
     }
 
-    alert("Configuración de recargos guardada correctamente.");
+    alert("Configuración guardada correctamente.");
     cargarConfiguracion();
+    cargarCuentasEnMora();
   }
 
   async function cargarCuentasEnMora() {
@@ -176,7 +197,7 @@ export default function Recargos() {
     setHistorial(data || []);
   }
 
-  async function aplicarRecargoCuenta(cuenta) {
+  async function aplicarRecargoCuenta(cuenta, mostrarAlerta = true) {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
 
@@ -186,7 +207,7 @@ export default function Recargos() {
     );
 
     if (diasAtraso <= Number(diasGracia || 0)) {
-      alert("Esta cuenta aún no supera los días de gracia.");
+      if (mostrarAlerta) alert("Esta cuenta aún no supera los días de gracia.");
       return;
     }
 
@@ -195,7 +216,7 @@ export default function Recargos() {
     const saldoNuevo = saldoAnterior + montoRecargo;
 
     if (montoRecargo <= 0) {
-      alert("El recargo debe ser mayor a cero.");
+      if (mostrarAlerta) alert("El recargo debe ser mayor a cero.");
       return;
     }
 
@@ -241,9 +262,11 @@ export default function Recargos() {
       return;
     }
 
-    alert("Recargo aplicado correctamente.");
-    cargarCuentasEnMora();
-    cargarHistorial();
+    if (mostrarAlerta) {
+      alert("Recargo aplicado correctamente.");
+      cargarCuentasEnMora();
+      cargarHistorial();
+    }
   }
 
   async function aplicarRecargoMasivo() {
@@ -261,21 +284,38 @@ export default function Recargos() {
     setAplicando(true);
 
     for (const cuenta of cuentasMora) {
-      await aplicarRecargoCuenta(cuenta);
+      await aplicarRecargoCuenta(cuenta, false);
     }
 
     setAplicando(false);
+
     alert("Aplicación masiva finalizada.");
+    cargarCuentasEnMora();
+    cargarHistorial();
   }
 
   return (
     <div style={pagina}>
-      <h1>Módulo 6 - Recargos</h1>
+      <h1>Recargos</h1>
+      <p style={subtitulo}>Configuración y aplicación de recargos por empresa.</p>
+
+      <div style={cardEmpresa}>
+        <h2>Configuración por Empresa</h2>
+
+        <p>
+          <strong>Empresa activa:</strong>{" "}
+          {empresa?.nombre || empresa?.nombre_empresa || empresa?.razon_social || "Empresa no identificada"}
+        </p>
+
+        <p style={{ color: "#6b7280", marginBottom: 0 }}>
+          Esta configuración aplica únicamente para la empresa activa en el sistema.
+        </p>
+      </div>
 
       <div style={card}>
         <h2>Configuración de Recargos</h2>
 
-        <label>
+        <label style={labelCheck}>
           <input
             type="checkbox"
             checked={recargoAutomatico}
@@ -467,12 +507,26 @@ const pagina = {
   padding: "20px",
 };
 
+const subtitulo = {
+  color: "#6b7280",
+  marginTop: "-8px",
+  marginBottom: "20px",
+};
+
 const card = {
   background: "#fff",
   padding: "22px",
   borderRadius: "14px",
   marginBottom: "25px",
   boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
+};
+
+const cardEmpresa = {
+  background: "#eef2ff",
+  padding: "22px",
+  borderRadius: "14px",
+  marginBottom: "25px",
+  border: "1px solid #c7d2fe",
 };
 
 const header = {
@@ -488,6 +542,11 @@ const input = {
   border: "1px solid #d1d5db",
   borderRadius: "8px",
   boxSizing: "border-box",
+};
+
+const labelCheck = {
+  display: "block",
+  marginBottom: "15px",
 };
 
 const botonGuardar = {
