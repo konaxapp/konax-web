@@ -23,6 +23,11 @@ export default function Suscripciones() {
     estado: "Activo",
   });
 
+  useEffect(() => {
+    cargarSuscripciones();
+    cargarPagos();
+  }, []);
+
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
 
@@ -38,40 +43,27 @@ export default function Suscripciones() {
     return "MEM-" + Date.now();
   }
 
-  function convertirFechaLocal(fechaTexto) {
-    if (!fechaTexto) return null;
-    const [anio, mes, dia] = fechaTexto.split("-").map(Number);
-    return new Date(anio, mes - 1, dia);
-  }
-
   function sumarMesesFecha(fechaTexto, meses) {
     if (!fechaTexto) return "";
 
     const [anio, mes, dia] = fechaTexto.split("-").map(Number);
     const fecha = new Date(anio, mes - 1 + meses, dia);
 
-    const nuevoAnio = fecha.getFullYear();
-    const nuevoMes = String(fecha.getMonth() + 1).padStart(2, "0");
-    const nuevoDia = String(fecha.getDate()).padStart(2, "0");
-
-    return `${nuevoAnio}-${nuevoMes}-${nuevoDia}`;
+    return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(fecha.getDate()).padStart(2, "0")}`;
   }
 
   function calcularVencimientoDesde(fechaBase, periodicidad) {
     if (!fechaBase) return "";
 
-    switch (periodicidad) {
-      case "Mensual":
-        return sumarMesesFecha(fechaBase, 1);
-      case "Trimestral":
-        return sumarMesesFecha(fechaBase, 3);
-      case "Semestral":
-        return sumarMesesFecha(fechaBase, 6);
-      case "Anual":
-        return sumarMesesFecha(fechaBase, 12);
-      default:
-        return fechaBase;
-    }
+    if (periodicidad === "Mensual") return sumarMesesFecha(fechaBase, 1);
+    if (periodicidad === "Trimestral") return sumarMesesFecha(fechaBase, 3);
+    if (periodicidad === "Semestral") return sumarMesesFecha(fechaBase, 6);
+    if (periodicidad === "Anual") return sumarMesesFecha(fechaBase, 12);
+
+    return fechaBase;
   }
 
   function calcularVencimiento() {
@@ -87,13 +79,11 @@ export default function Suscripciones() {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
-    const vence = convertirFechaLocal(fechaVencimiento);
-    if (!vence) return 0;
-
+    const [anio, mes, dia] = fechaVencimiento.split("-").map(Number);
+    const vence = new Date(anio, mes - 1, dia);
     vence.setHours(0, 0, 0, 0);
 
-    const diferencia = vence - hoy;
-    return Math.ceil(diferencia / (1000 * 60 * 60 * 24));
+    return Math.ceil((vence - hoy) / (1000 * 60 * 60 * 24));
   }
 
   function obtenerEstadoVisual(item) {
@@ -125,11 +115,6 @@ export default function Suscripciones() {
     });
   }
 
-  useEffect(() => {
-    cargarSuscripciones();
-    cargarPagos();
-  }, []);
-
   async function cargarSuscripciones() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
@@ -141,7 +126,7 @@ export default function Suscripciones() {
       .order("fecha_vencimiento", { ascending: true });
 
     if (error) {
-      alert("Error cargando suscripciones: " + error.message);
+      alert("Error cargando membresías: " + error.message);
       return;
     }
 
@@ -152,16 +137,14 @@ export default function Suscripciones() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("caja")
       .select("*")
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false })
       .limit(20);
 
-    if (!error) {
-      setPagos(data || []);
-    }
+    setPagos(data || []);
   }
 
   async function obtenerOCrearCliente(empresaId) {
@@ -178,37 +161,36 @@ export default function Suscripciones() {
 
     if (clienteExistente) {
       if (!clienteExistente.empresa_id) {
-        const { data: clienteActualizado, error: errorActualizar } =
-          await supabase
-            .from("clientes")
-            .update({
-              empresa_id: empresaId,
-              nombre: formulario.cliente || clienteExistente.nombre,
-              telefono: formulario.telefono || clienteExistente.telefono,
-              correo: formulario.correo || clienteExistente.correo,
-              estado: "Activo",
-            })
-            .eq("id", clienteExistente.id)
-            .select()
-            .single();
+        const { data, error } = await supabase
+          .from("clientes")
+          .update({
+            empresa_id: empresaId,
+            nombre: formulario.cliente || clienteExistente.nombre,
+            telefono: formulario.telefono || clienteExistente.telefono,
+            correo: formulario.correo || clienteExistente.correo,
+            estado: "Activo",
+          })
+          .eq("id", clienteExistente.id)
+          .select()
+          .single();
 
-        if (errorActualizar) {
-          alert("Error actualizando cliente: " + errorActualizar.message);
+        if (error) {
+          alert("Error actualizando cliente: " + error.message);
           return null;
         }
 
-        return clienteActualizado;
+        return data;
       }
 
-     if (String(clienteExistente.empresa_id) !== String(empresaId)) {
+      if (String(clienteExistente.empresa_id) !== String(empresaId)) {
         alert("Esta cédula ya existe asociada a otra empresa.");
         return null;
       }
 
       return clienteExistente;
-      }
+    }
 
-    const { data: clienteNuevo, error: errorCrear } = await supabase
+    const { data, error } = await supabase
       .from("clientes")
       .insert([
         {
@@ -223,12 +205,12 @@ export default function Suscripciones() {
       .select()
       .single();
 
-    if (errorCrear) {
-      alert("Error creando cliente: " + errorCrear.message);
+    if (error) {
+      alert("Error creando cliente: " + error.message);
       return null;
     }
 
-    return clienteNuevo;
+    return data;
   }
 
   async function crearSuscripcion() {
@@ -312,33 +294,126 @@ export default function Suscripciones() {
 
     if (errorSuscripcion) {
       setCargando(false);
-      alert("Error creando suscripción: " + errorSuscripcion.message);
+      alert("Error creando membresía: " + errorSuscripcion.message);
       return;
     }
 
-    const { error: errorCobranza } = await supabase
-      .from("informacion_cobranza")
-      .insert([
-        {
-          empresa_id: empresaId,
-          cliente_id: clienteCreado.id,
-          informacion_comercial_id: comercialCreado.id,
-          estado_cobranza:
-            formulario.estado === "Activo" ? "Al Día" : formulario.estado,
-          responsable_cobro: formulario.vendedor || null,
-        },
-      ]);
-
-    if (errorCobranza) {
-      setCargando(false);
-      alert("Membresía creada, pero hubo error creando cobranza: " + errorCobranza.message);
-      return;
-    }
+    await supabase.from("informacion_cobranza").insert([
+      {
+        empresa_id: empresaId,
+        cliente_id: clienteCreado.id,
+        informacion_comercial_id: comercialCreado.id,
+        estado_cobranza:
+          formulario.estado === "Activo" ? "Al Día" : formulario.estado,
+        responsable_cobro: formulario.vendedor || null,
+      },
+    ]);
 
     setCargando(false);
     alert("Membresía creada correctamente. Cuenta: " + numeroCuenta);
 
     limpiarFormulario();
+    cargarSuscripciones();
+  }
+
+  async function renovarSuscripcion(item) {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    const confirmar = confirm(
+      `¿Registrar pago y renovar membresía de ${item.cliente}?`
+    );
+
+    if (!confirmar) return;
+
+    const precio = Number(item.precio || 0);
+
+    const fechaBase =
+      calcularDiasParaVencer(item.fecha_vencimiento) < 0
+        ? new Date().toISOString().split("T")[0]
+        : item.fecha_vencimiento;
+
+    const nuevaFecha = calcularVencimientoDesde(fechaBase, item.periodicidad);
+
+    const { error: errorCaja } = await supabase.from("caja").insert([
+      {
+        empresa_id: empresaId,
+        cliente_id: item.cliente_id,
+        informacion_comercial_id: item.informacion_comercial_id,
+        tipo: "Suscripción",
+        tipo_movimiento: "PAGO_MEMBRESIA",
+        descripcion: `Renovación de membresía: ${item.plan}`,
+        monto: precio,
+        metodo_pago: item.forma_pago || "Efectivo",
+        fecha_pago: new Date().toISOString(),
+        estado: "Procesado",
+        cliente_nombre: item.cliente || null,
+        cliente_cedula: item.cedula || null,
+      },
+    ]);
+
+    if (errorCaja) {
+      alert("Error registrando pago: " + errorCaja.message);
+      return;
+    }
+
+    await supabase
+      .from("suscripciones")
+      .update({
+        fecha_vencimiento: nuevaFecha,
+        estado: "Activo",
+      })
+      .eq("id", item.id)
+      .eq("empresa_id", empresaId);
+
+    await supabase
+      .from("informacion_comercial")
+      .update({
+        fecha_vencimiento: nuevaFecha,
+        saldo_actual: precio,
+        estado: "Activo",
+      })
+      .eq("id", item.informacion_comercial_id)
+      .eq("empresa_id", empresaId);
+
+    await supabase
+      .from("informacion_cobranza")
+      .update({
+        estado_cobranza: "Al Día",
+        fecha_ultimo_pago: new Date().toISOString(),
+        monto_ultimo_pago: precio,
+      })
+      .eq("informacion_comercial_id", item.informacion_comercial_id)
+      .eq("empresa_id", empresaId);
+
+    alert("Membresía renovada correctamente.");
+    cargarSuscripciones();
+    cargarPagos();
+  }
+
+  async function cambiarEstado(item, nuevoEstado) {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    await supabase
+      .from("suscripciones")
+      .update({ estado: nuevoEstado })
+      .eq("id", item.id)
+      .eq("empresa_id", empresaId);
+
+    await supabase
+      .from("informacion_comercial")
+      .update({ estado: nuevoEstado })
+      .eq("id", item.informacion_comercial_id)
+      .eq("empresa_id", empresaId);
+
+    await supabase
+      .from("informacion_cobranza")
+      .update({ estado_cobranza: nuevoEstado })
+      .eq("informacion_comercial_id", item.informacion_comercial_id)
+      .eq("empresa_id", empresaId);
+
+    alert(`Membresía actualizada a ${nuevoEstado}.`);
     cargarSuscripciones();
   }
 
@@ -359,21 +434,81 @@ export default function Suscripciones() {
           <h2>Crear Membresía</h2>
 
           <div style={grid}>
-            <input placeholder="Cédula / Identificación" value={formulario.cedula} onChange={(e) => setFormulario({ ...formulario, cedula: e.target.value })} style={input} />
-            <input placeholder="Nombre del cliente" value={formulario.cliente} onChange={(e) => setFormulario({ ...formulario, cliente: e.target.value })} style={input} />
-            <input placeholder="Teléfono" value={formulario.telefono} onChange={(e) => setFormulario({ ...formulario, telefono: e.target.value })} style={input} />
-            <input placeholder="Correo" value={formulario.correo} onChange={(e) => setFormulario({ ...formulario, correo: e.target.value })} style={input} />
-            <input placeholder="Plan / Membresía" value={formulario.plan} onChange={(e) => setFormulario({ ...formulario, plan: e.target.value })} style={input} />
-            <input placeholder="Precio" type="number" value={formulario.precio} onChange={(e) => setFormulario({ ...formulario, precio: e.target.value })} style={input} />
+            <input
+              placeholder="Cédula / Identificación"
+              value={formulario.cedula}
+              onChange={(e) =>
+                setFormulario({ ...formulario, cedula: e.target.value })
+              }
+              style={input}
+            />
 
-            <select value={formulario.periodicidad} onChange={(e) => setFormulario({ ...formulario, periodicidad: e.target.value })} style={input}>
+            <input
+              placeholder="Nombre del cliente"
+              value={formulario.cliente}
+              onChange={(e) =>
+                setFormulario({ ...formulario, cliente: e.target.value })
+              }
+              style={input}
+            />
+
+            <input
+              placeholder="Teléfono"
+              value={formulario.telefono}
+              onChange={(e) =>
+                setFormulario({ ...formulario, telefono: e.target.value })
+              }
+              style={input}
+            />
+
+            <input
+              placeholder="Correo"
+              value={formulario.correo}
+              onChange={(e) =>
+                setFormulario({ ...formulario, correo: e.target.value })
+              }
+              style={input}
+            />
+
+            <input
+              placeholder="Plan / Membresía"
+              value={formulario.plan}
+              onChange={(e) =>
+                setFormulario({ ...formulario, plan: e.target.value })
+              }
+              style={input}
+            />
+
+            <input
+              placeholder="Precio"
+              type="number"
+              value={formulario.precio}
+              onChange={(e) =>
+                setFormulario({ ...formulario, precio: e.target.value })
+              }
+              style={input}
+            />
+
+            <select
+              value={formulario.periodicidad}
+              onChange={(e) =>
+                setFormulario({ ...formulario, periodicidad: e.target.value })
+              }
+              style={input}
+            >
               <option>Mensual</option>
               <option>Trimestral</option>
               <option>Semestral</option>
               <option>Anual</option>
             </select>
 
-            <select value={formulario.formaPago} onChange={(e) => setFormulario({ ...formulario, formaPago: e.target.value })} style={input}>
+            <select
+              value={formulario.formaPago}
+              onChange={(e) =>
+                setFormulario({ ...formulario, formaPago: e.target.value })
+              }
+              style={input}
+            >
               <option>Efectivo</option>
               <option>Transferencia</option>
               <option>Tarjeta</option>
@@ -382,13 +517,42 @@ export default function Suscripciones() {
               <option>Débito Directo</option>
             </select>
 
-            <input placeholder="Responsable / Vendedor" value={formulario.vendedor} onChange={(e) => setFormulario({ ...formulario, vendedor: e.target.value })} style={input} />
+            <input
+              placeholder="Responsable / Vendedor"
+              value={formulario.vendedor}
+              onChange={(e) =>
+                setFormulario({ ...formulario, vendedor: e.target.value })
+              }
+              style={input}
+            />
 
-            <input type="date" value={formulario.fechaInicio} onChange={(e) => setFormulario({ ...formulario, fechaInicio: e.target.value })} style={input} />
+            <input
+              type="date"
+              value={formulario.fechaInicio}
+              onChange={(e) =>
+                setFormulario({ ...formulario, fechaInicio: e.target.value })
+              }
+              style={input}
+            />
 
-            <input value={calcularVencimiento()} readOnly placeholder="Fecha vencimiento" style={{ ...input, background: "#f3f4f6", fontWeight: "bold" }} />
+            <input
+              value={calcularVencimiento()}
+              readOnly
+              placeholder="Fecha vencimiento"
+              style={{
+                ...input,
+                background: "#f3f4f6",
+                fontWeight: "bold",
+              }}
+            />
 
-            <select value={formulario.estado} onChange={(e) => setFormulario({ ...formulario, estado: e.target.value })} style={input}>
+            <select
+              value={formulario.estado}
+              onChange={(e) =>
+                setFormulario({ ...formulario, estado: e.target.value })
+              }
+              style={input}
+            >
               <option>Activo</option>
               <option>Pendiente</option>
               <option>Suspendido</option>
@@ -396,11 +560,142 @@ export default function Suscripciones() {
             </select>
           </div>
 
-          <textarea placeholder="Descripción / Nota" value={formulario.descripcion} onChange={(e) => setFormulario({ ...formulario, descripcion: e.target.value })} style={textarea} />
+          <textarea
+            placeholder="Descripción / Nota"
+            value={formulario.descripcion}
+            onChange={(e) =>
+              setFormulario({ ...formulario, descripcion: e.target.value })
+            }
+            style={textarea}
+          />
 
           <button onClick={crearSuscripcion} disabled={cargando} style={boton}>
             {cargando ? "Guardando..." : "Crear Membresía"}
           </button>
+        </div>
+
+        <div style={card}>
+          <h2>Clientes con Membresía</h2>
+
+          <div style={{ overflowX: "auto" }}>
+            <table style={tabla}>
+              <thead>
+                <tr>
+                  <th style={th}>Cliente</th>
+                  <th style={th}>Cédula</th>
+                  <th style={th}>Plan</th>
+                  <th style={th}>Precio</th>
+                  <th style={th}>Periodicidad</th>
+                  <th style={th}>Inicio</th>
+                  <th style={th}>Vence</th>
+                  <th style={th}>Días</th>
+                  <th style={th}>Estado</th>
+                  <th style={th}>Acciones</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {suscripciones.length === 0 ? (
+                  <tr>
+                    <td style={td} colSpan="10">
+                      No hay membresías registradas.
+                    </td>
+                  </tr>
+                ) : (
+                  suscripciones.map((item) => {
+                    const dias = calcularDiasParaVencer(item.fecha_vencimiento);
+                    const estado = obtenerEstadoVisual(item);
+
+                    return (
+                      <tr key={item.id}>
+                        <td style={td}>{item.cliente}</td>
+                        <td style={td}>{item.cedula}</td>
+                        <td style={td}>{item.plan}</td>
+                        <td style={td}>${Number(item.precio || 0).toFixed(2)}</td>
+                        <td style={td}>{item.periodicidad}</td>
+                        <td style={td}>{item.fecha_inicio || "-"}</td>
+                        <td style={td}>{item.fecha_vencimiento || "-"}</td>
+                        <td style={td}>{dias}</td>
+                        <td style={td}>
+                          <span
+                            style={
+                              estado === "Vencida" || estado === "Suspendido"
+                                ? estadoRojo
+                                : estadoVerde
+                            }
+                          >
+                            {estado}
+                          </span>
+                        </td>
+                        <td style={td}>
+                          <button
+                            style={botonPequeno}
+                            onClick={() => renovarSuscripcion(item)}
+                          >
+                            Renovar
+                          </button>
+                          <button
+                            style={botonNaranja}
+                            onClick={() => cambiarEstado(item, "Suspendido")}
+                          >
+                            Suspender
+                          </button>
+                          <button
+                            style={botonAzul}
+                            onClick={() => cambiarEstado(item, "Activo")}
+                          >
+                            Reactivar
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style={card}>
+          <h2>Historial de Pagos</h2>
+
+          <div style={{ overflowX: "auto" }}>
+            <table style={tabla}>
+              <thead>
+                <tr>
+                  <th style={th}>Fecha</th>
+                  <th style={th}>Cliente</th>
+                  <th style={th}>Descripción</th>
+                  <th style={th}>Monto</th>
+                  <th style={th}>Método</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {pagos.length === 0 ? (
+                  <tr>
+                    <td style={td} colSpan="5">
+                      No hay pagos registrados.
+                    </td>
+                  </tr>
+                ) : (
+                  pagos.map((pago) => (
+                    <tr key={pago.id}>
+                      <td style={td}>
+                        {pago.fecha_pago
+                          ? new Date(pago.fecha_pago).toLocaleString()
+                          : "-"}
+                      </td>
+                      <td style={td}>{pago.cliente_nombre || "-"}</td>
+                      <td style={td}>{pago.descripcion || "-"}</td>
+                      <td style={td}>${Number(pago.monto || 0).toFixed(2)}</td>
+                      <td style={td}>{pago.metodo_pago || "-"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -484,4 +779,73 @@ const boton = {
   cursor: "pointer",
   fontWeight: "bold",
 };
-                                                      
+
+const tabla = {
+  width: "100%",
+  borderCollapse: "collapse",
+  marginTop: "15px",
+  fontSize: "14px",
+};
+
+const th = {
+  textAlign: "left",
+  padding: "10px",
+  borderBottom: "1px solid #e5e7eb",
+  background: "#f9fafb",
+};
+
+const td = {
+  padding: "10px",
+  borderBottom: "1px solid #f3f4f6",
+};
+
+const botonPequeno = {
+  background: "#16a34a",
+  color: "#fff",
+  border: "none",
+  padding: "7px 10px",
+  borderRadius: "7px",
+  cursor: "pointer",
+  marginRight: "6px",
+  marginBottom: "5px",
+  fontWeight: "bold",
+};
+
+const botonNaranja = {
+  background: "#f97316",
+  color: "#fff",
+  border: "none",
+  padding: "7px 10px",
+  borderRadius: "7px",
+  cursor: "pointer",
+  marginRight: "6px",
+  marginBottom: "5px",
+  fontWeight: "bold",
+};
+
+const botonAzul = {
+  background: "#2563eb",
+  color: "#fff",
+  border: "none",
+  padding: "7px 10px",
+  borderRadius: "7px",
+  cursor: "pointer",
+  marginBottom: "5px",
+  fontWeight: "bold",
+};
+
+const estadoVerde = {
+  background: "#dcfce7",
+  color: "#166534",
+  padding: "5px 10px",
+  borderRadius: "999px",
+  fontWeight: "bold",
+};
+
+const estadoRojo = {
+  background: "#fee2e2",
+  color: "#991b1b",
+  padding: "5px 10px",
+  borderRadius: "999px",
+  fontWeight: "bold",
+};
