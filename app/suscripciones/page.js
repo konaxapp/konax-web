@@ -5,8 +5,12 @@ import { supabase } from "../../lib/supabase";
 
 export default function Suscripciones() {
   const [formulario, setFormulario] = useState({
+    cedula: "",
     cliente: "",
+    telefono: "",
+    correo: "",
     plan: "",
+    tipoServicio: "Membresía",
     descripcion: "",
     precio: "",
     vendedor: "",
@@ -15,73 +19,187 @@ export default function Suscripciones() {
     estado: "Activo",
   });
 
-  const calcularVencimiento = () => {
+  function obtenerEmpresaId() {
+    const empresaId = localStorage.getItem("empresaId");
+
+    if (!empresaId) {
+      alert("No hay empresa activa.");
+      return null;
+    }
+
+    return empresaId;
+  }
+
+  function generarNumeroCuenta() {
+    return "SUB-" + Date.now();
+  }
+
+  function calcularVencimiento() {
     if (!formulario.fechaInicio) return "";
 
     const fecha = new Date(formulario.fechaInicio);
 
     switch (formulario.periodicidad) {
       case "Mensual":
-        fecha.setDate(fecha.getDate() + 30);
+        fecha.setMonth(fecha.getMonth() + 1);
         break;
-
       case "Trimestral":
-        fecha.setDate(fecha.getDate() + 90);
+        fecha.setMonth(fecha.getMonth() + 3);
         break;
-
       case "Semestral":
-        fecha.setDate(fecha.getDate() + 180);
+        fecha.setMonth(fecha.getMonth() + 6);
         break;
-
       case "Anual":
-        fecha.setDate(fecha.getDate() + 365);
+        fecha.setFullYear(fecha.getFullYear() + 1);
+        break;
+      default:
         break;
     }
 
     return fecha.toISOString().split("T")[0];
-  };
-
-  const guardar = async () => {
-  if (!formulario.cliente || !formulario.plan || !formulario.precio) {
-    alert("Complete Cliente, Plan y Precio");
-    return;
   }
 
-  const { error } = await supabase
-    .from("suscripciones")
-    .insert([
-      {
-        cliente: formulario.cliente,
-        plan: formulario.plan,
-        descripcion: formulario.descripcion,
-        precio: formulario.precio,
-        vendedor: formulario.vendedor,
-        fecha_inicio: formulario.fechaInicio,
-        fecha_vencimiento: calcularVencimiento(),
-        periodicidad: formulario.periodicidad,
-        estado: formulario.estado,
-      },
-    ]);
+  async function guardar() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
 
-  if (error) {
-    console.error(error);
-    alert("Error: " + error.message);
-    return;
+    if (!formulario.cedula || !formulario.cliente || !formulario.plan || !formulario.precio) {
+      alert("Complete cédula, cliente, plan y precio.");
+      return;
+    }
+
+    let clienteCreado = null;
+
+    const { data: clienteExistente, error: errorBuscar } = await supabase
+      .from("clientes")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("cedula", formulario.cedula)
+      .maybeSingle();
+
+    if (errorBuscar) {
+      alert("Error buscando cliente: " + errorBuscar.message);
+      return;
+    }
+
+    if (clienteExistente) {
+      clienteCreado = clienteExistente;
+    } else {
+      const { data, error } = await supabase
+        .from("clientes")
+        .insert([
+          {
+            empresa_id: empresaId,
+            cedula: formulario.cedula,
+            nombre: formulario.cliente,
+            telefono: formulario.telefono,
+            correo: formulario.correo,
+            estado: "Activo",
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        alert("Error creando cliente: " + error.message);
+        return;
+      }
+
+      clienteCreado = data;
+    }
+
+    const numeroCuenta = generarNumeroCuenta();
+    const fechaVencimiento = calcularVencimiento();
+    const precio = Number(formulario.precio || 0);
+
+    const { data: comercialCreado, error: errorComercial } = await supabase
+      .from("informacion_comercial")
+      .insert([
+        {
+          empresa_id: empresaId,
+          cliente_id: clienteCreado.id,
+          numero_cuenta: numeroCuenta,
+          tipo_producto: formulario.tipoServicio,
+          descripcion: formulario.plan + " - " + formulario.descripcion,
+          modalidad: formulario.periodicidad,
+          monto_total: precio,
+          saldo_actual: precio,
+          cuota: precio,
+          fecha_inicio: formulario.fechaInicio || null,
+          fecha_vencimiento: fechaVencimiento || null,
+          responsable: formulario.vendedor || null,
+          estado: formulario.estado,
+          observacion: formulario.descripcion,
+        },
+      ])
+      .select()
+      .single();
+
+    if (errorComercial) {
+      alert("Error creando información comercial: " + errorComercial.message);
+      return;
+    }
+
+    const { error: errorSuscripcion } = await supabase
+      .from("suscripciones")
+      .insert([
+        {
+          empresa_id: empresaId,
+          cliente_id: clienteCreado.id,
+          informacion_comercial_id: comercialCreado.id,
+          cliente: formulario.cliente,
+          cedula: formulario.cedula,
+          plan: formulario.plan,
+          tipo_servicio: formulario.tipoServicio,
+          descripcion: formulario.descripcion,
+          precio,
+          vendedor: formulario.vendedor,
+          fecha_inicio: formulario.fechaInicio || null,
+          fecha_vencimiento: fechaVencimiento || null,
+          periodicidad: formulario.periodicidad,
+          estado: formulario.estado,
+        },
+      ]);
+
+    if (errorSuscripcion) {
+      alert("Error creando suscripción: " + errorSuscripcion.message);
+      return;
+    }
+
+    const { error: errorCobranza } = await supabase
+      .from("informacion_cobranza")
+      .insert([
+        {
+          empresa_id: empresaId,
+          cliente_id: clienteCreado.id,
+          informacion_comercial_id: comercialCreado.id,
+          estado_cobranza: formulario.estado === "Activo" ? "Al Día" : formulario.estado,
+          responsable_cobro: formulario.vendedor || null,
+        },
+      ]);
+
+    if (errorCobranza) {
+      alert("Suscripción creada, pero hubo error creando cobranza: " + errorCobranza.message);
+      return;
+    }
+
+    alert("Suscripción creada correctamente. Cuenta: " + numeroCuenta);
+
+    setFormulario({
+      cedula: "",
+      cliente: "",
+      telefono: "",
+      correo: "",
+      plan: "",
+      tipoServicio: "Membresía",
+      descripcion: "",
+      precio: "",
+      vendedor: "",
+      fechaInicio: "",
+      periodicidad: "Mensual",
+      estado: "Activo",
+    });
   }
-
-  alert("Suscripción creada correctamente");
-
-  setFormulario({
-    cliente: "",
-    plan: "",
-    descripcion: "",
-    precio: "",
-    vendedor: "",
-    fechaInicio: "",
-    periodicidad: "Mensual",
-    estado: "Activo",
-  });
-};
 
   return (
     <div style={pagina}>
@@ -89,28 +207,54 @@ export default function Suscripciones() {
         <h1 style={titulo}>Suscripciones y Membresías</h1>
 
         <div style={card}>
+          <h2>Crear Suscripción</h2>
+
           <div style={grid}>
             <input
-              placeholder="Cliente"
-              value={formulario.cliente}
-              onChange={(e) =>
-                setFormulario({
-                  ...formulario,
-                  cliente: e.target.value,
-                })
-              }
+              placeholder="Cédula / Identificación"
+              value={formulario.cedula}
+              onChange={(e) => setFormulario({ ...formulario, cedula: e.target.value })}
               style={input}
             />
 
             <input
+              placeholder="Cliente"
+              value={formulario.cliente}
+              onChange={(e) => setFormulario({ ...formulario, cliente: e.target.value })}
+              style={input}
+            />
+
+            <input
+              placeholder="Teléfono"
+              value={formulario.telefono}
+              onChange={(e) => setFormulario({ ...formulario, telefono: e.target.value })}
+              style={input}
+            />
+
+            <input
+              placeholder="Correo"
+              value={formulario.correo}
+              onChange={(e) => setFormulario({ ...formulario, correo: e.target.value })}
+              style={input}
+            />
+
+            <select
+              value={formulario.tipoServicio}
+              onChange={(e) => setFormulario({ ...formulario, tipoServicio: e.target.value })}
+              style={input}
+            >
+              <option>Gimnasio</option>
+              <option>Academia</option>
+              <option>Escuela</option>
+              <option>Membresía</option>
+              <option>Software SaaS</option>
+              <option>Servicio Recurrente</option>
+            </select>
+
+            <input
               placeholder="Plan"
               value={formulario.plan}
-              onChange={(e) =>
-                setFormulario({
-                  ...formulario,
-                  plan: e.target.value,
-                })
-              }
+              onChange={(e) => setFormulario({ ...formulario, plan: e.target.value })}
               style={input}
             />
 
@@ -118,47 +262,27 @@ export default function Suscripciones() {
               placeholder="Precio"
               type="number"
               value={formulario.precio}
-              onChange={(e) =>
-                setFormulario({
-                  ...formulario,
-                  precio: e.target.value,
-                })
-              }
+              onChange={(e) => setFormulario({ ...formulario, precio: e.target.value })}
               style={input}
             />
 
             <input
-              placeholder="Vendedor"
+              placeholder="Vendedor / Responsable"
               value={formulario.vendedor}
-              onChange={(e) =>
-                setFormulario({
-                  ...formulario,
-                  vendedor: e.target.value,
-                })
-              }
+              onChange={(e) => setFormulario({ ...formulario, vendedor: e.target.value })}
               style={input}
             />
 
             <input
               type="date"
               value={formulario.fechaInicio}
-              onChange={(e) =>
-                setFormulario({
-                  ...formulario,
-                  fechaInicio: e.target.value,
-                })
-              }
+              onChange={(e) => setFormulario({ ...formulario, fechaInicio: e.target.value })}
               style={input}
             />
 
             <select
               value={formulario.periodicidad}
-              onChange={(e) =>
-                setFormulario({
-                  ...formulario,
-                  periodicidad: e.target.value,
-                })
-              }
+              onChange={(e) => setFormulario({ ...formulario, periodicidad: e.target.value })}
               style={input}
             >
               <option>Mensual</option>
@@ -170,21 +294,13 @@ export default function Suscripciones() {
             <input
               value={calcularVencimiento()}
               readOnly
-              style={{
-                ...input,
-                background: "#f3f4f6",
-                fontWeight: "bold",
-              }}
+              placeholder="Fecha vencimiento"
+              style={{ ...input, background: "#f3f4f6", fontWeight: "bold" }}
             />
 
             <select
               value={formulario.estado}
-              onChange={(e) =>
-                setFormulario({
-                  ...formulario,
-                  estado: e.target.value,
-                })
-              }
+              onChange={(e) => setFormulario({ ...formulario, estado: e.target.value })}
               style={input}
             >
               <option>Activo</option>
@@ -197,12 +313,7 @@ export default function Suscripciones() {
           <textarea
             placeholder="Descripción"
             value={formulario.descripcion}
-            onChange={(e) =>
-              setFormulario({
-                ...formulario,
-                descripcion: e.target.value,
-              })
-            }
+            onChange={(e) => setFormulario({ ...formulario, descripcion: e.target.value })}
             style={textarea}
           />
 
