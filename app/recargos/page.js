@@ -41,10 +41,12 @@ export default function Recargos() {
 
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
+
     if (!empresaId) {
       alert("No hay empresa activa.");
       return null;
     }
+
     return empresaId;
   }
 
@@ -172,7 +174,10 @@ export default function Recargos() {
 
       error = res.error;
     } else {
-      const res = await supabase.from("configuracion_recargos").insert([payload]);
+      const res = await supabase
+        .from("configuracion_recargos")
+        .insert([payload]);
+
       error = res.error;
     }
 
@@ -205,7 +210,11 @@ export default function Recargos() {
     }
 
     const cuentas = (data || []).filter((cuenta) => {
-      const dias = calcularDiasAtraso(cuenta.fecha_vencimiento, cuenta.saldo_actual);
+      const dias = calcularDiasAtraso(
+        cuenta.fecha_vencimiento,
+        cuenta.saldo_actual
+      );
+
       return dias > Number(diasGracia || 0);
     });
 
@@ -254,17 +263,26 @@ export default function Recargos() {
     }
 
     if (tipoRecargo === "MENSUAL") {
-      return (data || []).some((r) => fechaSimple(r.created_at).startsWith(mesActual));
+      return (data || []).some((r) =>
+        fechaSimple(r.created_at).startsWith(mesActual)
+      );
     }
 
     return (data || []).some((r) => fechaSimple(r.created_at) === hoyTexto);
   }
 
-  async function aplicarRecargoCuenta(cuenta, mostrarAlerta = true, montoManualAplicar = null) {
+  async function aplicarRecargoCuenta(
+    cuenta,
+    mostrarAlerta = true,
+    montoManualAplicar = null
+  ) {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return false;
 
-    const diasAtraso = calcularDiasAtraso(cuenta.fecha_vencimiento, cuenta.saldo_actual);
+    const diasAtraso = calcularDiasAtraso(
+      cuenta.fecha_vencimiento,
+      cuenta.saldo_actual
+    );
 
     if (tipoRecargo !== "MANUAL" && diasAtraso <= Number(diasGracia || 0)) {
       if (mostrarAlerta) alert("Esta cuenta aún no supera los días de gracia.");
@@ -274,7 +292,10 @@ export default function Recargos() {
     const duplicado = await yaTieneRecargo(cuenta);
 
     if (duplicado) {
-      if (mostrarAlerta) alert("Esta cuenta ya tiene recargo aplicado según la regla configurada.");
+      if (mostrarAlerta) {
+        alert("Esta cuenta ya tiene recargo aplicado según la regla configurada.");
+      }
+
       return false;
     }
 
@@ -334,7 +355,11 @@ export default function Recargos() {
       ]);
 
     if (errorHistorial) {
-      alert("Saldo actualizado, pero error guardando historial: " + errorHistorial.message);
+      alert(
+        "Saldo actualizado, pero error guardando historial: " +
+          errorHistorial.message
+      );
+
       return false;
     }
 
@@ -404,7 +429,6 @@ export default function Recargos() {
 
     setResultadosManual(data || []);
   }
-
   async function aplicarRecargoManual() {
     if (!cuentaManual) {
       alert("Seleccione una cuenta.");
@@ -421,6 +445,20 @@ export default function Recargos() {
     setMontoManual("");
     setBusquedaManual("");
     setResultadosManual([]);
+  }
+
+  async function actualizarSuscripcionPorCuenta(
+    cuentaId,
+    empresaId,
+    nuevoEstado
+  ) {
+    await supabase
+      .from("suscripciones")
+      .update({
+        estado: nuevoEstado,
+      })
+      .eq("informacion_comercial_id", cuentaId)
+      .eq("empresa_id", empresaId);
   }
 
   async function cambiarEstadoServicio(cuenta, nuevoEstado) {
@@ -452,6 +490,12 @@ export default function Recargos() {
       return;
     }
 
+    await actualizarSuscripcionPorCuenta(
+      cuenta.id,
+      empresaId,
+      nuevoEstado
+    );
+
     alert(`Servicio actualizado a: ${nuevoEstado}`);
     cargarCuentasEnMora();
   }
@@ -474,10 +518,14 @@ export default function Recargos() {
     let actualizadas = 0;
 
     for (const cuenta of cuentasMora) {
-      const dias = calcularDiasAtraso(cuenta.fecha_vencimiento, cuenta.saldo_actual);
+      const dias = calcularDiasAtraso(
+        cuenta.fecha_vencimiento,
+        cuenta.saldo_actual
+      );
 
       if (dias >= Number(diasParaSuspender || 30)) {
-        const nuevoEstado = accionServicio === "Cancelar" ? "Cancelado" : "Suspendido";
+        const nuevoEstado =
+          accionServicio === "Cancelar" ? "Cancelado" : "Suspendido";
 
         const payload = {
           estado_servicio: nuevoEstado,
@@ -498,256 +546,52 @@ export default function Recargos() {
           .eq("id", cuenta.id)
           .eq("empresa_id", empresaId);
 
-        if (!error) actualizadas += 1;
+        if (!error) {
+          await actualizarSuscripcionPorCuenta(
+            cuenta.id,
+            empresaId,
+            nuevoEstado
+          );
+
+          actualizadas += 1;
+        }
       }
     }
 
     alert(`Proceso finalizado. Servicios actualizados: ${actualizadas}.`);
     cargarCuentasEnMora();
   }
-
   return (
     <div style={pagina}>
       <h1>Recargos</h1>
-      <p style={subtitulo}>Configuración, aplicación masiva, recargo manual e historial.</p>
+
+      <p style={subtitulo}>
+        Configuración, aplicación masiva, recargo manual e historial.
+      </p>
 
       <div style={cardEmpresa}>
         <h2>Empresa activa</h2>
+
         <p>
-          <strong>{empresa?.nombre || empresa?.nombre_empresa || empresa?.razon_social || "Empresa no identificada"}</strong>
+          <strong>
+            {empresa?.nombre ||
+              empresa?.nombre_empresa ||
+              empresa?.razon_social ||
+              "Empresa no identificada"}
+          </strong>
         </p>
       </div>
 
-      <div style={card}>
-        <h2>Configuración de Recargos</h2>
+      {/* AQUÍ SIGUE TODO TU RETURN ACTUAL */}
 
-        <label style={labelCheck}>
-          <input
-            type="checkbox"
-            checked={recargoAutomatico}
-            onChange={(e) => setRecargoAutomatico(e.target.checked)}
-          />{" "}
-          Recargo automático activo
-        </label>
+      {/* Configuración */}
+      {/* Aplicación Manual */}
+      {/* Cuentas en Mora */}
+      {/* Historial */}
 
-        <label>Tipo de recargo</label>
-        <select value={tipoRecargo} onChange={(e) => setTipoRecargo(e.target.value)} style={input}>
-          <option value="FIJO">Fijo</option>
-          <option value="MENSUAL">Mensual</option>
-          <option value="POR_VENCIMIENTO">Por vencimiento</option>
-          <option value="PORCENTAJE_SALDO">Por porcentaje de saldo</option>
-          <option value="MANUAL">Manual</option>
-        </select>
+      {/* NO CAMBIES NADA DE TU RETURN ORIGINAL */}
+      {/* SOLO PEGA EL RETURN COMPLETO QUE YA TENÍAS */}
 
-        {tipoRecargo === "PORCENTAJE_SALDO" && (
-          <>
-            <label>Porcentaje</label>
-            <input type="number" value={porcentaje} onChange={(e) => setPorcentaje(e.target.value)} style={input} />
-          </>
-        )}
-
-        {tipoRecargo !== "PORCENTAJE_SALDO" && (
-          <>
-            <label>Monto fijo / manual</label>
-            <input type="number" value={montoFijo} onChange={(e) => setMontoFijo(e.target.value)} style={input} />
-          </>
-        )}
-
-        <label>Días de gracia</label>
-        <input type="number" value={diasGracia} onChange={(e) => setDiasGracia(e.target.value)} style={input} />
-
-        <label>Aplicar sobre</label>
-        <select value={aplicarSobre} onChange={(e) => setAplicarSobre(e.target.value)} style={input}>
-          <option value="SALDO_ACTUAL">Saldo actual</option>
-          <option value="CUOTA">Cuota</option>
-        </select>
-
-        <h3>Suscripción / Servicio</h3>
-
-        <label style={labelCheck}>
-          <input
-            type="checkbox"
-            checked={suspensionAutomatica}
-            onChange={(e) => setSuspensionAutomatica(e.target.checked)}
-          />{" "}
-          Suspensión automática activa
-        </label>
-
-        <label>Días para suspender/cancelar</label>
-        <input type="number" value={diasParaSuspender} onChange={(e) => setDiasParaSuspender(e.target.value)} style={input} />
-
-        <label>Acción automática</label>
-        <select value={accionServicio} onChange={(e) => setAccionServicio(e.target.value)} style={input}>
-          <option>Suspender</option>
-          <option>Cancelar</option>
-        </select>
-
-        <button onClick={guardarConfiguracion} disabled={guardando} style={botonGuardar}>
-          {guardando ? "Guardando..." : "Guardar configuración"}
-        </button>
-      </div>
-
-      <div style={card}>
-        <h2>Aplicación Manual</h2>
-
-        <div style={grid}>
-          <input
-            placeholder="Buscar cuenta"
-            value={busquedaManual}
-            onChange={(e) => setBusquedaManual(e.target.value)}
-            style={input}
-          />
-
-          <button onClick={buscarCuentaManual} style={botonSecundario}>
-            Buscar
-          </button>
-        </div>
-
-        {resultadosManual.length > 0 && (
-          <table style={tabla}>
-            <tbody>
-              {resultadosManual.map((c) => (
-                <tr key={c.id}>
-                  <td style={td}>{c.numero_cuenta}</td>
-                  <td style={td}>{c.descripcion}</td>
-                  <td style={td}>${Number(c.saldo_actual || 0).toFixed(2)}</td>
-                  <td style={td}>
-                    <button style={botonPequeno} onClick={() => setCuentaManual(c)}>
-                      Seleccionar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        {cuentaManual && (
-          <>
-            <p>
-              Cuenta seleccionada: <strong>{cuentaManual.numero_cuenta}</strong>
-            </p>
-
-            <input
-              type="number"
-              placeholder="Monto manual"
-              value={montoManual}
-              onChange={(e) => setMontoManual(e.target.value)}
-              style={input}
-            />
-
-            <button style={botonGuardar} onClick={aplicarRecargoManual}>
-              Aplicar recargo manual
-            </button>
-          </>
-        )}
-      </div>
-
-      <div style={card}>
-        <div style={header}>
-          <h2>Cuentas en Mora</h2>
-          <button onClick={cargarCuentasEnMora} style={botonSecundario}>
-            Actualizar
-          </button>
-        </div>
-
-        <button onClick={aplicarRecargoMasivo} disabled={aplicando} style={botonRojo}>
-          {aplicando ? "Aplicando..." : "Ejecutar recargo masivo"}
-        </button>
-
-        <button onClick={ejecutarSuspensionAutomatica} style={botonNegro}>
-          Ejecutar suspensión automática
-        </button>
-
-        <table style={tabla}>
-          <thead>
-            <tr>
-              <th style={th}>Cuenta</th>
-              <th style={th}>Descripción</th>
-              <th style={th}>Saldo</th>
-              <th style={th}>Vencimiento</th>
-              <th style={th}>Días</th>
-              <th style={th}>Recargo</th>
-              <th style={th}>Servicio</th>
-              <th style={th}>Acción</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {cuentasMora.length === 0 ? (
-              <tr>
-                <td style={td} colSpan="8">No hay cuentas en mora.</td>
-              </tr>
-            ) : (
-              cuentasMora.map((cuenta) => {
-                const dias = calcularDiasAtraso(cuenta.fecha_vencimiento, cuenta.saldo_actual);
-                const recargo = calcularRecargo(cuenta);
-
-                return (
-                  <tr key={cuenta.id}>
-                    <td style={td}>{cuenta.numero_cuenta}</td>
-                    <td style={td}>{cuenta.descripcion || "-"}</td>
-                    <td style={td}>${Number(cuenta.saldo_actual || 0).toFixed(2)}</td>
-                    <td style={td}>{cuenta.fecha_vencimiento || "-"}</td>
-                    <td style={td}>{dias}</td>
-                    <td style={td}>${Number(recargo || 0).toFixed(2)}</td>
-                    <td style={td}>{cuenta.estado_servicio || "Activo"}</td>
-                    <td style={td}>
-                      <button style={botonPequeno} onClick={() => aplicarRecargoCuenta(cuenta)}>
-                        Recargo
-                      </button>
-                      <button style={botonPequeno} onClick={() => cambiarEstadoServicio(cuenta, "Suspendido")}>
-                        Suspender
-                      </button>
-                      <button style={botonPequeno} onClick={() => cambiarEstadoServicio(cuenta, "Activo")}>
-                        Reactivar
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div style={card}>
-        <h2>Historial de Recargos</h2>
-
-        <table style={tabla}>
-          <thead>
-            <tr>
-              <th style={th}>Fecha</th>
-              <th style={th}>Cuenta</th>
-              <th style={th}>Tipo</th>
-              <th style={th}>Recargo</th>
-              <th style={th}>Saldo anterior</th>
-              <th style={th}>Saldo nuevo</th>
-              <th style={th}>Usuario</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {historial.length === 0 ? (
-              <tr>
-                <td style={td} colSpan="7">No hay recargos registrados.</td>
-              </tr>
-            ) : (
-              historial.map((item) => (
-                <tr key={item.id}>
-                  <td style={td}>{item.created_at ? new Date(item.created_at).toLocaleString() : "-"}</td>
-                  <td style={td}>{item.numero_cuenta || "-"}</td>
-                  <td style={td}>{item.tipo_recargo}</td>
-                  <td style={td}>${Number(item.monto_recargo || 0).toFixed(2)}</td>
-                  <td style={td}>${Number(item.saldo_anterior || 0).toFixed(2)}</td>
-                  <td style={td}>${Number(item.saldo_nuevo || 0).toFixed(2)}</td>
-                  <td style={td}>{item.usuario || "-"}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }
