@@ -5,27 +5,50 @@ import { supabase } from "../../lib/supabase";
 
 export default function Dashboard() {
   const [modulos, setModulos] = useState(null);
+  const [empresaNombre, setEmpresaNombre] = useState("");
 
   useEffect(() => {
     cargarModulos();
   }, []);
 
   async function cargarModulos() {
-    const { data, error } = await supabase
-      .from("empresa_modulos")
-      .select("*")
-      .limit(1);
+    const empresaId = localStorage.getItem("empresaId");
 
-    if (error) {
-      console.log(error);
+    if (!empresaId) {
+      window.location.href = "/login";
       return;
     }
 
-    setModulos(data?.[0]);
+    setEmpresaNombre(
+      localStorage.getItem("empresaNombre") || "Empresa"
+    );
+
+    const { data, error } = await supabase
+      .from("empresa_modulos")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    if (error) {
+      console.log(error);
+      alert("Error cargando módulos: " + error.message);
+      return;
+    }
+
+    if (!data) {
+      alert("Esta empresa no tiene módulos asignados.");
+      return;
+    }
+
+    setModulos(data);
   }
 
   if (!modulos) {
-    return <div>Cargando Dashboard...</div>;
+    return (
+      <div style={{ padding: "30px" }}>
+        Cargando Dashboard...
+      </div>
+    );
   }
 
   const tarjetas = [
@@ -92,8 +115,23 @@ export default function Dashboard() {
   ];
 
   return (
-    <div style={{ padding: "30px" }}>
+    <div
+      style={{
+        padding: "30px",
+        background: "#f5f6fa",
+        minHeight: "100vh",
+      }}
+    >
       <h1>Centro de Operaciones KONAX</h1>
+
+      <p
+        style={{
+          color: "#666",
+          marginBottom: "30px",
+        }}
+      >
+        Empresa: <strong>{empresaNombre}</strong>
+      </p>
 
       <div
         style={{
@@ -101,7 +139,6 @@ export default function Dashboard() {
           gridTemplateColumns:
             "repeat(auto-fill,minmax(250px,1fr))",
           gap: "20px",
-          marginTop: "30px",
         }}
       >
         {tarjetas
@@ -112,17 +149,17 @@ export default function Dashboard() {
               href={item.ruta}
               style={{
                 border: "1px solid #ddd",
-                borderRadius: "12px",
-                padding: "20px",
+                borderRadius: "14px",
+                padding: "22px",
                 textDecoration: "none",
-                color: "#000",
+                color: "#111",
                 background: "#fff",
+                boxShadow:
+                  "0 2px 10px rgba(0,0,0,0.05)",
               }}
             >
               <h3>{item.nombre}</h3>
-            </a>
-          ))}
-      </div>
-    </div>
-  );
-}
+
+              <p
+                style={{
+                  color: "#666",
