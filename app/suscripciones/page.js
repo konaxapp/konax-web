@@ -32,12 +32,10 @@ export default function Suscripciones() {
 
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
-
     if (!empresaId) {
       alert("No hay empresa activa.");
       return null;
     }
-
     return empresaId;
   }
 
@@ -47,7 +45,6 @@ export default function Suscripciones() {
 
   function sumarMesesFecha(fechaTexto, meses) {
     if (!fechaTexto) return "";
-
     const [anio, mes, dia] = fechaTexto.split("-").map(Number);
     const fecha = new Date(anio, mes - 1 + meses, dia);
 
@@ -59,12 +56,10 @@ export default function Suscripciones() {
 
   function calcularVencimientoDesde(fechaBase, periodicidad) {
     if (!fechaBase) return "";
-
     if (periodicidad === "Mensual") return sumarMesesFecha(fechaBase, 1);
     if (periodicidad === "Trimestral") return sumarMesesFecha(fechaBase, 3);
     if (periodicidad === "Semestral") return sumarMesesFecha(fechaBase, 6);
     if (periodicidad === "Anual") return sumarMesesFecha(fechaBase, 12);
-
     return fechaBase;
   }
 
@@ -119,11 +114,9 @@ export default function Suscripciones() {
 
   function limpiarTelefono(telefono) {
     const limpio = String(telefono || "").replace(/\D/g, "");
-
     if (!limpio) return "";
     if (limpio.startsWith("507")) return limpio;
     if (limpio.length === 8) return "507" + limpio;
-
     return limpio;
   }
 
@@ -143,12 +136,12 @@ export default function Suscripciones() {
       estado === "Vencida"
         ? "se encuentra vencida"
         : estado === "Por vencer"
-        ? `vence el ${item.fecha_vencimiento}`
-        : `está activa hasta el ${item.fecha_vencimiento}`
+        ? vence el ${item.fecha_vencimiento}
+        : está activa hasta el ${item.fecha_vencimiento}
     }. Para mantener el servicio activo, puedes realizar tu pago. Gracias.`;
 
     window.open(
-      `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`,
+      https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)},
       "_blank"
     );
   }
@@ -162,7 +155,8 @@ export default function Suscripciones() {
       if (seccion) seccion.scrollIntoView({ behavior: "smooth" });
     }, 100);
   }
- const membresiasFiltradas = useMemo(() => {
+
+  const membresiasFiltradas = useMemo(() => {
     const texto = busquedaMembresia.toLowerCase();
 
     return suscripciones.filter((item) =>
@@ -264,6 +258,7 @@ export default function Suscripciones() {
       .from("caja")
       .select("*")
       .eq("empresa_id", empresaId)
+      .in("tipo", ["Suscripción", "Membresía"])
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -285,7 +280,7 @@ export default function Suscripciones() {
       .from("clientes")
       .select("*")
       .eq("empresa_id", empresaId)
-      .or(`cedula.ilike.%${texto}%,nombre.ilike.%${texto}%`)
+      .or(cedula.ilike.%${texto}%,nombre.ilike.%${texto}%)
       .limit(1);
 
     if (error) {
@@ -313,6 +308,7 @@ export default function Suscripciones() {
     const { data: clienteExistente, error: errorBuscar } = await supabase
       .from("clientes")
       .select("*")
+      .eq("empresa_id", empresaId)
       .eq("cedula", formulario.cedula)
       .maybeSingle();
 
@@ -322,34 +318,25 @@ export default function Suscripciones() {
     }
 
     if (clienteExistente) {
-      if (!clienteExistente.empresa_id) {
-        const { data, error } = await supabase
-          .from("clientes")
-          .update({
-            empresa_id: empresaId,
-            nombre: formulario.cliente || clienteExistente.nombre,
-            telefono: formulario.telefono || clienteExistente.telefono,
-            correo: formulario.correo || clienteExistente.correo,
-            estado: "Activo",
-          })
-          .eq("id", clienteExistente.id)
-          .select()
-          .single();
+      const { data, error } = await supabase
+        .from("clientes")
+        .update({
+          nombre: formulario.cliente || clienteExistente.nombre,
+          telefono: formulario.telefono || clienteExistente.telefono,
+          correo: formulario.correo || clienteExistente.correo,
+          estado: "Activo",
+        })
+        .eq("id", clienteExistente.id)
+        .eq("empresa_id", empresaId)
+        .select()
+        .single();
 
-        if (error) {
-          alert("Error actualizando cliente: " + error.message);
-          return null;
-        }
-
-        return data;
-      }
-
-      if (String(clienteExistente.empresa_id) !== String(empresaId)) {
-        alert("Esta cédula ya existe asociada a otra empresa.");
+      if (error) {
+        alert("Error actualizando cliente: " + error.message);
         return null;
       }
 
-      return clienteExistente;
+      return data;
     }
 
     const { data, error } = await supabase
@@ -374,7 +361,8 @@ export default function Suscripciones() {
 
     return data;
   }
- async function crearSuscripcion() {
+
+  async function crearSuscripcion() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
 
@@ -410,7 +398,8 @@ export default function Suscripciones() {
           cliente_id: clienteCreado.id,
           numero_cuenta: numeroCuenta,
           tipo_producto: "Membresía",
-          descripcion: `${formulario.plan} - ${formulario.descripcion}`,
+          tipo_cuenta: "Suscripción",
+          descripcion: ${formulario.plan} - ${formulario.descripcion},
           modalidad: formulario.periodicidad,
           monto_total: precio,
           saldo_actual: precio,
@@ -419,6 +408,7 @@ export default function Suscripciones() {
           fecha_vencimiento: fechaVencimiento,
           responsable: formulario.vendedor || null,
           estado: formulario.estado,
+          estado_servicio: formulario.estado,
           observacion: formulario.descripcion,
         },
       ])
@@ -469,7 +459,7 @@ export default function Suscripciones() {
           formulario.estado === "Activo" ? "Al Día" : formulario.estado,
         responsable_cobro: formulario.vendedor || null,
       },
-      ]);
+    ]);
 
     setCargando(false);
     alert("Membresía creada correctamente. Cuenta: " + numeroCuenta);
@@ -483,7 +473,7 @@ export default function Suscripciones() {
     if (!empresaId) return;
 
     const confirmar = confirm(
-      `¿Registrar pago y renovar membresía de ${item.cliente}?`
+      ¿Registrar pago y renovar membresía de ${item.cliente}?
     );
 
     if (!confirmar) return;
@@ -504,7 +494,7 @@ export default function Suscripciones() {
         informacion_comercial_id: item.informacion_comercial_id,
         tipo: "Suscripción",
         tipo_movimiento: "PAGO_MEMBRESIA",
-        descripcion: `Renovación de membresía: ${item.plan}`,
+        descripcion: Renovación de membresía: ${item.plan},
         monto: precio,
         metodo_pago: item.forma_pago || "Efectivo",
         fecha_pago: new Date().toISOString(),
@@ -534,6 +524,10 @@ export default function Suscripciones() {
         fecha_vencimiento: nuevaFecha,
         saldo_actual: precio,
         estado: "Activo",
+        estado_servicio: "Activo",
+        fecha_suspension: null,
+        fecha_cancelacion: null,
+        motivo_suspension: null,
       })
       .eq("id", item.informacion_comercial_id)
       .eq("empresa_id", empresaId);
@@ -557,6 +551,27 @@ export default function Suscripciones() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
 
+    const payloadComercial = {
+      estado: nuevoEstado,
+      estado_servicio: nuevoEstado,
+    };
+
+    if (nuevoEstado === "Suspendido") {
+      payloadComercial.fecha_suspension = new Date().toISOString().split("T")[0];
+      payloadComercial.motivo_suspension = "Suspensión manual";
+    }
+
+    if (nuevoEstado === "Cancelado") {
+      payloadComercial.fecha_cancelacion = new Date().toISOString().split("T")[0];
+      payloadComercial.motivo_suspension = "Cancelación manual";
+    }
+
+    if (nuevoEstado === "Activo") {
+      payloadComercial.fecha_suspension = null;
+      payloadComercial.fecha_cancelacion = null;
+      payloadComercial.motivo_suspension = null;
+    }
+
     await supabase
       .from("suscripciones")
       .update({ estado: nuevoEstado })
@@ -565,7 +580,7 @@ export default function Suscripciones() {
 
     await supabase
       .from("informacion_comercial")
-      .update({ estado: nuevoEstado })
+      .update(payloadComercial)
       .eq("id", item.informacion_comercial_id)
       .eq("empresa_id", empresaId);
 
@@ -575,9 +590,10 @@ export default function Suscripciones() {
       .eq("informacion_comercial_id", item.informacion_comercial_id)
       .eq("empresa_id", empresaId);
 
-    alert(`Membresía actualizada a ${nuevoEstado}.`);
+    alert(Membresía actualizada a ${nuevoEstado}.);
     cargarSuscripciones();
   }
+
   return (
     <div style={pagina}>
       <div style={contenedor}>
@@ -596,22 +612,18 @@ export default function Suscripciones() {
             <span>Activas</span>
             <strong>{totalActivas}</strong>
           </div>
-
           <div style={resumenCard}>
             <span>Por vencer</span>
             <strong>{totalPorVencer}</strong>
           </div>
-
           <div style={resumenCard}>
             <span>Vencidas</span>
             <strong>{totalVencidas}</strong>
           </div>
-
           <div style={resumenCard}>
             <span>Suspendidas</span>
             <strong>{totalSuspendidas}</strong>
           </div>
-
           <div style={resumenCard}>
             <span>Ingresos del mes</span>
             <strong>${ingresosMes.toFixed(2)}</strong>
@@ -632,10 +644,7 @@ export default function Suscripciones() {
                     {item.plan} vence en{" "}
                     {calcularDiasParaVencer(item.fecha_vencimiento)} días.
                   </p>
-                  <button
-                    style={whatsappBtn}
-                    onClick={() => enviarWhatsApp(item)}
-                  >
+                  <button style={whatsappBtn} onClick={() => enviarWhatsApp(item)}>
                     WhatsApp
                   </button>
                 </div>
@@ -663,10 +672,7 @@ export default function Suscripciones() {
                   >
                     Suspender
                   </button>
-                  <button
-                    style={whatsappBtn}
-                    onClick={() => enviarWhatsApp(item)}
-                  >
+                  <button style={whatsappBtn} onClick={() => enviarWhatsApp(item)}>
                     WhatsApp
                   </button>
                 </div>
@@ -688,10 +694,7 @@ export default function Suscripciones() {
               style={input}
             />
 
-            <button
-              onClick={buscarClienteParaFormulario}
-              style={botonSecundario}
-            >
+            <button onClick={buscarClienteParaFormulario} style={botonSecundario}>
               Buscar cliente
             </button>
           </div>
@@ -889,7 +892,9 @@ export default function Suscripciones() {
                         <td style={td}>
                           <span
                             style={
-                              estado === "Vencida" || estado === "Suspendido"
+                              estado === "Vencida" ||
+                              estado === "Suspendido" ||
+                              estado === "Cancelado"
                                 ? estadoRojo
                                 : estadoVerde
                             }
@@ -917,6 +922,13 @@ export default function Suscripciones() {
                             onClick={() => cambiarEstado(item, "Activo")}
                           >
                             Reactivar
+                          </button>
+
+                          <button
+                            style={botonRojoMini}
+                            onClick={() => cambiarEstado(item, "Cancelado")}
+                          >
+                            Cancelar
                           </button>
 
                           <button
@@ -953,10 +965,7 @@ export default function Suscripciones() {
               style={input}
             />
 
-            <button
-              onClick={() => setBusquedaPagos("")}
-              style={botonSecundario}
-            >
+            <button onClick={() => setBusquedaPagos("")} style={botonSecundario}>
               Ver todos
             </button>
           </div>
@@ -1139,6 +1148,18 @@ const botonSecundario = {
 
 const botonSecundarioMini = {
   background: "#111827",
+  color: "#ffffff",
+  border: "none",
+  padding: "7px 10px",
+  borderRadius: "7px",
+  cursor: "pointer",
+  marginRight: "6px",
+  marginBottom: "5px",
+  fontWeight: "bold",
+};
+
+const botonRojoMini = {
+  background: "#dc2626",
   color: "#ffffff",
   border: "none",
   padding: "7px 10px",
