@@ -469,3 +469,765 @@ export default function Suscripciones() {
           formulario.estado === "Activo" ? "Al Día" : formulario.estado,
         responsable_cobro: formulario.vendedor || null,
       },
+      ]);
+
+    setCargando(false);
+    alert("Membresía creada correctamente. Cuenta: " + numeroCuenta);
+
+    limpiarFormulario();
+    cargarSuscripciones();
+  }
+
+  async function renovarSuscripcion(item) {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    const confirmar = confirm(
+      `¿Registrar pago y renovar membresía de ${item.cliente}?`
+    );
+
+    if (!confirmar) return;
+
+    const precio = Number(item.precio || 0);
+
+    const fechaBase =
+      calcularDiasParaVencer(item.fecha_vencimiento) < 0
+        ? new Date().toISOString().split("T")[0]
+        : item.fecha_vencimiento;
+
+    const nuevaFecha = calcularVencimientoDesde(fechaBase, item.periodicidad);
+
+    const { error: errorCaja } = await supabase.from("caja").insert([
+      {
+        empresa_id: empresaId,
+        cliente_id: item.cliente_id,
+        informacion_comercial_id: item.informacion_comercial_id,
+        tipo: "Suscripción",
+        tipo_movimiento: "PAGO_MEMBRESIA",
+        descripcion: `Renovación de membresía: ${item.plan}`,
+        monto: precio,
+        metodo_pago: item.forma_pago || "Efectivo",
+        fecha_pago: new Date().toISOString(),
+        estado: "Procesado",
+        cliente_nombre: item.cliente || null,
+        cliente_cedula: item.cedula || null,
+      },
+    ]);
+
+    if (errorCaja) {
+      alert("Error registrando pago: " + errorCaja.message);
+      return;
+    }
+
+    await supabase
+      .from("suscripciones")
+      .update({
+        fecha_vencimiento: nuevaFecha,
+        estado: "Activo",
+      })
+      .eq("id", item.id)
+      .eq("empresa_id", empresaId);
+
+    await supabase
+      .from("informacion_comercial")
+      .update({
+        fecha_vencimiento: nuevaFecha,
+        saldo_actual: precio,
+        estado: "Activo",
+      })
+      .eq("id", item.informacion_comercial_id)
+      .eq("empresa_id", empresaId);
+
+    await supabase
+      .from("informacion_cobranza")
+      .update({
+        estado_cobranza: "Al Día",
+        fecha_ultimo_pago: new Date().toISOString(),
+        monto_ultimo_pago: precio,
+      })
+      .eq("informacion_comercial_id", item.informacion_comercial_id)
+      .eq("empresa_id", empresaId);
+
+    alert("Membresía renovada correctamente.");
+    cargarSuscripciones();
+    cargarPagos();
+  }
+
+  async function cambiarEstado(item, nuevoEstado) {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    await supabase
+      .from("suscripciones")
+      .update({ estado: nuevoEstado })
+      .eq("id", item.id)
+      .eq("empresa_id", empresaId);
+
+    await supabase
+      .from("informacion_comercial")
+      .update({ estado: nuevoEstado })
+      .eq("id", item.informacion_comercial_id)
+      .eq("empresa_id", empresaId);
+
+    await supabase
+      .from("informacion_cobranza")
+      .update({ estado_cobranza: nuevoEstado })
+      .eq("informacion_comercial_id", item.informacion_comercial_id)
+      .eq("empresa_id", empresaId);
+
+    alert(`Membresía actualizada a ${nuevoEstado}.`);
+    cargarSuscripciones();
+  }
+  return (
+    <div style={pagina}>
+      <div style={contenedor}>
+        <div style={logoBox}>
+          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+        </div>
+
+        <h1 style={titulo}>Suscripciones y Membresías</h1>
+
+        <p style={subtitulo}>
+          Control de membresías, vencimientos, renovaciones, pagos y WhatsApp.
+        </p>
+
+        <div style={resumenGrid}>
+          <div style={resumenCard}>
+            <span>Activas</span>
+            <strong>{totalActivas}</strong>
+          </div>
+
+          <div style={resumenCard}>
+            <span>Por vencer</span>
+            <strong>{totalPorVencer}</strong>
+          </div>
+
+          <div style={resumenCard}>
+            <span>Vencidas</span>
+            <strong>{totalVencidas}</strong>
+          </div>
+
+          <div style={resumenCard}>
+            <span>Suspendidas</span>
+            <strong>{totalSuspendidas}</strong>
+          </div>
+
+          <div style={resumenCard}>
+            <span>Ingresos del mes</span>
+            <strong>${ingresosMes.toFixed(2)}</strong>
+          </div>
+        </div>
+
+        <div style={gridDos}>
+          <div style={card}>
+            <h2>Próximos Vencimientos</h2>
+
+            {proximosVencimientos.length === 0 ? (
+              <p>No hay vencimientos próximos.</p>
+            ) : (
+              proximosVencimientos.map((item) => (
+                <div key={item.id} style={alertaBox}>
+                  <strong>{item.cliente}</strong>
+                  <p>
+                    {item.plan} vence en{" "}
+                    {calcularDiasParaVencer(item.fecha_vencimiento)} días.
+                  </p>
+                  <button
+                    style={whatsappBtn}
+                    onClick={() => enviarWhatsApp(item)}
+                  >
+                    WhatsApp
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div style={card}>
+            <h2>Membresías Vencidas</h2>
+
+            {membresiasVencidas.length === 0 ? (
+              <p>No hay membresías vencidas.</p>
+            ) : (
+              membresiasVencidas.map((item) => (
+                <div key={item.id} style={vencidaBox}>
+                  <strong>{item.cliente}</strong>
+                  <p>
+                    {item.plan} venció hace{" "}
+                    {Math.abs(calcularDiasParaVencer(item.fecha_vencimiento))}{" "}
+                    días.
+                  </p>
+                  <button
+                    style={botonNaranja}
+                    onClick={() => cambiarEstado(item, "Suspendido")}
+                  >
+                    Suspender
+                  </button>
+                  <button
+                    style={whatsappBtn}
+                    onClick={() => enviarWhatsApp(item)}
+                  >
+                    WhatsApp
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div style={card}>
+          <h2>Crear Membresía</h2>
+
+          <div style={toolbar}>
+            <input
+              placeholder="Para buscar cliente escriba cédula o nombre aquí..."
+              value={formulario.cedula}
+              onChange={(e) =>
+                setFormulario({ ...formulario, cedula: e.target.value })
+              }
+              style={input}
+            />
+
+            <button
+              onClick={buscarClienteParaFormulario}
+              style={botonSecundario}
+            >
+              Buscar cliente
+            </button>
+          </div>
+
+          <div style={grid}>
+            <input
+              placeholder="Nombre del cliente"
+              value={formulario.cliente}
+              onChange={(e) =>
+                setFormulario({ ...formulario, cliente: e.target.value })
+              }
+              style={input}
+            />
+
+            <input
+              placeholder="Teléfono para WhatsApp"
+              value={formulario.telefono}
+              onChange={(e) =>
+                setFormulario({ ...formulario, telefono: e.target.value })
+              }
+              style={input}
+            />
+
+            <input
+              placeholder="Correo"
+              value={formulario.correo}
+              onChange={(e) =>
+                setFormulario({ ...formulario, correo: e.target.value })
+              }
+              style={input}
+            />
+
+            <input
+              placeholder="Plan / Membresía"
+              value={formulario.plan}
+              onChange={(e) =>
+                setFormulario({ ...formulario, plan: e.target.value })
+              }
+              style={input}
+            />
+
+            <input
+              placeholder="Precio"
+              type="number"
+              value={formulario.precio}
+              onChange={(e) =>
+                setFormulario({ ...formulario, precio: e.target.value })
+              }
+              style={input}
+            />
+
+            <select
+              value={formulario.periodicidad}
+              onChange={(e) =>
+                setFormulario({ ...formulario, periodicidad: e.target.value })
+              }
+              style={input}
+            >
+              <option>Mensual</option>
+              <option>Trimestral</option>
+              <option>Semestral</option>
+              <option>Anual</option>
+            </select>
+
+            <select
+              value={formulario.formaPago}
+              onChange={(e) =>
+                setFormulario({ ...formulario, formaPago: e.target.value })
+              }
+              style={input}
+            >
+              <option>Efectivo</option>
+              <option>Transferencia</option>
+              <option>Tarjeta</option>
+              <option>Yappy</option>
+              <option>ACH</option>
+              <option>Débito Directo</option>
+            </select>
+
+            <input
+              placeholder="Responsable / Vendedor"
+              value={formulario.vendedor}
+              onChange={(e) =>
+                setFormulario({ ...formulario, vendedor: e.target.value })
+              }
+              style={input}
+            />
+
+            <input
+              type="date"
+              value={formulario.fechaInicio}
+              onChange={(e) =>
+                setFormulario({ ...formulario, fechaInicio: e.target.value })
+              }
+              style={input}
+            />
+
+            <input
+              value={calcularVencimiento()}
+              readOnly
+              placeholder="Fecha vencimiento"
+              style={{
+                ...input,
+                background: "#f3f4f6",
+                fontWeight: "bold",
+              }}
+            />
+
+            <select
+              value={formulario.estado}
+              onChange={(e) =>
+                setFormulario({ ...formulario, estado: e.target.value })
+              }
+              style={input}
+            >
+              <option>Activo</option>
+              <option>Pendiente</option>
+              <option>Suspendido</option>
+              <option>Cancelado</option>
+            </select>
+          </div>
+
+          <textarea
+            placeholder="Descripción / Nota"
+            value={formulario.descripcion}
+            onChange={(e) =>
+              setFormulario({ ...formulario, descripcion: e.target.value })
+            }
+            style={textarea}
+          />
+
+          <button onClick={crearSuscripcion} disabled={cargando} style={boton}>
+            {cargando ? "Guardando..." : "Crear Membresía"}
+          </button>
+        </div>
+
+        <div style={card}>
+          <h2>Clientes con Membresía</h2>
+
+          <div style={toolbar}>
+            <input
+              placeholder="Buscar cliente, cédula, teléfono o plan..."
+              value={busquedaMembresia}
+              onChange={(e) => setBusquedaMembresia(e.target.value)}
+              style={input}
+            />
+
+            <button
+              onClick={() => setBusquedaMembresia("")}
+              style={botonSecundario}
+            >
+              Ver todos
+            </button>
+          </div>
+
+          <div style={{ overflowX: "auto" }}>
+            <table style={tabla}>
+              <thead>
+                <tr>
+                  <th style={th}>Cliente</th>
+                  <th style={th}>Cédula</th>
+                  <th style={th}>Teléfono</th>
+                  <th style={th}>Plan</th>
+                  <th style={th}>Precio</th>
+                  <th style={th}>Vence</th>
+                  <th style={th}>Días</th>
+                  <th style={th}>Estado</th>
+                  <th style={th}>Acciones</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {membresiasFiltradas.length === 0 ? (
+                  <tr>
+                    <td style={td} colSpan="9">
+                      No hay membresías registradas.
+                    </td>
+                  </tr>
+                ) : (
+                  membresiasFiltradas.map((item) => {
+                    const dias = calcularDiasParaVencer(item.fecha_vencimiento);
+                    const estado = obtenerEstadoVisual(item);
+
+                    return (
+                      <tr key={item.id}>
+                        <td style={td}>{item.cliente}</td>
+                        <td style={td}>{item.cedula}</td>
+                        <td style={td}>{item.telefono || "-"}</td>
+                        <td style={td}>{item.plan}</td>
+                        <td style={td}>
+                          ${Number(item.precio || 0).toFixed(2)}
+                        </td>
+                        <td style={td}>{item.fecha_vencimiento || "-"}</td>
+                        <td style={td}>{dias}</td>
+                        <td style={td}>
+                          <span
+                            style={
+                              estado === "Vencida" || estado === "Suspendido"
+                                ? estadoRojo
+                                : estadoVerde
+                            }
+                          >
+                            {estado}
+                          </span>
+                        </td>
+                        <td style={td}>
+                          <button
+                            style={botonPequeno}
+                            onClick={() => renovarSuscripcion(item)}
+                          >
+                            Renovar
+                          </button>
+
+                          <button
+                            style={botonNaranja}
+                            onClick={() => cambiarEstado(item, "Suspendido")}
+                          >
+                            Suspender
+                          </button>
+
+                          <button
+                            style={botonAzul}
+                            onClick={() => cambiarEstado(item, "Activo")}
+                          >
+                            Reactivar
+                          </button>
+
+                          <button
+                            style={botonSecundarioMini}
+                            onClick={() => verHistorialCliente(item)}
+                          >
+                            Historial
+                          </button>
+
+                          <button
+                            style={whatsappBtn}
+                            onClick={() => enviarWhatsApp(item)}
+                          >
+                            WhatsApp
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style={card} id="historial-pagos">
+          <h2>Historial de Pagos</h2>
+
+          <div style={toolbar}>
+            <input
+              placeholder="Buscar historial por cliente, cédula, método o descripción..."
+              value={busquedaPagos}
+              onChange={(e) => setBusquedaPagos(e.target.value)}
+              style={input}
+            />
+
+            <button
+              onClick={() => setBusquedaPagos("")}
+              style={botonSecundario}
+            >
+              Ver todos
+            </button>
+          </div>
+
+          <div style={{ overflowX: "auto" }}>
+            <table style={tabla}>
+              <thead>
+                <tr>
+                  <th style={th}>Fecha</th>
+                  <th style={th}>Cliente</th>
+                  <th style={th}>Cédula</th>
+                  <th style={th}>Descripción</th>
+                  <th style={th}>Monto</th>
+                  <th style={th}>Método</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {pagosFiltrados.length === 0 ? (
+                  <tr>
+                    <td style={td} colSpan="6">
+                      No hay pagos registrados.
+                    </td>
+                  </tr>
+                ) : (
+                  pagosFiltrados.map((pago) => (
+                    <tr key={pago.id}>
+                      <td style={td}>
+                        {pago.fecha_pago
+                          ? new Date(pago.fecha_pago).toLocaleString()
+                          : "-"}
+                      </td>
+                      <td style={td}>{pago.cliente_nombre || "-"}</td>
+                      <td style={td}>{pago.cliente_cedula || "-"}</td>
+                      <td style={td}>{pago.descripcion || "-"}</td>
+                      <td style={td}>${Number(pago.monto || 0).toFixed(2)}</td>
+                      <td style={td}>{pago.metodo_pago || "-"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const pagina = {
+  minHeight: "100vh",
+  background: "#f3f4f6",
+  padding: "40px",
+  fontFamily: "Arial, sans-serif",
+};
+
+const contenedor = {
+  maxWidth: "1300px",
+  margin: "0 auto",
+};
+
+const logoBox = {
+  textAlign: "center",
+  marginBottom: "25px",
+};
+
+const logo = {
+  width: "260px",
+  maxWidth: "100%",
+  height: "auto",
+};
+
+const titulo = {
+  fontSize: "40px",
+  marginBottom: "10px",
+  color: "#111827",
+};
+
+const subtitulo = {
+  color: "#6b7280",
+  fontSize: "18px",
+  marginBottom: "30px",
+};
+
+const resumenGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+  gap: "15px",
+  marginBottom: "20px",
+};
+
+const resumenCard = {
+  background: "#ffffff",
+  padding: "18px",
+  borderRadius: "14px",
+  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+  display: "grid",
+  gap: "8px",
+};
+
+const gridDos = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))",
+  gap: "20px",
+};
+
+const card = {
+  background: "#ffffff",
+  padding: "25px",
+  borderRadius: "16px",
+  marginBottom: "20px",
+  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+};
+
+const alertaBox = {
+  background: "#fef9c3",
+  padding: "12px",
+  borderRadius: "10px",
+  marginBottom: "10px",
+};
+
+const vencidaBox = {
+  background: "#fee2e2",
+  padding: "12px",
+  borderRadius: "10px",
+  marginBottom: "10px",
+};
+
+const grid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))",
+  gap: "15px",
+};
+
+const toolbar = {
+  display: "grid",
+  gridTemplateColumns: "1fr auto",
+  gap: "12px",
+  marginBottom: "15px",
+};
+
+const input = {
+  width: "100%",
+  padding: "12px",
+  borderRadius: "8px",
+  border: "1px solid #d1d5db",
+  boxSizing: "border-box",
+};
+
+const textarea = {
+  width: "100%",
+  minHeight: "100px",
+  marginTop: "15px",
+  padding: "12px",
+  borderRadius: "8px",
+  border: "1px solid #d1d5db",
+  boxSizing: "border-box",
+};
+
+const boton = {
+  marginTop: "15px",
+  background: "#16a34a",
+  color: "#fff",
+  border: "none",
+  padding: "12px 25px",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontWeight: "bold",
+};
+
+const botonSecundario = {
+  background: "#111827",
+  color: "#ffffff",
+  border: "none",
+  padding: "12px 18px",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontWeight: "bold",
+};
+
+const botonSecundarioMini = {
+  background: "#111827",
+  color: "#ffffff",
+  border: "none",
+  padding: "7px 10px",
+  borderRadius: "7px",
+  cursor: "pointer",
+  marginRight: "6px",
+  marginBottom: "5px",
+  fontWeight: "bold",
+};
+
+const tabla = {
+  width: "100%",
+  borderCollapse: "collapse",
+  marginTop: "15px",
+  fontSize: "14px",
+};
+
+const th = {
+  textAlign: "left",
+  padding: "10px",
+  borderBottom: "1px solid #e5e7eb",
+  background: "#f9fafb",
+};
+
+const td = {
+  padding: "10px",
+  borderBottom: "1px solid #f3f4f6",
+};
+
+const botonPequeno = {
+  background: "#16a34a",
+  color: "#fff",
+  border: "none",
+  padding: "7px 10px",
+  borderRadius: "7px",
+  cursor: "pointer",
+  marginRight: "6px",
+  marginBottom: "5px",
+  fontWeight: "bold",
+};
+
+const botonNaranja = {
+  background: "#f97316",
+  color: "#fff",
+  border: "none",
+  padding: "7px 10px",
+  borderRadius: "7px",
+  cursor: "pointer",
+  marginRight: "6px",
+  marginBottom: "5px",
+  fontWeight: "bold",
+};
+
+const botonAzul = {
+  background: "#2563eb",
+  color: "#fff",
+  border: "none",
+  padding: "7px 10px",
+  borderRadius: "7px",
+  cursor: "pointer",
+  marginRight: "6px",
+  marginBottom: "5px",
+  fontWeight: "bold",
+};
+
+const whatsappBtn = {
+  background: "#25D366",
+  color: "#fff",
+  border: "none",
+  padding: "7px 10px",
+  borderRadius: "7px",
+  cursor: "pointer",
+  marginRight: "6px",
+  marginBottom: "5px",
+  fontWeight: "bold",
+};
+
+const estadoVerde = {
+  background: "#dcfce7",
+  color: "#166534",
+  padding: "5px 10px",
+  borderRadius: "999px",
+  fontWeight: "bold",
+};
+
+const estadoRojo = {
+  background: "#fee2e2",
+  color: "#991b1b",
+  padding: "5px 10px",
+  borderRadius: "999px",
+  fontWeight: "bold",
+};
