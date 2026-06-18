@@ -32,10 +32,12 @@ export default function Suscripciones() {
 
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
+
     if (!empresaId) {
       alert("No hay empresa activa.");
       return null;
     }
+
     return empresaId;
   }
 
@@ -45,6 +47,7 @@ export default function Suscripciones() {
 
   function sumarMesesFecha(fechaTexto, meses) {
     if (!fechaTexto) return "";
+
     const [anio, mes, dia] = fechaTexto.split("-").map(Number);
     const fecha = new Date(anio, mes - 1 + meses, dia);
 
@@ -56,10 +59,12 @@ export default function Suscripciones() {
 
   function calcularVencimientoDesde(fechaBase, periodicidad) {
     if (!fechaBase) return "";
+
     if (periodicidad === "Mensual") return sumarMesesFecha(fechaBase, 1);
     if (periodicidad === "Trimestral") return sumarMesesFecha(fechaBase, 3);
     if (periodicidad === "Semestral") return sumarMesesFecha(fechaBase, 6);
     if (periodicidad === "Anual") return sumarMesesFecha(fechaBase, 12);
+
     return fechaBase;
   }
 
@@ -114,9 +119,11 @@ export default function Suscripciones() {
 
   function limpiarTelefono(telefono) {
     const limpio = String(telefono || "").replace(/\D/g, "");
+
     if (!limpio) return "";
     if (limpio.startsWith("507")) return limpio;
     if (limpio.length === 8) return "507" + limpio;
+
     return limpio;
   }
 
@@ -130,18 +137,22 @@ export default function Suscripciones() {
 
     const estado = obtenerEstadoVisual(item);
 
+    let textoEstado = "";
+
+    if (estado === "Vencida") {
+      textoEstado = "se encuentra vencida";
+    } else if (estado === "Por vencer") {
+      textoEstado = `vence el ${item.fecha_vencimiento}`;
+    } else {
+      textoEstado = `está activa hasta el ${item.fecha_vencimiento}`;
+    }
+
     const mensaje = `Hola ${item.cliente || ""}. Te recordamos que tu membresía ${
       item.plan || ""
-    } ${
-      estado === "Vencida"
-        ? "se encuentra vencida"
-        : estado === "Por vencer"
-        ? vence el ${item.fecha_vencimiento}
-        : está activa hasta el ${item.fecha_vencimiento}
-    }. Para mantener el servicio activo, puedes realizar tu pago. Gracias.`;
+    } ${textoEstado}. Para mantener el servicio activo, puedes realizar tu pago. Gracias.`;
 
     window.open(
-      https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)},
+      `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`,
       "_blank"
     );
   }
@@ -280,7 +291,7 @@ export default function Suscripciones() {
       .from("clientes")
       .select("*")
       .eq("empresa_id", empresaId)
-      .or(cedula.ilike.%${texto}%,nombre.ilike.%${texto}%)
+      .or(`cedula.ilike.%${texto}%,nombre.ilike.%${texto}%`)
       .limit(1);
 
     if (error) {
@@ -399,7 +410,7 @@ export default function Suscripciones() {
           numero_cuenta: numeroCuenta,
           tipo_producto: "Membresía",
           tipo_cuenta: "Suscripción",
-          descripcion: ${formulario.plan} - ${formulario.descripcion},
+          descripcion: `${formulario.plan} - ${formulario.descripcion}`,
           modalidad: formulario.periodicidad,
           monto_total: precio,
           saldo_actual: precio,
@@ -473,7 +484,7 @@ export default function Suscripciones() {
     if (!empresaId) return;
 
     const confirmar = confirm(
-      ¿Registrar pago y renovar membresía de ${item.cliente}?
+      `¿Registrar pago y renovar membresía de ${item.cliente}?`
     );
 
     if (!confirmar) return;
@@ -494,7 +505,7 @@ export default function Suscripciones() {
         informacion_comercial_id: item.informacion_comercial_id,
         tipo: "Suscripción",
         tipo_movimiento: "PAGO_MEMBRESIA",
-        descripcion: Renovación de membresía: ${item.plan},
+        descripcion: `Renovación de membresía: ${item.plan}`,
         monto: precio,
         metodo_pago: item.forma_pago || "Efectivo",
         fecha_pago: new Date().toISOString(),
@@ -590,7 +601,7 @@ export default function Suscripciones() {
       .eq("informacion_comercial_id", item.informacion_comercial_id)
       .eq("empresa_id", empresaId);
 
-    alert(Membresía actualizada a ${nuevoEstado}.);
+    alert(`Membresía actualizada a ${nuevoEstado}.`);
     cargarSuscripciones();
   }
 
@@ -612,18 +623,22 @@ export default function Suscripciones() {
             <span>Activas</span>
             <strong>{totalActivas}</strong>
           </div>
+
           <div style={resumenCard}>
             <span>Por vencer</span>
             <strong>{totalPorVencer}</strong>
           </div>
+
           <div style={resumenCard}>
             <span>Vencidas</span>
             <strong>{totalVencidas}</strong>
           </div>
+
           <div style={resumenCard}>
             <span>Suspendidas</span>
             <strong>{totalSuspendidas}</strong>
           </div>
+
           <div style={resumenCard}>
             <span>Ingresos del mes</span>
             <strong>${ingresosMes.toFixed(2)}</strong>
@@ -644,7 +659,11 @@ export default function Suscripciones() {
                     {item.plan} vence en{" "}
                     {calcularDiasParaVencer(item.fecha_vencimiento)} días.
                   </p>
-                  <button style={whatsappBtn} onClick={() => enviarWhatsApp(item)}>
+
+                  <button
+                    style={whatsappBtn}
+                    onClick={() => enviarWhatsApp(item)}
+                  >
                     WhatsApp
                   </button>
                 </div>
@@ -666,13 +685,18 @@ export default function Suscripciones() {
                     {Math.abs(calcularDiasParaVencer(item.fecha_vencimiento))}{" "}
                     días.
                   </p>
+
                   <button
                     style={botonNaranja}
                     onClick={() => cambiarEstado(item, "Suspendido")}
                   >
                     Suspender
                   </button>
-                  <button style={whatsappBtn} onClick={() => enviarWhatsApp(item)}>
+
+                  <button
+                    style={whatsappBtn}
+                    onClick={() => enviarWhatsApp(item)}
+                  >
                     WhatsApp
                   </button>
                 </div>
@@ -694,7 +718,10 @@ export default function Suscripciones() {
               style={input}
             />
 
-            <button onClick={buscarClienteParaFormulario} style={botonSecundario}>
+            <button
+              onClick={buscarClienteParaFormulario}
+              style={botonSecundario}
+            >
               Buscar cliente
             </button>
           </div>
@@ -965,7 +992,10 @@ export default function Suscripciones() {
               style={input}
             />
 
-            <button onClick={() => setBusquedaPagos("")} style={botonSecundario}>
+            <button
+              onClick={() => setBusquedaPagos("")}
+              style={botonSecundario}
+            >
               Ver todos
             </button>
           </div>
