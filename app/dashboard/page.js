@@ -56,7 +56,7 @@ export default function Dashboard() {
     { nombre: "Recargos", ruta: "/recargos", activo: modulos.recargos },
     { nombre: "Dashboard Ventas", ruta: "/dashboard-ventas", activo: modulos.dashboard_ventas },
     { nombre: "Dashboard Cobros", ruta: "/dashboard-cobranza", activo: modulos.dashboard_cobros },
-    { nombre: "Egresos", ruta: "/egresos", activo: modulos.egresos },
+    { nombre: "Gastos", ruta: "/gastos", activo: modulos.egresos },
   ];
 
   function cerrarSesion() {
