@@ -70,7 +70,7 @@ export default function Dashboard() {
         <div>
           <h1 style={titulo}>Centro de Operaciones KONAX</h1>
           <p style={subtitulo}>
-            Empresa: <strong>{empresaNombre}</strong>
+            Negocio actual: <strong>{empresaNombre}</strong>
           </p>
         </div>
 
