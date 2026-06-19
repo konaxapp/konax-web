@@ -5,9 +5,7 @@ import { supabase } from "../../lib/supabase";
 
 export default function Caja() {
   const [tipoMovimiento, setTipoMovimiento] = useState("Venta Contado");
-  const [fechaPago, setFechaPago] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [fechaPago, setFechaPago] = useState(new Date().toISOString().split("T")[0]);
 
   const [buscarCliente, setBuscarCliente] = useState("");
   const [resultadosBusqueda, setResultadosBusqueda] = useState([]);
@@ -44,6 +42,45 @@ export default function Caja() {
 
   function generarTransaccion() {
     return "TX-" + Date.now();
+  }
+
+  function sumarMesesFecha(fechaTexto, meses) {
+    if (!fechaTexto) return "";
+
+    const [anio, mes, dia] = fechaTexto.split("-").map(Number);
+    const fecha = new Date(anio, mes - 1 + meses, dia);
+
+    return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(fecha.getDate()).padStart(2, "0")}`;
+  }
+
+  function calcularDiasParaVencer(fechaVencimiento) {
+    if (!fechaVencimiento) return 0;
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const [anio, mes, dia] = fechaVencimiento.split("-").map(Number);
+    const vence = new Date(anio, mes - 1, dia);
+    vence.setHours(0, 0, 0, 0);
+
+    return Math.ceil((vence - hoy) / (1000 * 60 * 60 * 24));
+  }
+
+  function calcularNuevoVencimiento(fechaActual, periodicidad) {
+    const fechaBase =
+      calcularDiasParaVencer(fechaActual) < 0
+        ? new Date().toISOString().split("T")[0]
+        : fechaActual;
+
+    if (periodicidad === "Mensual") return sumarMesesFecha(fechaBase, 1);
+    if (periodicidad === "Trimestral") return sumarMesesFecha(fechaBase, 3);
+    if (periodicidad === "Semestral") return sumarMesesFecha(fechaBase, 6);
+    if (periodicidad === "Anual") return sumarMesesFecha(fechaBase, 12);
+
+    return sumarMesesFecha(fechaBase, 1);
   }
 
   async function cargarMovimientos() {
@@ -166,6 +203,65 @@ export default function Caja() {
     setCuentaSeleccionada(resultado.cuenta || data[0]);
   }
 
+  async function renovarSuscripcionDesdeCaja(empresaId, cuenta, montoPago) {
+    const { data: suscripcion, error } = await supabase
+      .from("suscripciones")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("informacion_comercial_id", cuenta.id)
+      .maybeSingle();
+
+    if (error) {
+      alert("Pago registrado, pero error buscando suscripción: " + error.message);
+      return;
+    }
+
+    if (!suscripcion) {
+      alert("Pago registrado, pero no se encontró una suscripción asociada a esta cuenta.");
+      return;
+    }
+
+    const nuevaFecha = calcularNuevoVencimiento(
+      suscripcion.fecha_vencimiento,
+      suscripcion.periodicidad
+    );
+
+    const precio = Number(suscripcion.precio || cuenta.cuota || montoPago || 0);
+
+    await supabase
+      .from("suscripciones")
+      .update({
+        fecha_vencimiento: nuevaFecha,
+        estado: "Activo",
+      })
+      .eq("id", suscripcion.id)
+      .eq("empresa_id", empresaId);
+
+    await supabase
+      .from("informacion_comercial")
+      .update({
+        fecha_vencimiento: nuevaFecha,
+        saldo_actual: precio,
+        estado: "Activo",
+        estado_servicio: "Activo",
+        fecha_suspension: null,
+        fecha_cancelacion: null,
+        motivo_suspension: null,
+      })
+      .eq("id", cuenta.id)
+      .eq("empresa_id", empresaId);
+
+    await supabase
+      .from("informacion_cobranza")
+      .update({
+        estado_cobranza: "Al Día",
+        fecha_ultimo_pago: fechaPago,
+        monto_ultimo_pago: Number(montoPago),
+      })
+      .eq("empresa_id", empresaId)
+      .eq("informacion_comercial_id", cuenta.id);
+  }
+
   async function guardarMovimiento() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
@@ -245,6 +341,14 @@ export default function Caja() {
         alert("Movimiento registrado, pero error actualizando cobranza: " + errorCobranza.message);
         return;
       }
+
+      if (tipoMovimiento === "Suscripción" || tipoMovimiento === "Membresía") {
+        await renovarSuscripcionDesdeCaja(
+          empresaId,
+          cuentaSeleccionada,
+          Number(monto)
+        );
+      }
     }
 
     alert("Movimiento registrado correctamente.");
@@ -310,11 +414,11 @@ export default function Caja() {
                 style={inputStyle}
               >
                 <option>Venta Contado</option>
-                <option>Venta Crédito</option>
                 <option>Abono</option>
                 <option>Pago Crédito</option>
                 <option>Mensualidad</option>
                 <option>Suscripción</option>
+                <option>Membresía</option>
                 <option>Contrato</option>
               </select>
             </div>
@@ -529,6 +633,14 @@ export default function Caja() {
                     <td style={td}>{movimiento.estado}</td>
                   </tr>
                 ))}
+
+                {movimientos.length === 0 && (
+                  <tr>
+                    <td style={td} colSpan="11">
+                      No hay movimientos registrados.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
