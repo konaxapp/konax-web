@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 export default function Admin() {
   return (
     <div style={pagina}>
@@ -10,25 +12,25 @@ export default function Admin() {
       </p>
 
       <div style={grid}>
-        <a href="/empresas" style={card}>
+        <Link href="/empresas" style={card}>
           <h3>Empresas</h3>
           <p>Crear y administrar empresas.</p>
-        </a>
+        </Link>
 
-        <a href="/usuarios" style={card}>
+        <Link href="/usuarios" style={card}>
           <h3>Usuarios</h3>
           <p>Crear usuarios y asignar empresas.</p>
-        </a>
+        </Link>
 
-        <a href="/roles" style={card}>
+        <Link href="/roles" style={card}>
           <h3>Roles</h3>
           <p>Administrar roles y permisos.</p>
-        </a>
+        </Link>
 
-        <a href="/dashboard" style={card}>
+        <Link href="/dashboard" style={card}>
           <h3>Dashboard</h3>
           <p>Ir al centro de operaciones.</p>
-        </a>
+        </Link>
       </div>
     </div>
   );
