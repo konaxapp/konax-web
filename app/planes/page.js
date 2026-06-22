@@ -149,10 +149,9 @@ export default function Planes() {
     }
 
     const payloadModulos = {
-      empresa_id: empresaId,
-      ...plan.modulos,
-      updated_at: new Date().toISOString(),
-    };
+  empresa_id: empresaId,
+  ...plan.modulos,
+};
 
     const { data: existeModulo, error: errorBuscar } = await supabase
       .from("empresa_modulos")
