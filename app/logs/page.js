@@ -1,9 +1,9 @@
 "use client";
 
-export default function Logs() {
+export default function Modulos() {
   return (
     <div style={pagina}>
-      <h1>Logs</h1>
+      <h1>Módulos</h1>
       <p>Pantalla en construcción.</p>
       <a href="/admin" style={boton}>
         Volver al Panel Administrador
