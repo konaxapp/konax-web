@@ -164,3 +164,7 @@ export default function Empresas() {
               <input
                 type="text"
                 placeholder="Ej. Hot Dog City"
+   value={nombre}
+  onChange={(e) => setNombre(e.target.value)}
+  style={inputStyle}
+/>
