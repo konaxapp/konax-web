@@ -4,11 +4,7 @@ export default function Facturacion() {
   return (
     <div style={pagina}>
       <h1>Facturación</h1>
-
-      <p>
-        Pantalla en construcción para controlar pagos, planes, mensualidades y estado de clientes KONAX.
-      </p>
-
+      <p>Pantalla en construcción.</p>
       <a href="/admin" style={boton}>
         Volver al Panel Administrador
       </a>
