@@ -1,32 +1,138 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function Planes() {
   const [tipoPlan, setTipoPlan] = useState("mensual");
+  const [empresaId, setEmpresaId] = useState("");
+  const [empresaNombre, setEmpresaNombre] = useState("");
 
-  function obtenerEmpresaId() {
-    const empresaId = localStorage.getItem("empresaId");
+  useEffect(() => {
+    const id = localStorage.getItem("empresaAdminCreadaId");
+    const nombre = localStorage.getItem("empresaAdminCreadaNombre");
 
-    if (!empresaId) {
-      alert("No hay empresa activa. Configure la empresa antes de seleccionar un plan.");
-      return null;
+    if (!id) {
+      alert("Primero debes crear o seleccionar una empresa.");
+      window.location.href = "/empresas";
+      return;
     }
 
-    return empresaId;
-  }
+    setEmpresaId(id);
+    setEmpresaNombre(nombre || "Empresa seleccionada");
+  }, []);
 
-  async function seleccionarPlan(plan) {
-    const empresaId = obtenerEmpresaId();
-    if (!empresaId) return;
+  const planes = [
+    {
+      nombre: "KONAX Básico",
+      codigo: "basico",
+      precioMensual: "49",
+      precioAnual: "499",
+      color: "#2563eb",
+      modulos: {
+        clientes: true,
+        vista_cliente: true,
+        caja: false,
+        control_caja: false,
+        cobranza: true,
+        inventario: false,
+        venta_credito: true,
+        suscripciones: false,
+        recargos: false,
+        dashboard_ventas: false,
+        dashboard_cobros: true,
+        egresos: false,
+      },
+      incluye: [
+        "Clientes",
+        "Créditos",
+        "Cobranza",
+        "Pagos",
+        "Promesas de pago",
+        "Bitácora básica",
+        "Dashboard de cobranza",
+      ],
+    },
+    {
+      nombre: "KONAX Gestión",
+      codigo: "gestion",
+      precioMensual: "99",
+      precioAnual: "999",
+      color: "#10b981",
+      modulos: {
+        clientes: true,
+        vista_cliente: true,
+        caja: true,
+        control_caja: true,
+        cobranza: true,
+        inventario: true,
+        venta_credito: true,
+        suscripciones: false,
+        recargos: false,
+        dashboard_ventas: true,
+        dashboard_cobros: true,
+        egresos: true,
+      },
+      incluye: [
+        "Todo Básico",
+        "Inventario",
+        "Ventas crédito",
+        "Caja",
+        "Control caja",
+        "Gastos",
+        "Reportes básicos",
+      ],
+    },
+    {
+      nombre: "KONAX Empresarial",
+      codigo: "empresarial",
+      precioMensual: "499",
+      precioAnual: "4990",
+      color: "#111827",
+      modulos: {
+        clientes: true,
+        vista_cliente: true,
+        caja: true,
+        control_caja: true,
+        cobranza: true,
+        inventario: true,
+        venta_credito: true,
+        suscripciones: true,
+        recargos: true,
+        dashboard_ventas: true,
+        dashboard_cobros: true,
+        egresos: true,
+      },
+      incluye: [
+        "Todo Gestión",
+        "Suscripciones",
+        "Recargos",
+        "Dashboard gerencial",
+        "Reportes avanzados",
+        "Módulos personalizados",
+        "Soporte especializado",
+      ],
+    },
+  ];
+
+  async function asignarPlan(plan) {
+    if (!empresaId) {
+      alert("No hay empresa seleccionada.");
+      return;
+    }
 
     const precio =
       tipoPlan === "mensual"
         ? Number(plan.precioMensual)
         : Number(plan.precioAnual);
 
-    const { error } = await supabase
+    const confirmar = confirm(
+      `Se asignará ${plan.nombre} a ${empresaNombre}. ¿Deseas continuar?`
+    );
+
+    if (!confirmar) return;
+
+    const { error: errorEmpresa } = await supabase
       .from("empresas")
       .update({
         plan_codigo: plan.codigo,
@@ -37,69 +143,58 @@ export default function Planes() {
       })
       .eq("id", empresaId);
 
-    if (error) {
-      alert("Error al guardar el plan en Supabase: " + error.message);
+    if (errorEmpresa) {
+      alert("Error al guardar el plan: " + errorEmpresa.message);
       return;
     }
 
-    window.location.href = "/confirmacion";
-  }
+    const payloadModulos = {
+      empresa_id: empresaId,
+      ...plan.modulos,
+      updated_at: new Date().toISOString(),
+    };
 
-  const planes = [
-    {
-      nombre: "KONAX Básico",
-      codigo: "basico",
-      precioMensual: "49",
-      precioAnual: "499",
-      color: "#2563eb",
-      incluye: [
-        "Clientes",
-        "Créditos",
-        "Cobranza",
-        "Pagos",
-        "Promesas de pago",
-        "Bitácora básica",
-      ],
-    },
-    {
-      nombre: "KONAX Gestión",
-      codigo: "gestion",
-      precioMensual: "99",
-      precioAnual: "999",
-      color: "#10b981",
-      incluye: [
-        "Todo Básico",
-        "Inventario",
-        "Ventas crédito",
-        "Caja",
-        "Usuarios",
-        "Reportes básicos",
-      ],
-    },
-    {
-      nombre: "KONAX Empresarial",
-      codigo: "empresarial",
-      precioMensual: "499",
-      precioAnual: "4990",
-      color: "#111827",
-      incluye: [
-        "Todo Gestión",
-        "Multiempresa",
-        "Dashboard gerencial",
-        "Reportes avanzados",
-        "Módulos personalizados",
-        "Soporte especializado",
-      ],
-    },
-  ];
+    const { data: existeModulo, error: errorBuscar } = await supabase
+      .from("empresa_modulos")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    if (errorBuscar) {
+      alert("Plan guardado, pero error verificando módulos: " + errorBuscar.message);
+      return;
+    }
+
+    let errorModulos;
+
+    if (existeModulo?.id) {
+      const res = await supabase
+        .from("empresa_modulos")
+        .update(payloadModulos)
+        .eq("id", existeModulo.id);
+
+      errorModulos = res.error;
+    } else {
+      const res = await supabase.from("empresa_modulos").insert([payloadModulos]);
+      errorModulos = res.error;
+    }
+
+    if (errorModulos) {
+      alert("Plan guardado, pero error activando módulos: " + errorModulos.message);
+      return;
+    }
+
+    alert("Plan y módulos asignados correctamente. Ahora crea el usuario administrador inicial.");
+    window.location.href = "/usuarios";
+  }
 
   return (
     <div style={pagina}>
       <div style={card}>
-        <h1 style={titulo}>Selecciona tu Plan</h1>
+        <h1 style={titulo}>Asignar Plan a Empresa</h1>
 
         <p style={subtitulo}>
-          Elige el plan que mejor se adapte a tu negocio.
+          Empresa seleccionada: <strong>{empresaNombre}</strong>
         </p>
 
         <div style={toggleBox}>
@@ -143,7 +238,7 @@ export default function Planes() {
               </ul>
 
               <button
-                onClick={() => seleccionarPlan(plan)}
+                onClick={() => asignarPlan(plan)}
                 style={{
                   width: "100%",
                   padding: "12px",
@@ -155,15 +250,19 @@ export default function Planes() {
                   fontWeight: "bold",
                 }}
               >
-                Seleccionar
+                Asignar Plan
               </button>
             </div>
           ))}
         </div>
 
         <p style={nota}>
-          Precios mensuales: Básico $49 · Gestión $99 · Empresarial $499
+          Flujo: Empresa → Plan → Módulos → Usuario Administrador Inicial.
         </p>
+
+        <a href="/empresas" style={botonVolver}>
+          Volver a Empresas
+        </a>
       </div>
     </div>
   );
@@ -173,7 +272,7 @@ const pagina = {
   minHeight: "100vh",
   background: "#f5f7fb",
   padding: "40px",
-  fontFamily: "Arial",
+  fontFamily: "Arial, sans-serif",
 };
 
 const card = {
@@ -232,7 +331,7 @@ const planesBox = {
 const lista = {
   color: "#666",
   paddingLeft: "20px",
-  minHeight: "160px",
+  minHeight: "190px",
 };
 
 const nota = {
@@ -240,4 +339,15 @@ const nota = {
   marginTop: "30px",
   color: "#777",
   fontSize: "14px",
+};
+
+const botonVolver = {
+  display: "inline-block",
+  marginTop: "20px",
+  background: "#111827",
+  color: "#ffffff",
+  padding: "12px 18px",
+  borderRadius: "8px",
+  textDecoration: "none",
+  fontWeight: "bold",
 };
