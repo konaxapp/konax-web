@@ -126,7 +126,7 @@ export default function Usuarios() {
     }
 
     alert("Configuración finalizada. Ya puedes entregar las credenciales al cliente.");
-    window.location.href = "/admin";
+    window.location.href = "/dashboard";
   }
 
   return (
@@ -161,7 +161,7 @@ export default function Usuarios() {
         </div>
 
         <div style={campo}>
-          <label>Contraseña Temporal</label>
+          <label>Contraseña de Acceso</label>
           <input
             type="text"
             placeholder="Ej. 123456"
