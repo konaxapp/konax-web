@@ -163,4 +163,4 @@ export default function Empresas() {
               <label>Nombre de la Empresa</label>
               <input
                 type="text"
-                placeholder="Ej. Hot Dog City
+                placeholder="Ej. Hot Dog City"
