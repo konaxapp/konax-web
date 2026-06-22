@@ -17,45 +17,11 @@ export default function Empresas() {
   const [guardando, setGuardando] = useState(false);
 
   const categorias = {
-    "Ventas a Crédito": [
-      "Mueblería",
-      "Electrónica",
-      "Distribuidora",
-      "Cooperativa",
-      "Financiera",
-      "Casa de Empeño",
-    ],
-    "Suscripciones y Membresías": [
-      "Gimnasio",
-      "IPTV",
-      "Internet y Cable",
-      "Club",
-      "Servicio por Membresía",
-    ],
-    Comercio: [
-      "Ferretería",
-      "Farmacia",
-      "Tienda",
-      "Mercado",
-      "Repuestos",
-      "Boutique",
-    ],
-    Servicios: [
-      "Seguridad",
-      "Limpieza",
-      "Jardinería",
-      "Mantenimiento",
-      "Veterinaria",
-      "Clínica",
-      "Belleza",
-      "Consultoría",
-    ],
-    Educación: [
-      "Escuela",
-      "Colegio",
-      "Academia",
-      "Centro de Capacitación",
-    ],
+    "Ventas a Crédito": ["Mueblería", "Electrónica", "Distribuidora", "Cooperativa", "Financiera", "Casa de Empeño"],
+    "Suscripciones y Membresías": ["Gimnasio", "IPTV", "Internet y Cable", "Club", "Servicio por Membresía"],
+    Comercio: ["Ferretería", "Farmacia", "Tienda", "Mercado", "Repuestos", "Boutique"],
+    Servicios: ["Seguridad", "Limpieza", "Jardinería", "Mantenimiento", "Veterinaria", "Clínica", "Belleza", "Consultoría"],
+    Educación: ["Escuela", "Colegio", "Academia", "Centro de Capacitación"],
   };
 
   useEffect(() => {
@@ -131,11 +97,10 @@ export default function Empresas() {
     localStorage.setItem("tipoNegocioAdmin", data.tipo_negocio || "");
 
     alert("Empresa creada correctamente. Ahora selecciona el plan.");
-
     limpiarFormulario();
     cargarEmpresas();
 
-    window.location.href = "/admin/planes";
+    window.location.href = "/planes";
   }
 
   async function cambiarEstadoEmpresa(empresa, nuevoEstado) {
@@ -168,8 +133,7 @@ export default function Empresas() {
           <div>
             <h1 style={titulo}>Empresas Clientes</h1>
             <p style={subtitulo}>
-              Crea empresas clientes para luego asignar plan, módulos y usuario
-              administrador inicial.
+              Crea empresas clientes para luego asignar plan, módulos y usuario administrador inicial.
             </p>
           </div>
 
@@ -183,43 +147,19 @@ export default function Empresas() {
 
           <div style={grid}>
             <Campo label="Nombre de la Empresa">
-              <input
-                type="text"
-                placeholder="Ej. Hot Dog City"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                style={inputStyle}
-              />
+              <input type="text" placeholder="Ej. Hot Dog City" value={nombre} onChange={(e) => setNombre(e.target.value)} style={inputStyle} />
             </Campo>
 
             <Campo label="Teléfono">
-              <input
-                type="text"
-                placeholder="Ej. 6000-0000"
-                value={telefono}
-                onChange={(e) => setTelefono(e.target.value)}
-                style={inputStyle}
-              />
+              <input type="text" placeholder="Ej. 6000-0000" value={telefono} onChange={(e) => setTelefono(e.target.value)} style={inputStyle} />
             </Campo>
 
             <Campo label="Correo">
-              <input
-                type="email"
-                placeholder="empresa@correo.com"
-                value={correo}
-                onChange={(e) => setCorreo(e.target.value)}
-                style={inputStyle}
-              />
+              <input type="email" placeholder="empresa@correo.com" value={correo} onChange={(e) => setCorreo(e.target.value)} style={inputStyle} />
             </Campo>
 
             <Campo label="Dirección">
-              <input
-                type="text"
-                placeholder="Dirección del negocio"
-                value={direccion}
-                onChange={(e) => setDireccion(e.target.value)}
-                style={inputStyle}
-              />
+              <input type="text" placeholder="Dirección del negocio" value={direccion} onChange={(e) => setDireccion(e.target.value)} style={inputStyle} />
             </Campo>
 
             <Campo label="Categoría del Negocio">
@@ -233,36 +173,23 @@ export default function Empresas() {
               >
                 <option value="">Seleccione una categoría</option>
                 {Object.keys(categorias).map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
+                  <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
             </Campo>
 
             <Campo label="Tipo de Negocio">
-              <select
-                value={tipoNegocio}
-                onChange={(e) => setTipoNegocio(e.target.value)}
-                style={inputStyle}
-                disabled={!categoria}
-              >
+              <select value={tipoNegocio} onChange={(e) => setTipoNegocio(e.target.value)} style={inputStyle} disabled={!categoria}>
                 <option value="">Seleccione el tipo de negocio</option>
                 {categoria &&
                   categorias[categoria].map((negocio) => (
-                    <option key={negocio} value={negocio}>
-                      {negocio}
-                    </option>
+                    <option key={negocio} value={negocio}>{negocio}</option>
                   ))}
               </select>
             </Campo>
 
             <Campo label="Tipo de Recargo">
-              <select
-                value={tipoRecargo}
-                onChange={(e) => setTipoRecargo(e.target.value)}
-                style={inputStyle}
-              >
+              <select value={tipoRecargo} onChange={(e) => setTipoRecargo(e.target.value)} style={inputStyle}>
                 <option>Sin recargo</option>
                 <option>Mensual</option>
                 <option>Semanal</option>
@@ -272,11 +199,7 @@ export default function Empresas() {
             </Campo>
 
             <Campo label="Estado">
-              <select
-                value={estado}
-                onChange={(e) => setEstado(e.target.value)}
-                style={inputStyle}
-              >
+              <select value={estado} onChange={(e) => setEstado(e.target.value)} style={inputStyle}>
                 <option>Activo</option>
                 <option>Suspendido</option>
                 <option>Cancelado</option>
@@ -311,9 +234,7 @@ export default function Empresas() {
               <tbody>
                 {empresas.length === 0 ? (
                   <tr>
-                    <td style={td} colSpan="9">
-                      No hay empresas registradas.
-                    </td>
+                    <td style={td} colSpan="9">No hay empresas registradas.</td>
                   </tr>
                 ) : (
                   empresas.map((empresa) => (
@@ -331,14 +252,7 @@ export default function Empresas() {
                       <td style={td}>{empresa.estado_plan || "Pendiente"}</td>
 
                       <td style={td}>
-                        <span
-                          style={
-                            empresa.estado === "Activo" ||
-                            empresa.estado === "Activa"
-                              ? estadoActivo
-                              : estadoInactivo
-                          }
-                        >
+                        <span style={empresa.estado === "Activo" || empresa.estado === "Activa" ? estadoActivo : estadoInactivo}>
                           {empresa.estado || "Activo"}
                         </span>
                       </td>
@@ -348,38 +262,27 @@ export default function Empresas() {
                       </td>
 
                       <td style={td}>
-                        <button
-                          style={botonMini}
-                          onClick={() => seleccionarEmpresa(empresa)}
-                        >
+                        <button style={botonMini} onClick={() => seleccionarEmpresa(empresa)}>
                           Seleccionar
                         </button>
 
-                        <Link href="/admin/planes" style={linkMini}>
+                        <Link href="/planes" style={linkMini}>
                           Plan
                         </Link>
 
-                        <Link href="/admin/modulos" style={linkMini}>
+                        <Link href="/modulos" style={linkMini}>
                           Módulos
                         </Link>
 
-                        <Link href="/admin/usuarios" style={linkMini}>
+                        <Link href="/usuarios" style={linkMini}>
                           Admin
                         </Link>
 
-                        <button
-                          style={botonNaranja}
-                          onClick={() =>
-                            cambiarEstadoEmpresa(empresa, "Suspendido")
-                          }
-                        >
+                        <button style={botonNaranja} onClick={() => cambiarEstadoEmpresa(empresa, "Suspendido")}>
                           Suspender
                         </button>
 
-                        <button
-                          style={botonMini}
-                          onClick={() => cambiarEstadoEmpresa(empresa, "Activo")}
-                        >
+                        <button style={botonMini} onClick={() => cambiarEstadoEmpresa(empresa, "Activo")}>
                           Activar
                         </button>
                       </td>
@@ -391,8 +294,7 @@ export default function Empresas() {
           </div>
 
           <p style={nota}>
-            Flujo: crear empresa → asignar plan → activar módulos → crear usuario
-            administrador inicial.
+            Flujo: crear empresa → asignar plan → activar módulos → crear usuario administrador inicial.
           </p>
         </div>
       </div>
