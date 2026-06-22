@@ -4,14 +4,26 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function Usuarios() {
-  const [empresaId, setEmpresaId] = useState(null);
+  const [empresaId, setEmpresaId] = useState("");
+  const [empresaNombre, setEmpresaNombre] = useState("");
   const [nombre, setNombre] = useState("");
   const [correo, setCorreo] = useState("");
-  const [rol, setRol] = useState("Administrador");
+  const [password, setPassword] = useState("");
   const [usuarios, setUsuarios] = useState([]);
+  const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
-    cargarEmpresaActiva();
+    const id = localStorage.getItem("empresaAdminCreadaId");
+    const nombreEmpresa = localStorage.getItem("empresaAdminCreadaNombre");
+
+    if (!id) {
+      alert("Primero debes crear o seleccionar una empresa.");
+      window.location.href = "/empresas";
+      return;
+    }
+
+    setEmpresaId(id);
+    setEmpresaNombre(nombreEmpresa || "Empresa seleccionada");
   }, []);
 
   useEffect(() => {
@@ -19,37 +31,6 @@ export default function Usuarios() {
       cargarUsuarios();
     }
   }, [empresaId]);
-
-  function actualizarCantidadUsuarios(listaUsuarios) {
-    const totalUsuarios = listaUsuarios.length;
-
-    localStorage.setItem("cantidadUsuarios", String(totalUsuarios));
-
-    const empresaConfigurada = localStorage.getItem("empresaConfigurada");
-
-    if (empresaConfigurada) {
-      const datosEmpresa = JSON.parse(empresaConfigurada);
-
-      localStorage.setItem(
-        "empresaConfigurada",
-        JSON.stringify({
-          ...datosEmpresa,
-          usuarios: totalUsuarios,
-        })
-      );
-    }
-  }
-
-  function cargarEmpresaActiva() {
-    const empresaIdGuardado = localStorage.getItem("empresaId");
-
-    if (!empresaIdGuardado) {
-      alert("No hay empresa activa. Configure la empresa antes de agregar usuarios.");
-      return;
-    }
-
-    setEmpresaId(empresaIdGuardado);
-  }
 
   async function cargarUsuarios() {
     const { data, error } = await supabase
@@ -63,48 +44,51 @@ export default function Usuarios() {
       return;
     }
 
-    const listaUsuarios = data || [];
-
-    setUsuarios(listaUsuarios);
-    actualizarCantidadUsuarios(listaUsuarios);
+    setUsuarios(data || []);
   }
 
-  async function agregarUsuario() {
+  async function crearAdministradorInicial() {
     if (!empresaId) {
-      alert("No hay empresa activa.");
+      alert("No hay empresa seleccionada.");
       return;
     }
 
-    if (!nombre || !correo || !rol) {
-      alert("Complete nombre, correo y rol.");
+    if (!nombre || !correo || !password) {
+      alert("Complete nombre, correo y contraseña.");
       return;
     }
+
+    setGuardando(true);
 
     const { error } = await supabase.from("usuarios").insert([
       {
         empresa_id: empresaId,
         nombre,
         correo,
-        rol,
+        password,
+        rol: "Administrador",
         estado: "Activo",
       },
     ]);
 
+    setGuardando(false);
+
     if (error) {
-      alert("Error al agregar usuario: " + error.message);
+      alert("Error creando administrador: " + error.message);
       return;
     }
 
+    alert("Usuario administrador inicial creado correctamente.");
+
     setNombre("");
     setCorreo("");
-    setRol("Administrador");
+    setPassword("");
 
     await cargarUsuarios();
   }
 
   async function eliminarUsuario(id) {
-    const confirmar = confirm("¿Desea eliminar este usuario?");
-
+    const confirmar = confirm("¿Deseas eliminar este usuario?");
     if (!confirmar) return;
 
     const { error } = await supabase
@@ -114,37 +98,50 @@ export default function Usuarios() {
       .eq("empresa_id", empresaId);
 
     if (error) {
-      alert("Error al eliminar usuario: " + error.message);
+      alert("Error eliminando usuario: " + error.message);
       return;
     }
 
-    await cargarUsuarios();
+    cargarUsuarios();
   }
 
-  function finalizarConfiguracion() {
+  async function finalizarConfiguracion() {
     const tieneAdministrador = usuarios.some(
-      (usuario) => usuario.rol === "Administrador"
+      (usuario) =>
+        usuario.rol === "Administrador" && usuario.estado === "Activo"
     );
 
     if (!tieneAdministrador) {
-      alert("Debe agregar al menos un Administrador.");
+      alert("Debe crear al menos un usuario administrador activo.");
       return;
     }
 
-    actualizarCantidadUsuarios(usuarios);
+    const { error } = await supabase
+      .from("empresas")
+      .update({ configuracion_completa: true })
+      .eq("id", empresaId);
 
-    window.location.href = "/finalizar";
+    if (error) {
+      alert("Error finalizando configuración: " + error.message);
+      return;
+    }
+
+    alert("Configuración finalizada. Ya puedes entregar las credenciales al cliente.");
+
+    window.location.href = "/admin";
   }
 
   return (
     <div style={pagina}>
       <div style={card}>
-        <h1 style={titulo}>Configura tu equipo de trabajo</h1>
+        <h1 style={titulo}>Usuario Administrador Inicial</h1>
 
-        <p style={subtitulo}>Agrega los usuarios que utilizarán KONAX</p>
+        <p style={subtitulo}>
+          Empresa seleccionada: <strong>{empresaNombre}</strong>
+        </p>
 
         <div style={campo}>
-          <label>Nombre</label>
+          <label>Nombre del Administrador</label>
           <input
             type="text"
             placeholder="Nombre completo"
@@ -155,10 +152,10 @@ export default function Usuarios() {
         </div>
 
         <div style={campo}>
-          <label>Correo Electrónico</label>
+          <label>Correo de Acceso</label>
           <input
             type="email"
-            placeholder="correo@empresa.com"
+            placeholder="admin@empresa.com"
             value={correo}
             onChange={(e) => setCorreo(e.target.value)}
             style={inputStyle}
@@ -166,26 +163,26 @@ export default function Usuarios() {
         </div>
 
         <div style={campo}>
-          <label>Rol</label>
-          <select
-            value={rol}
-            onChange={(e) => setRol(e.target.value)}
+          <label>Contraseña Temporal</label>
+          <input
+            type="text"
+            placeholder="Ej. 123456"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             style={inputStyle}
-          >
-            <option>Administrador</option>
-            <option>Supervisor</option>
-            <option>Gestor</option>
-            <option>Caja</option>
-            <option>Vendedor</option>
-          </select>
+          />
         </div>
 
-        <button onClick={agregarUsuario} style={botonAzul}>
-          Agregar Usuario
+        <button
+          onClick={crearAdministradorInicial}
+          style={botonAzul}
+          disabled={guardando}
+        >
+          {guardando ? "Guardando..." : "Crear Administrador Inicial"}
         </button>
 
         <h2 style={{ marginBottom: "20px" }}>
-          Usuarios agregados ({usuarios.length})
+          Administradores creados ({usuarios.length})
         </h2>
 
         <div style={tablaBox}>
@@ -204,7 +201,7 @@ export default function Usuarios() {
               {usuarios.length === 0 && (
                 <tr>
                   <td style={tdStyle} colSpan="5">
-                    No hay usuarios agregados.
+                    No hay administradores creados.
                   </td>
                 </tr>
               )}
@@ -220,6 +217,7 @@ export default function Usuarios() {
                       style={{
                         color: "#dc2626",
                         cursor: "pointer",
+                        fontWeight: "bold",
                       }}
                       onClick={() => eliminarUsuario(usuario.id)}
                     >
@@ -233,12 +231,16 @@ export default function Usuarios() {
         </div>
 
         <p style={nota}>
-          Se requiere al menos un Administrador para finalizar la configuración.
+          Este usuario será el primer acceso del cliente para entrar al Dashboard.
         </p>
 
         <button onClick={finalizarConfiguracion} style={botonVerde}>
           Finalizar Configuración
         </button>
+
+        <a href="/planes" style={botonVolver}>
+          Volver a Planes
+        </a>
       </div>
     </div>
   );
@@ -250,7 +252,7 @@ const pagina = {
   display: "flex",
   justifyContent: "center",
   padding: "40px",
-  fontFamily: "Arial",
+  fontFamily: "Arial, sans-serif",
 };
 
 const card = {
@@ -340,4 +342,16 @@ const botonVerde = {
   fontWeight: "bold",
   cursor: "pointer",
   boxShadow: "0 4px 12px rgba(22,163,74,0.30)",
+};
+
+const botonVolver = {
+  display: "block",
+  marginTop: "18px",
+  textAlign: "center",
+  background: "#111827",
+  color: "#ffffff",
+  padding: "12px",
+  borderRadius: "9px",
+  textDecoration: "none",
+  fontWeight: "bold",
 };
