@@ -95,24 +95,28 @@ export default function Empresas() {
 
     setGuardando(true);
 
-    const { error } = await supabase.from("empresas").insert([
-      {
-        nombre,
-        telefono,
-        correo,
-        direccion,
-        categoria_negocio: categoria,
-        tipo_negocio: tipoNegocio,
-        tipo_recargo: tipoRecargo,
-        estado,
-        configuracion_completa: false,
-        estado_plan: "Pendiente",
-        plan_codigo: null,
-        plan_nombre: null,
-        plan_tipo: null,
-        plan_precio: 0,
-      },
-    ]);
+    const { data, error } = await supabase
+      .from("empresas")
+      .insert([
+        {
+          nombre,
+          telefono,
+          correo,
+          direccion,
+          categoria_negocio: categoria,
+          tipo_negocio: tipoNegocio,
+          tipo_recargo: tipoRecargo,
+          estado,
+          configuracion_completa: false,
+          estado_plan: "Pendiente",
+          plan_codigo: null,
+          plan_nombre: null,
+          plan_tipo: null,
+          plan_precio: 0,
+        },
+      ])
+      .select()
+      .single();
 
     setGuardando(false);
 
@@ -121,12 +125,17 @@ export default function Empresas() {
       return;
     }
 
-    alert(
-      "Empresa creada correctamente. Ahora asigna plan, módulos y usuario administrador inicial."
-    );
+    localStorage.setItem("empresaAdminCreadaId", data.id);
+    localStorage.setItem("empresaAdminCreadaNombre", data.nombre || "");
+    localStorage.setItem("categoriaNegocioAdmin", data.categoria_negocio || "");
+    localStorage.setItem("tipoNegocioAdmin", data.tipo_negocio || "");
+
+    alert("Empresa creada correctamente. Ahora selecciona el plan.");
 
     limpiarFormulario();
     cargarEmpresas();
+
+    window.location.href = "/admin/planes";
   }
 
   async function cambiarEstadoEmpresa(empresa, nuevoEstado) {
@@ -144,12 +153,12 @@ export default function Empresas() {
   }
 
   function seleccionarEmpresa(empresa) {
-    localStorage.setItem("empresaId", empresa.id);
-    localStorage.setItem("empresaNombre", empresa.nombre || "");
-    localStorage.setItem("categoriaNegocio", empresa.categoria_negocio || "");
-    localStorage.setItem("tipoNegocio", empresa.tipo_negocio || "");
+    localStorage.setItem("empresaAdminCreadaId", empresa.id);
+    localStorage.setItem("empresaAdminCreadaNombre", empresa.nombre || "");
+    localStorage.setItem("categoriaNegocioAdmin", empresa.categoria_negocio || "");
+    localStorage.setItem("tipoNegocioAdmin", empresa.tipo_negocio || "");
 
-    alert("Empresa seleccionada: " + empresa.nombre);
+    alert("Empresa seleccionada para configuración: " + empresa.nombre);
   }
 
   return (
@@ -320,6 +329,7 @@ export default function Empresas() {
                       <td style={td}>{empresa.tipo_negocio || "-"}</td>
                       <td style={td}>{empresa.plan_nombre || "Sin plan"}</td>
                       <td style={td}>{empresa.estado_plan || "Pendiente"}</td>
+
                       <td style={td}>
                         <span
                           style={
@@ -332,6 +342,7 @@ export default function Empresas() {
                           {empresa.estado || "Activo"}
                         </span>
                       </td>
+
                       <td style={td}>
                         {empresa.configuracion_completa ? "Completa" : "Pendiente"}
                       </td>
@@ -344,24 +355,15 @@ export default function Empresas() {
                           Seleccionar
                         </button>
 
-                        <Link
-                          href={`/admin/planes?empresa=${empresa.id}`}
-                          style={linkMini}
-                        >
+                        <Link href="/admin/planes" style={linkMini}>
                           Plan
                         </Link>
 
-                        <Link
-                          href={`/admin/modulos?empresa=${empresa.id}`}
-                          style={linkMini}
-                        >
+                        <Link href="/admin/modulos" style={linkMini}>
                           Módulos
                         </Link>
 
-                        <Link
-                          href={`/admin/usuarios?empresa=${empresa.id}`}
-                          style={linkMini}
-                        >
+                        <Link href="/admin/usuarios" style={linkMini}>
                           Admin
                         </Link>
 
