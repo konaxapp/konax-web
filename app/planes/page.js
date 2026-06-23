@@ -42,7 +42,6 @@ export default function Planes() {
         recargos: false,
         dashboard_ventas: false,
         dashboard_cobros: true,
-        dashboard_ejecutivo: false,
         egresos: false,
       },
       incluye: [
@@ -74,7 +73,6 @@ export default function Planes() {
         recargos: false,
         dashboard_ventas: true,
         dashboard_cobros: true,
-        dashboard_ejecutivo: false,
         egresos: true,
       },
       incluye: [
@@ -106,14 +104,12 @@ export default function Planes() {
         recargos: true,
         dashboard_ventas: true,
         dashboard_cobros: true,
-        dashboard_ejecutivo: true,
         egresos: true,
       },
       incluye: [
         "Todo KONAX Ventas y Gestión",
         "Suscripciones y Membresías",
         "Recargos Automáticos",
-        "Dashboard Ejecutivo",
         "Dashboard de Ventas",
         "Dashboard de Cobranza",
         "Reportes Avanzados",
