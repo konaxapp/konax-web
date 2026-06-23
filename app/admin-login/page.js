@@ -11,7 +11,10 @@ export default function AdminLogin() {
   async function iniciarSesion(e) {
     e.preventDefault();
 
-    if (!correo || !password) {
+    const correoLimpio = correo.trim().toLowerCase();
+    const passwordLimpio = password.trim();
+
+    if (!correoLimpio || !passwordLimpio) {
       alert("Ingrese correo y contraseña.");
       return;
     }
@@ -19,11 +22,10 @@ export default function AdminLogin() {
     setCargando(true);
 
     const { data, error } = await supabase
-  .from("administradores_konax")
-  .select("*")
-  .eq("correo", correo.trim())
-  .eq("password", password.trim())
-  .maybeSingle();
+      .from("administradores_konax")
+      .select("*")
+      .ilike("correo", correoLimpio)
+      .maybeSingle();
 
     setCargando(false);
 
@@ -33,7 +35,17 @@ export default function AdminLogin() {
     }
 
     if (!data) {
-      alert("Correo o contraseña incorrectos.");
+      alert("No existe un administrador con ese correo.");
+      return;
+    }
+
+    if (String(data.password || "").trim() !== passwordLimpio) {
+      alert("La contraseña no coincide.");
+      return;
+    }
+
+    if (data.estado && data.estado !== "Activo") {
+      alert("Este administrador no está activo.");
       return;
     }
 
@@ -60,7 +72,7 @@ export default function AdminLogin() {
           <label>Correo</label>
           <input
             type="email"
-            placeholder="correo@konax.com"
+            placeholder="correo@konax.net"
             value={correo}
             onChange={(e) => setCorreo(e.target.value)}
             style={input}
