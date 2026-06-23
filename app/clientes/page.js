@@ -266,7 +266,7 @@ export default function CuentasPorCobrar() {
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>👤 Información del Cliente</h2>
+          <h2 style={tituloSeccion}>Información del Cliente</h2>
 
           <div style={grid}>
             <input placeholder="Cédula / Identificación *" value={cedula} onChange={(e) => setCedula(e.target.value)} style={inputStyle} />
@@ -278,7 +278,7 @@ export default function CuentasPorCobrar() {
             <input placeholder="Nombre de referencia" value={referenciaNombre} onChange={(e) => setReferenciaNombre(e.target.value)} style={inputStyle} />
             <input placeholder="Teléfono de referencia" value={referenciaTelefono} onChange={(e) => setReferenciaTelefono(e.target.value)} style={inputStyle} />
 
-            <select value={estadoCliente} onChange={(e) => setEstadoCliente(e.target.value)} style={inputStyle}>
+            <select value={estadoCliente} onChange={(e) => setEstadoCliente(e.target.value)} style={selectStyle}>
               <option>Activo</option>
               <option>Inactivo</option>
             </select>
@@ -286,17 +286,12 @@ export default function CuentasPorCobrar() {
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>💰 Información de la Cuenta por Cobrar</h2>
+          <h2 style={tituloSeccion}>Información de la Cuenta por Cobrar</h2>
 
           <div style={grid}>
-            <input
-              placeholder="Número de cuenta (opcional)"
-              value={numeroCuenta}
-              onChange={(e) => setNumeroCuenta(e.target.value)}
-              style={inputStyle}
-            />
+            <input placeholder="Número de cuenta (opcional)" value={numeroCuenta} onChange={(e) => setNumeroCuenta(e.target.value)} style={inputStyle} />
 
-            <select value={tipoProducto} onChange={(e) => setTipoProducto(e.target.value)} style={inputStyle}>
+            <select value={tipoProducto} onChange={(e) => setTipoProducto(e.target.value)} style={selectStyle}>
               <option value="">Seleccione tipo de cuenta</option>
               <option>Crédito</option>
               <option>Préstamo</option>
@@ -308,7 +303,7 @@ export default function CuentasPorCobrar() {
               <option>Servicio pendiente</option>
             </select>
 
-            <select value={modalidad} onChange={(e) => setModalidad(e.target.value)} style={inputStyle}>
+            <select value={modalidad} onChange={(e) => setModalidad(e.target.value)} style={selectStyle}>
               <option value="">Seleccione frecuencia de cobro</option>
               <option>Semanal</option>
               <option>Quincenal</option>
@@ -333,7 +328,7 @@ export default function CuentasPorCobrar() {
               <input type="date" value={fechaVencimiento} onChange={(e) => setFechaVencimiento(e.target.value)} style={inputStyle} />
             </div>
 
-            <select value={estadoCuenta} onChange={(e) => setEstadoCuenta(e.target.value)} style={inputStyle}>
+            <select value={estadoCuenta} onChange={(e) => setEstadoCuenta(e.target.value)} style={selectStyle}>
               <option>Activo</option>
               <option>Suspendido</option>
               <option>Cancelado</option>
@@ -349,10 +344,10 @@ export default function CuentasPorCobrar() {
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>📋 Información de Cobranza Inicial</h2>
+          <h2 style={tituloSeccion}>Información de Cobranza Inicial</h2>
 
           <div style={grid}>
-            <select value={estadoCobranza} onChange={(e) => setEstadoCobranza(e.target.value)} style={inputStyle}>
+            <select value={estadoCobranza} onChange={(e) => setEstadoCobranza(e.target.value)} style={selectStyle}>
               <option>Al Día</option>
               <option>Mora</option>
               <option>Legal</option>
@@ -461,9 +456,17 @@ const inputStyle = {
   width: "100%",
   padding: "12px",
   borderRadius: "8px",
-  border: "1px solid #d1d5db",
+  border: "1px solid #9ca3af",
   fontSize: "14px",
   boxSizing: "border-box",
+  backgroundColor: "#ffffff",
+  color: "#111827",
+  fontWeight: "500",
+};
+
+const selectStyle = {
+  ...inputStyle,
+  fontWeight: "600",
 };
 
 const labelStyle = {
