@@ -19,12 +19,11 @@ export default function AdminLogin() {
     setCargando(true);
 
     const { data, error } = await supabase
-      .from("administradores_konax")
-      .select("*")
-      .eq("correo", correo.trim())
-      .eq("password", password.trim())
-      .eq("estado", "Activo")
-      .maybeSingle();
+  .from("administradores_konax")
+  .select("*")
+  .eq("correo", correo.trim())
+  .eq("password", password.trim())
+  .maybeSingle();
 
     setCargando(false);
 
