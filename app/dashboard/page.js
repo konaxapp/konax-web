@@ -34,6 +34,7 @@ export default function Dashboard() {
     setEmpresaNombre(
       empresa?.nombre || localStorage.getItem("empresaNombre") || "Empresa"
     );
+
     setPlanNombre(empresa?.plan_nombre || "Sin plan");
 
     const { data: modulosData, error: errorModulos } = await supabase
@@ -58,6 +59,10 @@ export default function Dashboard() {
   function cerrarSesion() {
     localStorage.clear();
     window.location.href = "/login";
+  }
+
+  function abrirModulo(ruta) {
+    window.location.href = ruta;
   }
 
   if (!modulos) {
@@ -146,9 +151,11 @@ export default function Dashboard() {
       <div style={encabezado}>
         <div>
           <h1 style={titulo}>Centro de Operaciones KONAX</h1>
+
           <p style={subtitulo}>
             Negocio actual: <strong>{empresaNombre}</strong>
           </p>
+
           <p style={plan}>
             Plan activo: <strong>{planNombre}</strong>
           </p>
@@ -161,18 +168,20 @@ export default function Dashboard() {
 
       <div style={grid}>
         {tarjetasActivas.map((item) => (
-          <a key={item.nombre} href={item.ruta} style={card}>
+          <div
+            key={item.nombre}
+            style={card}
+            onClick={() => abrirModulo(item.ruta)}
+          >
             <h3 style={cardTitulo}>{item.nombre}</h3>
             <p style={cardTexto}>{item.descripcion}</p>
             <span style={abrir}>Abrir módulo →</span>
-          </a>
+          </div>
         ))}
       </div>
 
       {tarjetasActivas.length === 0 && (
-        <div style={sinModulos}>
-          Esta empresa no tiene módulos activos.
-        </div>
+        <div style={sinModulos}>Esta empresa no tiene módulos activos.</div>
       )}
     </div>
   );
@@ -233,6 +242,7 @@ const card = {
   color: "#111",
   background: "#fff",
   boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+  cursor: "pointer",
 };
 
 const cardTitulo = {
