@@ -6,12 +6,13 @@ import { supabase } from "../../lib/supabase";
 export default function Dashboard() {
   const [modulos, setModulos] = useState(null);
   const [empresaNombre, setEmpresaNombre] = useState("");
+  const [planNombre, setPlanNombre] = useState("");
 
   useEffect(() => {
-    cargarModulos();
+    cargarDashboard();
   }, []);
 
-  async function cargarModulos() {
+  async function cargarDashboard() {
     const empresaId = localStorage.getItem("empresaId");
 
     if (!empresaId) {
@@ -19,25 +20,44 @@ export default function Dashboard() {
       return;
     }
 
-    setEmpresaNombre(localStorage.getItem("empresaNombre") || "Empresa");
+    const { data: empresa, error: errorEmpresa } = await supabase
+      .from("empresas")
+      .select("nombre, plan_nombre, estado_plan")
+      .eq("id", empresaId)
+      .maybeSingle();
 
-    const { data, error } = await supabase
+    if (errorEmpresa) {
+      alert("Error cargando empresa: " + errorEmpresa.message);
+      return;
+    }
+
+    setEmpresaNombre(
+      empresa?.nombre || localStorage.getItem("empresaNombre") || "Empresa"
+    );
+    setPlanNombre(empresa?.plan_nombre || "Sin plan");
+
+    const { data: modulosData, error: errorModulos } = await supabase
       .from("empresa_modulos")
       .select("*")
       .eq("empresa_id", empresaId)
       .maybeSingle();
 
-    if (error) {
-      alert("Error cargando módulos: " + error.message);
+    if (errorModulos) {
+      alert("Error cargando módulos: " + errorModulos.message);
       return;
     }
 
-    if (!data) {
+    if (!modulosData) {
       alert("Esta empresa no tiene módulos asignados.");
       return;
     }
 
-    setModulos(data);
+    setModulos(modulosData);
+  }
+
+  function cerrarSesion() {
+    localStorage.clear();
+    window.location.href = "/login";
   }
 
   if (!modulos) {
@@ -45,24 +65,81 @@ export default function Dashboard() {
   }
 
   const tarjetas = [
-    { nombre: "Clientes", ruta: "/clientes", activo: modulos.clientes },
-    { nombre: "Vista Cliente", ruta: "/vista-cliente", activo: modulos.vista_cliente },
-    { nombre: "Caja", ruta: "/caja", activo: modulos.caja },
-    { nombre: "Control Caja", ruta: "/control-caja", activo: modulos.control_caja },
-    { nombre: "Cobranza", ruta: "/cartera", activo: modulos.cobranza },
-    { nombre: "Inventario", ruta: "/inventario", activo: modulos.inventario },
-    { nombre: "Venta Crédito", ruta: "/ventas-credito", activo: modulos.venta_credito },
-    { nombre: "Suscripciones", ruta: "/suscripciones", activo: modulos.suscripciones },
-    { nombre: "Recargos", ruta: "/recargos", activo: modulos.recargos },
-    { nombre: "Dashboard Ventas", ruta: "/dashboard-ventas", activo: modulos.dashboard_ventas },
-    { nombre: "Dashboard Cobros", ruta: "/dashboard-cobranza", activo: modulos.dashboard_cobros },
-    { nombre: "Gastos", ruta: "/gastos", activo: modulos.egresos },
+    {
+      nombre: "Clientes",
+      descripcion: "Registro y consulta de clientes.",
+      ruta: "/clientes",
+      activo: modulos.clientes,
+    },
+    {
+      nombre: "Vista Cliente",
+      descripcion: "Ficha individual, historial y datos del cliente.",
+      ruta: "/vista-cliente",
+      activo: modulos.vista_cliente,
+    },
+    {
+      nombre: "Créditos",
+      descripcion: "Registro y control de ventas o créditos otorgados.",
+      ruta: "/ventas-credito",
+      activo: modulos.venta_credito,
+    },
+    {
+      nombre: "Caja Básica",
+      descripcion: "Registro básico de pagos y abonos.",
+      ruta: "/caja",
+      activo: modulos.caja,
+    },
+    {
+      nombre: "Cobranza",
+      descripcion: "Gestión de cobros, promesas e historial de seguimiento.",
+      ruta: "/cobranza",
+      activo: modulos.cobranza,
+    },
+    {
+      nombre: "Dashboard de Cobranza",
+      descripcion: "Indicadores de cartera, mora, cobros y gestores.",
+      ruta: "/dashboard-cobranza",
+      activo: modulos.dashboard_cobros,
+    },
+    {
+      nombre: "Inventario",
+      descripcion: "Productos, stock y movimientos de inventario.",
+      ruta: "/inventario",
+      activo: modulos.inventario,
+    },
+    {
+      nombre: "Control Caja",
+      descripcion: "Cierres, arqueos y control operativo de caja.",
+      ruta: "/control-caja",
+      activo: modulos.control_caja,
+    },
+    {
+      nombre: "Suscripciones",
+      descripcion: "Membresías, vencimientos y renovaciones.",
+      ruta: "/suscripciones",
+      activo: modulos.suscripciones,
+    },
+    {
+      nombre: "Recargos",
+      descripcion: "Configuración y aplicación de recargos.",
+      ruta: "/recargos",
+      activo: modulos.recargos,
+    },
+    {
+      nombre: "Dashboard Ventas",
+      descripcion: "Indicadores comerciales y ventas.",
+      ruta: "/dashboard-ventas",
+      activo: modulos.dashboard_ventas,
+    },
+    {
+      nombre: "Gastos",
+      descripcion: "Registro y control de gastos del negocio.",
+      ruta: "/gastos",
+      activo: modulos.egresos,
+    },
   ];
 
-  function cerrarSesion() {
-    localStorage.clear();
-    window.location.href = "/login";
-  }
+  const tarjetasActivas = tarjetas.filter((item) => item.activo);
 
   return (
     <div style={pagina}>
@@ -72,6 +149,9 @@ export default function Dashboard() {
           <p style={subtitulo}>
             Negocio actual: <strong>{empresaNombre}</strong>
           </p>
+          <p style={plan}>
+            Plan activo: <strong>{planNombre}</strong>
+          </p>
         </div>
 
         <button onClick={cerrarSesion} style={botonSalir}>
@@ -80,15 +160,20 @@ export default function Dashboard() {
       </div>
 
       <div style={grid}>
-        {tarjetas
-          .filter((item) => item.activo)
-          .map((item) => (
-            <a key={item.nombre} href={item.ruta} style={card}>
-              <h3 style={cardTitulo}>{item.nombre}</h3>
-              <p style={cardTexto}>Abrir módulo</p>
-            </a>
-          ))}
+        {tarjetasActivas.map((item) => (
+          <a key={item.nombre} href={item.ruta} style={card}>
+            <h3 style={cardTitulo}>{item.nombre}</h3>
+            <p style={cardTexto}>{item.descripcion}</p>
+            <span style={abrir}>Abrir módulo →</span>
+          </a>
+        ))}
       </div>
+
+      {tarjetasActivas.length === 0 && (
+        <div style={sinModulos}>
+          Esta empresa no tiene módulos activos.
+        </div>
+      )}
     </div>
   );
 }
@@ -116,6 +201,12 @@ const titulo = {
 const subtitulo = {
   color: "#666",
   marginTop: "8px",
+  marginBottom: "4px",
+};
+
+const plan = {
+  color: "#2563eb",
+  marginTop: "4px",
 };
 
 const botonSalir = {
@@ -151,4 +242,20 @@ const cardTitulo = {
 const cardTexto = {
   color: "#666",
   marginTop: "10px",
+  minHeight: "42px",
+};
+
+const abrir = {
+  display: "inline-block",
+  marginTop: "10px",
+  color: "#2563eb",
+  fontWeight: "bold",
+};
+
+const sinModulos = {
+  background: "#fff",
+  padding: "20px",
+  borderRadius: "12px",
+  color: "#666",
+  marginTop: "20px",
 };
