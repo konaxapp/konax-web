@@ -154,3 +154,111 @@ export default function PlanEmpresa() {
     if (modulos?.id) {
       const res = await supabase
         .from("empresa_modulos")
+        .update(payloadModulos)
+        .eq("id", modulos.id);
+
+      errorModulos = res.error;
+    } else {
+      const res = await supabase.from("empresa_modulos").insert([payloadModulos]);
+      errorModulos = res.error;
+    }
+
+    if (errorModulos) {
+      alert("Plan cambiado, pero error actualizando módulos: " + errorModulos.message);
+      return;
+    }
+
+    alert("Plan y módulos actualizados correctamente.");
+    cargarEmpresa();
+  }
+
+  if (cargando) {
+    return <div style={{ padding: "30px" }}>Cargando plan de empresa...</div>;
+  }
+
+  return (
+    <div style={pagina}>
+      <div style={header}>
+        <div>
+          <h1 style={titulo}>Gestionar Plan</h1>
+          <p style={subtitulo}>
+            Empresa: <strong>{empresa.nombre}</strong>
+          </p>
+        </div>
+
+        <Link href="/empresas" style={botonVolver}>
+          Volver a Empresas
+        </Link>
+      </div>
+
+      <div style={cardActual}>
+        <h2>Plan Actual</h2>
+
+        <p>
+          <strong>Plan:</strong> {empresa.plan_nombre || "Sin plan"}
+        </p>
+
+        <p>
+          <strong>Tipo:</strong> {empresa.plan_tipo || "No definido"}
+        </p>
+
+        <p>
+          <strong>Precio:</strong> ${Number(empresa.plan_precio || 0).toFixed(2)}
+        </p>
+
+        <p>
+          <strong>Estado:</strong> {empresa.estado_plan || "Pendiente"}
+        </p>
+      </div>
+
+      <div style={toggleBox}>
+        <button
+          onClick={() => setTipoPlan("mensual")}
+          style={tipoPlan === "mensual" ? botonActivo : botonInactivo}
+        >
+          Mensual
+        </button>
+
+        <button
+          onClick={() => setTipoPlan("anual")}
+          style={tipoPlan === "anual" ? botonActivo : botonInactivo}
+        >
+          Anual
+        </button>
+      </div>
+
+      <div style={grid}>
+        {planes.map((plan) => {
+          const precio = tipoPlan === "mensual" ? plan.precioMensual : plan.precioAnual;
+          const esActual = empresa.plan_codigo === plan.codigo;
+
+          return (
+            <div key={plan.codigo} style={{ ...card, border: `2px solid ${plan.color}` }}>
+              <h2>{plan.nombre}</h2>
+              <h1>${precio}</h1>
+
+              {esActual && <p style={actual}>Plan actual</p>}
+
+              <button
+                onClick={() => cambiarPlan(plan)}
+                style={{ ...botonPlan, background: plan.color }}
+              >
+                {esActual ? "Actualizar Plan Actual" : "Cambiar a este Plan"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const pagina = {
+  minHeight: "100vh",
+  background: "#f3f4f6",
+  padding: "35px",
+  fontFamily: "Arial, sans-serif",
+};
+
+const header = {
+  display:
