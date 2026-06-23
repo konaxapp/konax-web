@@ -5,6 +5,9 @@ import { supabase } from "../../lib/supabase";
 
 export default function VistaCliente() {
   const [buscar, setBuscar] = useState("");
+  function volverDashboard() {
+  window.location.href = "/dashboard";
+}
   const [resultados, setResultados] = useState([]);
 
   const [cliente, setCliente] = useState(null);
@@ -366,9 +369,15 @@ export default function VistaCliente() {
     <div style={pagina}>
       <div style={contenedor}>
         <div style={encabezado}>
-          <img src="/konax-logo.png" alt="KONAX" style={logo} />
-          <h1 style={titulo}>Vista Cliente</h1>
-        </div>
+  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+    <img src="/konax-logo.png" alt="KONAX" style={logo} />
+    <h1 style={titulo}>Vista Cliente</h1>
+  </div>
+
+  <button onClick={volverDashboard} style={botonDashboard}>
+    ← Volver al Dashboard
+  </button>
+</div>
 
         <div style={card}>
           <h2 style={tituloSeccion}>Buscar Cliente</h2>
@@ -600,9 +609,11 @@ const contenedor = {
 
 const encabezado = {
   display: "flex",
+  justifyContent: "space-between",
   alignItems: "center",
   gap: "14px",
   marginBottom: "10px",
+  flexWrap: "wrap",
 };
 
 const logo = {
@@ -735,6 +746,15 @@ const whatsappBtn = {
   border: "none",
   background: "#25D366",
   color: "#ffffff",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+const botonDashboard = {
+  background: "#111827",
+  color: "#ffffff",
+  border: "none",
+  padding: "11px 18px",
+  borderRadius: "8px",
   fontWeight: "bold",
   cursor: "pointer",
 };
