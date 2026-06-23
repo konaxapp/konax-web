@@ -7,6 +7,7 @@ export default function Dashboard() {
   const [modulos, setModulos] = useState(null);
   const [empresaNombre, setEmpresaNombre] = useState("");
   const [planNombre, setPlanNombre] = useState("");
+  const [planCodigo, setPlanCodigo] = useState("");
 
   useEffect(() => {
     cargarDashboard();
@@ -22,7 +23,7 @@ export default function Dashboard() {
 
     const { data: empresa, error: errorEmpresa } = await supabase
       .from("empresas")
-      .select("nombre, plan_nombre, estado_plan")
+      .select("nombre, plan_nombre, plan_codigo, estado_plan")
       .eq("id", empresaId)
       .maybeSingle();
 
@@ -36,6 +37,7 @@ export default function Dashboard() {
     );
 
     setPlanNombre(empresa?.plan_nombre || "Sin plan");
+    setPlanCodigo(empresa?.plan_codigo || "");
 
     const { data: modulosData, error: errorModulos } = await supabase
       .from("empresa_modulos")
@@ -57,7 +59,13 @@ export default function Dashboard() {
   }
 
   function cerrarSesion() {
-    localStorage.clear();
+    localStorage.removeItem("empresaId");
+    localStorage.removeItem("empresaNombre");
+    localStorage.removeItem("usuarioId");
+    localStorage.removeItem("usuarioNombre");
+    localStorage.removeItem("usuarioCorreo");
+    localStorage.removeItem("usuarioRol");
+
     window.location.href = "/login";
   }
 
@@ -69,10 +77,14 @@ export default function Dashboard() {
     return <div style={{ padding: "30px" }}>Cargando Dashboard...</div>;
   }
 
+  const esPlanCobros = planCodigo === "cobros";
+
   const tarjetas = [
     {
-      nombre: "Clientes",
-      descripcion: "Registro y consulta de clientes.",
+      nombre: esPlanCobros ? "Cuentas por Cobrar" : "Clientes",
+      descripcion: esPlanCobros
+        ? "Carga inicial de clientes y cartera existente."
+        : "Registro y consulta de clientes.",
       ruta: "/clientes",
       activo: modulos.clientes,
     },
@@ -86,7 +98,7 @@ export default function Dashboard() {
       nombre: "Créditos",
       descripcion: "Registro y control de ventas o créditos otorgados.",
       ruta: "/ventas-credito",
-      activo: modulos.venta_credito,
+      activo: !esPlanCobros && modulos.venta_credito,
     },
     {
       nombre: "Caja Básica",
@@ -150,11 +162,9 @@ export default function Dashboard() {
     <div style={pagina}>
       <div style={encabezado}>
         <div>
-          <h1 style={titulo}>Centro de Operaciones KONAX</h1>
+          <h1 style={titulo}>{empresaNombre}</h1>
 
-          <p style={subtitulo}>
-            Negocio actual: <strong>{empresaNombre}</strong>
-          </p>
+          <p style={subtitulo}>Panel de trabajo</p>
 
           <p style={plan}>
             Plan activo: <strong>{planNombre}</strong>
@@ -205,17 +215,21 @@ const encabezado = {
 const titulo = {
   margin: 0,
   color: "#111827",
+  fontSize: "34px",
+  fontWeight: "bold",
 };
 
 const subtitulo = {
-  color: "#666",
+  color: "#6b7280",
   marginTop: "8px",
   marginBottom: "4px",
+  fontSize: "16px",
 };
 
 const plan = {
   color: "#2563eb",
   marginTop: "4px",
+  fontSize: "15px",
 };
 
 const botonSalir = {
