@@ -261,4 +261,94 @@ const pagina = {
 };
 
 const header = {
-  display:
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: "25px",
+};
+
+const titulo = {
+  margin: 0,
+  color: "#111827",
+};
+
+const subtitulo = {
+  color: "#6b7280",
+};
+
+const botonVolver = {
+  background: "#111827",
+  color: "#ffffff",
+  padding: "12px 18px",
+  borderRadius: "8px",
+  textDecoration: "none",
+  fontWeight: "bold",
+};
+
+const cardActual = {
+  background: "#ffffff",
+  padding: "25px",
+  borderRadius: "16px",
+  marginBottom: "25px",
+  boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+};
+
+const toggleBox = {
+  display: "flex",
+  justifyContent: "center",
+  gap: "10px",
+  marginBottom: "30px",
+};
+
+const botonActivo = {
+  padding: "12px 25px",
+  borderRadius: "10px",
+  border: "1px solid #2563eb",
+  background: "#2563eb",
+  color: "white",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonInactivo = {
+  padding: "12px 25px",
+  borderRadius: "10px",
+  border: "1px solid #2563eb",
+  background: "white",
+  color: "#2563eb",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const grid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
+  gap: "20px",
+};
+
+const card = {
+  background: "#ffffff",
+  padding: "25px",
+  borderRadius: "16px",
+  boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+};
+
+const actual = {
+  background: "#dcfce7",
+  color: "#166534",
+  padding: "8px 12px",
+  borderRadius: "999px",
+  fontWeight: "bold",
+  display: "inline-block",
+};
+
+const botonPlan = {
+  width: "100%",
+  marginTop: "20px",
+  padding: "13px",
+  border: "none",
+  borderRadius: "9px",
+  color: "#ffffff",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
