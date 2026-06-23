@@ -50,7 +50,12 @@ export default function AdminLogin() {
     <div style={pagina}>
       <form onSubmit={iniciarSesion} style={card}>
         <h1 style={titulo}>KONAX</h1>
-        <h2 style={subtitulo}>Login Maestro</h2>
+
+        <h2 style={subtitulo}>Control Center</h2>
+
+        <p style={descripcion}>
+          Acceso exclusivo para administradores de la plataforma KONAX.
+        </p>
 
         <div style={campo}>
           <label>Correo</label>
@@ -75,7 +80,7 @@ export default function AdminLogin() {
         </div>
 
         <button type="submit" style={boton} disabled={cargando}>
-          {cargando ? "Ingresando..." : "Ingresar al Admin"}
+          {cargando ? "Ingresando..." : "Ingresar al Control Center"}
         </button>
       </form>
     </div>
@@ -93,24 +98,35 @@ const pagina = {
 };
 
 const card = {
-  width: "420px",
+  width: "430px",
   background: "#ffffff",
-  padding: "40px",
+  padding: "42px",
   borderRadius: "18px",
   boxShadow: "0 10px 30px rgba(0,0,0,0.10)",
 };
 
 const titulo = {
   textAlign: "center",
-  marginBottom: "8px",
+  marginBottom: "6px",
   color: "#111827",
-  fontSize: "38px",
+  fontSize: "40px",
+  letterSpacing: "1px",
 };
 
 const subtitulo = {
   textAlign: "center",
-  marginBottom: "30px",
+  marginBottom: "12px",
+  color: "#1e40af",
+  fontSize: "24px",
+  fontWeight: "bold",
+};
+
+const descripcion = {
+  textAlign: "center",
   color: "#6b7280",
+  fontSize: "14px",
+  lineHeight: "22px",
+  marginBottom: "30px",
 };
 
 const campo = {
