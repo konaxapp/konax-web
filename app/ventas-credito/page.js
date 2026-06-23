@@ -201,133 +201,186 @@ export default function VentasCredito() {
   }
 
   async function guardarCredito() {
-    const empresaId = obtenerEmpresaId();
-    if (!empresaId) return;
+  const empresaId = obtenerEmpresaId();
+  if (!empresaId) return;
 
-    if (!credito.cliente || !credito.cedula || !productoId) {
-      alert("Complete cliente, cédula y producto válido.");
-      return;
-    }
+  if (!credito.cliente || !credito.cedula || !productoId) {
+    alert("Complete cliente, cédula y producto válido.");
+    return;
+  }
 
-    if (!credito.vendedor) {
-      alert("Ingrese el vendedor.");
-      return;
-    }
+  if (!credito.vendedor) {
+    alert("Ingrese el vendedor.");
+    return;
+  }
 
-    if (cantidad <= 0) {
-      alert("La cantidad debe ser mayor a cero.");
-      return;
-    }
+  if (cantidad <= 0) {
+    alert("La cantidad debe ser mayor a cero.");
+    return;
+  }
 
-    if (stockDisponible < cantidad) {
-      alert("No hay suficiente stock disponible.");
-      return;
-    }
+  if (stockDisponible < cantidad) {
+    alert("No hay suficiente stock disponible.");
+    return;
+  }
 
-    if (!plazo || plazo <= 0) {
-      alert("Ingrese el plazo o cantidad de cuotas.");
-      return;
-    }
+  if (!plazo || plazo <= 0) {
+    alert("Ingrese el plazo o cantidad de cuotas.");
+    return;
+  }
 
-    const numeroCuenta = "KX-" + Date.now();
-    const usuario = credito.vendedor;
-    const fechaMovimiento = new Date().toISOString();
-    const nuevoStock = stockDisponible - cantidad;
+  const numeroCuenta = "KX-" + Date.now();
+  const usuario = credito.vendedor;
+  const fechaMovimiento = new Date().toISOString();
+  const fechaHoy = new Date().toISOString().split("T")[0];
+  const nuevoStock = stockDisponible - cantidad;
 
-    const { error: errorCredito } = await supabase.from("creditos").insert([
+  const { error: errorCredito } = await supabase.from("creditos").insert([
+    {
+      empresa_id: empresaId,
+      numero_cuenta: numeroCuenta,
+      cliente: credito.cliente,
+      cedula: credito.cedula,
+      telefono: credito.telefono,
+      vendedor: credito.vendedor,
+
+      producto_id: productoId,
+      codigo_producto: credito.codigo,
+      producto: credito.producto,
+      cantidad,
+      descripcion: credito.descripcion,
+
+      precio_compra: precioCompra,
+      precio_venta: precioVenta,
+      precio_credito: precioCredito,
+      ganancia,
+      porcentaje_ganancia: porcentajeGanancia,
+
+      abono_inicial: inicial,
+      monto_financiado: montoBase,
+      plazo,
+      modalidad: credito.modalidad,
+      dias_pago: credito.diasPago,
+      frecuencia: credito.frecuencia,
+
+      tasa_interes_mensual: tasaInteres,
+      gastos_manejo: gastosManejo,
+      seguro,
+      comision,
+
+      interes_total: interesTotal,
+      total_financiado: totalCredito,
+      total_pagar: totalPagar,
+      cuota: cuotaFinal,
+      saldo_actual: totalCredito,
+
+      primer_pago: credito.primerPago || null,
+      estado: "Activo",
+      observacion: credito.observacion,
+    },
+  ]);
+
+  if (errorCredito) {
+    alert("Error al guardar crédito: " + errorCredito.message);
+    return;
+  }
+
+  const { data: infoComercial, error: errorInfoComercial } = await supabase
+    .from("informacion_comercial")
+    .insert([
       {
         empresa_id: empresaId,
+        cliente_id: null,
         numero_cuenta: numeroCuenta,
-        cliente: credito.cliente,
-        cedula: credito.cedula,
-        telefono: credito.telefono,
-        vendedor: credito.vendedor,
-
-        producto_id: productoId,
-        codigo_producto: credito.codigo,
-        producto: credito.producto,
-        cantidad,
-        descripcion: credito.descripcion,
-
-        precio_compra: precioCompra,
-        precio_venta: precioVenta,
-        precio_credito: precioCredito,
-        ganancia,
-        porcentaje_ganancia: porcentajeGanancia,
-
-        abono_inicial: inicial,
-        monto_financiado: montoBase,
-        plazo,
+        tipo_producto: credito.producto,
         modalidad: credito.modalidad,
-        dias_pago: credito.diasPago,
-        frecuencia: credito.frecuencia,
-
-        tasa_interes_mensual: tasaInteres,
-        gastos_manejo: gastosManejo,
-        seguro,
-        comision,
-
-        interes_total: interesTotal,
-        total_financiado: totalCredito,
-        total_pagar: totalPagar,
-        cuota: cuotaFinal,
+        descripcion: credito.descripcion,
+        monto_total: totalPagar,
         saldo_actual: totalCredito,
-
-        primer_pago: credito.primerPago || null,
+        cuota: cuotaFinal,
+        fecha_inicio: fechaHoy,
+        fecha_vencimiento: credito.primerPago || null,
+        responsable: credito.vendedor,
         estado: "Activo",
-        observacion: credito.observacion,
+      },
+    ])
+    .select()
+    .single();
+
+  if (errorInfoComercial) {
+    alert(
+      "Crédito creado, pero error creando información comercial: " +
+        errorInfoComercial.message
+    );
+    return;
+  }
+
+  const { error: errorInfoCobranza } = await supabase
+    .from("informacion_cobranza")
+    .insert([
+      {
+        empresa_id: empresaId,
+        cliente_id: null,
+        informacion_comercial_id: infoComercial.id,
+        estado_cobranza: "Al Día",
+        dias_mora: 0,
+        responsable_cob: credito.vendedor,
+        observacion_cob: "Crédito creado desde Venta Crédito",
       },
     ]);
 
-    if (errorCredito) {
-      alert("Error al guardar crédito: " + errorCredito.message);
-      return;
-    }
-
-    const { error: errorStock } = await supabase
-      .from("productos")
-      .update({
-        stock_actual: nuevoStock,
-        ultimo_movimiento_usuario: usuario,
-        ultimo_movimiento_fecha: fechaMovimiento,
-      })
-      .eq("id", productoId)
-      .eq("empresa_id", empresaId);
-
-    if (errorStock) {
-      alert(
-        "Crédito creado, pero hubo error al descontar inventario: " +
-          errorStock.message
-      );
-      return;
-    }
-
-    const { error: errorMovimiento } = await supabase
-      .from("movimientos_inventario")
-      .insert([
-        {
-          empresa_id: empresaId,
-          producto_id: productoId,
-          tipo_movimiento: "SALIDA",
-          cantidad,
-          stock_anterior: stockDisponible,
-          stock_nuevo: nuevoStock,
-          observacion: `Venta crédito ${numeroCuenta} - ${credito.cliente}`,
-          usuario,
-        },
-      ]);
-
-    if (errorMovimiento) {
-      alert(
-        "Crédito creado, inventario descontado, pero no se registró movimiento: " +
-          errorMovimiento.message
-      );
-      return;
-    }
-
-    alert("Crédito creado correctamente. Cuenta: " + numeroCuenta);
-    limpiarFormulario();
+  if (errorInfoCobranza) {
+    alert(
+      "Crédito creado, pero error creando información de cobranza: " +
+        errorInfoCobranza.message
+    );
+    return;
   }
+
+  const { error: errorStock } = await supabase
+    .from("productos")
+    .update({
+      stock_actual: nuevoStock,
+      ultimo_movimiento_usuario: usuario,
+      ultimo_movimiento_fecha: fechaMovimiento,
+    })
+    .eq("id", productoId)
+    .eq("empresa_id", empresaId);
+
+  if (errorStock) {
+    alert(
+      "Crédito creado, pero hubo error al descontar inventario: " +
+        errorStock.message
+    );
+    return;
+  }
+
+  const { error: errorMovimiento } = await supabase
+    .from("movimientos_inventario")
+    .insert([
+      {
+        empresa_id: empresaId,
+        producto_id: productoId,
+        tipo_movimiento: "SALIDA",
+        cantidad,
+        stock_anterior: stockDisponible,
+        stock_nuevo: nuevoStock,
+        observacion: `Venta crédito ${numeroCuenta} - ${credito.cliente}`,
+        usuario,
+      },
+    ]);
+
+  if (errorMovimiento) {
+    alert(
+      "Crédito creado, inventario descontado, pero no se registró movimiento: " +
+        errorMovimiento.message
+    );
+    return;
+  }
+
+  alert("Crédito creado correctamente. Cuenta: " + numeroCuenta);
+  limpiarFormulario();
+}
 
   return (
     <div style={pagina}>
