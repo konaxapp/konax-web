@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-export default function Clientes() {
+export default function CuentasPorCobrar() {
   const [cedula, setCedula] = useState("");
   const [nombre, setNombre] = useState("");
   const [correo, setCorreo] = useState("");
@@ -12,8 +12,9 @@ export default function Clientes() {
   const [direccion, setDireccion] = useState("");
   const [referenciaNombre, setReferenciaNombre] = useState("");
   const [referenciaTelefono, setReferenciaTelefono] = useState("");
-  const [estado, setEstado] = useState("Activo");
+  const [estadoCliente, setEstadoCliente] = useState("Activo");
 
+  const [numeroCuenta, setNumeroCuenta] = useState("");
   const [tipoProducto, setTipoProducto] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [modalidad, setModalidad] = useState("");
@@ -22,19 +23,21 @@ export default function Clientes() {
   const [cuota, setCuota] = useState("");
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaVencimiento, setFechaVencimiento] = useState("");
-  const [observacion, setObservacion] = useState("");
+  const [estadoCuenta, setEstadoCuenta] = useState("Activo");
 
-  const [estadoCobranza, setEstadoCobranza] = useState("");
+  const [estadoCobranza, setEstadoCobranza] = useState("Al Día");
   const [fechaUltimoPago, setFechaUltimoPago] = useState("");
   const [montoUltimoPago, setMontoUltimoPago] = useState("");
   const [responsableCobro, setResponsableCobro] = useState("");
+  const [observacionCobro, setObservacionCobro] = useState("");
   const [documentos, setDocumentos] = useState([]);
+  const [guardando, setGuardando] = useState(false);
 
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
 
     if (!empresaId) {
-      alert("No hay empresa activa. Configure la empresa antes de guardar clientes.");
+      alert("No hay empresa activa. Configure la empresa antes de guardar.");
       return null;
     }
 
@@ -43,6 +46,18 @@ export default function Clientes() {
 
   function generarNumeroCuenta() {
     return "KX-" + Date.now();
+  }
+
+  function calcularDiasMora(fecha) {
+    if (!fecha) return 0;
+
+    const hoy = new Date();
+    const vencimiento = new Date(fecha);
+    const diferencia = hoy - vencimiento;
+
+    if (diferencia <= 0) return 0;
+
+    return Math.floor(diferencia / (1000 * 60 * 60 * 24));
   }
 
   function limpiarFormulario() {
@@ -54,7 +69,9 @@ export default function Clientes() {
     setDireccion("");
     setReferenciaNombre("");
     setReferenciaTelefono("");
-    setEstado("Activo");
+    setEstadoCliente("Activo");
+
+    setNumeroCuenta("");
     setTipoProducto("");
     setDescripcion("");
     setModalidad("");
@@ -63,11 +80,13 @@ export default function Clientes() {
     setCuota("");
     setFechaInicio("");
     setFechaVencimiento("");
-    setObservacion("");
-    setEstadoCobranza("");
+    setEstadoCuenta("Activo");
+
+    setEstadoCobranza("Al Día");
     setFechaUltimoPago("");
     setMontoUltimoPago("");
     setResponsableCobro("");
+    setObservacionCobro("");
     setDocumentos([]);
   }
 
@@ -86,7 +105,7 @@ export default function Clientes() {
     }
   }
 
-  async function guardarCliente() {
+  async function guardarCuenta() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
 
@@ -100,6 +119,18 @@ export default function Clientes() {
       return;
     }
 
+    if (!montoTotal && !saldoActual) {
+      alert("Ingrese monto original o saldo actual.");
+      return;
+    }
+
+    if (!responsableCobro) {
+      alert("Ingrese responsable de cobro.");
+      return;
+    }
+
+    setGuardando(true);
+
     let clienteCreado = null;
 
     const { data: clienteExistente, error: errorBuscarCliente } = await supabase
@@ -110,6 +141,7 @@ export default function Clientes() {
       .maybeSingle();
 
     if (errorBuscarCliente) {
+      setGuardando(false);
       alert("Error buscando cliente: " + errorBuscarCliente.message);
       return;
     }
@@ -130,14 +162,15 @@ export default function Clientes() {
             correo,
             referencia_nombre: referenciaNombre,
             referencia_telefono: referenciaTelefono,
-            estado,
-            observacion,
+            estado: estadoCliente,
+            observacion: observacionCobro,
           },
         ])
         .select()
         .single();
 
       if (error) {
+        setGuardando(false);
         alert("Error al guardar cliente: " + error.message);
         return;
       }
@@ -145,7 +178,7 @@ export default function Clientes() {
       clienteCreado = data;
     }
 
-    const numeroCuenta = generarNumeroCuenta();
+    const cuentaFinal = numeroCuenta || generarNumeroCuenta();
 
     const montoTotalNumero = Number(montoTotal || 0);
     const saldoActualNumero =
@@ -157,7 +190,7 @@ export default function Clientes() {
         {
           empresa_id: empresaId,
           cliente_id: clienteCreado.id,
-          numero_cuenta: numeroCuenta,
+          numero_cuenta: cuentaFinal,
           tipo_producto: tipoProducto,
           descripcion,
           modalidad,
@@ -166,51 +199,55 @@ export default function Clientes() {
           cuota: Number(cuota || 0),
           fecha_inicio: fechaInicio || null,
           fecha_vencimiento: fechaVencimiento || null,
-          responsable: responsableCobro || null,
-          estado,
-          observacion,
+          responsable: responsableCobro,
+          estado: estadoCuenta,
+          observacion: observacionCobro,
         },
       ])
       .select()
       .single();
 
     if (errorComercial) {
+      setGuardando(false);
       alert("Error en información comercial: " + errorComercial.message);
       return;
     }
 
-    const hayCobranza =
-      estadoCobranza || fechaUltimoPago || montoUltimoPago || responsableCobro;
+    const diasMora = calcularDiasMora(fechaVencimiento);
 
-    if (hayCobranza) {
-      const { error: errorCobranza } = await supabase
-        .from("informacion_cobranza")
-        .insert([
-          {
-            empresa_id: empresaId,
-            cliente_id: clienteCreado.id,
-            informacion_comercial_id: comercialCreado.id,
-            estado_cobranza: estadoCobranza || null,
-            fecha_ultimo_pago: fechaUltimoPago || null,
-            monto_ultimo_pago: Number(montoUltimoPago || 0),
-            responsable_cobro: responsableCobro || null,
-          },
-        ]);
+    const { error: errorCobranza } = await supabase
+      .from("informacion_cobranza")
+      .insert([
+        {
+          empresa_id: empresaId,
+          cliente_id: clienteCreado.id,
+          informacion_comercial_id: comercialCreado.id,
+          estado_cobranza: estadoCobranza || "Al Día",
+          dias_mora: diasMora,
+          fecha_ultimo_pago: fechaUltimoPago || null,
+          monto_ultimo_pago: Number(montoUltimoPago || 0),
+          responsable_cobro: responsableCobro,
+          observacion_cobro:
+            observacionCobro || "Cuenta creada desde Cuentas por Cobrar",
+        },
+      ]);
 
-      if (errorCobranza) {
-        alert("Error en cobranza inicial: " + errorCobranza.message);
-        return;
-      }
+    if (errorCobranza) {
+      setGuardando(false);
+      alert("Error en cobranza inicial: " + errorCobranza.message);
+      return;
     }
 
     try {
       await subirDocumentos(clienteCreado.id, empresaId);
     } catch (error) {
+      setGuardando(false);
       alert("Cuenta creada, pero hubo error subiendo documentos: " + error.message);
       return;
     }
 
-    alert("Cliente registrado correctamente. Cuenta: " + numeroCuenta);
+    setGuardando(false);
+    alert("Cuenta por cobrar registrada correctamente. Cuenta: " + cuentaFinal);
     limpiarFormulario();
   }
 
@@ -221,9 +258,9 @@ export default function Clientes() {
           <img src="/konax-logo.png" alt="KONAX" style={logo} />
 
           <div>
-            <h1 style={titulo}>Carga Inicial de Clientes</h1>
+            <h1 style={titulo}>Cuentas por Cobrar / Carga Inicial</h1>
             <p style={subtitulo}>
-              Carga de clientes, información comercial, cobranza inicial y documentos.
+              Registra clientes existentes, cuentas por cobrar, cobranza inicial y documentos.
             </p>
           </div>
         </div>
@@ -240,16 +277,30 @@ export default function Clientes() {
             <input placeholder="Dirección completa" value={direccion} onChange={(e) => setDireccion(e.target.value)} style={inputStyle} />
             <input placeholder="Nombre de referencia" value={referenciaNombre} onChange={(e) => setReferenciaNombre(e.target.value)} style={inputStyle} />
             <input placeholder="Teléfono de referencia" value={referenciaTelefono} onChange={(e) => setReferenciaTelefono(e.target.value)} style={inputStyle} />
+
+            <select value={estadoCliente} onChange={(e) => setEstadoCliente(e.target.value)} style={inputStyle}>
+              <option>Activo</option>
+              <option>Inactivo</option>
+            </select>
           </div>
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>📦 Información Comercial</h2>
+          <h2 style={tituloSeccion}>💰 Información de la Cuenta por Cobrar</h2>
 
           <div style={grid}>
+            <input
+              placeholder="Número de cuenta (opcional)"
+              value={numeroCuenta}
+              onChange={(e) => setNumeroCuenta(e.target.value)}
+              style={inputStyle}
+            />
+
             <select value={tipoProducto} onChange={(e) => setTipoProducto(e.target.value)} style={inputStyle}>
               <option value="">Seleccione tipo de cuenta</option>
               <option>Crédito</option>
+              <option>Préstamo</option>
+              <option>Cuenta por cobrar</option>
               <option>Membresía</option>
               <option>Suscripción</option>
               <option>Mensualidad</option>
@@ -281,10 +332,16 @@ export default function Clientes() {
               <label style={labelStyle}>Fecha de vencimiento</label>
               <input type="date" value={fechaVencimiento} onChange={(e) => setFechaVencimiento(e.target.value)} style={inputStyle} />
             </div>
+
+            <select value={estadoCuenta} onChange={(e) => setEstadoCuenta(e.target.value)} style={inputStyle}>
+              <option>Activo</option>
+              <option>Suspendido</option>
+              <option>Cancelado</option>
+            </select>
           </div>
 
           <textarea
-            placeholder="Descripción. Ej: Sala Roma, mensualidad escolar, membresía anual, servicio pendiente..."
+            placeholder="Descripción. Ej: Cuenta existente, préstamo personal, mensualidad pendiente, servicio pendiente..."
             value={descripcion}
             onChange={(e) => setDescripcion(e.target.value)}
             style={{ ...inputStyle, marginTop: "15px", minHeight: "90px" }}
@@ -296,7 +353,6 @@ export default function Clientes() {
 
           <div style={grid}>
             <select value={estadoCobranza} onChange={(e) => setEstadoCobranza(e.target.value)} style={inputStyle}>
-              <option value="">Seleccione estado de cobranza</option>
               <option>Al Día</option>
               <option>Mora</option>
               <option>Legal</option>
@@ -310,13 +366,13 @@ export default function Clientes() {
             </div>
 
             <input placeholder="Monto último pago" value={montoUltimoPago} onChange={(e) => setMontoUltimoPago(e.target.value)} style={inputStyle} />
-            <input placeholder="Responsable de cartera" value={responsableCobro} onChange={(e) => setResponsableCobro(e.target.value)} style={inputStyle} />
+            <input placeholder="Responsable de cobro *" value={responsableCobro} onChange={(e) => setResponsableCobro(e.target.value)} style={inputStyle} />
           </div>
 
           <textarea
             placeholder="Observación inicial / historial previo de cobro"
-            value={observacion}
-            onChange={(e) => setObservacion(e.target.value)}
+            value={observacionCobro}
+            onChange={(e) => setObservacionCobro(e.target.value)}
             style={{ ...inputStyle, marginTop: "15px", minHeight: "100px" }}
           />
 
@@ -332,8 +388,8 @@ export default function Clientes() {
           </div>
 
           <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-            <button onClick={guardarCliente} style={botonGuardar}>
-              + Guardar Cliente
+            <button onClick={guardarCuenta} style={botonGuardar} disabled={guardando}>
+              {guardando ? "Guardando..." : "Guardar Cuenta por Cobrar"}
             </button>
 
             <button onClick={limpiarFormulario} style={botonLimpiar}>
