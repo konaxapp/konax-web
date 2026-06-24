@@ -57,7 +57,10 @@ export default function DashboardCobranza() {
     if (cobranza?.estado_cobranza) return cobranza.estado_cobranza;
     if (cuenta?.estado) return cuenta.estado;
 
-    const dias = calcularDiasAtraso(cuenta?.fecha_vencimiento, cuenta?.saldo_actual);
+    const dias = calcularDiasAtraso(
+      cuenta?.fecha_vencimiento,
+      cuenta?.saldo_actual
+    );
 
     if (dias <= 0) return "Al Día";
     if (dias <= 90) return "Mora";
@@ -123,9 +126,14 @@ export default function DashboardCobranza() {
       (c) => c.informacion_comercial_id === cuenta.id
     );
 
-    const dias = calcularDiasAtraso(cuenta.fecha_vencimiento, cuenta.saldo_actual);
+    const dias = calcularDiasAtraso(
+      cuenta.fecha_vencimiento,
+      cuenta.saldo_actual
+    );
+
     const estado = estadoAutomatico(cuenta, cobranza);
-    const gestor = cobranza?.responsable_cobro || cuenta?.responsable || "Sin asignar";
+    const gestor =
+      cobranza?.responsable_cobro || cuenta?.responsable || "Sin asignar";
 
     return {
       cuenta,
@@ -194,7 +202,9 @@ export default function DashboardCobranza() {
     .reduce((sum, p) => sum + Number(p.monto || 0), 0);
 
   const cobradoMes = pagos
-    .filter((p) => fechaSimple(p.fecha_pago || p.created_at).startsWith(mesActual))
+    .filter((p) =>
+      fechaSimple(p.fecha_pago || p.created_at).startsWith(mesActual)
+    )
     .reduce((sum, p) => sum + Number(p.monto || 0), 0);
 
   const cobradoPeriodo = pagosFiltrados.reduce(
@@ -246,18 +256,9 @@ export default function DashboardCobranza() {
   };
 
   const moraAntiguedad = [
-    {
-      rango: "1-29 días",
-      monto: semaforo.amarillo,
-    },
-    {
-      rango: "30-59 días",
-      monto: semaforo.naranja,
-    },
-    {
-      rango: "60+ días",
-      monto: semaforo.rojo,
-    },
+    { rango: "1-29 días", monto: semaforo.amarillo },
+    { rango: "30-59 días", monto: semaforo.naranja },
+    { rango: "60+ días", monto: semaforo.rojo },
   ];
 
   const rankingGestores = gestores
@@ -414,9 +415,7 @@ export default function DashboardCobranza() {
           <div style={card}>
             <h2 style={tituloSeccion}>Recuperación del Mes</h2>
 
-            <p style={textoGrande}>
-              {formato(cobradoMes)} recuperado este mes
-            </p>
+            <p style={textoGrande}>{formato(cobradoMes)} recuperado este mes</p>
 
             <div style={barraFondo}>
               <div
@@ -452,7 +451,7 @@ export default function DashboardCobranza() {
               <p style={nota}>Aún no hay gestores con cobros registrados.</p>
             )}
 
-            {rankingGestores.map((g, index) => (
+            {rankingGestores.map((g) => (
               <div key={g.gestor} style={barraItem}>
                 <div style={barraHeader}>
                   <strong>{g.gestor}</strong>
@@ -469,8 +468,8 @@ export default function DashboardCobranza() {
                 </div>
 
                 <p style={nota}>
-                  Clientes: {g.clientes} · Gestiones: {g.gestiones} · Recuperación:{" "}
-                  {g.recuperacion.toFixed(1)}%
+                  Clientes: {g.clientes} · Gestiones: {g.gestiones} ·
+                  Recuperación: {g.recuperacion.toFixed(1)}%
                 </p>
               </div>
             ))}
@@ -539,7 +538,7 @@ export default function DashboardCobranza() {
 function Campo({ label, children }) {
   return (
     <div>
-      <label style={label}>{label}</label>
+      <label style={labelStyle}>{label}</label>
       {children}
     </div>
   );
@@ -682,7 +681,7 @@ const gridFiltros = {
   gap: "12px",
 };
 
-const label = {
+const labelStyle = {
   display: "block",
   marginBottom: "6px",
   fontSize: "13px",
