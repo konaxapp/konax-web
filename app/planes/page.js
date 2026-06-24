@@ -27,11 +27,13 @@ export default function Planes() {
     {
       nombre: "KONAX Cobros",
       codigo: "cobros",
+      etiqueta: "Cartera y cobranza",
       precioMensual: 49,
       precioAnual: 499,
       usuariosIncluidos: 3,
       precioUsuarioExtra: 10.99,
       color: "#2563eb",
+      fondo: "#eff6ff",
       modulos: {
         clientes: true,
         vista_cliente: true,
@@ -62,11 +64,14 @@ export default function Planes() {
     {
       nombre: "KONAX Ventas y Gestión",
       codigo: "ventas_gestion",
+      etiqueta: "Operación completa",
       precioMensual: 99,
       precioAnual: 999,
       usuariosIncluidos: 6,
       precioUsuarioExtra: 10.99,
       color: "#10b981",
+      fondo: "#ecfdf5",
+      destacado: true,
       modulos: {
         clientes: true,
         vista_cliente: true,
@@ -98,11 +103,13 @@ export default function Planes() {
     {
       nombre: "KONAX Pro",
       codigo: "pro",
+      etiqueta: "Gerencia y crecimiento",
       precioMensual: 149,
       precioAnual: 1499,
       usuariosIncluidos: 12,
       precioUsuarioExtra: 10.99,
       color: "#111827",
+      fondo: "#f9fafb",
       modulos: {
         clientes: true,
         vista_cliente: true,
@@ -206,8 +213,12 @@ export default function Planes() {
 
   return (
     <div style={pagina}>
-      <div style={card}>
-        <h1 style={titulo}>Asignar Plan a Empresa</h1>
+      <div style={cardPrincipal}>
+        <div style={logoBox}>
+          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+        </div>
+
+        <h1 style={titulo}>Selecciona el plan de la empresa</h1>
 
         <p style={subtitulo}>
           Empresa seleccionada: <strong>{empresaNombre}</strong>
@@ -238,20 +249,34 @@ export default function Planes() {
               <div
                 key={plan.codigo}
                 style={{
-                  flex: 1,
-                  minWidth: "300px",
+                  ...planCard,
                   border: `2px solid ${plan.color}`,
-                  borderRadius: "12px",
-                  padding: "25px",
-                  background: "#ffffff",
+                  background: plan.fondo,
+                  transform: plan.destacado ? "scale(1.02)" : "scale(1)",
                 }}
               >
-                <h2>{plan.nombre}</h2>
+                {plan.destacado && (
+                  <div style={recomendado}>Más recomendado</div>
+                )}
 
-                <h1>${precio}</h1>
+                <div
+                  style={{
+                    ...badge,
+                    background: plan.color,
+                  }}
+                >
+                  {plan.etiqueta}
+                </div>
+
+                <h2 style={planTitulo}>{plan.nombre}</h2>
+
+                <div style={precioBox}>
+                  <span style={signo}>$</span>
+                  <span style={precioGrande}>{precio}</span>
+                </div>
 
                 <p style={precioTexto}>
-                  {tipoPlan === "mensual" ? "Pago mensual" : "Pago anual"}
+                  {tipoPlan === "mensual" ? "Pago mensual" : "Pago anual con ahorro"}
                 </p>
 
                 <p style={usuariosTexto}>
@@ -260,24 +285,20 @@ export default function Planes() {
 
                 <ul style={lista}>
                   {plan.incluye.map((item) => (
-                    <li key={item}>{item}</li>
+                    <li key={item} style={li}>
+                      ✓ {item}
+                    </li>
                   ))}
                 </ul>
 
                 <button
                   onClick={() => asignarPlan(plan)}
                   style={{
-                    width: "100%",
-                    padding: "12px",
-                    border: "none",
+                    ...botonPlan,
                     background: plan.color,
-                    color: "white",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontWeight: "bold",
                   }}
                 >
-                  Asignar Plan
+                  Asignar {plan.nombre}
                 </button>
               </div>
             );
@@ -303,78 +324,168 @@ const pagina = {
   fontFamily: "Arial, sans-serif",
 };
 
-const card = {
-  maxWidth: "1200px",
+const cardPrincipal = {
+  maxWidth: "1300px",
   margin: "0 auto",
   background: "white",
-  borderRadius: "16px",
+  borderRadius: "20px",
   padding: "40px",
-  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+  boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+};
+
+const logoBox = {
+  textAlign: "center",
+  marginBottom: "18px",
+};
+
+const logo = {
+  width: "190px",
+  maxWidth: "100%",
+  height: "auto",
 };
 
 const titulo = {
   textAlign: "center",
   marginBottom: "10px",
+  fontSize: "34px",
+  color: "#111827",
 };
 
 const subtitulo = {
   textAlign: "center",
-  color: "#666",
-  marginBottom: "40px",
+  color: "#6b7280",
+  marginBottom: "28px",
 };
 
 const toggleBox = {
   display: "flex",
   justifyContent: "center",
   gap: "10px",
-  marginBottom: "40px",
+  marginBottom: "35px",
 };
 
 const botonActivo = {
-  padding: "12px 25px",
-  borderRadius: "10px",
-  border: "1px solid #2563eb",
-  background: "#2563eb",
+  padding: "12px 28px",
+  borderRadius: "999px",
+  border: "1px solid #111827",
+  background: "#111827",
   color: "white",
   fontWeight: "bold",
   cursor: "pointer",
 };
 
 const botonInactivo = {
-  padding: "12px 25px",
-  borderRadius: "10px",
-  border: "1px solid #2563eb",
+  padding: "12px 28px",
+  borderRadius: "999px",
+  border: "1px solid #d1d5db",
   background: "white",
-  color: "#2563eb",
+  color: "#111827",
   fontWeight: "bold",
   cursor: "pointer",
 };
 
 const planesBox = {
   display: "flex",
-  gap: "20px",
+  gap: "22px",
   flexWrap: "wrap",
+  alignItems: "stretch",
+};
+
+const planCard = {
+  flex: 1,
+  minWidth: "300px",
+  borderRadius: "18px",
+  padding: "26px",
+  position: "relative",
+  boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+};
+
+const recomendado = {
+  position: "absolute",
+  top: "-14px",
+  right: "20px",
+  background: "#facc15",
+  color: "#111827",
+  padding: "7px 12px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: "bold",
+};
+
+const badge = {
+  display: "inline-block",
+  color: "#ffffff",
+  padding: "7px 12px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: "bold",
+  marginBottom: "14px",
+};
+
+const planTitulo = {
+  fontSize: "24px",
+  color: "#111827",
+  marginBottom: "10px",
+};
+
+const precioBox = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "2px",
+  marginBottom: "0px",
+};
+
+const signo = {
+  fontSize: "24px",
+  fontWeight: "bold",
+  color: "#111827",
+  marginTop: "8px",
+};
+
+const precioGrande = {
+  fontSize: "54px",
+  fontWeight: "900",
+  color: "#111827",
 };
 
 const precioTexto = {
   color: "#6b7280",
-  marginTop: "-10px",
-  marginBottom: "10px",
+  marginTop: "-5px",
+  marginBottom: "12px",
+  fontSize: "14px",
 };
 
 const usuariosTexto = {
-  background: "#f3f4f6",
-  padding: "10px",
-  borderRadius: "8px",
+  background: "#ffffff",
+  padding: "11px",
+  borderRadius: "10px",
   fontWeight: "bold",
   color: "#111827",
+  border: "1px solid #e5e7eb",
 };
 
 const lista = {
-  color: "#666",
-  paddingLeft: "20px",
-  minHeight: "300px",
-  lineHeight: "28px",
+  color: "#374151",
+  paddingLeft: "0",
+  listStyle: "none",
+  minHeight: "330px",
+  lineHeight: "27px",
+  fontSize: "14px",
+};
+
+const li = {
+  marginBottom: "4px",
+};
+
+const botonPlan = {
+  width: "100%",
+  padding: "14px",
+  border: "none",
+  color: "white",
+  borderRadius: "10px",
+  cursor: "pointer",
+  fontWeight: "bold",
+  fontSize: "15px",
 };
 
 const nota = {
