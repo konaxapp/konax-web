@@ -350,3 +350,7 @@ export default function Caja() {
         await renovarSuscripcionDesdeCaja(
           empresaId,
           cuentaSeleccionada,
+          const td = {
+  padding: "15px",
+  borderBottom: "1px solid #f3f4f6",
+};
