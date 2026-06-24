@@ -62,12 +62,6 @@ export default function Empresas() {
     cargarEmpresas();
   }, []);
 
-  function calcularProximaFacturacion() {
-    const fecha = new Date();
-    fecha.setDate(fecha.getDate() + 30);
-    return fecha.toISOString().split("T")[0];
-  }
-
   async function cargarEmpresas() {
     const { data, error } = await supabase
       .from("empresas")
@@ -106,9 +100,6 @@ export default function Empresas() {
 
     setGuardando(true);
 
-    const fechaActivacion = new Date().toISOString().split("T")[0];
-    const fechaProximaFacturacion = calcularProximaFacturacion();
-
     const { data, error } = await supabase
       .from("empresas")
       .insert([
@@ -119,16 +110,21 @@ export default function Empresas() {
           direccion,
           categoria_negocio: categoria,
           tipo_negocio: tipoNegocio,
+
           estado: "Activo",
-          estado_pago: "Al día",
-          configuracion_completa: false,
+          estado_pago: "Pendiente",
           estado_plan: "Pendiente",
+
+          configuracion_completa: false,
+
           plan_codigo: null,
           plan_nombre: null,
           plan_tipo: null,
           plan_precio: 0,
-          fecha_activacion: fechaActivacion,
-          fecha_proxima_facturacion: fechaProximaFacturacion,
+
+          fecha_activacion: null,
+          fecha_ultimo_pago: null,
+          fecha_proxima_facturacion: null,
         },
       ])
       .select()
@@ -145,7 +141,7 @@ export default function Empresas() {
         empresa_id: data.id,
         empresa_nombre: data.nombre,
         accion: "Empresa creada",
-        descripcion: `Se creó la empresa ${data.nombre} en KONAX.`,
+        descripcion: `Se creó la empresa ${data.nombre} en KONAX. Pendiente de asignar plan.`,
         estado_anterior: null,
         estado_nuevo: "Activo",
         usuario: "KONAX",
@@ -169,46 +165,12 @@ export default function Empresas() {
 
   function irPlan(empresa) {
     guardarEmpresaEnLocalStorage(empresa);
-    window.location.href = "/plan-empresa";
+    window.location.href = "/planes";
   }
 
-  function irModulos(empresa) {
+  function irUsuarioPrincipal(empresa) {
     guardarEmpresaEnLocalStorage(empresa);
-    window.location.href = "/modulos";
-  }
-
-  function irUsuarioPrincipal() {
     window.location.href = "/usuarios";
-  }
-
-  async function cambiarEstadoEmpresa(empresa, nuevoEstado) {
-    const { error } = await supabase
-      .from("empresas")
-      .update({
-        estado: nuevoEstado,
-        estado_plan: nuevoEstado === "Activo" ? "Activo" : "Suspendido",
-      })
-      .eq("id", empresa.id);
-
-    if (error) {
-      alert("Error actualizando empresa: " + error.message);
-      return;
-    }
-
-    await supabase.from("bitacora_konax").insert([
-      {
-        empresa_id: empresa.id,
-        empresa_nombre: empresa.nombre,
-        accion: nuevoEstado === "Activo" ? "Empresa activada" : "Empresa suspendida",
-        descripcion: `La empresa ${empresa.nombre} cambió a estado ${nuevoEstado}.`,
-        estado_anterior: empresa.estado,
-        estado_nuevo: nuevoEstado,
-        usuario: "KONAX",
-      },
-    ]);
-
-    alert(`Empresa ${nuevoEstado === "Activo" ? "activada" : "suspendida"} correctamente.`);
-    cargarEmpresas();
   }
 
   return (
@@ -220,7 +182,7 @@ export default function Empresas() {
             <div>
               <h1 style={titulo}>Empresas Clientes</h1>
               <p style={subtitulo}>
-                Crea, configura y administra empresas dentro de KONAX Control Center.
+                Crea empresas, asigna plan y registra el usuario principal.
               </p>
             </div>
           </div>
@@ -231,10 +193,6 @@ export default function Empresas() {
               style={botonOscuro}
             >
               {mostrarEmpresas ? "Ocultar Empresas" : "Ver Empresas Registradas"}
-            </button>
-
-            <button onClick={irUsuarioPrincipal} style={botonOscuro}>
-              Crear Usuario Principal
             </button>
 
             <Link href="/admin" style={botonVolver}>
@@ -389,9 +347,7 @@ export default function Empresas() {
                           </span>
                         </td>
 
-                        <td style={td}>
-                          {empresa.fecha_proxima_facturacion || "-"}
-                        </td>
+                        <td style={td}>{empresa.fecha_proxima_facturacion || "-"}</td>
 
                         <td style={td}>
                           {empresa.configuracion_completa ? "Completa" : "Pendiente"}
@@ -405,32 +361,15 @@ export default function Empresas() {
                             Seleccionar
                           </button>
 
-                          <button
-                            style={botonMini}
-                            onClick={() => irPlan(empresa)}
-                          >
+                          <button style={botonMini} onClick={() => irPlan(empresa)}>
                             Plan
                           </button>
 
                           <button
                             style={botonMini}
-                            onClick={() => irModulos(empresa)}
+                            onClick={() => irUsuarioPrincipal(empresa)}
                           >
-                            Módulos
-                          </button>
-
-                          <button
-                            style={botonMiniRojo}
-                            onClick={() => cambiarEstadoEmpresa(empresa, "Suspendido")}
-                          >
-                            Suspender
-                          </button>
-
-                          <button
-                            style={botonMiniVerde}
-                            onClick={() => cambiarEstadoEmpresa(empresa, "Activo")}
-                          >
-                            Activar
+                            Usuario Principal
                           </button>
                         </td>
                       </tr>
@@ -441,7 +380,7 @@ export default function Empresas() {
             </div>
 
             <p style={nota}>
-              Flujo: crear empresa → asignar plan → activar módulos → crear usuario principal.
+              Flujo: crear empresa → asignar plan automático → crear usuario principal.
             </p>
           </div>
         )}
@@ -662,18 +601,6 @@ const botonMini = {
 
 const botonMiniVerde = {
   background: "#16a34a",
-  color: "#ffffff",
-  border: "none",
-  padding: "7px 10px",
-  borderRadius: "7px",
-  fontWeight: "bold",
-  cursor: "pointer",
-  marginRight: "5px",
-  marginBottom: "5px",
-};
-
-const botonMiniRojo = {
-  background: "#dc2626",
   color: "#ffffff",
   border: "none",
   padding: "7px 10px",
