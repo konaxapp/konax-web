@@ -1,102 +1,316 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
 
 export default function DashboardCobranza() {
+  const [cuentas, setCuentas] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [cobranzas, setCobranzas] = useState([]);
+  const [pagos, setPagos] = useState([]);
+  const [gestiones, setGestiones] = useState([]);
+
   const [filtroDesde, setFiltroDesde] = useState("");
   const [filtroHasta, setFiltroHasta] = useState("");
   const [filtroGestor, setFiltroGestor] = useState("Todos");
   const [filtroEstado, setFiltroEstado] = useState("Todos");
 
-  const data = {
-    carteraTotal: 110000,
-    carteraAlDia: 65000,
-    carteraMora: 45000,
-    porcentajeMora: 40.9,
-    cobradoHoy: 2500,
-    cobradoMes: 18500,
-    metaMes: 40000,
-    recuperacionMes: 16.8,
-    promesasActivas: 12,
-    promesasCumplidas: 8,
-    promesasIncumplidas: 4,
-    montoPromesasActivas: 6200,
-    montoPromesasIncumplidas: 2400,
-    clientesActivos: 120,
-    clientesMora: 34,
+  useEffect(() => {
+    cargarDatos();
+  }, []);
 
-    semaforo: {
-      verde: 65000,
-      amarillo: 18000,
-      naranja: 15000,
-      rojo: 12000,
-    },
+  function volverDashboard() {
+    window.location.href = "/dashboard";
+  }
 
-    gestores: [
-      { gestor: "Gestor 1", cobrado: 7200, clientes: 22, recuperacion: 28 },
-      { gestor: "Gestor 2", cobrado: 5800, clientes: 18, recuperacion: 21 },
-      { gestor: "Gestor 3", cobrado: 5500, clientes: 16, recuperacion: 19 },
-    ],
+  function obtenerEmpresaId() {
+    const empresaId = localStorage.getItem("empresaId");
 
-    moraAntiguedad: [
-      { rango: "1-29 días", monto: 18000 },
-      { rango: "30-59 días", monto: 15000 },
-      { rango: "60-89 días", monto: 7000 },
-      { rango: "90+ días", monto: 5000 },
-    ],
+    if (!empresaId) {
+      alert("No hay empresa activa.");
+      window.location.href = "/login";
+      return null;
+    }
 
-    mayorMora: [
-      { cliente: "Ana López", dias: 120, saldo: 5500, gestor: "Gestor 3" },
-      { cliente: "Pedro Gómez", dias: 55, saldo: 3200, gestor: "Gestor 1" },
-      { cliente: "María Díaz", dias: 18, saldo: 800, gestor: "Gestor 2" },
-    ],
+    return empresaId;
+  }
 
-    mayorSaldo: [
-      { cliente: "Ana López", saldo: 5500, estado: "🔴 Crítico" },
-      { cliente: "Pedro Gómez", saldo: 3200, estado: "🟠 Mora" },
-      { cliente: "Juan Pérez", saldo: 1500, estado: "🟢 Al Día" },
-    ],
-  };
+  function fechaSimple(fecha) {
+    return String(fecha || "").slice(0, 10);
+  }
 
-  const formato = (numero) =>
-    "USD " +
-    Number(numero).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-    });
+  function calcularDiasAtraso(fechaVencimiento, saldoActual) {
+    if (!fechaVencimiento || Number(saldoActual || 0) <= 0) return 0;
 
-  const imprimirReporte = () => {
-    window.print();
-  };
+    const hoy = new Date();
+    const vencimiento = new Date(fechaVencimiento);
+    const diferencia = hoy - vencimiento;
 
-  const buscar = () => {
-    alert("Aquí se aplicarán filtros reales cuando conectemos Supabase.");
-  };
+    if (diferencia <= 0) return 0;
 
-  const limpiarFiltros = () => {
+    return Math.floor(diferencia / (1000 * 60 * 60 * 24));
+  }
+
+  function estadoAutomatico(cuenta, cobranza) {
+    if (Number(cuenta?.saldo_actual || 0) <= 0) return "Cancelado";
+
+    if (cobranza?.estado_cobranza) return cobranza.estado_cobranza;
+    if (cuenta?.estado) return cuenta.estado;
+
+    const dias = calcularDiasAtraso(cuenta?.fecha_vencimiento, cuenta?.saldo_actual);
+
+    if (dias <= 0) return "Al Día";
+    if (dias <= 90) return "Mora";
+    return "Legal";
+  }
+
+  async function cargarDatos() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    const { data: cuentasData, error: errorCuentas } = await supabase
+      .from("informacion_comercial")
+      .select("*")
+      .eq("empresa_id", empresaId);
+
+    if (errorCuentas) {
+      alert("Error cargando cuentas: " + errorCuentas.message);
+      return;
+    }
+
+    const { data: clientesData } = await supabase
+      .from("clientes")
+      .select("*")
+      .eq("empresa_id", empresaId);
+
+    const { data: cobranzasData } = await supabase
+      .from("informacion_cobranza")
+      .select("*")
+      .eq("empresa_id", empresaId);
+
+    const { data: pagosData } = await supabase
+      .from("caja")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("estado", "Procesado");
+
+    const { data: gestionesData } = await supabase
+      .from("bitacora_cliente")
+      .select("*")
+      .eq("empresa_id", empresaId);
+
+    setCuentas(cuentasData || []);
+    setClientes(clientesData || []);
+    setCobranzas(cobranzasData || []);
+    setPagos(pagosData || []);
+    setGestiones(gestionesData || []);
+  }
+
+  function limpiarFiltros() {
     setFiltroDesde("");
     setFiltroHasta("");
     setFiltroGestor("Todos");
     setFiltroEstado("Todos");
+  }
+
+  function imprimirReporte() {
+    window.print();
+  }
+
+  const cartera = cuentas.map((cuenta) => {
+    const cliente = clientes.find((c) => c.id === cuenta.cliente_id);
+    const cobranza = cobranzas.find(
+      (c) => c.informacion_comercial_id === cuenta.id
+    );
+
+    const dias = calcularDiasAtraso(cuenta.fecha_vencimiento, cuenta.saldo_actual);
+    const estado = estadoAutomatico(cuenta, cobranza);
+    const gestor = cobranza?.responsable_cobro || cuenta?.responsable || "Sin asignar";
+
+    return {
+      cuenta,
+      cliente,
+      cobranza,
+      dias,
+      estado,
+      gestor,
+    };
+  });
+
+  const gestores = [
+    "Todos",
+    ...new Set(cartera.map((item) => item.gestor).filter(Boolean)),
+  ];
+
+  const carteraFiltrada = cartera.filter((item) => {
+    const coincideGestor =
+      filtroGestor === "Todos" || item.gestor === filtroGestor;
+
+    const coincideEstado =
+      filtroEstado === "Todos" || item.estado === filtroEstado;
+
+    return coincideGestor && coincideEstado;
+  });
+
+  const pagosFiltrados = pagos.filter((pago) => {
+    const fecha = fechaSimple(pago.fecha_pago || pago.created_at);
+
+    const coincideDesde = !filtroDesde || fecha >= filtroDesde;
+    const coincideHasta = !filtroHasta || fecha <= filtroHasta;
+
+    return coincideDesde && coincideHasta;
+  });
+
+  const gestionesFiltradas = gestiones.filter((g) => {
+    const fecha = fechaSimple(g.fecha_gestion || g.created_at);
+
+    const coincideDesde = !filtroDesde || fecha >= filtroDesde;
+    const coincideHasta = !filtroHasta || fecha <= filtroHasta;
+
+    return coincideDesde && coincideHasta;
+  });
+
+  const hoy = new Date().toISOString().split("T")[0];
+  const mesActual = new Date().toISOString().slice(0, 7);
+
+  const carteraTotal = carteraFiltrada.reduce(
+    (sum, item) => sum + Number(item.cuenta?.saldo_actual || 0),
+    0
+  );
+
+  const carteraAlDia = carteraFiltrada
+    .filter((item) => item.estado === "Al Día")
+    .reduce((sum, item) => sum + Number(item.cuenta?.saldo_actual || 0), 0);
+
+  const carteraMora = carteraFiltrada
+    .filter((item) => item.estado === "Mora" || item.estado === "Legal")
+    .reduce((sum, item) => sum + Number(item.cuenta?.saldo_actual || 0), 0);
+
+  const porcentajeMora =
+    carteraTotal > 0 ? (carteraMora / carteraTotal) * 100 : 0;
+
+  const cobradoHoy = pagos
+    .filter((p) => fechaSimple(p.fecha_pago || p.created_at) === hoy)
+    .reduce((sum, p) => sum + Number(p.monto || 0), 0);
+
+  const cobradoMes = pagos
+    .filter((p) => fechaSimple(p.fecha_pago || p.created_at).startsWith(mesActual))
+    .reduce((sum, p) => sum + Number(p.monto || 0), 0);
+
+  const cobradoPeriodo = pagosFiltrados.reduce(
+    (sum, p) => sum + Number(p.monto || 0),
+    0
+  );
+
+  const clientesActivos = carteraFiltrada.length;
+
+  const clientesMora = carteraFiltrada.filter(
+    (item) => item.estado === "Mora" || item.estado === "Legal"
+  ).length;
+
+  const promesas = gestiones.filter(
+    (g) =>
+      g.tipo_gestion === "Promesa de Pago" ||
+      g.resultado_gestion === "Promesa registrada" ||
+      g.resultado_gestion === "Promesa de Pago"
+  );
+
+  const promesasActivas = promesas.filter(
+    (p) => p.proxima_gestion && fechaSimple(p.proxima_gestion) >= hoy
+  ).length;
+
+  const promesasIncumplidas = promesas.filter(
+    (p) => p.proxima_gestion && fechaSimple(p.proxima_gestion) < hoy
+  ).length;
+
+  const promesasCumplidas = gestiones.filter(
+    (g) => g.resultado_gestion === "Pago Realizado"
+  ).length;
+
+  const semaforo = {
+    verde: carteraFiltrada
+      .filter((i) => i.dias <= 0)
+      .reduce((s, i) => s + Number(i.cuenta?.saldo_actual || 0), 0),
+
+    amarillo: carteraFiltrada
+      .filter((i) => i.dias >= 1 && i.dias <= 29)
+      .reduce((s, i) => s + Number(i.cuenta?.saldo_actual || 0), 0),
+
+    naranja: carteraFiltrada
+      .filter((i) => i.dias >= 30 && i.dias <= 59)
+      .reduce((s, i) => s + Number(i.cuenta?.saldo_actual || 0), 0),
+
+    rojo: carteraFiltrada
+      .filter((i) => i.dias >= 60)
+      .reduce((s, i) => s + Number(i.cuenta?.saldo_actual || 0), 0),
   };
 
-  const colorGestor = (index) => {
-    const colores = [
-      "#16a34a",
-      "#2563eb",
-      "#f97316",
-      "#7c3aed",
-      "#dc2626",
-      "#0891b2",
-      "#ca8a04",
-      "#be185d",
-    ];
+  const moraAntiguedad = [
+    {
+      rango: "1-29 días",
+      monto: semaforo.amarillo,
+    },
+    {
+      rango: "30-59 días",
+      monto: semaforo.naranja,
+    },
+    {
+      rango: "60+ días",
+      monto: semaforo.rojo,
+    },
+  ];
 
-    return colores[index % colores.length];
-  };
+  const rankingGestores = gestores
+    .filter((g) => g !== "Todos")
+    .map((gestor) => {
+      const cuentasGestor = cartera.filter((item) => item.gestor === gestor);
 
-  const avanceMeta = Math.min((data.cobradoMes / data.metaMes) * 100, 100);
-  const maxGestor = Math.max(...data.gestores.map((g) => g.cobrado));
-  const maxMora = Math.max(...data.moraAntiguedad.map((m) => m.monto));
+      const gestionesGestor = gestionesFiltradas.filter(
+        (g) => (g.usuario || "Sin asignar") === gestor
+      );
+
+      const cobradoGestor = pagosFiltrados
+        .filter((p) => (p.usuario || p.vendedor || "Sin asignar") === gestor)
+        .reduce((sum, p) => sum + Number(p.monto || 0), 0);
+
+      const asignado = cuentasGestor.reduce(
+        (sum, item) => sum + Number(item.cuenta?.saldo_actual || 0),
+        0
+      );
+
+      const recuperacion = asignado > 0 ? (cobradoGestor / asignado) * 100 : 0;
+
+      return {
+        gestor,
+        cobrado: cobradoGestor,
+        clientes: cuentasGestor.length,
+        gestiones: gestionesGestor.length,
+        recuperacion,
+      };
+    });
+
+  const mayorMora = [...carteraFiltrada]
+    .sort((a, b) => b.dias - a.dias)
+    .slice(0, 10);
+
+  const mayorSaldo = [...carteraFiltrada]
+    .sort(
+      (a, b) =>
+        Number(b.cuenta?.saldo_actual || 0) -
+        Number(a.cuenta?.saldo_actual || 0)
+    )
+    .slice(0, 10);
+
+  const maxMora = Math.max(...moraAntiguedad.map((m) => m.monto), 1);
+  const maxGestor = Math.max(...rankingGestores.map((g) => g.cobrado), 1);
+
+  const formato = (numero) =>
+    "USD " +
+    Number(numero || 0).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+    });
+
+  const avanceCobro = carteraTotal > 0 ? (cobradoMes / carteraTotal) * 100 : 0;
 
   return (
     <div style={pagina}>
@@ -108,18 +322,19 @@ export default function DashboardCobranza() {
             <div>
               <h1 style={titulo}>Dashboard Cobranza</h1>
               <p style={subtitulo}>
-                Indicadores de cartera, mora, promesas, recuperación y gestores.
+                Indicadores reales de cartera, mora, cobros, promesas y gestores.
               </p>
             </div>
           </div>
 
           <div style={accionesTop}>
+            <button style={botonDashboard} onClick={volverDashboard}>
+              ← Volver al Dashboard
+            </button>
+
             <button style={botonNegro} onClick={imprimirReporte}>
               Imprimir Reporte
             </button>
-
-            <button style={botonSecundario}>Exportar PDF</button>
-            <button style={botonSecundario}>Exportar Excel</button>
           </div>
         </div>
 
@@ -127,42 +342,37 @@ export default function DashboardCobranza() {
           <h2 style={tituloSeccion}>Filtros</h2>
 
           <div style={gridFiltros}>
-            <div>
-              <label style={label}>Fecha desde</label>
+            <Campo label="Fecha desde">
               <input
                 type="date"
                 value={filtroDesde}
                 onChange={(e) => setFiltroDesde(e.target.value)}
                 style={inputStyle}
               />
-            </div>
+            </Campo>
 
-            <div>
-              <label style={label}>Fecha hasta</label>
+            <Campo label="Fecha hasta">
               <input
                 type="date"
                 value={filtroHasta}
                 onChange={(e) => setFiltroHasta(e.target.value)}
                 style={inputStyle}
               />
-            </div>
+            </Campo>
 
-            <div>
-              <label style={label}>Gestor</label>
+            <Campo label="Gestor">
               <select
                 value={filtroGestor}
                 onChange={(e) => setFiltroGestor(e.target.value)}
                 style={inputStyle}
               >
-                <option>Todos</option>
-                <option>Gestor 1</option>
-                <option>Gestor 2</option>
-                <option>Gestor 3</option>
+                {gestores.map((gestor) => (
+                  <option key={gestor}>{gestor}</option>
+                ))}
               </select>
-            </div>
+            </Campo>
 
-            <div>
-              <label style={label}>Estado</label>
+            <Campo label="Estado">
               <select
                 value={filtroEstado}
                 onChange={(e) => setFiltroEstado(e.target.value)}
@@ -171,107 +381,65 @@ export default function DashboardCobranza() {
                 <option>Todos</option>
                 <option>Al Día</option>
                 <option>Mora</option>
-                <option>Crítico</option>
                 <option>Legal</option>
+                <option>Suspendido</option>
+                <option>Cancelado</option>
               </select>
-            </div>
+            </Campo>
           </div>
 
           <div style={acciones}>
-            <button style={boton} onClick={buscar}>
-              Buscar
-            </button>
-
             <button style={botonGris} onClick={limpiarFiltros}>
-              Limpiar
+              Limpiar filtros
             </button>
           </div>
         </div>
 
         <div style={kpiGrid}>
-          <KPI titulo="Cartera Total" valor={formato(data.carteraTotal)} icono="💰" />
-          <KPI titulo="Cartera Al Día" valor={formato(data.carteraAlDia)} icono="🟢" />
-          <KPI titulo="Cartera en Mora" valor={formato(data.carteraMora)} icono="🔴" />
-          <KPI titulo="% Mora" valor={`${data.porcentajeMora}%`} icono="📈" />
-          <KPI titulo="Cobrado Hoy" valor={formato(data.cobradoHoy)} icono="📅" />
-          <KPI titulo="Cobrado Mes" valor={formato(data.cobradoMes)} icono="📆" />
-          <KPI titulo="Promesas Activas" valor={data.promesasActivas} icono="🤝" />
-          <KPI titulo="Promesas Incumplidas" valor={data.promesasIncumplidas} icono="⚠️" />
-          <KPI titulo="Promesas Cumplidas" valor={data.promesasCumplidas} icono="✅" />
-          <KPI titulo="Clientes Activos" valor={data.clientesActivos} icono="👥" />
-          <KPI titulo="Clientes en Mora" valor={data.clientesMora} icono="🚨" />
-          <KPI titulo="Recuperación Mes" valor={`${data.recuperacionMes}%`} icono="📊" />
+          <KPI titulo="Cartera Total" valor={formato(carteraTotal)} icono="💰" />
+          <KPI titulo="Cartera Al Día" valor={formato(carteraAlDia)} icono="🟢" />
+          <KPI titulo="Cartera en Mora" valor={formato(carteraMora)} icono="🔴" />
+          <KPI titulo="% Mora" valor={`${porcentajeMora.toFixed(1)}%`} icono="📈" />
+          <KPI titulo="Cobrado Hoy" valor={formato(cobradoHoy)} icono="📅" />
+          <KPI titulo="Cobrado Mes" valor={formato(cobradoMes)} icono="📆" />
+          <KPI titulo="Cobrado Periodo" valor={formato(cobradoPeriodo)} icono="🧾" />
+          <KPI titulo="Clientes Activos" valor={clientesActivos} icono="👥" />
+          <KPI titulo="Clientes en Mora" valor={clientesMora} icono="🚨" />
+          <KPI titulo="Promesas Activas" valor={promesasActivas} icono="🤝" />
+          <KPI titulo="Promesas Cumplidas" valor={promesasCumplidas} icono="✅" />
+          <KPI titulo="Promesas Incumplidas" valor={promesasIncumplidas} icono="⚠️" />
         </div>
 
         <div style={gridDos}>
           <div style={card}>
-            <h2 style={tituloSeccion}>Meta de Cobro del Mes</h2>
+            <h2 style={tituloSeccion}>Recuperación del Mes</h2>
 
             <p style={textoGrande}>
-              {formato(data.cobradoMes)} / {formato(data.metaMes)}
+              {formato(cobradoMes)} recuperado este mes
             </p>
 
             <div style={barraFondo}>
-              <div style={{ ...barraProgreso, width: `${avanceMeta}%` }} />
+              <div
+                style={{
+                  ...barraProgreso,
+                  width: `${Math.min(avanceCobro, 100)}%`,
+                }}
+              />
             </div>
 
-            <p style={nota}>{avanceMeta.toFixed(1)}% alcanzado</p>
+            <p style={nota}>
+              Equivale al {avanceCobro.toFixed(1)}% de la cartera filtrada.
+            </p>
           </div>
 
           <div style={card}>
             <h2 style={tituloSeccion}>Semáforo General</h2>
 
             <div style={semaforoGrid}>
-              <Semaforo label="🟢 Al día" valor={formato(data.semaforo.verde)} />
-              <Semaforo label="🟡 1-29 días" valor={formato(data.semaforo.amarillo)} />
-              <Semaforo label="🟠 30-59 días" valor={formato(data.semaforo.naranja)} />
-              <Semaforo label="🔴 60+ días" valor={formato(data.semaforo.rojo)} />
-            </div>
-          </div>
-        </div>
-
-        <div style={gridGraficas}>
-          <div style={card}>
-            <h2 style={tituloSeccion}>Estado de Cartera</h2>
-
-            <div style={graficaBox}>
-              <div
-                style={{
-                  ...dona,
-                  background: `conic-gradient(#16a34a 0% ${
-                    (data.carteraAlDia / data.carteraTotal) * 100
-                  }%, #dc2626 ${
-                    (data.carteraAlDia / data.carteraTotal) * 100
-                  }% 100%)`,
-                }}
-              />
-
-              <div>
-                <p>🟢 Al día: {formato(data.carteraAlDia)}</p>
-                <p>🔴 Mora: {formato(data.carteraMora)}</p>
-              </div>
-            </div>
-          </div>
-
-          <div style={card}>
-            <h2 style={tituloSeccion}>Promesas</h2>
-
-            <div style={graficaBox}>
-              <div
-                style={{
-                  ...dona,
-                  background:
-                    "conic-gradient(#16a34a 0% 45%, #f59e0b 45% 75%, #dc2626 75% 100%)",
-                }}
-              />
-
-              <div>
-                <p>✅ Cumplidas: {data.promesasCumplidas}</p>
-                <p>🤝 Activas: {data.promesasActivas}</p>
-                <p>⚠️ Incumplidas: {data.promesasIncumplidas}</p>
-                <p>Monto activo: {formato(data.montoPromesasActivas)}</p>
-                <p>Monto incumplido: {formato(data.montoPromesasIncumplidas)}</p>
-              </div>
+              <Semaforo label="🟢 Al día" valor={formato(semaforo.verde)} />
+              <Semaforo label="🟡 1-29 días" valor={formato(semaforo.amarillo)} />
+              <Semaforo label="🟠 30-59 días" valor={formato(semaforo.naranja)} />
+              <Semaforo label="🔴 60+ días" valor={formato(semaforo.rojo)} />
             </div>
           </div>
         </div>
@@ -280,8 +448,12 @@ export default function DashboardCobranza() {
           <div style={card}>
             <h2 style={tituloSeccion}>Cobro por Gestor</h2>
 
-            {data.gestores.map((g, index) => (
-              <div key={index} style={barraItem}>
+            {rankingGestores.length === 0 && (
+              <p style={nota}>Aún no hay gestores con cobros registrados.</p>
+            )}
+
+            {rankingGestores.map((g, index) => (
+              <div key={g.gestor} style={barraItem}>
                 <div style={barraHeader}>
                   <strong>{g.gestor}</strong>
                   <span>{formato(g.cobrado)}</span>
@@ -292,13 +464,13 @@ export default function DashboardCobranza() {
                     style={{
                       ...barraProgreso,
                       width: `${(g.cobrado / maxGestor) * 100}%`,
-                      background: colorGestor(index),
                     }}
                   />
                 </div>
 
-                <p style={{ ...nota, marginTop: "5px" }}>
-                  Recuperación: {g.recuperacion}%
+                <p style={nota}>
+                  Clientes: {g.clientes} · Gestiones: {g.gestiones} · Recuperación:{" "}
+                  {g.recuperacion.toFixed(1)}%
                 </p>
               </div>
             ))}
@@ -307,8 +479,8 @@ export default function DashboardCobranza() {
           <div style={card}>
             <h2 style={tituloSeccion}>Mora por Antigüedad</h2>
 
-            {data.moraAntiguedad.map((m, index) => (
-              <div key={index} style={barraItem}>
+            {moraAntiguedad.map((m) => (
+              <div key={m.rango} style={barraItem}>
                 <div style={barraHeader}>
                   <strong>{m.rango}</strong>
                   <span>{formato(m.monto)}</span>
@@ -330,35 +502,45 @@ export default function DashboardCobranza() {
         <Tabla
           titulo="Top Clientes con Mayor Mora"
           columnas={["Cliente", "Días", "Saldo", "Gestor"]}
-          filas={data.mayorMora.map((c) => [
-            c.cliente,
-            c.dias,
-            formato(c.saldo),
-            c.gestor,
+          filas={mayorMora.map((item) => [
+            item.cliente?.nombre || "Sin nombre",
+            item.dias,
+            formato(item.cuenta?.saldo_actual),
+            item.gestor,
           ])}
         />
 
         <Tabla
           titulo="Top Clientes con Mayor Saldo"
           columnas={["Cliente", "Saldo", "Estado"]}
-          filas={data.mayorSaldo.map((c) => [
-            c.cliente,
-            formato(c.saldo),
-            c.estado,
+          filas={mayorSaldo.map((item) => [
+            item.cliente?.nombre || "Sin nombre",
+            formato(item.cuenta?.saldo_actual),
+            item.estado,
           ])}
         />
 
         <Tabla
           titulo="Ranking de Gestores"
-          columnas={["Gestor", "Cobrado Mes", "Clientes", "% Recuperación"]}
-          filas={data.gestores.map((g) => [
+          columnas={["Gestor", "Cobrado", "Clientes", "Gestiones", "% Recuperación"]}
+          filas={rankingGestores.map((g) => [
             g.gestor,
             formato(g.cobrado),
             g.clientes,
-            `${g.recuperacion}%`,
+            g.gestiones,
+            `${g.recuperacion.toFixed(1)}%`,
           ])}
         />
       </div>
+    </div>
+  );
+}
+
+function Campo({ label, children }) {
+  return (
+    <div>
+      <label style={label}>{label}</label>
+      {children}
     </div>
   );
 }
@@ -392,19 +574,31 @@ function Tabla({ titulo, columnas, filas }) {
           <thead>
             <tr>
               {columnas.map((col, index) => (
-                <th key={index} style={th}>{col}</th>
+                <th key={index} style={th}>
+                  {col}
+                </th>
               ))}
             </tr>
           </thead>
 
           <tbody>
-            {filas.map((fila, index) => (
-              <tr key={index}>
-                {fila.map((celda, i) => (
-                  <td key={i} style={td}>{celda}</td>
-                ))}
+            {filas.length === 0 ? (
+              <tr>
+                <td style={td} colSpan={columnas.length}>
+                  No hay datos disponibles.
+                </td>
               </tr>
-            ))}
+            ) : (
+              filas.map((fila, index) => (
+                <tr key={index}>
+                  {fila.map((celda, i) => (
+                    <td key={i} style={td}>
+                      {celda}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -414,8 +608,8 @@ function Tabla({ titulo, columnas, filas }) {
 
 const pagina = {
   minHeight: "100vh",
-  background: "#f3f4f6",
-  padding: "18px",
+  background: "#eef2f7",
+  padding: "20px",
   fontFamily: "Arial, sans-serif",
 };
 
@@ -425,12 +619,17 @@ const contenedor = {
 };
 
 const encabezado = {
+  background: "linear-gradient(135deg, #111827, #1e40af)",
+  color: "#ffffff",
+  padding: "24px",
+  borderRadius: "20px",
+  marginBottom: "18px",
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   gap: "16px",
-  marginBottom: "16px",
   flexWrap: "wrap",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
 };
 
 const tituloBox = {
@@ -440,19 +639,20 @@ const tituloBox = {
 };
 
 const logo = {
-  width: "110px",
-  height: "auto",
+  width: "90px",
+  background: "#ffffff",
+  borderRadius: "14px",
+  padding: "8px",
 };
 
 const titulo = {
   fontSize: "32px",
   margin: 0,
-  color: "#111827",
 };
 
 const subtitulo = {
   marginTop: "5px",
-  color: "#6b7280",
+  color: "#dbeafe",
   fontSize: "15px",
 };
 
@@ -467,10 +667,11 @@ const card = {
   padding: "18px",
   borderRadius: "16px",
   marginBottom: "16px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
 };
 
 const tituloSeccion = {
+  marginTop: 0,
   marginBottom: "14px",
   color: "#111827",
 };
@@ -495,6 +696,8 @@ const inputStyle = {
   borderRadius: "8px",
   border: "1px solid #d1d5db",
   boxSizing: "border-box",
+  background: "#ffffff",
+  color: "#111827",
 };
 
 const acciones = {
@@ -503,11 +706,11 @@ const acciones = {
   marginTop: "14px",
 };
 
-const boton = {
-  background: "#16a34a",
-  color: "#ffffff",
+const botonDashboard = {
+  background: "#ffffff",
+  color: "#111827",
   border: "none",
-  padding: "12px 24px",
+  padding: "12px 20px",
   borderRadius: "9px",
   fontWeight: "bold",
   cursor: "pointer",
@@ -516,17 +719,7 @@ const boton = {
 const botonNegro = {
   background: "#111827",
   color: "#ffffff",
-  border: "none",
-  padding: "12px 20px",
-  borderRadius: "9px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const botonSecundario = {
-  background: "#ffffff",
-  color: "#111827",
-  border: "1px solid #d1d5db",
+  border: "1px solid #ffffff",
   padding: "12px 20px",
   borderRadius: "9px",
   fontWeight: "bold",
@@ -554,7 +747,7 @@ const cardIndicador = {
   background: "#ffffff",
   padding: "18px",
   borderRadius: "16px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
 };
 
 const iconoBox = {
@@ -575,12 +768,6 @@ const cardNumero = {
 };
 
 const gridDos = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(360px,1fr))",
-  gap: "16px",
-};
-
-const gridGraficas = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(360px,1fr))",
   gap: "16px",
@@ -625,20 +812,6 @@ const semaforoItem = {
   display: "flex",
   justifyContent: "space-between",
   gap: "10px",
-};
-
-const graficaBox = {
-  display: "flex",
-  alignItems: "center",
-  gap: "24px",
-  flexWrap: "wrap",
-};
-
-const dona = {
-  width: "160px",
-  height: "160px",
-  borderRadius: "50%",
-  position: "relative",
 };
 
 const barraItem = {
