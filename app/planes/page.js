@@ -2,14 +2,20 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { supabase } from "../../lib/supabase";
 import { asignarPlanEmpresa } from "../../lib/konaxPlanes";
 
 export default function Planes() {
   const [tipoPlan, setTipoPlan] = useState("mensual");
   const [empresaId, setEmpresaId] = useState("");
   const [empresaNombre, setEmpresaNombre] = useState("");
+  const [empresaActual, setEmpresaActual] = useState(null);
 
   useEffect(() => {
+    cargarEmpresa();
+  }, []);
+
+  async function cargarEmpresa() {
     const id = localStorage.getItem("empresaAdminCreadaId");
     const nombre = localStorage.getItem("empresaAdminCreadaNombre");
 
@@ -21,7 +27,21 @@ export default function Planes() {
 
     setEmpresaId(id);
     setEmpresaNombre(nombre || "Empresa seleccionada");
-  }, []);
+
+    const { data, error } = await supabase
+      .from("empresas")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (!error && data) {
+      setEmpresaActual(data);
+
+      if (data.plan_tipo) {
+        setTipoPlan(String(data.plan_tipo).toLowerCase());
+      }
+    }
+  }
 
   const planes = [
     {
@@ -103,8 +123,11 @@ export default function Planes() {
       return;
     }
 
+    const yaTienePlan = !!empresaActual?.plan_codigo;
+    const accion = yaTienePlan ? "actualizará" : "asignará";
+
     const confirmar = confirm(
-      `Se asignará ${plan.nombre} a ${empresaNombre}. ¿Deseas continuar?`
+      `Se ${accion} ${plan.nombre} para ${empresaNombre}. ¿Deseas continuar?`
     );
 
     if (!confirmar) return;
@@ -113,6 +136,12 @@ export default function Planes() {
 
     if (!resultado.ok) {
       alert(resultado.mensaje);
+      return;
+    }
+
+    if (yaTienePlan) {
+      alert("Plan actualizado correctamente.");
+      window.location.href = "/centro-gestion";
       return;
     }
 
@@ -131,6 +160,12 @@ export default function Planes() {
 
         <p style={subtitulo}>
           Empresa seleccionada: <strong>{empresaNombre}</strong>
+          {empresaActual?.plan_nombre && (
+            <>
+              <br />
+              Plan actual: <strong>{empresaActual.plan_nombre}</strong>
+            </>
+          )}
         </p>
 
         <div style={toggleBox}>
@@ -154,6 +189,8 @@ export default function Planes() {
             const precio =
               tipoPlan === "mensual" ? plan.precioMensual : plan.precioAnual;
 
+            const esActual = empresaActual?.plan_codigo === plan.codigo;
+
             return (
               <div
                 key={plan.codigo}
@@ -164,9 +201,9 @@ export default function Planes() {
                   transform: plan.destacado ? "scale(1.02)" : "scale(1)",
                 }}
               >
-                {plan.destacado && (
-                  <div style={recomendado}>Más recomendado</div>
-                )}
+                {plan.destacado && <div style={recomendado}>Más recomendado</div>}
+
+                {esActual && <div style={planActual}>Plan actual</div>}
 
                 <div style={{ ...badge, background: plan.color }}>
                   {plan.etiqueta}
@@ -180,7 +217,9 @@ export default function Planes() {
                 </div>
 
                 <p style={precioTexto}>
-                  {tipoPlan === "mensual" ? "Pago mensual" : "Pago anual con ahorro"}
+                  {tipoPlan === "mensual"
+                    ? "Pago mensual"
+                    : "Pago anual con ahorro"}
                 </p>
 
                 <p style={usuariosTexto}>
@@ -199,7 +238,7 @@ export default function Planes() {
                   onClick={() => asignarPlan(plan)}
                   style={{ ...botonPlan, background: plan.color }}
                 >
-                  Asignar {plan.nombre}
+                  {esActual ? "Actualizar plan actual" : `Asignar ${plan.nombre}`}
                 </button>
               </div>
             );
@@ -207,7 +246,7 @@ export default function Planes() {
         </div>
 
         <p style={nota}>
-          Flujo automático: Empresa → Plan → Módulos → Usuario Principal.
+          Si la empresa ya existe, el plan se actualiza sin crearla nuevamente.
         </p>
 
         <Link href="/empresas" style={botonVolver}>
@@ -307,6 +346,18 @@ const recomendado = {
   right: "20px",
   background: "#facc15",
   color: "#111827",
+  padding: "7px 12px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: "bold",
+};
+
+const planActual = {
+  position: "absolute",
+  top: "-14px",
+  left: "20px",
+  background: "#dcfce7",
+  color: "#166534",
   padding: "7px 12px",
   borderRadius: "999px",
   fontSize: "12px",
