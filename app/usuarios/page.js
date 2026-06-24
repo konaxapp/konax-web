@@ -78,6 +78,18 @@ export default function Usuarios() {
       return;
     }
 
+    await supabase.from("bitacora_konax").insert([
+      {
+        empresa_id: empresaId,
+        empresa_nombre: empresaNombre,
+        accion: "Usuario principal creado",
+        descripcion: `Se creó el usuario administrador inicial para ${empresaNombre}.`,
+        estado_anterior: null,
+        estado_nuevo: "Usuario activo",
+        usuario: "KONAX",
+      },
+    ]);
+
     alert("Administrador inicial creado correctamente.");
 
     setNombre("");
@@ -117,7 +129,9 @@ export default function Usuarios() {
 
     const { error } = await supabase
       .from("empresas")
-      .update({ configuracion_completa: true })
+      .update({
+        configuracion_completa: true,
+      })
       .eq("id", empresaId);
 
     if (error) {
@@ -125,59 +139,86 @@ export default function Usuarios() {
       return;
     }
 
-    alert("Configuración finalizada. Ya puedes entregar las credenciales al cliente.");
-    window.location.href = "/dashboard";
+    await supabase.from("bitacora_konax").insert([
+      {
+        empresa_id: empresaId,
+        empresa_nombre: empresaNombre,
+        accion: "Configuración finalizada",
+        descripcion: `La empresa ${empresaNombre} quedó configurada con usuario principal.`,
+        estado_anterior: "Pendiente",
+        estado_nuevo: "Completa",
+        usuario: "KONAX",
+      },
+    ]);
+
+    localStorage.removeItem("empresaAdminCreadaId");
+    localStorage.removeItem("empresaAdminCreadaNombre");
+    localStorage.removeItem("categoriaNegocioAdmin");
+    localStorage.removeItem("tipoNegocioAdmin");
+
+    alert("Configuración finalizada. Puedes entregar las credenciales al cliente.");
+
+    window.location.href = "/admin";
   }
 
   return (
     <div style={pagina}>
       <div style={card}>
-        <h1 style={titulo}>Usuario Administrador Inicial</h1>
+        <div style={header}>
+          <img src="/konax-logo.png" alt="KONAX" style={logo} />
 
-        <p style={subtitulo}>
-          Empresa seleccionada: <strong>{empresaNombre}</strong>
-        </p>
-
-        <div style={campo}>
-          <label>Nombre del Administrador</label>
-          <input
-            type="text"
-            placeholder="Nombre completo"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            style={inputStyle}
-          />
+          <div>
+            <h1 style={titulo}>Usuario Principal</h1>
+            <p style={subtitulo}>
+              Empresa seleccionada: <strong>{empresaNombre}</strong>
+            </p>
+          </div>
         </div>
 
-        <div style={campo}>
-          <label>Correo de Acceso</label>
-          <input
-            type="email"
-            placeholder="admin@empresa.com"
-            value={correo}
-            onChange={(e) => setCorreo(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
+        <div style={bloque}>
+          <h2 style={tituloSeccion}>Crear Administrador Inicial</h2>
 
-        <div style={campo}>
-          <label>Contraseña de Acceso</label>
-          <input
-            type="text"
-            placeholder="Ej. 123456"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
+          <div style={campo}>
+            <label>Nombre del Administrador</label>
+            <input
+              type="text"
+              placeholder="Nombre completo"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              style={inputStyle}
+            />
+          </div>
 
-        <button
-          onClick={crearAdministradorInicial}
-          style={botonAzul}
-          disabled={guardando}
-        >
-          {guardando ? "Guardando..." : "Crear Administrador Inicial"}
-        </button>
+          <div style={campo}>
+            <label>Correo de Acceso</label>
+            <input
+              type="email"
+              placeholder="admin@empresa.com"
+              value={correo}
+              onChange={(e) => setCorreo(e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+
+          <div style={campo}>
+            <label>Contraseña de Acceso</label>
+            <input
+              type="text"
+              placeholder="Ej. 123456"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+
+          <button
+            onClick={crearAdministradorInicial}
+            style={botonAzul}
+            disabled={guardando}
+          >
+            {guardando ? "Guardando..." : "Crear Administrador Inicial"}
+          </button>
+        </div>
 
         <h2 style={{ marginBottom: "20px" }}>
           Administrador inicial creado ({usuarios.length})
@@ -229,11 +270,15 @@ export default function Usuarios() {
         </div>
 
         <p style={nota}>
-          Este usuario será el primer acceso del cliente para entrar al Dashboard.
+          Este usuario será el acceso principal del cliente. Al finalizar, regresarás al panel administrativo.
         </p>
 
         <button onClick={finalizarConfiguracion} style={botonVerde}>
           Finalizar Configuración
+        </button>
+
+        <button onClick={() => (window.location.href = "/empresas")} style={botonNegro}>
+          Volver a Empresas
         </button>
       </div>
     </div>
@@ -257,15 +302,40 @@ const card = {
   boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
 };
 
+const header = {
+  display: "flex",
+  alignItems: "center",
+  gap: "16px",
+  marginBottom: "30px",
+};
+
+const logo = {
+  width: "95px",
+  height: "auto",
+};
+
 const titulo = {
-  textAlign: "center",
-  marginBottom: "10px",
+  margin: 0,
+  color: "#111827",
 };
 
 const subtitulo = {
-  textAlign: "center",
   color: "#666",
-  marginBottom: "40px",
+  marginTop: "6px",
+};
+
+const bloque = {
+  background: "#f9fafb",
+  padding: "22px",
+  borderRadius: "14px",
+  marginBottom: "30px",
+  border: "1px solid #e5e7eb",
+};
+
+const tituloSeccion = {
+  marginTop: 0,
+  marginBottom: "18px",
+  color: "#111827",
 };
 
 const campo = {
@@ -292,7 +362,6 @@ const botonAzul = {
   fontSize: "16px",
   fontWeight: "bold",
   cursor: "pointer",
-  marginBottom: "40px",
 };
 
 const tablaBox = {
@@ -321,7 +390,7 @@ const tdStyle = {
 const nota = {
   color: "#666",
   fontSize: "14px",
-  marginBottom: "25px",
+  marginBottom: "18px",
   textAlign: "center",
 };
 
@@ -336,4 +405,17 @@ const botonVerde = {
   fontWeight: "bold",
   cursor: "pointer",
   boxShadow: "0 4px 12px rgba(22,163,74,0.30)",
+  marginBottom: "12px",
+};
+
+const botonNegro = {
+  width: "100%",
+  background: "#111827",
+  color: "white",
+  border: "none",
+  padding: "15px",
+  borderRadius: "10px",
+  fontSize: "15px",
+  fontWeight: "bold",
+  cursor: "pointer",
 };
