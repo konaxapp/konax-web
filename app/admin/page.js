@@ -10,29 +10,12 @@ export default function Admin() {
           <img src="/konax-logo.png" alt="KONAX" style={logo} />
 
           <div>
-            <span style={badge}>BackOffice SaaS</span>
+            <span style={badge}>Administración KONAX</span>
             <h1 style={titulo}>Centro Administrativo KONAX</h1>
             <p style={subtitulo}>
-              Administra empresas clientes, planes, módulos, usuarios principales
-              y el crecimiento interno de KONAX.
+              Administra empresas clientes, planes comerciales, módulos,
+              usuarios principales y el control interno del negocio KONAX.
             </p>
-          </div>
-        </div>
-
-        <div style={resumenGrid}>
-          <div style={resumenCard}>
-            <span>Empresas</span>
-            <strong>Clientes KONAX</strong>
-          </div>
-
-          <div style={resumenCard}>
-            <span>Planes</span>
-            <strong>Cobros / Gestión / Pro</strong>
-          </div>
-
-          <div style={resumenCard}>
-            <span>Control</span>
-            <strong>Centro de Gestión</strong>
           </div>
         </div>
 
@@ -65,19 +48,10 @@ export default function Admin() {
             <div style={icono}>📊</div>
             <h3>Centro de Gestión KONAX</h3>
             <p>
-              Ver empresas, pagos, vencimientos, suspensiones, activaciones e
-              historial del negocio KONAX.
+              Ver empresas, pagos, vencimientos, activaciones, suspensiones e
+              historial interno de KONAX.
             </p>
           </Link>
-
-          <div style={cardInfo}>
-            <div style={icono}>⚙️</div>
-            <h3>Próxima etapa</h3>
-            <p>
-              Luego conectaremos pagos KONAX, bitácora interna y suspensión
-              automática por vencimiento.
-            </p>
-          </div>
         </div>
       </div>
     </div>
@@ -92,7 +66,7 @@ const pagina = {
 };
 
 const contenedor = {
-  maxWidth: "1350px",
+  maxWidth: "1300px",
   margin: "0 auto",
 };
 
@@ -104,7 +78,7 @@ const hero = {
   alignItems: "center",
   gap: "28px",
   boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
-  marginBottom: "24px",
+  marginBottom: "26px",
   border: "1px solid #e5e7eb",
 };
 
@@ -138,23 +112,6 @@ const subtitulo = {
   margin: 0,
 };
 
-const resumenGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
-  gap: "16px",
-  marginBottom: "24px",
-};
-
-const resumenCard = {
-  background: "#111827",
-  color: "#ffffff",
-  padding: "20px",
-  borderRadius: "16px",
-  display: "grid",
-  gap: "8px",
-  boxShadow: "0 6px 16px rgba(0,0,0,0.10)",
-};
-
 const grid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
@@ -175,11 +132,6 @@ const cardDestacado = {
   ...card,
   background: "#ecfdf5",
   border: "2px solid #10b981",
-};
-
-const cardInfo = {
-  ...card,
-  background: "#f9fafb",
 };
 
 const icono = {
