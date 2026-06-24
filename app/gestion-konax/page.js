@@ -6,6 +6,7 @@ import { supabase } from "../../lib/supabase";
 
 export default function GestionKonax() {
   const [empresas, setEmpresas] = useState([]);
+  const [pagos, setPagos] = useState([]);
   const [bitacora, setBitacora] = useState([]);
   const [filtro, setFiltro] = useState("");
   const [cargando, setCargando] = useState(true);
@@ -28,13 +29,19 @@ export default function GestionKonax() {
       return;
     }
 
+    const { data: pagosData } = await supabase
+      .from("pagos_konax")
+      .select("*")
+      .order("created_at", { ascending: false });
+
     const { data: bitacoraData } = await supabase
       .from("bitacora_konax")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(30);
+      .limit(40);
 
     setEmpresas(empresasData || []);
+    setPagos(pagosData || []);
     setBitacora(bitacoraData || []);
     setCargando(false);
   }
@@ -108,6 +115,10 @@ export default function GestionKonax() {
     );
   });
 
+  const hoy = new Date();
+  const mesActual = hoy.getMonth();
+  const anioActual = hoy.getFullYear();
+
   const empresasActivas = empresas.filter(
     (e) => e.estado === "Activo" || e.estado === "Activa"
   ).length;
@@ -116,13 +127,37 @@ export default function GestionKonax() {
     (e) => e.estado === "Suspendido" || e.estado_plan === "Suspendido"
   ).length;
 
-  const pendientesPago = empresas.filter(
-    (e) => e.estado_pago && e.estado_pago !== "Al día"
-  ).length;
-
-  const ingresosMensuales = empresas
+  const ingresosEstimados = empresas
     .filter((e) => e.estado === "Activo" || e.estado === "Activa")
     .reduce((sum, e) => sum + Number(e.plan_precio || 0), 0);
+
+  const pagadoEsteMes = pagos.reduce((sum, pago) => {
+    const fecha = pago.fecha_pago || pago.created_at;
+    if (!fecha) return sum;
+
+    const fechaPago = new Date(fecha);
+
+    if (
+      fechaPago.getMonth() === mesActual &&
+      fechaPago.getFullYear() === anioActual &&
+      pago.estado_pago === "Pagado"
+    ) {
+      return sum + Number(pago.monto || 0);
+    }
+
+    return sum;
+  }, 0);
+
+  const pagosPendientes = pagos.filter(
+    (pago) => pago.estado_pago === "Pendiente"
+  ).length;
+
+  const pagosVencidos = pagos.filter((pago) => {
+    if (!pago.fecha_vencimiento) return false;
+
+    const vencimiento = new Date(pago.fecha_vencimiento);
+    return vencimiento < hoy && pago.estado_pago !== "Pagado";
+  }).length;
 
   if (cargando) {
     return <div style={pagina}>Cargando Centro de Gestión KONAX...</div>;
@@ -136,11 +171,11 @@ export default function GestionKonax() {
             <img src="/konax-logo.png" alt="KONAX" style={logo} />
 
             <div>
-              <p style={etiqueta}>Control Center</p>
+              <p style={etiqueta}>Centro Interno KONAX</p>
               <h1 style={titulo}>Centro de Gestión KONAX</h1>
               <p style={subtitulo}>
-                Ver empresas, pagos, vencimientos, activaciones, suspensiones e
-                historial interno de KONAX.
+                Control interno de empresas, pagos, vencimientos, activaciones,
+                suspensiones e historial administrativo de KONAX.
               </p>
             </div>
           </div>
@@ -160,12 +195,10 @@ export default function GestionKonax() {
           <KPI titulo="Empresas Registradas" valor={empresas.length} icono="🏢" />
           <KPI titulo="Empresas Activas" valor={empresasActivas} icono="✅" />
           <KPI titulo="Suspendidas" valor={empresasSuspendidas} icono="⛔" />
-          <KPI titulo="Pendientes de Pago" valor={pendientesPago} icono="⚠️" />
-          <KPI
-            titulo="Ingreso Mensual Estimado"
-            valor={formato(ingresosMensuales)}
-            icono="💰"
-          />
+          <KPI titulo="Pagos Pendientes" valor={pagosPendientes} icono="⚠️" />
+          <KPI titulo="Pagos Vencidos" valor={pagosVencidos} icono="🚨" />
+          <KPI titulo="Ingreso Estimado" valor={formato(ingresosEstimados)} icono="📈" />
+          <KPI titulo="Pagado Este Mes" valor={formato(pagadoEsteMes)} icono="💰" />
         </div>
 
         <div style={card}>
@@ -173,7 +206,7 @@ export default function GestionKonax() {
             <div>
               <h2 style={tituloSeccion}>Empresas Clientes</h2>
               <p style={textoSuave}>
-                Control de planes, pagos, vencimientos, activaciones y suspensiones.
+                Consulta de empresas, planes, precios, pagos, vencimientos y estado del servicio.
               </p>
             </div>
 
@@ -193,7 +226,7 @@ export default function GestionKonax() {
                   <th style={th}>Plan</th>
                   <th style={th}>Precio</th>
                   <th style={th}>Pago</th>
-                  <th style={th}>Estado</th>
+                  <th style={th}>Servicio</th>
                   <th style={th}>Próxima Facturación</th>
                   <th style={th}>Configuración</th>
                   <th style={th}>Acciones</th>
@@ -201,91 +234,91 @@ export default function GestionKonax() {
               </thead>
 
               <tbody>
-                {empresasFiltradas.map((empresa) => (
-                  <tr key={empresa.id}>
-                    <td style={td}>
-                      <strong>{empresa.nombre}</strong>
-                      <br />
-                      <span style={textoPequeno}>{empresa.correo || "-"}</span>
-                      <br />
-                      <span style={textoPequeno}>{empresa.telefono || "-"}</span>
-                    </td>
-
-                    <td style={td}>{empresa.plan_nombre || "Sin plan"}</td>
-                    <td style={td}>{formato(empresa.plan_precio)}</td>
-                    <td style={td}>{empresa.estado_pago || "Pendiente"}</td>
-
-                    <td style={td}>
-                      <span
-                        style={
-                          empresa.estado === "Activo" || empresa.estado === "Activa"
-                            ? estadoActivo
-                            : estadoSuspendido
-                        }
-                      >
-                        {empresa.estado || "Activo"}
-                      </span>
-                    </td>
-
-                    <td style={td}>
-                      {empresa.fecha_proxima_facturacion || "-"}
-                    </td>
-
-                    <td style={td}>
-                      {empresa.configuracion_completa ? "Completa" : "Pendiente"}
-                    </td>
-
-                    <td style={td}>
-                      <button
-                        style={botonVerde}
-                        onClick={() => seleccionarEmpresa(empresa)}
-                      >
-                        Seleccionar
-                      </button>
-
-                      <button
-                        style={botonAzul}
-                        onClick={() => {
-                          seleccionarEmpresa(empresa);
-                          window.location.href = "/plan-empresa";
-                        }}
-                      >
-                        Plan
-                      </button>
-
-                      <button
-                        style={botonAzul}
-                        onClick={() => {
-                          seleccionarEmpresa(empresa);
-                          window.location.href = "/modulos";
-                        }}
-                      >
-                        Módulos
-                      </button>
-
-                      <button
-                        style={botonRojo}
-                        onClick={() => cambiarEstadoEmpresa(empresa, "Suspendido")}
-                      >
-                        Suspender
-                      </button>
-
-                      <button
-                        style={botonVerde}
-                        onClick={() => cambiarEstadoEmpresa(empresa, "Activo")}
-                      >
-                        Activar
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-
-                {empresasFiltradas.length === 0 && (
+                {empresasFiltradas.length === 0 ? (
                   <tr>
                     <td style={td} colSpan="8">
                       No hay empresas para mostrar.
                     </td>
                   </tr>
+                ) : (
+                  empresasFiltradas.map((empresa) => (
+                    <tr key={empresa.id}>
+                      <td style={td}>
+                        <strong>{empresa.nombre}</strong>
+                        <br />
+                        <span style={textoPequeno}>{empresa.correo || "-"}</span>
+                        <br />
+                        <span style={textoPequeno}>{empresa.telefono || "-"}</span>
+                      </td>
+
+                      <td style={td}>{empresa.plan_nombre || "Sin plan"}</td>
+                      <td style={td}>{formato(empresa.plan_precio)}</td>
+                      <td style={td}>{empresa.estado_pago || "Pendiente"}</td>
+
+                      <td style={td}>
+                        <span
+                          style={
+                            empresa.estado === "Activo" || empresa.estado === "Activa"
+                              ? estadoActivo
+                              : estadoSuspendido
+                          }
+                        >
+                          {empresa.estado || "Activo"}
+                        </span>
+                      </td>
+
+                      <td style={td}>
+                        {empresa.fecha_proxima_facturacion || "-"}
+                      </td>
+
+                      <td style={td}>
+                        {empresa.configuracion_completa ? "Completa" : "Pendiente"}
+                      </td>
+
+                      <td style={td}>
+                        <button
+                          style={botonVerde}
+                          onClick={() => seleccionarEmpresa(empresa)}
+                        >
+                          Seleccionar
+                        </button>
+
+                        <button
+                          style={botonAzul}
+                          onClick={() => {
+                            seleccionarEmpresa(empresa);
+                            window.location.href = "/planes";
+                          }}
+                        >
+                          Plan
+                        </button>
+
+                        <button
+                          style={botonAzul}
+                          onClick={() => {
+                            seleccionarEmpresa(empresa);
+                            window.location.href = "/modulos";
+                          }}
+                        >
+                          Módulos
+                        </button>
+
+                        <button
+                          style={botonRojo}
+                          onClick={() => cambiarEstadoEmpresa(empresa, "Suspendido")}
+                        >
+                          Suspender
+                        </button>
+
+                        <button
+                          style={botonVerde}
+                          onClick={() => cambiarEstadoEmpresa(empresa, "Activo")}
+                        >
+                          Activar
+                        </button>
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
@@ -295,7 +328,7 @@ export default function GestionKonax() {
         <div style={card}>
           <h2 style={tituloSeccion}>Historial Interno KONAX</h2>
           <p style={textoSuave}>
-            Últimas acciones realizadas sobre empresas, planes, pagos y estados.
+            Últimas acciones realizadas sobre empresas, planes, pagos, activaciones y suspensiones.
           </p>
 
           <div style={{ overflowX: "auto" }}>
@@ -311,22 +344,26 @@ export default function GestionKonax() {
               </thead>
 
               <tbody>
-                {bitacora.map((item) => (
-                  <tr key={item.id}>
-                    <td style={td}>{item.created_at || "-"}</td>
-                    <td style={td}>{item.empresa_nombre || "-"}</td>
-                    <td style={td}>{item.accion || "-"}</td>
-                    <td style={td}>{item.descripcion || "-"}</td>
-                    <td style={td}>{item.usuario || "-"}</td>
-                  </tr>
-                ))}
-
-                {bitacora.length === 0 && (
+                {bitacora.length === 0 ? (
                   <tr>
                     <td style={td} colSpan="5">
                       No hay historial registrado.
                     </td>
                   </tr>
+                ) : (
+                  bitacora.map((item) => (
+                    <tr key={item.id}>
+                      <td style={td}>
+                        {item.created_at
+                          ? new Date(item.created_at).toLocaleString()
+                          : "-"}
+                      </td>
+                      <td style={td}>{item.empresa_nombre || "-"}</td>
+                      <td style={td}>{item.accion || "-"}</td>
+                      <td style={td}>{item.descripcion || "-"}</td>
+                      <td style={td}>{item.usuario || "-"}</td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
@@ -360,7 +397,7 @@ const contenedor = {
 };
 
 const hero = {
-  background: "linear-gradient(135deg, #111827, #1e40af)",
+  background: "linear-gradient(135deg, #111827, #064e3b)",
   color: "#ffffff",
   padding: "28px",
   borderRadius: "22px",
@@ -389,7 +426,7 @@ const logo = {
 
 const etiqueta = {
   margin: 0,
-  color: "#bfdbfe",
+  color: "#bbf7d0",
   fontSize: "14px",
   fontWeight: "bold",
 };
@@ -401,7 +438,7 @@ const titulo = {
 };
 
 const subtitulo = {
-  color: "#dbeafe",
+  color: "#dcfce7",
   marginTop: "6px",
   maxWidth: "780px",
 };
@@ -433,7 +470,7 @@ const botonOscuro = {
 
 const kpiGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))",
   gap: "16px",
   marginBottom: "20px",
 };
