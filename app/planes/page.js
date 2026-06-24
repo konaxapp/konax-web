@@ -1,373 +1,407 @@
-import { supabase } from "../../lib/supabase";
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { asignarPlanEmpresa } from "../../lib/konaxPlanes";
 
-export const PLANES_KONAX = {
-  cobros: {
-    codigo: "cobros",
-    nombre: "KONAX Cobros",
-    precio: 49,
-    usuarios: 3,
-    modulos: {
-      clientes: true,
-      vista_cliente: true,
-      venta_credito: false,
-      caja: true,
-      cobranza: true,
-      dashboard_cobros: true,
-      inventario: false,
-      control_caja: false,
-      suscripciones: false,
-      recargos: false,
-      dashboard_ventas: false,
-      egresos: false,
-    },
-  },
+export default function Planes() {
+  const [tipoPlan, setTipoPlan] = useState("mensual");
+  const [empresaId, setEmpresaId] = useState("");
+  const [empresaNombre, setEmpresaNombre] = useState("");
 
-  ventas_gestion: {
-    codigo: "ventas_gestion",
-    nombre: "KONAX Ventas y Gestión",
-    precio: 99,
-    usuarios: 6,
-    modulos: {
-      clientes: true,
-      vista_cliente: true,
-      venta_credito: true,
-      caja: true,
-      cobranza: true,
-      dashboard_cobros: true,
-      inventario: true,
-      control_caja: true,
-      suscripciones: false,
-      recargos: true,
-      dashboard_ventas: true,
-      egresos: true,
-    },
-  },
+  useEffect(() => {
+    const id = localStorage.getItem("empresaAdminCreadaId");
+    const nombre = localStorage.getItem("empresaAdminCreadaNombre");
 
-  pro: {
-    codigo: "pro",
-    nombre: "KONAX Pro",
-    precio: 149,
-    usuarios: 12,
-    modulos: {
-      clientes: true,
-      vista_cliente: true,
-      venta_credito: true,
-      caja: true,
-      cobranza: true,
-      dashboard_cobros: true,
-      inventario: true,
-      control_caja: true,
-      suscripciones: true,
-      recargos: true,
-      dashboard_ventas: true,
-      egresos: true,
-    },
-  },
-};
-
-export function obtenerPlanPorCodigo(codigo) {
-  return PLANES_KONAX[codigo] || null;
-}
-
-export function fechaHoy() {
-  return new Date().toISOString().split("T")[0];
-}
-
-export function sumarDias(fechaTexto, dias) {
-  const fecha = fechaTexto ? new Date(fechaTexto) : new Date();
-  fecha.setDate(fecha.getDate() + dias);
-  return fecha.toISOString().split("T")[0];
-}
-
-export function calcularProximaFacturacion(dias = 30) {
-  return sumarDias(fechaHoy(), dias);
-}
-
-export async function asignarPlanEmpresa(empresaId, codigoPlan) {
-  const plan = obtenerPlanPorCodigo(codigoPlan);
-
-  if (!empresaId) {
-    return {
-      ok: false,
-      mensaje: "No hay empresa seleccionada.",
-    };
-  }
-
-  if (!plan) {
-    return {
-      ok: false,
-      mensaje: "Plan no válido.",
-    };
-  }
-
-  const hoy = fechaHoy();
-  const proximaFacturacion = calcularProximaFacturacion(30);
-
-  const { data: empresaActual } = await supabase
-    .from("empresas")
-    .select("*")
-    .eq("id", empresaId)
-    .maybeSingle();
-
-  const { error: errorEmpresa } = await supabase
-    .from("empresas")
-    .update({
-      plan_codigo: plan.codigo,
-      plan_nombre: plan.nombre,
-      plan_tipo: "Mensual",
-      plan_precio: plan.precio,
-      usuarios_incluidos: plan.usuarios,
-      estado: "Activo",
-      estado_plan: "Activo",
-      estado_pago: "Al día",
-      fecha_activacion: hoy,
-      fecha_proxima_facturacion: proximaFacturacion,
-      configuracion_completa: true,
-    })
-    .eq("id", empresaId);
-
-  if (errorEmpresa) {
-    return {
-      ok: false,
-      mensaje: "Error actualizando empresa: " + errorEmpresa.message,
-    };
-  }
-
-  const modulosPayload = {
-    empresa_id: empresaId,
-    ...plan.modulos,
-  };
-
-  const { error: errorModulos } = await supabase
-    .from("empresa_modulos")
-    .upsert([modulosPayload], {
-      onConflict: "empresa_id",
-    });
-
-  if (errorModulos) {
-    return {
-      ok: false,
-      mensaje: "Error actualizando módulos: " + errorModulos.message,
-    };
-  }
-
-  await supabase.from("bitacora_konax").insert([
-    {
-      empresa_id: empresaId,
-      empresa_nombre: empresaActual?.nombre || "",
-      accion: "Plan asignado",
-      descripcion: `Se asignó el plan ${plan.nombre} a la empresa.`,
-      estado_anterior: empresaActual?.estado_plan || null,
-      estado_nuevo: "Activo",
-      usuario: "KONAX",
-    },
-  ]);
-
-  return {
-    ok: true,
-    plan,
-    mensaje: `Plan ${plan.nombre} asignado correctamente.`,
-  };
-}
-
-export async function suspenderEmpresaPorVencimiento(empresa) {
-  if (!empresa?.id) {
-    return {
-      ok: false,
-      mensaje: "Empresa inválida.",
-    };
-  }
-
-  const { error } = await supabase
-    .from("empresas")
-    .update({
-      estado: "Suspendido",
-      estado_plan: "Suspendido",
-      estado_pago: "Pendiente",
-    })
-    .eq("id", empresa.id);
-
-  if (error) {
-    return {
-      ok: false,
-      mensaje: "Error suspendiendo empresa: " + error.message,
-    };
-  }
-
-  await supabase.from("bitacora_konax").insert([
-    {
-      empresa_id: empresa.id,
-      empresa_nombre: empresa.nombre || "",
-      accion: "Suspensión automática",
-      descripcion: `La empresa ${
-        empresa.nombre || ""
-      } fue suspendida automáticamente por vencimiento de facturación.`,
-      estado_anterior: empresa.estado || null,
-      estado_nuevo: "Suspendido",
-      usuario: "Sistema KONAX",
-    },
-  ]);
-
-  return {
-    ok: true,
-    mensaje: "Empresa suspendida automáticamente.",
-  };
-}
-
-export async function validarEmpresaActiva(empresaId) {
-  if (!empresaId) {
-    return {
-      ok: false,
-      suspendida: true,
-      mensaje: "No hay empresa asignada.",
-    };
-  }
-
-  const { data: empresa, error } = await supabase
-    .from("empresas")
-    .select("*")
-    .eq("id", empresaId)
-    .maybeSingle();
-
-  if (error) {
-    return {
-      ok: false,
-      suspendida: true,
-      mensaje: "Error verificando empresa: " + error.message,
-    };
-  }
-
-  if (!empresa) {
-    return {
-      ok: false,
-      suspendida: true,
-      mensaje: "Empresa no encontrada.",
-    };
-  }
-
-  const hoy = fechaHoy();
-
-  const vencida =
-    empresa.fecha_proxima_facturacion &&
-    hoy > empresa.fecha_proxima_facturacion &&
-    empresa.estado_pago !== "Al día";
-
-  if (
-    empresa.estado === "Suspendido" ||
-    empresa.estado_plan === "Suspendido" ||
-    vencida
-  ) {
-    if (vencida && empresa.estado_plan !== "Suspendido") {
-      await suspenderEmpresaPorVencimiento(empresa);
+    if (!id) {
+      alert("Primero debes crear o seleccionar una empresa.");
+      window.location.href = "/empresas";
+      return;
     }
 
-    return {
-      ok: false,
-      suspendida: true,
-      empresa,
-      mensaje:
-        "El servicio de esta empresa está suspendido por facturación pendiente.",
-    };
+    setEmpresaId(id);
+    setEmpresaNombre(nombre || "Empresa seleccionada");
+  }, []);
+
+  const planes = [
+    {
+      nombre: "KONAX Cobros",
+      codigo: "cobros",
+      etiqueta: "Cartera y cobranza",
+      precioMensual: 49,
+      precioAnual: 499,
+      usuariosIncluidos: 3,
+      color: "#2563eb",
+      fondo: "#eff6ff",
+      incluye: [
+        "3 usuarios incluidos",
+        "Clientes",
+        "Vista Cliente",
+        "Cuentas por Cobrar",
+        "Caja Básica",
+        "Cobranza",
+        "Gestión de Cobros",
+        "Promesas de Pago",
+        "Dashboard de Cobranza",
+        "Usuario adicional: $10.99/mes",
+      ],
+    },
+    {
+      nombre: "KONAX Ventas y Gestión",
+      codigo: "ventas_gestion",
+      etiqueta: "Operación completa",
+      precioMensual: 99,
+      precioAnual: 999,
+      usuariosIncluidos: 6,
+      color: "#10b981",
+      fondo: "#ecfdf5",
+      destacado: true,
+      incluye: [
+        "6 usuarios incluidos",
+        "Todo KONAX Cobros",
+        "Inventario",
+        "Venta Crédito",
+        "Caja",
+        "Control de Caja",
+        "Gastos / Egresos",
+        "Recargos",
+        "Dashboard de Ventas",
+        "Reportes Operativos",
+        "Usuario adicional: $10.99/mes",
+      ],
+    },
+    {
+      nombre: "KONAX Pro",
+      codigo: "pro",
+      etiqueta: "Gerencia y crecimiento",
+      precioMensual: 149,
+      precioAnual: 1499,
+      usuariosIncluidos: 12,
+      color: "#111827",
+      fondo: "#f9fafb",
+      incluye: [
+        "12 usuarios incluidos",
+        "Todo KONAX Ventas y Gestión",
+        "Dashboard Ejecutivo",
+        "Reportes Avanzados",
+        "Comisiones",
+        "Metas por Vendedor",
+        "Metas por Gestor",
+        "Multi Sucursales",
+        "Comparativos Mensuales",
+        "Presupuesto vs Resultado",
+        "Indicadores Gerenciales",
+        "Soporte Prioritario",
+        "Usuario adicional: $10.99/mes",
+      ],
+    },
+  ];
+
+  async function asignarPlan(plan) {
+    if (!empresaId) {
+      alert("No hay empresa seleccionada.");
+      return;
+    }
+
+    const confirmar = confirm(
+      `Se asignará ${plan.nombre} a ${empresaNombre}. ¿Deseas continuar?`
+    );
+
+    if (!confirmar) return;
+
+    const resultado = await asignarPlanEmpresa(empresaId, plan.codigo);
+
+    if (!resultado.ok) {
+      alert(resultado.mensaje);
+      return;
+    }
+
+    alert(resultado.mensaje + " Ahora crea el Usuario Principal.");
+    window.location.href = "/usuarios";
   }
 
-  return {
-    ok: true,
-    suspendida: false,
-    empresa,
-    mensaje: "Empresa activa.",
-  };
+  return (
+    <div style={pagina}>
+      <div style={cardPrincipal}>
+        <div style={logoBox}>
+          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+        </div>
+
+        <h1 style={titulo}>Selecciona el plan de la empresa</h1>
+
+        <p style={subtitulo}>
+          Empresa seleccionada: <strong>{empresaNombre}</strong>
+        </p>
+
+        <div style={toggleBox}>
+          <button
+            onClick={() => setTipoPlan("mensual")}
+            style={tipoPlan === "mensual" ? botonActivo : botonInactivo}
+          >
+            Mensual
+          </button>
+
+          <button
+            onClick={() => setTipoPlan("anual")}
+            style={tipoPlan === "anual" ? botonActivo : botonInactivo}
+          >
+            Anual
+          </button>
+        </div>
+
+        <div style={planesBox}>
+          {planes.map((plan) => {
+            const precio =
+              tipoPlan === "mensual" ? plan.precioMensual : plan.precioAnual;
+
+            return (
+              <div
+                key={plan.codigo}
+                style={{
+                  ...planCard,
+                  border: `2px solid ${plan.color}`,
+                  background: plan.fondo,
+                  transform: plan.destacado ? "scale(1.02)" : "scale(1)",
+                }}
+              >
+                {plan.destacado && (
+                  <div style={recomendado}>Más recomendado</div>
+                )}
+
+                <div style={{ ...badge, background: plan.color }}>
+                  {plan.etiqueta}
+                </div>
+
+                <h2 style={planTitulo}>{plan.nombre}</h2>
+
+                <div style={precioBox}>
+                  <span style={signo}>$</span>
+                  <span style={precioGrande}>{precio}</span>
+                </div>
+
+                <p style={precioTexto}>
+                  {tipoPlan === "mensual" ? "Pago mensual" : "Pago anual con ahorro"}
+                </p>
+
+                <p style={usuariosTexto}>
+                  {plan.usuariosIncluidos} usuarios incluidos
+                </p>
+
+                <ul style={lista}>
+                  {plan.incluye.map((item) => (
+                    <li key={item} style={li}>
+                      ✓ {item}
+                    </li>
+                  ))}
+                </ul>
+
+                <button
+                  onClick={() => asignarPlan(plan)}
+                  style={{ ...botonPlan, background: plan.color }}
+                >
+                  Asignar {plan.nombre}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        <p style={nota}>
+          Flujo automático: Empresa → Plan → Módulos → Usuario Principal.
+        </p>
+
+        <Link href="/empresas" style={botonVolver}>
+          Volver a Empresas
+        </Link>
+      </div>
+    </div>
+  );
 }
 
-export async function registrarPagoEmpresa({
-  empresa,
-  monto,
-  metodo,
-  referencia,
-  observacion,
-  usuario = "KONAX",
-}) {
-  if (!empresa?.id) {
-    return {
-      ok: false,
-      mensaje: "Empresa inválida.",
-    };
-  }
+const pagina = {
+  minHeight: "100vh",
+  background: "#f5f7fb",
+  padding: "40px",
+  fontFamily: "Arial, sans-serif",
+};
 
-  if (!monto || Number(monto) <= 0) {
-    return {
-      ok: false,
-      mensaje: "Ingrese un monto válido.",
-    };
-  }
+const cardPrincipal = {
+  maxWidth: "1300px",
+  margin: "0 auto",
+  background: "white",
+  borderRadius: "20px",
+  padding: "40px",
+  boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+};
 
-  const hoy = fechaHoy();
-  const proximaFacturacion = calcularProximaFacturacion(30);
+const logoBox = {
+  textAlign: "center",
+  marginBottom: "18px",
+};
 
-  const { error: errorPago } = await supabase.from("pagos_konax").insert([
-    {
-      empresa_id: empresa.id,
-      empresa_nombre: empresa.nombre || "",
-      plan_codigo: empresa.plan_codigo || "",
-      plan_nombre: empresa.plan_nombre || "",
-      plan_tipo: empresa.plan_tipo || "Mensual",
-      monto: Number(monto),
-      metodo_pago: metodo || "Yappy",
-      referencia_pago: referencia || "",
-      fecha_factura: hoy,
-      fecha_pago: hoy,
-      fecha_vencimiento: proximaFacturacion,
-      estado_pago: "Pagado",
-      estado_servicio: "Activo",
-      observacion: observacion || "",
-      usuario_registro: usuario,
-    },
-  ]);
+const logo = {
+  width: "190px",
+  maxWidth: "100%",
+  height: "auto",
+};
 
-  if (errorPago) {
-    return {
-      ok: false,
-      mensaje: "Error registrando pago: " + errorPago.message,
-    };
-  }
+const titulo = {
+  textAlign: "center",
+  marginBottom: "10px",
+  fontSize: "34px",
+  color: "#111827",
+};
 
-  const { error: errorEmpresa } = await supabase
-    .from("empresas")
-    .update({
-      estado: "Activo",
-      estado_plan: "Activo",
-      estado_pago: "Al día",
-      fecha_ultimo_pago: hoy,
-      fecha_proxima_facturacion: proximaFacturacion,
-    })
-    .eq("id", empresa.id);
+const subtitulo = {
+  textAlign: "center",
+  color: "#6b7280",
+  marginBottom: "28px",
+};
 
-  if (errorEmpresa) {
-    return {
-      ok: false,
-      mensaje:
-        "Pago guardado, pero error actualizando empresa: " +
-        errorEmpresa.message,
-    };
-  }
+const toggleBox = {
+  display: "flex",
+  justifyContent: "center",
+  gap: "10px",
+  marginBottom: "35px",
+};
 
-  await supabase.from("bitacora_konax").insert([
-    {
-      empresa_id: empresa.id,
-      empresa_nombre: empresa.nombre || "",
-      accion: "Pago registrado",
-      descripcion: `Pago registrado por ${Number(monto).toFixed(
-        2
-      )} vía ${metodo || "Yappy"}. Próxima facturación: ${proximaFacturacion}.`,
-      estado_anterior: empresa.estado || null,
-      estado_nuevo: "Activo",
-      usuario,
-    },
-  ]);
+const botonActivo = {
+  padding: "12px 28px",
+  borderRadius: "999px",
+  border: "1px solid #111827",
+  background: "#111827",
+  color: "white",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
 
-  return {
-    ok: true,
-    mensaje: "Pago registrado y empresa activada correctamente.",
-    proximaFacturacion,
-  };
-}
+const botonInactivo = {
+  padding: "12px 28px",
+  borderRadius: "999px",
+  border: "1px solid #d1d5db",
+  background: "white",
+  color: "#111827",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const planesBox = {
+  display: "flex",
+  gap: "22px",
+  flexWrap: "wrap",
+  alignItems: "stretch",
+};
+
+const planCard = {
+  flex: 1,
+  minWidth: "300px",
+  borderRadius: "18px",
+  padding: "26px",
+  position: "relative",
+  boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+};
+
+const recomendado = {
+  position: "absolute",
+  top: "-14px",
+  right: "20px",
+  background: "#facc15",
+  color: "#111827",
+  padding: "7px 12px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: "bold",
+};
+
+const badge = {
+  display: "inline-block",
+  color: "#ffffff",
+  padding: "7px 12px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: "bold",
+  marginBottom: "14px",
+};
+
+const planTitulo = {
+  fontSize: "24px",
+  color: "#111827",
+  marginBottom: "10px",
+};
+
+const precioBox = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "2px",
+};
+
+const signo = {
+  fontSize: "24px",
+  fontWeight: "bold",
+  color: "#111827",
+  marginTop: "8px",
+};
+
+const precioGrande = {
+  fontSize: "54px",
+  fontWeight: "900",
+  color: "#111827",
+};
+
+const precioTexto = {
+  color: "#6b7280",
+  marginTop: "-5px",
+  marginBottom: "12px",
+  fontSize: "14px",
+};
+
+const usuariosTexto = {
+  background: "#ffffff",
+  padding: "11px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  color: "#111827",
+  border: "1px solid #e5e7eb",
+};
+
+const lista = {
+  color: "#374151",
+  paddingLeft: "0",
+  listStyle: "none",
+  minHeight: "330px",
+  lineHeight: "27px",
+  fontSize: "14px",
+};
+
+const li = {
+  marginBottom: "4px",
+};
+
+const botonPlan = {
+  width: "100%",
+  padding: "14px",
+  border: "none",
+  color: "white",
+  borderRadius: "10px",
+  cursor: "pointer",
+  fontWeight: "bold",
+  fontSize: "15px",
+};
+
+const nota = {
+  textAlign: "center",
+  marginTop: "30px",
+  color: "#777",
+  fontSize: "14px",
+};
+
+const botonVolver = {
+  display: "inline-block",
+  marginTop: "20px",
+  background: "#111827",
+  color: "#ffffff",
+  padding: "12px 18px",
+  borderRadius: "8px",
+  textDecoration: "none",
+  fontWeight: "bold",
+};
