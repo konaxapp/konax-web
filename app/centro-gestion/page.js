@@ -11,9 +11,60 @@ export default function GestionKonax() {
   const [filtro, setFiltro] = useState("");
   const [cargando, setCargando] = useState(true);
 
+  const [mostrarPago, setMostrarPago] = useState(false);
+  const [empresaPago, setEmpresaPago] = useState(null);
+  const [montoPago, setMontoPago] = useState("");
+  const [metodoPago, setMetodoPago] = useState("Yappy");
+  const [referenciaPago, setReferenciaPago] = useState("");
+  const [observacionPago, setObservacionPago] = useState("");
+
   useEffect(() => {
     cargarDatos();
   }, []);
+
+  function fechaHoy() {
+    return new Date().toISOString().split("T")[0];
+  }
+
+  function sumarDias(fechaTexto, dias) {
+    const fecha = fechaTexto ? new Date(fechaTexto) : new Date();
+    fecha.setDate(fecha.getDate() + dias);
+    return fecha.toISOString().split("T")[0];
+  }
+
+  async function revisarSuspensionesAutomaticas(empresasData) {
+    const hoy = fechaHoy();
+
+    for (const empresa of empresasData || []) {
+      const vencida =
+        empresa.fecha_proxima_facturacion &&
+        hoy > empresa.fecha_proxima_facturacion &&
+        empresa.estado_pago !== "Al día";
+
+      if (vencida && empresa.estado !== "Suspendido") {
+        await supabase
+          .from("empresas")
+          .update({
+            estado: "Suspendido",
+            estado_plan: "Suspendido",
+            estado_pago: "Pendiente",
+          })
+          .eq("id", empresa.id);
+
+        await supabase.from("bitacora_konax").insert([
+          {
+            empresa_id: empresa.id,
+            empresa_nombre: empresa.nombre,
+            accion: "Suspensión automática",
+            descripcion: `La empresa ${empresa.nombre} fue suspendida automáticamente por facturación vencida.`,
+            estado_anterior: empresa.estado,
+            estado_nuevo: "Suspendido",
+            usuario: "Sistema KONAX",
+          },
+        ]);
+      }
+    }
+  }
 
   async function cargarDatos() {
     setCargando(true);
@@ -29,6 +80,13 @@ export default function GestionKonax() {
       return;
     }
 
+    await revisarSuspensionesAutomaticas(empresasData || []);
+
+    const { data: empresasActualizadas } = await supabase
+      .from("empresas")
+      .select("*")
+      .order("created_at", { ascending: false });
+
     const { data: pagosData } = await supabase
       .from("pagos_konax")
       .select("*")
@@ -40,7 +98,7 @@ export default function GestionKonax() {
       .order("created_at", { ascending: false })
       .limit(40);
 
-    setEmpresas(empresasData || []);
+    setEmpresas(empresasActualizadas || []);
     setPagos(pagosData || []);
     setBitacora(bitacoraData || []);
     setCargando(false);
@@ -64,41 +122,91 @@ export default function GestionKonax() {
     alert("Empresa seleccionada: " + empresa.nombre);
   }
 
-  async function cambiarEstadoEmpresa(empresa, nuevoEstado) {
-    const confirmar = confirm(
-      `¿Seguro que deseas ${
-        nuevoEstado === "Activo" ? "activar" : "suspender"
-      } esta empresa?`
-    );
+  function abrirPago(empresa) {
+    setEmpresaPago(empresa);
+    setMontoPago(empresa.plan_precio || "");
+    setMetodoPago("Yappy");
+    setReferenciaPago("");
+    setObservacionPago("");
+    setMostrarPago(true);
+  }
 
-    if (!confirmar) return;
+  function cerrarPago() {
+    setMostrarPago(false);
+    setEmpresaPago(null);
+    setMontoPago("");
+    setReferenciaPago("");
+    setObservacionPago("");
+  }
 
-    const { error } = await supabase
+  async function registrarPago() {
+    if (!empresaPago) {
+      alert("Seleccione una empresa.");
+      return;
+    }
+
+    if (!montoPago || Number(montoPago) <= 0) {
+      alert("Ingrese un monto válido.");
+      return;
+    }
+
+    if (!referenciaPago) {
+      alert("Ingrese la referencia del pago.");
+      return;
+    }
+
+    const hoy = fechaHoy();
+    const proximaFacturacion = sumarDias(hoy, 30);
+    const usuario = localStorage.getItem("adminKonaxNombre") || "KONAX";
+
+    const { error: errorPago } = await supabase.from("pagos_konax").insert([
+      {
+        empresa_id: empresaPago.id,
+        empresa_nombre: empresaPago.nombre,
+        monto: Number(montoPago),
+        metodo_pago: metodoPago,
+        referencia: referenciaPago,
+        observacion: observacionPago,
+        fecha_pago: hoy,
+        usuario,
+      },
+    ]);
+
+    if (errorPago) {
+      alert("Error registrando pago: " + errorPago.message);
+      return;
+    }
+
+    const { error: errorEmpresa } = await supabase
       .from("empresas")
       .update({
-        estado: nuevoEstado,
-        estado_plan: nuevoEstado === "Activo" ? "Activo" : "Suspendido",
+        estado: "Activo",
+        estado_plan: "Activo",
+        estado_pago: "Al día",
+        fecha_ultimo_pago: hoy,
+        fecha_proxima_facturacion: proximaFacturacion,
       })
-      .eq("id", empresa.id);
+      .eq("id", empresaPago.id);
 
-    if (error) {
-      alert("Error actualizando empresa: " + error.message);
+    if (errorEmpresa) {
+      alert("Pago guardado, pero error actualizando empresa: " + errorEmpresa.message);
       return;
     }
 
     await supabase.from("bitacora_konax").insert([
       {
-        empresa_id: empresa.id,
-        empresa_nombre: empresa.nombre,
-        accion: nuevoEstado === "Activo" ? "Empresa activada" : "Empresa suspendida",
-        descripcion: `La empresa ${empresa.nombre} cambió a estado ${nuevoEstado}.`,
-        estado_anterior: empresa.estado,
-        estado_nuevo: nuevoEstado,
-        usuario: localStorage.getItem("adminKonaxNombre") || "KONAX",
+        empresa_id: empresaPago.id,
+        empresa_nombre: empresaPago.nombre,
+        accion: "Pago registrado",
+        descripcion: `Pago registrado por ${formato(montoPago)} vía ${metodoPago}. Próxima facturación: ${proximaFacturacion}.`,
+        estado_anterior: empresaPago.estado,
+        estado_nuevo: "Activo",
+        usuario,
       },
     ]);
 
-    alert("Estado actualizado correctamente.");
+    alert("Pago registrado correctamente.");
+    cerrarPago();
     cargarDatos();
   }
 
@@ -139,8 +247,7 @@ export default function GestionKonax() {
 
     if (
       fechaPago.getMonth() === mesActual &&
-      fechaPago.getFullYear() === anioActual &&
-      pago.estado_pago === "Pagado"
+      fechaPago.getFullYear() === anioActual
     ) {
       return sum + Number(pago.monto || 0);
     }
@@ -148,15 +255,16 @@ export default function GestionKonax() {
     return sum;
   }, 0);
 
-  const pagosPendientes = pagos.filter(
-    (pago) => pago.estado_pago === "Pendiente"
-  ).length;
+  const proximosVencer = empresas.filter((empresa) => {
+    if (!empresa.fecha_proxima_facturacion) return false;
 
-  const pagosVencidos = pagos.filter((pago) => {
-    if (!pago.fecha_vencimiento) return false;
+    const hoyTexto = fechaHoy();
+    const limite = sumarDias(hoyTexto, 7);
 
-    const vencimiento = new Date(pago.fecha_vencimiento);
-    return vencimiento < hoy && pago.estado_pago !== "Pagado";
+    return (
+      empresa.fecha_proxima_facturacion >= hoyTexto &&
+      empresa.fecha_proxima_facturacion <= limite
+    );
   }).length;
 
   if (cargando) {
@@ -174,8 +282,7 @@ export default function GestionKonax() {
               <p style={etiqueta}>Centro Interno KONAX</p>
               <h1 style={titulo}>Centro de Gestión KONAX</h1>
               <p style={subtitulo}>
-                Control interno de empresas, pagos, vencimientos, activaciones,
-                suspensiones e historial administrativo de KONAX.
+                Control interno de empresas, pagos, vencimientos y estado del servicio.
               </p>
             </div>
           </div>
@@ -195,8 +302,7 @@ export default function GestionKonax() {
           <KPI titulo="Empresas Registradas" valor={empresas.length} icono="🏢" />
           <KPI titulo="Empresas Activas" valor={empresasActivas} icono="✅" />
           <KPI titulo="Suspendidas" valor={empresasSuspendidas} icono="⛔" />
-          <KPI titulo="Pagos Pendientes" valor={pagosPendientes} icono="⚠️" />
-          <KPI titulo="Pagos Vencidos" valor={pagosVencidos} icono="🚨" />
+          <KPI titulo="Próximas a vencer" valor={proximosVencer} icono="📅" />
           <KPI titulo="Ingreso Estimado" valor={formato(ingresosEstimados)} icono="📈" />
           <KPI titulo="Pagado Este Mes" valor={formato(pagadoEsteMes)} icono="💰" />
         </div>
@@ -206,7 +312,7 @@ export default function GestionKonax() {
             <div>
               <h2 style={tituloSeccion}>Empresas Clientes</h2>
               <p style={textoSuave}>
-                Consulta de empresas, planes, precios, pagos, vencimientos y estado del servicio.
+                Consulta empresas, planes, pagos, vencimientos y registra pagos KONAX.
               </p>
             </div>
 
@@ -267,9 +373,7 @@ export default function GestionKonax() {
                         </span>
                       </td>
 
-                      <td style={td}>
-                        {empresa.fecha_proxima_facturacion || "-"}
-                      </td>
+                      <td style={td}>{empresa.fecha_proxima_facturacion || "-"}</td>
 
                       <td style={td}>
                         {empresa.configuracion_completa ? "Completa" : "Pendiente"}
@@ -294,27 +398,10 @@ export default function GestionKonax() {
                         </button>
 
                         <button
-                          style={botonAzul}
-                          onClick={() => {
-                            seleccionarEmpresa(empresa);
-                            window.location.href = "/modulos";
-                          }}
+                          style={botonDorado}
+                          onClick={() => abrirPago(empresa)}
                         >
-                          Módulos
-                        </button>
-
-                        <button
-                          style={botonRojo}
-                          onClick={() => cambiarEstadoEmpresa(empresa, "Suspendido")}
-                        >
-                          Suspender
-                        </button>
-
-                        <button
-                          style={botonVerde}
-                          onClick={() => cambiarEstadoEmpresa(empresa, "Activo")}
-                        >
-                          Activar
+                          Registrar Pago
                         </button>
                       </td>
                     </tr>
@@ -328,7 +415,7 @@ export default function GestionKonax() {
         <div style={card}>
           <h2 style={tituloSeccion}>Historial Interno KONAX</h2>
           <p style={textoSuave}>
-            Últimas acciones realizadas sobre empresas, planes, pagos, activaciones y suspensiones.
+            Últimas acciones realizadas sobre empresas, planes y pagos.
           </p>
 
           <div style={{ overflowX: "auto" }}>
@@ -369,6 +456,62 @@ export default function GestionKonax() {
             </table>
           </div>
         </div>
+
+        {mostrarPago && (
+          <div style={modalFondo}>
+            <div style={modal}>
+              <h2 style={tituloSeccion}>Registrar Pago KONAX</h2>
+
+              <p style={textoSuave}>
+                Empresa: <strong>{empresaPago?.nombre}</strong>
+              </p>
+
+              <label style={label}>Método de pago</label>
+              <select
+                value={metodoPago}
+                onChange={(e) => setMetodoPago(e.target.value)}
+                style={inputStyle}
+              >
+                <option>Yappy</option>
+                <option>Transferencia Bancaria</option>
+              </select>
+
+              <label style={label}>Monto pagado</label>
+              <input
+                value={montoPago}
+                onChange={(e) => setMontoPago(e.target.value)}
+                placeholder="Ej. 49"
+                style={inputStyle}
+              />
+
+              <label style={label}>Referencia</label>
+              <input
+                value={referenciaPago}
+                onChange={(e) => setReferenciaPago(e.target.value)}
+                placeholder="Número de referencia o comprobante"
+                style={inputStyle}
+              />
+
+              <label style={label}>Observación</label>
+              <textarea
+                value={observacionPago}
+                onChange={(e) => setObservacionPago(e.target.value)}
+                placeholder="Observación opcional"
+                style={textarea}
+              />
+
+              <div style={accionesModal}>
+                <button style={botonVerdeGrande} onClick={registrarPago}>
+                  Guardar Pago
+                </button>
+
+                <button style={botonGrisGrande} onClick={cerrarPago}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -599,8 +742,8 @@ const botonAzul = {
   marginBottom: "5px",
 };
 
-const botonRojo = {
-  background: "#dc2626",
+const botonDorado = {
+  background: "#ca8a04",
   color: "#ffffff",
   border: "none",
   padding: "7px 10px",
@@ -609,4 +752,78 @@ const botonRojo = {
   cursor: "pointer",
   marginRight: "5px",
   marginBottom: "5px",
+};
+
+const modalFondo = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.45)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  padding: "20px",
+  zIndex: 999,
+};
+
+const modal = {
+  width: "460px",
+  maxWidth: "100%",
+  background: "#ffffff",
+  padding: "24px",
+  borderRadius: "18px",
+  boxShadow: "0 10px 30px rgba(0,0,0,0.20)",
+};
+
+const label = {
+  display: "block",
+  marginTop: "14px",
+  marginBottom: "6px",
+  color: "#374151",
+  fontSize: "13px",
+  fontWeight: "bold",
+};
+
+const inputStyle = {
+  width: "100%",
+  padding: "11px",
+  borderRadius: "9px",
+  border: "1px solid #d1d5db",
+  boxSizing: "border-box",
+};
+
+const textarea = {
+  width: "100%",
+  padding: "11px",
+  borderRadius: "9px",
+  border: "1px solid #d1d5db",
+  boxSizing: "border-box",
+  minHeight: "80px",
+};
+
+const accionesModal = {
+  display: "flex",
+  gap: "10px",
+  marginTop: "18px",
+};
+
+const botonVerdeGrande = {
+  flex: 1,
+  background: "#16a34a",
+  color: "#ffffff",
+  border: "none",
+  padding: "12px",
+  borderRadius: "9px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonGrisGrande = {
+  flex: 1,
+  background: "#6b7280",
+  color: "#ffffff",
+  border: "none",
+  padding: "12px",
+  borderRadius: "9px",
+  fontWeight: "bold",
+  cursor: "pointer",
 };
