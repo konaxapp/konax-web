@@ -177,8 +177,7 @@ export default function Empresas() {
     window.location.href = "/modulos";
   }
 
-  function irUsuarioPrincipal(empresa) {
-    guardarEmpresaEnLocalStorage(empresa);
+  function irUsuarioPrincipal() {
     window.location.href = "/usuarios";
   }
 
@@ -232,6 +231,10 @@ export default function Empresas() {
               style={botonOscuro}
             >
               {mostrarEmpresas ? "Ocultar Empresas" : "Ver Empresas Registradas"}
+            </button>
+
+            <button onClick={irUsuarioPrincipal} style={botonOscuro}>
+              Crear Usuario Principal
             </button>
 
             <Link href="/admin" style={botonVolver}>
@@ -414,13 +417,6 @@ export default function Empresas() {
                             onClick={() => irModulos(empresa)}
                           >
                             Módulos
-                          </button>
-
-                          <button
-                            style={botonMini}
-                            onClick={() => irUsuarioPrincipal(empresa)}
-                          >
-                            Crear Usuario Principal
                           </button>
 
                           <button
