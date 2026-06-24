@@ -11,6 +11,33 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [cargando, setCargando] = useState(false);
 
+  function fechaHoy() {
+    return new Date().toISOString().split("T")[0];
+  }
+
+  async function suspenderEmpresa(empresa) {
+    await supabase
+      .from("empresas")
+      .update({
+        estado: "Suspendido",
+        estado_plan: "Suspendido",
+        estado_pago: "Pendiente",
+      })
+      .eq("id", empresa.id);
+
+    await supabase.from("bitacora_konax").insert([
+      {
+        empresa_id: empresa.id,
+        empresa_nombre: empresa.nombre,
+        accion: "Suspensión automática",
+        descripcion: `La empresa ${empresa.nombre} fue suspendida automáticamente por vencimiento de facturación.`,
+        estado_anterior: empresa.estado,
+        estado_nuevo: "Suspendido",
+        usuario: "Sistema KONAX",
+      },
+    ]);
+  }
+
   async function iniciarSesion() {
     if (!correo || !password) {
       alert("Ingrese correo y contraseña");
@@ -19,11 +46,11 @@ export default function Login() {
 
     setCargando(true);
 
-    const { data, error } = await supabase
+    const { data: usuario, error } = await supabase
       .from("usuarios")
       .select("*")
-      .eq("correo", correo)
-      .eq("password", password)
+      .eq("correo", correo.trim())
+      .eq("password", password.trim())
       .eq("estado", "Activo")
       .maybeSingle();
 
@@ -33,20 +60,65 @@ export default function Login() {
       return;
     }
 
-    if (!data) {
+    if (!usuario) {
       setCargando(false);
       alert("Usuario o contraseña incorrectos");
       return;
     }
 
-    localStorage.setItem("usuarioId", data.id);
-    localStorage.setItem("empresaId", data.empresa_id || "");
-    localStorage.setItem("nombreUsuario", data.nombre || "");
-    localStorage.setItem("correoUsuario", data.correo || "");
-    localStorage.setItem("rolUsuario", data.rol || "");
-    localStorage.setItem("modulos", data.modulos || "");
+    const { data: empresa, error: errorEmpresa } = await supabase
+      .from("empresas")
+      .select("*")
+      .eq("id", usuario.empresa_id)
+      .maybeSingle();
 
-    if (data.rol === "SuperAdmin") {
+    if (errorEmpresa) {
+      setCargando(false);
+      alert("Error verificando empresa: " + errorEmpresa.message);
+      return;
+    }
+
+    if (!empresa) {
+      setCargando(false);
+      alert("Este usuario no tiene empresa asignada.");
+      return;
+    }
+
+    const hoy = fechaHoy();
+    const vencimiento = empresa.fecha_proxima_facturacion;
+
+    const estaVencida =
+      vencimiento &&
+      hoy > vencimiento &&
+      empresa.estado_pago !== "Al día";
+
+    if (
+      empresa.estado === "Suspendido" ||
+      empresa.estado_plan === "Suspendido" ||
+      estaVencida
+    ) {
+      if (estaVencida && empresa.estado_plan !== "Suspendido") {
+        await suspenderEmpresa(empresa);
+      }
+
+      setCargando(false);
+      alert(
+        "El servicio de esta empresa está suspendido por facturación pendiente. Contacte a KONAX."
+      );
+      return;
+    }
+
+    localStorage.setItem("usuarioId", usuario.id);
+    localStorage.setItem("empresaId", usuario.empresa_id || "");
+    localStorage.setItem("empresaNombre", empresa.nombre || "");
+    localStorage.setItem("nombreUsuario", usuario.nombre || "");
+    localStorage.setItem("correoUsuario", usuario.correo || "");
+    localStorage.setItem("rolUsuario", usuario.rol || "");
+    localStorage.setItem("modulos", usuario.modulos || "");
+
+    setCargando(false);
+
+    if (usuario.rol === "SuperAdmin") {
       router.push("/admin");
     } else {
       router.push("/dashboard");
@@ -56,11 +128,9 @@ export default function Login() {
   return (
     <div style={contenedor}>
       <div style={card}>
-        <h1>KONAX</h1>
+        <h1 style={titulo}>KONAX</h1>
 
-        <p style={subtitulo}>
-          Iniciar Sesión
-        </p>
+        <p style={subtitulo}>Iniciar Sesión</p>
 
         <input
           type="email"
@@ -78,11 +148,7 @@ export default function Login() {
           style={input}
         />
 
-        <button
-          onClick={iniciarSesion}
-          disabled={cargando}
-          style={boton}
-        >
+        <button onClick={iniciarSesion} disabled={cargando} style={boton}>
           {cargando ? "Ingresando..." : "Ingresar"}
         </button>
       </div>
@@ -96,6 +162,7 @@ const contenedor = {
   justifyContent: "center",
   alignItems: "center",
   background: "#f3f4f6",
+  fontFamily: "Arial, sans-serif",
 };
 
 const card = {
@@ -104,6 +171,11 @@ const card = {
   padding: "40px",
   borderRadius: "15px",
   boxShadow: "0 4px 15px rgba(0,0,0,0.10)",
+};
+
+const titulo = {
+  margin: "0 0 10px 0",
+  color: "#111827",
 };
 
 const subtitulo = {
