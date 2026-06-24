@@ -29,6 +29,8 @@ export default function Planes() {
       codigo: "cobros",
       precioMensual: 49,
       precioAnual: 499,
+      usuariosIncluidos: 3,
+      precioUsuarioExtra: 10.99,
       color: "#2563eb",
       modulos: {
         clientes: true,
@@ -37,7 +39,7 @@ export default function Planes() {
         control_caja: false,
         cobranza: true,
         inventario: false,
-        venta_credito: true,
+        venta_credito: false,
         suscripciones: false,
         recargos: false,
         dashboard_ventas: false,
@@ -45,14 +47,16 @@ export default function Planes() {
         egresos: false,
       },
       incluye: [
+        "3 usuarios incluidos",
         "Clientes",
         "Vista Cliente",
-        "Créditos",
+        "Cuentas por Cobrar",
         "Caja Básica",
         "Cobranza",
         "Gestión de Cobros",
         "Promesas de Pago",
         "Dashboard de Cobranza",
+        "Usuario adicional: $10.99/mes",
       ],
     },
     {
@@ -60,6 +64,8 @@ export default function Planes() {
       codigo: "ventas_gestion",
       precioMensual: 99,
       precioAnual: 999,
+      usuariosIncluidos: 6,
+      precioUsuarioExtra: 10.99,
       color: "#10b981",
       modulos: {
         clientes: true,
@@ -69,21 +75,24 @@ export default function Planes() {
         cobranza: true,
         inventario: true,
         venta_credito: true,
-        suscripciones: false,
-        recargos: false,
+        suscripciones: true,
+        recargos: true,
         dashboard_ventas: true,
         dashboard_cobros: true,
         egresos: true,
       },
       incluye: [
+        "6 usuarios incluidos",
         "Todo KONAX Cobros",
         "Inventario",
         "Venta Crédito",
         "Caja",
         "Control de Caja",
         "Gastos / Egresos",
+        "Recargos",
         "Dashboard de Ventas",
         "Reportes Operativos",
+        "Usuario adicional: $10.99/mes",
       ],
     },
     {
@@ -91,6 +100,8 @@ export default function Planes() {
       codigo: "pro",
       precioMensual: 149,
       precioAnual: 1499,
+      usuariosIncluidos: 12,
+      precioUsuarioExtra: 10.99,
       color: "#111827",
       modulos: {
         clientes: true,
@@ -107,13 +118,19 @@ export default function Planes() {
         egresos: true,
       },
       incluye: [
+        "12 usuarios incluidos",
         "Todo KONAX Ventas y Gestión",
-        "Suscripciones y Membresías",
-        "Recargos Automáticos",
-        "Dashboard de Ventas",
-        "Dashboard de Cobranza",
+        "Dashboard Ejecutivo",
         "Reportes Avanzados",
+        "Comisiones",
+        "Metas por Vendedor",
+        "Metas por Gestor",
+        "Multi Sucursales",
+        "Comparativos Mensuales",
+        "Presupuesto vs Resultado",
+        "Indicadores Gerenciales",
         "Soporte Prioritario",
+        "Usuario adicional: $10.99/mes",
       ],
     },
   ];
@@ -183,7 +200,7 @@ export default function Planes() {
       return;
     }
 
-    alert("Plan y módulos asignados correctamente. Ahora crea el usuario administrador inicial.");
+    alert("Plan y módulos asignados correctamente. Ahora crea el Usuario Principal.");
     window.location.href = "/usuarios";
   }
 
@@ -233,6 +250,14 @@ export default function Planes() {
 
                 <h1>${precio}</h1>
 
+                <p style={precioTexto}>
+                  {tipoPlan === "mensual" ? "Pago mensual" : "Pago anual"}
+                </p>
+
+                <p style={usuariosTexto}>
+                  {plan.usuariosIncluidos} usuarios incluidos
+                </p>
+
                 <ul style={lista}>
                   {plan.incluye.map((item) => (
                     <li key={item}>{item}</li>
@@ -260,7 +285,7 @@ export default function Planes() {
         </div>
 
         <p style={nota}>
-          Flujo: Empresa → Plan → Módulos → Usuario Administrador Inicial.
+          Flujo: Empresa → Plan → Módulos → Usuario Principal.
         </p>
 
         <Link href="/empresas" style={botonVolver}>
@@ -331,10 +356,24 @@ const planesBox = {
   flexWrap: "wrap",
 };
 
+const precioTexto = {
+  color: "#6b7280",
+  marginTop: "-10px",
+  marginBottom: "10px",
+};
+
+const usuariosTexto = {
+  background: "#f3f4f6",
+  padding: "10px",
+  borderRadius: "8px",
+  fontWeight: "bold",
+  color: "#111827",
+};
+
 const lista = {
   color: "#666",
   paddingLeft: "20px",
-  minHeight: "220px",
+  minHeight: "300px",
   lineHeight: "28px",
 };
 
