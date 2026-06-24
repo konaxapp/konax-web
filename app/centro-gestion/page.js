@@ -12,6 +12,8 @@ export default function GestionKonax() {
   const [cargando, setCargando] = useState(true);
 
   const [mostrarPago, setMostrarPago] = useState(false);
+  const [mostrarReporte, setMostrarReporte] = useState(false);
+
   const [empresaPago, setEmpresaPago] = useState(null);
   const [montoPago, setMontoPago] = useState("");
   const [metodoPago, setMetodoPago] = useState("Yappy");
@@ -30,6 +32,15 @@ export default function GestionKonax() {
     const fecha = fechaTexto ? new Date(fechaTexto) : new Date();
     fecha.setDate(fecha.getDate() + dias);
     return fecha.toISOString().split("T")[0];
+  }
+
+  function formato(numero) {
+    return (
+      "$" +
+      Number(numero || 0).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+      })
+    );
   }
 
   async function revisarSuspensionesAutomaticas(empresasData) {
@@ -96,7 +107,7 @@ export default function GestionKonax() {
       .from("bitacora_konax")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(40);
+      .limit(80);
 
     setEmpresas(empresasActualizadas || []);
     setPagos(pagosData || []);
@@ -104,21 +115,11 @@ export default function GestionKonax() {
     setCargando(false);
   }
 
-  function formato(numero) {
-    return (
-      "$" +
-      Number(numero || 0).toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-      })
-    );
-  }
-
   function seleccionarEmpresa(empresa) {
     localStorage.setItem("empresaAdminCreadaId", empresa.id);
     localStorage.setItem("empresaAdminCreadaNombre", empresa.nombre || "");
     localStorage.setItem("categoriaNegocioAdmin", empresa.categoria_negocio || "");
     localStorage.setItem("tipoNegocioAdmin", empresa.tipo_negocio || "");
-
     alert("Empresa seleccionada: " + empresa.nombre);
   }
 
@@ -200,7 +201,7 @@ export default function GestionKonax() {
       return;
     }
 
-    await supabase.from("bitacora_konax").insert([
+    const { error: errorBitacora } = await supabase.from("bitacora_konax").insert([
       {
         empresa_id: empresaPago.id,
         empresa_nombre: empresaPago.nombre,
@@ -212,7 +213,12 @@ export default function GestionKonax() {
       },
     ]);
 
-    alert("Pago registrado correctamente.");
+    if (errorBitacora) {
+      alert("Pago guardado, pero error guardando bitácora: " + errorBitacora.message);
+    } else {
+      alert("Pago registrado correctamente.");
+    }
+
     cerrarPago();
     cargarDatos();
   }
@@ -230,9 +236,9 @@ export default function GestionKonax() {
     );
   });
 
-  const hoy = new Date();
-  const mesActual = hoy.getMonth();
-  const anioActual = hoy.getFullYear();
+  const hoyFecha = new Date();
+  const mesActual = hoyFecha.getMonth();
+  const anioActual = hoyFecha.getFullYear();
 
   const empresasActivas = empresas.filter(
     (e) => e.estado === "Activo" || e.estado === "Activa"
@@ -246,21 +252,22 @@ export default function GestionKonax() {
     .filter((e) => e.estado === "Activo" || e.estado === "Activa")
     .reduce((sum, e) => sum + Number(e.plan_precio || 0), 0);
 
-  const pagadoEsteMes = pagos.reduce((sum, pago) => {
+  const pagosDelMes = pagos.filter((pago) => {
     const fecha = pago.fecha_pago || pago.created_at;
-    if (!fecha) return sum;
+    if (!fecha) return false;
 
     const fechaPago = new Date(fecha);
 
-    if (
+    return (
       fechaPago.getMonth() === mesActual &&
       fechaPago.getFullYear() === anioActual
-    ) {
-      return sum + Number(pago.monto || 0);
-    }
+    );
+  });
 
-    return sum;
-  }, 0);
+  const pagadoEsteMes = pagosDelMes.reduce(
+    (sum, pago) => sum + Number(pago.monto || 0),
+    0
+  );
 
   const proximosVencer = empresas.filter((empresa) => {
     if (!empresa.fecha_proxima_facturacion) return false;
@@ -295,6 +302,13 @@ export default function GestionKonax() {
           </div>
 
           <div style={accionesTop}>
+            <button
+              onClick={() => setMostrarReporte(!mostrarReporte)}
+              style={botonClaro}
+            >
+              {mostrarReporte ? "Ocultar Reporte" : "Ver Reporte Interno"}
+            </button>
+
             <Link href="/empresas" style={botonClaro}>
               Empresas
             </Link>
@@ -419,50 +433,99 @@ export default function GestionKonax() {
           </div>
         </div>
 
-        <div style={card}>
-          <h2 style={tituloSeccion}>Historial Interno KONAX</h2>
-          <p style={textoSuave}>
-            Últimas acciones realizadas sobre empresas, planes y pagos.
-          </p>
+        {mostrarReporte && (
+          <>
+            <div style={card}>
+              <h2 style={tituloSeccion}>Reporte de Pagos del Mes</h2>
+              <p style={textoSuave}>
+                Pagos registrados durante el mes actual.
+              </p>
 
-          <div style={{ overflowX: "auto" }}>
-            <table style={tabla}>
-              <thead>
-                <tr>
-                  <th style={th}>Fecha</th>
-                  <th style={th}>Empresa</th>
-                  <th style={th}>Acción</th>
-                  <th style={th}>Descripción</th>
-                  <th style={th}>Usuario</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {bitacora.length === 0 ? (
-                  <tr>
-                    <td style={td} colSpan="5">
-                      No hay historial registrado.
-                    </td>
-                  </tr>
-                ) : (
-                  bitacora.map((item) => (
-                    <tr key={item.id}>
-                      <td style={td}>
-                        {item.created_at
-                          ? new Date(item.created_at).toLocaleString()
-                          : "-"}
-                      </td>
-                      <td style={td}>{item.empresa_nombre || "-"}</td>
-                      <td style={td}>{item.accion || "-"}</td>
-                      <td style={td}>{item.descripcion || "-"}</td>
-                      <td style={td}>{item.usuario || "-"}</td>
+              <div style={{ overflowX: "auto" }}>
+                <table style={tabla}>
+                  <thead>
+                    <tr>
+                      <th style={th}>Fecha</th>
+                      <th style={th}>Empresa</th>
+                      <th style={th}>Plan</th>
+                      <th style={th}>Método</th>
+                      <th style={th}>Referencia</th>
+                      <th style={th}>Monto</th>
+                      <th style={th}>Usuario</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                  </thead>
+
+                  <tbody>
+                    {pagosDelMes.length === 0 ? (
+                      <tr>
+                        <td style={td} colSpan="7">
+                          No hay pagos registrados este mes.
+                        </td>
+                      </tr>
+                    ) : (
+                      pagosDelMes.map((pago) => (
+                        <tr key={pago.id}>
+                          <td style={td}>{pago.fecha_pago || "-"}</td>
+                          <td style={td}>{pago.empresa_nombre || "-"}</td>
+                          <td style={td}>{pago.plan_nombre || "-"}</td>
+                          <td style={td}>{pago.metodo_pago || "-"}</td>
+                          <td style={td}>{pago.referencia_pago || "-"}</td>
+                          <td style={td}>{formato(pago.monto)}</td>
+                          <td style={td}>{pago.usuario_registro || "-"}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div style={card}>
+              <h2 style={tituloSeccion}>Historial Interno KONAX</h2>
+              <p style={textoSuave}>
+                Últimas acciones realizadas sobre empresas, planes y pagos.
+              </p>
+
+              <div style={{ overflowX: "auto" }}>
+                <table style={tabla}>
+                  <thead>
+                    <tr>
+                      <th style={th}>Fecha</th>
+                      <th style={th}>Empresa</th>
+                      <th style={th}>Acción</th>
+                      <th style={th}>Descripción</th>
+                      <th style={th}>Usuario</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {bitacora.length === 0 ? (
+                      <tr>
+                        <td style={td} colSpan="5">
+                          No hay historial registrado.
+                        </td>
+                      </tr>
+                    ) : (
+                      bitacora.map((item) => (
+                        <tr key={item.id}>
+                          <td style={td}>
+                            {item.created_at
+                              ? new Date(item.created_at).toLocaleString()
+                              : "-"}
+                          </td>
+                          <td style={td}>{item.empresa_nombre || "-"}</td>
+                          <td style={td}>{item.accion || "-"}</td>
+                          <td style={td}>{item.descripcion || "-"}</td>
+                          <td style={td}>{item.usuario || "-"}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
 
         {mostrarPago && (
           <div style={modalFondo}>
@@ -606,6 +669,8 @@ const botonClaro = {
   borderRadius: "9px",
   textDecoration: "none",
   fontWeight: "bold",
+  border: "none",
+  cursor: "pointer",
 };
 
 const botonOscuro = {
