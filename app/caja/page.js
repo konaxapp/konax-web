@@ -215,15 +215,7 @@ export default function Caja() {
       .eq("informacion_comercial_id", cuenta.id)
       .maybeSingle();
 
-    if (error) {
-      alert("Pago registrado, pero error buscando suscripción: " + error.message);
-      return;
-    }
-
-    if (!suscripcion) {
-      alert("Pago registrado, pero no se encontró una suscripción asociada a esta cuenta.");
-      return;
-    }
+    if (error || !suscripcion) return;
 
     const nuevaFecha = calcularNuevoVencimiento(
       suscripcion.fecha_vencimiento,
@@ -350,7 +342,539 @@ export default function Caja() {
         await renovarSuscripcionDesdeCaja(
           empresaId,
           cuentaSeleccionada,
-          const td = {
-  padding: "15px",
+          Number(monto)
+        );
+      }
+    }
+
+    alert("Movimiento registrado correctamente.");
+    limpiarFormulario();
+    cargarMovimientos();
+  }
+
+  function limpiarFormulario() {
+    setTipoMovimiento("Venta Contado");
+    setFechaPago(new Date().toISOString().split("T")[0]);
+    setBuscarCliente("");
+    setResultadosBusqueda([]);
+    setClienteSeleccionado(null);
+    setCuentasCliente([]);
+    setCuentaSeleccionada(null);
+    setNombreContado("");
+    setCedulaContado("");
+    setMetodoPago("Efectivo");
+    setMonto("");
+    setConcepto("");
+    setResponsable("");
+    setObservacion("");
+  }
+
+  const totalCaja = movimientos.reduce(
+    (total, mov) => total + Number(mov.monto || 0),
+    0
+  );
+
+  const movimientosHoy = movimientos.filter((mov) => {
+    const fecha = String(mov.fecha_pago || mov.created_at || "").split("T")[0];
+    return fecha === new Date().toISOString().split("T")[0];
+  });
+
+  const totalHoy = movimientosHoy.reduce(
+    (total, mov) => total + Number(mov.monto || 0),
+    0
+  );
+
+  return (
+    <div style={pagina}>
+      <div style={contenedor}>
+        <div style={header}>
+          <div>
+            <img src="/konax-logo.png" alt="KONAX" style={logo} />
+            <h1 style={titulo}>Caja</h1>
+            <p style={subtitulo}>
+              Registro de ventas, pagos, abonos, mensualidades, suscripciones y contratos.
+            </p>
+          </div>
+
+          <button onClick={volverDashboard} style={botonVolver}>
+            ← Volver al Dashboard
+          </button>
+        </div>
+
+        <div style={resumenGrid}>
+          <div style={resumenCard}>
+            <span>Movimientos</span>
+            <strong>{movimientos.length}</strong>
+          </div>
+
+          <div style={resumenCard}>
+            <span>Total registrado</span>
+            <strong>${totalCaja.toFixed(2)}</strong>
+          </div>
+
+          <div style={resumenCard}>
+            <span>Movimientos hoy</span>
+            <strong>{movimientosHoy.length}</strong>
+          </div>
+
+          <div style={resumenCard}>
+            <span>Total hoy</span>
+            <strong>${totalHoy.toFixed(2)}</strong>
+          </div>
+        </div>
+
+        <div style={card}>
+          <h2 style={tituloSeccion}>Información General</h2>
+
+          <div style={grid}>
+            <Campo label="Fecha">
+              <input
+                type="date"
+                value={fechaPago}
+                onChange={(e) => setFechaPago(e.target.value)}
+                style={inputStyle}
+              />
+            </Campo>
+
+            <Campo label="N° Transacción">
+              <input value="Automático al guardar" readOnly style={inputStyle} />
+            </Campo>
+
+            <Campo label="Tipo de movimiento">
+              <select
+                value={tipoMovimiento}
+                onChange={(e) => setTipoMovimiento(e.target.value)}
+                style={inputStyle}
+              >
+                <option>Venta Contado</option>
+                <option>Venta Crédito</option>
+                <option>Abono</option>
+                <option>Pago Crédito</option>
+                <option>Mensualidad</option>
+                <option>Suscripción</option>
+                <option>Membresía</option>
+                <option>Contrato</option>
+              </select>
+            </Campo>
+          </div>
+        </div>
+
+        {!requiereCliente && (
+          <div style={card}>
+            <h2 style={tituloSeccion}>Cliente Contado</h2>
+
+            <div style={grid}>
+              <input
+                placeholder="Nombre del cliente opcional"
+                value={nombreContado}
+                onChange={(e) => setNombreContado(e.target.value)}
+                style={inputStyle}
+              />
+
+              <input
+                placeholder="Cédula opcional"
+                value={cedulaContado}
+                onChange={(e) => setCedulaContado(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+          </div>
+        )}
+
+        {requiereCliente && (
+          <div style={card}>
+            <h2 style={tituloSeccion}>Cliente / Cuenta</h2>
+
+            <div style={toolbar}>
+              <input
+                placeholder="Buscar cliente por nombre, cédula o número de cuenta..."
+                value={buscarCliente}
+                onChange={(e) => setBuscarCliente(e.target.value)}
+                style={inputStyle}
+              />
+
+              <button style={botonSecundario} onClick={buscarClientes}>
+                Buscar
+              </button>
+            </div>
+
+            {resultadosBusqueda.length > 0 && (
+              <div style={{ marginTop: "15px", overflowX: "auto" }}>
+                <table style={tabla}>
+                  <tbody>
+                    {resultadosBusqueda.map((item, index) => (
+                      <tr key={index}>
+                        <td style={td}>{item.cliente.nombre}</td>
+                        <td style={td}>{item.cliente.cedula}</td>
+                        <td style={td}>{item.cuenta?.numero_cuenta || "Ver cuentas"}</td>
+                        <td style={td}>
+                          <button
+                            style={botonPequeno}
+                            onClick={() => seleccionarResultado(item)}
+                          >
+                            Seleccionar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {clienteSeleccionado && (
+              <div style={clienteBox}>
+                <strong>{clienteSeleccionado.nombre}</strong>
+                <p>Cédula: {clienteSeleccionado.cedula}</p>
+
+                {cuentasCliente.length > 1 && (
+                  <select
+                    value={cuentaSeleccionada?.id || ""}
+                    onChange={(e) => {
+                      const cuenta = cuentasCliente.find(
+                        (item) => item.id === e.target.value
+                      );
+                      setCuentaSeleccionada(cuenta);
+                    }}
+                    style={inputStyle}
+                  >
+                    {cuentasCliente.map((cuenta) => (
+                      <option key={cuenta.id} value={cuenta.id}>
+                        {cuenta.numero_cuenta} - {cuenta.descripcion} - Saldo $
+                        {Number(cuenta.saldo_actual || 0).toLocaleString()}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                <p>
+                  Cuenta: <strong>{cuentaSeleccionada?.numero_cuenta || "Sin cuenta"}</strong>
+                </p>
+                <p>
+                  Saldo actual:{" "}
+                  <strong>${Number(cuentaSeleccionada?.saldo_actual || 0).toFixed(2)}</strong>
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={card}>
+          <h2 style={tituloSeccion}>Detalle del Movimiento</h2>
+
+          <div style={grid}>
+            <Campo label="Método de pago">
+              <select
+                value={metodoPago}
+                onChange={(e) => setMetodoPago(e.target.value)}
+                style={inputStyle}
+              >
+                <option>Efectivo</option>
+                <option>Transferencia</option>
+                <option>Yappy</option>
+                <option>Tarjeta</option>
+                <option>Cheque</option>
+                <option>Otro</option>
+              </select>
+            </Campo>
+
+            <input
+              placeholder="Monto"
+              type="number"
+              value={monto}
+              onChange={(e) => setMonto(e.target.value)}
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="Concepto / Descripción"
+              value={concepto}
+              onChange={(e) => setConcepto(e.target.value)}
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="Vendedor / Responsable"
+              value={responsable}
+              onChange={(e) => setResponsable(e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+
+          <textarea
+            placeholder="Observación del movimiento..."
+            value={observacion}
+            onChange={(e) => setObservacion(e.target.value)}
+            style={textarea}
+          />
+
+          <div style={acciones}>
+            <button style={boton} onClick={guardarMovimiento}>
+              Registrar Movimiento
+            </button>
+
+            <button style={botonLimpiar} onClick={limpiarFormulario}>
+              Limpiar
+            </button>
+          </div>
+        </div>
+
+        <div style={card}>
+          <h2 style={tituloSeccion}>Movimientos Registrados</h2>
+
+          <div style={{ overflowX: "auto" }}>
+            <table style={tabla}>
+              <thead>
+                <tr>
+                  <th style={th}>Fecha</th>
+                  <th style={th}>Transacción</th>
+                  <th style={th}>Cliente</th>
+                  <th style={th}>Cédula</th>
+                  <th style={th}>Cuenta</th>
+                  <th style={th}>Tipo</th>
+                  <th style={th}>Método</th>
+                  <th style={th}>Monto</th>
+                  <th style={th}>Concepto</th>
+                  <th style={th}>Responsable</th>
+                  <th style={th}>Estado</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {movimientos.length === 0 ? (
+                  <tr>
+                    <td style={td} colSpan="11">
+                      No hay movimientos registrados.
+                    </td>
+                  </tr>
+                ) : (
+                  movimientos.map((movimiento) => (
+                    <tr key={movimiento.id}>
+                      <td style={td}>{movimiento.fecha_pago || movimiento.created_at}</td>
+                      <td style={td}>{movimiento.numero_transaccion || "-"}</td>
+                      <td style={td}>{movimiento.cliente_nombre || "-"}</td>
+                      <td style={td}>{movimiento.cliente_cedula || "-"}</td>
+                      <td style={td}>{movimiento.numero_cuenta || "-"}</td>
+                      <td style={td}>{movimiento.tipo}</td>
+                      <td style={td}>{movimiento.metodo_pago}</td>
+                      <td style={td}>${Number(movimiento.monto || 0).toFixed(2)}</td>
+                      <td style={td}>{movimiento.descripcion}</td>
+                      <td style={td}>{movimiento.usuario}</td>
+                      <td style={td}>{movimiento.estado}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Campo({ label, children }) {
+  return (
+    <div>
+      <label style={labelStyle}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+const pagina = {
+  minHeight: "100vh",
+  background: "linear-gradient(135deg, #ecfdf5 0%, #f3f4f6 45%, #ffffff 100%)",
+  padding: "35px",
+  fontFamily: "Arial, sans-serif",
+};
+
+const contenedor = {
+  maxWidth: "1450px",
+  margin: "0 auto",
+};
+
+const header = {
+  background: "#ffffff",
+  borderRadius: "20px",
+  padding: "26px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "20px",
+  flexWrap: "wrap",
+  marginBottom: "22px",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+};
+
+const logo = {
+  width: "150px",
+  height: "auto",
+  marginBottom: "10px",
+};
+
+const titulo = {
+  fontSize: "38px",
+  margin: "0 0 8px 0",
+  color: "#111827",
+};
+
+const subtitulo = {
+  color: "#6b7280",
+  fontSize: "16px",
+  margin: 0,
+};
+
+const resumenGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: "16px",
+  marginBottom: "20px",
+};
+
+const resumenCard = {
+  background: "#111827",
+  color: "#ffffff",
+  padding: "20px",
+  borderRadius: "16px",
+  display: "grid",
+  gap: "8px",
+  boxShadow: "0 6px 16px rgba(0,0,0,0.10)",
+};
+
+const card = {
+  background: "#ffffff",
+  padding: "25px",
+  borderRadius: "18px",
+  marginBottom: "20px",
+  boxShadow: "0 6px 18px rgba(0,0,0,0.07)",
+  border: "1px solid #e5e7eb",
+};
+
+const tituloSeccion = {
+  marginTop: 0,
+  marginBottom: "20px",
+  color: "#111827",
+};
+
+const grid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))",
+  gap: "15px",
+};
+
+const toolbar = {
+  display: "grid",
+  gridTemplateColumns: "1fr auto",
+  gap: "12px",
+};
+
+const labelStyle = {
+  display: "block",
+  marginBottom: "6px",
+  fontSize: "14px",
+  color: "#374151",
+  fontWeight: "bold",
+};
+
+const inputStyle = {
+  width: "100%",
+  padding: "12px",
+  borderRadius: "9px",
+  border: "1px solid #9ca3af",
+  fontSize: "14px",
+  boxSizing: "border-box",
+  background: "#ffffff",
+  color: "#111827",
+};
+
+const textarea = {
+  ...inputStyle,
+  minHeight: "110px",
+  marginTop: "18px",
+};
+
+const acciones = {
+  display: "flex",
+  gap: "12px",
+  flexWrap: "wrap",
+  marginTop: "18px",
+};
+
+const boton = {
+  background: "#16a34a",
+  color: "#ffffff",
+  border: "none",
+  padding: "14px 28px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonLimpiar = {
+  background: "#111827",
+  color: "#ffffff",
+  border: "none",
+  padding: "14px 28px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonVolver = {
+  background: "#111827",
+  color: "#ffffff",
+  border: "none",
+  padding: "13px 20px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonSecundario = {
+  background: "#111827",
+  color: "#ffffff",
+  border: "none",
+  padding: "12px 18px",
+  borderRadius: "9px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonPequeno = {
+  background: "#16a34a",
+  color: "#ffffff",
+  border: "none",
+  padding: "8px 12px",
+  borderRadius: "8px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const clienteBox = {
+  marginTop: "15px",
+  background: "#f9fafb",
+  border: "1px solid #e5e7eb",
+  padding: "16px",
+  borderRadius: "14px",
+};
+
+const tabla = {
+  width: "100%",
+  borderCollapse: "collapse",
+};
+
+const th = {
+  textAlign: "left",
+  padding: "13px",
+  borderBottom: "1px solid #e5e7eb",
+  background: "#111827",
+  color: "#ffffff",
+  fontSize: "13px",
+};
+
+const td = {
+  padding: "13px",
   borderBottom: "1px solid #f3f4f6",
+  fontSize: "13px",
 };
