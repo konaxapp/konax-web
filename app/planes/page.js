@@ -1,4 +1,5 @@
-import { supabase } from "./supabase";
+import { supabase } from "../../lib/supabase";
+import { asignarPlanEmpresa } from "../../lib/konaxPlanes";
 
 export const PLANES_KONAX = {
   cobros: {
