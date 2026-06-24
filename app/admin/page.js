@@ -13,8 +13,8 @@ export default function Admin() {
             <span style={badge}>Administración KONAX</span>
             <h1 style={titulo}>Centro Administrativo KONAX</h1>
             <p style={subtitulo}>
-              Administra empresas clientes, planes comerciales, módulos,
-              usuarios principales y el control interno del negocio KONAX.
+              Administra empresas clientes, planes comerciales, módulos activos
+              y el control interno del negocio KONAX.
             </p>
           </div>
         </div>
@@ -23,25 +23,26 @@ export default function Admin() {
           <Link href="/empresas" style={card}>
             <div style={icono}>🏢</div>
             <h3>Empresas Clientes</h3>
-            <p>Crear, configurar, activar y administrar empresas registradas.</p>
+            <p>
+              Crear empresas y completar su configuración: plan, módulos y
+              Usuario Principal.
+            </p>
           </Link>
 
           <Link href="/planes" style={card}>
             <div style={icono}>💼</div>
             <h3>Planes Comerciales</h3>
-            <p>Asignar KONAX Cobros, Ventas y Gestión o KONAX Pro.</p>
+            <p>
+              Consultar y asignar planes KONAX Cobros, Ventas y Gestión o Pro.
+            </p>
           </Link>
 
           <Link href="/modulos" style={card}>
             <div style={icono}>🧩</div>
             <h3>Gestión de Módulos</h3>
-            <p>Activar o desactivar módulos según el plan contratado.</p>
-          </Link>
-
-          <Link href="/usuarios" style={card}>
-            <div style={icono}>👤</div>
-            <h3>Usuario Principal</h3>
-            <p>Crear el primer acceso administrativo de cada empresa.</p>
+            <p>
+              Activar, desactivar o ajustar módulos disponibles por empresa.
+            </p>
           </Link>
 
           <Link href="/centro-gestion" style={cardDestacado}>
@@ -66,7 +67,7 @@ const pagina = {
 };
 
 const contenedor = {
-  maxWidth: "1300px",
+  maxWidth: "1250px",
   margin: "0 auto",
 };
 
@@ -120,7 +121,7 @@ const grid = {
 
 const card = {
   background: "#ffffff",
-  padding: "26px",
+  padding: "28px",
   borderRadius: "18px",
   textDecoration: "none",
   color: "#111827",
@@ -135,6 +136,6 @@ const cardDestacado = {
 };
 
 const icono = {
-  fontSize: "34px",
+  fontSize: "36px",
   marginBottom: "10px",
 };
