@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
-
+import { asignarPlanEmpresa } from "../../lib/konaxPlanes";
 export default function Planes() {
   const [tipoPlan, setTipoPlan] = useState("mensual");
   const [empresaId, setEmpresaId] = useState("");
@@ -143,10 +143,34 @@ export default function Planes() {
   ];
 
   async function asignarPlan(plan) {
-    if (!empresaId) {
-      alert("No hay empresa seleccionada.");
-      return;
-    }
+  if (!empresaId) {
+    alert("No hay empresa seleccionada.");
+    return;
+  }
+
+  const confirmar = confirm(
+    `Se asignará ${plan.nombre} a ${empresaNombre}. ¿Deseas continuar?`
+  );
+
+  if (!confirmar) return;
+
+  const resultado = await asignarPlanEmpresa(
+    empresaId,
+    plan.codigo
+  );
+
+  if (!resultado.ok) {
+    alert(resultado.mensaje);
+    return;
+  }
+
+  alert(
+    resultado.mensaje +
+      " Ahora crea el Usuario Principal."
+  );
+
+  window.location.href = "/usuarios";
+}
 
     const precio = tipoPlan === "mensual" ? plan.precioMensual : plan.precioAnual;
 
