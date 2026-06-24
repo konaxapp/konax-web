@@ -10,13 +10,13 @@ export default function Admin() {
 
         <p style={subtitulo}>
           Centro maestro para administrar empresas clientes, planes, módulos,
-          usuarios principales, facturación y bitácora interna.
+          usuarios principales, roles y el Centro de Gestión KONAX.
         </p>
 
         <div style={grid}>
           <Link href="/empresas" style={card}>
             <h3>Empresas Clientes</h3>
-            <p>Crear, activar, suspender y administrar empresas.</p>
+            <p>Crear, activar, suspender y administrar empresas clientes.</p>
           </Link>
 
           <Link href="/planes" style={card}>
@@ -39,19 +39,12 @@ export default function Admin() {
             <p>Configurar accesos por perfil de usuario.</p>
           </Link>
 
-          <Link href="/facturacion" style={card}>
-            <h3>Facturación KONAX</h3>
-            <p>Controlar pagos, vencimientos y estado del servicio.</p>
-          </Link>
-
-          <Link href="/bitacora-empresas" style={card}>
-            <h3>Bitácora Interna</h3>
-            <p>Ver historial de cambios, pagos, suspensiones y activaciones.</p>
-          </Link>
-
-          <Link href="/dashboard" style={card}>
-            <h3>Dashboard Empresa</h3>
-            <p>Entrar al centro operativo de la empresa seleccionada.</p>
+          <Link href="/centro-gestion" style={card}>
+            <h3>Centro de Gestión KONAX</h3>
+            <p>
+              Ver empresas registradas, pagos, vencimientos, suspensiones,
+              activaciones e historial del negocio KONAX.
+            </p>
           </Link>
         </div>
       </div>
@@ -80,7 +73,7 @@ const titulo = {
 const subtitulo = {
   color: "#6b7280",
   marginBottom: "30px",
-  maxWidth: "800px",
+  maxWidth: "850px",
 };
 
 const grid = {
