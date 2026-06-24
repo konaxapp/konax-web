@@ -6,6 +6,8 @@ import { supabase } from "../../lib/supabase";
 
 export default function Empresas() {
   const [empresas, setEmpresas] = useState([]);
+  const [mostrarEmpresas, setMostrarEmpresas] = useState(false);
+
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
   const [correo, setCorreo] = useState("");
@@ -89,6 +91,13 @@ export default function Empresas() {
     setTipoNegocio("");
   }
 
+  function guardarEmpresaEnLocalStorage(empresa) {
+    localStorage.setItem("empresaAdminCreadaId", empresa.id);
+    localStorage.setItem("empresaAdminCreadaNombre", empresa.nombre || "");
+    localStorage.setItem("categoriaNegocioAdmin", empresa.categoria_negocio || "");
+    localStorage.setItem("tipoNegocioAdmin", empresa.tipo_negocio || "");
+  }
+
   async function guardarEmpresa() {
     if (!nombre || !telefono || !categoria || !tipoNegocio) {
       alert("Complete nombre, teléfono, categoría y tipo de negocio.");
@@ -143,44 +152,92 @@ export default function Empresas() {
       },
     ]);
 
+    guardarEmpresaEnLocalStorage(data);
+
     setGuardando(false);
-
-    localStorage.setItem("empresaAdminCreadaId", data.id);
-    localStorage.setItem("empresaAdminCreadaNombre", data.nombre || "");
-    localStorage.setItem("categoriaNegocioAdmin", data.categoria_negocio || "");
-    localStorage.setItem("tipoNegocioAdmin", data.tipo_negocio || "");
-
-    alert("Empresa creada correctamente. Ahora selecciona el plan.");
-
     limpiarFormulario();
     cargarEmpresas();
 
+    alert("Empresa creada correctamente. Ahora selecciona el plan.");
     window.location.href = "/planes";
   }
 
   function seleccionarEmpresa(empresa) {
-    localStorage.setItem("empresaAdminCreadaId", empresa.id);
-    localStorage.setItem("empresaAdminCreadaNombre", empresa.nombre || "");
-    localStorage.setItem("categoriaNegocioAdmin", empresa.categoria_negocio || "");
-    localStorage.setItem("tipoNegocioAdmin", empresa.tipo_negocio || "");
+    guardarEmpresaEnLocalStorage(empresa);
+    alert("Empresa seleccionada: " + empresa.nombre);
+  }
 
-    alert("Empresa seleccionada para configuración: " + empresa.nombre);
+  function irPlan(empresa) {
+    guardarEmpresaEnLocalStorage(empresa);
+    window.location.href = "/plan-empresa";
+  }
+
+  function irModulos(empresa) {
+    guardarEmpresaEnLocalStorage(empresa);
+    window.location.href = "/modulos";
+  }
+
+  function irUsuarioPrincipal(empresa) {
+    guardarEmpresaEnLocalStorage(empresa);
+    window.location.href = "/usuarios";
+  }
+
+  async function cambiarEstadoEmpresa(empresa, nuevoEstado) {
+    const { error } = await supabase
+      .from("empresas")
+      .update({
+        estado: nuevoEstado,
+        estado_plan: nuevoEstado === "Activo" ? "Activo" : "Suspendido",
+      })
+      .eq("id", empresa.id);
+
+    if (error) {
+      alert("Error actualizando empresa: " + error.message);
+      return;
+    }
+
+    await supabase.from("bitacora_konax").insert([
+      {
+        empresa_id: empresa.id,
+        empresa_nombre: empresa.nombre,
+        accion: nuevoEstado === "Activo" ? "Empresa activada" : "Empresa suspendida",
+        descripcion: `La empresa ${empresa.nombre} cambió a estado ${nuevoEstado}.`,
+        estado_anterior: empresa.estado,
+        estado_nuevo: nuevoEstado,
+        usuario: "KONAX",
+      },
+    ]);
+
+    alert(`Empresa ${nuevoEstado === "Activo" ? "activada" : "suspendida"} correctamente.`);
+    cargarEmpresas();
   }
 
   return (
     <div style={pagina}>
       <div style={contenedor}>
-        <div style={header}>
-          <div>
-            <h1 style={titulo}>Empresas Clientes</h1>
-            <p style={subtitulo}>
-              Crea empresas clientes para asignar plan, módulos y Usuario Principal.
-            </p>
+        <div style={hero}>
+          <div style={heroInfo}>
+            <img src="/konax-logo.png" alt="KONAX" style={logo} />
+            <div>
+              <h1 style={titulo}>Empresas Clientes</h1>
+              <p style={subtitulo}>
+                Crea, configura y administra empresas dentro de KONAX Control Center.
+              </p>
+            </div>
           </div>
 
-          <Link href="/admin" style={botonVolver}>
-            Volver al Admin
-          </Link>
+          <div style={accionesTop}>
+            <button
+              onClick={() => setMostrarEmpresas(!mostrarEmpresas)}
+              style={botonOscuro}
+            >
+              {mostrarEmpresas ? "Ocultar Empresas" : "Ver Empresas Registradas"}
+            </button>
+
+            <Link href="/admin" style={botonVolver}>
+              Volver al Admin
+            </Link>
+          </div>
         </div>
 
         <div style={card}>
@@ -190,7 +247,7 @@ export default function Empresas() {
             <Campo label="Nombre de la Empresa">
               <input
                 type="text"
-                placeholder="Ej. Hot Dog City"
+                placeholder="Ej. Mueblería Los Toros"
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 style={inputStyle}
@@ -263,104 +320,135 @@ export default function Empresas() {
             </Campo>
           </div>
 
-          <button onClick={guardarEmpresa} style={boton} disabled={guardando}>
-            {guardando ? "Guardando..." : "Crear Empresa"}
-          </button>
+          <div style={accionesFormulario}>
+            <button onClick={guardarEmpresa} style={boton} disabled={guardando}>
+              {guardando ? "Guardando..." : "Crear Empresa"}
+            </button>
+
+            <button onClick={limpiarFormulario} style={botonGris}>
+              Limpiar
+            </button>
+          </div>
         </div>
 
-        <div style={card}>
-          <h2 style={tituloSeccion}>Empresas Registradas</h2>
+        {mostrarEmpresas && (
+          <div style={card}>
+            <h2 style={tituloSeccion}>Empresas Registradas</h2>
 
-          <div style={{ overflowX: "auto" }}>
-            <table style={tabla}>
-              <thead>
-                <tr>
-                  <th style={th}>Empresa</th>
-                  <th style={th}>Teléfono</th>
-                  <th style={th}>Categoría</th>
-                  <th style={th}>Tipo</th>
-                  <th style={th}>Plan</th>
-                  <th style={th}>Estado Pago</th>
-                  <th style={th}>Servicio</th>
-                  <th style={th}>Próxima Facturación</th>
-                  <th style={th}>Configuración</th>
-                  <th style={th}>Acciones</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {empresas.length === 0 ? (
+            <div style={{ overflowX: "auto" }}>
+              <table style={tabla}>
+                <thead>
                   <tr>
-                    <td style={td} colSpan="10">
-                      No hay empresas registradas.
-                    </td>
+                    <th style={th}>Empresa</th>
+                    <th style={th}>Teléfono</th>
+                    <th style={th}>Categoría</th>
+                    <th style={th}>Tipo</th>
+                    <th style={th}>Plan</th>
+                    <th style={th}>Estado Pago</th>
+                    <th style={th}>Servicio</th>
+                    <th style={th}>Próxima Facturación</th>
+                    <th style={th}>Configuración</th>
+                    <th style={th}>Acciones</th>
                   </tr>
-                ) : (
-                  empresas.map((empresa) => (
-                    <tr key={empresa.id}>
-                      <td style={td}>
-                        <strong>{empresa.nombre}</strong>
-                        <br />
-                        <span style={textoPequeno}>{empresa.correo || "-"}</span>
-                      </td>
+                </thead>
 
-                      <td style={td}>{empresa.telefono || "-"}</td>
-                      <td style={td}>{empresa.categoria_negocio || "-"}</td>
-                      <td style={td}>{empresa.tipo_negocio || "-"}</td>
-                      <td style={td}>{empresa.plan_nombre || "Sin plan"}</td>
-                      <td style={td}>{empresa.estado_pago || "Pendiente"}</td>
-
-                      <td style={td}>
-                        <span
-                          style={
-                            empresa.estado === "Activo" || empresa.estado === "Activa"
-                              ? estadoActivo
-                              : estadoInactivo
-                          }
-                        >
-                          {empresa.estado || "Activo"}
-                        </span>
-                      </td>
-
-                      <td style={td}>
-                        {empresa.fecha_proxima_facturacion || "-"}
-                      </td>
-
-                      <td style={td}>
-                        {empresa.configuracion_completa ? "Completa" : "Pendiente"}
-                      </td>
-
-                      <td style={td}>
-                        <button
-                          style={botonMini}
-                          onClick={() => seleccionarEmpresa(empresa)}
-                        >
-                          Seleccionar
-                        </button>
-
-                        <Link href="/planes" style={linkMini}>
-                          Plan
-                        </Link>
-
-                        <Link href="/modulos" style={linkMini}>
-                          Módulos
-                        </Link>
-
-                        <Link href="/usuarios" style={linkMini}>
-                          Usuario Principal
-                        </Link>
+                <tbody>
+                  {empresas.length === 0 ? (
+                    <tr>
+                      <td style={td} colSpan="10">
+                        No hay empresas registradas.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : (
+                    empresas.map((empresa) => (
+                      <tr key={empresa.id}>
+                        <td style={td}>
+                          <strong>{empresa.nombre}</strong>
+                          <br />
+                          <span style={textoPequeno}>{empresa.correo || "-"}</span>
+                        </td>
 
-          <p style={nota}>
-            Flujo: crear empresa → asignar plan → activar módulos → crear Usuario Principal.
-          </p>
-        </div>
+                        <td style={td}>{empresa.telefono || "-"}</td>
+                        <td style={td}>{empresa.categoria_negocio || "-"}</td>
+                        <td style={td}>{empresa.tipo_negocio || "-"}</td>
+                        <td style={td}>{empresa.plan_nombre || "Sin plan"}</td>
+                        <td style={td}>{empresa.estado_pago || "Pendiente"}</td>
+
+                        <td style={td}>
+                          <span
+                            style={
+                              empresa.estado === "Activo" || empresa.estado === "Activa"
+                                ? estadoActivo
+                                : estadoInactivo
+                            }
+                          >
+                            {empresa.estado || "Activo"}
+                          </span>
+                        </td>
+
+                        <td style={td}>
+                          {empresa.fecha_proxima_facturacion || "-"}
+                        </td>
+
+                        <td style={td}>
+                          {empresa.configuracion_completa ? "Completa" : "Pendiente"}
+                        </td>
+
+                        <td style={td}>
+                          <button
+                            style={botonMiniVerde}
+                            onClick={() => seleccionarEmpresa(empresa)}
+                          >
+                            Seleccionar
+                          </button>
+
+                          <button
+                            style={botonMini}
+                            onClick={() => irPlan(empresa)}
+                          >
+                            Plan
+                          </button>
+
+                          <button
+                            style={botonMini}
+                            onClick={() => irModulos(empresa)}
+                          >
+                            Módulos
+                          </button>
+
+                          <button
+                            style={botonMini}
+                            onClick={() => irUsuarioPrincipal(empresa)}
+                          >
+                            Crear Usuario Principal
+                          </button>
+
+                          <button
+                            style={botonMiniRojo}
+                            onClick={() => cambiarEstadoEmpresa(empresa, "Suspendido")}
+                          >
+                            Suspender
+                          </button>
+
+                          <button
+                            style={botonMiniVerde}
+                            onClick={() => cambiarEstadoEmpresa(empresa, "Activo")}
+                          >
+                            Activar
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <p style={nota}>
+              Flujo: crear empresa → asignar plan → activar módulos → crear usuario principal.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -377,7 +465,7 @@ function Campo({ label, children }) {
 
 const pagina = {
   minHeight: "100vh",
-  background: "#f3f4f6",
+  background: "#eef2f7",
   padding: "30px",
   fontFamily: "Arial, sans-serif",
 };
@@ -387,33 +475,57 @@ const contenedor = {
   margin: "0 auto",
 };
 
-const header = {
+const hero = {
+  background: "linear-gradient(135deg, #111827, #1e40af)",
+  color: "#ffffff",
+  padding: "26px",
+  borderRadius: "20px",
+  marginBottom: "22px",
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  gap: "15px",
+  gap: "20px",
   flexWrap: "wrap",
-  marginBottom: "20px",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+};
+
+const heroInfo = {
+  display: "flex",
+  alignItems: "center",
+  gap: "18px",
+};
+
+const logo = {
+  width: "85px",
+  height: "auto",
+  background: "#ffffff",
+  borderRadius: "14px",
+  padding: "8px",
+};
+
+const accionesTop = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap",
 };
 
 const titulo = {
   fontSize: "34px",
   margin: 0,
-  color: "#111827",
 };
 
 const subtitulo = {
-  color: "#6b7280",
+  color: "#dbeafe",
   marginTop: "6px",
   maxWidth: "700px",
 };
 
 const card = {
   background: "#ffffff",
-  padding: "22px",
-  borderRadius: "16px",
+  padding: "24px",
+  borderRadius: "18px",
   marginBottom: "20px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+  boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
 };
 
 const tituloSeccion = {
@@ -442,8 +554,8 @@ const labelStyle = {
 
 const inputStyle = {
   width: "100%",
-  padding: "11px",
-  borderRadius: "8px",
+  padding: "12px",
+  borderRadius: "9px",
   border: "1px solid #d1d5db",
   fontSize: "14px",
   boxSizing: "border-box",
@@ -451,13 +563,40 @@ const inputStyle = {
   color: "#111827",
 };
 
-const boton = {
+const accionesFormulario = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap",
   marginTop: "18px",
+};
+
+const boton = {
   background: "#2563eb",
   color: "#ffffff",
   border: "none",
   padding: "13px 24px",
   borderRadius: "9px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonGris = {
+  background: "#6b7280",
+  color: "#ffffff",
+  border: "none",
+  padding: "13px 24px",
+  borderRadius: "9px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonOscuro = {
+  background: "#ffffff",
+  color: "#111827",
+  border: "none",
+  padding: "11px 18px",
+  borderRadius: "9px",
+  textDecoration: "none",
   fontWeight: "bold",
   cursor: "pointer",
 };
@@ -469,6 +608,7 @@ const botonVolver = {
   borderRadius: "9px",
   textDecoration: "none",
   fontWeight: "bold",
+  border: "1px solid #ffffff",
 };
 
 const tabla = {
@@ -513,6 +653,18 @@ const estadoInactivo = {
 };
 
 const botonMini = {
+  background: "#111827",
+  color: "#ffffff",
+  border: "none",
+  padding: "7px 10px",
+  borderRadius: "7px",
+  fontWeight: "bold",
+  cursor: "pointer",
+  marginRight: "5px",
+  marginBottom: "5px",
+};
+
+const botonMiniVerde = {
   background: "#16a34a",
   color: "#ffffff",
   border: "none",
@@ -524,14 +676,14 @@ const botonMini = {
   marginBottom: "5px",
 };
 
-const linkMini = {
-  display: "inline-block",
-  background: "#111827",
+const botonMiniRojo = {
+  background: "#dc2626",
   color: "#ffffff",
+  border: "none",
   padding: "7px 10px",
   borderRadius: "7px",
   fontWeight: "bold",
-  textDecoration: "none",
+  cursor: "pointer",
   marginRight: "5px",
   marginBottom: "5px",
 };
