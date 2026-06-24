@@ -163,12 +163,19 @@ export default function GestionKonax() {
       {
         empresa_id: empresaPago.id,
         empresa_nombre: empresaPago.nombre,
+        plan_codigo: empresaPago.plan_codigo,
+        plan_nombre: empresaPago.plan_nombre,
+        plan_tipo: empresaPago.plan_tipo || "Mensual",
         monto: Number(montoPago),
         metodo_pago: metodoPago,
-        referencia: referenciaPago,
-        observacion: observacionPago,
+        referencia_pago: referenciaPago,
+        fecha_factura: hoy,
         fecha_pago: hoy,
-        usuario,
+        fecha_vencimiento: proximaFacturacion,
+        estado_pago: "Pagado",
+        estado_servicio: "Activo",
+        observacion: observacionPago,
+        usuario_registro: usuario,
       },
     ]);
 
