@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "../../lib/supabase";
 import { asignarPlanEmpresa } from "../../lib/konaxPlanes";
+
 export default function Planes() {
   const [tipoPlan, setTipoPlan] = useState("mensual");
   const [empresaId, setEmpresaId] = useState("");
@@ -31,23 +31,8 @@ export default function Planes() {
       precioMensual: 49,
       precioAnual: 499,
       usuariosIncluidos: 3,
-      precioUsuarioExtra: 10.99,
       color: "#2563eb",
       fondo: "#eff6ff",
-      modulos: {
-        clientes: true,
-        vista_cliente: true,
-        caja: true,
-        control_caja: false,
-        cobranza: true,
-        inventario: false,
-        venta_credito: false,
-        suscripciones: false,
-        recargos: false,
-        dashboard_ventas: false,
-        dashboard_cobros: true,
-        egresos: false,
-      },
       incluye: [
         "3 usuarios incluidos",
         "Clientes",
@@ -68,24 +53,9 @@ export default function Planes() {
       precioMensual: 99,
       precioAnual: 999,
       usuariosIncluidos: 6,
-      precioUsuarioExtra: 10.99,
       color: "#10b981",
       fondo: "#ecfdf5",
       destacado: true,
-      modulos: {
-        clientes: true,
-        vista_cliente: true,
-        caja: true,
-        control_caja: true,
-        cobranza: true,
-        inventario: true,
-        venta_credito: true,
-        suscripciones: true,
-        recargos: true,
-        dashboard_ventas: true,
-        dashboard_cobros: true,
-        egresos: true,
-      },
       incluye: [
         "6 usuarios incluidos",
         "Todo KONAX Cobros",
@@ -107,23 +77,8 @@ export default function Planes() {
       precioMensual: 149,
       precioAnual: 1499,
       usuariosIncluidos: 12,
-      precioUsuarioExtra: 10.99,
       color: "#111827",
       fondo: "#f9fafb",
-      modulos: {
-        clientes: true,
-        vista_cliente: true,
-        caja: true,
-        control_caja: true,
-        cobranza: true,
-        inventario: true,
-        venta_credito: true,
-        suscripciones: true,
-        recargos: true,
-        dashboard_ventas: true,
-        dashboard_cobros: true,
-        egresos: true,
-      },
       incluye: [
         "12 usuarios incluidos",
         "Todo KONAX Ventas y Gestión",
@@ -143,36 +98,10 @@ export default function Planes() {
   ];
 
   async function asignarPlan(plan) {
-  if (!empresaId) {
-    alert("No hay empresa seleccionada.");
-    return;
-  }
-
-  const confirmar = confirm(
-    `Se asignará ${plan.nombre} a ${empresaNombre}. ¿Deseas continuar?`
-  );
-
-  if (!confirmar) return;
-
-  const resultado = await asignarPlanEmpresa(
-    empresaId,
-    plan.codigo
-  );
-
-  if (!resultado.ok) {
-    alert(resultado.mensaje);
-    return;
-  }
-
-  alert(
-    resultado.mensaje +
-      " Ahora crea el Usuario Principal."
-  );
-
-  window.location.href = "/usuarios";
-}
-
-    const precio = tipoPlan === "mensual" ? plan.precioMensual : plan.precioAnual;
+    if (!empresaId) {
+      alert("No hay empresa seleccionada.");
+      return;
+    }
 
     const confirmar = confirm(
       `Se asignará ${plan.nombre} a ${empresaNombre}. ¿Deseas continuar?`
@@ -180,58 +109,14 @@ export default function Planes() {
 
     if (!confirmar) return;
 
-    const { error: errorEmpresa } = await supabase
-      .from("empresas")
-      .update({
-        plan_codigo: plan.codigo,
-        plan_nombre: plan.nombre,
-        plan_tipo: tipoPlan,
-        plan_precio: precio,
-        estado_plan: "Activo",
-      })
-      .eq("id", empresaId);
+    const resultado = await asignarPlanEmpresa(empresaId, plan.codigo);
 
-    if (errorEmpresa) {
-      alert("Error al guardar el plan: " + errorEmpresa.message);
+    if (!resultado.ok) {
+      alert(resultado.mensaje);
       return;
     }
 
-    const payloadModulos = {
-      empresa_id: empresaId,
-      ...plan.modulos,
-    };
-
-    const { data: existeModulo, error: errorBuscar } = await supabase
-      .from("empresa_modulos")
-      .select("id")
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
-
-    if (errorBuscar) {
-      alert("Plan guardado, pero error verificando módulos: " + errorBuscar.message);
-      return;
-    }
-
-    let errorModulos = null;
-
-    if (existeModulo?.id) {
-      const res = await supabase
-        .from("empresa_modulos")
-        .update(payloadModulos)
-        .eq("id", existeModulo.id);
-
-      errorModulos = res.error;
-    } else {
-      const res = await supabase.from("empresa_modulos").insert([payloadModulos]);
-      errorModulos = res.error;
-    }
-
-    if (errorModulos) {
-      alert("Plan guardado, pero error activando módulos: " + errorModulos.message);
-      return;
-    }
-
-    alert("Plan y módulos asignados correctamente. Ahora crea el Usuario Principal.");
+    alert(resultado.mensaje + " Ahora crea el Usuario Principal.");
     window.location.href = "/usuarios";
   }
 
@@ -283,12 +168,7 @@ export default function Planes() {
                   <div style={recomendado}>Más recomendado</div>
                 )}
 
-                <div
-                  style={{
-                    ...badge,
-                    background: plan.color,
-                  }}
-                >
+                <div style={{ ...badge, background: plan.color }}>
                   {plan.etiqueta}
                 </div>
 
@@ -317,10 +197,7 @@ export default function Planes() {
 
                 <button
                   onClick={() => asignarPlan(plan)}
-                  style={{
-                    ...botonPlan,
-                    background: plan.color,
-                  }}
+                  style={{ ...botonPlan, background: plan.color }}
                 >
                   Asignar {plan.nombre}
                 </button>
@@ -330,7 +207,7 @@ export default function Planes() {
         </div>
 
         <p style={nota}>
-          Flujo: Empresa → Plan → Módulos → Usuario Principal.
+          Flujo automático: Empresa → Plan → Módulos → Usuario Principal.
         </p>
 
         <Link href="/empresas" style={botonVolver}>
@@ -456,7 +333,6 @@ const precioBox = {
   display: "flex",
   alignItems: "flex-start",
   gap: "2px",
-  marginBottom: "0px",
 };
 
 const signo = {
