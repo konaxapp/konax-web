@@ -4,8 +4,11 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function Caja() {
-  const [tipoMovimiento, setTipoMovimiento] = useState("Venta Contado");
-  const [fechaPago, setFechaPago] = useState(new Date().toISOString().split("T")[0]);
+  const [tipoNegocioEmpresa, setTipoNegocioEmpresa] = useState("");
+  const [tipoMovimiento, setTipoMovimiento] = useState("");
+  const [fechaPago, setFechaPago] = useState(
+    new Date().toISOString().split("T")[0]
+  );
 
   const [buscarCliente, setBuscarCliente] = useState("");
   const [resultadosBusqueda, setResultadosBusqueda] = useState([]);
@@ -23,9 +26,68 @@ export default function Caja() {
   const [observacion, setObservacion] = useState("");
   const [movimientos, setMovimientos] = useState([]);
 
-  const requiereCliente = tipoMovimiento !== "Venta Contado";
+  function obtenerOpcionesMovimiento(tipoNegocio) {
+    const tipo = String(tipoNegocio || "").toLowerCase();
+
+    if (
+      tipo.includes("gimnasio") ||
+      tipo.includes("club") ||
+      tipo.includes("academia") ||
+      tipo.includes("escuela") ||
+      tipo.includes("colegio")
+    ) {
+      return ["Inscripción / Membresía", "Mensualidad", "Renovación", "Abono"];
+    }
+
+    if (
+      tipo.includes("iptv") ||
+      tipo.includes("internet") ||
+      tipo.includes("cable") ||
+      tipo.includes("servicio por membresía")
+    ) {
+      return ["Contrato", "Mensualidad", "Renovación", "Abono"];
+    }
+
+    if (
+      tipo.includes("mueblería") ||
+      tipo.includes("electrónica") ||
+      tipo.includes("financiera") ||
+      tipo.includes("cooperativa") ||
+      tipo.includes("casa de empeño")
+    ) {
+      return ["Venta Contado", "Venta Crédito", "Abono", "Pago Crédito", "Cancelación"];
+    }
+
+    if (
+      tipo.includes("ferretería") ||
+      tipo.includes("farmacia") ||
+      tipo.includes("tienda") ||
+      tipo.includes("mercado") ||
+      tipo.includes("repuestos") ||
+      tipo.includes("boutique")
+    ) {
+      return ["Venta Contado", "Venta Crédito", "Abono", "Pago Crédito"];
+    }
+
+    return ["Venta Contado", "Venta Crédito", "Abono", "Pago Crédito", "Mensualidad", "Contrato"];
+  }
+
+  const opcionesMovimiento = obtenerOpcionesMovimiento(tipoNegocioEmpresa);
+
+  const movimientosSinCliente = ["Venta Contado", "Servicio Contado"];
+  const requiereCliente = !movimientosSinCliente.includes(tipoMovimiento);
 
   useEffect(() => {
+    const tipo =
+      localStorage.getItem("tipoNegocio") ||
+      localStorage.getItem("tipoNegocioAdmin") ||
+      "";
+
+    setTipoNegocioEmpresa(tipo);
+
+    const opciones = obtenerOpcionesMovimiento(tipo);
+    setTipoMovimiento(opciones[0]);
+
     cargarMovimientos();
   }, []);
 
@@ -338,7 +400,13 @@ export default function Caja() {
         return;
       }
 
-      if (tipoMovimiento === "Suscripción" || tipoMovimiento === "Membresía") {
+      if (
+        tipoMovimiento === "Suscripción" ||
+        tipoMovimiento === "Membresía" ||
+        tipoMovimiento === "Inscripción / Membresía" ||
+        tipoMovimiento === "Mensualidad" ||
+        tipoMovimiento === "Renovación"
+      ) {
         await renovarSuscripcionDesdeCaja(
           empresaId,
           cuentaSeleccionada,
@@ -353,7 +421,9 @@ export default function Caja() {
   }
 
   function limpiarFormulario() {
-    setTipoMovimiento("Venta Contado");
+    const opciones = obtenerOpcionesMovimiento(tipoNegocioEmpresa);
+
+    setTipoMovimiento(opciones[0]);
     setFechaPago(new Date().toISOString().split("T")[0]);
     setBuscarCliente("");
     setResultadosBusqueda([]);
@@ -392,7 +462,10 @@ export default function Caja() {
             <img src="/konax-logo.png" alt="KONAX" style={logo} />
             <h1 style={titulo}>Caja</h1>
             <p style={subtitulo}>
-              Registro de ventas, pagos, abonos, mensualidades, suscripciones y contratos.
+              Registro de ventas, pagos, abonos, mensualidades, membresías y contratos.
+            </p>
+            <p style={negocioTexto}>
+              Tipo de negocio: <strong>{tipoNegocioEmpresa || "General"}</strong>
             </p>
           </div>
 
@@ -446,14 +519,11 @@ export default function Caja() {
                 onChange={(e) => setTipoMovimiento(e.target.value)}
                 style={inputStyle}
               >
-                <option>Venta Contado</option>
-                <option>Venta Crédito</option>
-                <option>Abono</option>
-                <option>Pago Crédito</option>
-                <option>Mensualidad</option>
-                <option>Suscripción</option>
-                <option>Membresía</option>
-                <option>Contrato</option>
+                {opcionesMovimiento.map((opcion) => (
+                  <option key={opcion} value={opcion}>
+                    {opcion}
+                  </option>
+                ))}
               </select>
             </Campo>
           </div>
@@ -723,6 +793,12 @@ const subtitulo = {
   color: "#6b7280",
   fontSize: "16px",
   margin: 0,
+};
+
+const negocioTexto = {
+  color: "#047857",
+  fontSize: "14px",
+  marginTop: "8px",
 };
 
 const resumenGrid = {
