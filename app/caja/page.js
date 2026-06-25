@@ -26,6 +26,41 @@ export default function Caja() {
   const [observacion, setObservacion] = useState("");
   const [movimientos, setMovimientos] = useState([]);
 
+  useEffect(() => {
+    iniciarCaja();
+  }, []);
+
+  async function iniciarCaja() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    await cargarTipoNegocioEmpresa(empresaId);
+    await cargarMovimientos();
+  }
+
+  async function cargarTipoNegocioEmpresa(empresaId) {
+    const { data, error } = await supabase
+      .from("empresas")
+      .select("categoria_negocio, tipo_negocio")
+      .eq("id", empresaId)
+      .maybeSingle();
+
+    if (error) {
+      alert("Error cargando tipo de negocio: " + error.message);
+      return;
+    }
+
+    const categoria = data?.categoria_negocio || "";
+    const tipo = data?.tipo_negocio || "";
+
+    const tipoCompleto = `${categoria} ${tipo}`.trim() || "General";
+
+    setTipoNegocioEmpresa(tipoCompleto);
+
+    const opciones = obtenerOpcionesMovimiento(tipoCompleto);
+    setTipoMovimiento(opciones[0]);
+  }
+
   function obtenerOpcionesMovimiento(tipoNegocio) {
     const tipo = String(tipoNegocio || "").toLowerCase();
 
@@ -61,7 +96,13 @@ export default function Caja() {
       tipo.includes("cooperativa") ||
       tipo.includes("casa de empeño")
     ) {
-      return ["Venta Contado", "Venta Crédito", "Abono", "Pago Crédito", "Cancelación"];
+      return [
+        "Venta Contado",
+        "Venta Crédito",
+        "Abono",
+        "Pago Crédito",
+        "Cancelación",
+      ];
     }
 
     if (
@@ -79,7 +120,14 @@ export default function Caja() {
       return ["Venta Contado", "Venta Crédito", "Abono", "Pago Crédito"];
     }
 
-    return ["Venta Contado", "Venta Crédito", "Abono", "Pago Crédito", "Mensualidad", "Contrato"];
+    return [
+      "Venta Contado",
+      "Venta Crédito",
+      "Abono",
+      "Pago Crédito",
+      "Mensualidad",
+      "Contrato",
+    ];
   }
 
   const opcionesMovimiento = obtenerOpcionesMovimiento(tipoNegocioEmpresa);
@@ -87,33 +135,14 @@ export default function Caja() {
   const movimientosSinCliente = ["Venta Contado", "Servicio Contado"];
   const requiereCliente = !movimientosSinCliente.includes(tipoMovimiento);
 
-  useEffect(() => {
-    const tipoNegocio =
-      localStorage.getItem("tipoNegocio") ||
-      localStorage.getItem("tipoNegocioAdmin") ||
-      "";
-
-    const categoriaNegocio =
-      localStorage.getItem("categoriaNegocio") ||
-      localStorage.getItem("categoriaNegocioAdmin") ||
-      "";
-
-    const tipoCompleto = `${categoriaNegocio} ${tipoNegocio}`;
-
-    setTipoNegocioEmpresa(tipoCompleto.trim() || "General");
-
-    const opciones = obtenerOpcionesMovimiento(tipoCompleto);
-    setTipoMovimiento(opciones[0]);
-
-    cargarMovimientos();
-  }, []);
-
   function volverDashboard() {
     window.location.href = "/dashboard";
   }
 
   function obtenerEmpresaId() {
-    const empresaId = localStorage.getItem("empresaId");
+    const empresaId =
+      localStorage.getItem("empresaId") ||
+      localStorage.getItem("empresaAdminCreadaId");
 
     if (!empresaId) {
       alert("No hay empresa activa. Configure la empresa antes de usar Caja.");
