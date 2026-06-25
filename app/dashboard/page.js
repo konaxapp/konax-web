@@ -57,6 +57,10 @@ export default function Dashboard() {
     setTipoNegocio(empresa.tipo_negocio || "");
     setCategoriaNegocio(empresa.categoria_negocio || "");
 
+    localStorage.setItem("empresaNombre", empresa.nombre || "Empresa");
+    localStorage.setItem("tipoNegocio", empresa.tipo_negocio || "");
+    localStorage.setItem("categoriaNegocio", empresa.categoria_negocio || "");
+
     const { data: modulosData, error: errorModulos } = await supabase
       .from("empresa_modulos")
       .select("*")
@@ -83,6 +87,9 @@ export default function Dashboard() {
     localStorage.removeItem("usuarioNombre");
     localStorage.removeItem("usuarioCorreo");
     localStorage.removeItem("usuarioRol");
+    localStorage.removeItem("tipoNegocio");
+    localStorage.removeItem("categoriaNegocio");
+
     window.location.href = "/login";
   }
 
@@ -155,6 +162,7 @@ export default function Dashboard() {
   const comercioInventario = esNegocioComercioInventario();
 
   const permitirCredito = !membresia && ventaCredito && modulos.venta_credito;
+
   const permitirInventario =
     !membresia && (ventaCredito || comercioInventario) && modulos.inventario;
 
@@ -163,7 +171,9 @@ export default function Dashboard() {
   const permitirRecargos = !membresia && modulos.recargos;
 
   const permitirSuscripciones =
-    membresia || modulos.suscripciones || categoriaNegocio === "Suscripciones y Membresías";
+    membresia ||
+    modulos.suscripciones ||
+    categoriaNegocio === "Suscripciones y Membresías";
 
   const tarjetas = [
     {
@@ -259,6 +269,13 @@ export default function Dashboard() {
       activo: modulos.egresos,
       icono: "🧮",
     },
+    {
+      nombre: "Usuarios y Roles",
+      descripcion: "Crear usuarios, asignar roles y administrar accesos.",
+      ruta: "/usuarios",
+      activo: true,
+      icono: "🔐",
+    },
   ];
 
   const tarjetasActivas = tarjetas.filter((item) => item.activo);
@@ -308,7 +325,7 @@ export default function Dashboard() {
         {tarjetasActivas.map((item) => (
           <div
             key={item.nombre}
-            style={card}
+            style={item.nombre === "Usuarios y Roles" ? cardDestacado : card}
             onClick={() => abrirModulo(item.ruta)}
           >
             <div style={icono}>{item.icono}</div>
@@ -436,6 +453,12 @@ const card = {
   background: "#ffffff",
   boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
   cursor: "pointer",
+};
+
+const cardDestacado = {
+  ...card,
+  border: "2px solid #10b981",
+  background: "#ecfdf5",
 };
 
 const icono = {
