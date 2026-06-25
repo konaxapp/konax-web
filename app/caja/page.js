@@ -34,7 +34,10 @@ export default function Caja() {
       tipo.includes("club") ||
       tipo.includes("academia") ||
       tipo.includes("escuela") ||
-      tipo.includes("colegio")
+      tipo.includes("colegio") ||
+      tipo.includes("suscripciones") ||
+      tipo.includes("membresias") ||
+      tipo.includes("membresías")
     ) {
       return ["Inscripción / Membresía", "Mensualidad", "Renovación", "Abono"];
     }
@@ -43,14 +46,17 @@ export default function Caja() {
       tipo.includes("iptv") ||
       tipo.includes("internet") ||
       tipo.includes("cable") ||
+      tipo.includes("streaming") ||
       tipo.includes("servicio por membresía")
     ) {
       return ["Contrato", "Mensualidad", "Renovación", "Abono"];
     }
 
     if (
+      tipo.includes("muebleria") ||
       tipo.includes("mueblería") ||
       tipo.includes("electrónica") ||
+      tipo.includes("electronica") ||
       tipo.includes("financiera") ||
       tipo.includes("cooperativa") ||
       tipo.includes("casa de empeño")
@@ -59,10 +65,14 @@ export default function Caja() {
     }
 
     if (
+      tipo.includes("ferreteria") ||
       tipo.includes("ferretería") ||
       tipo.includes("farmacia") ||
+      tipo.includes("abarroteria") ||
+      tipo.includes("abarrotería") ||
       tipo.includes("tienda") ||
       tipo.includes("mercado") ||
+      tipo.includes("supermercado") ||
       tipo.includes("repuestos") ||
       tipo.includes("boutique")
     ) {
@@ -78,14 +88,21 @@ export default function Caja() {
   const requiereCliente = !movimientosSinCliente.includes(tipoMovimiento);
 
   useEffect(() => {
-    const tipo =
+    const tipoNegocio =
       localStorage.getItem("tipoNegocio") ||
       localStorage.getItem("tipoNegocioAdmin") ||
       "";
 
-    setTipoNegocioEmpresa(tipo);
+    const categoriaNegocio =
+      localStorage.getItem("categoriaNegocio") ||
+      localStorage.getItem("categoriaNegocioAdmin") ||
+      "";
 
-    const opciones = obtenerOpcionesMovimiento(tipo);
+    const tipoCompleto = `${categoriaNegocio} ${tipoNegocio}`;
+
+    setTipoNegocioEmpresa(tipoCompleto.trim() || "General");
+
+    const opciones = obtenerOpcionesMovimiento(tipoCompleto);
     setTipoMovimiento(opciones[0]);
 
     cargarMovimientos();
