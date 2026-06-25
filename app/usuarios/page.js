@@ -6,7 +6,6 @@ import { supabase } from "../../lib/supabase";
 export default function Usuarios() {
   const [empresaId, setEmpresaId] = useState("");
   const [empresaNombre, setEmpresaNombre] = useState("");
-
   const [nombre, setNombre] = useState("");
   const [correo, setCorreo] = useState("");
   const [password, setPassword] = useState("");
@@ -42,36 +41,33 @@ export default function Usuarios() {
     }
   }, [empresaId]);
 
-  async function cargarRoles() {
-    const { data, error } = await supabase
-      .from("roles_konax")
-      .select("*")
-      .order("nombre", { ascending: true });
+async function cargarRoles() {
+  const { data, error } = await supabase
+    .from("roles_konax")
+    .select("*")
+    .order("nombre", { ascending: true });
 
-    if (error) {
-      alert("Error cargando roles: " + error.message);
-      return;
-    }
-
-    const rolesActivos = (data || []).filter(
-      (rol) =>
-        rol.activo === true ||
-        rol.activo === "true" ||
-        rol.activo === "TRUE" ||
-        rol.activo === null ||
-        rol.activo === undefined
-    );
-
-    setRoles(rolesActivos);
-
-    const admin = rolesActivos.find((rol) => rol.nombre === "Administrador");
-
-    if (admin) {
-      setRolId(admin.id);
-    } else if (rolesActivos.length > 0) {
-      setRolId(rolesActivos[0].id);
-    }
+  if (error) {
+    alert("Error cargando roles: " + error.message);
+    return;
   }
+
+  const rolesActivos = data || [];
+
+  setRoles(rolesActivos);
+
+  const admin = rolesActivos.find(
+    (rol) => String(rol.nombre || "").toLowerCase() === "administrador"
+  );
+
+  if (admin) {
+    setRolId(admin.id);
+  } else if (rolesActivos.length > 0) {
+    setRolId(rolesActivos[0].id);
+  } else {
+    setRolId("");
+  }
+}
 
   async function cargarUsuarios() {
     const { data, error } = await supabase
@@ -93,7 +89,9 @@ export default function Usuarios() {
     setCorreo("");
     setPassword("");
 
-    const admin = roles.find((rol) => rol.nombre === "Administrador");
+const admin = roles.find(
+  (rol) => String(rol.nombre || "").toLowerCase() === "administrador"
+);
     if (admin) setRolId(admin.id);
   }
 
