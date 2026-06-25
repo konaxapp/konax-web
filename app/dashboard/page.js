@@ -9,6 +9,8 @@ export default function Dashboard() {
   const [planNombre, setPlanNombre] = useState("");
   const [planCodigo, setPlanCodigo] = useState("");
   const [estadoPlan, setEstadoPlan] = useState("");
+  const [tipoNegocio, setTipoNegocio] = useState("");
+  const [categoriaNegocio, setCategoriaNegocio] = useState("");
 
   useEffect(() => {
     cargarDashboard();
@@ -24,7 +26,9 @@ export default function Dashboard() {
 
     const { data: empresa, error: errorEmpresa } = await supabase
       .from("empresas")
-      .select("nombre, plan_nombre, plan_codigo, estado_plan, estado")
+      .select(
+        "nombre, plan_nombre, plan_codigo, estado_plan, estado, tipo_negocio, categoria_negocio"
+      )
       .eq("id", empresaId)
       .maybeSingle();
 
@@ -46,12 +50,12 @@ export default function Dashboard() {
       return;
     }
 
-    setEmpresaNombre(
-      empresa?.nombre || localStorage.getItem("empresaNombre") || "Empresa"
-    );
-    setPlanNombre(empresa?.plan_nombre || "Sin plan");
-    setPlanCodigo(empresa?.plan_codigo || "");
-    setEstadoPlan(empresa?.estado_plan || "Activo");
+    setEmpresaNombre(empresa.nombre || "Empresa");
+    setPlanNombre(empresa.plan_nombre || "Sin plan");
+    setPlanCodigo(empresa.plan_codigo || "");
+    setEstadoPlan(empresa.estado_plan || "Activo");
+    setTipoNegocio(empresa.tipo_negocio || "");
+    setCategoriaNegocio(empresa.categoria_negocio || "");
 
     const { data: modulosData, error: errorModulos } = await supabase
       .from("empresa_modulos")
@@ -79,12 +83,62 @@ export default function Dashboard() {
     localStorage.removeItem("usuarioNombre");
     localStorage.removeItem("usuarioCorreo");
     localStorage.removeItem("usuarioRol");
-
     window.location.href = "/login";
   }
 
   function abrirModulo(ruta) {
     window.location.href = ruta;
+  }
+
+  function normalizar(texto) {
+    return String(texto || "").toLowerCase().trim();
+  }
+
+  function esNegocioMembresia() {
+    const tipo = normalizar(tipoNegocio);
+    const categoria = normalizar(categoriaNegocio);
+
+    return (
+      tipo.includes("gimnasio") ||
+      tipo.includes("club") ||
+      tipo.includes("academia") ||
+      tipo.includes("servicio por membresía") ||
+      tipo.includes("membres") ||
+      categoria.includes("suscripciones") ||
+      categoria.includes("membres")
+    );
+  }
+
+  function esNegocioVentaCredito() {
+    const tipo = normalizar(tipoNegocio);
+    const categoria = normalizar(categoriaNegocio);
+
+    return (
+      categoria.includes("ventas a crédito") ||
+      tipo.includes("mueblería") ||
+      tipo.includes("electronica") ||
+      tipo.includes("electrónica") ||
+      tipo.includes("distribuidora") ||
+      tipo.includes("financiera") ||
+      tipo.includes("cooperativa") ||
+      tipo.includes("empeño")
+    );
+  }
+
+  function esNegocioComercioInventario() {
+    const tipo = normalizar(tipoNegocio);
+    const categoria = normalizar(categoriaNegocio);
+
+    return (
+      categoria.includes("comercio") ||
+      tipo.includes("ferretería") ||
+      tipo.includes("ferreteria") ||
+      tipo.includes("farmacia") ||
+      tipo.includes("tienda") ||
+      tipo.includes("mercado") ||
+      tipo.includes("repuestos") ||
+      tipo.includes("boutique")
+    );
   }
 
   if (!modulos) {
@@ -96,6 +150,20 @@ export default function Dashboard() {
   }
 
   const esPlanCobros = planCodigo === "cobros";
+  const membresia = esNegocioMembresia();
+  const ventaCredito = esNegocioVentaCredito();
+  const comercioInventario = esNegocioComercioInventario();
+
+  const permitirCredito = !membresia && ventaCredito && modulos.venta_credito;
+  const permitirInventario =
+    !membresia && (ventaCredito || comercioInventario) && modulos.inventario;
+
+  const permitirCobranza = !membresia && modulos.cobranza;
+  const permitirDashboardCobros = !membresia && modulos.dashboard_cobros;
+  const permitirRecargos = !membresia && modulos.recargos;
+
+  const permitirSuscripciones =
+    membresia || modulos.suscripciones || categoriaNegocio === "Suscripciones y Membresías";
 
   const tarjetas = [
     {
@@ -118,7 +186,7 @@ export default function Dashboard() {
       nombre: "Créditos",
       descripcion: "Registro de ventas a crédito con inventario.",
       ruta: "/ventas-credito",
-      activo: !esPlanCobros && modulos.venta_credito,
+      activo: permitirCredito,
       icono: "💳",
     },
     {
@@ -132,28 +200,28 @@ export default function Dashboard() {
       nombre: "Cobranza",
       descripcion: "Gestión de cobros, promesas y seguimiento.",
       ruta: "/cobranza",
-      activo: modulos.cobranza,
+      activo: permitirCobranza,
       icono: "📞",
     },
     {
       nombre: "Centro de Cobranza",
       descripcion: "Indicadores reales de cartera, mora y cobros.",
       ruta: "/dashboard-cobranza",
-      activo: modulos.dashboard_cobros,
+      activo: permitirDashboardCobros,
       icono: "📊",
     },
     {
       nombre: "Inventario",
       descripcion: "Consulta general de productos, precios y stock.",
       ruta: "/inventario",
-      activo: modulos.inventario,
+      activo: permitirInventario,
       icono: "📦",
     },
     {
       nombre: "Nuevo Producto",
       descripcion: "Registro de productos y carga inicial de inventario.",
       ruta: "/inventario/nuevo",
-      activo: modulos.inventario,
+      activo: permitirInventario,
       icono: "➕",
     },
     {
@@ -167,21 +235,21 @@ export default function Dashboard() {
       nombre: "Suscripciones",
       descripcion: "Membresías, renovaciones y vencimientos.",
       ruta: "/suscripciones",
-      activo: modulos.suscripciones,
+      activo: permitirSuscripciones,
       icono: "🔁",
     },
     {
       nombre: "Recargos",
       descripcion: "Configuración y aplicación de recargos.",
       ruta: "/recargos",
-      activo: modulos.recargos,
+      activo: permitirRecargos,
       icono: "⚠️",
     },
     {
       nombre: "Centro de Ventas",
       descripcion: "Indicadores comerciales y ventas.",
       ruta: "/dashboard-ventas",
-      activo: modulos.dashboard_ventas,
+      activo: !membresia && modulos.dashboard_ventas,
       icono: "📈",
     },
     {
@@ -208,6 +276,8 @@ export default function Dashboard() {
             <p style={plan}>
               Plan activo: <strong>{planNombre}</strong> · Estado:{" "}
               <strong>{estadoPlan}</strong>
+              <br />
+              Tipo de negocio: <strong>{tipoNegocio || "No definido"}</strong>
             </p>
           </div>
         </div>
