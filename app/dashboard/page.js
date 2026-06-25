@@ -88,7 +88,11 @@ export default function Dashboard() {
   }
 
   if (!modulos) {
-    return <div style={{ padding: "30px" }}>Cargando Dashboard...</div>;
+    return (
+      <div style={{ padding: "30px" }}>
+        Cargando Centro de Operaciones Empresariales...
+      </div>
+    );
   }
 
   const esPlanCobros = planCodigo === "cobros";
@@ -132,7 +136,7 @@ export default function Dashboard() {
       icono: "📞",
     },
     {
-      nombre: "Dashboard de Cobranza",
+      nombre: "Centro de Cobranza",
       descripcion: "Indicadores reales de cartera, mora y cobros.",
       ruta: "/dashboard-cobranza",
       activo: modulos.dashboard_cobros,
@@ -140,10 +144,17 @@ export default function Dashboard() {
     },
     {
       nombre: "Inventario",
-      descripcion: "Productos, stock y movimientos.",
+      descripcion: "Consulta general de productos, precios y stock.",
       ruta: "/inventario",
       activo: modulos.inventario,
       icono: "📦",
+    },
+    {
+      nombre: "Nuevo Producto",
+      descripcion: "Registro de productos y carga inicial de inventario.",
+      ruta: "/inventario/nuevo",
+      activo: modulos.inventario,
+      icono: "➕",
     },
     {
       nombre: "Control Caja",
@@ -167,7 +178,7 @@ export default function Dashboard() {
       icono: "⚠️",
     },
     {
-      nombre: "Dashboard Ventas",
+      nombre: "Centro de Ventas",
       descripcion: "Indicadores comerciales y ventas.",
       ruta: "/dashboard-ventas",
       activo: modulos.dashboard_ventas,
@@ -191,7 +202,7 @@ export default function Dashboard() {
           <img src="/konax-logo.png" alt="KONAX" style={logo} />
 
           <div>
-            <p style={etiqueta}>Panel de trabajo</p>
+            <p style={etiqueta}>Centro de Operaciones Empresariales</p>
             <h1 style={titulo}>{empresaNombre}</h1>
 
             <p style={plan}>
@@ -253,7 +264,7 @@ const pagina = {
 };
 
 const hero = {
-  background: "linear-gradient(135deg, #111827, #1e40af)",
+  background: "linear-gradient(135deg, #111827, #064e3b)",
   color: "#ffffff",
   padding: "28px",
   borderRadius: "22px",
@@ -282,7 +293,7 @@ const logo = {
 
 const etiqueta = {
   margin: 0,
-  color: "#bfdbfe",
+  color: "#bbf7d0",
   fontSize: "14px",
   fontWeight: "bold",
 };
@@ -294,7 +305,7 @@ const titulo = {
 };
 
 const plan = {
-  color: "#dbeafe",
+  color: "#dcfce7",
   marginTop: "6px",
   fontSize: "15px",
 };
@@ -377,7 +388,7 @@ const cardTexto = {
 const abrir = {
   display: "inline-block",
   marginTop: "10px",
-  color: "#2563eb",
+  color: "#047857",
   fontWeight: "bold",
 };
 
