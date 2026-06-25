@@ -30,14 +30,16 @@ export default function Suscripciones() {
     cargarPagos();
   }, []);
 
+  function volverDashboard() {
+    window.location.href = "/dashboard";
+  }
+
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
-
     if (!empresaId) {
       alert("No hay empresa activa.");
       return null;
     }
-
     return empresaId;
   }
 
@@ -47,10 +49,8 @@ export default function Suscripciones() {
 
   function sumarMesesFecha(fechaTexto, meses) {
     if (!fechaTexto) return "";
-
     const [anio, mes, dia] = fechaTexto.split("-").map(Number);
     const fecha = new Date(anio, mes - 1 + meses, dia);
-
     return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(
       2,
       "0"
@@ -59,12 +59,10 @@ export default function Suscripciones() {
 
   function calcularVencimientoDesde(fechaBase, periodicidad) {
     if (!fechaBase) return "";
-
     if (periodicidad === "Mensual") return sumarMesesFecha(fechaBase, 1);
     if (periodicidad === "Trimestral") return sumarMesesFecha(fechaBase, 3);
     if (periodicidad === "Semestral") return sumarMesesFecha(fechaBase, 6);
     if (periodicidad === "Anual") return sumarMesesFecha(fechaBase, 12);
-
     return fechaBase;
   }
 
@@ -77,26 +75,20 @@ export default function Suscripciones() {
 
   function calcularDiasParaVencer(fechaVencimiento) {
     if (!fechaVencimiento) return 0;
-
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
-
     const [anio, mes, dia] = fechaVencimiento.split("-").map(Number);
     const vence = new Date(anio, mes - 1, dia);
     vence.setHours(0, 0, 0, 0);
-
     return Math.ceil((vence - hoy) / (1000 * 60 * 60 * 24));
   }
 
   function obtenerEstadoVisual(item) {
     if (item.estado === "Suspendido") return "Suspendido";
     if (item.estado === "Cancelado") return "Cancelado";
-
     const dias = calcularDiasParaVencer(item.fecha_vencimiento);
-
     if (dias < 0) return "Vencida";
     if (dias <= 3) return "Por vencer";
-
     return item.estado || "Activo";
   }
 
@@ -119,42 +111,79 @@ export default function Suscripciones() {
 
   function limpiarTelefono(telefono) {
     const limpio = String(telefono || "").replace(/\D/g, "");
-
     if (!limpio) return "";
     if (limpio.startsWith("507")) return limpio;
     if (limpio.length === 8) return "507" + limpio;
-
     return limpio;
   }
 
-  function enviarWhatsApp(item) {
+  function abrirWhatsApp(item, mensaje) {
     const telefono = limpiarTelefono(item.telefono);
-
     if (!telefono) {
       alert("Este cliente no tiene teléfono registrado.");
       return;
     }
 
-    const estado = obtenerEstadoVisual(item);
+    window.open(
+      `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`,
+      "_blank"
+    );
+  }
 
+  function enviarWhatsAppRecordatorio(item) {
+    const estado = obtenerEstadoVisual(item);
     let textoEstado = "";
 
     if (estado === "Vencida") {
-      textoEstado = "se encuentra vencida";
+      textoEstado = `se encuentra vencida desde el ${item.fecha_vencimiento}`;
     } else if (estado === "Por vencer") {
       textoEstado = `vence el ${item.fecha_vencimiento}`;
     } else {
       textoEstado = `está activa hasta el ${item.fecha_vencimiento}`;
     }
 
-    const mensaje = `Hola ${item.cliente || ""}. Te recordamos que tu membresía ${
-      item.plan || ""
-    } ${textoEstado}. Para mantener el servicio activo, puedes realizar tu pago. Gracias.`;
+    const mensaje = `Hola ${item.cliente || ""} 👋
 
-    window.open(
-      `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`,
-      "_blank"
-    );
+Te recordamos que tu membresía ${item.plan || ""} ${textoEstado}.
+
+Monto a pagar: $${Number(item.precio || 0).toFixed(2)}
+
+Puedes realizar tu pago para mantener el servicio activo.
+
+Gracias por preferirnos.`;
+
+    abrirWhatsApp(item, mensaje);
+  }
+
+  function enviarWhatsAppPromocion(item) {
+    const mensaje = `Hola ${item.cliente || ""} 👋
+
+Tenemos una promoción especial para ti:
+
+🔥 Renueva tu membresía hoy y recibe un beneficio especial.
+
+Plan actual: ${item.plan || ""}
+Monto: $${Number(item.precio || 0).toFixed(2)}
+
+Responde este mensaje para activar tu promoción.
+
+Gracias por ser parte de nosotros.`;
+
+    abrirWhatsApp(item, mensaje);
+  }
+
+  function enviarWhatsAppReactivacion(item) {
+    const mensaje = `Hola ${item.cliente || ""} 👋
+
+Queremos invitarte a reactivar tu membresía ${item.plan || ""}.
+
+Tu cuenta aparece como ${obtenerEstadoVisual(item)}.
+
+Tenemos una opción especial para que regreses hoy mismo.
+
+Responde este mensaje y te ayudamos a reactivarla.`;
+
+    abrirWhatsApp(item, mensaje);
   }
 
   function verHistorialCliente(item) {
@@ -169,7 +198,6 @@ export default function Suscripciones() {
 
   const membresiasFiltradas = useMemo(() => {
     const texto = busquedaMembresia.toLowerCase();
-
     return suscripciones.filter((item) =>
       `${item.cliente || ""} ${item.cedula || ""} ${item.telefono || ""} ${
         item.plan || ""
@@ -181,7 +209,6 @@ export default function Suscripciones() {
 
   const pagosFiltrados = useMemo(() => {
     const texto = busquedaPagos.toLowerCase();
-
     return pagos.filter((pago) =>
       `${pago.cliente_nombre || ""} ${pago.cliente_cedula || ""} ${
         pago.descripcion || ""
@@ -210,7 +237,6 @@ export default function Suscripciones() {
   const ingresosMes = pagos.reduce((total, pago) => {
     const fecha = pago.fecha_pago || pago.created_at;
     if (!fecha) return total;
-
     const fechaPago = new Date(fecha);
     const hoy = new Date();
 
@@ -608,49 +634,43 @@ export default function Suscripciones() {
   return (
     <div style={pagina}>
       <div style={contenedor}>
-        <div style={logoBox}>
-          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+        <div style={hero}>
+          <div style={heroInfo}>
+            <img src="/konax-logo.png" alt="KONAX" style={logoHero} />
+
+            <div>
+              <p style={etiqueta}>Módulo de membresías</p>
+              <h1 style={tituloHero}>Suscripciones y Membresías</h1>
+              <p style={subtituloHero}>
+                Control de miembros, renovaciones, vencimientos, pagos y WhatsApp.
+              </p>
+            </div>
+          </div>
+
+          <button onClick={volverDashboard} style={botonClaro}>
+            ← Centro de Operaciones
+          </button>
         </div>
 
-        <h1 style={titulo}>Suscripciones y Membresías</h1>
-
-        <p style={subtitulo}>
-          Control de membresías, vencimientos, renovaciones, pagos y WhatsApp.
-        </p>
-
         <div style={resumenGrid}>
-          <div style={resumenCard}>
-            <span>Activas</span>
-            <strong>{totalActivas}</strong>
-          </div>
-
-          <div style={resumenCard}>
-            <span>Por vencer</span>
-            <strong>{totalPorVencer}</strong>
-          </div>
-
-          <div style={resumenCard}>
-            <span>Vencidas</span>
-            <strong>{totalVencidas}</strong>
-          </div>
-
-          <div style={resumenCard}>
-            <span>Suspendidas</span>
-            <strong>{totalSuspendidas}</strong>
-          </div>
-
-          <div style={resumenCard}>
-            <span>Ingresos del mes</span>
-            <strong>${ingresosMes.toFixed(2)}</strong>
-          </div>
+          <KPI titulo="Activas" valor={totalActivas} icono="✅" />
+          <KPI titulo="Por vencer" valor={totalPorVencer} icono="🟡" />
+          <KPI titulo="Vencidas" valor={totalVencidas} icono="🔴" />
+          <KPI titulo="Suspendidas" valor={totalSuspendidas} icono="⛔" />
+          <KPI
+            titulo="Ingresos del mes"
+            valor={`$${ingresosMes.toFixed(2)}`}
+            icono="💰"
+            destacado
+          />
         </div>
 
         <div style={gridDos}>
           <div style={card}>
-            <h2>Próximos Vencimientos</h2>
+            <h2 style={tituloSeccion}>Próximos Vencimientos</h2>
 
             {proximosVencimientos.length === 0 ? (
-              <p>No hay vencimientos próximos.</p>
+              <p style={textoSuave}>No hay vencimientos próximos.</p>
             ) : (
               proximosVencimientos.map((item) => (
                 <div key={item.id} style={alertaBox}>
@@ -662,9 +682,16 @@ export default function Suscripciones() {
 
                   <button
                     style={whatsappBtn}
-                    onClick={() => enviarWhatsApp(item)}
+                    onClick={() => enviarWhatsAppRecordatorio(item)}
                   >
-                    WhatsApp
+                    Recordatorio
+                  </button>
+
+                  <button
+                    style={promoBtn}
+                    onClick={() => enviarWhatsAppPromocion(item)}
+                  >
+                    Promoción
                   </button>
                 </div>
               ))
@@ -672,10 +699,10 @@ export default function Suscripciones() {
           </div>
 
           <div style={card}>
-            <h2>Membresías Vencidas</h2>
+            <h2 style={tituloSeccion}>Membresías Vencidas</h2>
 
             {membresiasVencidas.length === 0 ? (
-              <p>No hay membresías vencidas.</p>
+              <p style={textoSuave}>No hay membresías vencidas.</p>
             ) : (
               membresiasVencidas.map((item) => (
                 <div key={item.id} style={vencidaBox}>
@@ -695,9 +722,16 @@ export default function Suscripciones() {
 
                   <button
                     style={whatsappBtn}
-                    onClick={() => enviarWhatsApp(item)}
+                    onClick={() => enviarWhatsAppRecordatorio(item)}
                   >
-                    WhatsApp
+                    Recordatorio
+                  </button>
+
+                  <button
+                    style={promoBtn}
+                    onClick={() => enviarWhatsAppReactivacion(item)}
+                  >
+                    Reactivar WhatsApp
                   </button>
                 </div>
               ))
@@ -706,11 +740,11 @@ export default function Suscripciones() {
         </div>
 
         <div style={card}>
-          <h2>Crear Membresía</h2>
+          <h2 style={tituloSeccion}>Crear Membresía</h2>
 
           <div style={toolbar}>
             <input
-              placeholder="Para buscar cliente escriba cédula o nombre aquí..."
+              placeholder="Buscar cliente por cédula o nombre..."
               value={formulario.cedula}
               onChange={(e) =>
                 setFormulario({ ...formulario, cedula: e.target.value })
@@ -859,7 +893,7 @@ export default function Suscripciones() {
         </div>
 
         <div style={card}>
-          <h2>Clientes con Membresía</h2>
+          <h2 style={tituloSeccion}>Clientes con Membresía</h2>
 
           <div style={toolbar}>
             <input
@@ -967,9 +1001,16 @@ export default function Suscripciones() {
 
                           <button
                             style={whatsappBtn}
-                            onClick={() => enviarWhatsApp(item)}
+                            onClick={() => enviarWhatsAppRecordatorio(item)}
                           >
-                            WhatsApp
+                            Recordatorio
+                          </button>
+
+                          <button
+                            style={promoBtn}
+                            onClick={() => enviarWhatsAppPromocion(item)}
+                          >
+                            Promoción
                           </button>
                         </td>
                       </tr>
@@ -982,7 +1023,7 @@ export default function Suscripciones() {
         </div>
 
         <div style={card} id="historial-pagos">
-          <h2>Historial de Pagos</h2>
+          <h2 style={tituloSeccion}>Historial de Pagos</h2>
 
           <div style={toolbar}>
             <input
@@ -1045,39 +1086,82 @@ export default function Suscripciones() {
   );
 }
 
+function KPI({ titulo, valor, icono, destacado }) {
+  return (
+    <div style={destacado ? resumenCardDestacado : resumenCard}>
+      <div style={kpiIcono}>{icono}</div>
+      <span>{titulo}</span>
+      <strong>{valor}</strong>
+    </div>
+  );
+}
+
 const pagina = {
   minHeight: "100vh",
-  background: "#f3f4f6",
-  padding: "40px",
+  background: "#eef2f7",
+  padding: "24px",
   fontFamily: "Arial, sans-serif",
 };
 
 const contenedor = {
-  maxWidth: "1300px",
+  maxWidth: "1450px",
   margin: "0 auto",
 };
 
-const logoBox = {
-  textAlign: "center",
-  marginBottom: "25px",
+const hero = {
+  background: "linear-gradient(135deg, #111827, #064e3b)",
+  color: "#ffffff",
+  padding: "28px",
+  borderRadius: "22px",
+  marginBottom: "22px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "20px",
+  flexWrap: "wrap",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
 };
 
-const logo = {
-  width: "260px",
-  maxWidth: "100%",
-  height: "auto",
+const heroInfo = {
+  display: "flex",
+  alignItems: "center",
+  gap: "18px",
 };
 
-const titulo = {
-  fontSize: "40px",
-  marginBottom: "10px",
+const logoHero = {
+  width: "90px",
+  background: "#ffffff",
+  borderRadius: "16px",
+  padding: "8px",
+};
+
+const etiqueta = {
+  margin: 0,
+  color: "#bbf7d0",
+  fontSize: "14px",
+  fontWeight: "bold",
+};
+
+const tituloHero = {
+  margin: "4px 0",
+  fontSize: "36px",
+  fontWeight: "bold",
+};
+
+const subtituloHero = {
+  color: "#dcfce7",
+  marginTop: "6px",
+  fontSize: "15px",
+};
+
+const botonClaro = {
+  background: "#ffffff",
   color: "#111827",
-};
-
-const subtitulo = {
-  color: "#6b7280",
-  fontSize: "18px",
-  marginBottom: "30px",
+  border: "none",
+  padding: "12px 18px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
 };
 
 const resumenGrid = {
@@ -1090,10 +1174,24 @@ const resumenGrid = {
 const resumenCard = {
   background: "#ffffff",
   padding: "18px",
-  borderRadius: "14px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+  borderRadius: "16px",
+  boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
   display: "grid",
   gap: "8px",
+};
+
+const resumenCardDestacado = {
+  background: "linear-gradient(135deg, #16a34a, #166534)",
+  color: "#ffffff",
+  padding: "18px",
+  borderRadius: "16px",
+  boxShadow: "0 4px 14px rgba(0,0,0,0.12)",
+  display: "grid",
+  gap: "8px",
+};
+
+const kpiIcono = {
+  fontSize: "25px",
 };
 
 const gridDos = {
@@ -1104,24 +1202,36 @@ const gridDos = {
 
 const card = {
   background: "#ffffff",
-  padding: "25px",
-  borderRadius: "16px",
+  padding: "24px",
+  borderRadius: "18px",
   marginBottom: "20px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+  boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
+};
+
+const tituloSeccion = {
+  marginTop: 0,
+  marginBottom: "16px",
+  color: "#111827",
+};
+
+const textoSuave = {
+  color: "#6b7280",
 };
 
 const alertaBox = {
   background: "#fef9c3",
-  padding: "12px",
-  borderRadius: "10px",
+  padding: "14px",
+  borderRadius: "12px",
   marginBottom: "10px",
+  border: "1px solid #fde68a",
 };
 
 const vencidaBox = {
   background: "#fee2e2",
-  padding: "12px",
-  borderRadius: "10px",
+  padding: "14px",
+  borderRadius: "12px",
   marginBottom: "10px",
+  border: "1px solid #fecaca",
 };
 
 const grid = {
@@ -1140,7 +1250,7 @@ const toolbar = {
 const input = {
   width: "100%",
   padding: "12px",
-  borderRadius: "8px",
+  borderRadius: "9px",
   border: "1px solid #d1d5db",
   boxSizing: "border-box",
 };
@@ -1150,7 +1260,7 @@ const textarea = {
   minHeight: "100px",
   marginTop: "15px",
   padding: "12px",
-  borderRadius: "8px",
+  borderRadius: "9px",
   border: "1px solid #d1d5db",
   boxSizing: "border-box",
 };
@@ -1161,7 +1271,7 @@ const boton = {
   color: "#fff",
   border: "none",
   padding: "12px 25px",
-  borderRadius: "8px",
+  borderRadius: "9px",
   cursor: "pointer",
   fontWeight: "bold",
 };
@@ -1171,7 +1281,7 @@ const botonSecundario = {
   color: "#ffffff",
   border: "none",
   padding: "12px 18px",
-  borderRadius: "8px",
+  borderRadius: "9px",
   cursor: "pointer",
   fontWeight: "bold",
 };
@@ -1209,14 +1319,16 @@ const tabla = {
 
 const th = {
   textAlign: "left",
-  padding: "10px",
+  padding: "11px",
   borderBottom: "1px solid #e5e7eb",
-  background: "#f9fafb",
+  background: "#111827",
+  color: "#ffffff",
 };
 
 const td = {
   padding: "10px",
   borderBottom: "1px solid #f3f4f6",
+  verticalAlign: "top",
 };
 
 const botonPequeno = {
@@ -1257,6 +1369,18 @@ const botonAzul = {
 
 const whatsappBtn = {
   background: "#25D366",
+  color: "#fff",
+  border: "none",
+  padding: "7px 10px",
+  borderRadius: "7px",
+  cursor: "pointer",
+  marginRight: "6px",
+  marginBottom: "5px",
+  fontWeight: "bold",
+};
+
+const promoBtn = {
+  background: "#7c3aed",
   color: "#fff",
   border: "none",
   padding: "7px 10px",
