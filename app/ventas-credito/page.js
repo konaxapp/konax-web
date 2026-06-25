@@ -72,6 +72,10 @@ export default function VentasCredito() {
       minimumFractionDigits: 2,
     });
 
+  function volverDashboard() {
+    window.location.href = "/dashboard";
+  }
+
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
 
@@ -201,254 +205,314 @@ export default function VentasCredito() {
   }
 
   async function guardarCredito() {
-  const empresaId = obtenerEmpresaId();
-  if (!empresaId) return;
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
 
-  if (!credito.cliente || !credito.cedula || !productoId) {
-    alert("Complete cliente, cédula y producto válido.");
-    return;
-  }
+    if (!credito.cliente || !credito.cedula || !productoId) {
+      alert("Complete cliente, cédula y producto válido.");
+      return;
+    }
 
-  if (!credito.vendedor) {
-    alert("Ingrese el vendedor.");
-    return;
-  }
+    if (!credito.vendedor) {
+      alert("Ingrese el vendedor.");
+      return;
+    }
 
-  if (cantidad <= 0) {
-    alert("La cantidad debe ser mayor a cero.");
-    return;
-  }
+    if (cantidad <= 0) {
+      alert("La cantidad debe ser mayor a cero.");
+      return;
+    }
 
-  if (stockDisponible < cantidad) {
-    alert("No hay suficiente stock disponible.");
-    return;
-  }
+    if (stockDisponible < cantidad) {
+      alert("No hay suficiente stock disponible.");
+      return;
+    }
 
-  if (!plazo || plazo <= 0) {
-    alert("Ingrese el plazo o cantidad de cuotas.");
-    return;
-  }
+    if (!plazo || plazo <= 0) {
+      alert("Ingrese el plazo o cantidad de cuotas.");
+      return;
+    }
 
-  const numeroCuenta = "KX-" + Date.now();
-  const usuario = credito.vendedor;
-  const fechaMovimiento = new Date().toISOString();
-  const fechaHoy = new Date().toISOString().split("T")[0];
-  const nuevoStock = stockDisponible - cantidad;
+    const numeroCuenta = "KX-" + Date.now();
+    const usuario = credito.vendedor;
+    const fechaMovimiento = new Date().toISOString();
+    const fechaHoy = new Date().toISOString().split("T")[0];
+    const nuevoStock = stockDisponible - cantidad;
 
-  const { error: errorCredito } = await supabase.from("creditos").insert([
-    {
-      empresa_id: empresaId,
-      numero_cuenta: numeroCuenta,
-      cliente: credito.cliente,
-      cedula: credito.cedula,
-      telefono: credito.telefono,
-      vendedor: credito.vendedor,
-
-      producto_id: productoId,
-      codigo_producto: credito.codigo,
-      producto: credito.producto,
-      cantidad,
-      descripcion: credito.descripcion,
-
-      precio_compra: precioCompra,
-      precio_venta: precioVenta,
-      precio_credito: precioCredito,
-      ganancia,
-      porcentaje_ganancia: porcentajeGanancia,
-
-      abono_inicial: inicial,
-      monto_financiado: montoBase,
-      plazo,
-      modalidad: credito.modalidad,
-      dias_pago: credito.diasPago,
-      frecuencia: credito.frecuencia,
-
-      tasa_interes_mensual: tasaInteres,
-      gastos_manejo: gastosManejo,
-      seguro,
-      comision,
-
-      interes_total: interesTotal,
-      total_financiado: totalCredito,
-      total_pagar: totalPagar,
-      cuota: cuotaFinal,
-      saldo_actual: totalCredito,
-
-      primer_pago: credito.primerPago || null,
-      estado: "Activo",
-      observacion: credito.observacion,
-    },
-  ]);
-
-  if (errorCredito) {
-    alert("Error al guardar crédito: " + errorCredito.message);
-    return;
-  }
-
-  const { data: infoComercial, error: errorInfoComercial } = await supabase
-    .from("informacion_comercial")
-    .insert([
+    const { error: errorCredito } = await supabase.from("creditos").insert([
       {
         empresa_id: empresaId,
-        cliente_id: null,
         numero_cuenta: numeroCuenta,
-        tipo_producto: credito.producto,
-        modalidad: credito.modalidad,
-        descripcion: credito.descripcion,
-        monto_total: totalPagar,
-        saldo_actual: totalCredito,
-        cuota: cuotaFinal,
-        fecha_inicio: fechaHoy,
-        fecha_vencimiento: credito.primerPago || null,
-        responsable: credito.vendedor,
-        estado: "Activo",
-      },
-    ])
-    .select()
-    .single();
-
-  if (errorInfoComercial) {
-    alert(
-      "Crédito creado, pero error creando información comercial: " +
-        errorInfoComercial.message
-    );
-    return;
-  }
-
-  const { error: errorInfoCobranza } = await supabase
-    .from("informacion_cobranza")
-    .insert([
-      {
-        empresa_id: empresaId,
-        cliente_id: null,
-        informacion_comercial_id: infoComercial.id,
-        estado_cobranza: "Al Día",
-        dias_mora: 0,
-        responsable_cob: credito.vendedor,
-        observacion_cob: "Crédito creado desde Venta Crédito",
-      },
-    ]);
-
-  if (errorInfoCobranza) {
-    alert(
-      "Crédito creado, pero error creando información de cobranza: " +
-        errorInfoCobranza.message
-    );
-    return;
-  }
-
-  const { error: errorStock } = await supabase
-    .from("productos")
-    .update({
-      stock_actual: nuevoStock,
-      ultimo_movimiento_usuario: usuario,
-      ultimo_movimiento_fecha: fechaMovimiento,
-    })
-    .eq("id", productoId)
-    .eq("empresa_id", empresaId);
-
-  if (errorStock) {
-    alert(
-      "Crédito creado, pero hubo error al descontar inventario: " +
-        errorStock.message
-    );
-    return;
-  }
-
-  const { error: errorMovimiento } = await supabase
-    .from("movimientos_inventario")
-    .insert([
-      {
-        empresa_id: empresaId,
+        cliente: credito.cliente,
+        cedula: credito.cedula,
+        telefono: credito.telefono,
+        vendedor: credito.vendedor,
         producto_id: productoId,
-        tipo_movimiento: "SALIDA",
+        codigo_producto: credito.codigo,
+        producto: credito.producto,
         cantidad,
-        stock_anterior: stockDisponible,
-        stock_nuevo: nuevoStock,
-        observacion: `Venta crédito ${numeroCuenta} - ${credito.cliente}`,
-        usuario,
+        descripcion: credito.descripcion,
+        precio_compra: precioCompra,
+        precio_venta: precioVenta,
+        precio_credito: precioCredito,
+        ganancia,
+        porcentaje_ganancia: porcentajeGanancia,
+        abono_inicial: inicial,
+        monto_financiado: montoBase,
+        plazo,
+        modalidad: credito.modalidad,
+        dias_pago: credito.diasPago,
+        frecuencia: credito.frecuencia,
+        tasa_interes_mensual: tasaInteres,
+        gastos_manejo: gastosManejo,
+        seguro,
+        comision,
+        interes_total: interesTotal,
+        total_financiado: totalCredito,
+        total_pagar: totalPagar,
+        cuota: cuotaFinal,
+        saldo_actual: totalCredito,
+        primer_pago: credito.primerPago || null,
+        estado: "Activo",
+        observacion: credito.observacion,
       },
     ]);
 
-  if (errorMovimiento) {
-    alert(
-      "Crédito creado, inventario descontado, pero no se registró movimiento: " +
-        errorMovimiento.message
-    );
-    return;
-  }
+    if (errorCredito) {
+      alert("Error al guardar crédito: " + errorCredito.message);
+      return;
+    }
 
-  alert("Crédito creado correctamente. Cuenta: " + numeroCuenta);
-  limpiarFormulario();
-}
+    const { data: infoComercial, error: errorInfoComercial } = await supabase
+      .from("informacion_comercial")
+      .insert([
+        {
+          empresa_id: empresaId,
+          cliente_id: null,
+          numero_cuenta: numeroCuenta,
+          tipo_producto: credito.producto,
+          modalidad: credito.modalidad,
+          descripcion: credito.descripcion,
+          monto_total: totalPagar,
+          saldo_actual: totalCredito,
+          cuota: cuotaFinal,
+          fecha_inicio: fechaHoy,
+          fecha_vencimiento: credito.primerPago || null,
+          responsable: credito.vendedor,
+          estado: "Activo",
+        },
+      ])
+      .select()
+      .single();
+
+    if (errorInfoComercial) {
+      alert(
+        "Crédito creado, pero error creando información comercial: " +
+          errorInfoComercial.message
+      );
+      return;
+    }
+
+    const { error: errorInfoCobranza } = await supabase
+      .from("informacion_cobranza")
+      .insert([
+        {
+          empresa_id: empresaId,
+          cliente_id: null,
+          informacion_comercial_id: infoComercial.id,
+          estado_cobranza: "Al Día",
+          dias_mora: 0,
+          responsable_cob: credito.vendedor,
+          observacion_cob: "Crédito creado desde Venta Crédito",
+        },
+      ]);
+
+    if (errorInfoCobranza) {
+      alert(
+        "Crédito creado, pero error creando información de cobranza: " +
+          errorInfoCobranza.message
+      );
+      return;
+    }
+
+    const { error: errorStock } = await supabase
+      .from("productos")
+      .update({
+        stock_actual: nuevoStock,
+        ultimo_movimiento_usuario: usuario,
+        ultimo_movimiento_fecha: fechaMovimiento,
+      })
+      .eq("id", productoId)
+      .eq("empresa_id", empresaId);
+
+    if (errorStock) {
+      alert(
+        "Crédito creado, pero hubo error al descontar inventario: " +
+          errorStock.message
+      );
+      return;
+    }
+
+    const { error: errorMovimiento } = await supabase
+      .from("movimientos_inventario")
+      .insert([
+        {
+          empresa_id: empresaId,
+          producto_id: productoId,
+          tipo_movimiento: "SALIDA",
+          cantidad,
+          stock_anterior: stockDisponible,
+          stock_nuevo: nuevoStock,
+          observacion: `Venta crédito ${numeroCuenta} - ${credito.cliente}`,
+          usuario,
+        },
+      ]);
+
+    if (errorMovimiento) {
+      alert(
+        "Crédito creado, inventario descontado, pero no se registró movimiento: " +
+          errorMovimiento.message
+      );
+      return;
+    }
+
+    alert("Crédito creado correctamente. Cuenta: " + numeroCuenta);
+    limpiarFormulario();
+  }
 
   return (
     <div style={pagina}>
       <div style={contenedor}>
-        <div style={encabezado}>
-          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+        <div style={hero}>
+          <div style={heroInfo}>
+            <img src="/konax-logo.png" alt="KONAX" style={logo} />
 
-          <div>
-            <h1 style={titulo}>Venta Crédito</h1>
-            <p style={subtitulo}>
-              Busque productos, cotice cuotas, cree créditos y descuente inventario.
-            </p>
+            <div>
+              <p style={etiqueta}>Módulo comercial</p>
+              <h1 style={titulo}>Venta a Crédito</h1>
+              <p style={subtitulo}>
+                Crea créditos, calcula cuotas, descuenta inventario y activa cobranza.
+              </p>
+            </div>
           </div>
+
+          <button onClick={volverDashboard} style={botonClaro}>
+            ← Volver al Dashboard
+          </button>
+        </div>
+
+        <div style={kpiGrid}>
+          <KPI titulo="Monto base" valor={formato(montoBase)} icono="💳" />
+          <KPI titulo="Cuota final" valor={formato(cuotaFinal)} icono="📆" destacado />
+          <KPI titulo="Total a pagar" valor={formato(totalPagar)} icono="💰" />
+          <KPI titulo="Stock disponible" valor={stockDisponible} icono="📦" numero />
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>Información del Cliente</h2>
+          <h2 style={tituloSeccion}>Cliente</h2>
 
           <div style={grid}>
             <Campo label="Nombre del cliente">
-              <input value={credito.cliente} onChange={(e) => actualizar("cliente", e.target.value)} style={inputStyle} />
+              <input
+                value={credito.cliente}
+                onChange={(e) => actualizar("cliente", e.target.value)}
+                style={inputStyle}
+                placeholder="Nombre completo"
+              />
             </Campo>
 
             <Campo label="Cédula">
-              <input value={credito.cedula} onChange={(e) => actualizar("cedula", e.target.value)} style={inputStyle} />
+              <input
+                value={credito.cedula}
+                onChange={(e) => actualizar("cedula", e.target.value)}
+                style={inputStyle}
+                placeholder="Cédula o identificación"
+              />
             </Campo>
 
             <Campo label="Teléfono">
-              <input value={credito.telefono} onChange={(e) => actualizar("telefono", e.target.value)} style={inputStyle} />
+              <input
+                value={credito.telefono}
+                onChange={(e) => actualizar("telefono", e.target.value)}
+                style={inputStyle}
+                placeholder="Teléfono del cliente"
+              />
             </Campo>
-          </div>
-        </div>
 
-        <div style={card}>
-          <h2 style={tituloSeccion}>Información de la Venta</h2>
-
-          <div style={grid}>
             <Campo label="Vendedor">
-              <input value={credito.vendedor} onChange={(e) => actualizar("vendedor", e.target.value)} style={inputStyle} />
+              <input
+                value={credito.vendedor}
+                onChange={(e) => actualizar("vendedor", e.target.value)}
+                style={inputStyle}
+                placeholder="Responsable de la venta"
+              />
             </Campo>
           </div>
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>Producto</h2>
+          <h2 style={tituloSeccion}>Producto del Inventario</h2>
 
           <div style={grid}>
-            <Campo label="Buscar artículo por código, nombre o descripción">
-              <div style={{ display: "flex", gap: "8px" }}>
-                <input value={busquedaProducto} onChange={(e) => setBusquedaProducto(e.target.value)} style={inputStyle} />
-                <button onClick={buscarProductos} style={botonBuscar}>Buscar</button>
+            <Campo label="Buscar artículo">
+              <div style={busquedaBox}>
+                <input
+                  value={busquedaProducto}
+                  onChange={(e) => setBusquedaProducto(e.target.value)}
+                  style={inputStyle}
+                  placeholder="Código, nombre o descripción"
+                />
+                <button onClick={buscarProductos} style={botonBuscar}>
+                  Buscar
+                </button>
               </div>
             </Campo>
 
-            <Campo label="Código"><input value={credito.codigo} readOnly style={inputReadOnly} /></Campo>
-            <Campo label="Producto"><input value={credito.producto} readOnly style={inputReadOnly} /></Campo>
-            <Campo label="Descripción"><input value={credito.descripcion} readOnly style={inputReadOnly} /></Campo>
-            <Campo label="Stock disponible"><input value={stockDisponible} readOnly style={inputReadOnly} /></Campo>
-
-            <Campo label="Cantidad">
-              <input type="number" value={credito.cantidad} onChange={(e) => actualizar("cantidad", e.target.value)} style={inputStyle} />
+            <Campo label="Código">
+              <input value={credito.codigo} readOnly style={inputReadOnly} />
             </Campo>
 
-            <Campo label="Precio compra"><input value={formato(precioCompra)} readOnly style={inputReadOnly} /></Campo>
-            <Campo label="Precio venta"><input value={formato(precioVenta)} readOnly style={inputReadOnly} /></Campo>
-            <Campo label="Precio crédito"><input value={formato(precioCredito)} readOnly style={inputReadOnly} /></Campo>
-            <Campo label="% Ganancia sobre venta"><input value={`${porcentajeGanancia.toFixed(2)}%`} readOnly style={inputReadOnly} /></Campo>
+            <Campo label="Producto">
+              <input value={credito.producto} readOnly style={inputReadOnly} />
+            </Campo>
+
+            <Campo label="Stock disponible">
+              <input value={stockDisponible} readOnly style={inputReadOnly} />
+            </Campo>
+
+            <Campo label="Cantidad">
+              <input
+                type="number"
+                value={credito.cantidad}
+                onChange={(e) => actualizar("cantidad", e.target.value)}
+                style={inputStyle}
+              />
+            </Campo>
+
+            <Campo label="Precio compra">
+              <input value={formato(precioCompra)} readOnly style={inputReadOnly} />
+            </Campo>
+
+            <Campo label="Precio venta">
+              <input value={formato(precioVenta)} readOnly style={inputReadOnly} />
+            </Campo>
+
+            <Campo label="Precio crédito">
+              <input value={formato(precioCredito)} readOnly style={inputReadOnly} />
+            </Campo>
+
+            <Campo label="% Ganancia">
+              <input
+                value={`${porcentajeGanancia.toFixed(2)}%`}
+                readOnly
+                style={inputReadOnly}
+              />
+            </Campo>
           </div>
+
+          <Campo label="Descripción">
+            <input value={credito.descripcion} readOnly style={inputReadOnly} />
+          </Campo>
 
           {resultadosProductos.length > 0 && (
             <div style={tablaBox}>
@@ -471,7 +535,10 @@ export default function VentasCredito() {
                       <td style={td}>{p.stock_actual}</td>
                       <td style={td}>{formato(p.precio_credito)}</td>
                       <td style={td}>
-                        <button style={botonMini} onClick={() => seleccionarProducto(p)}>
+                        <button
+                          style={botonMini}
+                          onClick={() => seleccionarProducto(p)}
+                        >
                           Seleccionar
                         </button>
                       </td>
@@ -494,22 +561,40 @@ export default function VentasCredito() {
 
           <div style={grid}>
             <Campo label="Abono inicial">
-              <input type="number" value={credito.inicial} onChange={(e) => actualizar("inicial", e.target.value)} style={inputStyle} />
+              <input
+                type="number"
+                value={credito.inicial}
+                onChange={(e) => actualizar("inicial", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Plazo / cantidad de cuotas">
-              <input type="number" value={credito.plazo} onChange={(e) => actualizar("plazo", e.target.value)} style={inputStyle} />
+              <input
+                type="number"
+                value={credito.plazo}
+                onChange={(e) => actualizar("plazo", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Modalidad">
-              <select value={credito.modalidad} onChange={(e) => actualizar("modalidad", e.target.value)} style={inputStyle}>
+              <select
+                value={credito.modalidad}
+                onChange={(e) => actualizar("modalidad", e.target.value)}
+                style={inputStyle}
+              >
                 <option>Pago voluntario</option>
                 <option>Descuento directo</option>
               </select>
             </Campo>
 
             <Campo label="Frecuencia">
-              <select value={credito.frecuencia} onChange={(e) => actualizar("frecuencia", e.target.value)} style={inputStyle}>
+              <select
+                value={credito.frecuencia}
+                onChange={(e) => actualizar("frecuencia", e.target.value)}
+                style={inputStyle}
+              >
                 <option>Semanal</option>
                 <option>Quincenal</option>
                 <option>Mensual</option>
@@ -517,11 +602,21 @@ export default function VentasCredito() {
             </Campo>
 
             <Campo label="Regla de pago">
-              <input value={credito.diasPago} onChange={(e) => actualizar("diasPago", e.target.value)} style={inputStyle} />
+              <input
+                value={credito.diasPago}
+                onChange={(e) => actualizar("diasPago", e.target.value)}
+                style={inputStyle}
+                placeholder="Ej. todos los viernes"
+              />
             </Campo>
 
             <Campo label="Primer pago">
-              <input type="date" value={credito.primerPago} onChange={(e) => actualizar("primerPago", e.target.value)} style={inputStyle} />
+              <input
+                type="date"
+                value={credito.primerPago}
+                onChange={(e) => actualizar("primerPago", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
           </div>
         </div>
@@ -531,28 +626,58 @@ export default function VentasCredito() {
 
           <div style={grid}>
             <Campo label="Tasa de interés mensual %">
-              <input type="number" value={credito.tasaInteres} onChange={(e) => actualizar("tasaInteres", e.target.value)} style={inputStyle} />
+              <input
+                type="number"
+                value={credito.tasaInteres}
+                onChange={(e) => actualizar("tasaInteres", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Gastos de manejo">
-              <input type="number" value={credito.gastosManejo} onChange={(e) => actualizar("gastosManejo", e.target.value)} style={inputStyle} />
+              <input
+                type="number"
+                value={credito.gastosManejo}
+                onChange={(e) => actualizar("gastosManejo", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Comisión">
-              <input type="number" value={credito.comision} onChange={(e) => actualizar("comision", e.target.value)} style={inputStyle} />
+              <input
+                type="number"
+                value={credito.comision}
+                onChange={(e) => actualizar("comision", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Seguro total">
-              <input type="number" value={credito.seguro} onChange={(e) => actualizar("seguro", e.target.value)} style={inputStyle} />
+              <input
+                type="number"
+                value={credito.seguro}
+                onChange={(e) => actualizar("seguro", e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Cuota final">
-              <input value={formato(cuotaFinal)} readOnly style={{ ...inputReadOnly, fontWeight: "bold", color: "#16a34a" }} />
+              <input
+                value={formato(cuotaFinal)}
+                readOnly
+                style={{
+                  ...inputReadOnly,
+                  fontWeight: "bold",
+                  color: "#16a34a",
+                }}
+              />
             </Campo>
           </div>
 
           <div style={acciones}>
-            <button style={botonAzul} onClick={cotizarCredito}>Cotización</button>
+            <button style={botonAzul} onClick={cotizarCredito}>
+              Generar Cotización
+            </button>
           </div>
 
           {mostrarCotizacion && (
@@ -570,12 +695,22 @@ export default function VentasCredito() {
           )}
 
           <Campo label="Observación">
-            <textarea value={credito.observacion} onChange={(e) => actualizar("observacion", e.target.value)} style={textarea} />
+            <textarea
+              value={credito.observacion}
+              onChange={(e) => actualizar("observacion", e.target.value)}
+              style={textarea}
+              placeholder="Observación de la venta..."
+            />
           </Campo>
 
           <div style={acciones}>
-            <button style={boton} onClick={guardarCredito}>Crear Crédito</button>
-            <button style={botonGris} onClick={limpiarFormulario}>Limpiar</button>
+            <button style={boton} onClick={guardarCredito}>
+              Crear Crédito
+            </button>
+
+            <button style={botonGris} onClick={limpiarFormulario}>
+              Limpiar
+            </button>
           </div>
         </div>
       </div>
@@ -585,9 +720,19 @@ export default function VentasCredito() {
 
 function Campo({ label, children }) {
   return (
-    <div>
+    <div style={campo}>
       <label style={labelStyle}>{label}</label>
       {children}
+    </div>
+  );
+}
+
+function KPI({ titulo, valor, icono, destacado, numero }) {
+  return (
+    <div style={destacado ? kpiCardDestacado : kpiCard}>
+      <div style={kpiIcono}>{icono}</div>
+      <p style={kpiTitulo}>{titulo}</p>
+      <h2 style={kpiValor}>{numero ? valor : valor}</h2>
     </div>
   );
 }
@@ -603,49 +748,120 @@ function Resumen({ label, valor, principal }) {
 
 const pagina = {
   minHeight: "100vh",
-  background: "#f3f4f6",
-  padding: "18px",
+  background: "#eef2f7",
+  padding: "24px",
   fontFamily: "Arial, sans-serif",
 };
 
 const contenedor = {
-  maxWidth: "1400px",
+  maxWidth: "1450px",
   margin: "0 auto",
 };
 
-const encabezado = {
+const hero = {
+  background: "linear-gradient(135deg, #111827, #1e40af)",
+  color: "#ffffff",
+  padding: "26px",
+  borderRadius: "22px",
+  marginBottom: "18px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "18px",
+  flexWrap: "wrap",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
+};
+
+const heroInfo = {
   display: "flex",
   alignItems: "center",
-  gap: "14px",
-  marginBottom: "18px",
+  gap: "18px",
 };
 
 const logo = {
   width: "90px",
-  height: "auto",
+  background: "#ffffff",
+  borderRadius: "16px",
+  padding: "8px",
+};
+
+const etiqueta = {
+  margin: 0,
+  color: "#bfdbfe",
+  fontSize: "13px",
+  fontWeight: "bold",
 };
 
 const titulo = {
-  fontSize: "32px",
-  margin: 0,
-  color: "#111827",
+  fontSize: "34px",
+  margin: "4px 0",
 };
 
 const subtitulo = {
-  color: "#6b7280",
-  marginTop: "5px",
-  fontSize: "15px",
+  color: "#dbeafe",
+  margin: 0,
+};
+
+const botonClaro = {
+  background: "#ffffff",
+  color: "#111827",
+  border: "none",
+  padding: "12px 18px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const kpiGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: "16px",
+  marginBottom: "18px",
+};
+
+const kpiCard = {
+  background: "#ffffff",
+  padding: "18px",
+  borderRadius: "18px",
+  boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
+  border: "1px solid #e5e7eb",
+};
+
+const kpiCardDestacado = {
+  background: "linear-gradient(135deg, #16a34a, #166534)",
+  color: "#ffffff",
+  padding: "18px",
+  borderRadius: "18px",
+  boxShadow: "0 4px 14px rgba(0,0,0,0.12)",
+};
+
+const kpiIcono = {
+  fontSize: "25px",
+  marginBottom: "8px",
+};
+
+const kpiTitulo = {
+  margin: 0,
+  fontSize: "14px",
+  color: "inherit",
+};
+
+const kpiValor = {
+  marginTop: "8px",
+  fontSize: "27px",
+  color: "inherit",
 };
 
 const card = {
   background: "#ffffff",
-  padding: "18px",
-  borderRadius: "16px",
-  marginBottom: "16px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+  padding: "20px",
+  borderRadius: "18px",
+  marginBottom: "18px",
+  boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
 };
 
 const tituloSeccion = {
+  marginTop: 0,
   marginBottom: "16px",
   color: "#111827",
 };
@@ -654,6 +870,10 @@ const grid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
   gap: "14px",
+};
+
+const campo = {
+  marginBottom: "10px",
 };
 
 const labelStyle = {
@@ -667,7 +887,7 @@ const labelStyle = {
 const inputStyle = {
   width: "100%",
   padding: "12px",
-  borderRadius: "8px",
+  borderRadius: "9px",
   border: "1px solid #d1d5db",
   boxSizing: "border-box",
   fontSize: "14px",
@@ -676,6 +896,12 @@ const inputStyle = {
 const inputReadOnly = {
   ...inputStyle,
   background: "#f3f4f6",
+  color: "#374151",
+};
+
+const busquedaBox = {
+  display: "flex",
+  gap: "8px",
 };
 
 const botonBuscar = {
@@ -683,7 +909,7 @@ const botonBuscar = {
   color: "#ffffff",
   border: "none",
   padding: "12px 16px",
-  borderRadius: "8px",
+  borderRadius: "9px",
   fontWeight: "bold",
   cursor: "pointer",
 };
@@ -724,6 +950,7 @@ const resumenCredito = {
   gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
   gap: "14px",
   marginTop: "16px",
+  marginBottom: "16px",
 };
 
 const totalCard = {
@@ -760,7 +987,7 @@ const totalValorPrincipal = {
 const textarea = {
   width: "100%",
   padding: "12px",
-  borderRadius: "8px",
+  borderRadius: "9px",
   border: "1px solid #d1d5db",
   boxSizing: "border-box",
   fontSize: "14px",
@@ -809,8 +1036,8 @@ const tabla = {
 const th = {
   textAlign: "left",
   padding: "12px",
-  background: "#f9fafb",
-  borderBottom: "1px solid #e5e7eb",
+  background: "#111827",
+  color: "#ffffff",
 };
 
 const td = {
