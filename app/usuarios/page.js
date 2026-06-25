@@ -17,11 +17,16 @@ export default function Usuarios() {
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
-    const id = localStorage.getItem("empresaAdminCreadaId");
-    const nombreEmpresa = localStorage.getItem("empresaAdminCreadaNombre");
+    const id =
+      localStorage.getItem("empresaAdminCreadaId") ||
+      localStorage.getItem("empresaId");
+
+    const nombreEmpresa =
+      localStorage.getItem("empresaAdminCreadaNombre") ||
+      localStorage.getItem("empresaNombre");
 
     if (!id) {
-      alert("Primero debes crear o seleccionar una empresa.");
+      alert("No hay empresa seleccionada.");
       window.location.href = "/empresas";
       return;
     }
@@ -41,7 +46,6 @@ export default function Usuarios() {
     const { data, error } = await supabase
       .from("roles_konax")
       .select("*")
-      .eq("activo", true)
       .order("nombre", { ascending: true });
 
     if (error) {
@@ -49,36 +53,35 @@ export default function Usuarios() {
       return;
     }
 
-    setRoles(data || []);
+    const rolesActivos = (data || []).filter(
+      (rol) =>
+        rol.activo === true ||
+        rol.activo === "true" ||
+        rol.activo === "TRUE" ||
+        rol.activo === null ||
+        rol.activo === undefined
+    );
 
-    const admin = data?.find((rol) => rol.nombre === "Administrador");
+    setRoles(rolesActivos);
+
+    const admin = rolesActivos.find((rol) => rol.nombre === "Administrador");
+
     if (admin) {
       setRolId(admin.id);
-    } else if (data && data.length > 0) {
-      setRolId(data[0].id);
+    } else if (rolesActivos.length > 0) {
+      setRolId(rolesActivos[0].id);
     }
   }
 
   async function cargarUsuarios() {
     const { data, error } = await supabase
       .from("usuarios")
-      .select("*, roles_konax(nombre)")
+      .select("*")
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: true });
 
     if (error) {
-      const fallback = await supabase
-        .from("usuarios")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .order("created_at", { ascending: true });
-
-      if (fallback.error) {
-        alert("Error cargando usuarios: " + fallback.error.message);
-        return;
-      }
-
-      setUsuarios(fallback.data || []);
+      alert("Error cargando usuarios: " + error.message);
       return;
     }
 
@@ -91,9 +94,7 @@ export default function Usuarios() {
     setPassword("");
 
     const admin = roles.find((rol) => rol.nombre === "Administrador");
-    if (admin) {
-      setRolId(admin.id);
-    }
+    if (admin) setRolId(admin.id);
   }
 
   async function crearUsuario() {
@@ -148,7 +149,6 @@ export default function Usuarios() {
     ]);
 
     alert("Usuario creado correctamente.");
-
     limpiarFormulario();
     await cargarUsuarios();
   }
@@ -174,9 +174,7 @@ export default function Usuarios() {
   async function finalizarConfiguracion() {
     const tieneAdministrador = usuarios.some(
       (usuario) =>
-        (usuario.rol === "Administrador" ||
-          usuario.roles_konax?.nombre === "Administrador") &&
-        usuario.estado === "Activo"
+        usuario.rol === "Administrador" && usuario.estado === "Activo"
     );
 
     if (!tieneAdministrador) {
@@ -201,7 +199,7 @@ export default function Usuarios() {
         empresa_id: empresaId,
         empresa_nombre: empresaNombre,
         accion: "Configuración finalizada",
-        descripcion: `La empresa ${empresaNombre} quedó configurada con usuario principal y roles.`,
+        descripcion: `La empresa ${empresaNombre} quedó configurada con usuarios y roles.`,
         estado_anterior: "Pendiente",
         estado_nuevo: "Completa",
         usuario: "KONAX",
@@ -213,7 +211,7 @@ export default function Usuarios() {
     localStorage.removeItem("categoriaNegocioAdmin");
     localStorage.removeItem("tipoNegocioAdmin");
 
-    alert("Configuración finalizada. Puedes entregar las credenciales al cliente.");
+    alert("Configuración finalizada.");
 
     window.location.href = "/admin";
   }
@@ -234,8 +232,8 @@ export default function Usuarios() {
             </div>
           </div>
 
-          <button onClick={() => (window.location.href = "/empresas")} style={botonVolver}>
-            ← Volver a Empresas
+          <button onClick={() => (window.location.href = "/dashboard")} style={botonVolver}>
+            ← Volver
           </button>
         </div>
 
@@ -320,7 +318,9 @@ export default function Usuarios() {
 
         <div style={card}>
           <div style={cardHeader}>
-            <h2 style={tituloSeccion}>Usuarios de la Empresa ({usuarios.length})</h2>
+            <h2 style={tituloSeccion}>
+              Usuarios de la Empresa ({usuarios.length})
+            </h2>
             <p style={textoSuave}>
               Debe existir al menos un Administrador activo para finalizar.
             </p>
@@ -353,11 +353,15 @@ export default function Usuarios() {
                       <strong>{usuario.nombre}</strong>
                     </td>
                     <td style={tdStyle}>{usuario.correo}</td>
+                    <td style={tdStyle}>{usuario.rol || "-"}</td>
                     <td style={tdStyle}>
-                      {usuario.roles_konax?.nombre || usuario.rol || "-"}
-                    </td>
-                    <td style={tdStyle}>
-                      <span style={usuario.estado === "Activo" ? estadoActivo : estadoInactivo}>
+                      <span
+                        style={
+                          usuario.estado === "Activo"
+                            ? estadoActivo
+                            : estadoInactivo
+                        }
+                      >
                         {usuario.estado || "Activo"}
                       </span>
                     </td>
