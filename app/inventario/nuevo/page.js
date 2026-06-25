@@ -15,6 +15,12 @@ export default function NuevoProducto() {
     precio_credito: "",
     stock_inicial: "",
     stock_minimo: "",
+    numero_factura: "",
+    fecha_compra: new Date().toISOString().split("T")[0],
+    condicion_compra: "Contado",
+    total_factura: "",
+    fecha_vencimiento_pago: "",
+    observacion_compra: "",
   });
 
   const [imagen, setImagen] = useState(null);
@@ -65,6 +71,11 @@ export default function NuevoProducto() {
       return;
     }
 
+    if (!form.numero_factura) {
+      alert("Ingrese el número de factura u orden de compra.");
+      return;
+    }
+
     const stockInicial = Number(form.stock_inicial || 0);
 
     let imagenUrl = null;
@@ -112,7 +123,12 @@ export default function NuevoProducto() {
           cantidad: stockInicial,
           stock_anterior: 0,
           stock_nuevo: stockInicial,
-          observacion: "Stock inicial",
+          numero_factura: form.numero_factura,
+          fecha_compra: form.fecha_compra,
+          condicion_compra: form.condicion_compra,
+          total_factura: Number(form.total_factura || 0),
+          fecha_vencimiento_pago: form.fecha_vencimiento_pago || null,
+          observacion: form.observacion_compra || "Stock inicial",
           usuario: "Sistema",
         },
       ]);
@@ -138,6 +154,12 @@ export default function NuevoProducto() {
       precio_credito: "",
       stock_inicial: "",
       stock_minimo: "",
+      numero_factura: "",
+      fecha_compra: new Date().toISOString().split("T")[0],
+      condicion_compra: "Contado",
+      total_factura: "",
+      fecha_vencimiento_pago: "",
+      observacion_compra: "",
     });
 
     setImagen(null);
@@ -158,7 +180,7 @@ export default function NuevoProducto() {
               <p style={etiqueta}>Inventario</p>
               <h1 style={titulo}>Nuevo Producto</h1>
               <p style={subtitulo}>
-                Registra productos, precios, proveedor, stock inicial e imagen.
+                Registra el producto junto con la factura, orden de compra o condición de consignación.
               </p>
             </div>
           </div>
@@ -170,123 +192,102 @@ export default function NuevoProducto() {
 
         <div style={card}>
           <div style={seccionHeader}>
-            <h2 style={tituloSeccion}>Información del Producto</h2>
-            <p style={textoSuave}>Completa los datos principales del artículo.</p>
+            <h2 style={tituloSeccion}>Datos del Producto</h2>
+            <p style={textoSuave}>Información comercial del artículo.</p>
           </div>
 
           <div style={grid}>
             <Campo label="Código *">
-              <input
-                value={form.codigo}
-                onChange={(e) => actualizar("codigo", e.target.value)}
-                style={inputStyle}
-                placeholder="Ej. PRD-001"
-              />
+              <input value={form.codigo} onChange={(e) => actualizar("codigo", e.target.value)} style={inputStyle} placeholder="Ej. PRD-001" />
             </Campo>
 
             <Campo label="Nombre del Producto *">
-              <input
-                value={form.nombre}
-                onChange={(e) => actualizar("nombre", e.target.value)}
-                style={inputStyle}
-                placeholder="Ej. Sala Valencia"
-              />
+              <input value={form.nombre} onChange={(e) => actualizar("nombre", e.target.value)} style={inputStyle} placeholder="Ej. Sala Valencia" />
             </Campo>
 
             <Campo label="Categoría">
-              <input
-                value={form.categoria}
-                onChange={(e) => actualizar("categoria", e.target.value)}
-                style={inputStyle}
-                placeholder="Ej. Salas, Tecnología, Abarrotes"
-              />
+              <input value={form.categoria} onChange={(e) => actualizar("categoria", e.target.value)} style={inputStyle} placeholder="Ej. Salas, Tecnología, Abarrotes" />
             </Campo>
 
             <Campo label="Proveedor">
-              <input
-                value={form.proveedor}
-                onChange={(e) => actualizar("proveedor", e.target.value)}
-                style={inputStyle}
-                placeholder="Nombre del proveedor"
-              />
+              <input value={form.proveedor} onChange={(e) => actualizar("proveedor", e.target.value)} style={inputStyle} placeholder="Nombre del proveedor" />
             </Campo>
 
-            <Campo label="Precio Compra">
-              <input
-                type="number"
-                value={form.precio_compra}
-                onChange={(e) => actualizar("precio_compra", e.target.value)}
-                style={inputStyle}
-                placeholder="0.00"
-              />
+            <Campo label="Precio Compra Unitario">
+              <input type="number" value={form.precio_compra} onChange={(e) => actualizar("precio_compra", e.target.value)} style={inputStyle} placeholder="0.00" />
             </Campo>
 
             <Campo label="Precio Venta">
-              <input
-                type="number"
-                value={form.precio_venta}
-                onChange={(e) => actualizar("precio_venta", e.target.value)}
-                style={inputStyle}
-                placeholder="0.00"
-              />
+              <input type="number" value={form.precio_venta} onChange={(e) => actualizar("precio_venta", e.target.value)} style={inputStyle} placeholder="0.00" />
             </Campo>
 
             <Campo label="Precio Crédito">
-              <input
-                type="number"
-                value={form.precio_credito}
-                onChange={(e) => actualizar("precio_credito", e.target.value)}
-                style={inputStyle}
-                placeholder="Opcional"
-              />
+              <input type="number" value={form.precio_credito} onChange={(e) => actualizar("precio_credito", e.target.value)} style={inputStyle} placeholder="Opcional" />
             </Campo>
 
             <Campo label="Stock Inicial">
-              <input
-                type="number"
-                value={form.stock_inicial}
-                onChange={(e) => actualizar("stock_inicial", e.target.value)}
-                style={inputStyle}
-                placeholder="0"
-              />
+              <input type="number" value={form.stock_inicial} onChange={(e) => actualizar("stock_inicial", e.target.value)} style={inputStyle} placeholder="0" />
             </Campo>
 
             <Campo label="Stock Mínimo">
-              <input
-                type="number"
-                value={form.stock_minimo}
-                onChange={(e) => actualizar("stock_minimo", e.target.value)}
-                style={inputStyle}
-                placeholder="0"
-              />
+              <input type="number" value={form.stock_minimo} onChange={(e) => actualizar("stock_minimo", e.target.value)} style={inputStyle} placeholder="0" />
+            </Campo>
+          </div>
+
+          <div style={separador} />
+
+          <div style={seccionHeader}>
+            <h2 style={tituloSeccion}>Factura / Orden de Compra</h2>
+            <p style={textoSuave}>
+              Estos datos permiten relacionar el producto con la compra física, crédito o consignación.
+            </p>
+          </div>
+
+          <div style={grid}>
+            <Campo label="N° Factura / Orden *">
+              <input value={form.numero_factura} onChange={(e) => actualizar("numero_factura", e.target.value)} style={inputStyle} placeholder="Ej. FAC-1025 / OC-001" />
+            </Campo>
+
+            <Campo label="Fecha de Compra">
+              <input type="date" value={form.fecha_compra} onChange={(e) => actualizar("fecha_compra", e.target.value)} style={inputStyle} />
+            </Campo>
+
+            <Campo label="Condición">
+              <select value={form.condicion_compra} onChange={(e) => actualizar("condicion_compra", e.target.value)} style={inputStyle}>
+                <option>Contado</option>
+                <option>Crédito 30 días</option>
+                <option>Crédito 60 días</option>
+                <option>Consignación</option>
+              </select>
+            </Campo>
+
+            <Campo label="Total Factura / Orden">
+              <input type="number" value={form.total_factura} onChange={(e) => actualizar("total_factura", e.target.value)} style={inputStyle} placeholder="0.00" />
+            </Campo>
+
+            <Campo label="Fecha Vencimiento Pago">
+              <input type="date" value={form.fecha_vencimiento_pago} onChange={(e) => actualizar("fecha_vencimiento_pago", e.target.value)} style={inputStyle} />
             </Campo>
           </div>
 
           <div style={gridInferior}>
-            <Campo label="Descripción">
-              <textarea
-                value={form.descripcion}
-                onChange={(e) => actualizar("descripcion", e.target.value)}
-                style={textarea}
-                placeholder="Descripción, características o detalles del producto..."
-              />
+            <Campo label="Descripción del Producto">
+              <textarea value={form.descripcion} onChange={(e) => actualizar("descripcion", e.target.value)} style={textarea} placeholder="Descripción, características o detalles del producto..." />
             </Campo>
 
             <Campo label="Foto del Producto">
               <div style={uploadBox}>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setImagen(e.target.files[0])}
-                  style={inputFile}
-                />
-
+                <input type="file" accept="image/*" onChange={(e) => setImagen(e.target.files[0])} style={inputFile} />
                 <p style={textoArchivo}>
                   {imagen ? imagen.name : "Selecciona una imagen del producto"}
                 </p>
               </div>
             </Campo>
           </div>
+
+          <Campo label="Observación de Compra">
+            <textarea value={form.observacion_compra} onChange={(e) => actualizar("observacion_compra", e.target.value)} style={textareaCompra} placeholder="Ej. Mercancía en consignación, factura pendiente de pago, acuerdo con proveedor..." />
+          </Campo>
 
           <div style={acciones}>
             <button onClick={guardarProducto} style={botonGuardar}>
@@ -415,6 +416,12 @@ const gridInferior = {
   marginTop: "18px",
 };
 
+const separador = {
+  height: "1px",
+  background: "#e5e7eb",
+  margin: "28px 0",
+};
+
 const campo = {
   display: "flex",
   flexDirection: "column",
@@ -441,6 +448,13 @@ const inputStyle = {
 const textarea = {
   ...inputStyle,
   minHeight: "115px",
+  resize: "vertical",
+};
+
+const textareaCompra = {
+  ...inputStyle,
+  minHeight: "90px",
+  marginTop: "18px",
   resize: "vertical",
 };
 
