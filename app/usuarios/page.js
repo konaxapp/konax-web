@@ -6,9 +6,13 @@ import { supabase } from "../../lib/supabase";
 export default function Usuarios() {
   const [empresaId, setEmpresaId] = useState("");
   const [empresaNombre, setEmpresaNombre] = useState("");
+
   const [nombre, setNombre] = useState("");
   const [correo, setCorreo] = useState("");
   const [password, setPassword] = useState("");
+  const [rolId, setRolId] = useState("");
+
+  const [roles, setRoles] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [guardando, setGuardando] = useState(false);
 
@@ -28,33 +32,85 @@ export default function Usuarios() {
 
   useEffect(() => {
     if (empresaId) {
+      cargarRoles();
       cargarUsuarios();
     }
   }, [empresaId]);
 
+  async function cargarRoles() {
+    const { data, error } = await supabase
+      .from("roles_konax")
+      .select("*")
+      .eq("activo", true)
+      .order("nombre", { ascending: true });
+
+    if (error) {
+      alert("Error cargando roles: " + error.message);
+      return;
+    }
+
+    setRoles(data || []);
+
+    const admin = data?.find((rol) => rol.nombre === "Administrador");
+    if (admin) {
+      setRolId(admin.id);
+    } else if (data && data.length > 0) {
+      setRolId(data[0].id);
+    }
+  }
+
   async function cargarUsuarios() {
     const { data, error } = await supabase
       .from("usuarios")
-      .select("*")
+      .select("*, roles_konax(nombre)")
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: true });
 
     if (error) {
-      alert("Error cargando usuarios: " + error.message);
+      const fallback = await supabase
+        .from("usuarios")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .order("created_at", { ascending: true });
+
+      if (fallback.error) {
+        alert("Error cargando usuarios: " + fallback.error.message);
+        return;
+      }
+
+      setUsuarios(fallback.data || []);
       return;
     }
 
     setUsuarios(data || []);
   }
 
-  async function crearAdministradorInicial() {
+  function limpiarFormulario() {
+    setNombre("");
+    setCorreo("");
+    setPassword("");
+
+    const admin = roles.find((rol) => rol.nombre === "Administrador");
+    if (admin) {
+      setRolId(admin.id);
+    }
+  }
+
+  async function crearUsuario() {
     if (!empresaId) {
       alert("No hay empresa seleccionada.");
       return;
     }
 
-    if (!nombre || !correo || !password) {
-      alert("Complete nombre, correo y contraseña.");
+    if (!nombre || !correo || !password || !rolId) {
+      alert("Complete nombre, correo, contraseña y rol.");
+      return;
+    }
+
+    const rolSeleccionado = roles.find((rol) => rol.id === rolId);
+
+    if (!rolSeleccionado) {
+      alert("Seleccione un rol válido.");
       return;
     }
 
@@ -66,7 +122,8 @@ export default function Usuarios() {
         nombre,
         correo,
         password,
-        rol: "Administrador",
+        rol_id: rolSeleccionado.id,
+        rol: rolSeleccionado.nombre,
         estado: "Activo",
       },
     ]);
@@ -74,7 +131,7 @@ export default function Usuarios() {
     setGuardando(false);
 
     if (error) {
-      alert("Error creando administrador: " + error.message);
+      alert("Error creando usuario: " + error.message);
       return;
     }
 
@@ -82,20 +139,17 @@ export default function Usuarios() {
       {
         empresa_id: empresaId,
         empresa_nombre: empresaNombre,
-        accion: "Usuario principal creado",
-        descripcion: `Se creó el usuario administrador inicial para ${empresaNombre}.`,
+        accion: "Usuario creado",
+        descripcion: `Se creó el usuario ${nombre} con rol ${rolSeleccionado.nombre} para ${empresaNombre}.`,
         estado_anterior: null,
         estado_nuevo: "Usuario activo",
         usuario: "KONAX",
       },
     ]);
 
-    alert("Administrador inicial creado correctamente.");
+    alert("Usuario creado correctamente.");
 
-    setNombre("");
-    setCorreo("");
-    setPassword("");
-
+    limpiarFormulario();
     await cargarUsuarios();
   }
 
@@ -119,7 +173,10 @@ export default function Usuarios() {
 
   async function finalizarConfiguracion() {
     const tieneAdministrador = usuarios.some(
-      (usuario) => usuario.rol === "Administrador" && usuario.estado === "Activo"
+      (usuario) =>
+        (usuario.rol === "Administrador" ||
+          usuario.roles_konax?.nombre === "Administrador") &&
+        usuario.estado === "Activo"
     );
 
     if (!tieneAdministrador) {
@@ -144,7 +201,7 @@ export default function Usuarios() {
         empresa_id: empresaId,
         empresa_nombre: empresaNombre,
         accion: "Configuración finalizada",
-        descripcion: `La empresa ${empresaNombre} quedó configurada con usuario principal.`,
+        descripcion: `La empresa ${empresaNombre} quedó configurada con usuario principal y roles.`,
         estado_anterior: "Pendiente",
         estado_nuevo: "Completa",
         usuario: "KONAX",
@@ -163,234 +220,431 @@ export default function Usuarios() {
 
   return (
     <div style={pagina}>
-      <div style={card}>
-        <div style={header}>
-          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+      <div style={contenedor}>
+        <div style={hero}>
+          <div style={heroInfo}>
+            <img src="/konax-logo.png" alt="KONAX" style={logo} />
 
-          <div>
-            <h1 style={titulo}>Usuario Principal</h1>
-            <p style={subtitulo}>
-              Empresa seleccionada: <strong>{empresaNombre}</strong>
-            </p>
-          </div>
-        </div>
-
-        <div style={bloque}>
-          <h2 style={tituloSeccion}>Crear Administrador Inicial</h2>
-
-          <div style={campo}>
-            <label>Nombre del Administrador</label>
-            <input
-              type="text"
-              placeholder="Nombre completo"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              style={inputStyle}
-            />
+            <div>
+              <p style={etiqueta}>Administración de Empresa</p>
+              <h1 style={titulo}>Usuarios y Roles</h1>
+              <p style={subtitulo}>
+                Empresa seleccionada: <strong>{empresaNombre}</strong>
+              </p>
+            </div>
           </div>
 
-          <div style={campo}>
-            <label>Correo de Acceso</label>
-            <input
-              type="email"
-              placeholder="admin@empresa.com"
-              value={correo}
-              onChange={(e) => setCorreo(e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-
-          <div style={campo}>
-            <label>Contraseña de Acceso</label>
-            <input
-              type="text"
-              placeholder="Ej. 123456"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-
-          <button
-            onClick={crearAdministradorInicial}
-            style={botonAzul}
-            disabled={guardando}
-          >
-            {guardando ? "Guardando..." : "Crear Administrador Inicial"}
+          <button onClick={() => (window.location.href = "/empresas")} style={botonVolver}>
+            ← Volver a Empresas
           </button>
         </div>
 
-        <h2 style={{ marginBottom: "20px" }}>
-          Administrador inicial creado ({usuarios.length})
-        </h2>
-
-        <div style={tablaBox}>
-          <table style={tabla}>
-            <thead style={{ background: "#f9fafb" }}>
-              <tr>
-                <th style={thStyle}>Nombre</th>
-                <th style={thStyle}>Correo</th>
-                <th style={thStyle}>Rol</th>
-                <th style={thStyle}>Estado</th>
-                <th style={thStyle}>Acciones</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {usuarios.length === 0 && (
-                <tr>
-                  <td style={tdStyle} colSpan="5">
-                    No hay administrador creado.
-                  </td>
-                </tr>
-              )}
-
-              {usuarios.map((usuario) => (
-                <tr key={usuario.id}>
-                  <td style={tdStyle}>{usuario.nombre}</td>
-                  <td style={tdStyle}>{usuario.correo}</td>
-                  <td style={tdStyle}>{usuario.rol}</td>
-                  <td style={tdStyle}>{usuario.estado}</td>
-                  <td style={tdStyle}>
-                    <span
-                      style={{
-                        color: "#dc2626",
-                        cursor: "pointer",
-                        fontWeight: "bold",
-                      }}
-                      onClick={() => eliminarUsuario(usuario.id)}
-                    >
-                      Eliminar
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={resumenGrid}>
+          <KPI titulo="Usuarios creados" valor={usuarios.length} icono="👥" />
+          <KPI titulo="Roles disponibles" valor={roles.length} icono="🔐" />
+          <KPI titulo="Empresa" valor={empresaNombre} icono="🏢" />
         </div>
 
-        <p style={nota}>
-          Este usuario será el acceso principal del cliente. Al finalizar, regresarás al panel administrativo.
-        </p>
+        <div style={card}>
+          <div style={cardHeader}>
+            <h2 style={tituloSeccion}>Crear Usuario</h2>
+            <p style={textoSuave}>
+              Crea usuarios para la empresa y asígnales un rol de acceso.
+            </p>
+          </div>
 
-        <button onClick={finalizarConfiguracion} style={botonVerde}>
-          Finalizar Configuración
-        </button>
+          <div style={grid}>
+            <Campo label="Nombre del Usuario">
+              <input
+                type="text"
+                placeholder="Nombre completo"
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                style={inputStyle}
+              />
+            </Campo>
 
-        <button onClick={() => (window.location.href = "/empresas")} style={botonNegro}>
-          Volver a Empresas
-        </button>
+            <Campo label="Correo de Acceso">
+              <input
+                type="email"
+                placeholder="usuario@empresa.com"
+                value={correo}
+                onChange={(e) => setCorreo(e.target.value)}
+                style={inputStyle}
+              />
+            </Campo>
+
+            <Campo label="Contraseña de Acceso">
+              <input
+                type="text"
+                placeholder="Ej. 123456"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                style={inputStyle}
+              />
+            </Campo>
+
+            <Campo label="Rol del Usuario">
+              <select
+                value={rolId}
+                onChange={(e) => setRolId(e.target.value)}
+                style={inputStyle}
+              >
+                {roles.length === 0 && (
+                  <option value="">No hay roles configurados</option>
+                )}
+
+                {roles.map((rol) => (
+                  <option key={rol.id} value={rol.id}>
+                    {rol.nombre}
+                  </option>
+                ))}
+              </select>
+            </Campo>
+          </div>
+
+          <div style={acciones}>
+            <button
+              onClick={crearUsuario}
+              style={botonAzul}
+              disabled={guardando}
+            >
+              {guardando ? "Guardando..." : "Crear Usuario"}
+            </button>
+
+            <button onClick={limpiarFormulario} style={botonNegro}>
+              Limpiar
+            </button>
+          </div>
+        </div>
+
+        <div style={card}>
+          <div style={cardHeader}>
+            <h2 style={tituloSeccion}>Usuarios de la Empresa ({usuarios.length})</h2>
+            <p style={textoSuave}>
+              Debe existir al menos un Administrador activo para finalizar.
+            </p>
+          </div>
+
+          <div style={tablaBox}>
+            <table style={tabla}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Nombre</th>
+                  <th style={thStyle}>Correo</th>
+                  <th style={thStyle}>Rol</th>
+                  <th style={thStyle}>Estado</th>
+                  <th style={thStyle}>Acciones</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {usuarios.length === 0 && (
+                  <tr>
+                    <td style={tdStyle} colSpan="5">
+                      No hay usuarios creados.
+                    </td>
+                  </tr>
+                )}
+
+                {usuarios.map((usuario) => (
+                  <tr key={usuario.id}>
+                    <td style={tdStyle}>
+                      <strong>{usuario.nombre}</strong>
+                    </td>
+                    <td style={tdStyle}>{usuario.correo}</td>
+                    <td style={tdStyle}>
+                      {usuario.roles_konax?.nombre || usuario.rol || "-"}
+                    </td>
+                    <td style={tdStyle}>
+                      <span style={usuario.estado === "Activo" ? estadoActivo : estadoInactivo}>
+                        {usuario.estado || "Activo"}
+                      </span>
+                    </td>
+                    <td style={tdStyle}>
+                      <button
+                        style={botonEliminar}
+                        onClick={() => eliminarUsuario(usuario.id)}
+                      >
+                        Eliminar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <p style={nota}>
+            Al finalizar, la empresa quedará lista para ingresar al Centro de Operaciones.
+          </p>
+
+          <button onClick={finalizarConfiguracion} style={botonVerde}>
+            Finalizar Configuración
+          </button>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function Campo({ label, children }) {
+  return (
+    <div style={campo}>
+      <label style={labelStyle}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function KPI({ titulo, valor, icono }) {
+  return (
+    <div style={resumenCard}>
+      <div style={kpiIcono}>{icono}</div>
+      <span style={resumenLabel}>{titulo}</span>
+      <strong style={resumenValor}>{valor}</strong>
     </div>
   );
 }
 
 const pagina = {
   minHeight: "100vh",
-  background: "#f3f4f6",
-  display: "flex",
-  justifyContent: "center",
-  padding: "40px",
+  background: "linear-gradient(135deg, #ecfdf5 0%, #f3f4f6 45%, #ffffff 100%)",
+  padding: "35px",
   fontFamily: "Arial, sans-serif",
 };
 
-const card = {
-  width: "900px",
-  background: "white",
-  borderRadius: "16px",
-  padding: "40px",
-  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+const contenedor = {
+  maxWidth: "1300px",
+  margin: "0 auto",
 };
 
-const header = {
+const hero = {
+  background: "linear-gradient(135deg, #111827, #064e3b)",
+  color: "#ffffff",
+  padding: "28px",
+  borderRadius: "22px",
+  marginBottom: "22px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "20px",
+  flexWrap: "wrap",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
+};
+
+const heroInfo = {
   display: "flex",
   alignItems: "center",
-  gap: "16px",
-  marginBottom: "30px",
+  gap: "18px",
 };
 
 const logo = {
-  width: "95px",
+  width: "85px",
   height: "auto",
+  background: "#ffffff",
+  borderRadius: "16px",
+  padding: "8px",
+};
+
+const etiqueta = {
+  margin: 0,
+  color: "#bbf7d0",
+  fontSize: "14px",
+  fontWeight: "bold",
 };
 
 const titulo = {
+  margin: "4px 0",
+  fontSize: "36px",
+  fontWeight: "bold",
+};
+
+const subtitulo = {
+  color: "#dcfce7",
+  marginTop: "6px",
+};
+
+const botonVolver = {
+  background: "#ffffff",
+  color: "#111827",
+  border: "none",
+  padding: "12px 18px",
+  borderRadius: "9px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const resumenGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: "16px",
+  marginBottom: "20px",
+};
+
+const resumenCard = {
+  background: "#ffffff",
+  padding: "20px",
+  borderRadius: "18px",
+  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
+  display: "grid",
+  gap: "6px",
+};
+
+const kpiIcono = {
+  fontSize: "26px",
+};
+
+const resumenLabel = {
+  color: "#6b7280",
+  fontSize: "13px",
+};
+
+const resumenValor = {
+  color: "#111827",
+  fontSize: "20px",
+};
+
+const card = {
+  background: "#ffffff",
+  borderRadius: "20px",
+  padding: "26px",
+  marginBottom: "20px",
+  boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+  border: "1px solid #e5e7eb",
+};
+
+const cardHeader = {
+  marginBottom: "18px",
+};
+
+const tituloSeccion = {
   margin: 0,
   color: "#111827",
 };
 
-const subtitulo = {
-  color: "#666",
+const textoSuave = {
+  color: "#6b7280",
   marginTop: "6px",
 };
 
-const bloque = {
-  background: "#f9fafb",
-  padding: "22px",
-  borderRadius: "14px",
-  marginBottom: "30px",
-  border: "1px solid #e5e7eb",
-};
-
-const tituloSeccion = {
-  marginTop: 0,
-  marginBottom: "18px",
-  color: "#111827",
+const grid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
+  gap: "16px",
 };
 
 const campo = {
-  marginBottom: "20px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "6px",
+};
+
+const labelStyle = {
+  color: "#374151",
+  fontSize: "13px",
+  fontWeight: "bold",
 };
 
 const inputStyle = {
   width: "100%",
   padding: "12px",
-  marginTop: "8px",
-  borderRadius: "8px",
+  borderRadius: "10px",
   border: "1px solid #d1d5db",
   fontSize: "14px",
   boxSizing: "border-box",
+  background: "#ffffff",
+  color: "#111827",
+};
+
+const acciones = {
+  display: "flex",
+  gap: "12px",
+  flexWrap: "wrap",
+  marginTop: "20px",
 };
 
 const botonAzul = {
-  width: "100%",
   background: "#2563eb",
   color: "white",
   border: "none",
-  padding: "15px",
+  padding: "13px 24px",
   borderRadius: "10px",
-  fontSize: "16px",
+  fontSize: "15px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonNegro = {
+  background: "#111827",
+  color: "white",
+  border: "none",
+  padding: "13px 24px",
+  borderRadius: "10px",
+  fontSize: "15px",
   fontWeight: "bold",
   cursor: "pointer",
 };
 
 const tablaBox = {
   border: "1px solid #e5e7eb",
-  borderRadius: "10px",
-  overflow: "hidden",
-  marginBottom: "25px",
+  borderRadius: "14px",
+  overflowX: "auto",
+  marginBottom: "22px",
 };
 
 const tabla = {
   width: "100%",
   borderCollapse: "collapse",
+  minWidth: "850px",
 };
 
 const thStyle = {
   textAlign: "left",
-  padding: "15px",
-  borderBottom: "1px solid #e5e7eb",
+  padding: "13px",
+  background: "#111827",
+  color: "#ffffff",
+  fontSize: "13px",
 };
 
 const tdStyle = {
-  padding: "15px",
+  padding: "13px",
   borderBottom: "1px solid #f3f4f6",
+  color: "#111827",
+};
+
+const estadoActivo = {
+  background: "#dcfce7",
+  color: "#166534",
+  padding: "5px 9px",
+  borderRadius: "999px",
+  fontWeight: "bold",
+  fontSize: "12px",
+};
+
+const estadoInactivo = {
+  background: "#fee2e2",
+  color: "#991b1b",
+  padding: "5px 9px",
+  borderRadius: "999px",
+  fontWeight: "bold",
+  fontSize: "12px",
+};
+
+const botonEliminar = {
+  background: "#dc2626",
+  color: "#ffffff",
+  border: "none",
+  padding: "8px 11px",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontWeight: "bold",
 };
 
 const nota = {
-  color: "#666",
+  color: "#6b7280",
   fontSize: "14px",
-  marginBottom: "18px",
+  marginBottom: "16px",
   textAlign: "center",
 };
 
@@ -399,23 +653,10 @@ const botonVerde = {
   background: "#16a34a",
   color: "white",
   border: "none",
-  padding: "18px",
+  padding: "16px",
   borderRadius: "12px",
-  fontSize: "18px",
+  fontSize: "17px",
   fontWeight: "bold",
   cursor: "pointer",
   boxShadow: "0 4px 12px rgba(22,163,74,0.30)",
-  marginBottom: "12px",
-};
-
-const botonNegro = {
-  width: "100%",
-  background: "#111827",
-  color: "white",
-  border: "none",
-  padding: "15px",
-  borderRadius: "10px",
-  fontSize: "15px",
-  fontWeight: "bold",
-  cursor: "pointer",
 };
