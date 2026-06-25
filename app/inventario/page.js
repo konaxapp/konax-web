@@ -44,8 +44,8 @@ export default function Inventario() {
     window.location.href = "/dashboard";
   }
 
-  function nuevoProducto() {
-    window.location.href = "/inventario/nuevo";
+  function irVistaCliente() {
+    window.location.href = "/vista-cliente";
   }
 
   const productosStockBajo = productos.filter((p) => {
@@ -130,12 +130,12 @@ export default function Inventario() {
           </div>
 
           <div style={accionesHero}>
-            <button onClick={nuevoProducto} style={botonNuevo}>
-              + Nuevo Producto
+            <button onClick={irVistaCliente} style={botonSecundario}>
+              Vista Cliente
             </button>
 
             <button onClick={volverCentroOperaciones} style={botonVolver}>
-              ← Centro de Operaciones
+              Salir
             </button>
           </div>
         </div>
@@ -157,7 +157,7 @@ export default function Inventario() {
             <div>
               <h2 style={tituloSeccion}>Productos registrados</h2>
               <p style={textoSuave}>
-                Consulta general de productos. Para crear uno nuevo usa el botón superior.
+                Consulta general de productos, precios, disponibilidad y estado del stock.
               </p>
             </div>
 
@@ -353,7 +353,7 @@ const accionesHero = {
   flexWrap: "wrap",
 };
 
-const botonNuevo = {
+const botonSecundario = {
   background: "#16a34a",
   color: "#ffffff",
   border: "none",
