@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function ControlCaja() {
+  const CODIGO_SUPERVISOR = "1234";
+
   const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
   const [movimientos, setMovimientos] = useState([]);
   const [cierres, setCierres] = useState([]);
@@ -12,8 +14,15 @@ export default function ControlCaja() {
   const [observacion, setObservacion] = useState("");
   const [usuario, setUsuario] = useState("Administrador");
 
+  const [cajaAbierta, setCajaAbierta] = useState(false);
+  const [supervisorApertura, setSupervisorApertura] = useState("");
+  const [codigoSupervisor, setCodigoSupervisor] = useState("");
+  const [accionSupervisor, setAccionSupervisor] = useState("");
+  const [mostrarModal, setMostrarModal] = useState(false);
+
   useEffect(() => {
     cargarDatos();
+    cargarEstadoCajaLocal();
   }, [fecha]);
 
   function obtenerEmpresaId() {
@@ -25,6 +34,19 @@ export default function ControlCaja() {
     }
 
     return empresaId;
+  }
+
+  function volverDashboard() {
+    window.location.href = "/dashboard";
+  }
+
+  function cargarEstadoCajaLocal() {
+    const empresaId = localStorage.getItem("empresaId") || "sin_empresa";
+    const estado = localStorage.getItem(`caja_abierta_${empresaId}_${fecha}`);
+    const supervisor = localStorage.getItem(`supervisor_caja_${empresaId}_${fecha}`);
+
+    setCajaAbierta(estado === "SI");
+    setSupervisorApertura(supervisor || "");
   }
 
   async function cargarDatos() {
@@ -88,16 +110,74 @@ export default function ControlCaja() {
     totalTarjeta +
     totalCheque;
 
+  const totalDigital =
+    totalTransferencia + totalYappy + totalTarjeta + totalCheque;
+
   const diferencia = Number(efectivoContado || 0) - Number(totalEfectivo || 0);
 
-  async function cerrarCaja() {
+  function abrirModalSupervisor(accion) {
+    setAccionSupervisor(accion);
+    setCodigoSupervisor("");
+    setMostrarModal(true);
+  }
+
+  function cerrarModalSupervisor() {
+    setMostrarModal(false);
+    setCodigoSupervisor("");
+    setAccionSupervisor("");
+  }
+
+  async function validarSupervisor() {
+    if (codigoSupervisor !== CODIGO_SUPERVISOR) {
+      alert("Código de supervisor incorrecto.");
+      return;
+    }
+
+    if (accionSupervisor === "abrir") {
+      abrirCajaAutorizada();
+      return;
+    }
+
+    if (accionSupervisor === "cerrar") {
+      await cerrarCajaAutorizada();
+      return;
+    }
+  }
+
+  function abrirCajaAutorizada() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
+
+    localStorage.setItem(`caja_abierta_${empresaId}_${fecha}`, "SI");
+    localStorage.setItem(`supervisor_caja_${empresaId}_${fecha}`, usuario);
+
+    setCajaAbierta(true);
+    setSupervisorApertura(usuario);
+
+    alert("Caja abierta correctamente con autorización de supervisor.");
+    cerrarModalSupervisor();
+  }
+
+  async function cerrarCajaAutorizada() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    if (!cajaAbierta) {
+      alert("Primero debe abrir la caja.");
+      return;
+    }
 
     if (efectivoContado === "" || Number(efectivoContado) < 0) {
       alert("Ingrese un efectivo contado válido.");
       return;
     }
+
+    const observacionFinal = `
+${observacion || ""}
+Supervisor apertura: ${supervisorApertura || usuario}
+Supervisor cierre: ${usuario}
+Código supervisor validado: SI
+`.trim();
 
     const { error } = await supabase.from("control_caja").insert([
       {
@@ -112,7 +192,7 @@ export default function ControlCaja() {
         total_tarjeta: totalTarjeta,
         total_cheque: totalCheque,
         total_transacciones: movimientos.length,
-        observacion,
+        observacion: observacionFinal,
         usuario,
         estado: "Cerrado",
       },
@@ -123,22 +203,73 @@ export default function ControlCaja() {
       return;
     }
 
+    localStorage.removeItem(`caja_abierta_${empresaId}_${fecha}`);
+    localStorage.removeItem(`supervisor_caja_${empresaId}_${fecha}`);
+
     alert("Caja cerrada correctamente.");
 
+    setCajaAbierta(false);
+    setSupervisorApertura("");
     setEfectivoContado("");
     setObservacion("");
+    cerrarModalSupervisor();
     cargarCierres();
   }
 
   return (
     <div style={pagina}>
       <div style={contenedor}>
-        <div style={logoBox}>
-          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+        <div style={hero}>
+          <div style={heroInfo}>
+            <img src="/konax-logo.png" alt="KONAX" style={logo} />
+
+            <div>
+              <p style={etiqueta}>Módulo operativo</p>
+              <h1 style={titulo}>Control y Arqueo de Caja</h1>
+              <p style={subtitulo}>
+                Apertura, arqueo y cierre diario con autorización de supervisor.
+              </p>
+            </div>
+          </div>
+
+          <div style={accionesTop}>
+            <button onClick={volverDashboard} style={botonClaro}>
+              ← Volver al Dashboard
+            </button>
+          </div>
         </div>
 
-        <h1 style={titulo}>Control de Caja</h1>
-        <p style={subtitulo}>Arqueo y cierre diario de operaciones.</p>
+        <div style={estadoCajaBox}>
+          <div>
+            <p style={estadoLabel}>Estado actual</p>
+            <h2 style={cajaAbierta ? estadoAbierta : estadoCerrada}>
+              {cajaAbierta ? "🟢 Caja Abierta" : "🔴 Caja Cerrada"}
+            </h2>
+            <p style={textoSuave}>
+              {cajaAbierta
+                ? `Autorizada por: ${supervisorApertura || "Supervisor"}`
+                : "Debe abrir la caja antes de cerrar el arqueo."}
+            </p>
+          </div>
+
+          <div style={accionesEstado}>
+            <button
+              style={botonAzul}
+              onClick={() => abrirModalSupervisor("abrir")}
+              disabled={cajaAbierta}
+            >
+              Abrir Caja
+            </button>
+
+            <button
+              style={botonVerde}
+              onClick={() => abrirModalSupervisor("cerrar")}
+              disabled={!cajaAbierta}
+            >
+              Cerrar Caja
+            </button>
+          </div>
+        </div>
 
         <div style={card}>
           <h2 style={tituloSeccion}>Fecha de control</h2>
@@ -152,25 +283,11 @@ export default function ControlCaja() {
         </div>
 
         <div style={cardsGrid}>
-          <div style={cardKpi}>
-            <div style={kpiTitulo}>💵 Efectivo Sistema</div>
-            <div style={kpiValor}>${totalEfectivo.toLocaleString()}</div>
-          </div>
-
-          <div style={cardKpi}>
-            <div style={kpiTitulo}>🏦 Transferencias</div>
-            <div style={kpiValor}>${totalTransferencia.toLocaleString()}</div>
-          </div>
-
-          <div style={cardKpi}>
-            <div style={kpiTitulo}>📱 Yappy</div>
-            <div style={kpiValor}>${totalYappy.toLocaleString()}</div>
-          </div>
-
-          <div style={cardKpi}>
-            <div style={kpiTitulo}>💰 Total Sistema</div>
-            <div style={kpiValor}>${totalSistema.toLocaleString()}</div>
-          </div>
+          <KPI titulo="💵 Efectivo Sistema" valor={totalEfectivo} />
+          <KPI titulo="🏦 Transferencias" valor={totalTransferencia} />
+          <KPI titulo="📱 Yappy" valor={totalYappy} />
+          <KPI titulo="💳 Tarjeta" valor={totalTarjeta} />
+          <KPI titulo="💰 Total Sistema" valor={totalSistema} destacado />
         </div>
 
         <div style={card}>
@@ -189,6 +306,8 @@ export default function ControlCaja() {
                 value={efectivoContado}
                 onChange={(e) => setEfectivoContado(e.target.value)}
                 style={inputStyle}
+                disabled={!cajaAbierta}
+                placeholder="Ingrese efectivo contado"
               />
             </div>
 
@@ -211,7 +330,7 @@ export default function ControlCaja() {
             </div>
 
             <div>
-              <label style={label}>Usuario</label>
+              <label style={label}>Usuario / Responsable</label>
               <input
                 value={usuario}
                 onChange={(e) => setUsuario(e.target.value)}
@@ -225,12 +344,16 @@ export default function ControlCaja() {
             value={observacion}
             onChange={(e) => setObservacion(e.target.value)}
             style={textarea}
+            disabled={!cajaAbierta}
           />
 
-          <div style={acciones}>
-            <button style={boton} onClick={cerrarCaja}>
-              Cerrar Caja
-            </button>
+          <div style={diferenciaBox}>
+            <strong>Resultado del arqueo:</strong>{" "}
+            {diferencia === 0
+              ? "Cuadra correctamente."
+              : diferencia > 0
+              ? "Sobra efectivo en caja."
+              : "Falta efectivo en caja."}
           </div>
         </div>
 
@@ -238,27 +361,10 @@ export default function ControlCaja() {
           <h2 style={tituloSeccion}>Resumen del Día</h2>
 
           <div style={cardsGrid}>
-            <div style={cardKpi}>
-              <div style={kpiTitulo}>Total Cobrado</div>
-              <div style={kpiValor}>${totalSistema.toLocaleString()}</div>
-            </div>
-
-            <div style={cardKpi}>
-              <div style={kpiTitulo}>Total Digital</div>
-              <div style={kpiValor}>
-                ${(totalTransferencia + totalYappy + totalTarjeta + totalCheque).toLocaleString()}
-              </div>
-            </div>
-
-            <div style={cardKpi}>
-              <div style={kpiTitulo}>Tarjeta</div>
-              <div style={kpiValor}>${totalTarjeta.toLocaleString()}</div>
-            </div>
-
-            <div style={cardKpi}>
-              <div style={kpiTitulo}>Transacciones</div>
-              <div style={kpiValor}>{movimientos.length}</div>
-            </div>
+            <KPI titulo="Total Cobrado" valor={totalSistema} />
+            <KPI titulo="Total Digital" valor={totalDigital} />
+            <KPI titulo="Cheque" valor={totalCheque} />
+            <KPI titulo="Transacciones" valor={movimientos.length} numero />
           </div>
         </div>
 
@@ -316,6 +422,51 @@ export default function ControlCaja() {
             </table>
           </div>
         </div>
+
+        {mostrarModal && (
+          <div style={modalFondo}>
+            <div style={modal}>
+              <h2 style={tituloSeccion}>
+                {accionSupervisor === "abrir"
+                  ? "Autorizar Apertura de Caja"
+                  : "Autorizar Cierre de Caja"}
+              </h2>
+
+              <p style={textoSuave}>
+                Ingrese el código de supervisor para continuar.
+              </p>
+
+              <input
+                type="password"
+                placeholder="Código supervisor"
+                value={codigoSupervisor}
+                onChange={(e) => setCodigoSupervisor(e.target.value)}
+                style={inputStyle}
+              />
+
+              <div style={accionesModal}>
+                <button style={botonVerdeGrande} onClick={validarSupervisor}>
+                  Autorizar
+                </button>
+
+                <button style={botonGrisGrande} onClick={cerrarModalSupervisor}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function KPI({ titulo, valor, destacado, numero }) {
+  return (
+    <div style={destacado ? cardKpiDestacado : cardKpi}>
+      <div style={kpiTitulo}>{titulo}</div>
+      <div style={kpiValor}>
+        {numero ? Number(valor || 0).toLocaleString() : "$" + Number(valor || 0).toLocaleString()}
       </div>
     </div>
   );
@@ -323,81 +474,167 @@ export default function ControlCaja() {
 
 const pagina = {
   minHeight: "100vh",
-  background: "#f3f4f6",
-  padding: "18px",
+  background: "#eef2f7",
+  padding: "24px",
   fontFamily: "Arial, sans-serif",
 };
 
 const contenedor = {
-  maxWidth: "1300px",
+  maxWidth: "1350px",
   margin: "0 auto",
 };
 
-const logoBox = {
-  textAlign: "center",
-  marginBottom: "12px",
+const hero = {
+  background: "linear-gradient(135deg, #111827, #1e3a8a)",
+  color: "#ffffff",
+  padding: "26px",
+  borderRadius: "22px",
+  marginBottom: "18px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "18px",
+  flexWrap: "wrap",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
+};
+
+const heroInfo = {
+  display: "flex",
+  alignItems: "center",
+  gap: "18px",
 };
 
 const logo = {
-  width: "110px",
-  maxWidth: "100%",
-  height: "auto",
+  width: "90px",
+  background: "#ffffff",
+  borderRadius: "16px",
+  padding: "8px",
+};
+
+const etiqueta = {
+  margin: 0,
+  color: "#bfdbfe",
+  fontSize: "13px",
+  fontWeight: "bold",
 };
 
 const titulo = {
-  fontSize: "32px",
-  marginBottom: "6px",
-  color: "#111827",
+  fontSize: "34px",
+  margin: "4px 0",
 };
 
 const subtitulo = {
+  color: "#dbeafe",
+  margin: 0,
+};
+
+const accionesTop = {
+  display: "flex",
+  gap: "10px",
+};
+
+const botonClaro = {
+  background: "#ffffff",
+  color: "#111827",
+  border: "none",
+  padding: "12px 18px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const estadoCajaBox = {
+  background: "#ffffff",
+  padding: "22px",
+  borderRadius: "18px",
+  marginBottom: "18px",
+  boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "16px",
+  flexWrap: "wrap",
+};
+
+const estadoLabel = {
   color: "#6b7280",
-  fontSize: "16px",
-  marginBottom: "20px",
+  margin: 0,
+  fontSize: "13px",
+  fontWeight: "bold",
+};
+
+const estadoAbierta = {
+  color: "#16a34a",
+  margin: "6px 0",
+};
+
+const estadoCerrada = {
+  color: "#dc2626",
+  margin: "6px 0",
+};
+
+const accionesEstado = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap",
 };
 
 const card = {
   background: "#ffffff",
-  padding: "18px",
-  borderRadius: "16px",
-  marginBottom: "16px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+  padding: "20px",
+  borderRadius: "18px",
+  marginBottom: "18px",
+  boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
 };
 
 const tituloSeccion = {
+  marginTop: 0,
   marginBottom: "16px",
   color: "#111827",
 };
 
+const textoSuave = {
+  color: "#6b7280",
+};
+
 const cardsGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
   gap: "16px",
-  marginBottom: "16px",
+  marginBottom: "18px",
 };
 
 const cardKpi = {
   background: "#ffffff",
   padding: "18px",
-  borderRadius: "16px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+  borderRadius: "18px",
+  boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
+  border: "1px solid #e5e7eb",
+};
+
+const cardKpiDestacado = {
+  background: "linear-gradient(135deg, #16a34a, #166534)",
+  color: "#ffffff",
+  padding: "18px",
+  borderRadius: "18px",
+  boxShadow: "0 4px 14px rgba(0,0,0,0.12)",
 };
 
 const kpiTitulo = {
-  color: "#6b7280",
   marginBottom: "8px",
   fontSize: "14px",
+  color: "inherit",
 };
 
 const kpiValor = {
   fontSize: "28px",
   fontWeight: "bold",
-  color: "#111827",
+  color: "inherit",
 };
 
 const grid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))",
   gap: "15px",
 };
 
@@ -412,7 +649,7 @@ const label = {
 const inputStyle = {
   width: "100%",
   padding: "12px",
-  borderRadius: "8px",
+  borderRadius: "9px",
   border: "1px solid #d1d5db",
   fontSize: "14px",
   boxSizing: "border-box",
@@ -421,7 +658,7 @@ const inputStyle = {
 const textarea = {
   width: "100%",
   padding: "12px",
-  borderRadius: "8px",
+  borderRadius: "9px",
   border: "1px solid #d1d5db",
   fontSize: "14px",
   boxSizing: "border-box",
@@ -429,18 +666,30 @@ const textarea = {
   marginTop: "18px",
 };
 
-const acciones = {
-  display: "flex",
-  gap: "15px",
-  flexWrap: "wrap",
-  marginTop: "18px",
+const diferenciaBox = {
+  marginTop: "16px",
+  background: "#f9fafb",
+  border: "1px solid #e5e7eb",
+  borderRadius: "12px",
+  padding: "14px",
+  color: "#374151",
 };
 
-const boton = {
+const botonAzul = {
+  background: "#2563eb",
+  color: "#ffffff",
+  border: "none",
+  padding: "12px 20px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonVerde = {
   background: "#16a34a",
   color: "#ffffff",
   border: "none",
-  padding: "12px 24px",
+  padding: "12px 20px",
   borderRadius: "10px",
   fontWeight: "bold",
   cursor: "pointer",
@@ -454,11 +703,59 @@ const tabla = {
 const th = {
   textAlign: "left",
   padding: "12px",
-  borderBottom: "1px solid #e5e7eb",
-  background: "#f9fafb",
+  background: "#111827",
+  color: "#ffffff",
 };
 
 const td = {
   padding: "12px",
-  borderBottom: "1px solid #f3f4f6",
+  borderBottom: "1px solid #e5e7eb",
+};
+
+const modalFondo = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.45)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  padding: "20px",
+  zIndex: 999,
+};
+
+const modal = {
+  width: "430px",
+  maxWidth: "100%",
+  background: "#ffffff",
+  padding: "24px",
+  borderRadius: "18px",
+  boxShadow: "0 10px 30px rgba(0,0,0,0.20)",
+};
+
+const accionesModal = {
+  display: "flex",
+  gap: "10px",
+  marginTop: "18px",
+};
+
+const botonVerdeGrande = {
+  flex: 1,
+  background: "#16a34a",
+  color: "#ffffff",
+  border: "none",
+  padding: "12px",
+  borderRadius: "9px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonGrisGrande = {
+  flex: 1,
+  background: "#6b7280",
+  color: "#ffffff",
+  border: "none",
+  padding: "12px",
+  borderRadius: "9px",
+  fontWeight: "bold",
+  cursor: "pointer",
 };
