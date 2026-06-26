@@ -262,11 +262,11 @@ export default function Caja() {
       }));
     }
 
-    const { data: cuentasData, error: errorCuentas } = await supabase
-      .from("informacion_comercial")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .ilike("numero_cuenta", %${texto}%);
+   const { data: cuentasData, error: errorCuentas } = await supabase
+  .from("informacion_comercial")
+  .select("*")
+  .eq("empresa_id", empresaId)
+  .ilike("numero_cuenta", `%${texto}%`);
 
     if (errorCuentas) {
       alert("Error buscando cuenta: " + errorCuentas.message);
