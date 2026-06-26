@@ -12,7 +12,6 @@ export default function Dashboard() {
   const [tipoNegocio, setTipoNegocio] = useState("");
   const [categoriaNegocio, setCategoriaNegocio] = useState("");
   const [usuarioRol, setUsuarioRol] = useState("");
-  const [rolId, setRolId] = useState("");
   const [permisosUsuario, setPermisosUsuario] = useState([]);
 
   useEffect(() => {
@@ -25,6 +24,7 @@ export default function Dashboard() {
       localStorage.getItem("usuarioRol") ||
       localStorage.getItem("rolUsuario") ||
       "";
+
     const rolIdLocal = localStorage.getItem("rolId") || "";
 
     if (!empresaId) {
@@ -33,7 +33,6 @@ export default function Dashboard() {
     }
 
     setUsuarioRol(rolUsuarioLocal);
-    setRolId(rolIdLocal);
 
     const { data: empresa, error: errorEmpresa } = await supabase
       .from("empresas")
@@ -67,10 +66,6 @@ export default function Dashboard() {
     setEstadoPlan(empresa.estado_plan || "Activo");
     setTipoNegocio(empresa.tipo_negocio || "");
     setCategoriaNegocio(empresa.categoria_negocio || "");
-
-    localStorage.setItem("empresaNombre", empresa.nombre || "Empresa");
-    localStorage.setItem("tipoNegocio", empresa.tipo_negocio || "");
-    localStorage.setItem("categoriaNegocio", empresa.categoria_negocio || "");
 
     const { data: modulosData, error: errorModulos } = await supabase
       .from("empresa_modulos")
@@ -148,20 +143,25 @@ export default function Dashboard() {
         "cobranza",
         "dashboard_cobros",
         "inventario",
+        "inventario_nuevo",
         "dashboard_ventas",
         "gastos",
       ];
     }
 
     if (rol === "Cajero") {
-      return ["caja", "control_caja", "vista_cliente"];
+      return ["vista_cliente", "caja", "control_caja"];
     }
 
     if (rol === "Vendedor") {
-      return ["clientes", "vista_cliente", "ventas_credito", "inventario"];
+      return ["clientes", "vista_cliente", "ventas_credito", "inventario", "suscripciones"];
     }
 
-    if (rol === "Cobranza" || rol === "Gestor de Cobranza") {
+    if (
+      rol === "Cobranza" ||
+      rol === "Gestor de Cobro" ||
+      rol === "Gestor de Cobranza"
+    ) {
       return ["vista_cliente", "cobranza", "dashboard_cobros"];
     }
 
@@ -241,11 +241,7 @@ export default function Dashboard() {
   }
 
   if (!modulos) {
-    return (
-      <div style={{ padding: "30px" }}>
-        Cargando Centro de Operaciones Empresariales...
-      </div>
-    );
+    return <div style={{ padding: "30px" }}>Cargando Centro de Operaciones Empresariales...</div>;
   }
 
   const esPlanCobros = planCodigo === "cobros";
@@ -272,12 +268,7 @@ export default function Dashboard() {
     !membresia && modulos.cobranza && tienePermiso("cobranza");
 
   const permitirDashboardCobros =
-    !membresia &&
-    modulos.dashboard_cobros &&
-    tienePermiso("dashboard_cobros");
-
-  const permitirRecargos =
-    !membresia && modulos.recargos && tienePermiso("recargos");
+    !membresia && modulos.dashboard_cobros && tienePermiso("dashboard_cobros");
 
   const permitirSuscripciones =
     (membresia ||
@@ -347,14 +338,18 @@ export default function Dashboard() {
       icono: "➕",
     },
     {
-  nombre: "Control Caja",
-  descripcion: "Cierres, arqueos y control operativo.",
-  ruta: "/control-caja",
-  activo:
-    tienePermiso("control_caja") &&
-    (modulos.control_caja || usuarioRol === "Cajero" || usuarioRol === "Supervisor"),
-  icono: "🏦",
-},
+      nombre: "Control Caja",
+      descripcion: "Cierres, arqueos y control operativo.",
+      ruta: "/control-caja",
+      activo:
+        tienePermiso("control_caja") &&
+        (modulos.control_caja ||
+          usuarioRol === "Cajero" ||
+          usuarioRol === "Supervisor" ||
+          usuarioRol === "Administrador"),
+      icono: "🏦",
+    },
+    {
       nombre: "Suscripciones",
       descripcion: "Membresías, renovaciones y vencimientos.",
       ruta: "/suscripciones",
@@ -365,7 +360,7 @@ export default function Dashboard() {
       nombre: "Recargos",
       descripcion: "Configuración y aplicación de recargos.",
       ruta: "/recargos",
-      activo: permitirRecargos,
+      activo: !membresia && modulos.recargos && tienePermiso("recargos"),
       icono: "⚠️",
     },
     {
