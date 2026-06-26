@@ -25,6 +25,7 @@ export default function Caja() {
   const [responsable, setResponsable] = useState("");
   const [observacion, setObservacion] = useState("");
   const [movimientos, setMovimientos] = useState([]);
+  const [vendedores, setVendedores] = useState([]);
 
   useEffect(() => {
     iniciarCaja();
@@ -35,7 +36,25 @@ export default function Caja() {
     if (!empresaId) return;
 
     await cargarTipoNegocioEmpresa(empresaId);
+    await cargarVendedores(empresaId);
     await cargarMovimientos();
+  }
+
+  async function cargarVendedores(empresaId) {
+    const { data, error } = await supabase
+      .from("usuarios")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("estado", "Activo")
+      .in("rol", ["Vendedor", "Supervisor", "Administrador"])
+      .order("nombre", { ascending: true });
+
+    if (error) {
+      alert("Error cargando vendedores/responsables: " + error.message);
+      return;
+    }
+
+    setVendedores(data || []);
   }
 
   async function cargarTipoNegocioEmpresa(empresaId) {
@@ -52,8 +71,7 @@ export default function Caja() {
 
     const categoria = data?.categoria_negocio || "";
     const tipo = data?.tipo_negocio || "";
-
-    const tipoCompleto = `${categoria} ${tipo}`.trim() || "General";
+    const tipoCompleto = ${categoria} ${tipo}.trim() || "General";
 
     setTipoNegocioEmpresa(tipoCompleto);
 
@@ -230,7 +248,7 @@ export default function Caja() {
       .from("clientes")
       .select("*")
       .eq("empresa_id", empresaId)
-      .or(`nombre.ilike.%${texto}%,cedula.ilike.%${texto}%`);
+      .or(nombre.ilike.%${texto}%,cedula.ilike.%${texto}%);
 
     if (errorClientes) {
       alert("Error buscando cliente: " + errorClientes.message);
@@ -248,7 +266,7 @@ export default function Caja() {
       .from("informacion_comercial")
       .select("*")
       .eq("empresa_id", empresaId)
-      .ilike("numero_cuenta", `%${texto}%`);
+      .ilike("numero_cuenta", %${texto}%);
 
     if (errorCuentas) {
       alert("Error buscando cuenta: " + errorCuentas.message);
@@ -313,6 +331,17 @@ export default function Caja() {
 
     setCuentasCliente(data);
     setCuentaSeleccionada(resultado.cuenta || data[0]);
+
+    const vendedorCuenta =
+      resultado.cuenta?.responsable ||
+      resultado.cuenta?.vendedor ||
+      data[0]?.responsable ||
+      data[0]?.vendedor ||
+      "";
+
+    if (vendedorCuenta) {
+      setResponsable(vendedorCuenta);
+    }
   }
 
   async function renovarSuscripcionDesdeCaja(empresaId, cuenta, montoPago) {
@@ -385,7 +414,16 @@ export default function Caja() {
       return;
     }
 
+    if (!responsable) {
+      alert("Seleccione el vendedor o responsable.");
+      return;
+    }
+
     const numeroTransaccion = generarTransaccion();
+    const usuarioRegistro =
+      localStorage.getItem("usuarioNombre") ||
+      localStorage.getItem("adminKonaxNombre") ||
+      "Caja";
 
     const { error } = await supabase.from("caja").insert([
       {
@@ -399,7 +437,8 @@ export default function Caja() {
         descripcion: concepto || observacion || tipoMovimiento,
         monto: Number(monto),
         metodo_pago: metodoPago,
-        usuario: responsable || "Caja",
+        usuario: usuarioRegistro,
+        vendedor_responsable: responsable,
         estado: "Procesado",
         cliente_nombre: requiereCliente
           ? clienteSeleccionado?.nombre
@@ -465,7 +504,6 @@ export default function Caja() {
     limpiarFormulario();
     cargarMovimientos();
   }
-
   function limpiarFormulario() {
     const opciones = obtenerOpcionesMovimiento(tipoNegocioEmpresa);
 
@@ -516,7 +554,7 @@ export default function Caja() {
           </div>
 
           <button onClick={volverDashboard} style={botonVolver}>
-            ← Volver al Dashboard
+            ← Centro de Operaciones
           </button>
         </div>
 
@@ -556,7 +594,7 @@ export default function Caja() {
             </Campo>
 
             <Campo label="N° Transacción">
-              <input value="Automático al guardar" readOnly style={inputStyle} />
+              <input value="Automático al guardar" readOnly style={inputReadOnly} />
             </Campo>
 
             <Campo label="Tipo de movimiento">
@@ -580,19 +618,21 @@ export default function Caja() {
             <h2 style={tituloSeccion}>Cliente Contado</h2>
 
             <div style={grid}>
-              <input
-                placeholder="Nombre del cliente opcional"
-                value={nombreContado}
-                onChange={(e) => setNombreContado(e.target.value)}
-                style={inputStyle}
-              />
+              <Campo label="Nombre del cliente">
+                <input
+                  value={nombreContado}
+                  onChange={(e) => setNombreContado(e.target.value)}
+                  style={inputStyle}
+                />
+              </Campo>
 
-              <input
-                placeholder="Cédula opcional"
-                value={cedulaContado}
-                onChange={(e) => setCedulaContado(e.target.value)}
-                style={inputStyle}
-              />
+              <Campo label="Cédula">
+                <input
+                  value={cedulaContado}
+                  onChange={(e) => setCedulaContado(e.target.value)}
+                  style={inputStyle}
+                />
+              </Campo>
             </div>
           </div>
         )}
@@ -602,16 +642,20 @@ export default function Caja() {
             <h2 style={tituloSeccion}>Cliente / Cuenta</h2>
 
             <div style={toolbar}>
-              <input
-                placeholder="Buscar cliente por nombre, cédula o número de cuenta..."
-                value={buscarCliente}
-                onChange={(e) => setBuscarCliente(e.target.value)}
-                style={inputStyle}
-              />
+              <Campo label="Buscar cliente">
+                <input
+                  placeholder="Nombre, cédula o número de cuenta..."
+                  value={buscarCliente}
+                  onChange={(e) => setBuscarCliente(e.target.value)}
+                  style={inputStyle}
+                />
+              </Campo>
 
-              <button style={botonSecundario} onClick={buscarClientes}>
-                Buscar
-              </button>
+              <div style={botonBuscarBox}>
+                <button style={botonSecundario} onClick={buscarClientes}>
+                  Buscar
+                </button>
+              </div>
             </div>
 
             {resultadosBusqueda.length > 0 && (
@@ -644,31 +688,45 @@ export default function Caja() {
                 <p>Cédula: {clienteSeleccionado.cedula}</p>
 
                 {cuentasCliente.length > 1 && (
-                  <select
-                    value={cuentaSeleccionada?.id || ""}
-                    onChange={(e) => {
-                      const cuenta = cuentasCliente.find(
-                        (item) => item.id === e.target.value
-                      );
-                      setCuentaSeleccionada(cuenta);
-                    }}
-                    style={inputStyle}
-                  >
-                    {cuentasCliente.map((cuenta) => (
-                      <option key={cuenta.id} value={cuenta.id}>
-                        {cuenta.numero_cuenta} - {cuenta.descripcion} - Saldo $
-                        {Number(cuenta.saldo_actual || 0).toLocaleString()}
-                      </option>
-                    ))}
-                  </select>
+                  <Campo label="Seleccionar cuenta">
+                    <select
+                      value={cuentaSeleccionada?.id || ""}
+                      onChange={(e) => {
+                        const cuenta = cuentasCliente.find(
+                          (item) => item.id === e.target.value
+                        );
+
+                        setCuentaSeleccionada(cuenta);
+
+                        const vendedorCuenta =
+                          cuenta?.responsable || cuenta?.vendedor || "";
+
+                        if (vendedorCuenta) {
+                          setResponsable(vendedorCuenta);
+                        }
+                      }}
+                      style={inputStyle}
+                    >
+                      {cuentasCliente.map((cuenta) => (
+                        <option key={cuenta.id} value={cuenta.id}>
+                          {cuenta.numero_cuenta} - {cuenta.descripcion} - Saldo $
+                          {Number(cuenta.saldo_actual || 0).toLocaleString()}
+                        </option>
+                      ))}
+                    </select>
+                  </Campo>
                 )}
 
                 <p>
-                  Cuenta: <strong>{cuentaSeleccionada?.numero_cuenta || "Sin cuenta"}</strong>
+                  Cuenta:{" "}
+                  <strong>{cuentaSeleccionada?.numero_cuenta || "Sin cuenta"}</strong>
                 </p>
+
                 <p>
                   Saldo actual:{" "}
-                  <strong>${Number(cuentaSeleccionada?.saldo_actual || 0).toFixed(2)}</strong>
+                  <strong>
+                    ${Number(cuentaSeleccionada?.saldo_actual || 0).toFixed(2)}
+                  </strong>
                 </p>
               </div>
             )}
@@ -694,35 +752,47 @@ export default function Caja() {
               </select>
             </Campo>
 
-            <input
-              placeholder="Monto"
-              type="number"
-              value={monto}
-              onChange={(e) => setMonto(e.target.value)}
-              style={inputStyle}
-            />
+            <Campo label="Monto">
+              <input
+                type="number"
+                value={monto}
+                onChange={(e) => setMonto(e.target.value)}
+                style={inputStyle}
+              />
+            </Campo>
 
-            <input
-              placeholder="Concepto / Descripción"
-              value={concepto}
-              onChange={(e) => setConcepto(e.target.value)}
-              style={inputStyle}
-            />
+            <Campo label="Concepto / Descripción">
+              <input
+                value={concepto}
+                onChange={(e) => setConcepto(e.target.value)}
+                style={inputStyle}
+              />
+            </Campo>
 
-            <input
-              placeholder="Vendedor / Responsable"
-              value={responsable}
-              onChange={(e) => setResponsable(e.target.value)}
-              style={inputStyle}
-            />
+            <Campo label="Vendedor / Responsable">
+              <select
+                value={responsable}
+                onChange={(e) => setResponsable(e.target.value)}
+                style={inputStyle}
+              >
+                <option value="">Seleccione responsable</option>
+
+                {vendedores.map((vendedor) => (
+                  <option key={vendedor.id} value={vendedor.nombre}>
+                    {vendedor.nombre} - {vendedor.rol}
+                  </option>
+                ))}
+              </select>
+            </Campo>
           </div>
 
-          <textarea
-            placeholder="Observación del movimiento..."
-            value={observacion}
-            onChange={(e) => setObservacion(e.target.value)}
-            style={textarea}
-          />
+          <Campo label="Observación">
+            <textarea
+              value={observacion}
+              onChange={(e) => setObservacion(e.target.value)}
+              style={textarea}
+            />
+          </Campo>
 
           <div style={acciones}>
             <button style={boton} onClick={guardarMovimiento}>
@@ -734,8 +804,7 @@ export default function Caja() {
             </button>
           </div>
         </div>
-
-        <div style={card}>
+<div style={card}>
           <h2 style={tituloSeccion}>Movimientos Registrados</h2>
 
           <div style={{ overflowX: "auto" }}>
@@ -751,7 +820,8 @@ export default function Caja() {
                   <th style={th}>Método</th>
                   <th style={th}>Monto</th>
                   <th style={th}>Concepto</th>
-                  <th style={th}>Responsable</th>
+                  <th style={th}>Registrado por</th>
+                  <th style={th}>Vendedor / Responsable</th>
                   <th style={th}>Estado</th>
                 </tr>
               </thead>
@@ -759,23 +829,32 @@ export default function Caja() {
               <tbody>
                 {movimientos.length === 0 ? (
                   <tr>
-                    <td style={td} colSpan="11">
+                    <td style={td} colSpan="12">
                       No hay movimientos registrados.
                     </td>
                   </tr>
                 ) : (
                   movimientos.map((movimiento) => (
                     <tr key={movimiento.id}>
-                      <td style={td}>{movimiento.fecha_pago || movimiento.created_at}</td>
+                      <td style={td}>
+                        {movimiento.fecha_pago || movimiento.created_at}
+                      </td>
                       <td style={td}>{movimiento.numero_transaccion || "-"}</td>
                       <td style={td}>{movimiento.cliente_nombre || "-"}</td>
                       <td style={td}>{movimiento.cliente_cedula || "-"}</td>
                       <td style={td}>{movimiento.numero_cuenta || "-"}</td>
                       <td style={td}>{movimiento.tipo}</td>
                       <td style={td}>{movimiento.metodo_pago}</td>
-                      <td style={td}>${Number(movimiento.monto || 0).toFixed(2)}</td>
-                      <td style={td}>{movimiento.descripcion}</td>
-                      <td style={td}>{movimiento.usuario}</td>
+                      <td style={td}>
+                        ${Number(movimiento.monto || 0).toFixed(2)}
+                      </td>
+                      <td style={td}>{movimiento.descripcion || "-"}</td>
+                      <td style={td}>{movimiento.usuario || "-"}</td>
+                      <td style={td}>
+                        {movimiento.vendedor_responsable ||
+                          movimiento.responsable ||
+                          "-"}
+                      </td>
                       <td style={td}>{movimiento.estado}</td>
                     </tr>
                   ))
@@ -791,7 +870,7 @@ export default function Caja() {
 
 function Campo({ label, children }) {
   return (
-    <div>
+    <div style={campo}>
       <label style={labelStyle}>{label}</label>
       {children}
     </div>
@@ -811,38 +890,42 @@ const contenedor = {
 };
 
 const header = {
-  background: "#ffffff",
-  borderRadius: "20px",
-  padding: "26px",
+  background: "linear-gradient(135deg, #111827, #064e3b)",
+  color: "#ffffff",
+  borderRadius: "22px",
+  padding: "28px",
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   gap: "20px",
   flexWrap: "wrap",
   marginBottom: "22px",
-  boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
 };
 
 const logo = {
-  width: "150px",
+  width: "125px",
   height: "auto",
   marginBottom: "10px",
+  background: "#ffffff",
+  borderRadius: "14px",
+  padding: "8px",
 };
 
 const titulo = {
   fontSize: "38px",
   margin: "0 0 8px 0",
-  color: "#111827",
+  color: "#ffffff",
 };
 
 const subtitulo = {
-  color: "#6b7280",
+  color: "#dcfce7",
   fontSize: "16px",
   margin: 0,
 };
 
 const negocioTexto = {
-  color: "#047857",
+  color: "#bbf7d0",
   fontSize: "14px",
   marginTop: "8px",
 };
@@ -855,13 +938,14 @@ const resumenGrid = {
 };
 
 const resumenCard = {
-  background: "#111827",
-  color: "#ffffff",
+  background: "#ffffff",
+  color: "#111827",
   padding: "20px",
   borderRadius: "16px",
   display: "grid",
   gap: "8px",
-  boxShadow: "0 6px 16px rgba(0,0,0,0.10)",
+  boxShadow: "0 6px 16px rgba(0,0,0,0.08)",
+  border: "1px solid #e5e7eb",
 };
 
 const card = {
@@ -889,6 +973,12 @@ const toolbar = {
   display: "grid",
   gridTemplateColumns: "1fr auto",
   gap: "12px",
+  alignItems: "end",
+};
+
+const campo = {
+  display: "flex",
+  flexDirection: "column",
 };
 
 const labelStyle = {
@@ -910,10 +1000,22 @@ const inputStyle = {
   color: "#111827",
 };
 
+const inputReadOnly = {
+  ...inputStyle,
+  background: "#f3f4f6",
+  color: "#6b7280",
+  fontWeight: "bold",
+};
+
 const textarea = {
   ...inputStyle,
   minHeight: "110px",
-  marginTop: "18px",
+  marginTop: "0px",
+};
+
+const botonBuscarBox = {
+  display: "flex",
+  alignItems: "end",
 };
 
 const acciones = {
@@ -944,8 +1046,8 @@ const botonLimpiar = {
 };
 
 const botonVolver = {
-  background: "#111827",
-  color: "#ffffff",
+  background: "#ffffff",
+  color: "#111827",
   border: "none",
   padding: "13px 20px",
   borderRadius: "10px",
