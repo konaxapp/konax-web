@@ -11,6 +11,9 @@ export default function Dashboard() {
   const [estadoPlan, setEstadoPlan] = useState("");
   const [tipoNegocio, setTipoNegocio] = useState("");
   const [categoriaNegocio, setCategoriaNegocio] = useState("");
+  const [usuarioRol, setUsuarioRol] = useState("");
+  const [rolId, setRolId] = useState("");
+  const [permisosUsuario, setPermisosUsuario] = useState([]);
 
   useEffect(() => {
     cargarDashboard();
@@ -18,11 +21,17 @@ export default function Dashboard() {
 
   async function cargarDashboard() {
     const empresaId = localStorage.getItem("empresaId");
+    const rolUsuarioLocal =
+      localStorage.getItem("usuarioRol") || localStorage.getItem("rolUsuario") || "";
+    const rolIdLocal = localStorage.getItem("rolId") || "";
 
     if (!empresaId) {
       window.location.href = "/login";
       return;
     }
+
+    setUsuarioRol(rolUsuarioLocal);
+    setRolId(rolIdLocal);
 
     const { data: empresa, error: errorEmpresa } = await supabase
       .from("empresas")
@@ -78,18 +87,98 @@ export default function Dashboard() {
     }
 
     setModulos(modulosData);
+
+    await cargarPermisosUsuario(rolIdLocal, rolUsuarioLocal);
+  }
+
+  async function cargarPermisosUsuario(rolIdLocal, rolUsuarioLocal) {
+    if (!rolIdLocal) {
+      setPermisosUsuario(permisosBasePorRol(rolUsuarioLocal));
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("roles_permisos_konax")
+      .select("permisos_konax(modulo, accion)")
+      .eq("rol_id", rolIdLocal);
+
+    if (error || !data || data.length === 0) {
+      setPermisosUsuario(permisosBasePorRol(rolUsuarioLocal));
+      return;
+    }
+
+    const permisos = data
+      .map((item) => item.permisos_konax?.modulo)
+      .filter(Boolean);
+
+    setPermisosUsuario(permisos);
+  }
+
+  function permisosBasePorRol(rol) {
+    if (rol === "SuperAdmin" || rol === "Administrador") {
+      return [
+        "clientes",
+        "vista_cliente",
+        "ventas_credito",
+        "caja",
+        "control_caja",
+        "cobranza",
+        "dashboard_cobros",
+        "inventario",
+        "inventario_nuevo",
+        "suscripciones",
+        "recargos",
+        "dashboard_ventas",
+        "gastos",
+        "usuarios",
+        "roles",
+      ];
+    }
+
+    if (rol === "Supervisor") {
+      return [
+        "clientes",
+        "vista_cliente",
+        "ventas_credito",
+        "caja",
+        "control_caja",
+        "cobranza",
+        "dashboard_cobros",
+        "inventario",
+        "dashboard_ventas",
+        "gastos",
+      ];
+    }
+
+    if (rol === "Cajero") {
+      return ["caja", "control_caja", "clientes", "vista_cliente"];
+    }
+
+    if (rol === "Vendedor") {
+      return ["clientes", "vista_cliente", "ventas_credito", "inventario"];
+    }
+
+    if (rol === "Cobranza" || rol === "Gestor de Cobranza") {
+      return ["vista_cliente", "cobranza", "dashboard_cobros"];
+    }
+
+    if (rol === "Inventario") {
+      return ["inventario", "inventario_nuevo"];
+    }
+
+    return [];
+  }
+
+  function tienePermiso(modulo) {
+    if (usuarioRol === "SuperAdmin" || usuarioRol === "Administrador") {
+      return true;
+    }
+
+    return permisosUsuario.includes(modulo);
   }
 
   function cerrarSesion() {
-    localStorage.removeItem("empresaId");
-    localStorage.removeItem("empresaNombre");
-    localStorage.removeItem("usuarioId");
-    localStorage.removeItem("usuarioNombre");
-    localStorage.removeItem("usuarioCorreo");
-    localStorage.removeItem("usuarioRol");
-    localStorage.removeItem("tipoNegocio");
-    localStorage.removeItem("categoriaNegocio");
-
+    localStorage.clear();
     window.location.href = "/login";
   }
 
@@ -161,19 +250,37 @@ export default function Dashboard() {
   const ventaCredito = esNegocioVentaCredito();
   const comercioInventario = esNegocioComercioInventario();
 
-  const permitirCredito = !membresia && ventaCredito && modulos.venta_credito;
+  const permitirCredito =
+    !membresia &&
+    ventaCredito &&
+    modulos.venta_credito &&
+    tienePermiso("ventas_credito");
 
   const permitirInventario =
-    !membresia && (ventaCredito || comercioInventario) && modulos.inventario;
+    !membresia &&
+    (ventaCredito || comercioInventario) &&
+    modulos.inventario &&
+    tienePermiso("inventario");
 
-  const permitirCobranza = !membresia && modulos.cobranza;
-  const permitirDashboardCobros = !membresia && modulos.dashboard_cobros;
-  const permitirRecargos = !membresia && modulos.recargos;
+  const permitirNuevoProducto =
+    permitirInventario && tienePermiso("inventario_nuevo");
+
+  const permitirCobranza =
+    !membresia && modulos.cobranza && tienePermiso("cobranza");
+
+  const permitirDashboardCobros =
+    !membresia &&
+    modulos.dashboard_cobros &&
+    tienePermiso("dashboard_cobros");
+
+  const permitirRecargos =
+    !membresia && modulos.recargos && tienePermiso("recargos");
 
   const permitirSuscripciones =
-    membresia ||
-    modulos.suscripciones ||
-    categoriaNegocio === "Suscripciones y Membresías";
+    (membresia ||
+      modulos.suscripciones ||
+      categoriaNegocio === "Suscripciones y Membresías") &&
+    tienePermiso("suscripciones");
 
   const tarjetas = [
     {
@@ -182,14 +289,14 @@ export default function Dashboard() {
         ? "Carga inicial de clientes y cartera existente."
         : "Registro y consulta de clientes.",
       ruta: "/clientes",
-      activo: modulos.clientes,
+      activo: modulos.clientes && tienePermiso("clientes"),
       icono: "👥",
     },
     {
       nombre: "Vista Cliente",
       descripcion: "Ficha individual, historial, pagos y gestiones.",
       ruta: "/vista-cliente",
-      activo: modulos.vista_cliente,
+      activo: modulos.vista_cliente && tienePermiso("vista_cliente"),
       icono: "🧾",
     },
     {
@@ -203,7 +310,7 @@ export default function Dashboard() {
       nombre: "Caja Básica",
       descripcion: "Registro de pagos, abonos y mensualidades.",
       ruta: "/caja",
-      activo: modulos.caja,
+      activo: modulos.caja && tienePermiso("caja"),
       icono: "💵",
     },
     {
@@ -231,14 +338,14 @@ export default function Dashboard() {
       nombre: "Nuevo Producto",
       descripcion: "Registro de productos y carga inicial de inventario.",
       ruta: "/inventario/nuevo",
-      activo: permitirInventario,
+      activo: permitirNuevoProducto,
       icono: "➕",
     },
     {
       nombre: "Control Caja",
       descripcion: "Cierres, arqueos y control operativo.",
       ruta: "/control-caja",
-      activo: modulos.control_caja,
+      activo: modulos.control_caja && tienePermiso("control_caja"),
       icono: "🏦",
     },
     {
@@ -259,22 +366,32 @@ export default function Dashboard() {
       nombre: "Centro de Ventas",
       descripcion: "Indicadores comerciales y ventas.",
       ruta: "/dashboard-ventas",
-      activo: !membresia && modulos.dashboard_ventas,
+      activo:
+        !membresia &&
+        modulos.dashboard_ventas &&
+        tienePermiso("dashboard_ventas"),
       icono: "📈",
     },
     {
       nombre: "Gastos",
       descripcion: "Registro y control de egresos.",
       ruta: "/gastos",
-      activo: modulos.egresos,
+      activo: modulos.egresos && tienePermiso("gastos"),
       icono: "🧮",
     },
     {
       nombre: "Usuarios y Roles",
       descripcion: "Crear usuarios, asignar roles y administrar accesos.",
       ruta: "/usuarios",
-      activo: true,
+      activo: tienePermiso("usuarios"),
       icono: "🔐",
+    },
+    {
+      nombre: "Roles y Permisos",
+      descripcion: "Crear roles y definir permisos por módulo.",
+      ruta: "/roles",
+      activo: tienePermiso("roles"),
+      icono: "🛡️",
     },
   ];
 
@@ -295,6 +412,8 @@ export default function Dashboard() {
               <strong>{estadoPlan}</strong>
               <br />
               Tipo de negocio: <strong>{tipoNegocio || "No definido"}</strong>
+              <br />
+              Usuario: <strong>{usuarioRol || "Sin rol"}</strong>
             </p>
           </div>
         </div>
@@ -306,7 +425,7 @@ export default function Dashboard() {
 
       <div style={resumenGrid}>
         <div style={resumenCard}>
-          <p style={resumenLabel}>Módulos activos</p>
+          <p style={resumenLabel}>Módulos visibles</p>
           <h2 style={resumenValor}>{tarjetasActivas.length}</h2>
         </div>
 
@@ -316,8 +435,8 @@ export default function Dashboard() {
         </div>
 
         <div style={resumenCard}>
-          <p style={resumenLabel}>Servicio</p>
-          <h2 style={resumenValorTexto}>{estadoPlan}</h2>
+          <p style={resumenLabel}>Rol</p>
+          <h2 style={resumenValorTexto}>{usuarioRol || "Sin rol"}</h2>
         </div>
       </div>
 
@@ -325,7 +444,12 @@ export default function Dashboard() {
         {tarjetasActivas.map((item) => (
           <div
             key={item.nombre}
-            style={item.nombre === "Usuarios y Roles" ? cardDestacado : card}
+            style={
+              item.nombre === "Usuarios y Roles" ||
+              item.nombre === "Roles y Permisos"
+                ? cardDestacado
+                : card
+            }
             onClick={() => abrirModulo(item.ruta)}
           >
             <div style={icono}>{item.icono}</div>
@@ -337,7 +461,9 @@ export default function Dashboard() {
       </div>
 
       {tarjetasActivas.length === 0 && (
-        <div style={sinModulos}>Esta empresa no tiene módulos activos.</div>
+        <div style={sinModulos}>
+          Este usuario no tiene módulos permitidos. Revise sus permisos.
+        </div>
       )}
     </div>
   );
