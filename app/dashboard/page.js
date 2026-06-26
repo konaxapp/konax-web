@@ -22,7 +22,9 @@ export default function Dashboard() {
   async function cargarDashboard() {
     const empresaId = localStorage.getItem("empresaId");
     const rolUsuarioLocal =
-      localStorage.getItem("usuarioRol") || localStorage.getItem("rolUsuario") || "";
+      localStorage.getItem("usuarioRol") ||
+      localStorage.getItem("rolUsuario") ||
+      "";
     const rolIdLocal = localStorage.getItem("rolId") || "";
 
     if (!empresaId) {
@@ -87,7 +89,6 @@ export default function Dashboard() {
     }
 
     setModulos(modulosData);
-
     await cargarPermisosUsuario(rolIdLocal, rolUsuarioLocal);
   }
 
@@ -118,6 +119,7 @@ export default function Dashboard() {
     if (rol === "SuperAdmin" || rol === "Administrador") {
       return [
         "clientes",
+        "cuentas_por_cobrar",
         "vista_cliente",
         "ventas_credito",
         "caja",
@@ -138,6 +140,7 @@ export default function Dashboard() {
     if (rol === "Supervisor") {
       return [
         "clientes",
+        "cuentas_por_cobrar",
         "vista_cliente",
         "ventas_credito",
         "caja",
@@ -151,7 +154,7 @@ export default function Dashboard() {
     }
 
     if (rol === "Cajero") {
-      return ["caja", "control_caja", "clientes", "vista_cliente"];
+      return ["caja", "control_caja", "vista_cliente"];
     }
 
     if (rol === "Vendedor") {
@@ -289,7 +292,9 @@ export default function Dashboard() {
         ? "Carga inicial de clientes y cartera existente."
         : "Registro y consulta de clientes.",
       ruta: "/clientes",
-      activo: modulos.clientes && tienePermiso("clientes"),
+      activo:
+        modulos.clientes &&
+        tienePermiso(esPlanCobros ? "cuentas_por_cobrar" : "clientes"),
       icono: "👥",
     },
     {
