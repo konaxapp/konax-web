@@ -20,6 +20,7 @@ export default function Dashboard() {
 
   async function cargarDashboard() {
     const empresaId = localStorage.getItem("empresaId");
+
     const rolUsuarioLocal =
       localStorage.getItem("usuarioRol") ||
       localStorage.getItem("rolUsuario") ||
@@ -88,8 +89,10 @@ export default function Dashboard() {
   }
 
   async function cargarPermisosUsuario(rolIdLocal, rolUsuarioLocal) {
+    const permisosBase = permisosBasePorRol(rolUsuarioLocal);
+
     if (!rolIdLocal) {
-      setPermisosUsuario(permisosBasePorRol(rolUsuarioLocal));
+      setPermisosUsuario(permisosBase);
       return;
     }
 
@@ -99,19 +102,27 @@ export default function Dashboard() {
       .eq("rol_id", rolIdLocal);
 
     if (error || !data || data.length === 0) {
-      setPermisosUsuario(permisosBasePorRol(rolUsuarioLocal));
+      setPermisosUsuario(permisosBase);
       return;
     }
 
-    const permisos = data
+    const permisosDB = data
       .map((item) => item.permisos_konax?.modulo)
       .filter(Boolean);
 
-    setPermisosUsuario(permisos);
+    const permisosCombinados = [...new Set([...permisosBase, ...permisosDB])];
+
+    setPermisosUsuario(permisosCombinados);
+  }
+
+  function normalizarRol(rol) {
+    return String(rol || "").toLowerCase().trim();
   }
 
   function permisosBasePorRol(rol) {
-    if (rol === "SuperAdmin" || rol === "Administrador") {
+    const rolNormalizado = normalizarRol(rol);
+
+    if (rolNormalizado === "superadmin" || rolNormalizado === "administrador") {
       return [
         "clientes",
         "cuentas_por_cobrar",
@@ -132,7 +143,7 @@ export default function Dashboard() {
       ];
     }
 
-    if (rol === "Supervisor") {
+    if (rolNormalizado === "supervisor") {
       return [
         "clientes",
         "cuentas_por_cobrar",
@@ -144,28 +155,36 @@ export default function Dashboard() {
         "dashboard_cobros",
         "inventario",
         "inventario_nuevo",
+        "suscripciones",
+        "recargos",
         "dashboard_ventas",
         "gastos",
       ];
     }
 
-    if (rol === "Cajero") {
+    if (rolNormalizado === "cajero") {
       return ["vista_cliente", "caja", "control_caja"];
     }
 
-    if (rol === "Vendedor") {
-      return ["clientes", "vista_cliente", "ventas_credito", "inventario", "suscripciones"];
+    if (rolNormalizado === "vendedor") {
+      return [
+        "clientes",
+        "vista_cliente",
+        "ventas_credito",
+        "inventario",
+        "suscripciones",
+      ];
     }
 
     if (
-      rol === "Cobranza" ||
-      rol === "Gestor de Cobro" ||
-      rol === "Gestor de Cobranza"
+      rolNormalizado === "cobranza" ||
+      rolNormalizado === "gestor de cobro" ||
+      rolNormalizado === "gestor de cobranza"
     ) {
       return ["vista_cliente", "cobranza", "dashboard_cobros"];
     }
 
-    if (rol === "Inventario") {
+    if (rolNormalizado === "inventario") {
       return ["inventario", "inventario_nuevo"];
     }
 
@@ -173,7 +192,9 @@ export default function Dashboard() {
   }
 
   function tienePermiso(modulo) {
-    if (usuarioRol === "SuperAdmin" || usuarioRol === "Administrador") {
+    const rolNormalizado = normalizarRol(usuarioRol);
+
+    if (rolNormalizado === "superadmin" || rolNormalizado === "administrador") {
       return true;
     }
 
@@ -241,7 +262,11 @@ export default function Dashboard() {
   }
 
   if (!modulos) {
-    return <div style={{ padding: "30px" }}>Cargando Centro de Operaciones Empresariales...</div>;
+    return (
+      <div style={{ padding: "30px" }}>
+        Cargando Centro de Operaciones Empresariales...
+      </div>
+    );
   }
 
   const esPlanCobros = planCodigo === "cobros";
@@ -275,6 +300,13 @@ export default function Dashboard() {
       modulos.suscripciones ||
       categoriaNegocio === "Suscripciones y Membresías") &&
     tienePermiso("suscripciones");
+
+  const permitirControlCaja =
+    tienePermiso("control_caja") &&
+    (modulos.control_caja ||
+      usuarioRol === "Cajero" ||
+      usuarioRol === "Supervisor" ||
+      usuarioRol === "Administrador");
 
   const tarjetas = [
     {
@@ -341,12 +373,7 @@ export default function Dashboard() {
       nombre: "Control Caja",
       descripcion: "Cierres, arqueos y control operativo.",
       ruta: "/control-caja",
-      activo:
-        tienePermiso("control_caja") &&
-        (modulos.control_caja ||
-          usuarioRol === "Cajero" ||
-          usuarioRol === "Supervisor" ||
-          usuarioRol === "Administrador"),
+      activo: permitirControlCaja,
       icono: "🏦",
     },
     {
