@@ -248,7 +248,7 @@ export default function Caja() {
       .from("clientes")
       .select("*")
       .eq("empresa_id", empresaId)
-      .or(nombre.ilike.%${texto}%,cedula.ilike.%${texto}%);
+      .or(`nombre.ilike.%${texto}%,cedula.ilike.%${texto}%`);
 
     if (errorClientes) {
       alert("Error buscando cliente: " + errorClientes.message);
