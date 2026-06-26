@@ -347,13 +347,14 @@ export default function Dashboard() {
       icono: "➕",
     },
     {
-      nombre: "Control Caja",
-      descripcion: "Cierres, arqueos y control operativo.",
-      ruta: "/control-caja",
-      activo: modulos.control_caja && tienePermiso("control_caja"),
-      icono: "🏦",
-    },
-    {
+  nombre: "Control Caja",
+  descripcion: "Cierres, arqueos y control operativo.",
+  ruta: "/control-caja",
+  activo:
+    tienePermiso("control_caja") &&
+    (modulos.control_caja || usuarioRol === "Cajero" || usuarioRol === "Supervisor"),
+  icono: "🏦",
+},
       nombre: "Suscripciones",
       descripcion: "Membresías, renovaciones y vencimientos.",
       ruta: "/suscripciones",
