@@ -71,7 +71,7 @@ export default function Caja() {
 
     const categoria = data?.categoria_negocio || "";
     const tipo = data?.tipo_negocio || "";
-    const tipoCompleto = ${categoria} ${tipo}.trim() || "General";
+    const tipoCompleto = `${categoria} ${tipo}`.trim() || "General";
 
     setTipoNegocioEmpresa(tipoCompleto);
 
