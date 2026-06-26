@@ -88,9 +88,7 @@ export default function Login() {
     const vencimiento = empresa.fecha_proxima_facturacion;
 
     const estaVencida =
-      vencimiento &&
-      hoy > vencimiento &&
-      empresa.estado_pago !== "Al día";
+      vencimiento && hoy > vencimiento && empresa.estado_pago !== "Al día";
 
     if (
       empresa.estado === "Suspendido" ||
@@ -109,12 +107,20 @@ export default function Login() {
     }
 
     localStorage.setItem("usuarioId", usuario.id);
+    localStorage.setItem("usuarioNombre", usuario.nombre || "");
+    localStorage.setItem("nombreUsuario", usuario.nombre || "");
+    localStorage.setItem("usuarioCorreo", usuario.correo || "");
+    localStorage.setItem("correoUsuario", usuario.correo || "");
+
     localStorage.setItem("empresaId", usuario.empresa_id || "");
     localStorage.setItem("empresaNombre", empresa.nombre || "");
-    localStorage.setItem("nombreUsuario", usuario.nombre || "");
-    localStorage.setItem("correoUsuario", usuario.correo || "");
+
+    localStorage.setItem("usuarioRol", usuario.rol || "");
     localStorage.setItem("rolUsuario", usuario.rol || "");
-    localStorage.setItem("modulos", usuario.modulos || "");
+    localStorage.setItem("rolId", usuario.rol_id || "");
+
+    localStorage.setItem("tipoNegocio", empresa.tipo_negocio || "");
+    localStorage.setItem("categoriaNegocio", empresa.categoria_negocio || "");
 
     setCargando(false);
 
