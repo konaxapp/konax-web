@@ -5,9 +5,6 @@ import { supabase } from "../../lib/supabase";
 
 export default function VistaCliente() {
   const [buscar, setBuscar] = useState("");
-  function volverDashboard() {
-  window.location.href = "/dashboard";
-}
   const [resultados, setResultados] = useState([]);
 
   const [cliente, setCliente] = useState(null);
@@ -38,6 +35,10 @@ export default function VistaCliente() {
     }
   }, []);
 
+  function volverDashboard() {
+    window.location.href = "/dashboard";
+  }
+
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
 
@@ -47,6 +48,24 @@ export default function VistaCliente() {
     }
 
     return empresaId;
+  }
+
+  function obtenerUsuarioActual() {
+    const nombre =
+      localStorage.getItem("usuarioNombre") ||
+      localStorage.getItem("adminKonaxNombre") ||
+      "";
+
+    const rol =
+      localStorage.getItem("usuarioRol") ||
+      localStorage.getItem("rolUsuario") ||
+      "";
+
+    if (nombre && rol) return `${nombre} (${rol})`;
+    if (nombre) return nombre;
+    if (rol) return rol;
+
+    return "Usuario";
   }
 
   function calcularDiasAtraso(fechaVencimiento, saldoActual) {
@@ -225,6 +244,8 @@ export default function VistaCliente() {
       return;
     }
 
+    const usuarioActual = obtenerUsuarioActual();
+
     const { error } = await supabase.from("bitacora_cliente").insert([
       {
         empresa_id: empresaId,
@@ -233,7 +254,8 @@ export default function VistaCliente() {
         tipo_gestion: tipoGestion,
         resultado_gestion: resultadoGestion,
         observacion,
-        usuario: "Usuario",
+        descripcion: observacion,
+        usuario: usuarioActual,
         fecha_gestion: new Date().toISOString(),
       },
     ]);
@@ -261,6 +283,7 @@ export default function VistaCliente() {
       return;
     }
 
+    const usuarioActual = obtenerUsuarioActual();
     const textoPromesa = `Promesa de pago para ${fechaPromesa} por $${montoPromesa}. ${observacionPromesa}`;
 
     const { error } = await supabase.from("bitacora_cliente").insert([
@@ -271,7 +294,8 @@ export default function VistaCliente() {
         tipo_gestion: "Promesa de Pago",
         resultado_gestion: "Promesa registrada",
         observacion: textoPromesa,
-        usuario: "Usuario",
+        descripcion: textoPromesa,
+        usuario: usuarioActual,
         fecha_gestion: new Date().toISOString(),
         proxima_gestion: fechaPromesa,
       },
@@ -369,15 +393,15 @@ export default function VistaCliente() {
     <div style={pagina}>
       <div style={contenedor}>
         <div style={encabezado}>
-  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-    <img src="/konax-logo.png" alt="KONAX" style={logo} />
-    <h1 style={titulo}>Vista Cliente</h1>
-  </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            <img src="/konax-logo.png" alt="KONAX" style={logo} />
+            <h1 style={titulo}>Vista Cliente</h1>
+          </div>
 
-  <button onClick={volverDashboard} style={botonDashboard}>
-    ← Volver al Dashboard
-  </button>
-</div>
+          <button onClick={volverDashboard} style={botonDashboard}>
+            ← Volver al Dashboard
+          </button>
+        </div>
 
         <div style={card}>
           <h2 style={tituloSeccion}>Buscar Cliente</h2>
@@ -402,9 +426,14 @@ export default function VistaCliente() {
                   <tr key={index}>
                     <td style={td}>{item.cliente.nombre}</td>
                     <td style={td}>{item.cliente.cedula}</td>
-                    <td style={td}>{item.cuenta?.numero_cuenta || "Ver cuentas"}</td>
                     <td style={td}>
-                      <button style={boton} onClick={() => seleccionarCliente(item)}>
+                      {item.cuenta?.numero_cuenta || "Ver cuentas"}
+                    </td>
+                    <td style={td}>
+                      <button
+                        style={boton}
+                        onClick={() => seleccionarCliente(item)}
+                      >
                         Seleccionar
                       </button>
                     </td>
@@ -426,7 +455,9 @@ export default function VistaCliente() {
             <div style={gridResumen}>
               <div style={card}>
                 <h3>Cliente</h3>
-                <p><strong>{cliente.nombre}</strong></p>
+                <p>
+                  <strong>{cliente.nombre}</strong>
+                </p>
                 <p>Cédula: {cliente.cedula}</p>
                 <p>Teléfono: {cliente.telefono}</p>
                 <p>Correo: {cliente.correo || "-"}</p>
@@ -454,17 +485,31 @@ export default function VistaCliente() {
                 <p>Tipo: {cuenta?.tipo_producto || "-"}</p>
                 <p>Descripción: {cuenta?.descripcion || "-"}</p>
                 <p>Modalidad: {cuenta?.modalidad || "-"}</p>
-                <p>Monto total: ${Number(cuenta?.monto_total || 0).toLocaleString()}</p>
-                <p>Saldo actual: ${Number(cuenta?.saldo_actual || 0).toLocaleString()}</p>
+                <p>
+                  Monto total: $
+                  {Number(cuenta?.monto_total || 0).toLocaleString()}
+                </p>
+                <p>
+                  Saldo actual: $
+                  {Number(cuenta?.saldo_actual || 0).toLocaleString()}
+                </p>
                 <p>Cuota: ${Number(cuenta?.cuota || 0).toLocaleString()}</p>
               </div>
 
               <div style={card}>
                 <h3>Cobranza</h3>
-                <p>Estado: {semaforo} {cobranza?.estado_cobranza || cuenta?.estado || "-"}</p>
-                <p><strong>Días de atraso:</strong> {diasAtraso}</p>
+                <p>
+                  Estado: {semaforo}{" "}
+                  {cobranza?.estado_cobranza || cuenta?.estado || "-"}
+                </p>
+                <p>
+                  <strong>Días de atraso:</strong> {diasAtraso}
+                </p>
                 <p>Fecha último pago: {cobranza?.fecha_ultimo_pago || "-"}</p>
-                <p>Monto último pago: ${Number(cobranza?.monto_ultimo_pago || 0).toLocaleString()}</p>
+                <p>
+                  Monto último pago: $
+                  {Number(cobranza?.monto_ultimo_pago || 0).toLocaleString()}
+                </p>
                 <p>Responsable: {cobranza?.responsable_cobro || "-"}</p>
               </div>
             </div>
@@ -473,9 +518,24 @@ export default function VistaCliente() {
               <h2 style={tituloSeccion}>Promesa de Pago</h2>
 
               <div style={gridFormulario}>
-                <input type="date" value={fechaPromesa} onChange={(e) => setFechaPromesa(e.target.value)} style={inputStyle} />
-                <input placeholder="Monto prometido" value={montoPromesa} onChange={(e) => setMontoPromesa(e.target.value)} style={inputStyle} />
-                <input placeholder="Observación de la promesa" value={observacionPromesa} onChange={(e) => setObservacionPromesa(e.target.value)} style={inputStyle} />
+                <input
+                  type="date"
+                  value={fechaPromesa}
+                  onChange={(e) => setFechaPromesa(e.target.value)}
+                  style={inputStyle}
+                />
+                <input
+                  placeholder="Monto prometido"
+                  value={montoPromesa}
+                  onChange={(e) => setMontoPromesa(e.target.value)}
+                  style={inputStyle}
+                />
+                <input
+                  placeholder="Observación de la promesa"
+                  value={observacionPromesa}
+                  onChange={(e) => setObservacionPromesa(e.target.value)}
+                  style={inputStyle}
+                />
               </div>
 
               <button style={boton} onClick={registrarPromesa}>
@@ -500,7 +560,9 @@ export default function VistaCliente() {
                   {pagos.map((pago) => (
                     <tr key={pago.id}>
                       <td style={td}>{pago.fecha_pago || pago.created_at}</td>
-                      <td style={td}>${Number(pago.monto || 0).toLocaleString()}</td>
+                      <td style={td}>
+                        ${Number(pago.monto || 0).toLocaleString()}
+                      </td>
                       <td style={td}>{pago.metodo_pago}</td>
                       <td style={td}>{pago.descripcion}</td>
                     </tr>
@@ -513,7 +575,11 @@ export default function VistaCliente() {
               <h2 style={tituloSeccion}>Observaciones de Gestión</h2>
 
               <div style={gridFormulario}>
-                <select value={tipoGestion} onChange={(e) => setTipoGestion(e.target.value)} style={inputStyle}>
+                <select
+                  value={tipoGestion}
+                  onChange={(e) => setTipoGestion(e.target.value)}
+                  style={inputStyle}
+                >
                   <option>Llamada</option>
                   <option>WhatsApp</option>
                   <option>Visita</option>
@@ -522,7 +588,11 @@ export default function VistaCliente() {
                   <option>Promesa de Pago</option>
                 </select>
 
-                <select value={resultadoGestion} onChange={(e) => setResultadoGestion(e.target.value)} style={inputStyle}>
+                <select
+                  value={resultadoGestion}
+                  onChange={(e) => setResultadoGestion(e.target.value)}
+                  style={inputStyle}
+                >
                   <option>Pendiente</option>
                   <option>Contestó</option>
                   <option>No contestó</option>
@@ -545,9 +615,13 @@ export default function VistaCliente() {
               <div style={{ marginTop: "14px" }}>
                 {gestiones.map((item) => (
                   <div key={item.id} style={observacionBox}>
-                    <strong>{item.fecha_gestion} — {item.usuario}</strong>
-                    <p>{item.tipo_gestion} / {item.resultado_gestion}</p>
-                    <p>{item.observacion}</p>
+                    <strong>
+                      {item.fecha_gestion} — {item.usuario || "Sin usuario"}
+                    </strong>
+                    <p>
+                      {item.tipo_gestion} / {item.resultado_gestion}
+                    </p>
+                    <p>{item.observacion || item.descripcion}</p>
                   </div>
                 ))}
               </div>
@@ -579,7 +653,10 @@ export default function VistaCliente() {
                     <tr key={doc.name}>
                       <td style={td}>{doc.name}</td>
                       <td style={td}>
-                        <button style={accionBtn} onClick={() => verDocumento(doc.name)}>
+                        <button
+                          style={accionBtn}
+                          onClick={() => verDocumento(doc.name)}
+                        >
                           Ver
                         </button>
                       </td>
@@ -749,6 +826,7 @@ const whatsappBtn = {
   fontWeight: "bold",
   cursor: "pointer",
 };
+
 const botonDashboard = {
   background: "#111827",
   color: "#ffffff",
