@@ -119,7 +119,12 @@ export default function CobranzaGeneral() {
       .select("*")
       .eq("empresa_id", empresaId)
       .eq("estado", "Activo")
-      .in("rol", ["Gestor de Cobro", "Gestor de Cobranza", "Cobranza", "Supervisor"])
+      .in("rol", [
+        "Gestor de Cobro",
+        "Gestor de Cobranza",
+        "Cobranza",
+        "Supervisor",
+      ])
       .order("nombre", { ascending: true });
 
     if (error) {
@@ -146,7 +151,9 @@ export default function CobranzaGeneral() {
     }
 
     const cuentas = cuentasData || [];
-    const clienteIds = [...new Set(cuentas.map((c) => c.cliente_id).filter(Boolean))];
+    const clienteIds = [
+      ...new Set(cuentas.map((c) => c.cliente_id).filter(Boolean)),
+    ];
     const cuentaIds = cuentas.map((c) => c.id);
 
     let clientes = [];
@@ -167,7 +174,8 @@ export default function CobranzaGeneral() {
         .from("informacion_cobranza")
         .select("*")
         .eq("empresa_id", empresaId)
-        .in("informacion_comercial_id", cuentaIds);
+        .in("informacion_comercial_id", cuentaIds)
+        .order("fecha_asignacion", { ascending: false });
 
       cobranzas = data || [];
     }
@@ -176,7 +184,7 @@ export default function CobranzaGeneral() {
       const cliente = clientes.find((c) => c.id === cuenta.cliente_id);
 
       const cobranza = cobranzas.find(
-        (c) => c.informacion_comercial_id === cuenta.id
+        (c) => String(c.informacion_comercial_id) === String(cuenta.id)
       );
 
       const dias = calcularDiasAtraso(
@@ -231,12 +239,14 @@ export default function CobranzaGeneral() {
     setValorBusqueda("");
     setEstadoBusqueda("Todos");
     setMoraBusqueda("Todos");
+
     setFiltrosAplicados({
       tipoBusqueda: "Cédula",
       valorBusqueda: "",
       estadoBusqueda: "Todos",
       moraBusqueda: "Todos",
     });
+
     setCuentasSeleccionadas([]);
   }
 
@@ -264,7 +274,9 @@ export default function CobranzaGeneral() {
     }
 
     if (filtrosAplicados.tipoBusqueda === "Producto") {
-      return limpiarTexto(cuenta.tipo_producto || cuenta.descripcion).includes(valor);
+      return limpiarTexto(cuenta.tipo_producto || cuenta.descripcion).includes(
+        valor
+      );
     }
 
     if (filtrosAplicados.tipoBusqueda === "Fecha inicio") {
@@ -312,7 +324,7 @@ export default function CobranzaGeneral() {
 
   function abrirModalAsignar(item) {
     setCuentaSeleccionada(item);
-    setGestorSeleccionado(item.cobranza?.responsable_cobro || "");
+    setGestorSeleccionado(item.cobranza?.responsable_cobro_id || "");
     setObservacionAsignacion("");
     setModalAsignar(true);
   }
@@ -338,7 +350,15 @@ export default function CobranzaGeneral() {
       return;
     }
 
-    const gestor = usuariosGestores.find((u) => u.nombre === gestorSeleccionado);
+    const gestor = usuariosGestores.find(
+      (u) => String(u.id) === String(gestorSeleccionado)
+    );
+
+    if (!gestor) {
+      alert("Gestor no encontrado.");
+      return;
+    }
+
     const usuarioAsignacion = usuarioActual();
     const fechaAsignacion = new Date().toISOString().split("T")[0];
 
@@ -349,8 +369,8 @@ export default function CobranzaGeneral() {
         cuentaSeleccionada.cuenta?.cliente_id ||
         null,
       informacion_comercial_id: cuentaSeleccionada.cuenta.id,
-      responsable_cobro: gestorSeleccionado,
-      responsable_cobro_id: gestor?.id || null,
+      responsable_cobro: gestor.nombre,
+      responsable_cobro_id: gestor.id,
       fecha_asignacion: fechaAsignacion,
       usuario_asignacion: usuarioAsignacion,
       observacion_asignacion: observacionAsignacion,
@@ -363,8 +383,8 @@ export default function CobranzaGeneral() {
       const res = await supabase
         .from("informacion_cobranza")
         .update(payload)
-        .eq("id", cuentaSeleccionada.cobranza.id)
-        .eq("empresa_id", empresaId);
+        .eq("empresa_id", empresaId)
+        .eq("informacion_comercial_id", cuentaSeleccionada.cuenta.id);
 
       error = res.error;
     } else {
@@ -380,15 +400,16 @@ export default function CobranzaGeneral() {
     await registrarBitacoraAsignacion([
       {
         item: cuentaSeleccionada,
-        gestor: gestorSeleccionado,
+        gestor: gestor.nombre,
         observacion: observacionAsignacion,
         tipo: "Asignación de gestor",
       },
     ]);
 
     alert("Gestor asignado correctamente.");
+
     cerrarModalAsignar();
-    cargarDatos();
+    await cargarDatos();
   }
 
   async function guardarAsignacionMasiva() {
@@ -405,13 +426,21 @@ export default function CobranzaGeneral() {
       return;
     }
 
+    const gestor = usuariosGestores.find(
+      (u) => String(u.id) === String(gestorMasivo)
+    );
+
+    if (!gestor) {
+      alert("Gestor no encontrado.");
+      return;
+    }
+
     const confirmar = confirm(
-      `¿Deseas asignar ${cuentasSeleccionadas.length} cuenta(s) a ${gestorMasivo}?`
+      `¿Deseas asignar ${cuentasSeleccionadas.length} cuenta(s) a ${gestor.nombre}?`
     );
 
     if (!confirmar) return;
 
-    const gestor = usuariosGestores.find((u) => u.nombre === gestorMasivo);
     const usuarioAsignacion = usuarioActual();
     const fechaAsignacion = new Date().toISOString().split("T")[0];
 
@@ -424,8 +453,8 @@ export default function CobranzaGeneral() {
         empresa_id: empresaId,
         cliente_id: item.cliente?.id || item.cuenta?.cliente_id || null,
         informacion_comercial_id: item.cuenta.id,
-        responsable_cobro: gestorMasivo,
-        responsable_cobro_id: gestor?.id || null,
+        responsable_cobro: gestor.nombre,
+        responsable_cobro_id: gestor.id,
         fecha_asignacion: fechaAsignacion,
         usuario_asignacion: usuarioAsignacion,
         observacion_asignacion: observacionMasiva || "Reasignación de cartera",
@@ -438,12 +467,15 @@ export default function CobranzaGeneral() {
         const res = await supabase
           .from("informacion_cobranza")
           .update(payload)
-          .eq("id", item.cobranza.id)
-          .eq("empresa_id", empresaId);
+          .eq("empresa_id", empresaId)
+          .eq("informacion_comercial_id", item.cuenta.id);
 
         error = res.error;
       } else {
-        const res = await supabase.from("informacion_cobranza").insert([payload]);
+        const res = await supabase
+          .from("informacion_cobranza")
+          .insert([payload]);
+
         error = res.error;
       }
 
@@ -456,7 +488,7 @@ export default function CobranzaGeneral() {
     await registrarBitacoraAsignacion(
       cuentasParaAsignar.map((item) => ({
         item,
-        gestor: gestorMasivo,
+        gestor: gestor.nombre,
         observacion: observacionMasiva,
         tipo: "Reasignación de cartera",
       }))
@@ -467,7 +499,7 @@ export default function CobranzaGeneral() {
     setCuentasSeleccionadas([]);
     setGestorMasivo("");
     setObservacionMasiva("");
-    cargarDatos();
+    await cargarDatos();
   }
 
   async function registrarBitacoraAsignacion(registros) {
@@ -478,7 +510,7 @@ export default function CobranzaGeneral() {
 
     const payload = registros.map((r) => ({
       empresa_id: empresaId,
-      cliente_id: r.item.cliente?.id || null,
+      cliente_id: r.item.cliente?.id || r.item.cuenta?.cliente_id || null,
       informacion_comercial_id: r.item.cuenta.id,
       tipo_gestion: r.tipo,
       resultado_gestion: "Gestor asignado",
@@ -491,40 +523,53 @@ export default function CobranzaGeneral() {
   }
 
   const gestores = [
-    "Todos",
-    ...new Set([
-      ...usuariosGestores.map((u) => u.nombre).filter(Boolean),
-      ...cartera.map((item) => item.cobranza?.responsable_cobro || "Sin asignar").filter(Boolean),
-    ]),
+    { id: "Todos", nombre: "Todos" },
+    ...usuariosGestores.map((u) => ({
+      id: String(u.id),
+      nombre: u.nombre,
+    })),
+    { id: "Sin asignar", nombre: "Sin asignar" },
   ];
 
   const gestoresMedicion = gestores
-    .filter((g) => g !== "Todos")
-    .filter((g) => gestorMedicion === "Todos" || g === gestorMedicion)
+    .filter((g) => g.id !== "Todos")
+    .filter((g) => gestorMedicion === "Todos" || g.id === gestorMedicion)
     .map((gestor) => {
       const carteraGestor = cartera.filter((item) => {
-        const responsable = item.cobranza?.responsable_cobro || "Sin asignar";
-        return responsable === gestor;
+        const responsableId = item.cobranza?.responsable_cobro_id;
+
+        if (gestor.id === "Sin asignar") {
+          return !responsableId && !item.cobranza?.responsable_cobro;
+        }
+
+        return String(responsableId) === String(gestor.id);
       });
 
-      const gestionesGestor = gestiones.filter(
-        (g) => (g.usuario || "Sin asignar") === gestor
-      );
+      const clientesAsignados = [
+        ...new Set(carteraGestor.map((item) => item.cliente?.id).filter(Boolean)),
+      ].length;
+
+      const gestionesGestor = gestiones.filter((g) => {
+        return carteraGestor.some(
+          (item) =>
+            String(item.cuenta.id) === String(g.informacion_comercial_id)
+        );
+      });
 
       const clientesGestionados = [
         ...new Set(gestionesGestor.map((g) => g.cliente_id).filter(Boolean)),
       ].length;
 
-      const pendientes = Math.max(carteraGestor.length - clientesGestionados, 0);
+      const pendientes = Math.max(clientesAsignados - clientesGestionados, 0);
 
       const porcentaje =
-        carteraGestor.length > 0
-          ? Math.round((clientesGestionados / carteraGestor.length) * 100)
+        clientesAsignados > 0
+          ? Math.round((clientesGestionados / clientesAsignados) * 100)
           : 0;
 
       return {
-        gestor,
-        asignados: carteraGestor.length,
+        gestor: gestor.nombre,
+        asignados: clientesAsignados,
         gestionados: clientesGestionados,
         pendientes,
         porcentaje,
@@ -555,7 +600,8 @@ export default function CobranzaGeneral() {
             <div>
               <h2 style={tituloSeccion}>Buscar cartera</h2>
               <p style={ayuda}>
-                Filtra la cartera por cliente, cédula, dirección, producto, fecha, estado o gestor.
+                Filtra la cartera por cliente, cédula, dirección, producto,
+                fecha, estado o gestor.
               </p>
             </div>
           </div>
@@ -580,7 +626,13 @@ export default function CobranzaGeneral() {
               </select>
             </Campo>
 
-            <Campo label={tipoBusqueda === "Cédula" ? "Número de cédula" : "Valor de búsqueda"}>
+            <Campo
+              label={
+                tipoBusqueda === "Cédula"
+                  ? "Número de cédula"
+                  : "Valor de búsqueda"
+              }
+            >
               <input
                 type={tipoBusqueda === "Fecha inicio" ? "date" : "text"}
                 value={valorBusqueda}
@@ -647,8 +699,8 @@ export default function CobranzaGeneral() {
             <div>
               <h2 style={tituloSeccion}>Asignar cartera</h2>
               <p style={ayuda}>
-                Resultado: <strong>{totalResultado}</strong> cuenta(s) · Seleccionadas:{" "}
-                <strong>{totalSeleccionado}</strong>
+                Resultado: <strong>{totalResultado}</strong> cuenta(s) ·
+                Seleccionadas: <strong>{totalSeleccionado}</strong>
               </p>
             </div>
 
@@ -672,7 +724,7 @@ export default function CobranzaGeneral() {
               >
                 <option value="">Seleccione gestor</option>
                 {usuariosGestores.map((gestor) => (
-                  <option key={gestor.id} value={gestor.nombre}>
+                  <option key={gestor.id} value={gestor.id}>
                     {gestor.nombre}
                   </option>
                 ))}
@@ -732,7 +784,9 @@ export default function CobranzaGeneral() {
                     <td style={td}>{item.cliente?.cedula || "-"}</td>
                     <td style={td}>{item.cliente?.direccion || "-"}</td>
                     <td style={td}>
-                      {item.cuenta?.tipo_producto || item.cuenta?.descripcion || "-"}
+                      {item.cuenta?.tipo_producto ||
+                        item.cuenta?.descripcion ||
+                        "-"}
                     </td>
                     <td style={td}>{item.cuenta?.numero_cuenta || "-"}</td>
                     <td style={td}>
@@ -741,13 +795,20 @@ export default function CobranzaGeneral() {
                     <td style={td}>{item.cuenta?.fecha_vencimiento || "-"}</td>
                     <td style={td}>{item.dias}</td>
                     <td style={td}>
-                      <span style={item.estado === "Al Día" ? estadoVerde : estadoRojo}>
+                      <span
+                        style={item.estado === "Al Día" ? estadoVerde : estadoRojo}
+                      >
                         {item.estado}
                       </span>
                     </td>
-                    <td style={td}>{item.cobranza?.responsable_cobro || "Sin asignar"}</td>
                     <td style={td}>
-                      <button style={botonMini} onClick={() => abrirModalAsignar(item)}>
+                      {item.cobranza?.responsable_cobro || "Sin asignar"}
+                    </td>
+                    <td style={td}>
+                      <button
+                        style={botonMini}
+                        onClick={() => abrirModalAsignar(item)}
+                      >
                         Cambiar
                       </button>
                     </td>
@@ -783,7 +844,9 @@ export default function CobranzaGeneral() {
                 style={inputStyle}
               >
                 {gestores.map((gestor) => (
-                  <option key={gestor}>{gestor}</option>
+                  <option key={gestor.id} value={gestor.id}>
+                    {gestor.nombre}
+                  </option>
                 ))}
               </select>
             </div>
@@ -832,9 +895,13 @@ export default function CobranzaGeneral() {
               <h2 style={tituloSeccion}>Cambiar gestor</h2>
 
               <p style={ayuda}>
-                Cliente: <strong>{cuentaSeleccionada?.cliente?.nombre || "-"}</strong>
+                Cliente:{" "}
+                <strong>{cuentaSeleccionada?.cliente?.nombre || "-"}</strong>
                 <br />
-                Cuenta: <strong>{cuentaSeleccionada?.cuenta?.numero_cuenta || "-"}</strong>
+                Cuenta:{" "}
+                <strong>
+                  {cuentaSeleccionada?.cuenta?.numero_cuenta || "-"}
+                </strong>
               </p>
 
               <Campo label="Gestor">
@@ -845,7 +912,7 @@ export default function CobranzaGeneral() {
                 >
                   <option value="">Seleccione gestor</option>
                   {usuariosGestores.map((gestor) => (
-                    <option key={gestor.id} value={gestor.nombre}>
+                    <option key={gestor.id} value={gestor.id}>
                       {gestor.nombre}
                     </option>
                   ))}
