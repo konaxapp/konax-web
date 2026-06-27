@@ -29,7 +29,7 @@ export default function CobranzaGeneral() {
   const [gestorSeleccionado, setGestorSeleccionado] = useState("");
   const [observacionAsignacion, setObservacionAsignacion] = useState("");
 
-  const [estadoMedicion, setEstadoMedicion] = useState("Todos");
+  const [gestorMedicion, setGestorMedicion] = useState("Todos");
 
   useEffect(() => {
     cargarDatos();
@@ -53,6 +53,18 @@ export default function CobranzaGeneral() {
 
   function fechaSimple(fecha) {
     return String(fecha || "").slice(0, 10);
+  }
+
+  function limpiarTexto(texto) {
+    return String(texto || "").toLowerCase().trim();
+  }
+
+  function limpiarCedula(texto) {
+    return String(texto || "")
+      .toLowerCase()
+      .replace(/-/g, "")
+      .replace(/\s/g, "")
+      .trim();
   }
 
   function usuarioActual() {
@@ -229,7 +241,7 @@ export default function CobranzaGeneral() {
   }
 
   function coincideTipoBusqueda(item) {
-    const valor = String(filtrosAplicados.valorBusqueda || "").toLowerCase().trim();
+    const valor = limpiarTexto(filtrosAplicados.valorBusqueda);
 
     if (!valor) return true;
 
@@ -238,21 +250,21 @@ export default function CobranzaGeneral() {
     const gestor = item.cobranza?.responsable_cobro || "Sin asignar";
 
     if (filtrosAplicados.tipoBusqueda === "Cédula") {
-      return String(cliente.cedula || "").toLowerCase().includes(valor);
+      const cedulaCliente = limpiarCedula(cliente.cedula);
+      const cedulaBuscada = limpiarCedula(valor);
+      return cedulaCliente.includes(cedulaBuscada);
     }
 
     if (filtrosAplicados.tipoBusqueda === "Cliente") {
-      return String(cliente.nombre || "").toLowerCase().includes(valor);
+      return limpiarTexto(cliente.nombre).includes(valor);
     }
 
     if (filtrosAplicados.tipoBusqueda === "Dirección") {
-      return String(cliente.direccion || "").toLowerCase().includes(valor);
+      return limpiarTexto(cliente.direccion).includes(valor);
     }
 
     if (filtrosAplicados.tipoBusqueda === "Producto") {
-      return String(cuenta.tipo_producto || cuenta.descripcion || "")
-        .toLowerCase()
-        .includes(valor);
+      return limpiarTexto(cuenta.tipo_producto || cuenta.descripcion).includes(valor);
     }
 
     if (filtrosAplicados.tipoBusqueda === "Fecha inicio") {
@@ -260,11 +272,11 @@ export default function CobranzaGeneral() {
     }
 
     if (filtrosAplicados.tipoBusqueda === "Gestor actual") {
-      return String(gestor || "").toLowerCase().includes(valor);
+      return limpiarTexto(gestor).includes(valor);
     }
 
     if (filtrosAplicados.tipoBusqueda === "Cuenta") {
-      return String(cuenta.numero_cuenta || "").toLowerCase().includes(valor);
+      return limpiarTexto(cuenta.numero_cuenta).includes(valor);
     }
 
     return true;
@@ -416,8 +428,7 @@ export default function CobranzaGeneral() {
         responsable_cobro_id: gestor?.id || null,
         fecha_asignacion: fechaAsignacion,
         usuario_asignacion: usuarioAsignacion,
-        observacion_asignacion:
-          observacionMasiva || "Reasignación de cartera",
+        observacion_asignacion: observacionMasiva || "Reasignación de cartera",
         estado_cobranza: item.estado || "Al Día",
       };
 
@@ -481,24 +492,19 @@ export default function CobranzaGeneral() {
 
   const gestores = [
     "Todos",
-    ...new Set(
-      cartera
-        .map((item) => item.cobranza?.responsable_cobro || "Sin asignar")
-        .filter(Boolean)
-    ),
+    ...new Set([
+      ...usuariosGestores.map((u) => u.nombre).filter(Boolean),
+      ...cartera.map((item) => item.cobranza?.responsable_cobro || "Sin asignar").filter(Boolean),
+    ]),
   ];
 
   const gestoresMedicion = gestores
     .filter((g) => g !== "Todos")
+    .filter((g) => gestorMedicion === "Todos" || g === gestorMedicion)
     .map((gestor) => {
       const carteraGestor = cartera.filter((item) => {
         const responsable = item.cobranza?.responsable_cobro || "Sin asignar";
-
-        const coincideGestor = responsable === gestor;
-        const coincideEstado =
-          estadoMedicion === "Todos" || item.estado === estadoMedicion;
-
-        return coincideGestor && coincideEstado;
+        return responsable === gestor;
       });
 
       const gestionesGestor = gestiones.filter(
@@ -574,7 +580,7 @@ export default function CobranzaGeneral() {
               </select>
             </Campo>
 
-            <Campo label="Dato a buscar">
+            <Campo label={tipoBusqueda === "Cédula" ? "Número de cédula" : "Valor de búsqueda"}>
               <input
                 type={tipoBusqueda === "Fecha inicio" ? "date" : "text"}
                 value={valorBusqueda}
@@ -691,7 +697,7 @@ export default function CobranzaGeneral() {
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>Resultado de cartera</h2>
+          <h2 style={tituloSeccion}>Cuentas encontradas</h2>
 
           <div style={{ overflowX: "auto" }}>
             <table style={tabla}>
@@ -770,24 +776,21 @@ export default function CobranzaGeneral() {
             </div>
 
             <div style={{ minWidth: "220px" }}>
-              <label style={labelStyle}>Estado</label>
+              <label style={labelStyle}>Gestor</label>
               <select
-                value={estadoMedicion}
-                onChange={(e) => setEstadoMedicion(e.target.value)}
+                value={gestorMedicion}
+                onChange={(e) => setGestorMedicion(e.target.value)}
                 style={inputStyle}
               >
-                <option>Todos</option>
-                <option>Al Día</option>
-                <option>Mora</option>
-                <option>Legal</option>
-                <option>Suspendido</option>
-                <option>Cancelado</option>
+                {gestores.map((gestor) => (
+                  <option key={gestor}>{gestor}</option>
+                ))}
               </select>
             </div>
           </div>
 
           <div style={{ overflowX: "auto" }}>
-            <table style={tabla}>
+            <table style={tablaMedicion}>
               <thead>
                 <tr>
                   <th style={th}>Gestor</th>
@@ -1072,6 +1075,12 @@ const tabla = {
   width: "100%",
   borderCollapse: "collapse",
   minWidth: "1150px",
+};
+
+const tablaMedicion = {
+  width: "100%",
+  borderCollapse: "collapse",
+  minWidth: "700px",
 };
 
 const th = {
