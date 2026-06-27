@@ -5,31 +5,31 @@ import { supabase } from "../../lib/supabase";
 
 export default function CobranzaGeneral() {
   const [cartera, setCartera] = useState([]);
-  const [pagosCobranza, setPagosCobranza] = useState([]);
   const [gestiones, setGestiones] = useState([]);
   const [usuariosGestores, setUsuariosGestores] = useState([]);
 
-  const [busqueda, setBusqueda] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState("Todos");
-  const [filtroGestor, setFiltroGestor] = useState("Todos");
-  const [filtroMora, setFiltroMora] = useState("Todos");
-  const [filtroResultado, setFiltroResultado] = useState("Todos");
-  const [fechaDesde, setFechaDesde] = useState("");
-  const [fechaHasta, setFechaHasta] = useState("");
-  const [filtroDireccion, setFiltroDireccion] = useState("");
-  const [filtroProducto, setFiltroProducto] = useState("Todos");
-  const [fechaVencimientoDesde, setFechaVencimientoDesde] = useState("");
-  const [fechaVencimientoHasta, setFechaVencimientoHasta] = useState("");
+  const [tipoBusqueda, setTipoBusqueda] = useState("Cédula");
+  const [valorBusqueda, setValorBusqueda] = useState("");
+  const [estadoBusqueda, setEstadoBusqueda] = useState("Todos");
+  const [moraBusqueda, setMoraBusqueda] = useState("Todos");
+
+  const [filtrosAplicados, setFiltrosAplicados] = useState({
+    tipoBusqueda: "Cédula",
+    valorBusqueda: "",
+    estadoBusqueda: "Todos",
+    moraBusqueda: "Todos",
+  });
+
+  const [cuentasSeleccionadas, setCuentasSeleccionadas] = useState([]);
+  const [gestorMasivo, setGestorMasivo] = useState("");
+  const [observacionMasiva, setObservacionMasiva] = useState("");
 
   const [modalAsignar, setModalAsignar] = useState(false);
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
   const [gestorSeleccionado, setGestorSeleccionado] = useState("");
   const [observacionAsignacion, setObservacionAsignacion] = useState("");
 
-  const [modalMasivo, setModalMasivo] = useState(false);
-  const [cuentasSeleccionadas, setCuentasSeleccionadas] = useState([]);
-  const [gestorMasivo, setGestorMasivo] = useState("");
-  const [observacionMasiva, setObservacionMasiva] = useState("");
+  const [estadoMedicion, setEstadoMedicion] = useState("Todos");
 
   useEffect(() => {
     cargarDatos();
@@ -37,10 +37,13 @@ export default function CobranzaGeneral() {
 
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
+
     if (!empresaId) {
-      alert("No hay empresa activa. Configure la empresa antes de usar Cobranza.");
+      alert("No hay empresa activa.");
+      window.location.href = "/login";
       return null;
     }
+
     return empresaId;
   }
 
@@ -63,10 +66,13 @@ export default function CobranzaGeneral() {
 
   function calcularDiasAtraso(fechaVencimiento, saldoActual) {
     if (!fechaVencimiento || Number(saldoActual || 0) <= 0) return 0;
+
     const hoy = new Date();
     const vencimiento = new Date(fechaVencimiento);
     const diferencia = hoy - vencimiento;
+
     if (diferencia <= 0) return 0;
+
     return Math.floor(diferencia / (1000 * 60 * 60 * 24));
   }
 
@@ -89,7 +95,6 @@ export default function CobranzaGeneral() {
   async function cargarDatos() {
     await cargarGestores();
     await cargarCartera();
-    await cargarPagosCobranza();
     await cargarGestiones();
   }
 
@@ -157,8 +162,15 @@ export default function CobranzaGeneral() {
 
     const carteraArmada = cuentas.map((cuenta) => {
       const cliente = clientes.find((c) => c.id === cuenta.cliente_id);
-      const cobranza = cobranzas.find((c) => c.informacion_comercial_id === cuenta.id);
-      const dias = calcularDiasAtraso(cuenta.fecha_vencimiento, cuenta.saldo_actual);
+
+      const cobranza = cobranzas.find(
+        (c) => c.informacion_comercial_id === cuenta.id
+      );
+
+      const dias = calcularDiasAtraso(
+        cuenta.fecha_vencimiento,
+        cuenta.saldo_actual
+      );
 
       const estado =
         cobranza?.estado_cobranza ||
@@ -178,32 +190,112 @@ export default function CobranzaGeneral() {
     setCartera(carteraArmada);
   }
 
-  async function cargarPagosCobranza() {
-    const empresaId = obtenerEmpresaId();
-    if (!empresaId) return;
-
-    const { data, error } = await supabase
-      .from("caja")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .in("tipo", ["Pago Crédito", "Abono", "Mensualidad"])
-      .eq("estado", "Procesado")
-      .order("fecha_pago", { ascending: false });
-
-    if (!error) setPagosCobranza(data || []);
-  }
-
   async function cargarGestiones() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("bitacora_cliente")
       .select("*")
       .eq("empresa_id", empresaId)
       .order("fecha_gestion", { ascending: false });
 
-    if (!error) setGestiones(data || []);
+    setGestiones(data || []);
+  }
+
+  function aplicarBusqueda() {
+    setFiltrosAplicados({
+      tipoBusqueda,
+      valorBusqueda,
+      estadoBusqueda,
+      moraBusqueda,
+    });
+
+    setCuentasSeleccionadas([]);
+  }
+
+  function limpiarFiltros() {
+    setTipoBusqueda("Cédula");
+    setValorBusqueda("");
+    setEstadoBusqueda("Todos");
+    setMoraBusqueda("Todos");
+    setFiltrosAplicados({
+      tipoBusqueda: "Cédula",
+      valorBusqueda: "",
+      estadoBusqueda: "Todos",
+      moraBusqueda: "Todos",
+    });
+    setCuentasSeleccionadas([]);
+  }
+
+  function coincideTipoBusqueda(item) {
+    const valor = String(filtrosAplicados.valorBusqueda || "").toLowerCase().trim();
+
+    if (!valor) return true;
+
+    const cliente = item.cliente || {};
+    const cuenta = item.cuenta || {};
+    const gestor = item.cobranza?.responsable_cobro || "Sin asignar";
+
+    if (filtrosAplicados.tipoBusqueda === "Cédula") {
+      return String(cliente.cedula || "").toLowerCase().includes(valor);
+    }
+
+    if (filtrosAplicados.tipoBusqueda === "Cliente") {
+      return String(cliente.nombre || "").toLowerCase().includes(valor);
+    }
+
+    if (filtrosAplicados.tipoBusqueda === "Dirección") {
+      return String(cliente.direccion || "").toLowerCase().includes(valor);
+    }
+
+    if (filtrosAplicados.tipoBusqueda === "Producto") {
+      return String(cuenta.tipo_producto || cuenta.descripcion || "")
+        .toLowerCase()
+        .includes(valor);
+    }
+
+    if (filtrosAplicados.tipoBusqueda === "Fecha inicio") {
+      return fechaSimple(cuenta.fecha_inicio) === valor;
+    }
+
+    if (filtrosAplicados.tipoBusqueda === "Gestor actual") {
+      return String(gestor || "").toLowerCase().includes(valor);
+    }
+
+    if (filtrosAplicados.tipoBusqueda === "Cuenta") {
+      return String(cuenta.numero_cuenta || "").toLowerCase().includes(valor);
+    }
+
+    return true;
+  }
+
+  const carteraFiltrada = cartera.filter((item) => {
+    const coincideBusqueda = coincideTipoBusqueda(item);
+
+    const coincideEstado =
+      filtrosAplicados.estadoBusqueda === "Todos" ||
+      item.estado === filtrosAplicados.estadoBusqueda;
+
+    const coincideMora =
+      filtrosAplicados.moraBusqueda === "Todos" ||
+      item.rangoMora === filtrosAplicados.moraBusqueda;
+
+    return coincideBusqueda && coincideEstado && coincideMora;
+  });
+
+  function toggleCuenta(id) {
+    setCuentasSeleccionadas((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  function seleccionarTodosFiltrados() {
+    setCuentasSeleccionadas(carteraFiltrada.map((item) => item.cuenta.id));
+  }
+
+  function limpiarSeleccion() {
+    setCuentasSeleccionadas([]);
   }
 
   function abrirModalAsignar(item) {
@@ -287,20 +379,6 @@ export default function CobranzaGeneral() {
     cargarDatos();
   }
 
-  function toggleCuenta(id) {
-    setCuentasSeleccionadas((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  }
-
-  function seleccionarTodosFiltrados() {
-    setCuentasSeleccionadas(carteraFiltrada.map((item) => item.cuenta.id));
-  }
-
-  function limpiarSeleccion() {
-    setCuentasSeleccionadas([]);
-  }
-
   async function guardarAsignacionMasiva() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
@@ -311,7 +389,7 @@ export default function CobranzaGeneral() {
     }
 
     if (!gestorMasivo) {
-      alert("Seleccione un gestor.");
+      alert("Seleccione el gestor que recibirá la cartera.");
       return;
     }
 
@@ -339,7 +417,7 @@ export default function CobranzaGeneral() {
         fecha_asignacion: fechaAsignacion,
         usuario_asignacion: usuarioAsignacion,
         observacion_asignacion:
-          observacionMasiva || "Asignación masiva de cartera",
+          observacionMasiva || "Reasignación de cartera",
         estado_cobranza: item.estado || "Al Día",
       };
 
@@ -369,15 +447,15 @@ export default function CobranzaGeneral() {
         item,
         gestor: gestorMasivo,
         observacion: observacionMasiva,
-        tipo: "Asignación masiva de cartera",
+        tipo: "Reasignación de cartera",
       }))
     );
 
-    alert("Asignación masiva realizada correctamente.");
+    alert("Cartera reasignada correctamente.");
+
     setCuentasSeleccionadas([]);
     setGestorMasivo("");
     setObservacionMasiva("");
-    setModalMasivo(false);
     cargarDatos();
   }
 
@@ -410,298 +488,114 @@ export default function CobranzaGeneral() {
     ),
   ];
 
-  const productos = [
-    "Todos",
-    ...new Set(
-      cartera
-        .map((item) => item.cuenta?.tipo_producto || item.cuenta?.descripcion || "")
-        .filter(Boolean)
-    ),
-  ];
-
-  const carteraFiltrada = cartera.filter((item) => {
-    const texto = busqueda.toLowerCase();
-    const gestor = item.cobranza?.responsable_cobro || "Sin asignar";
-    const direccion = String(item.cliente?.direccion || "").toLowerCase();
-    const producto = item.cuenta?.tipo_producto || item.cuenta?.descripcion || "";
-    const fechaVencimiento = fechaSimple(item.cuenta?.fecha_vencimiento);
-
-    const coincideBusqueda =
-      !texto ||
-      item.cliente?.nombre?.toLowerCase().includes(texto) ||
-      item.cliente?.cedula?.toLowerCase().includes(texto) ||
-      item.cuenta?.numero_cuenta?.toLowerCase().includes(texto);
-
-    const coincideEstado = filtroEstado === "Todos" || item.estado === filtroEstado;
-    const coincideGestor = filtroGestor === "Todos" || gestor === filtroGestor;
-    const coincideMora = filtroMora === "Todos" || item.rangoMora === filtroMora;
-
-    const coincideDireccion =
-      !filtroDireccion || direccion.includes(filtroDireccion.toLowerCase());
-
-    const coincideProducto =
-      filtroProducto === "Todos" || producto === filtroProducto;
-
-    const coincideVencDesde =
-      !fechaVencimientoDesde || fechaVencimiento >= fechaVencimientoDesde;
-
-    const coincideVencHasta =
-      !fechaVencimientoHasta || fechaVencimiento <= fechaVencimientoHasta;
-
-    return (
-      coincideBusqueda &&
-      coincideEstado &&
-      coincideGestor &&
-      coincideMora &&
-      coincideDireccion &&
-      coincideProducto &&
-      coincideVencDesde &&
-      coincideVencHasta
-    );
-  });
-
-  const gestionesFiltradas = gestiones.filter((g) => {
-    const fecha = fechaSimple(g.fecha_gestion);
-    const gestor = g.usuario || "Sin asignar";
-
-    const coincideDesde = !fechaDesde || fecha >= fechaDesde;
-    const coincideHasta = !fechaHasta || fecha <= fechaHasta;
-    const coincideGestor = filtroGestor === "Todos" || gestor === filtroGestor;
-    const coincideResultado =
-      filtroResultado === "Todos" || g.resultado_gestion === filtroResultado;
-
-    return coincideDesde && coincideHasta && coincideGestor && coincideResultado;
-  });
-
-  const pagosFiltrados = pagosCobranza.filter((p) => {
-    const fecha = fechaSimple(p.fecha_pago);
-    const coincideDesde = !fechaDesde || fecha >= fechaDesde;
-    const coincideHasta = !fechaHasta || fecha <= fechaHasta;
-    return coincideDesde && coincideHasta;
-  });
-
-  const hoy = new Date().toISOString().split("T")[0];
-  const mesActual = new Date().toISOString().slice(0, 7);
-
-  const cobradoHoy = pagosCobranza
-    .filter((p) => fechaSimple(p.fecha_pago) === hoy)
-    .reduce((sum, p) => sum + Number(p.monto || 0), 0);
-
-  const cobradoMes = pagosCobranza
-    .filter((p) => fechaSimple(p.fecha_pago).startsWith(mesActual))
-    .reduce((sum, p) => sum + Number(p.monto || 0), 0);
-
-  const cobradoPeriodo = pagosFiltrados.reduce(
-    (sum, p) => sum + Number(p.monto || 0),
-    0
-  );
-
-  const totalCartera = carteraFiltrada.reduce(
-    (sum, item) => sum + Number(item.cuenta?.saldo_actual || 0),
-    0
-  );
-
-  const totalMora = carteraFiltrada
-    .filter((item) => item.estado === "Mora")
-    .reduce((sum, item) => sum + Number(item.cuenta?.saldo_actual || 0), 0);
-
-  const clientesMora = carteraFiltrada.filter(
-    (item) => item.estado === "Mora" || item.estado === "Legal"
-  ).length;
-
-  const clientesSinAsignar = cartera.filter(
-    (item) => !item.cobranza?.responsable_cobro
-  ).length;
-
-  const clientesAsignados = cartera.filter(
-    (item) => item.cobranza?.responsable_cobro
-  ).length;
-
-  const gestoresActivos = usuariosGestores.length;
-
-  const moraRangos = ["Al Día", "1-30 días", "31-90 días", "91-180 días", "181+ días"].map(
-    (label) => ({
-      label,
-      monto: carteraFiltrada
-        .filter((i) => i.rangoMora === label)
-        .reduce((s, i) => s + Number(i.cuenta?.saldo_actual || 0), 0),
-    })
-  );
-
-  const maxMora = Math.max(...moraRangos.map((r) => r.monto), 1);
-
-  const actividadPorGestor = gestores
+  const gestoresMedicion = gestores
     .filter((g) => g !== "Todos")
     .map((gestor) => {
-      const carteraGestor = cartera.filter(
-        (item) => (item.cobranza?.responsable_cobro || "Sin asignar") === gestor
-      );
+      const carteraGestor = cartera.filter((item) => {
+        const responsable = item.cobranza?.responsable_cobro || "Sin asignar";
 
-      const gestionesGestor = gestionesFiltradas.filter(
+        const coincideGestor = responsable === gestor;
+        const coincideEstado =
+          estadoMedicion === "Todos" || item.estado === estadoMedicion;
+
+        return coincideGestor && coincideEstado;
+      });
+
+      const gestionesGestor = gestiones.filter(
         (g) => (g.usuario || "Sin asignar") === gestor
       );
 
-      const clientesUnicos = [
+      const clientesGestionados = [
         ...new Set(gestionesGestor.map((g) => g.cliente_id).filter(Boolean)),
       ].length;
 
+      const pendientes = Math.max(carteraGestor.length - clientesGestionados, 0);
+
       const porcentaje =
         carteraGestor.length > 0
-          ? Math.round((clientesUnicos / carteraGestor.length) * 100)
+          ? Math.round((clientesGestionados / carteraGestor.length) * 100)
           : 0;
 
       return {
         gestor,
         asignados: carteraGestor.length,
-        gestionados: clientesUnicos,
-        noGestionados: Math.max(carteraGestor.length - clientesUnicos, 0),
-        totalGestiones: gestionesGestor.length,
+        gestionados: clientesGestionados,
+        pendientes,
         porcentaje,
       };
     });
 
-  const pagosPorMes = agruparPagosPorMes(pagosCobranza).slice(-6);
-  const maxPagoMes = Math.max(...pagosPorMes.map((m) => m.total), 1);
-
-  function agruparPagosPorMes(pagos) {
-    const mapa = {};
-
-    pagos.forEach((pago) => {
-      const mes = String(pago.fecha_pago || pago.created_at || "").slice(0, 7);
-      if (!mes) return;
-      if (!mapa[mes]) mapa[mes] = 0;
-      mapa[mes] += Number(pago.monto || 0);
-    });
-
-    return Object.keys(mapa)
-      .sort()
-      .map((mes) => ({
-        mes,
-        total: mapa[mes],
-      }));
-  }
-
-  async function guardarCorteHistorico() {
-    alert("Corte histórico pendiente de conectar con historial_cartera.");
-  }
-
-  function limpiarFiltros() {
-    setBusqueda("");
-    setFiltroEstado("Todos");
-    setFiltroGestor("Todos");
-    setFiltroMora("Todos");
-    setFiltroResultado("Todos");
-    setFechaDesde("");
-    setFechaHasta("");
-    setFiltroDireccion("");
-    setFiltroProducto("Todos");
-    setFechaVencimientoDesde("");
-    setFechaVencimientoHasta("");
-    setCuentasSeleccionadas([]);
-  }
-
-  function imprimirReporte() {
-    window.print();
-  }
-
-  const textoPeriodo =
-    fechaDesde || fechaHasta
-      ? `${fechaDesde || "inicio"} hasta ${fechaHasta || "hoy"}`
-      : "Mes actual / sin rango aplicado";
+  const totalSeleccionado = cuentasSeleccionadas.length;
+  const totalResultado = carteraFiltrada.length;
 
   return (
     <div style={pagina}>
       <div style={contenedor}>
         <div style={hero}>
-          <div style={heroInfo}>
-            <img src="/konax-logo.png" alt="KONAX" style={logoHero} />
-
-            <div>
-              <p style={etiqueta}>Módulo de Cobranza</p>
-              <h1 style={tituloHero}>Cobranza General</h1>
-              <p style={subtituloHero}>
-                Supervisión ejecutiva de cartera, asignación masiva, cobros y productividad.
-              </p>
-              <p style={periodoHero}>Periodo del reporte: {textoPeriodo}</p>
-            </div>
+          <div>
+            <h1 style={tituloHero}>Cobranza General</h1>
+            <p style={subtituloHero}>
+              Busca cartera, selecciona cuentas y asigna gestores de cobro.
+            </p>
           </div>
 
-          <div style={accionesHeader}>
-            <button style={botonClaro} onClick={volverDashboard}>
-              ← Centro de Operaciones
-            </button>
-
-            <button style={botonVerde} onClick={guardarCorteHistorico}>
-              Guardar corte
-            </button>
-
-            <button style={botonNegro} onClick={imprimirReporte}>
-              Imprimir
-            </button>
-          </div>
-        </div>
-
-        <div style={kpiGrid}>
-          <KPI titulo="Cartera Total" valor={totalCartera} />
-          <KPI titulo="En Mora" valor={totalMora} />
-          <KPI titulo="Cobrado Hoy" valor={cobradoHoy} />
-          <KPI titulo="Cobrado Mes" valor={cobradoMes} />
-          <KPI titulo="Clientes Mora" valor={clientesMora} tipo="numero" />
-          <KPI titulo="Sin Asignar" valor={clientesSinAsignar} tipo="numero" />
-          <KPI titulo="Asignados" valor={clientesAsignados} tipo="numero" />
-          <KPI titulo="Gestores Activos" valor={gestoresActivos} tipo="numero" />
+          <button style={botonClaro} onClick={volverDashboard}>
+            ← Volver
+          </button>
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>Filtros de Supervisión</h2>
+          <div style={cardHeader}>
+            <div>
+              <h2 style={tituloSeccion}>Buscar cartera</h2>
+              <p style={ayuda}>
+                Filtra la cartera por cliente, cédula, dirección, producto, fecha, estado o gestor.
+              </p>
+            </div>
+          </div>
 
           <div style={gridFiltros}>
-            <Campo label="Buscar cliente, cédula o cuenta">
-              <input
-                placeholder="Ejemplo: Ana, 8-888, CTA-001"
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                style={inputStyle}
-              />
-            </Campo>
-
-            <Campo label="Dirección / Zona">
-              <input
-                placeholder="Ej. La Chorrera"
-                value={filtroDireccion}
-                onChange={(e) => setFiltroDireccion(e.target.value)}
-                style={inputStyle}
-              />
-            </Campo>
-
-            <Campo label="Producto">
+            <Campo label="Buscar por">
               <select
-                value={filtroProducto}
-                onChange={(e) => setFiltroProducto(e.target.value)}
+                value={tipoBusqueda}
+                onChange={(e) => {
+                  setTipoBusqueda(e.target.value);
+                  setValorBusqueda("");
+                }}
                 style={inputStyle}
               >
-                {productos.map((p) => (
-                  <option key={p}>{p}</option>
-                ))}
+                <option>Cédula</option>
+                <option>Cliente</option>
+                <option>Dirección</option>
+                <option>Producto</option>
+                <option>Fecha inicio</option>
+                <option>Gestor actual</option>
+                <option>Cuenta</option>
               </select>
             </Campo>
 
-            <Campo label="Gestor">
-              <select
-                value={filtroGestor}
-                onChange={(e) => setFiltroGestor(e.target.value)}
+            <Campo label="Dato a buscar">
+              <input
+                type={tipoBusqueda === "Fecha inicio" ? "date" : "text"}
+                value={valorBusqueda}
+                onChange={(e) => setValorBusqueda(e.target.value)}
+                placeholder={
+                  tipoBusqueda === "Cédula"
+                    ? "Ej. 8-888-888"
+                    : tipoBusqueda === "Dirección"
+                    ? "Ej. La Chorrera"
+                    : tipoBusqueda === "Producto"
+                    ? "Ej. Lavadora"
+                    : "Escriba aquí"
+                }
                 style={inputStyle}
-              >
-                {gestores.map((gestor) => (
-                  <option key={gestor}>{gestor}</option>
-                ))}
-              </select>
+              />
             </Campo>
 
             <Campo label="Estado">
               <select
-                value={filtroEstado}
-                onChange={(e) => setFiltroEstado(e.target.value)}
+                value={estadoBusqueda}
+                onChange={(e) => setEstadoBusqueda(e.target.value)}
                 style={inputStyle}
               >
                 <option>Todos</option>
@@ -715,8 +609,8 @@ export default function CobranzaGeneral() {
 
             <Campo label="Mora">
               <select
-                value={filtroMora}
-                onChange={(e) => setFiltroMora(e.target.value)}
+                value={moraBusqueda}
+                onChange={(e) => setMoraBusqueda(e.target.value)}
                 style={inputStyle}
               >
                 <option>Todos</option>
@@ -728,55 +622,76 @@ export default function CobranzaGeneral() {
               </select>
             </Campo>
 
-            <Campo label="Vencimiento desde">
-              <input
-                type="date"
-                value={fechaVencimientoDesde}
-                onChange={(e) => setFechaVencimientoDesde(e.target.value)}
+            <Campo label="Acciones">
+              <div style={botonesLinea}>
+                <button style={botonBuscar} onClick={aplicarBusqueda}>
+                  Buscar
+                </button>
+
+                <button style={botonLimpiar} onClick={limpiarFiltros}>
+                  Limpiar
+                </button>
+              </div>
+            </Campo>
+          </div>
+        </div>
+
+        <div style={card}>
+          <div style={asignacionHeader}>
+            <div>
+              <h2 style={tituloSeccion}>Asignar cartera</h2>
+              <p style={ayuda}>
+                Resultado: <strong>{totalResultado}</strong> cuenta(s) · Seleccionadas:{" "}
+                <strong>{totalSeleccionado}</strong>
+              </p>
+            </div>
+
+            <div style={botonesLinea}>
+              <button style={botonNegro} onClick={seleccionarTodosFiltrados}>
+                Seleccionar resultado
+              </button>
+
+              <button style={botonLimpiar} onClick={limpiarSeleccion}>
+                Quitar selección
+              </button>
+            </div>
+          </div>
+
+          <div style={gridAsignacion}>
+            <Campo label="Asignar a gestor">
+              <select
+                value={gestorMasivo}
+                onChange={(e) => setGestorMasivo(e.target.value)}
                 style={inputStyle}
-              />
+              >
+                <option value="">Seleccione gestor</option>
+                {usuariosGestores.map((gestor) => (
+                  <option key={gestor.id} value={gestor.nombre}>
+                    {gestor.nombre}
+                  </option>
+                ))}
+              </select>
             </Campo>
 
-            <Campo label="Vencimiento hasta">
+            <Campo label="Motivo">
               <input
-                type="date"
-                value={fechaVencimientoHasta}
-                onChange={(e) => setFechaVencimientoHasta(e.target.value)}
+                value={observacionMasiva}
+                onChange={(e) => setObservacionMasiva(e.target.value)}
+                placeholder="Ej. Cambio de zona, producto o carga de trabajo"
                 style={inputStyle}
               />
             </Campo>
 
             <Campo label="Acción">
-              <button style={botonSecundario} onClick={limpiarFiltros}>
-                Limpiar
+              <button style={botonAsignar} onClick={guardarAsignacionMasiva}>
+                Reasignar cartera
               </button>
             </Campo>
           </div>
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>Asignación Masiva</h2>
-          <p style={ayuda}>
-            Puedes seleccionar cuentas manualmente o seleccionar todas las cuentas filtradas por zona, producto, vencimiento, mora o gestor.
-          </p>
-
-          <div style={accionesHeader}>
-            <button style={botonVerde} onClick={seleccionarTodosFiltrados}>
-              Seleccionar filtrados ({carteraFiltrada.length})
-            </button>
-
-            <button style={botonNegro} onClick={limpiarSeleccion}>
-              Limpiar selección
-            </button>
-
-            <button style={botonMini} onClick={() => setModalMasivo(true)}>
-              Reasignar seleccionados ({cuentasSeleccionadas.length})
-            </button>
-          </div>
-        </div>
-
-        <div style={card}>
-          <h2 style={tituloSeccion}>Cartera y Asignación de Gestores</h2>
+          <h2 style={tituloSeccion}>Resultado de cartera</h2>
 
           <div style={{ overflowX: "auto" }}>
             <table style={tabla}>
@@ -827,7 +742,7 @@ export default function CobranzaGeneral() {
                     <td style={td}>{item.cobranza?.responsable_cobro || "Sin asignar"}</td>
                     <td style={td}>
                       <button style={botonMini} onClick={() => abrirModalAsignar(item)}>
-                        {item.cobranza?.responsable_cobro ? "Cambiar" : "Asignar"}
+                        Cambiar
                       </button>
                     </td>
                   </tr>
@@ -836,7 +751,7 @@ export default function CobranzaGeneral() {
                 {carteraFiltrada.length === 0 && (
                   <tr>
                     <td style={td} colSpan="12">
-                      No hay cuentas para mostrar con los filtros actuales.
+                      No hay cuentas con los filtros aplicados.
                     </td>
                   </tr>
                 )}
@@ -845,22 +760,31 @@ export default function CobranzaGeneral() {
           </div>
         </div>
 
-        <div style={gridDos}>
-          <div style={card}>
-            <h2 style={tituloSeccion}>Cobros Últimos Meses</h2>
-            <GraficaBarras data={pagosPorMes} max={maxPagoMes} />
-          </div>
-
-          <div style={card}>
-            <h2 style={tituloSeccion}>Mora por Antigüedad</h2>
-            {moraRangos.map((item) => (
-              <Barra key={item.label} label={item.label} valor={item.monto} max={maxMora} />
-            ))}
-          </div>
-        </div>
-
         <div style={card}>
-          <h2 style={tituloSeccion}>Supervisión por Gestor</h2>
+          <div style={asignacionHeader}>
+            <div>
+              <h2 style={tituloSeccion}>Medición de gestores</h2>
+              <p style={ayuda}>
+                Revisa la carga asignada y avance de gestión por cobrador.
+              </p>
+            </div>
+
+            <div style={{ minWidth: "220px" }}>
+              <label style={labelStyle}>Estado</label>
+              <select
+                value={estadoMedicion}
+                onChange={(e) => setEstadoMedicion(e.target.value)}
+                style={inputStyle}
+              >
+                <option>Todos</option>
+                <option>Al Día</option>
+                <option>Mora</option>
+                <option>Legal</option>
+                <option>Suspendido</option>
+                <option>Cancelado</option>
+              </select>
+            </div>
+          </div>
 
           <div style={{ overflowX: "auto" }}>
             <table style={tabla}>
@@ -869,30 +793,28 @@ export default function CobranzaGeneral() {
                   <th style={th}>Gestor</th>
                   <th style={th}>Asignados</th>
                   <th style={th}>Gestionados</th>
-                  <th style={th}>No gestionados</th>
-                  <th style={th}>Total gestiones</th>
-                  <th style={th}>% gestionado</th>
+                  <th style={th}>Pendientes</th>
+                  <th style={th}>% Gestión</th>
                 </tr>
               </thead>
 
               <tbody>
-                {actividadPorGestor.map((item) => (
+                {gestoresMedicion.map((item) => (
                   <tr key={item.gestor}>
                     <td style={td}>{item.gestor}</td>
                     <td style={td}>{item.asignados}</td>
                     <td style={td}>{item.gestionados}</td>
-                    <td style={td}>{item.noGestionados}</td>
-                    <td style={td}>{item.totalGestiones}</td>
+                    <td style={td}>{item.pendientes}</td>
                     <td style={td}>
                       <strong>{item.porcentaje}%</strong>
                     </td>
                   </tr>
                 ))}
 
-                {actividadPorGestor.length === 0 && (
+                {gestoresMedicion.length === 0 && (
                   <tr>
-                    <td style={td} colSpan="6">
-                      No hay gestiones registradas para el periodo seleccionado.
+                    <td style={td} colSpan="5">
+                      No hay gestores para mostrar.
                     </td>
                   </tr>
                 )}
@@ -902,114 +824,52 @@ export default function CobranzaGeneral() {
         </div>
 
         {modalAsignar && (
-          <ModalAsignar
-            titulo="Asignar Gestor"
-            cuenta={cuentaSeleccionada}
-            usuariosGestores={usuariosGestores}
-            gestor={gestorSeleccionado}
-            setGestor={setGestorSeleccionado}
-            observacion={observacionAsignacion}
-            setObservacion={setObservacionAsignacion}
-            onGuardar={guardarAsignacionGestor}
-            onCancelar={cerrarModalAsignar}
-          />
-        )}
-
-        {modalMasivo && (
           <div style={modalFondo}>
             <div style={modal}>
-              <h2 style={tituloSeccion}>Asignación Masiva</h2>
+              <h2 style={tituloSeccion}>Cambiar gestor</h2>
+
               <p style={ayuda}>
-                Cuentas seleccionadas: <strong>{cuentasSeleccionadas.length}</strong>
+                Cliente: <strong>{cuentaSeleccionada?.cliente?.nombre || "-"}</strong>
+                <br />
+                Cuenta: <strong>{cuentaSeleccionada?.cuenta?.numero_cuenta || "-"}</strong>
               </p>
 
-              <label style={labelStyle}>Gestor de Cobranza</label>
-              <select
-                value={gestorMasivo}
-                onChange={(e) => setGestorMasivo(e.target.value)}
-                style={inputStyle}
-              >
-                <option value="">Seleccione gestor</option>
-                {usuariosGestores.map((gestor) => (
-                  <option key={gestor.id} value={gestor.nombre}>
-                    {gestor.nombre}
-                  </option>
-                ))}
-              </select>
+              <Campo label="Gestor">
+                <select
+                  value={gestorSeleccionado}
+                  onChange={(e) => setGestorSeleccionado(e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">Seleccione gestor</option>
+                  {usuariosGestores.map((gestor) => (
+                    <option key={gestor.id} value={gestor.nombre}>
+                      {gestor.nombre}
+                    </option>
+                  ))}
+                </select>
+              </Campo>
 
-              <label style={labelStyle}>Motivo / Observación</label>
-              <textarea
-                value={observacionMasiva}
-                onChange={(e) => setObservacionMasiva(e.target.value)}
-                placeholder="Ej. Reasignación por zona, producto, fecha o carga de trabajo..."
-                style={textarea}
-              />
+              <Campo label="Motivo">
+                <textarea
+                  value={observacionAsignacion}
+                  onChange={(e) => setObservacionAsignacion(e.target.value)}
+                  placeholder="Motivo del cambio de gestor"
+                  style={textarea}
+                />
+              </Campo>
 
               <div style={accionesModal}>
-                <button style={botonVerdeGrande} onClick={guardarAsignacionMasiva}>
-                  Guardar Masivo
+                <button style={botonAsignar} onClick={guardarAsignacionGestor}>
+                  Guardar cambio
                 </button>
 
-                <button style={botonGrisGrande} onClick={() => setModalMasivo(false)}>
+                <button style={botonLimpiar} onClick={cerrarModalAsignar}>
                   Cancelar
                 </button>
               </div>
             </div>
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function ModalAsignar({
-  titulo,
-  cuenta,
-  usuariosGestores,
-  gestor,
-  setGestor,
-  observacion,
-  setObservacion,
-  onGuardar,
-  onCancelar,
-}) {
-  return (
-    <div style={modalFondo}>
-      <div style={modal}>
-        <h2 style={tituloSeccion}>{titulo}</h2>
-
-        <p style={ayuda}>
-          Cliente: <strong>{cuenta?.cliente?.nombre || "-"}</strong>
-          <br />
-          Cuenta: <strong>{cuenta?.cuenta?.numero_cuenta || "-"}</strong>
-        </p>
-
-        <label style={labelStyle}>Gestor de Cobranza</label>
-        <select value={gestor} onChange={(e) => setGestor(e.target.value)} style={inputStyle}>
-          <option value="">Seleccione gestor</option>
-          {usuariosGestores.map((g) => (
-            <option key={g.id} value={g.nombre}>
-              {g.nombre}
-            </option>
-          ))}
-        </select>
-
-        <label style={labelStyle}>Observación</label>
-        <textarea
-          value={observacion}
-          onChange={(e) => setObservacion(e.target.value)}
-          placeholder="Observación opcional de asignación..."
-          style={textarea}
-        />
-
-        <div style={accionesModal}>
-          <button style={botonVerdeGrande} onClick={onGuardar}>
-            Guardar
-          </button>
-          <button style={botonGrisGrande} onClick={onCancelar}>
-            Cancelar
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -1024,101 +884,249 @@ function Campo({ label, children }) {
   );
 }
 
-function KPI({ titulo, valor, tipo }) {
-  return (
-    <div style={cardKpi}>
-      <p style={kpiTitulo}>{titulo}</p>
-      <h2 style={kpiValor}>
-        {tipo === "numero"
-          ? Number(valor || 0).toLocaleString()
-          : "$" + Number(valor || 0).toLocaleString()}
-      </h2>
-    </div>
-  );
-}
+const pagina = {
+  minHeight: "100vh",
+  background: "#eef2f7",
+  padding: "24px",
+  fontFamily: "Arial, sans-serif",
+};
 
-function Barra({ label, valor, max }) {
-  const porcentaje = max > 0 ? Math.min((valor / max) * 100, 100) : 0;
+const contenedor = {
+  maxWidth: "1500px",
+  margin: "0 auto",
+};
 
-  return (
-    <div style={barraItem}>
-      <div style={barraHeader}>
-        <strong>{label}</strong>
-        <span>${Number(valor || 0).toLocaleString()}</span>
-      </div>
-      <div style={barraFondo}>
-        <div style={{ ...barraProgreso, width: `${porcentaje}%` }} />
-      </div>
-    </div>
-  );
-}
+const hero = {
+  background: "linear-gradient(135deg, #111827, #064e3b)",
+  color: "#ffffff",
+  padding: "26px",
+  borderRadius: "22px",
+  marginBottom: "18px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "16px",
+  flexWrap: "wrap",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
+};
 
-function GraficaBarras({ data, max }) {
-  if (!data || data.length === 0) {
-    return <div style={emptyBox}>Aún no hay cobros registrados.</div>;
-  }
+const tituloHero = {
+  margin: 0,
+  fontSize: "36px",
+  fontWeight: "bold",
+};
 
-  return (
-    <div style={graficaMeses}>
-      {data.map((item) => {
-        const alto = max > 0 ? Math.max((item.total / max) * 160, 12) : 12;
+const subtituloHero = {
+  color: "#dcfce7",
+  marginTop: "8px",
+  marginBottom: 0,
+  fontSize: "15px",
+};
 
-        return (
-          <div key={item.mes} style={barraMesBox}>
-            <div style={barraMesValor}>${Number(item.total || 0).toLocaleString()}</div>
-            <div style={{ ...barraMes, height: `${alto}px` }} />
-            <div style={barraMesLabel}>{item.mes}</div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+const card = {
+  background: "#ffffff",
+  padding: "22px",
+  borderRadius: "18px",
+  marginBottom: "16px",
+  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
+  border: "1px solid #e5e7eb",
+};
 
-const pagina = { minHeight: "100vh", background: "#eef2f7", padding: "24px", fontFamily: "Arial, sans-serif" };
-const contenedor = { maxWidth: "1500px", margin: "0 auto" };
-const hero = { background: "linear-gradient(135deg, #111827, #7f1d1d)", color: "#ffffff", padding: "28px", borderRadius: "22px", marginBottom: "22px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "20px", flexWrap: "wrap", boxShadow: "0 8px 24px rgba(0,0,0,0.16)" };
-const heroInfo = { display: "flex", alignItems: "center", gap: "18px" };
-const logoHero = { width: "90px", background: "#ffffff", borderRadius: "16px", padding: "8px" };
-const etiqueta = { margin: 0, color: "#fecaca", fontSize: "14px", fontWeight: "bold" };
-const tituloHero = { margin: "4px 0", fontSize: "36px", fontWeight: "bold" };
-const subtituloHero = { color: "#fee2e2", marginTop: "6px", fontSize: "15px" };
-const periodoHero = { margin: "8px 0 0", color: "#fef3c7", fontSize: "13px", fontWeight: "bold" };
-const accionesHeader = { display: "flex", gap: "10px", flexWrap: "wrap" };
-const botonClaro = { background: "#ffffff", color: "#111827", border: "none", padding: "11px 18px", borderRadius: "9px", fontWeight: "bold", cursor: "pointer" };
-const kpiGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: "14px", marginBottom: "16px" };
-const cardKpi = { background: "#ffffff", padding: "17px", borderRadius: "16px", boxShadow: "0 2px 10px rgba(0,0,0,0.06)" };
-const kpiTitulo = { margin: 0, color: "#6b7280", fontSize: "13px" };
-const kpiValor = { marginTop: "8px", color: "#111827", fontSize: "23px" };
-const gridDos = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(360px,1fr))", gap: "16px" };
-const card = { background: "#ffffff", padding: "18px", borderRadius: "16px", marginBottom: "16px", boxShadow: "0 2px 10px rgba(0,0,0,0.06)" };
-const tituloSeccion = { marginBottom: "6px", color: "#111827" };
-const ayuda = { marginTop: 0, marginBottom: "14px", color: "#6b7280", fontSize: "13px" };
-const gridFiltros = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: "14px", alignItems: "end" };
-const labelStyle = { display: "block", marginBottom: "6px", marginTop: "10px", color: "#374151", fontSize: "13px", fontWeight: "bold" };
-const inputStyle = { width: "100%", padding: "11px", borderRadius: "8px", border: "1px solid #d1d5db", boxSizing: "border-box" };
-const textarea = { width: "100%", minHeight: "90px", padding: "11px", borderRadius: "8px", border: "1px solid #d1d5db", boxSizing: "border-box" };
-const botonNegro = { background: "#111827", color: "#ffffff", border: "none", padding: "11px 20px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" };
-const botonVerde = { background: "#16a34a", color: "#ffffff", border: "none", padding: "11px 20px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" };
-const botonSecundario = { background: "#16a34a", color: "#ffffff", border: "none", padding: "11px 20px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", width: "100%" };
-const botonMini = { background: "#2563eb", color: "#ffffff", border: "none", padding: "7px 10px", borderRadius: "7px", fontWeight: "bold", cursor: "pointer" };
-const tabla = { width: "100%", borderCollapse: "collapse" };
-const th = { background: "#111827", color: "#ffffff", padding: "12px", textAlign: "left", fontSize: "13px" };
-const td = { padding: "11px", borderBottom: "1px solid #e5e7eb", fontSize: "13px" };
-const estadoVerde = { background: "#dcfce7", color: "#166534", padding: "5px 10px", borderRadius: "999px", fontWeight: "bold" };
-const estadoRojo = { background: "#fee2e2", color: "#991b1b", padding: "5px 10px", borderRadius: "999px", fontWeight: "bold" };
-const barraItem = { marginBottom: "16px" };
-const barraHeader = { display: "flex", justifyContent: "space-between", marginBottom: "6px", color: "#374151", fontSize: "13px" };
-const barraFondo = { width: "100%", height: "12px", background: "#e5e7eb", borderRadius: "999px", overflow: "hidden" };
-const barraProgreso = { height: "100%", background: "#16a34a", borderRadius: "999px" };
-const graficaMeses = { display: "flex", alignItems: "flex-end", gap: "12px", height: "230px", paddingTop: "20px", overflowX: "auto" };
-const barraMesBox = { minWidth: "75px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end" };
-const barraMes = { width: "34px", background: "#111827", borderRadius: "8px 8px 0 0" };
-const barraMesValor = { fontSize: "11px", color: "#374151", marginBottom: "6px", whiteSpace: "nowrap" };
-const barraMesLabel = { marginTop: "8px", fontSize: "12px", color: "#6b7280" };
-const emptyBox = { background: "#f9fafb", border: "1px dashed #d1d5db", borderRadius: "12px", padding: "18px", color: "#6b7280", fontSize: "14px" };
-const modalFondo = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", justifyContent: "center", alignItems: "center", padding: "20px", zIndex: 999 };
-const modal = { width: "460px", maxWidth: "100%", background: "#ffffff", padding: "24px", borderRadius: "18px", boxShadow: "0 10px 30px rgba(0,0,0,0.20)" };
-const accionesModal = { display: "flex", gap: "10px", marginTop: "18px" };
-const botonVerdeGrande = { flex: 1, background: "#16a34a", color: "#ffffff", border: "none", padding: "12px", borderRadius: "9px", fontWeight: "bold", cursor: "pointer" };
-const botonGrisGrande = { flex: 1, background: "#6b7280", color: "#ffffff", border: "none", padding: "12px", borderRadius: "9px", fontWeight: "bold", cursor: "pointer" };
+const cardHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "12px",
+  flexWrap: "wrap",
+  marginBottom: "14px",
+};
+
+const asignacionHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+  flexWrap: "wrap",
+  marginBottom: "14px",
+};
+
+const tituloSeccion = {
+  margin: 0,
+  color: "#111827",
+  fontSize: "22px",
+};
+
+const ayuda = {
+  marginTop: "6px",
+  marginBottom: 0,
+  color: "#6b7280",
+  fontSize: "14px",
+};
+
+const gridFiltros = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+  gap: "14px",
+  alignItems: "end",
+};
+
+const gridAsignacion = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
+  gap: "14px",
+  alignItems: "end",
+};
+
+const labelStyle = {
+  display: "block",
+  marginBottom: "6px",
+  color: "#374151",
+  fontSize: "13px",
+  fontWeight: "bold",
+};
+
+const inputStyle = {
+  width: "100%",
+  padding: "12px",
+  borderRadius: "10px",
+  border: "1px solid #d1d5db",
+  boxSizing: "border-box",
+  background: "#ffffff",
+  color: "#111827",
+  fontSize: "14px",
+};
+
+const textarea = {
+  ...inputStyle,
+  minHeight: "95px",
+  resize: "vertical",
+};
+
+const botonesLinea = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap",
+};
+
+const botonClaro = {
+  background: "#ffffff",
+  color: "#111827",
+  border: "none",
+  padding: "12px 20px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonBuscar = {
+  background: "#16a34a",
+  color: "#ffffff",
+  border: "none",
+  padding: "12px 20px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonAsignar = {
+  background: "#047857",
+  color: "#ffffff",
+  border: "none",
+  padding: "12px 20px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+  width: "100%",
+};
+
+const botonNegro = {
+  background: "#111827",
+  color: "#ffffff",
+  border: "none",
+  padding: "12px 18px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonLimpiar = {
+  background: "#6b7280",
+  color: "#ffffff",
+  border: "none",
+  padding: "12px 18px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonMini = {
+  background: "#2563eb",
+  color: "#ffffff",
+  border: "none",
+  padding: "8px 12px",
+  borderRadius: "8px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const tabla = {
+  width: "100%",
+  borderCollapse: "collapse",
+  minWidth: "1150px",
+};
+
+const th = {
+  background: "#111827",
+  color: "#ffffff",
+  padding: "12px",
+  textAlign: "left",
+  fontSize: "13px",
+};
+
+const td = {
+  padding: "11px",
+  borderBottom: "1px solid #e5e7eb",
+  fontSize: "13px",
+  color: "#111827",
+};
+
+const estadoVerde = {
+  background: "#dcfce7",
+  color: "#166534",
+  padding: "5px 10px",
+  borderRadius: "999px",
+  fontWeight: "bold",
+};
+
+const estadoRojo = {
+  background: "#fee2e2",
+  color: "#991b1b",
+  padding: "5px 10px",
+  borderRadius: "999px",
+  fontWeight: "bold",
+};
+
+const modalFondo = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.45)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  padding: "20px",
+  zIndex: 999,
+};
+
+const modal = {
+  width: "480px",
+  maxWidth: "100%",
+  background: "#ffffff",
+  padding: "24px",
+  borderRadius: "18px",
+  boxShadow: "0 10px 30px rgba(0,0,0,0.20)",
+};
+
+const accionesModal = {
+  display: "flex",
+  gap: "10px",
+  marginTop: "18px",
+};
