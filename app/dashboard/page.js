@@ -185,9 +185,7 @@ export default function Dashboard() {
 
   function tienePermiso(modulo) {
     const r = normalizarRol(usuarioRol);
-
     if (r === "superadmin" || r === "administrador") return true;
-
     return permisosUsuario.includes(modulo);
   }
 
@@ -297,9 +295,6 @@ export default function Dashboard() {
   const tarjetas = [
     {
       nombre: esPlanCobros ? "Cuentas por Cobrar" : "Clientes",
-      descripcion: esPlanCobros
-        ? "Carga inicial de clientes y cartera existente."
-        : "Registro y consulta de clientes.",
       ruta: "/clientes",
       activo:
         modulos.clientes &&
@@ -308,77 +303,66 @@ export default function Dashboard() {
     },
     {
       nombre: "Vista Cliente",
-      descripcion: "Ficha individual, historial, pagos y gestiones.",
       ruta: "/vista-cliente",
       activo: modulos.vista_cliente && tienePermiso("vista_cliente"),
       icono: "🧾",
     },
     {
       nombre: "Créditos",
-      descripcion: "Registro de ventas a crédito.",
       ruta: "/ventas-credito",
       activo: permitirCredito,
       icono: "💳",
     },
     {
       nombre: "Caja Básica",
-      descripcion: "Pagos, abonos y mensualidades.",
       ruta: "/caja",
       activo: modulos.caja && tienePermiso("caja"),
       icono: "💵",
     },
     {
       nombre: "Cobranza",
-      descripcion: "Gestión y seguimiento de cobros.",
       ruta: "/cobranza",
       activo: permitirCobranza,
       icono: "📞",
     },
     {
       nombre: "Centro de Cobranza",
-      descripcion: "Indicadores de cartera y mora.",
       ruta: "/dashboard-cobranza",
       activo: permitirDashboardCobros,
       icono: "📊",
     },
     {
       nombre: "Inventario",
-      descripcion: "Productos, precios y stock.",
       ruta: "/inventario",
       activo: permitirInventario,
       icono: "📦",
     },
     {
       nombre: "Nuevo Producto",
-      descripcion: "Carga inicial de inventario.",
       ruta: "/inventario/nuevo",
       activo: permitirNuevoProducto,
       icono: "➕",
     },
     {
       nombre: "Control Caja",
-      descripcion: "Cierres y arqueos.",
       ruta: "/control-caja",
       activo: permitirControlCaja,
       icono: "🏦",
     },
     {
       nombre: "Suscripciones",
-      descripcion: "Membresías y renovaciones.",
       ruta: "/suscripciones",
       activo: permitirSuscripciones,
       icono: "🔁",
     },
     {
       nombre: "Recargos",
-      descripcion: "Configuración de recargos.",
       ruta: "/recargos",
       activo: !membresia && modulos.recargos && tienePermiso("recargos"),
       icono: "⚠️",
     },
     {
       nombre: "Centro de Ventas",
-      descripcion: "Indicadores comerciales.",
       ruta: "/dashboard-ventas",
       activo:
         !membresia &&
@@ -388,21 +372,18 @@ export default function Dashboard() {
     },
     {
       nombre: "Gastos",
-      descripcion: "Registro de egresos.",
       ruta: "/gastos",
       activo: modulos.egresos && tienePermiso("gastos"),
       icono: "🧮",
     },
     {
       nombre: "Usuarios y Roles",
-      descripcion: "Usuarios y accesos.",
       ruta: "/usuarios",
       activo: tienePermiso("usuarios"),
       icono: "🔐",
     },
     {
       nombre: "Roles y Permisos",
-      descripcion: "Permisos por módulo.",
       ruta: "/roles",
       activo: tienePermiso("roles"),
       icono: "🛡️",
@@ -473,43 +454,6 @@ export default function Dashboard() {
           <div style={resumenCard}>
             <p style={resumenLabel}>Rol</p>
             <h2 style={resumenValorTexto}>{usuarioRol || "Sin rol"}</h2>
-          </div>
-        </div>
-
-        <div style={panelModulo}>
-          <h2 style={tituloModulo}>
-            {esPlanCobros ? "KONAX Cobros" : "Centro de Operaciones"}
-          </h2>
-
-          <p style={textoModulo}>
-            Use el menú lateral para abrir cada pantalla del sistema. Aquí tendrá
-            una vista limpia del módulo activo sin duplicar las opciones.
-          </p>
-
-          <div style={moduloResumenGrid}>
-            <div style={moduloCard}>
-              <span style={moduloIcono}>👥</span>
-              <strong>Clientes y cuentas</strong>
-              <p>Carga inicial, consulta y seguimiento de clientes.</p>
-            </div>
-
-            <div style={moduloCard}>
-              <span style={moduloIcono}>💵</span>
-              <strong>Pagos y caja</strong>
-              <p>Registro de pagos, abonos, mensualidades y arqueos.</p>
-            </div>
-
-            <div style={moduloCard}>
-              <span style={moduloIcono}>📞</span>
-              <strong>Cobranza</strong>
-              <p>Gestión de cobros, promesas y asignación de gestores.</p>
-            </div>
-
-            <div style={moduloCard}>
-              <span style={moduloIcono}>📊</span>
-              <strong>Indicadores</strong>
-              <p>Resumen de cartera, mora, cobros y productividad.</p>
-            </div>
           </div>
         </div>
 
@@ -677,45 +621,6 @@ const resumenValorTexto = {
   margin: "8px 0 0",
   color: "#111827",
   fontSize: "22px",
-};
-
-const panelModulo = {
-  background: "#ffffff",
-  borderRadius: "22px",
-  padding: "28px",
-  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
-  border: "1px solid #e5e7eb",
-};
-
-const tituloModulo = {
-  margin: "0 0 8px",
-  fontSize: "30px",
-  color: "#111827",
-};
-
-const textoModulo = {
-  margin: "0 0 22px",
-  color: "#6b7280",
-  fontSize: "16px",
-};
-
-const moduloResumenGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: "16px",
-};
-
-const moduloCard = {
-  background: "#f9fafb",
-  border: "1px solid #e5e7eb",
-  borderRadius: "18px",
-  padding: "20px",
-  display: "grid",
-  gap: "8px",
-};
-
-const moduloIcono = {
-  fontSize: "30px",
 };
 
 const sinModulos = {
