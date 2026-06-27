@@ -151,11 +151,7 @@ export default function CobranzaGeneral() {
     }
 
     const cuentas = cuentasData || [];
-
-    const clienteIds = [
-      ...new Set(cuentas.map((c) => c.cliente_id).filter(Boolean)),
-    ];
-
+    const clienteIds = [...new Set(cuentas.map((c) => c.cliente_id).filter(Boolean))];
     const cuentaIds = cuentas.map((c) => c.id).filter(Boolean);
 
     let clientes = [];
@@ -371,31 +367,57 @@ export default function CobranzaGeneral() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return { error: { message: "No hay empresa activa." } };
 
-    const payload = {
-      empresa_id: empresaId,
-      cliente_id: item.cliente?.id || item.cuenta?.cliente_id || null,
-      informacion_comercial_id: item.cuenta.id,
+    const hoy = new Date().toISOString().split("T")[0];
+
+    const datosActualizar = {
       responsable_cobro: gestor.nombre,
       responsable_cobro_id: gestor.id,
-      fecha_asignacion: new Date().toISOString().split("T")[0],
+      fecha_asignacion: hoy,
       usuario_asignacion: usuarioActual(),
       observacion_asignacion: observacion || "",
       estado_cobranza: item.estado || "Al Día",
     };
 
-    const borrar = await supabase
+    const { data: existentes, error: errorBuscar } = await supabase
       .from("informacion_cobranza")
-      .delete()
+      .select("id")
       .eq("empresa_id", empresaId)
       .eq("informacion_comercial_id", item.cuenta.id);
 
-    if (borrar.error) return { error: borrar.error };
+    if (errorBuscar) return { error: errorBuscar };
 
-    const insertar = await supabase.from("informacion_cobranza").insert([payload]);
+    if (existentes && existentes.length > 0) {
+      const { error } = await supabase
+        .from("informacion_cobranza")
+        .update(datosActualizar)
+        .eq("empresa_id", empresaId)
+        .eq("informacion_comercial_id", item.cuenta.id);
 
-    if (insertar.error) return { error: insertar.error };
+      return { error };
+    }
 
-    return { error: null };
+    const datosInsertar = {
+      empresa_id: empresaId,
+      cliente_id: item.cliente?.id || item.cuenta?.cliente_id || null,
+      informacion_comercial_id: item.cuenta.id,
+      responsable_cobro: gestor.nombre,
+      responsable_cobro_id: gestor.id,
+      fecha_asignacion: hoy,
+      usuario_asignacion: usuarioActual(),
+      observacion_asignacion: observacion || "",
+      estado_cobranza: item.estado || "Al Día",
+      fecha_ultimo_pago:
+        item.cuenta?.fecha_ultimo_pago ||
+        item.cuenta?.fecha_inicio ||
+        hoy,
+      monto_ultimo_pago: item.cuenta?.monto_ultimo_pago || 0,
+    };
+
+    const { error } = await supabase
+      .from("informacion_cobranza")
+      .insert([datosInsertar]);
+
+    return { error };
   }
 
   async function guardarAsignacionGestor() {
@@ -442,7 +464,6 @@ export default function CobranzaGeneral() {
     ]);
 
     alert("Gestor asignado correctamente.");
-
     cerrarModalAsignar();
     await cargarDatos();
   }
@@ -608,9 +629,15 @@ export default function CobranzaGeneral() {
             </p>
           </div>
 
-          <button style={botonClaro} onClick={volverDashboard}>
-            ← Volver
-          </button>
+          <div style={botonesLinea}>
+            <button style={botonClaro} onClick={cargarDatos}>
+              Actualizar
+            </button>
+
+            <button style={botonClaro} onClick={volverDashboard}>
+              ← Volver
+            </button>
+          </div>
         </div>
 
         <div style={card}>
@@ -655,15 +682,7 @@ export default function CobranzaGeneral() {
                 type={tipoBusqueda === "Fecha inicio" ? "date" : "text"}
                 value={valorBusqueda}
                 onChange={(e) => setValorBusqueda(e.target.value)}
-                placeholder={
-                  tipoBusqueda === "Cédula"
-                    ? "Ej. 8-888-888"
-                    : tipoBusqueda === "Dirección"
-                    ? "Ej. La Chorrera"
-                    : tipoBusqueda === "Producto"
-                    ? "Ej. Lavadora"
-                    : "Escriba aquí"
-                }
+                placeholder="Escriba aquí"
                 style={inputStyle}
               />
             </Campo>
@@ -904,14 +923,6 @@ export default function CobranzaGeneral() {
                     </td>
                   </tr>
                 ))}
-
-                {gestoresMedicion.length === 0 && (
-                  <tr>
-                    <td style={td} colSpan="5">
-                      No hay gestores para mostrar.
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
