@@ -59,320 +59,194 @@ export default function AdminLogin() {
 
   return (
     <div style={pagina}>
-      <div style={fondoDecorativoUno}></div>
-      <div style={fondoDecorativoDos}></div>
+      <div style={blurUno}></div>
+      <div style={blurDos}></div>
 
-      <div style={layout}>
-        <div style={panelIzquierdo}>
-          <div style={logoBox}>
-            <img src="/konax-logo.png" alt="KONAX" style={logo} />
-            <div>
-              <h1 style={brandTitle}>KONAX</h1>
-              <p style={brandSub}>Control Center</p>
-            </div>
-          </div>
+      <form onSubmit={iniciarSesion} style={modal}>
+        <button type="button" style={cerrar}>×</button>
 
-          <div style={badge}>Administración empresarial</div>
-
-          <h2 style={tituloHero}>
-            Centro Administrativo
-            <br />
-            <span style={tituloVerde}>KONAX</span>
-          </h2>
-
-          <p style={textoHero}>
-            Acceso exclusivo para administrar empresas clientes, planes,
-            módulos activos y control interno de la plataforma.
-          </p>
-
-          <div style={beneficiosGrid}>
-            <div style={beneficio}>
-              <span style={beneficioIcono}>🏢</span>
-              <strong>Empresas</strong>
-              <p>Control de clientes y configuraciones.</p>
-            </div>
-
-            <div style={beneficio}>
-              <span style={beneficioIcono}>📊</span>
-              <strong>Planes</strong>
-              <p>Gestión de módulos y servicios activos.</p>
-            </div>
-
-            <div style={beneficio}>
-              <span style={beneficioIcono}>🔐</span>
-              <strong>Seguridad</strong>
-              <p>Acceso reservado para administradores.</p>
-            </div>
-          </div>
+        <div style={logoFila}>
+          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+          <h1 style={marca}>KONAX</h1>
         </div>
 
-        <form onSubmit={iniciarSesion} style={card}>
-          <div style={cardHeader}>
-            <img src="/konax-logo.png" alt="KONAX" style={logoCard} />
+        <h2 style={titulo}>Bienvenido</h2>
 
-            <div>
-              <p style={cardEtiqueta}>Login Administrador</p>
-              <h2 style={cardTitulo}>Ingresar a KONAX</h2>
-            </div>
-          </div>
+        <p style={subtitulo}>
+          Ingresa a tu cuenta administrativa aquí
+        </p>
 
-          <p style={descripcion}>
-            Ingresa con tu correo y contraseña de administrador para acceder al
-            panel interno.
-          </p>
+        <div style={campo}>
+          <label style={label}>Correo</label>
+          <input
+            type="email"
+            placeholder="correo@konax.net"
+            value={correo}
+            onChange={(e) => setCorreo(e.target.value)}
+            style={input}
+          />
+        </div>
 
-          <div style={campo}>
-            <label style={label}>Correo</label>
-            <input
-              type="email"
-              placeholder="correo@konax.net"
-              value={correo}
-              onChange={(e) => setCorreo(e.target.value)}
-              style={input}
-            />
-          </div>
+        <div style={campo}>
+          <label style={label}>Contraseña</label>
+          <input
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={input}
+          />
+        </div>
 
-          <div style={campo}>
-            <label style={label}>Contraseña</label>
-            <input
-              type="password"
-              placeholder="Contraseña"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={input}
-            />
-          </div>
+        <button type="submit" style={boton} disabled={cargando}>
+          {cargando ? "Ingresando..." : "Iniciar Sesión  →"}
+        </button>
 
-          <button type="submit" style={boton} disabled={cargando}>
-            {cargando ? "Ingresando..." : "Ingresar al Control Center"}
-          </button>
-
-          <p style={nota}>
-            Plataforma privada de administración KONAX.
-          </p>
-        </form>
-      </div>
+        <p style={olvido}>¿Olvidaste tu contraseña?</p>
+      </form>
     </div>
   );
 }
 
 const pagina = {
   minHeight: "100vh",
-  background: "linear-gradient(135deg, #020617 0%, #064e3b 55%, #111827 100%)",
+  background:
+    "radial-gradient(circle at 20% 20%, #0f766e 0%, transparent 28%), linear-gradient(135deg, #020617 0%, #052e2b 50%, #111827 100%)",
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
-  padding: "35px",
+  padding: "30px",
   fontFamily: "Arial, sans-serif",
   position: "relative",
   overflow: "hidden",
 };
 
-const fondoDecorativoUno = {
+const blurUno = {
   position: "absolute",
   width: "420px",
   height: "420px",
   borderRadius: "50%",
-  background: "rgba(16,185,129,0.22)",
-  top: "-120px",
-  left: "-90px",
-  filter: "blur(20px)",
-};
-
-const fondoDecorativoDos = {
-  position: "absolute",
-  width: "520px",
-  height: "520px",
-  borderRadius: "50%",
-  background: "rgba(34,197,94,0.14)",
-  bottom: "-170px",
-  right: "-130px",
+  background: "rgba(16,185,129,0.20)",
+  left: "-120px",
+  top: "-90px",
   filter: "blur(25px)",
 };
 
-const layout = {
-  width: "1120px",
+const blurDos = {
+  position: "absolute",
+  width: "360px",
+  height: "360px",
+  borderRadius: "50%",
+  background: "rgba(45,212,191,0.14)",
+  right: "-90px",
+  bottom: "-80px",
+  filter: "blur(25px)",
+};
+
+const modal = {
+  width: "430px",
   maxWidth: "100%",
-  display: "grid",
-  gridTemplateColumns: "1.35fr 0.85fr",
-  gap: "26px",
-  alignItems: "stretch",
+  background: "linear-gradient(180deg, rgba(6,78,59,0.96), rgba(15,23,42,0.96))",
+  border: "1px solid rgba(94,234,212,0.35)",
+  borderRadius: "28px",
+  padding: "38px",
+  color: "#ffffff",
+  boxShadow: "0 25px 70px rgba(0,0,0,0.45)",
   position: "relative",
   zIndex: 2,
 };
 
-const panelIzquierdo = {
-  background: "linear-gradient(135deg, rgba(17,24,39,0.96), rgba(6,78,59,0.94))",
-  border: "1px solid rgba(255,255,255,0.12)",
-  borderRadius: "28px",
-  padding: "42px",
-  color: "#ffffff",
-  boxShadow: "0 20px 50px rgba(0,0,0,0.35)",
+const cerrar = {
+  position: "absolute",
+  top: "18px",
+  right: "20px",
+  background: "transparent",
+  border: "none",
+  color: "#67e8f9",
+  fontSize: "30px",
+  fontWeight: "bold",
+  cursor: "pointer",
 };
 
-const logoBox = {
+const logoFila = {
   display: "flex",
   alignItems: "center",
-  gap: "16px",
-  marginBottom: "34px",
+  gap: "14px",
+  justifyContent: "center",
+  marginBottom: "28px",
 };
 
 const logo = {
-  width: "84px",
-  height: "auto",
+  width: "68px",
   background: "#ffffff",
-  padding: "10px",
   borderRadius: "18px",
-};
-
-const brandTitle = {
-  margin: 0,
-  fontSize: "34px",
-  letterSpacing: "1px",
-};
-
-const brandSub = {
-  margin: "4px 0 0",
-  color: "#bbf7d0",
-  fontSize: "14px",
-  fontWeight: "bold",
-};
-
-const badge = {
-  display: "inline-block",
-  background: "rgba(255,255,255,0.10)",
-  border: "1px solid rgba(255,255,255,0.14)",
-  color: "#bbf7d0",
-  padding: "10px 16px",
-  borderRadius: "999px",
-  fontSize: "14px",
-  fontWeight: "bold",
-  marginBottom: "24px",
-};
-
-const tituloHero = {
-  margin: 0,
-  fontSize: "58px",
-  lineHeight: "64px",
-  letterSpacing: "-1.5px",
-};
-
-const tituloVerde = {
-  color: "#6ee7b7",
-};
-
-const textoHero = {
-  marginTop: "22px",
-  maxWidth: "650px",
-  color: "#d1fae5",
-  fontSize: "18px",
-  lineHeight: "30px",
-};
-
-const beneficiosGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))",
-  gap: "14px",
-  marginTop: "34px",
-};
-
-const beneficio = {
-  background: "rgba(255,255,255,0.09)",
-  border: "1px solid rgba(255,255,255,0.12)",
-  padding: "18px",
-  borderRadius: "18px",
-};
-
-const beneficioIcono = {
-  fontSize: "28px",
-  display: "block",
-  marginBottom: "10px",
-};
-
-const card = {
-  background: "#ffffff",
-  padding: "34px",
-  borderRadius: "28px",
-  boxShadow: "0 20px 50px rgba(0,0,0,0.30)",
-  alignSelf: "center",
-};
-
-const cardHeader = {
-  display: "flex",
-  alignItems: "center",
-  gap: "14px",
-  marginBottom: "18px",
-};
-
-const logoCard = {
-  width: "72px",
-  height: "auto",
-  background: "#f9fafb",
   padding: "8px",
-  borderRadius: "16px",
-  border: "1px solid #e5e7eb",
 };
 
-const cardEtiqueta = {
+const marca = {
   margin: 0,
-  color: "#047857",
-  fontSize: "13px",
+  fontSize: "42px",
   fontWeight: "bold",
+  letterSpacing: "1px",
+  color: "#ffffff",
 };
 
-const cardTitulo = {
-  margin: "3px 0 0",
-  color: "#111827",
-  fontSize: "28px",
+const titulo = {
+  textAlign: "center",
+  margin: "0 0 12px",
+  fontSize: "34px",
+  color: "#ffffff",
 };
 
-const descripcion = {
-  color: "#6b7280",
-  fontSize: "14px",
-  lineHeight: "22px",
-  marginBottom: "26px",
+const subtitulo = {
+  textAlign: "center",
+  color: "#d1fae5",
+  fontSize: "17px",
+  fontWeight: "bold",
+  marginBottom: "32px",
 };
 
 const campo = {
-  marginBottom: "18px",
+  marginBottom: "20px",
 };
 
 const label = {
   display: "block",
-  color: "#374151",
-  fontSize: "14px",
+  marginBottom: "8px",
+  fontSize: "15px",
   fontWeight: "bold",
-  marginBottom: "7px",
+  color: "#e5fdf7",
 };
 
 const input = {
   width: "100%",
-  padding: "14px",
-  border: "1px solid #d1d5db",
-  borderRadius: "12px",
-  fontSize: "15px",
+  padding: "16px",
+  borderRadius: "14px",
+  border: "1px solid rgba(94,234,212,0.35)",
+  background: "rgba(15,23,42,0.65)",
+  color: "#ffffff",
+  fontSize: "16px",
   boxSizing: "border-box",
   outline: "none",
-  background: "#ffffff",
-  color: "#111827",
 };
 
 const boton = {
   width: "100%",
-  padding: "15px",
-  background: "linear-gradient(135deg, #111827, #047857)",
-  color: "#ffffff",
+  padding: "16px",
+  background: "linear-gradient(135deg, #2dd4bf, #10b981)",
+  color: "#052e2b",
   border: "none",
-  borderRadius: "12px",
-  fontSize: "16px",
+  borderRadius: "13px",
+  fontSize: "17px",
   fontWeight: "bold",
   cursor: "pointer",
-  boxShadow: "0 8px 20px rgba(4,120,87,0.28)",
+  marginTop: "6px",
 };
 
-const nota = {
+const olvido = {
   textAlign: "center",
-  marginTop: "18px",
-  color: "#6b7280",
-  fontSize: "13px",
+  marginTop: "22px",
+  color: "#5eead4",
+  fontWeight: "bold",
+  fontSize: "14px",
 };
