@@ -161,10 +161,20 @@ export default function Dashboard() {
     if (r === "cajero") return ["vista_cliente", "caja", "control_caja"];
 
     if (r === "vendedor") {
-      return ["clientes", "vista_cliente", "ventas_credito", "inventario", "suscripciones"];
+      return [
+        "clientes",
+        "vista_cliente",
+        "ventas_credito",
+        "inventario",
+        "suscripciones",
+      ];
     }
 
-    if (r === "cobranza" || r === "gestor de cobro" || r === "gestor de cobranza") {
+    if (
+      r === "cobranza" ||
+      r === "gestor de cobro" ||
+      r === "gestor de cobranza"
+    ) {
       return ["vista_cliente", "cobranza", "dashboard_cobros"];
     }
 
@@ -251,7 +261,10 @@ export default function Dashboard() {
   const comercioInventario = esNegocioComercioInventario();
 
   const permitirCredito =
-    !membresia && ventaCredito && modulos.venta_credito && tienePermiso("ventas_credito");
+    !membresia &&
+    ventaCredito &&
+    modulos.venta_credito &&
+    tienePermiso("ventas_credito");
 
   const permitirInventario =
     !membresia &&
@@ -259,9 +272,11 @@ export default function Dashboard() {
     modulos.inventario &&
     tienePermiso("inventario");
 
-  const permitirNuevoProducto = permitirInventario && tienePermiso("inventario_nuevo");
+  const permitirNuevoProducto =
+    permitirInventario && tienePermiso("inventario_nuevo");
 
-  const permitirCobranza = !membresia && modulos.cobranza && tienePermiso("cobranza");
+  const permitirCobranza =
+    !membresia && modulos.cobranza && tienePermiso("cobranza");
 
   const permitirDashboardCobros =
     !membresia && modulos.dashboard_cobros && tienePermiso("dashboard_cobros");
@@ -286,7 +301,9 @@ export default function Dashboard() {
         ? "Carga inicial de clientes y cartera existente."
         : "Registro y consulta de clientes.",
       ruta: "/clientes",
-      activo: modulos.clientes && tienePermiso(esPlanCobros ? "cuentas_por_cobrar" : "clientes"),
+      activo:
+        modulos.clientes &&
+        tienePermiso(esPlanCobros ? "cuentas_por_cobrar" : "clientes"),
       icono: "👥",
     },
     {
@@ -363,7 +380,10 @@ export default function Dashboard() {
       nombre: "Centro de Ventas",
       descripcion: "Indicadores comerciales.",
       ruta: "/dashboard-ventas",
-      activo: !membresia && modulos.dashboard_ventas && tienePermiso("dashboard_ventas"),
+      activo:
+        !membresia &&
+        modulos.dashboard_ventas &&
+        tienePermiso("dashboard_ventas"),
       icono: "📈",
     },
     {
@@ -441,7 +461,7 @@ export default function Dashboard() {
 
         <div style={resumenGrid}>
           <div style={resumenCard}>
-            <p style={resumenLabel}>Módulos visibles</p>
+            <p style={resumenLabel}>Opciones disponibles</p>
             <h2 style={resumenValor}>{tarjetasActivas.length}</h2>
           </div>
 
@@ -456,24 +476,41 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div style={grid}>
-          {tarjetasActivas.map((item) => (
-            <div
-              key={item.nombre}
-              style={
-                item.nombre === "Usuarios y Roles" ||
-                item.nombre === "Roles y Permisos"
-                  ? cardDestacado
-                  : card
-              }
-              onClick={() => abrirModulo(item.ruta)}
-            >
-              <div style={icono}>{item.icono}</div>
-              <h3 style={cardTitulo}>{item.nombre}</h3>
-              <p style={cardTexto}>{item.descripcion}</p>
-              <span style={abrir}>Abrir módulo →</span>
+        <div style={panelModulo}>
+          <h2 style={tituloModulo}>
+            {esPlanCobros ? "KONAX Cobros" : "Centro de Operaciones"}
+          </h2>
+
+          <p style={textoModulo}>
+            Use el menú lateral para abrir cada pantalla del sistema. Aquí tendrá
+            una vista limpia del módulo activo sin duplicar las opciones.
+          </p>
+
+          <div style={moduloResumenGrid}>
+            <div style={moduloCard}>
+              <span style={moduloIcono}>👥</span>
+              <strong>Clientes y cuentas</strong>
+              <p>Carga inicial, consulta y seguimiento de clientes.</p>
             </div>
-          ))}
+
+            <div style={moduloCard}>
+              <span style={moduloIcono}>💵</span>
+              <strong>Pagos y caja</strong>
+              <p>Registro de pagos, abonos, mensualidades y arqueos.</p>
+            </div>
+
+            <div style={moduloCard}>
+              <span style={moduloIcono}>📞</span>
+              <strong>Cobranza</strong>
+              <p>Gestión de cobros, promesas y asignación de gestores.</p>
+            </div>
+
+            <div style={moduloCard}>
+              <span style={moduloIcono}>📊</span>
+              <strong>Indicadores</strong>
+              <p>Resumen de cartera, mora, cobros y productividad.</p>
+            </div>
+          </div>
         </div>
 
         {tarjetasActivas.length === 0 && (
@@ -642,50 +679,43 @@ const resumenValorTexto = {
   fontSize: "22px",
 };
 
-const grid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fill,minmax(250px,1fr))",
-  gap: "20px",
+const panelModulo = {
+  background: "#ffffff",
+  borderRadius: "22px",
+  padding: "28px",
+  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
+  border: "1px solid #e5e7eb",
 };
 
-const card = {
+const tituloModulo = {
+  margin: "0 0 8px",
+  fontSize: "30px",
+  color: "#111827",
+};
+
+const textoModulo = {
+  margin: "0 0 22px",
+  color: "#6b7280",
+  fontSize: "16px",
+};
+
+const moduloResumenGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: "16px",
+};
+
+const moduloCard = {
+  background: "#f9fafb",
   border: "1px solid #e5e7eb",
   borderRadius: "18px",
-  padding: "24px",
-  color: "#111827",
-  background: "#ffffff",
-  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
-  cursor: "pointer",
+  padding: "20px",
+  display: "grid",
+  gap: "8px",
 };
 
-const cardDestacado = {
-  ...card,
-  border: "2px solid #10b981",
-  background: "#ecfdf5",
-};
-
-const icono = {
-  fontSize: "34px",
-  marginBottom: "12px",
-};
-
-const cardTitulo = {
-  margin: 0,
-  fontSize: "20px",
-};
-
-const cardTexto = {
-  color: "#6b7280",
-  marginTop: "10px",
-  minHeight: "45px",
-  lineHeight: "21px",
-};
-
-const abrir = {
-  display: "inline-block",
-  marginTop: "10px",
-  color: "#047857",
-  fontWeight: "bold",
+const moduloIcono = {
+  fontSize: "30px",
 };
 
 const sinModulos = {
