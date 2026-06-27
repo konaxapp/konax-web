@@ -116,7 +116,7 @@ export default function CobranzaGeneral() {
 
     const { data, error } = await supabase
       .from("usuarios")
-      .select("*")
+      .select("id,nombre,rol,estado,empresa_id")
       .eq("empresa_id", empresaId)
       .eq("estado", "Activo")
       .in("rol", [
@@ -347,9 +347,29 @@ export default function CobranzaGeneral() {
     setCuentasSeleccionadas([]);
   }
 
+  function obtenerGestorPorIdONombre(id, nombre) {
+    const porId = usuariosGestores.find((u) => String(u.id) === String(id));
+
+    if (porId) return porId;
+
+    const porNombre = usuariosGestores.find(
+      (u) => limpiarTexto(u.nombre) === limpiarTexto(nombre)
+    );
+
+    return porNombre || null;
+  }
+
   function abrirModalAsignar(item) {
+    const responsableId = item.cobranza?.responsable_cobro_id || "";
+    const responsableNombre = item.cobranza?.responsable_cobro || "";
+
+    const gestorActual = obtenerGestorPorIdONombre(
+      responsableId,
+      responsableNombre
+    );
+
     setCuentaSeleccionada(item);
-    setGestorSeleccionado(item.cobranza?.responsable_cobro_id || "");
+    setGestorSeleccionado(gestorActual?.id || responsableId || "");
     setObservacionAsignacion("");
     setModalAsignar(true);
   }
@@ -364,6 +384,14 @@ export default function CobranzaGeneral() {
   async function guardarAsignacionActual(item, gestor, observacion) {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return { error: { message: "No hay empresa activa." } };
+
+    if (!gestor?.id || !gestor?.nombre) {
+      return {
+        error: {
+          message: "El gestor seleccionado no tiene ID o nombre válido.",
+        },
+      };
+    }
 
     const hoy = new Date().toISOString().split("T")[0];
 
@@ -545,17 +573,29 @@ export default function CobranzaGeneral() {
       };
     });
 
-    await supabase.from("bitacora_cliente").insert(payload);
+    const { error } = await supabase.from("bitacora_cliente").insert(payload);
+
+    if (error) {
+      console.error("Error guardando bitácora de asignación:", error.message);
+    }
   }
 
   const gestoresDesdeCartera = cartera
-    .map((item) => ({
-      id:
-        item.cobranza?.responsable_cobro_id ||
-        item.cobranza?.responsable_cobro ||
-        "Sin asignar",
-      nombre: item.cobranza?.responsable_cobro || "Sin asignar",
-    }))
+    .map((item) => {
+      const gestorExistente = obtenerGestorPorIdONombre(
+        item.cobranza?.responsable_cobro_id,
+        item.cobranza?.responsable_cobro
+      );
+
+      return {
+        id:
+          gestorExistente?.id ||
+          item.cobranza?.responsable_cobro_id ||
+          item.cobranza?.responsable_cobro ||
+          "Sin asignar",
+        nombre: item.cobranza?.responsable_cobro || "Sin asignar",
+      };
+    })
     .filter((g) => g.nombre);
 
   const gestoresBase = [
@@ -588,6 +628,10 @@ export default function CobranzaGeneral() {
       const carteraGestor = cartera.filter((item) => {
         const responsableId = item.cobranza?.responsable_cobro_id;
         const responsableNombre = item.cobranza?.responsable_cobro;
+        const gestorReal = obtenerGestorPorIdONombre(
+          responsableId,
+          responsableNombre
+        );
 
         if (gestor.nombre === "Sin asignar") {
           return !responsableId && !responsableNombre;
@@ -595,6 +639,7 @@ export default function CobranzaGeneral() {
 
         return (
           String(responsableId) === String(gestor.id) ||
+          String(gestorReal?.id || "") === String(gestor.id) ||
           limpiarTexto(responsableNombre) === limpiarTexto(gestor.nombre)
         );
       });
@@ -779,7 +824,7 @@ export default function CobranzaGeneral() {
                 <option value="">Seleccione gestor</option>
                 {usuariosGestores.map((gestor) => (
                   <option key={gestor.id} value={gestor.id}>
-                    {gestor.nombre}
+                    {gestor.nombre} - {gestor.rol}
                   </option>
                 ))}
               </select>
@@ -969,7 +1014,7 @@ export default function CobranzaGeneral() {
                   <option value="">Seleccione gestor</option>
                   {usuariosGestores.map((gestor) => (
                     <option key={gestor.id} value={gestor.id}>
-                      {gestor.nombre}
+                      {gestor.nombre} - {gestor.rol}
                     </option>
                   ))}
                 </select>
