@@ -151,7 +151,9 @@ export default function CobranzaGeneral() {
     }
 
     const cuentas = cuentasData || [];
-    const clienteIds = [...new Set(cuentas.map((c) => c.cliente_id).filter(Boolean))];
+    const clienteIds = [
+      ...new Set(cuentas.map((c) => c.cliente_id).filter(Boolean)),
+    ];
     const cuentaIds = cuentas.map((c) => c.id).filter(Boolean);
 
     let clientes = [];
@@ -287,9 +289,7 @@ export default function CobranzaGeneral() {
     const gestor = item.cobranza?.responsable_cobro || "Sin asignar";
 
     if (filtrosAplicados.tipoBusqueda === "Cédula") {
-      const cedulaCliente = limpiarCedula(cliente.cedula);
-      const cedulaBuscada = limpiarCedula(valor);
-      return cedulaCliente.includes(cedulaBuscada);
+      return limpiarCedula(cliente.cedula).includes(limpiarCedula(valor));
     }
 
     if (filtrosAplicados.tipoBusqueda === "Cliente") {
@@ -322,8 +322,6 @@ export default function CobranzaGeneral() {
   }
 
   const carteraFiltrada = cartera.filter((item) => {
-    const coincideBusqueda = coincideTipoBusqueda(item);
-
     const coincideEstado =
       filtrosAplicados.estadoBusqueda === "Todos" ||
       item.estado === filtrosAplicados.estadoBusqueda;
@@ -332,7 +330,7 @@ export default function CobranzaGeneral() {
       filtrosAplicados.moraBusqueda === "Todos" ||
       item.rangoMora === filtrosAplicados.moraBusqueda;
 
-    return coincideBusqueda && coincideEstado && coincideMora;
+    return coincideTipoBusqueda(item) && coincideEstado && coincideMora;
   });
 
   function toggleCuenta(id) {
@@ -407,9 +405,7 @@ export default function CobranzaGeneral() {
       observacion_asignacion: observacion || "",
       estado_cobranza: item.estado || "Al Día",
       fecha_ultimo_pago:
-        item.cuenta?.fecha_ultimo_pago ||
-        item.cuenta?.fecha_inicio ||
-        hoy,
+        item.cuenta?.fecha_ultimo_pago || item.cuenta?.fecha_inicio || hoy,
       monto_ultimo_pago: item.cuenta?.monto_ultimo_pago || 0,
     };
 
@@ -421,9 +417,6 @@ export default function CobranzaGeneral() {
   }
 
   async function guardarAsignacionGestor() {
-    const empresaId = obtenerEmpresaId();
-    if (!empresaId) return;
-
     if (!cuentaSeleccionada?.cuenta?.id) {
       alert("No hay cuenta seleccionada.");
       return;
@@ -536,19 +529,34 @@ export default function CobranzaGeneral() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId || registros.length === 0) return;
 
-    const payload = registros.map((r) => ({
-      empresa_id: empresaId,
-      cliente_id: r.item.cliente?.id || r.item.cuenta?.cliente_id || null,
-      informacion_comercial_id: r.item.cuenta.id,
-      tipo_gestion: r.tipo,
-      resultado_gestion: "Gestor asignado",
-      descripcion: `Cliente asignado a ${r.gestor}. ${r.observacion || ""}`,
-      usuario: usuarioActual(),
-      fecha_gestion: new Date().toISOString(),
-    }));
+    const payload = registros.map((r) => {
+      const texto = `Cliente asignado a ${r.gestor}. ${r.observacion || ""}`;
+
+      return {
+        empresa_id: empresaId,
+        cliente_id: r.item.cliente?.id || r.item.cuenta?.cliente_id || null,
+        informacion_comercial_id: r.item.cuenta.id,
+        tipo_gestion: r.tipo,
+        resultado_gestion: "Gestor asignado",
+        descripcion: texto,
+        observacion: texto,
+        usuario: usuarioActual(),
+        fecha_gestion: new Date().toISOString(),
+      };
+    });
 
     await supabase.from("bitacora_cliente").insert(payload);
   }
+
+  const gestoresDesdeCartera = cartera
+    .map((item) => ({
+      id:
+        item.cobranza?.responsable_cobro_id ||
+        item.cobranza?.responsable_cobro ||
+        "Sin asignar",
+      nombre: item.cobranza?.responsable_cobro || "Sin asignar",
+    }))
+    .filter((g) => g.nombre);
 
   const gestoresBase = [
     { id: "Todos", nombre: "Todos" },
@@ -556,23 +564,32 @@ export default function CobranzaGeneral() {
       id: String(u.id),
       nombre: u.nombre,
     })),
+    ...gestoresDesdeCartera,
     { id: "Sin asignar", nombre: "Sin asignar" },
   ];
 
   const gestores = gestoresBase.filter(
     (gestor, index, self) =>
-      index === self.findIndex((g) => String(g.id) === String(gestor.id))
+      index ===
+      self.findIndex(
+        (g) => limpiarTexto(g.nombre) === limpiarTexto(gestor.nombre)
+      )
   );
 
   const gestoresMedicion = gestores
-    .filter((g) => g.id !== "Todos")
-    .filter((g) => gestorMedicion === "Todos" || g.id === gestorMedicion)
+    .filter((g) => g.nombre !== "Todos")
+    .filter(
+      (g) =>
+        gestorMedicion === "Todos" ||
+        String(g.id) === String(gestorMedicion) ||
+        limpiarTexto(g.nombre) === limpiarTexto(gestorMedicion)
+    )
     .map((gestor) => {
       const carteraGestor = cartera.filter((item) => {
         const responsableId = item.cobranza?.responsable_cobro_id;
         const responsableNombre = item.cobranza?.responsable_cobro;
 
-        if (gestor.id === "Sin asignar") {
+        if (gestor.nombre === "Sin asignar") {
           return !responsableId && !responsableNombre;
         }
 
