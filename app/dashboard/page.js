@@ -20,12 +20,10 @@ export default function Dashboard() {
 
   async function cargarDashboard() {
     const empresaId = localStorage.getItem("empresaId");
-
     const rolUsuarioLocal =
       localStorage.getItem("usuarioRol") ||
       localStorage.getItem("rolUsuario") ||
       "";
-
     const rolIdLocal = localStorage.getItem("rolId") || "";
 
     if (!empresaId) {
@@ -110,9 +108,7 @@ export default function Dashboard() {
       .map((item) => item.permisos_konax?.modulo)
       .filter(Boolean);
 
-    const permisosCombinados = [...new Set([...permisosBase, ...permisosDB])];
-
-    setPermisosUsuario(permisosCombinados);
+    setPermisosUsuario([...new Set([...permisosBase, ...permisosDB])]);
   }
 
   function normalizarRol(rol) {
@@ -120,9 +116,9 @@ export default function Dashboard() {
   }
 
   function permisosBasePorRol(rol) {
-    const rolNormalizado = normalizarRol(rol);
+    const r = normalizarRol(rol);
 
-    if (rolNormalizado === "superadmin" || rolNormalizado === "administrador") {
+    if (r === "superadmin" || r === "administrador") {
       return [
         "clientes",
         "cuentas_por_cobrar",
@@ -143,7 +139,7 @@ export default function Dashboard() {
       ];
     }
 
-    if (rolNormalizado === "supervisor") {
+    if (r === "supervisor") {
       return [
         "clientes",
         "cuentas_por_cobrar",
@@ -162,41 +158,25 @@ export default function Dashboard() {
       ];
     }
 
-    if (rolNormalizado === "cajero") {
-      return ["vista_cliente", "caja", "control_caja"];
+    if (r === "cajero") return ["vista_cliente", "caja", "control_caja"];
+
+    if (r === "vendedor") {
+      return ["clientes", "vista_cliente", "ventas_credito", "inventario", "suscripciones"];
     }
 
-    if (rolNormalizado === "vendedor") {
-      return [
-        "clientes",
-        "vista_cliente",
-        "ventas_credito",
-        "inventario",
-        "suscripciones",
-      ];
-    }
-
-    if (
-      rolNormalizado === "cobranza" ||
-      rolNormalizado === "gestor de cobro" ||
-      rolNormalizado === "gestor de cobranza"
-    ) {
+    if (r === "cobranza" || r === "gestor de cobro" || r === "gestor de cobranza") {
       return ["vista_cliente", "cobranza", "dashboard_cobros"];
     }
 
-    if (rolNormalizado === "inventario") {
-      return ["inventario", "inventario_nuevo"];
-    }
+    if (r === "inventario") return ["inventario", "inventario_nuevo"];
 
     return [];
   }
 
   function tienePermiso(modulo) {
-    const rolNormalizado = normalizarRol(usuarioRol);
+    const r = normalizarRol(usuarioRol);
 
-    if (rolNormalizado === "superadmin" || rolNormalizado === "administrador") {
-      return true;
-    }
+    if (r === "superadmin" || r === "administrador") return true;
 
     return permisosUsuario.includes(modulo);
   }
@@ -262,11 +242,7 @@ export default function Dashboard() {
   }
 
   if (!modulos) {
-    return (
-      <div style={{ padding: "30px" }}>
-        Cargando Centro de Operaciones Empresariales...
-      </div>
-    );
+    return <div style={{ padding: "30px" }}>Cargando KONAX...</div>;
   }
 
   const esPlanCobros = planCodigo === "cobros";
@@ -275,10 +251,7 @@ export default function Dashboard() {
   const comercioInventario = esNegocioComercioInventario();
 
   const permitirCredito =
-    !membresia &&
-    ventaCredito &&
-    modulos.venta_credito &&
-    tienePermiso("ventas_credito");
+    !membresia && ventaCredito && modulos.venta_credito && tienePermiso("ventas_credito");
 
   const permitirInventario =
     !membresia &&
@@ -286,11 +259,9 @@ export default function Dashboard() {
     modulos.inventario &&
     tienePermiso("inventario");
 
-  const permitirNuevoProducto =
-    permitirInventario && tienePermiso("inventario_nuevo");
+  const permitirNuevoProducto = permitirInventario && tienePermiso("inventario_nuevo");
 
-  const permitirCobranza =
-    !membresia && modulos.cobranza && tienePermiso("cobranza");
+  const permitirCobranza = !membresia && modulos.cobranza && tienePermiso("cobranza");
 
   const permitirDashboardCobros =
     !membresia && modulos.dashboard_cobros && tienePermiso("dashboard_cobros");
@@ -304,9 +275,9 @@ export default function Dashboard() {
   const permitirControlCaja =
     tienePermiso("control_caja") &&
     (modulos.control_caja ||
-      usuarioRol === "Cajero" ||
-      usuarioRol === "Supervisor" ||
-      usuarioRol === "Administrador");
+      normalizarRol(usuarioRol) === "cajero" ||
+      normalizarRol(usuarioRol) === "supervisor" ||
+      normalizarRol(usuarioRol) === "administrador");
 
   const tarjetas = [
     {
@@ -315,9 +286,7 @@ export default function Dashboard() {
         ? "Carga inicial de clientes y cartera existente."
         : "Registro y consulta de clientes.",
       ruta: "/clientes",
-      activo:
-        modulos.clientes &&
-        tienePermiso(esPlanCobros ? "cuentas_por_cobrar" : "clientes"),
+      activo: modulos.clientes && tienePermiso(esPlanCobros ? "cuentas_por_cobrar" : "clientes"),
       icono: "👥",
     },
     {
@@ -329,94 +298,91 @@ export default function Dashboard() {
     },
     {
       nombre: "Créditos",
-      descripcion: "Registro de ventas a crédito con inventario.",
+      descripcion: "Registro de ventas a crédito.",
       ruta: "/ventas-credito",
       activo: permitirCredito,
       icono: "💳",
     },
     {
       nombre: "Caja Básica",
-      descripcion: "Registro de pagos, abonos y mensualidades.",
+      descripcion: "Pagos, abonos y mensualidades.",
       ruta: "/caja",
       activo: modulos.caja && tienePermiso("caja"),
       icono: "💵",
     },
     {
       nombre: "Cobranza",
-      descripcion: "Gestión de cobros, promesas y seguimiento.",
+      descripcion: "Gestión y seguimiento de cobros.",
       ruta: "/cobranza",
       activo: permitirCobranza,
       icono: "📞",
     },
     {
       nombre: "Centro de Cobranza",
-      descripcion: "Indicadores reales de cartera, mora y cobros.",
+      descripcion: "Indicadores de cartera y mora.",
       ruta: "/dashboard-cobranza",
       activo: permitirDashboardCobros,
       icono: "📊",
     },
     {
       nombre: "Inventario",
-      descripcion: "Consulta general de productos, precios y stock.",
+      descripcion: "Productos, precios y stock.",
       ruta: "/inventario",
       activo: permitirInventario,
       icono: "📦",
     },
     {
       nombre: "Nuevo Producto",
-      descripcion: "Registro de productos y carga inicial de inventario.",
+      descripcion: "Carga inicial de inventario.",
       ruta: "/inventario/nuevo",
       activo: permitirNuevoProducto,
       icono: "➕",
     },
     {
       nombre: "Control Caja",
-      descripcion: "Cierres, arqueos y control operativo.",
+      descripcion: "Cierres y arqueos.",
       ruta: "/control-caja",
       activo: permitirControlCaja,
       icono: "🏦",
     },
     {
       nombre: "Suscripciones",
-      descripcion: "Membresías, renovaciones y vencimientos.",
+      descripcion: "Membresías y renovaciones.",
       ruta: "/suscripciones",
       activo: permitirSuscripciones,
       icono: "🔁",
     },
     {
       nombre: "Recargos",
-      descripcion: "Configuración y aplicación de recargos.",
+      descripcion: "Configuración de recargos.",
       ruta: "/recargos",
       activo: !membresia && modulos.recargos && tienePermiso("recargos"),
       icono: "⚠️",
     },
     {
       nombre: "Centro de Ventas",
-      descripcion: "Indicadores comerciales y ventas.",
+      descripcion: "Indicadores comerciales.",
       ruta: "/dashboard-ventas",
-      activo:
-        !membresia &&
-        modulos.dashboard_ventas &&
-        tienePermiso("dashboard_ventas"),
+      activo: !membresia && modulos.dashboard_ventas && tienePermiso("dashboard_ventas"),
       icono: "📈",
     },
     {
       nombre: "Gastos",
-      descripcion: "Registro y control de egresos.",
+      descripcion: "Registro de egresos.",
       ruta: "/gastos",
       activo: modulos.egresos && tienePermiso("gastos"),
       icono: "🧮",
     },
     {
       nombre: "Usuarios y Roles",
-      descripcion: "Crear usuarios, asignar roles y administrar accesos.",
+      descripcion: "Usuarios y accesos.",
       ruta: "/usuarios",
       activo: tienePermiso("usuarios"),
       icono: "🔐",
     },
     {
       nombre: "Roles y Permisos",
-      descripcion: "Crear roles y definir permisos por módulo.",
+      descripcion: "Permisos por módulo.",
       ruta: "/roles",
       activo: tienePermiso("roles"),
       icono: "🛡️",
@@ -426,82 +392,194 @@ export default function Dashboard() {
   const tarjetasActivas = tarjetas.filter((item) => item.activo);
 
   return (
-    <div style={pagina}>
-      <div style={hero}>
-        <div style={heroInfo}>
+    <div style={layout}>
+      <aside style={sidebar}>
+        <div style={brandBox}>
           <img src="/konax-logo.png" alt="KONAX" style={logo} />
+          <div>
+            <h2 style={brandTitle}>KONAX</h2>
+            <p style={brandSub}>Panel Empresarial</p>
+          </div>
+        </div>
 
+        <div style={empresaBox}>
+          <strong>{empresaNombre}</strong>
+          <span>{usuarioRol || "Sin rol"}</span>
+        </div>
+
+        <nav style={menu}>
+          {tarjetasActivas.map((item) => (
+            <button
+              key={item.nombre}
+              onClick={() => abrirModulo(item.ruta)}
+              style={menuItem}
+            >
+              <span style={menuIcono}>{item.icono}</span>
+              <span>{item.nombre}</span>
+            </button>
+          ))}
+        </nav>
+
+        <button onClick={cerrarSesion} style={botonSalir}>
+          Cerrar sesión
+        </button>
+      </aside>
+
+      <main style={contenido}>
+        <div style={hero}>
           <div>
             <p style={etiqueta}>Centro de Operaciones Empresariales</p>
             <h1 style={titulo}>{empresaNombre}</h1>
-
             <p style={plan}>
               Plan activo: <strong>{planNombre}</strong> · Estado:{" "}
               <strong>{estadoPlan}</strong>
               <br />
               Tipo de negocio: <strong>{tipoNegocio || "No definido"}</strong>
-              <br />
-              Usuario: <strong>{usuarioRol || "Sin rol"}</strong>
             </p>
           </div>
         </div>
 
-        <button onClick={cerrarSesion} style={botonSalir}>
-          Cerrar sesión
-        </button>
-      </div>
-
-      <div style={resumenGrid}>
-        <div style={resumenCard}>
-          <p style={resumenLabel}>Módulos visibles</p>
-          <h2 style={resumenValor}>{tarjetasActivas.length}</h2>
-        </div>
-
-        <div style={resumenCard}>
-          <p style={resumenLabel}>Plan</p>
-          <h2 style={resumenValorTexto}>{planNombre}</h2>
-        </div>
-
-        <div style={resumenCard}>
-          <p style={resumenLabel}>Rol</p>
-          <h2 style={resumenValorTexto}>{usuarioRol || "Sin rol"}</h2>
-        </div>
-      </div>
-
-      <div style={grid}>
-        {tarjetasActivas.map((item) => (
-          <div
-            key={item.nombre}
-            style={
-              item.nombre === "Usuarios y Roles" ||
-              item.nombre === "Roles y Permisos"
-                ? cardDestacado
-                : card
-            }
-            onClick={() => abrirModulo(item.ruta)}
-          >
-            <div style={icono}>{item.icono}</div>
-            <h3 style={cardTitulo}>{item.nombre}</h3>
-            <p style={cardTexto}>{item.descripcion}</p>
-            <span style={abrir}>Abrir módulo →</span>
+        <div style={resumenGrid}>
+          <div style={resumenCard}>
+            <p style={resumenLabel}>Módulos visibles</p>
+            <h2 style={resumenValor}>{tarjetasActivas.length}</h2>
           </div>
-        ))}
-      </div>
 
-      {tarjetasActivas.length === 0 && (
-        <div style={sinModulos}>
-          Este usuario no tiene módulos permitidos. Revise sus permisos.
+          <div style={resumenCard}>
+            <p style={resumenLabel}>Plan</p>
+            <h2 style={resumenValorTexto}>{planNombre}</h2>
+          </div>
+
+          <div style={resumenCard}>
+            <p style={resumenLabel}>Rol</p>
+            <h2 style={resumenValorTexto}>{usuarioRol || "Sin rol"}</h2>
+          </div>
         </div>
-      )}
+
+        <div style={grid}>
+          {tarjetasActivas.map((item) => (
+            <div
+              key={item.nombre}
+              style={
+                item.nombre === "Usuarios y Roles" ||
+                item.nombre === "Roles y Permisos"
+                  ? cardDestacado
+                  : card
+              }
+              onClick={() => abrirModulo(item.ruta)}
+            >
+              <div style={icono}>{item.icono}</div>
+              <h3 style={cardTitulo}>{item.nombre}</h3>
+              <p style={cardTexto}>{item.descripcion}</p>
+              <span style={abrir}>Abrir módulo →</span>
+            </div>
+          ))}
+        </div>
+
+        {tarjetasActivas.length === 0 && (
+          <div style={sinModulos}>
+            Este usuario no tiene módulos permitidos. Revise sus permisos.
+          </div>
+        )}
+      </main>
     </div>
   );
 }
 
-const pagina = {
-  padding: "30px",
-  background: "#eef2f7",
+const layout = {
+  display: "flex",
   minHeight: "100vh",
+  background: "#eef2f7",
   fontFamily: "Arial, sans-serif",
+};
+
+const sidebar = {
+  width: "260px",
+  background: "linear-gradient(180deg, #111827, #064e3b)",
+  color: "#ffffff",
+  padding: "22px 16px",
+  boxSizing: "border-box",
+  position: "sticky",
+  top: 0,
+  height: "100vh",
+  overflowY: "auto",
+};
+
+const brandBox = {
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  marginBottom: "22px",
+};
+
+const logo = {
+  width: "58px",
+  background: "#ffffff",
+  borderRadius: "14px",
+  padding: "7px",
+};
+
+const brandTitle = {
+  margin: 0,
+  fontSize: "22px",
+};
+
+const brandSub = {
+  margin: "4px 0 0",
+  color: "#bbf7d0",
+  fontSize: "12px",
+};
+
+const empresaBox = {
+  background: "rgba(255,255,255,0.10)",
+  padding: "14px",
+  borderRadius: "14px",
+  marginBottom: "18px",
+  display: "grid",
+  gap: "5px",
+  fontSize: "14px",
+};
+
+const menu = {
+  display: "grid",
+  gap: "8px",
+};
+
+const menuItem = {
+  width: "100%",
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  background: "rgba(255,255,255,0.08)",
+  color: "#ffffff",
+  border: "1px solid rgba(255,255,255,0.08)",
+  padding: "12px",
+  borderRadius: "12px",
+  cursor: "pointer",
+  fontWeight: "bold",
+  textAlign: "left",
+};
+
+const menuIcono = {
+  fontSize: "19px",
+};
+
+const botonSalir = {
+  width: "100%",
+  marginTop: "18px",
+  background: "#ffffff",
+  color: "#111827",
+  border: "none",
+  padding: "12px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const contenido = {
+  flex: 1,
+  padding: "30px",
+  boxSizing: "border-box",
 };
 
 const hero = {
@@ -510,26 +588,7 @@ const hero = {
   padding: "28px",
   borderRadius: "22px",
   marginBottom: "22px",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "20px",
-  flexWrap: "wrap",
   boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
-};
-
-const heroInfo = {
-  display: "flex",
-  alignItems: "center",
-  gap: "18px",
-};
-
-const logo = {
-  width: "85px",
-  height: "auto",
-  background: "#ffffff",
-  borderRadius: "16px",
-  padding: "8px",
 };
 
 const etiqueta = {
@@ -549,16 +608,6 @@ const plan = {
   color: "#dcfce7",
   marginTop: "6px",
   fontSize: "15px",
-};
-
-const botonSalir = {
-  background: "#ffffff",
-  color: "#111827",
-  border: "none",
-  padding: "12px 18px",
-  borderRadius: "9px",
-  fontWeight: "bold",
-  cursor: "pointer",
 };
 
 const resumenGrid = {
