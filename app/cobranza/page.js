@@ -259,7 +259,6 @@ export default function CobranzaGeneral() {
       estadoBusqueda,
       moraBusqueda,
     });
-
     setCuentasSeleccionadas([]);
   }
 
@@ -349,7 +348,6 @@ export default function CobranzaGeneral() {
 
   function obtenerGestorPorIdONombre(id, nombre) {
     const porId = usuariosGestores.find((u) => String(u.id) === String(id));
-
     if (porId) return porId;
 
     const porNombre = usuariosGestores.find(
@@ -385,6 +383,10 @@ export default function CobranzaGeneral() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return { error: { message: "No hay empresa activa." } };
 
+    if (!item?.cuenta?.id) {
+      return { error: { message: "La cuenta no tiene ID válido." } };
+    }
+
     if (!gestor?.id || !gestor?.nombre) {
       return {
         error: {
@@ -395,31 +397,42 @@ export default function CobranzaGeneral() {
 
     const hoy = new Date().toISOString().split("T")[0];
 
-    const datosActualizar = {
+    const datosGuardar = {
       responsable_cobro: gestor.nombre,
       responsable_cobro_id: gestor.id,
       fecha_asignacion: hoy,
       usuario_asignacion: usuarioActual(),
       observacion_asignacion: observacion || "",
       estado_cobranza: item.estado || "Al Día",
+      updated_at: new Date().toISOString(),
     };
 
-    const { data: existentes, error: errorBuscar } = await supabase
+    const { data: existente, error: errorBuscar } = await supabase
       .from("informacion_cobranza")
-      .select("id")
+      .select("*")
       .eq("empresa_id", empresaId)
-      .eq("informacion_comercial_id", item.cuenta.id);
+      .eq("informacion_comercial_id", item.cuenta.id)
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (errorBuscar) return { error: errorBuscar };
 
-    if (existentes && existentes.length > 0) {
-      const { error } = await supabase
+    if (existente?.id) {
+      const { data: actualizado, error } = await supabase
         .from("informacion_cobranza")
-        .update(datosActualizar)
-        .eq("empresa_id", empresaId)
-        .eq("informacion_comercial_id", item.cuenta.id);
+        .update(datosGuardar)
+        .eq("id", existente.id)
+        .select("*")
+        .maybeSingle();
 
-      return { error };
+      if (error) return { error };
+
+      return {
+        error: null,
+        cobranzaActualizada: actualizado,
+      };
     }
 
     const datosInsertar = {
@@ -437,11 +450,18 @@ export default function CobranzaGeneral() {
       monto_ultimo_pago: item.cuenta?.monto_ultimo_pago || 0,
     };
 
-    const { error } = await supabase
+    const { data: insertado, error } = await supabase
       .from("informacion_cobranza")
-      .insert([datosInsertar]);
+      .insert([datosInsertar])
+      .select("*")
+      .maybeSingle();
 
-    return { error };
+    if (error) return { error };
+
+    return {
+      error: null,
+      cobranzaActualizada: insertado,
+    };
   }
 
   async function guardarAsignacionGestor() {
@@ -464,7 +484,7 @@ export default function CobranzaGeneral() {
       return;
     }
 
-    const { error } = await guardarAsignacionActual(
+    const { error, cobranzaActualizada } = await guardarAsignacionActual(
       cuentaSeleccionada,
       gestor,
       observacionAsignacion
@@ -484,9 +504,28 @@ export default function CobranzaGeneral() {
       },
     ]);
 
+    setCartera((prev) =>
+      prev.map((item) =>
+        String(item.cuenta.id) === String(cuentaSeleccionada.cuenta.id)
+          ? {
+              ...item,
+              cobranza: cobranzaActualizada || {
+                ...(item.cobranza || {}),
+                responsable_cobro: gestor.nombre,
+                responsable_cobro_id: gestor.id,
+                fecha_asignacion: new Date().toISOString().split("T")[0],
+                usuario_asignacion: usuarioActual(),
+                observacion_asignacion: observacionAsignacion || "",
+              },
+            }
+          : item
+      )
+    );
+
     alert("Gestor asignado correctamente.");
     cerrarModalAsignar();
-    await cargarDatos();
+    await cargarCartera();
+    await cargarGestiones();
   }
 
   async function guardarAsignacionMasiva() {
@@ -550,7 +589,8 @@ export default function CobranzaGeneral() {
     setGestorMasivo("");
     setObservacionMasiva("");
 
-    await cargarDatos();
+    await cargarCartera();
+    await cargarGestiones();
   }
 
   async function registrarBitacoraAsignacion(registros) {
