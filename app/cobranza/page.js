@@ -119,12 +119,7 @@ export default function CobranzaGeneral() {
       .select("id,nombre,rol,estado,empresa_id")
       .eq("empresa_id", empresaId)
       .eq("estado", "Activo")
-      .in("rol", [
-        "Gestor de Cobro",
-        "Gestor de Cobranza",
-        "Cobranza",
-        "Supervisor",
-      ])
+      .in("rol", ["Gestor de Cobro", "Gestor de Cobranza", "Cobranza"])
       .order("nombre", { ascending: true });
 
     if (error) {
@@ -179,7 +174,10 @@ export default function CobranzaGeneral() {
         .from("informacion_cobranza")
         .select("*")
         .eq("empresa_id", empresaId)
-        .in("informacion_comercial_id", cuentaIds);
+        .in("informacion_comercial_id", cuentaIds)
+        .order("updated_at", { ascending: false })
+        .order("fecha_asignacion", { ascending: false })
+        .order("created_at", { ascending: false });
 
       if (error) {
         alert("Error cargando asignaciones: " + error.message);
@@ -247,6 +245,7 @@ export default function CobranzaGeneral() {
       estadoBusqueda,
       moraBusqueda,
     });
+
     setCuentasSeleccionadas([]);
   }
 
@@ -268,6 +267,7 @@ export default function CobranzaGeneral() {
 
   function coincideTipoBusqueda(item) {
     const valor = limpiarTexto(filtrosAplicados.valorBusqueda);
+
     if (!valor) return true;
 
     const cliente = item.cliente || {};
@@ -335,6 +335,7 @@ export default function CobranzaGeneral() {
 
   function obtenerGestorPorIdONombre(id, nombre) {
     const porId = usuariosGestores.find((u) => String(u.id) === String(id));
+
     if (porId) return porId;
 
     const porNombre = usuariosGestores.find(
@@ -354,7 +355,7 @@ export default function CobranzaGeneral() {
     );
 
     setCuentaSeleccionada(item);
-    setGestorSeleccionado(gestorActual?.id || responsableId || "");
+    setGestorSeleccionado(gestorActual?.id || "");
     setObservacionAsignacion("");
     setModalAsignar(true);
   }
@@ -395,19 +396,25 @@ export default function CobranzaGeneral() {
       updated_at: ahora,
     };
 
-    const { data: actualizado, error } = await supabase
+    const { data: actualizados, error: errorUpdate } = await supabase
       .from("informacion_cobranza")
       .update(datosGuardar)
       .eq("empresa_id", empresaId)
       .eq("informacion_comercial_id", item.cuenta.id)
       .select("*");
 
-    if (error) return { error };
+    if (errorUpdate) return { error: errorUpdate };
 
-    if (actualizado && actualizado.length > 0) {
+    if (actualizados && actualizados.length > 0) {
+      const actualizadoReciente = actualizados.sort((a, b) => {
+        const fechaA = new Date(a.updated_at || a.fecha_asignacion || a.created_at || 0);
+        const fechaB = new Date(b.updated_at || b.fecha_asignacion || b.created_at || 0);
+        return fechaB - fechaA;
+      })[0];
+
       return {
         error: null,
-        cobranzaActualizada: actualizado[0],
+        cobranzaActualizada: actualizadoReciente,
       };
     }
 
@@ -484,7 +491,18 @@ export default function CobranzaGeneral() {
     setCartera((prev) =>
       prev.map((item) =>
         String(item.cuenta.id) === String(cuentaSeleccionada.cuenta.id)
-          ? { ...item, cobranza: cobranzaActualizada }
+          ? {
+              ...item,
+              cobranza: cobranzaActualizada || {
+                ...(item.cobranza || {}),
+                responsable_cobro: gestor.nombre,
+                responsable_cobro_id: gestor.id,
+                fecha_asignacion: new Date().toISOString().split("T")[0],
+                usuario_asignacion: usuarioActual(),
+                observacion_asignacion: observacionAsignacion || "",
+                updated_at: new Date().toISOString(),
+              },
+            }
           : item
       )
     );
@@ -600,7 +618,10 @@ export default function CobranzaGeneral() {
 
   const gestoresBase = [
     { id: "Todos", nombre: "Todos" },
-    ...usuariosGestores.map((u) => ({ id: String(u.id), nombre: u.nombre })),
+    ...usuariosGestores.map((u) => ({
+      id: String(u.id),
+      nombre: u.nombre,
+    })),
     ...gestoresDesdeCartera,
     { id: "Sin asignar", nombre: "Sin asignar" },
   ];
