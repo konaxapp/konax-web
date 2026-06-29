@@ -41,33 +41,32 @@ export default function Usuarios() {
     }
   }, [empresaId]);
 
-async function cargarRoles() {
-  const { data, error } = await supabase
-    .from("roles_konax")
-    .select("*")
-    .order("nombre", { ascending: true });
+  async function cargarRoles() {
+    const { data, error } = await supabase
+      .from("roles_konax")
+      .select("*")
+      .order("nombre", { ascending: true });
 
-  if (error) {
-    alert("Error cargando roles: " + error.message);
-    return;
+    if (error) {
+      alert("Error cargando roles: " + error.message);
+      return;
+    }
+
+    const rolesActivos = data || [];
+    setRoles(rolesActivos);
+
+    const admin = rolesActivos.find(
+      (rol) => String(rol.nombre || "").toLowerCase() === "administrador"
+    );
+
+    if (admin) {
+      setRolId(admin.id);
+    } else if (rolesActivos.length > 0) {
+      setRolId(rolesActivos[0].id);
+    } else {
+      setRolId("");
+    }
   }
-
-  const rolesActivos = data || [];
-
-  setRoles(rolesActivos);
-
-  const admin = rolesActivos.find(
-    (rol) => String(rol.nombre || "").toLowerCase() === "administrador"
-  );
-
-  if (admin) {
-    setRolId(admin.id);
-  } else if (rolesActivos.length > 0) {
-    setRolId(rolesActivos[0].id);
-  } else {
-    setRolId("");
-  }
-}
 
   async function cargarUsuarios() {
     const { data, error } = await supabase
@@ -89,9 +88,10 @@ async function cargarRoles() {
     setCorreo("");
     setPassword("");
 
-const admin = roles.find(
-  (rol) => String(rol.nombre || "").toLowerCase() === "administrador"
-);
+    const admin = roles.find(
+      (rol) => String(rol.nombre || "").toLowerCase() === "administrador"
+    );
+
     if (admin) setRolId(admin.id);
   }
 
@@ -118,9 +118,9 @@ const admin = roles.find(
     const { error } = await supabase.from("usuarios").insert([
       {
         empresa_id: empresaId,
-        nombre,
-        correo,
-        password,
+        nombre: nombre.trim(),
+        correo: correo.trim().toLowerCase(),
+        password: password.trim(),
         rol_id: rolSeleccionado.id,
         rol: rolSeleccionado.nombre,
         estado: "Activo",
@@ -170,12 +170,24 @@ const admin = roles.find(
   }
 
   async function finalizarConfiguracion() {
-    const tieneAdministrador = usuarios.some(
+    const { data: usuariosActuales, error: errorUsuarios } = await supabase
+      .from("usuarios")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("estado", "Activo")
+      .order("created_at", { ascending: true });
+
+    if (errorUsuarios) {
+      alert("Error verificando usuarios: " + errorUsuarios.message);
+      return;
+    }
+
+    const administradorEmpresa = (usuariosActuales || []).find(
       (usuario) =>
-        usuario.rol === "Administrador" && usuario.estado === "Activo"
+        String(usuario.rol || "").toLowerCase().trim() === "administrador"
     );
 
-    if (!tieneAdministrador) {
+    if (!administradorEmpresa) {
       alert("Debe crear al menos un administrador activo.");
       return;
     }
@@ -204,14 +216,26 @@ const admin = roles.find(
       },
     ]);
 
+    localStorage.setItem("usuarioId", administradorEmpresa.id);
+    localStorage.setItem("usuarioNombre", administradorEmpresa.nombre || "");
+    localStorage.setItem("nombreUsuario", administradorEmpresa.nombre || "");
+    localStorage.setItem("usuarioCorreo", administradorEmpresa.correo || "");
+    localStorage.setItem("correoUsuario", administradorEmpresa.correo || "");
+
+    localStorage.setItem("empresaId", empresaId);
+    localStorage.setItem("empresaNombre", empresaNombre || "");
+
+    localStorage.setItem("usuarioRol", administradorEmpresa.rol || "Administrador");
+    localStorage.setItem("rolUsuario", administradorEmpresa.rol || "Administrador");
+    localStorage.setItem("rolId", administradorEmpresa.rol_id || "");
+
     localStorage.removeItem("empresaAdminCreadaId");
     localStorage.removeItem("empresaAdminCreadaNombre");
     localStorage.removeItem("categoriaNegocioAdmin");
     localStorage.removeItem("tipoNegocioAdmin");
 
     alert("Configuración finalizada.");
-
-    window.location.href = "/admin";
+    window.location.href = "/dashboard";
   }
 
   return (
@@ -230,7 +254,10 @@ const admin = roles.find(
             </div>
           </div>
 
-          <button onClick={() => (window.location.href = "/dashboard")} style={botonVolver}>
+          <button
+            onClick={() => (window.location.href = "/dashboard")}
+            style={botonVolver}
+          >
             ← Volver
           </button>
         </div>
@@ -378,7 +405,8 @@ const admin = roles.find(
           </div>
 
           <p style={nota}>
-            Al finalizar, la empresa quedará lista para ingresar al Centro de Operaciones.
+            Al finalizar, la empresa quedará lista para ingresar al Centro de
+            Operaciones.
           </p>
 
           <button onClick={finalizarConfiguracion} style={botonVerde}>
