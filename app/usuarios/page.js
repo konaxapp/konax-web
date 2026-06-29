@@ -56,7 +56,7 @@ export default function Usuarios() {
     setRoles(rolesActivos);
 
     const admin = rolesActivos.find(
-      (rol) => String(rol.nombre || "").toLowerCase() === "administrador"
+      (rol) => String(rol.nombre || "").toLowerCase().trim() === "administrador"
     );
 
     if (admin) {
@@ -89,7 +89,7 @@ export default function Usuarios() {
     setPassword("");
 
     const admin = roles.find(
-      (rol) => String(rol.nombre || "").toLowerCase() === "administrador"
+      (rol) => String(rol.nombre || "").toLowerCase().trim() === "administrador"
     );
 
     if (admin) setRolId(admin.id);
@@ -192,12 +192,14 @@ export default function Usuarios() {
       return;
     }
 
-    const { error } = await supabase
+    const { data: empresaActualizada, error } = await supabase
       .from("empresas")
       .update({
         configuracion_completa: true,
       })
-      .eq("id", empresaId);
+      .eq("id", empresaId)
+      .select("*")
+      .maybeSingle();
 
     if (error) {
       alert("Error finalizando configuración: " + error.message);
@@ -216,6 +218,16 @@ export default function Usuarios() {
       },
     ]);
 
+    localStorage.removeItem("adminKonaxId");
+    localStorage.removeItem("adminKonaxNombre");
+    localStorage.removeItem("adminKonaxCorreo");
+    localStorage.removeItem("adminKonaxRol");
+
+    localStorage.removeItem("empresaAdminCreadaId");
+    localStorage.removeItem("empresaAdminCreadaNombre");
+    localStorage.removeItem("categoriaNegocioAdmin");
+    localStorage.removeItem("tipoNegocioAdmin");
+
     localStorage.setItem("usuarioId", administradorEmpresa.id);
     localStorage.setItem("usuarioNombre", administradorEmpresa.nombre || "");
     localStorage.setItem("nombreUsuario", administradorEmpresa.nombre || "");
@@ -223,19 +235,23 @@ export default function Usuarios() {
     localStorage.setItem("correoUsuario", administradorEmpresa.correo || "");
 
     localStorage.setItem("empresaId", empresaId);
-    localStorage.setItem("empresaNombre", empresaNombre || "");
+    localStorage.setItem(
+      "empresaNombre",
+      empresaActualizada?.nombre || empresaNombre || ""
+    );
 
-    localStorage.setItem("usuarioRol", administradorEmpresa.rol || "Administrador");
-    localStorage.setItem("rolUsuario", administradorEmpresa.rol || "Administrador");
+    localStorage.setItem("usuarioRol", "Administrador");
+    localStorage.setItem("rolUsuario", "Administrador");
     localStorage.setItem("rolId", administradorEmpresa.rol_id || "");
 
-    localStorage.removeItem("empresaAdminCreadaId");
-    localStorage.removeItem("empresaAdminCreadaNombre");
-    localStorage.removeItem("categoriaNegocioAdmin");
-    localStorage.removeItem("tipoNegocioAdmin");
+    localStorage.setItem("tipoNegocio", empresaActualizada?.tipo_negocio || "");
+    localStorage.setItem(
+      "categoriaNegocio",
+      empresaActualizada?.categoria_negocio || ""
+    );
 
     alert("Configuración finalizada.");
-    window.location.href = "/dashboard";
+    window.location.replace("/dashboard");
   }
 
   return (
