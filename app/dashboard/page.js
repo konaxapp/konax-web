@@ -135,7 +135,6 @@ export default function Dashboard() {
         "dashboard_ventas",
         "gastos",
         "usuarios",
-        "roles",
       ];
     }
 
@@ -381,12 +380,6 @@ export default function Dashboard() {
       ruta: "/usuarios",
       activo: tienePermiso("usuarios"),
       icono: "🔐",
-    },
-    {
-      nombre: "Roles y Permisos",
-      ruta: "/roles",
-      activo: tienePermiso("roles"),
-      icono: "🛡️",
     },
   ];
 
