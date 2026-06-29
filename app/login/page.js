@@ -132,79 +132,180 @@ export default function Login() {
   }
 
   return (
-    <div style={contenedor}>
-      <div style={card}>
-        <h1 style={titulo}>KONAX</h1>
+    <div style={pagina}>
+      <div style={blurUno}></div>
+      <div style={blurDos}></div>
 
-        <p style={subtitulo}>Iniciar Sesión</p>
+      <div style={modal}>
+        <div style={logoFila}>
+          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+          <h1 style={marca}>KONAX</h1>
+        </div>
 
-        <input
-          type="email"
-          placeholder="Correo"
-          value={correo}
-          onChange={(e) => setCorreo(e.target.value)}
-          style={input}
-        />
+        <h2 style={titulo}>Bienvenido</h2>
 
-        <input
-          type="password"
-          placeholder="Contraseña"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={input}
-        />
+        <p style={subtitulo}>Ingresa a tu cuenta empresarial aquí</p>
+
+        <div style={campo}>
+          <label style={label}>Correo</label>
+          <input
+            type="email"
+            placeholder="correo@empresa.com"
+            value={correo}
+            onChange={(e) => setCorreo(e.target.value)}
+            style={input}
+          />
+        </div>
+
+        <div style={campo}>
+          <label style={label}>Contraseña</label>
+          <input
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={input}
+          />
+        </div>
 
         <button onClick={iniciarSesion} disabled={cargando} style={boton}>
-          {cargando ? "Ingresando..." : "Ingresar"}
+          {cargando ? "Ingresando..." : "Iniciar Sesión →"}
         </button>
+
+        <p style={olvido}>¿Olvidaste tu contraseña?</p>
       </div>
     </div>
   );
 }
 
-const contenedor = {
+const pagina = {
   minHeight: "100vh",
+  background:
+    "radial-gradient(circle at 20% 20%, #0f766e 0%, transparent 28%), linear-gradient(135deg, #020617 0%, #052e2b 50%, #111827 100%)",
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
-  background: "#f3f4f6",
+  padding: "30px",
   fontFamily: "Arial, sans-serif",
+  position: "relative",
+  overflow: "hidden",
 };
 
-const card = {
-  width: "400px",
-  background: "#fff",
-  padding: "40px",
-  borderRadius: "15px",
-  boxShadow: "0 4px 15px rgba(0,0,0,0.10)",
+const blurUno = {
+  position: "absolute",
+  width: "420px",
+  height: "420px",
+  borderRadius: "50%",
+  background: "rgba(16,185,129,0.20)",
+  left: "-120px",
+  top: "-90px",
+  filter: "blur(25px)",
+};
+
+const blurDos = {
+  position: "absolute",
+  width: "360px",
+  height: "360px",
+  borderRadius: "50%",
+  background: "rgba(45,212,191,0.14)",
+  right: "-90px",
+  bottom: "-80px",
+  filter: "blur(25px)",
+};
+
+const modal = {
+  width: "430px",
+  maxWidth: "100%",
+  background:
+    "linear-gradient(180deg, rgba(6,78,59,0.96), rgba(15,23,42,0.96))",
+  border: "1px solid rgba(94,234,212,0.35)",
+  borderRadius: "28px",
+  padding: "38px",
+  color: "#ffffff",
+  boxShadow: "0 25px 70px rgba(0,0,0,0.45)",
+  position: "relative",
+  zIndex: 2,
+};
+
+const logoFila = {
+  display: "flex",
+  alignItems: "center",
+  gap: "14px",
+  justifyContent: "center",
+  marginBottom: "28px",
+};
+
+const logo = {
+  width: "68px",
+  background: "#ffffff",
+  borderRadius: "18px",
+  padding: "8px",
+};
+
+const marca = {
+  margin: 0,
+  fontSize: "42px",
+  fontWeight: "bold",
+  letterSpacing: "1px",
+  color: "#ffffff",
 };
 
 const titulo = {
-  margin: "0 0 10px 0",
-  color: "#111827",
+  textAlign: "center",
+  margin: "0 0 12px",
+  fontSize: "34px",
+  color: "#ffffff",
 };
 
 const subtitulo = {
+  textAlign: "center",
+  color: "#d1fae5",
+  fontSize: "17px",
+  fontWeight: "bold",
+  marginBottom: "32px",
+};
+
+const campo = {
   marginBottom: "20px",
-  color: "#6b7280",
+};
+
+const label = {
+  display: "block",
+  marginBottom: "8px",
+  fontSize: "15px",
+  fontWeight: "bold",
+  color: "#e5fdf7",
 };
 
 const input = {
   width: "100%",
-  padding: "12px",
-  marginBottom: "15px",
-  border: "1px solid #d1d5db",
-  borderRadius: "8px",
+  padding: "16px",
+  borderRadius: "14px",
+  border: "1px solid rgba(94,234,212,0.35)",
+  background: "rgba(15,23,42,0.65)",
+  color: "#ffffff",
+  fontSize: "16px",
   boxSizing: "border-box",
+  outline: "none",
 };
 
 const boton = {
   width: "100%",
-  padding: "12px",
-  background: "#2563eb",
-  color: "#fff",
+  padding: "16px",
+  background: "linear-gradient(135deg, #2dd4bf, #10b981)",
+  color: "#052e2b",
   border: "none",
-  borderRadius: "8px",
+  borderRadius: "13px",
+  fontSize: "17px",
   fontWeight: "bold",
   cursor: "pointer",
+  marginTop: "6px",
+};
+
+const olvido = {
+  textAlign: "center",
+  marginTop: "22px",
+  color: "#5eead4",
+  fontWeight: "bold",
+  fontSize: "14px",
 };
