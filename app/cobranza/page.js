@@ -335,81 +335,91 @@ export default function CobranzaGeneral() {
     setObservacionAsignacion("");
   }
 
-  async function guardarAsignacionActual(item, gestor, observacion) {
-    const empresaId = obtenerEmpresaId();
-    if (!empresaId) return { error: { message: "No hay empresa activa." } };
+ async function guardarAsignacionActual(item, gestor, observacion) {
+  const empresaId = obtenerEmpresaId();
+  if (!empresaId) return { error: { message: "No hay empresa activa." } };
 
-    if (!item?.cuenta?.id) {
-      return { error: { message: "La cuenta no tiene ID válido." } };
-    }
-
-    if (!gestor?.id || !gestor?.nombre) {
-      return { error: { message: "El gestor seleccionado no tiene ID o nombre válido." } };
-    }
-
-    const ahora = new Date().toISOString();
-    const hoy = ahora.split("T")[0];
-
-    const datosGuardar = {
-      responsable_cobro: gestor.nombre,
-      responsable_cobro_id: gestor.id,
-      fecha_asignacion: hoy,
-      usuario_asignacion: usuarioActual(),
-      observacion_asignacion: observacion || "",
-      estado_cobranza: item.estado || "Al Día",
-      updated_at: ahora,
-    };
-
-    const { data: existente, error: errorBuscar } = await supabase
-      .from("informacion_cobranza")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .eq("informacion_comercial_id", item.cuenta.id)
-      .maybeSingle();
-
-    if (errorBuscar) return { error: errorBuscar };
-
-    if (existente?.id) {
-      const { data: actualizado, error } = await supabase
-        .from("informacion_cobranza")
-        .update(datosGuardar)
-        .eq("id", existente.id)
-        .select("*")
-        .maybeSingle();
-
-      if (error) return { error };
-
-      return {
-        error: null,
-        cobranzaActualizada: actualizado || { ...existente, ...datosGuardar },
-      };
-    }
-
-    const datosInsertar = {
-      empresa_id: empresaId,
-      cliente_id: item.cliente?.id || item.cuenta?.cliente_id || null,
-      informacion_comercial_id: item.cuenta.id,
-      responsable_cobro: gestor.nombre,
-      responsable_cobro_id: gestor.id,
-      fecha_asignacion: hoy,
-      usuario_asignacion: usuarioActual(),
-      observacion_asignacion: observacion || "",
-      estado_cobranza: item.estado || "Al Día",
-      fecha_ultimo_pago: item.cuenta?.fecha_ultimo_pago || item.cuenta?.fecha_inicio || hoy,
-      monto_ultimo_pago: item.cuenta?.monto_ultimo_pago || 0,
-      updated_at: ahora,
-    };
-
-    const { data: insertado, error } = await supabase
-      .from("informacion_cobranza")
-      .insert([datosInsertar])
-      .select("*")
-      .maybeSingle();
-
-    if (error) return { error };
-    return { error: null, cobranzaActualizada: insertado };
+  if (!item?.cuenta?.id) {
+    return { error: { message: "La cuenta no tiene ID válido." } };
   }
 
+  if (!gestor?.id || !gestor?.nombre) {
+    return {
+      error: {
+        message: "El gestor seleccionado no tiene ID o nombre válido.",
+      },
+    };
+  }
+
+  const ahora = new Date().toISOString();
+  const hoy = ahora.split("T")[0];
+
+  const datosGuardar = {
+    responsable_cobro: gestor.nombre,
+    responsable_cobro_id: gestor.id,
+    fecha_asignacion: hoy,
+    usuario_asignacion: usuarioActual(),
+    observacion_asignacion: observacion || "",
+    estado_cobranza: item.estado || "Al Día",
+    updated_at: ahora,
+  };
+
+  const { data: existentes, error: errorBuscar } = await supabase
+    .from("informacion_cobranza")
+    .select("*")
+    .eq("empresa_id", empresaId)
+    .eq("informacion_comercial_id", item.cuenta.id);
+
+  if (errorBuscar) return { error: errorBuscar };
+
+  if (existentes && existentes.length > 0) {
+    const { data: actualizados, error } = await supabase
+      .from("informacion_cobranza")
+      .update(datosGuardar)
+      .eq("empresa_id", empresaId)
+      .eq("informacion_comercial_id", item.cuenta.id)
+      .select("*");
+
+    if (error) return { error };
+
+    return {
+      error: null,
+      cobranzaActualizada: actualizados?.[0] || {
+        ...(existentes[0] || {}),
+        ...datosGuardar,
+      },
+    };
+  }
+
+  const datosInsertar = {
+    empresa_id: empresaId,
+    cliente_id: item.cliente?.id || item.cuenta?.cliente_id || null,
+    informacion_comercial_id: item.cuenta.id,
+    responsable_cobro: gestor.nombre,
+    responsable_cobro_id: gestor.id,
+    fecha_asignacion: hoy,
+    usuario_asignacion: usuarioActual(),
+    observacion_asignacion: observacion || "",
+    estado_cobranza: item.estado || "Al Día",
+    fecha_ultimo_pago:
+      item.cuenta?.fecha_ultimo_pago || item.cuenta?.fecha_inicio || hoy,
+    monto_ultimo_pago: item.cuenta?.monto_ultimo_pago || 0,
+    updated_at: ahora,
+  };
+
+  const { data: insertado, error } = await supabase
+    .from("informacion_cobranza")
+    .insert([datosInsertar])
+    .select("*")
+    .maybeSingle();
+
+  if (error) return { error };
+
+  return {
+    error: null,
+    cobranzaActualizada: insertado,
+  };
+}
   async function guardarAsignacionGestor() {
     if (!cuentaSeleccionada?.cuenta?.id) {
       alert("No hay cuenta seleccionada.");
