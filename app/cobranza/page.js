@@ -202,10 +202,10 @@ export default function CobranzaGeneral() {
         cobranzasCuenta.length > 0
           ? cobranzasCuenta.sort((a, b) => {
               const fechaA = new Date(
-                a.updated_at || a.fecha_asignacion || a.created_at || 0
+                a.fecha_asignacion || a.created_at || 0
               );
               const fechaB = new Date(
-                b.updated_at || b.fecha_asignacion || b.created_at || 0
+                b.fecha_asignacion || b.created_at || 0
               );
               return fechaB - fechaA;
             })[0]
@@ -259,6 +259,7 @@ export default function CobranzaGeneral() {
       estadoBusqueda,
       moraBusqueda,
     });
+
     setCuentasSeleccionadas([]);
   }
 
@@ -404,34 +405,45 @@ export default function CobranzaGeneral() {
       usuario_asignacion: usuarioActual(),
       observacion_asignacion: observacion || "",
       estado_cobranza: item.estado || "Al Día",
-      updated_at: new Date().toISOString(),
     };
 
-    const { data: existente, error: errorBuscar } = await supabase
+    const { data: existentes, error: errorBuscar } = await supabase
       .from("informacion_cobranza")
       .select("*")
       .eq("empresa_id", empresaId)
-      .eq("informacion_comercial_id", item.cuenta.id)
-      .order("updated_at", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .eq("informacion_comercial_id", item.cuenta.id);
 
     if (errorBuscar) return { error: errorBuscar };
 
-    if (existente?.id) {
-      const { data: actualizado, error } = await supabase
+    if (existentes && existentes.length > 0) {
+      const { data: actualizados, error } = await supabase
         .from("informacion_cobranza")
         .update(datosGuardar)
-        .eq("id", existente.id)
-        .select("*")
-        .maybeSingle();
+        .eq("empresa_id", empresaId)
+        .eq("informacion_comercial_id", item.cuenta.id)
+        .select("*");
 
       if (error) return { error };
 
+      const cobranzaActualizada =
+        actualizados && actualizados.length > 0
+          ? actualizados.sort((a, b) => {
+              const fechaA = new Date(
+                a.fecha_asignacion || a.created_at || 0
+              );
+              const fechaB = new Date(
+                b.fecha_asignacion || b.created_at || 0
+              );
+              return fechaB - fechaA;
+            })[0]
+          : {
+              ...existentes[0],
+              ...datosGuardar,
+            };
+
       return {
         error: null,
-        cobranzaActualizada: actualizado,
+        cobranzaActualizada,
       };
     }
 
@@ -524,6 +536,7 @@ export default function CobranzaGeneral() {
 
     alert("Gestor asignado correctamente.");
     cerrarModalAsignar();
+
     await cargarCartera();
     await cargarGestiones();
   }
