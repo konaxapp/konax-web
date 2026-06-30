@@ -46,6 +46,7 @@ export default function Dashboard() {
 
     if (errorEmpresa) {
       alert("Error cargando empresa: " + errorEmpresa.message);
+      setCargando(false);
       return;
     }
 
@@ -74,25 +75,47 @@ export default function Dashboard() {
   }
 
   async function cargarModulosEmpresa(empresaId) {
-  const { data, error } = await supabase
-    .from("modulos_empresa")
-    .select("modulo, activo")
-    .eq("empresa_id", empresaId);
+    const { data, error } = await supabase
+      .from("empresa_modulos")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
 
-  if (error) {
-    alert("Error cargando funciones del plan: " + error.message);
-    setModulos({});
-    return;
+    if (error) {
+      alert("Error cargando módulos de empresa: " + error.message);
+      setModulos({});
+      return;
+    }
+
+    if (!data) {
+      setModulos({});
+      return;
+    }
+
+    setModulos({
+      dashboard: true,
+      clientes: Boolean(data.clientes),
+      vista_cliente: Boolean(data.vista_cliente),
+      creditos: Boolean(data.venta_credito),
+      caja: Boolean(data.caja),
+      control_caja: Boolean(data.control_caja),
+      cobranza: Boolean(data.cobranza),
+      gestor_cobros: Boolean(data.cobranza || data.dashboard_cobros),
+      abonos: Boolean(data.caja || data.cobranza),
+      pagos: Boolean(data.caja || data.cobranza),
+      inventario: Boolean(data.inventario),
+      movimientos_inventario: Boolean(data.inventario),
+      ventas: Boolean(data.venta_credito),
+      suscripciones: Boolean(data.suscripciones),
+      recargos: Boolean(data.recargos),
+      reportes: Boolean(data.dashboard_ventas || data.dashboard_cobros),
+      usuarios: true,
+      configuracion: true,
+      dashboard_ventas: Boolean(data.dashboard_ventas),
+      dashboard_cobros: Boolean(data.dashboard_cobros),
+      gastos: Boolean(data.egresos),
+    });
   }
-
-  const armados = {};
-
-  (data || []).forEach((item) => {
-    armados[item.modulo] = Boolean(item.activo);
-  });
-
-  setModulos(armados);
-}
 
   async function cargarPermisosUsuario(empresaId, usuarioId) {
     if (!usuarioId) {
@@ -109,6 +132,7 @@ export default function Dashboard() {
 
     if (error) {
       alert("Error cargando permisos del usuario: " + error.message);
+      setPermisosUsuario([]);
       return;
     }
 
@@ -157,7 +181,7 @@ export default function Dashboard() {
     {
       nombre: "Créditos",
       ruta: "/ventas-credito",
-      activo: puedeVer("ventas_credito"),
+      activo: puedeVer("creditos"),
       icono: "💳",
     },
     {
@@ -185,6 +209,18 @@ export default function Dashboard() {
       icono: "🧑‍💼",
     },
     {
+      nombre: "Registrar Abonos",
+      ruta: "/abonos",
+      activo: puedeVer("abonos"),
+      icono: "💰",
+    },
+    {
+      nombre: "Registrar Pagos",
+      ruta: "/pagos",
+      activo: puedeVer("pagos"),
+      icono: "✅",
+    },
+    {
       nombre: "Control Caja",
       ruta: "/control-caja",
       activo: puedeVer("control_caja"),
@@ -197,10 +233,16 @@ export default function Dashboard() {
       icono: "📦",
     },
     {
-      nombre: "Nuevo Producto",
-      ruta: "/inventario/nuevo",
-      activo: puedeVer("inventario_nuevo"),
-      icono: "➕",
+      nombre: "Movimientos Inventario",
+      ruta: "/movimientos-inventario",
+      activo: puedeVer("movimientos_inventario"),
+      icono: "🔄",
+    },
+    {
+      nombre: "Ventas",
+      ruta: "/ventas",
+      activo: puedeVer("ventas"),
+      icono: "🛒",
     },
     {
       nombre: "Suscripciones",
@@ -227,10 +269,22 @@ export default function Dashboard() {
       icono: "🧮",
     },
     {
+      nombre: "Reportes",
+      ruta: "/reportes",
+      activo: puedeVer("reportes"),
+      icono: "📋",
+    },
+    {
       nombre: "Usuarios y Roles",
       ruta: "/usuarios",
       activo: puedeVer("usuarios"),
       icono: "🔐",
+    },
+    {
+      nombre: "Configuración",
+      ruta: "/configuracion",
+      activo: puedeVer("configuracion"),
+      icono: "⚙️",
     },
   ];
 
