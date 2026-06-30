@@ -6,7 +6,6 @@ import { supabase } from "../../lib/supabase";
 
 export default function Empresas() {
   const [empresas, setEmpresas] = useState([]);
-  const [modulosPorEmpresa, setModulosPorEmpresa] = useState({});
   const [mostrarEmpresas, setMostrarEmpresas] = useState(false);
 
   const [nombre, setNombre] = useState("");
@@ -16,19 +15,6 @@ export default function Empresas() {
   const [categoria, setCategoria] = useState("");
   const [tipoNegocio, setTipoNegocio] = useState("");
   const [guardando, setGuardando] = useState(false);
-
-  const modulosDisponibles = [
-    { codigo: "dashboard", nombre: "Dashboard" },
-    { codigo: "clientes", nombre: "Clientes" },
-    { codigo: "cobranza", nombre: "Cobranza" },
-    { codigo: "caja", nombre: "Caja" },
-    { codigo: "creditos", nombre: "Créditos" },
-    { codigo: "usuarios", nombre: "Usuarios" },
-    { codigo: "reportes", nombre: "Reportes" },
-    { codigo: "inventario", nombre: "Inventario" },
-    { codigo: "ventas", nombre: "Ventas" },
-    { codigo: "suscripciones", nombre: "Suscripciones" },
-  ];
 
   const categorias = {
     "Ventas a Crédito": [
@@ -73,13 +59,8 @@ export default function Empresas() {
   };
 
   useEffect(() => {
-    cargarTodo();
+    cargarEmpresas();
   }, []);
-
-  async function cargarTodo() {
-    await cargarEmpresas();
-    await cargarModulosEmpresas();
-  }
 
   async function cargarEmpresas() {
     const { data, error } = await supabase
@@ -95,59 +76,6 @@ export default function Empresas() {
     setEmpresas(data || []);
   }
 
-  async function cargarModulosEmpresas() {
-    const { data, error } = await supabase.from("modulos_empresa").select("*");
-
-    if (error) {
-      alert("Error cargando módulos: " + error.message);
-      return;
-    }
-
-    const agrupados = {};
-
-    (data || []).forEach((item) => {
-      if (!agrupados[item.empresa_id]) agrupados[item.empresa_id] = {};
-      agrupados[item.empresa_id][item.modulo] = item;
-    });
-
-    setModulosPorEmpresa(agrupados);
-  }
-
-  function moduloActivo(empresaId, modulo) {
-    return Boolean(modulosPorEmpresa?.[empresaId]?.[modulo]?.activo);
-  }
-
-  async function alternarModulo(empresa, modulo) {
-    const activoActual = moduloActivo(empresa.id, modulo.codigo);
-    const nuevoEstado = !activoActual;
-
-    const admin =
-      localStorage.getItem("adminKonaxNombre") ||
-      localStorage.getItem("adminKonaxCorreo") ||
-      "KONAX";
-
-    const { error } = await supabase.from("modulos_empresa").upsert(
-      {
-        empresa_id: empresa.id,
-        modulo: modulo.codigo,
-        activo: nuevoEstado,
-        plan_origen: empresa.plan_nombre || "Manual",
-        activado_por: admin,
-        updated_at: new Date().toISOString(),
-      },
-      {
-        onConflict: "empresa_id,modulo",
-      }
-    );
-
-    if (error) {
-      alert("Error actualizando módulo: " + error.message);
-      return;
-    }
-
-    await cargarModulosEmpresas();
-  }
-
   function limpiarFormulario() {
     setNombre("");
     setTelefono("");
@@ -160,8 +88,14 @@ export default function Empresas() {
   function guardarEmpresaEnLocalStorage(empresa) {
     localStorage.setItem("empresaAdminCreadaId", empresa.id);
     localStorage.setItem("empresaAdminCreadaNombre", empresa.nombre || "");
-    localStorage.setItem("categoriaNegocioAdmin", empresa.categoria_negocio || "");
+    localStorage.setItem(
+      "categoriaNegocioAdmin",
+      empresa.categoria_negocio || ""
+    );
     localStorage.setItem("tipoNegocioAdmin", empresa.tipo_negocio || "");
+
+    localStorage.setItem("empresaId", empresa.id);
+    localStorage.setItem("empresaNombre", empresa.nombre || "");
   }
 
   async function guardarEmpresa() {
@@ -198,8 +132,9 @@ export default function Empresas() {
       .select()
       .single();
 
+    setGuardando(false);
+
     if (error) {
-      setGuardando(false);
       alert("Error al guardar empresa: " + error.message);
       return;
     }
@@ -217,10 +152,8 @@ export default function Empresas() {
     ]);
 
     guardarEmpresaEnLocalStorage(data);
-
-    setGuardando(false);
     limpiarFormulario();
-    await cargarTodo();
+    await cargarEmpresas();
 
     alert("Empresa creada correctamente. Ahora selecciona el plan.");
     window.location.href = "/planes";
@@ -241,16 +174,22 @@ export default function Empresas() {
     window.location.href = "/usuarios";
   }
 
+  function irAdministrarEmpresa(empresa) {
+    guardarEmpresaEnLocalStorage(empresa);
+    window.location.href = `/admin-empresa?empresa=${empresa.id}`;
+  }
+
   return (
     <div style={pagina}>
       <div style={contenedor}>
         <div style={hero}>
           <div style={heroInfo}>
             <img src="/konax-logo.png" alt="KONAX" style={logo} />
+
             <div>
               <h1 style={titulo}>Empresas Clientes</h1>
               <p style={subtitulo}>
-                Crea empresas, asigna plan, registra usuario principal y activa módulos.
+                Crea empresas, asigna plan, registra usuario principal y administra permisos.
               </p>
             </div>
           </div>
@@ -370,14 +309,12 @@ export default function Empresas() {
                   <tr>
                     <th style={th}>Empresa</th>
                     <th style={th}>Teléfono</th>
-                    <th style={th}>Categoría</th>
-                    <th style={th}>Tipo</th>
+                    <th style={th}>Negocio</th>
                     <th style={th}>Plan</th>
-                    <th style={th}>Estado Pago</th>
+                    <th style={th}>Pago</th>
                     <th style={th}>Servicio</th>
-                    <th style={th}>Próxima Facturación</th>
-                    <th style={th}>Configuración</th>
-                    <th style={th}>Módulos</th>
+                    <th style={th}>Facturación</th>
+                    <th style={th}>Config.</th>
                     <th style={th}>Acciones</th>
                   </tr>
                 </thead>
@@ -385,7 +322,7 @@ export default function Empresas() {
                 <tbody>
                   {empresas.length === 0 ? (
                     <tr>
-                      <td style={td} colSpan="11">
+                      <td style={td} colSpan="9">
                         No hay empresas registradas.
                       </td>
                     </tr>
@@ -395,19 +332,32 @@ export default function Empresas() {
                         <td style={td}>
                           <strong>{empresa.nombre}</strong>
                           <br />
-                          <span style={textoPequeno}>{empresa.correo || "-"}</span>
+                          <span style={textoPequeno}>
+                            {empresa.correo || "-"}
+                          </span>
                         </td>
 
                         <td style={td}>{empresa.telefono || "-"}</td>
-                        <td style={td}>{empresa.categoria_negocio || "-"}</td>
-                        <td style={td}>{empresa.tipo_negocio || "-"}</td>
+
+                        <td style={td}>
+                          {empresa.categoria_negocio || "-"}
+                          <br />
+                          <span style={textoPequeno}>
+                            {empresa.tipo_negocio || "-"}
+                          </span>
+                        </td>
+
                         <td style={td}>{empresa.plan_nombre || "Sin plan"}</td>
-                        <td style={td}>{empresa.estado_pago || "Pendiente"}</td>
+
+                        <td style={td}>
+                          {empresa.estado_pago || "Pendiente"}
+                        </td>
 
                         <td style={td}>
                           <span
                             style={
-                              empresa.estado === "Activo" || empresa.estado === "Activa"
+                              empresa.estado === "Activo" ||
+                              empresa.estado === "Activa"
                                 ? estadoActivo
                                 : estadoInactivo
                             }
@@ -416,40 +366,28 @@ export default function Empresas() {
                           </span>
                         </td>
 
-                        <td style={td}>{empresa.fecha_proxima_facturacion || "-"}</td>
-
                         <td style={td}>
-                          {empresa.configuracion_completa ? "Completa" : "Pendiente"}
+                          {empresa.fecha_proxima_facturacion || "-"}
                         </td>
 
                         <td style={td}>
-                          <div style={modulosGrid}>
-                            {modulosDisponibles.map((modulo) => {
-                              const activo = moduloActivo(empresa.id, modulo.codigo);
-
-                              return (
-                                <button
-                                  key={modulo.codigo}
-                                  style={activo ? moduloActivoBtn : moduloInactivoBtn}
-                                  onClick={() => alternarModulo(empresa, modulo)}
-                                >
-                                  {activo ? "✓ " : "+ "}
-                                  {modulo.nombre}
-                                </button>
-                              );
-                            })}
-                          </div>
+                          {empresa.configuracion_completa
+                            ? "Completa"
+                            : "Pendiente"}
                         </td>
 
                         <td style={td}>
                           <button
                             style={botonMiniVerde}
-                            onClick={() => seleccionarEmpresa(empresa)}
+                            onClick={() => irAdministrarEmpresa(empresa)}
                           >
-                            Seleccionar
+                            Administrar
                           </button>
 
-                          <button style={botonMini} onClick={() => irPlan(empresa)}>
+                          <button
+                            style={botonMini}
+                            onClick={() => irPlan(empresa)}
+                          >
                             Plan
                           </button>
 
@@ -457,7 +395,14 @@ export default function Empresas() {
                             style={botonMini}
                             onClick={() => irUsuarioPrincipal(empresa)}
                           >
-                            Usuario Principal
+                            Usuario
+                          </button>
+
+                          <button
+                            style={botonMiniGris}
+                            onClick={() => seleccionarEmpresa(empresa)}
+                          >
+                            Seleccionar
                           </button>
                         </td>
                       </tr>
@@ -468,7 +413,7 @@ export default function Empresas() {
             </div>
 
             <p style={nota}>
-              Flujo: crear empresa → asignar plan → activar módulos → crear usuario principal.
+              Usa “Administrar” para entrar a la empresa y configurar módulos, roles, usuarios y permisos.
             </p>
           </div>
         )}
@@ -699,33 +644,16 @@ const botonMiniVerde = {
   marginBottom: "5px",
 };
 
-const modulosGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(115px,1fr))",
-  gap: "6px",
-  minWidth: "360px",
-};
-
-const moduloActivoBtn = {
-  background: "#dcfce7",
-  color: "#166534",
-  border: "1px solid #86efac",
-  padding: "7px 9px",
-  borderRadius: "8px",
+const botonMiniGris = {
+  background: "#6b7280",
+  color: "#ffffff",
+  border: "none",
+  padding: "7px 10px",
+  borderRadius: "7px",
   fontWeight: "bold",
   cursor: "pointer",
-  fontSize: "12px",
-};
-
-const moduloInactivoBtn = {
-  background: "#f3f4f6",
-  color: "#374151",
-  border: "1px solid #d1d5db",
-  padding: "7px 9px",
-  borderRadius: "8px",
-  fontWeight: "bold",
-  cursor: "pointer",
-  fontSize: "12px",
+  marginRight: "5px",
+  marginBottom: "5px",
 };
 
 const nota = {
