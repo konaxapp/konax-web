@@ -20,24 +20,26 @@ export default function Usuarios() {
   const [guardando, setGuardando] = useState(false);
 
   const permisosDisponibles = [
-    { codigo: "dashboard", nombre: "Inicio / Resumen" },
-    { codigo: "clientes", nombre: "Clientes" },
-    { codigo: "cuentas_por_cobrar", nombre: "Cuentas por cobrar" },
-    { codigo: "vista_cliente", nombre: "Vista Cliente" },
-    { codigo: "ventas_credito", nombre: "Créditos" },
-    { codigo: "caja", nombre: "Caja" },
-    { codigo: "control_caja", nombre: "Control Caja" },
-    { codigo: "cobranza", nombre: "Cobranza" },
-    { codigo: "dashboard_cobros", nombre: "Centro de Cobranza" },
-    { codigo: "gestor_cobros", nombre: "Gestor de Cobros" },
-    { codigo: "inventario", nombre: "Inventario" },
-    { codigo: "inventario_nuevo", nombre: "Nuevo Producto" },
-    { codigo: "suscripciones", nombre: "Suscripciones" },
-    { codigo: "recargos", nombre: "Recargos" },
-    { codigo: "dashboard_ventas", nombre: "Centro de Ventas" },
-    { codigo: "gastos", nombre: "Gastos" },
-    { codigo: "usuarios", nombre: "Usuarios y Roles" },
-  ];
+  { codigo: "dashboard", nombre: "Inicio / Resumen" },
+  { codigo: "clientes", nombre: "Clientes" },
+  { codigo: "vista_cliente", nombre: "Ficha del cliente" },
+  { codigo: "creditos", nombre: "Créditos" },
+  { codigo: "cobranza", nombre: "Administrar cobranza" },
+  { codigo: "gestor_cobros", nombre: "Mi cartera de cobro" },
+  { codigo: "abonos", nombre: "Registrar abonos" },
+  { codigo: "pagos", nombre: "Registrar pagos" },
+  { codigo: "caja", nombre: "Caja" },
+  { codigo: "control_caja", nombre: "Control de caja" },
+  { codigo: "gastos", nombre: "Gastos" },
+  { codigo: "recargos", nombre: "Recargos" },
+  { codigo: "inventario", nombre: "Inventario" },
+  { codigo: "movimientos_inventario", nombre: "Movimientos de inventario" },
+  { codigo: "ventas", nombre: "Ventas" },
+  { codigo: "suscripciones", nombre: "Suscripciones" },
+  { codigo: "reportes", nombre: "Reportes" },
+  { codigo: "usuarios", nombre: "Usuarios" },
+  { codigo: "configuracion", nombre: "Configuración" },
+];
 
   useEffect(() => {
     const id =
