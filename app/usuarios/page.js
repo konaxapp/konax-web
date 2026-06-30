@@ -6,6 +6,7 @@ import { supabase } from "../../lib/supabase";
 export default function Usuarios() {
   const [empresaId, setEmpresaId] = useState("");
   const [empresaNombre, setEmpresaNombre] = useState("");
+
   const [nombre, setNombre] = useState("");
   const [correo, setCorreo] = useState("");
   const [password, setPassword] = useState("");
@@ -13,7 +14,23 @@ export default function Usuarios() {
 
   const [roles, setRoles] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
+  const [permisos, setPermisos] = useState({});
   const [guardando, setGuardando] = useState(false);
+
+  const modulosDisponibles = [
+    { codigo: "dashboard", nombre: "Dashboard" },
+    { codigo: "clientes", nombre: "Clientes" },
+    { codigo: "vista_cliente", nombre: "Vista Cliente" },
+    { codigo: "cobranza", nombre: "Cobranza" },
+    { codigo: "caja", nombre: "Caja" },
+    { codigo: "control_caja", nombre: "Control de Caja" },
+    { codigo: "creditos", nombre: "Créditos" },
+    { codigo: "inventario", nombre: "Inventario" },
+    { codigo: "ventas", nombre: "Ventas" },
+    { codigo: "suscripciones", nombre: "Suscripciones" },
+    { codigo: "reportes", nombre: "Reportes" },
+    { codigo: "usuarios", nombre: "Usuarios" },
+  ];
 
   useEffect(() => {
     const id =
@@ -36,10 +53,15 @@ export default function Usuarios() {
 
   useEffect(() => {
     if (empresaId) {
-      cargarRoles();
-      cargarUsuarios();
+      cargarTodo();
     }
   }, [empresaId]);
+
+  async function cargarTodo() {
+    await cargarRoles();
+    await cargarUsuarios();
+    await cargarPermisos();
+  }
 
   async function cargarRoles() {
     const { data, error } = await supabase
@@ -59,13 +81,9 @@ export default function Usuarios() {
       (rol) => String(rol.nombre || "").toLowerCase().trim() === "administrador"
     );
 
-    if (admin) {
-      setRolId(admin.id);
-    } else if (rolesActivos.length > 0) {
-      setRolId(rolesActivos[0].id);
-    } else {
-      setRolId("");
-    }
+    if (admin) setRolId(admin.id);
+    else if (rolesActivos.length > 0) setRolId(rolesActivos[0].id);
+    else setRolId("");
   }
 
   async function cargarUsuarios() {
@@ -81,6 +99,65 @@ export default function Usuarios() {
     }
 
     setUsuarios(data || []);
+  }
+
+  async function cargarPermisos() {
+    const { data, error } = await supabase
+      .from("permisos_roles_empresa")
+      .select("*")
+      .eq("empresa_id", empresaId);
+
+    if (error) {
+      alert(
+        "Error cargando permisos. Verifica que exista la tabla permisos_roles_empresa: " +
+          error.message
+      );
+      return;
+    }
+
+    const agrupados = {};
+
+    (data || []).forEach((permiso) => {
+      if (!agrupados[permiso.rol_id]) agrupados[permiso.rol_id] = {};
+      agrupados[permiso.rol_id][permiso.modulo] = permiso.activo;
+    });
+
+    setPermisos(agrupados);
+  }
+
+  function permisoActivo(rolIdActual, modulo) {
+    return Boolean(permisos?.[rolIdActual]?.[modulo]);
+  }
+
+  async function alternarPermiso(rol, modulo) {
+    const activoActual = permisoActivo(rol.id, modulo.codigo);
+    const nuevoEstado = !activoActual;
+
+    const { error } = await supabase.from("permisos_roles_empresa").upsert(
+      {
+        empresa_id: empresaId,
+        rol_id: rol.id,
+        modulo: modulo.codigo,
+        activo: nuevoEstado,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: "empresa_id,rol_id,modulo",
+      }
+    );
+
+    if (error) {
+      alert("Error actualizando permiso: " + error.message);
+      return;
+    }
+
+    setPermisos((prev) => ({
+      ...prev,
+      [rol.id]: {
+        ...(prev[rol.id] || {}),
+        [modulo.codigo]: nuevoEstado,
+      },
+    }));
   }
 
   function limpiarFormulario() {
@@ -211,7 +288,7 @@ export default function Usuarios() {
         empresa_id: empresaId,
         empresa_nombre: empresaNombre,
         accion: "Configuración finalizada",
-        descripcion: `La empresa ${empresaNombre} quedó configurada con usuarios y roles.`,
+        descripcion: `La empresa ${empresaNombre} quedó configurada con usuarios, roles y permisos.`,
         estado_anterior: "Pendiente",
         estado_nuevo: "Completa",
         usuario: "KONAX",
@@ -263,7 +340,7 @@ export default function Usuarios() {
 
             <div>
               <p style={etiqueta}>Administración de Empresa</p>
-              <h1 style={titulo}>Usuarios y Roles</h1>
+              <h1 style={titulo}>Usuarios, Roles y Permisos</h1>
               <p style={subtitulo}>
                 Empresa seleccionada: <strong>{empresaNombre}</strong>
               </p>
@@ -271,10 +348,10 @@ export default function Usuarios() {
           </div>
 
           <button
-            onClick={() => (window.location.href = "/dashboard")}
+            onClick={() => (window.location.href = "/empresas")}
             style={botonVolver}
           >
-            ← Volver
+            ← Volver a Empresas
           </button>
         </div>
 
@@ -359,6 +436,58 @@ export default function Usuarios() {
 
         <div style={card}>
           <div style={cardHeader}>
+            <h2 style={tituloSeccion}>Permisos por Rol</h2>
+            <p style={textoSuave}>
+              Activa o desactiva los módulos que podrá usar cada rol dentro de esta empresa.
+            </p>
+          </div>
+
+          {roles.length === 0 ? (
+            <p style={textoSuave}>No hay roles configurados.</p>
+          ) : (
+            <div style={rolesGrid}>
+              {roles.map((rol) => (
+                <div key={rol.id} style={rolCard}>
+                  <div style={rolHeader}>
+                    <h3 style={rolTitulo}>{rol.nombre}</h3>
+                    <span style={rolEtiqueta}>Rol</span>
+                  </div>
+
+                  <div style={modulosLista}>
+                    {modulosDisponibles.map((modulo) => {
+                      const activo = permisoActivo(rol.id, modulo.codigo);
+
+                      return (
+                        <div key={modulo.codigo} style={permisoFila}>
+                          <span style={permisoNombre}>{modulo.nombre}</span>
+
+                          <button
+                            type="button"
+                            onClick={() => alternarPermiso(rol, modulo)}
+                            style={activo ? switchActivo : switchInactivo}
+                          >
+                            <span
+                              style={
+                                activo ? switchCirculoActivo : switchCirculoInactivo
+                              }
+                            />
+                          </button>
+
+                          <span style={activo ? textoActivo : textoInactivo}>
+                            {activo ? "Activado" : "Desactivado"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={card}>
+          <div style={cardHeader}>
             <h2 style={tituloSeccion}>
               Usuarios de la Empresa ({usuarios.length})
             </h2>
@@ -421,8 +550,7 @@ export default function Usuarios() {
           </div>
 
           <p style={nota}>
-            Al finalizar, la empresa quedará lista para ingresar al Centro de
-            Operaciones.
+            Al finalizar, la empresa quedará lista para ingresar al Centro de Operaciones.
           </p>
 
           <button onClick={finalizarConfiguracion} style={botonVerde}>
@@ -461,7 +589,7 @@ const pagina = {
 };
 
 const contenedor = {
-  maxWidth: "1300px",
+  maxWidth: "1350px",
   margin: "0 auto",
 };
 
@@ -630,6 +758,117 @@ const botonNegro = {
   fontSize: "15px",
   fontWeight: "bold",
   cursor: "pointer",
+};
+
+const rolesGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))",
+  gap: "18px",
+};
+
+const rolCard = {
+  border: "1px solid #e5e7eb",
+  borderRadius: "16px",
+  padding: "18px",
+  background: "#f9fafb",
+};
+
+const rolHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: "14px",
+};
+
+const rolTitulo = {
+  margin: 0,
+  color: "#111827",
+  fontSize: "20px",
+};
+
+const rolEtiqueta = {
+  background: "#dbeafe",
+  color: "#1e40af",
+  padding: "5px 10px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: "bold",
+};
+
+const modulosLista = {
+  display: "grid",
+  gap: "10px",
+};
+
+const permisoFila = {
+  display: "grid",
+  gridTemplateColumns: "1fr auto 92px",
+  alignItems: "center",
+  gap: "10px",
+  background: "#ffffff",
+  padding: "10px",
+  borderRadius: "12px",
+  border: "1px solid #e5e7eb",
+};
+
+const permisoNombre = {
+  color: "#111827",
+  fontWeight: "bold",
+  fontSize: "13px",
+};
+
+const switchActivo = {
+  width: "46px",
+  height: "24px",
+  borderRadius: "999px",
+  border: "none",
+  background: "#16a34a",
+  padding: "3px",
+  cursor: "pointer",
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "center",
+};
+
+const switchInactivo = {
+  width: "46px",
+  height: "24px",
+  borderRadius: "999px",
+  border: "none",
+  background: "#d1d5db",
+  padding: "3px",
+  cursor: "pointer",
+  display: "flex",
+  justifyContent: "flex-start",
+  alignItems: "center",
+};
+
+const switchCirculoActivo = {
+  width: "18px",
+  height: "18px",
+  borderRadius: "50%",
+  background: "#ffffff",
+  display: "block",
+};
+
+const switchCirculoInactivo = {
+  width: "18px",
+  height: "18px",
+  borderRadius: "50%",
+  background: "#ffffff",
+  display: "block",
+};
+
+const textoActivo = {
+  color: "#166534",
+  fontSize: "12px",
+  fontWeight: "bold",
+};
+
+const textoInactivo = {
+  color: "#6b7280",
+  fontSize: "12px",
+  fontWeight: "bold",
 };
 
 const tablaBox = {
