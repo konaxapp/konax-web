@@ -222,6 +222,32 @@ export default function Usuarios() {
       return;
     }
 
+    const esAdministrador =
+      String(rolSeleccionado.nombre || "").toLowerCase().trim() ===
+      "administrador";
+
+    const permisosIniciales = permisosDisponibles.map((permiso) => ({
+      empresa_id: empresaId,
+      usuario_id: data.id,
+      permiso: permiso.codigo,
+      activo: esAdministrador,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error: errorPermisos } = await supabase
+      .from("permisos_usuarios_empresa")
+      .upsert(permisosIniciales, {
+        onConflict: "empresa_id,usuario_id,permiso",
+      });
+
+    if (errorPermisos) {
+      alert(
+        "Usuario creado, pero hubo error creando permisos: " +
+          errorPermisos.message
+      );
+      return;
+    }
+
     await supabase.from("bitacora_konax").insert([
       {
         empresa_id: empresaId,
