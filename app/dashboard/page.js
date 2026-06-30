@@ -128,6 +128,7 @@ export default function Dashboard() {
         "control_caja",
         "cobranza",
         "dashboard_cobros",
+        "gestor_cobros",
         "inventario",
         "inventario_nuevo",
         "suscripciones",
@@ -148,6 +149,7 @@ export default function Dashboard() {
         "control_caja",
         "cobranza",
         "dashboard_cobros",
+        "gestor_cobros",
         "inventario",
         "inventario_nuevo",
         "suscripciones",
@@ -174,7 +176,7 @@ export default function Dashboard() {
       r === "gestor de cobro" ||
       r === "gestor de cobranza"
     ) {
-      return ["vista_cliente", "cobranza", "dashboard_cobros"];
+      return ["vista_cliente", "gestor_cobros"];
     }
 
     if (r === "inventario") return ["inventario", "inventario_nuevo"];
@@ -278,6 +280,11 @@ export default function Dashboard() {
   const permitirDashboardCobros =
     !membresia && modulos.dashboard_cobros && tienePermiso("dashboard_cobros");
 
+  const permitirGestorCobros =
+    !membresia &&
+    (modulos.dashboard_cobros || modulos.cobranza) &&
+    tienePermiso("gestor_cobros");
+
   const permitirSuscripciones =
     (membresia ||
       modulos.suscripciones ||
@@ -329,6 +336,12 @@ export default function Dashboard() {
       ruta: "/dashboard-cobranza",
       activo: permitirDashboardCobros,
       icono: "📊",
+    },
+    {
+      nombre: "Gestor de Cobros",
+      ruta: "/gestor-cobros",
+      activo: permitirGestorCobros,
+      icono: "🧑‍💼",
     },
     {
       nombre: "Inventario",
