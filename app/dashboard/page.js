@@ -23,8 +23,7 @@ export default function Dashboard() {
       localStorage.getItem("empresaAdminCreadaId");
 
     const usuarioId =
-      localStorage.getItem("usuarioId") ||
-      localStorage.getItem("adminKonaxId");
+      localStorage.getItem("usuarioId") || localStorage.getItem("adminKonaxId");
 
     const rolUsuarioLocal =
       localStorage.getItem("usuarioRol") ||
@@ -32,10 +31,10 @@ export default function Dashboard() {
       localStorage.getItem("adminKonaxRol") ||
       "";
 
-   if (!empresaId) {
-  window.location.href = "/login";
-  return;
-  }
+    if (!empresaId) {
+      window.location.href = "/login";
+      return;
+    }
 
     setUsuarioRol(rolUsuarioLocal);
 
@@ -95,9 +94,14 @@ export default function Dashboard() {
   }
 
   async function cargarPermisosUsuario(empresaId, usuarioId) {
+    if (!usuarioId) {
+      setPermisosUsuario([]);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("permisos_usuarios_empresa")
-      .select("*")
+      .select("permiso, activo")
       .eq("empresa_id", empresaId)
       .eq("usuario_id", usuarioId)
       .eq("activo", true);
@@ -107,40 +111,20 @@ export default function Dashboard() {
       return;
     }
 
-    const permisos = (data || [])
-      .map((item) => item.permiso || item.modulo)
-      .filter(Boolean);
-
+    const permisos = (data || []).map((item) => item.permiso).filter(Boolean);
     setPermisosUsuario(permisos);
   }
-
-  function normalizarRol(rol) {
-    return String(rol || "").toLowerCase().trim();
-  }
-
- function esAdministrador() {
-  const rol = normalizarRol(usuarioRol);
-
-  return (
-    rol === "administrador" ||
-    rol === "admin" ||
-    rol === "superadmin" ||
-    rol === "super admin" ||
-    rol === "administrador konax"
-  );
-}
 
   function moduloActivo(codigo) {
     return Boolean(modulos?.[codigo]);
   }
 
   function tienePermiso(codigo) {
-    if (esAdministrador()) return true;
     return permisosUsuario.includes(codigo);
   }
 
-  function puedeVer(codigo) {
-    return moduloActivo(codigo) && tienePermiso(codigo);
+  function puedeVer(codigoModulo, codigoPermiso = codigoModulo) {
+    return moduloActivo(codigoModulo) && tienePermiso(codigoPermiso);
   }
 
   function cerrarSesion() {
@@ -157,24 +141,96 @@ export default function Dashboard() {
   }
 
   const tarjetas = [
-    { nombre: "Clientes", ruta: "/clientes", activo: puedeVer("clientes"), icono: "👥" },
-    { nombre: "Ficha del cliente", ruta: "/vista-cliente", activo: puedeVer("vista_cliente"), icono: "🧾" },
-    { nombre: "Créditos", ruta: "/ventas-credito", activo: puedeVer("creditos"), icono: "💳" },
-    { nombre: "Administrar cobranza", ruta: "/cobranza", activo: puedeVer("cobranza"), icono: "📞" },
-    { nombre: "Mi cartera de cobro", ruta: "/gestor-cobros", activo: puedeVer("gestor_cobros"), icono: "🧑‍💼" },
-    { nombre: "Registrar abonos", ruta: "/abonos", activo: puedeVer("abonos"), icono: "💰" },
-    { nombre: "Registrar pagos", ruta: "/pagos", activo: puedeVer("pagos"), icono: "✅" },
-    { nombre: "Caja", ruta: "/caja", activo: puedeVer("caja"), icono: "💵" },
-    { nombre: "Control de caja", ruta: "/control-caja", activo: puedeVer("control_caja"), icono: "🏦" },
-    { nombre: "Gastos", ruta: "/gastos", activo: puedeVer("gastos"), icono: "🧮" },
-    { nombre: "Recargos", ruta: "/recargos", activo: puedeVer("recargos"), icono: "⚠️" },
-    { nombre: "Inventario", ruta: "/inventario", activo: puedeVer("inventario"), icono: "📦" },
-    { nombre: "Movimientos de inventario", ruta: "/movimientos-inventario", activo: puedeVer("movimientos_inventario"), icono: "🔄" },
-    { nombre: "Ventas", ruta: "/ventas", activo: puedeVer("ventas"), icono: "🛒" },
-    { nombre: "Suscripciones", ruta: "/suscripciones", activo: puedeVer("suscripciones"), icono: "🔁" },
-    { nombre: "Reportes", ruta: "/reportes", activo: puedeVer("reportes"), icono: "📈" },
-    { nombre: "Usuarios", ruta: "/usuarios", activo: puedeVer("usuarios"), icono: "🔐" },
-    { nombre: "Configuración", ruta: "/configuracion", activo: puedeVer("configuracion"), icono: "⚙️" },
+    {
+      nombre: "Clientes",
+      ruta: "/clientes",
+      activo: puedeVer("clientes"),
+      icono: "👥",
+    },
+    {
+      nombre: "Vista Cliente",
+      ruta: "/vista-cliente",
+      activo: puedeVer("vista_cliente"),
+      icono: "🧾",
+    },
+    {
+      nombre: "Créditos",
+      ruta: "/ventas-credito",
+      activo: puedeVer("ventas_credito"),
+      icono: "💳",
+    },
+    {
+      nombre: "Caja",
+      ruta: "/caja",
+      activo: puedeVer("caja"),
+      icono: "💵",
+    },
+    {
+      nombre: "Cobranza",
+      ruta: "/cobranza",
+      activo: puedeVer("cobranza"),
+      icono: "📞",
+    },
+    {
+      nombre: "Centro de Cobranza",
+      ruta: "/dashboard-cobranza",
+      activo: puedeVer("dashboard_cobros"),
+      icono: "📊",
+    },
+    {
+      nombre: "Gestor de Cobros",
+      ruta: "/gestor-cobros",
+      activo: puedeVer("gestor_cobros"),
+      icono: "🧑‍💼",
+    },
+    {
+      nombre: "Control Caja",
+      ruta: "/control-caja",
+      activo: puedeVer("control_caja"),
+      icono: "🏦",
+    },
+    {
+      nombre: "Inventario",
+      ruta: "/inventario",
+      activo: puedeVer("inventario"),
+      icono: "📦",
+    },
+    {
+      nombre: "Nuevo Producto",
+      ruta: "/inventario/nuevo",
+      activo: puedeVer("inventario_nuevo"),
+      icono: "➕",
+    },
+    {
+      nombre: "Suscripciones",
+      ruta: "/suscripciones",
+      activo: puedeVer("suscripciones"),
+      icono: "🔁",
+    },
+    {
+      nombre: "Recargos",
+      ruta: "/recargos",
+      activo: puedeVer("recargos"),
+      icono: "⚠️",
+    },
+    {
+      nombre: "Centro de Ventas",
+      ruta: "/dashboard-ventas",
+      activo: puedeVer("dashboard_ventas"),
+      icono: "📈",
+    },
+    {
+      nombre: "Gastos",
+      ruta: "/gastos",
+      activo: puedeVer("gastos"),
+      icono: "🧮",
+    },
+    {
+      nombre: "Usuarios y Roles",
+      ruta: "/usuarios",
+      activo: puedeVer("usuarios"),
+      icono: "🔐",
+    },
   ];
 
   const tarjetasActivas = tarjetas.filter((item) => item.activo);
@@ -197,7 +253,11 @@ export default function Dashboard() {
 
         <nav style={menu}>
           {tarjetasActivas.map((item) => (
-            <button key={item.nombre} onClick={() => abrirModulo(item.ruta)} style={menuItem}>
+            <button
+              key={item.nombre}
+              onClick={() => abrirModulo(item.ruta)}
+              style={menuItem}
+            >
               <span style={menuIcono}>{item.icono}</span>
               <span>{item.nombre}</span>
             </button>
@@ -248,25 +308,166 @@ export default function Dashboard() {
   );
 }
 
-const layout = { display: "flex", minHeight: "100vh", background: "#eef2f7", fontFamily: "Arial, sans-serif" };
-const sidebar = { width: "260px", background: "linear-gradient(180deg, #111827, #064e3b)", color: "#ffffff", padding: "22px 16px", boxSizing: "border-box", position: "sticky", top: 0, height: "100vh", overflowY: "auto" };
-const brandBox = { display: "flex", alignItems: "center", gap: "12px", marginBottom: "22px" };
-const logo = { width: "58px", background: "#ffffff", borderRadius: "14px", padding: "7px" };
-const brandTitle = { margin: 0, fontSize: "22px" };
-const brandSub = { margin: "4px 0 0", color: "#bbf7d0", fontSize: "12px" };
-const empresaBox = { background: "rgba(255,255,255,0.10)", padding: "14px", borderRadius: "14px", marginBottom: "18px", display: "grid", gap: "5px", fontSize: "14px" };
-const menu = { display: "grid", gap: "8px" };
-const menuItem = { width: "100%", display: "flex", alignItems: "center", gap: "10px", background: "rgba(255,255,255,0.08)", color: "#ffffff", border: "1px solid rgba(255,255,255,0.08)", padding: "12px", borderRadius: "12px", cursor: "pointer", fontWeight: "bold", textAlign: "left" };
-const menuIcono = { fontSize: "19px" };
-const botonSalir = { width: "100%", marginTop: "18px", background: "#ffffff", color: "#111827", border: "none", padding: "12px", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" };
-const contenido = { flex: 1, padding: "30px", boxSizing: "border-box" };
-const hero = { background: "linear-gradient(135deg, #111827, #064e3b)", color: "#ffffff", padding: "28px", borderRadius: "22px", marginBottom: "22px", boxShadow: "0 8px 24px rgba(0,0,0,0.16)" };
-const etiqueta = { margin: 0, color: "#bbf7d0", fontSize: "14px", fontWeight: "bold" };
-const titulo = { margin: "4px 0", fontSize: "36px", fontWeight: "bold" };
-const plan = { color: "#dcfce7", marginTop: "6px", fontSize: "15px" };
-const resumenGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "16px", marginBottom: "22px" };
-const resumenCard = { background: "#ffffff", padding: "20px", borderRadius: "18px", boxShadow: "0 3px 12px rgba(0,0,0,0.06)" };
-const resumenLabel = { margin: 0, color: "#6b7280", fontSize: "13px" };
-const resumenValor = { margin: "8px 0 0", color: "#111827", fontSize: "30px" };
-const resumenValorTexto = { margin: "8px 0 0", color: "#111827", fontSize: "22px" };
-const sinModulos = { background: "#ffffff", padding: "20px", borderRadius: "12px", color: "#666", marginTop: "20px" };
+const layout = {
+  display: "flex",
+  minHeight: "100vh",
+  background: "#eef2f7",
+  fontFamily: "Arial, sans-serif",
+};
+
+const sidebar = {
+  width: "260px",
+  background: "linear-gradient(180deg, #111827, #064e3b)",
+  color: "#ffffff",
+  padding: "22px 16px",
+  boxSizing: "border-box",
+  position: "sticky",
+  top: 0,
+  height: "100vh",
+  overflowY: "auto",
+};
+
+const brandBox = {
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  marginBottom: "22px",
+};
+
+const logo = {
+  width: "58px",
+  background: "#ffffff",
+  borderRadius: "14px",
+  padding: "7px",
+};
+
+const brandTitle = {
+  margin: 0,
+  fontSize: "22px",
+};
+
+const brandSub = {
+  margin: "4px 0 0",
+  color: "#bbf7d0",
+  fontSize: "12px",
+};
+
+const empresaBox = {
+  background: "rgba(255,255,255,0.10)",
+  padding: "14px",
+  borderRadius: "14px",
+  marginBottom: "18px",
+  display: "grid",
+  gap: "5px",
+  fontSize: "14px",
+};
+
+const menu = {
+  display: "grid",
+  gap: "8px",
+};
+
+const menuItem = {
+  width: "100%",
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  background: "rgba(255,255,255,0.08)",
+  color: "#ffffff",
+  border: "1px solid rgba(255,255,255,0.08)",
+  padding: "12px",
+  borderRadius: "12px",
+  cursor: "pointer",
+  fontWeight: "bold",
+  textAlign: "left",
+};
+
+const menuIcono = {
+  fontSize: "19px",
+};
+
+const botonSalir = {
+  width: "100%",
+  marginTop: "18px",
+  background: "#ffffff",
+  color: "#111827",
+  border: "none",
+  padding: "12px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const contenido = {
+  flex: 1,
+  padding: "30px",
+  boxSizing: "border-box",
+};
+
+const hero = {
+  background: "linear-gradient(135deg, #111827, #064e3b)",
+  color: "#ffffff",
+  padding: "28px",
+  borderRadius: "22px",
+  marginBottom: "22px",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
+};
+
+const etiqueta = {
+  margin: 0,
+  color: "#bbf7d0",
+  fontSize: "14px",
+  fontWeight: "bold",
+};
+
+const titulo = {
+  margin: "4px 0",
+  fontSize: "36px",
+  fontWeight: "bold",
+};
+
+const plan = {
+  color: "#dcfce7",
+  marginTop: "6px",
+  fontSize: "15px",
+};
+
+const resumenGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: "16px",
+  marginBottom: "22px",
+};
+
+const resumenCard = {
+  background: "#ffffff",
+  padding: "20px",
+  borderRadius: "18px",
+  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
+};
+
+const resumenLabel = {
+  margin: 0,
+  color: "#6b7280",
+  fontSize: "13px",
+};
+
+const resumenValor = {
+  margin: "8px 0 0",
+  color: "#111827",
+  fontSize: "30px",
+};
+
+const resumenValorTexto = {
+  margin: "8px 0 0",
+  color: "#111827",
+  fontSize: "22px",
+};
+
+const sinModulos = {
+  background: "#ffffff",
+  padding: "20px",
+  borderRadius: "12px",
+  color: "#666",
+  marginTop: "20px",
+};
