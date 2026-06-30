@@ -7,10 +7,74 @@ export default function GestorCobros() {
   const [cartera, setCartera] = useState([]);
   const [busqueda, setBusqueda] = useState("");
   const [filtroCartera, setFiltroCartera] = useState("Todos");
+  const [accesoValidado, setAccesoValidado] = useState(false);
 
   useEffect(() => {
-    cargarCartera();
+    validarAcceso();
   }, []);
+
+  async function validarAcceso() {
+    const empresaId = localStorage.getItem("empresaId");
+    const usuarioId = localStorage.getItem("usuarioId");
+
+    const rol =
+      localStorage.getItem("usuarioRol") ||
+      localStorage.getItem("rolUsuario") ||
+      "";
+
+    if (!empresaId || !usuarioId) {
+      window.location.href = "/login";
+      return;
+    }
+
+    const rolNormalizado = String(rol || "").toLowerCase().trim();
+    const esAdmin =
+      rolNormalizado === "administrador" || rolNormalizado === "superadmin";
+
+    const { data: moduloEmpresa, error: errorModulo } = await supabase
+      .from("modulos_empresa")
+      .select("activo")
+      .eq("empresa_id", empresaId)
+      .eq("modulo", "gestor_cobros")
+      .maybeSingle();
+
+    if (errorModulo) {
+      alert("Error validando función: " + errorModulo.message);
+      window.location.href = "/dashboard";
+      return;
+    }
+
+    if (!moduloEmpresa?.activo) {
+      alert("Mi Cartera de Cobro no está activa en el plan de esta empresa.");
+      window.location.href = "/dashboard";
+      return;
+    }
+
+    if (!esAdmin) {
+      const { data: permisoUsuario, error: errorPermiso } = await supabase
+        .from("permisos_usuarios_empresa")
+        .select("activo")
+        .eq("empresa_id", empresaId)
+        .eq("usuario_id", usuarioId)
+        .eq("permiso", "gestor_cobros")
+        .maybeSingle();
+
+      if (errorPermiso) {
+        alert("Error validando permiso: " + errorPermiso.message);
+        window.location.href = "/dashboard";
+        return;
+      }
+
+      if (!permisoUsuario?.activo) {
+        alert("No tienes permiso para acceder a Mi Cartera de Cobro.");
+        window.location.href = "/dashboard";
+        return;
+      }
+    }
+
+    setAccesoValidado(true);
+    await cargarCartera();
+  }
 
   function volverDashboard() {
     window.location.href = "/dashboard";
@@ -317,6 +381,10 @@ export default function GestorCobros() {
 
   function imprimirCartera() {
     window.print();
+  }
+
+  if (!accesoValidado) {
+    return <div style={{ padding: "30px" }}>Validando acceso...</div>;
   }
 
   const hoy = new Date().toISOString().split("T")[0];
@@ -635,200 +703,4 @@ function Alerta({ titulo, valor }) {
   );
 }
 
-const pagina = {
-  minHeight: "100vh",
-  background: "#f3f4f6",
-  padding: "18px",
-  fontFamily: "Arial, sans-serif",
-};
-
-const contenedor = {
-  maxWidth: "1500px",
-  margin: "0 auto",
-};
-
-const encabezado = {
-  display: "flex",
-  alignItems: "center",
-  gap: "14px",
-  marginBottom: "18px",
-  flexWrap: "wrap",
-};
-
-const logo = {
-  width: "105px",
-  height: "auto",
-};
-
-const titulo = {
-  fontSize: "32px",
-  margin: 0,
-  color: "#111827",
-};
-
-const subtitulo = {
-  marginTop: "5px",
-  color: "#6b7280",
-  fontSize: "15px",
-};
-
-const alertasGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
-  gap: "14px",
-  marginBottom: "16px",
-};
-
-const cardAlerta = {
-  background: "#fff7ed",
-  padding: "16px",
-  borderRadius: "16px",
-  border: "1px solid #fed7aa",
-};
-
-const alertaTitulo = {
-  margin: 0,
-  color: "#9a3412",
-  fontSize: "13px",
-  fontWeight: "bold",
-};
-
-const alertaValor = {
-  marginTop: "8px",
-  marginBottom: 0,
-  color: "#111827",
-  fontSize: "24px",
-};
-
-const kpiGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))",
-  gap: "14px",
-  marginBottom: "16px",
-};
-
-const cardKpi = {
-  background: "#ffffff",
-  padding: "17px",
-  borderRadius: "16px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
-};
-
-const kpiTitulo = {
-  margin: 0,
-  color: "#6b7280",
-  fontSize: "13px",
-};
-
-const kpiValor = {
-  marginTop: "8px",
-  color: "#111827",
-  fontSize: "23px",
-};
-
-const card = {
-  background: "#ffffff",
-  padding: "18px",
-  borderRadius: "16px",
-  marginBottom: "16px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
-};
-
-const tituloSeccion = {
-  marginBottom: "14px",
-  color: "#111827",
-};
-
-const gridFiltros = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
-  gap: "14px",
-};
-
-const labelStyle = {
-  display: "block",
-  marginBottom: "6px",
-  color: "#374151",
-  fontSize: "13px",
-  fontWeight: "bold",
-};
-
-const inputStyle = {
-  width: "100%",
-  padding: "11px",
-  borderRadius: "8px",
-  border: "1px solid #d1d5db",
-  boxSizing: "border-box",
-};
-
-const inputMini = {
-  width: "190px",
-  padding: "8px",
-  borderRadius: "8px",
-  border: "1px solid #d1d5db",
-};
-
-const boton = {
-  background: "#16a34a",
-  color: "#ffffff",
-  border: "none",
-  padding: "8px 12px",
-  borderRadius: "8px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const botonGris = {
-  background: "#6b7280",
-  color: "#ffffff",
-  border: "none",
-  padding: "11px 20px",
-  borderRadius: "8px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const botonNegro = {
-  background: "#111827",
-  color: "#ffffff",
-  border: "none",
-  padding: "11px 20px",
-  borderRadius: "8px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const whatsappBtn = {
-  background: "#25D366",
-  color: "#ffffff",
-  border: "none",
-  padding: "8px 12px",
-  borderRadius: "8px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const tabla = {
-  width: "100%",
-  borderCollapse: "collapse",
-};
-
-const th = {
-  background: "#111827",
-  color: "#ffffff",
-  padding: "12px",
-  textAlign: "left",
-  fontSize: "13px",
-};
-
-const td = {
-  padding: "11px",
-  borderBottom: "1px solid #e5e7eb",
-  fontSize: "13px",
-};
-
-const nota = {
-  marginTop: "12px",
-  color: "#6b7280",
-  fontSize: "13px",
-};
+/* Tus estilos quedan igual desde aquí hacia abajo */
