@@ -14,22 +14,31 @@ export default function Usuarios() {
 
   const [roles, setRoles] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
-  const [permisos, setPermisos] = useState({});
+  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
+  const [busquedaUsuario, setBusquedaUsuario] = useState("");
+  const [permisosUsuario, setPermisosUsuario] = useState({});
   const [guardando, setGuardando] = useState(false);
 
-  const modulosDisponibles = [
-    { codigo: "dashboard", nombre: "Dashboard" },
+  const permisosDisponibles = [
+    { codigo: "dashboard", nombre: "Inicio / Resumen" },
     { codigo: "clientes", nombre: "Clientes" },
-    { codigo: "vista_cliente", nombre: "Vista Cliente" },
-    { codigo: "cobranza", nombre: "Cobranza" },
-    { codigo: "caja", nombre: "Caja" },
-    { codigo: "control_caja", nombre: "Control de Caja" },
+    { codigo: "vista_cliente", nombre: "Ficha del cliente" },
     { codigo: "creditos", nombre: "Créditos" },
+    { codigo: "cobranza", nombre: "Administrar cobranza" },
+    { codigo: "gestor_cobros", nombre: "Mi cartera de cobro" },
+    { codigo: "abonos", nombre: "Registrar abonos" },
+    { codigo: "pagos", nombre: "Registrar pagos" },
+    { codigo: "caja", nombre: "Caja" },
+    { codigo: "control_caja", nombre: "Control de caja" },
+    { codigo: "gastos", nombre: "Gastos" },
+    { codigo: "recargos", nombre: "Recargos" },
     { codigo: "inventario", nombre: "Inventario" },
+    { codigo: "movimientos_inventario", nombre: "Movimientos de inventario" },
     { codigo: "ventas", nombre: "Ventas" },
     { codigo: "suscripciones", nombre: "Suscripciones" },
     { codigo: "reportes", nombre: "Reportes" },
     { codigo: "usuarios", nombre: "Usuarios" },
+    { codigo: "configuracion", nombre: "Configuración" },
   ];
 
   useEffect(() => {
@@ -53,15 +62,10 @@ export default function Usuarios() {
 
   useEffect(() => {
     if (empresaId) {
-      cargarTodo();
+      cargarRoles();
+      cargarUsuarios();
     }
   }, [empresaId]);
-
-  async function cargarTodo() {
-    await cargarRoles();
-    await cargarUsuarios();
-    await cargarPermisos();
-  }
 
   async function cargarRoles() {
     const { data, error } = await supabase
@@ -101,48 +105,56 @@ export default function Usuarios() {
     setUsuarios(data || []);
   }
 
-  async function cargarPermisos() {
+  async function seleccionarUsuario(usuario) {
+    setUsuarioSeleccionado(usuario);
+    setBusquedaUsuario(usuario.nombre || "");
+    await cargarPermisosUsuario(usuario.id);
+  }
+
+  async function cargarPermisosUsuario(usuarioId) {
     const { data, error } = await supabase
-      .from("permisos_roles_empresa")
+      .from("permisos_usuarios_empresa")
       .select("*")
-      .eq("empresa_id", empresaId);
+      .eq("empresa_id", empresaId)
+      .eq("usuario_id", usuarioId);
 
     if (error) {
-      alert(
-        "Error cargando permisos. Verifica que exista la tabla permisos_roles_empresa: " +
-          error.message
-      );
+      alert("Error cargando permisos del usuario: " + error.message);
       return;
     }
 
-    const agrupados = {};
+    const permisosArmados = {};
 
     (data || []).forEach((permiso) => {
-      if (!agrupados[permiso.rol_id]) agrupados[permiso.rol_id] = {};
-      agrupados[permiso.rol_id][permiso.modulo] = permiso.activo;
+      permisosArmados[permiso.permiso] = permiso.activo;
     });
 
-    setPermisos(agrupados);
+    setPermisosUsuario(permisosArmados);
   }
 
-  function permisoActivo(rolIdActual, modulo) {
-    return Boolean(permisos?.[rolIdActual]?.[modulo]);
+  function permisoActivo(codigo) {
+    return Boolean(permisosUsuario?.[codigo]);
   }
 
-  async function alternarPermiso(rol, modulo) {
-    const activoActual = permisoActivo(rol.id, modulo.codigo);
+  async function alternarPermiso(permiso) {
+    if (!usuarioSeleccionado) {
+      alert("Seleccione un usuario.");
+      return;
+    }
+
+    const activoActual = permisoActivo(permiso.codigo);
     const nuevoEstado = !activoActual;
 
-    const { error } = await supabase.from("permisos_roles_empresa").upsert(
+    const { error } = await supabase.from("permisos_usuarios_empresa").upsert(
       {
         empresa_id: empresaId,
-        rol_id: rol.id,
-        modulo: modulo.codigo,
+        usuario_id: usuarioSeleccionado.id,
+        permiso: permiso.codigo,
         activo: nuevoEstado,
         updated_at: new Date().toISOString(),
       },
       {
-        onConflict: "empresa_id,rol_id,modulo",
+        onConflict: "empresa_id,usuario_id,permiso",
       }
     );
 
@@ -151,12 +163,9 @@ export default function Usuarios() {
       return;
     }
 
-    setPermisos((prev) => ({
+    setPermisosUsuario((prev) => ({
       ...prev,
-      [rol.id]: {
-        ...(prev[rol.id] || {}),
-        [modulo.codigo]: nuevoEstado,
-      },
+      [permiso.codigo]: nuevoEstado,
     }));
   }
 
@@ -192,17 +201,21 @@ export default function Usuarios() {
 
     setGuardando(true);
 
-    const { error } = await supabase.from("usuarios").insert([
-      {
-        empresa_id: empresaId,
-        nombre: nombre.trim(),
-        correo: correo.trim().toLowerCase(),
-        password: password.trim(),
-        rol_id: rolSeleccionado.id,
-        rol: rolSeleccionado.nombre,
-        estado: "Activo",
-      },
-    ]);
+    const { data, error } = await supabase
+      .from("usuarios")
+      .insert([
+        {
+          empresa_id: empresaId,
+          nombre: nombre.trim(),
+          correo: correo.trim().toLowerCase(),
+          password: password.trim(),
+          rol_id: rolSeleccionado.id,
+          rol: rolSeleccionado.nombre,
+          estado: "Activo",
+        },
+      ])
+      .select()
+      .single();
 
     setGuardando(false);
 
@@ -224,13 +237,24 @@ export default function Usuarios() {
     ]);
 
     alert("Usuario creado correctamente.");
+
     limpiarFormulario();
     await cargarUsuarios();
+
+    if (data) {
+      seleccionarUsuario(data);
+    }
   }
 
   async function eliminarUsuario(id) {
     const confirmar = confirm("¿Deseas eliminar este usuario?");
     if (!confirmar) return;
+
+    await supabase
+      .from("permisos_usuarios_empresa")
+      .delete()
+      .eq("empresa_id", empresaId)
+      .eq("usuario_id", id);
 
     const { error } = await supabase
       .from("usuarios")
@@ -241,6 +265,12 @@ export default function Usuarios() {
     if (error) {
       alert("Error eliminando usuario: " + error.message);
       return;
+    }
+
+    if (usuarioSeleccionado?.id === id) {
+      setUsuarioSeleccionado(null);
+      setPermisosUsuario({});
+      setBusquedaUsuario("");
     }
 
     await cargarUsuarios();
@@ -288,7 +318,7 @@ export default function Usuarios() {
         empresa_id: empresaId,
         empresa_nombre: empresaNombre,
         accion: "Configuración finalizada",
-        descripcion: `La empresa ${empresaNombre} quedó configurada con usuarios, roles y permisos.`,
+        descripcion: `La empresa ${empresaNombre} quedó configurada con usuarios y permisos individuales.`,
         estado_anterior: "Pendiente",
         estado_nuevo: "Completa",
         usuario: "KONAX",
@@ -331,6 +361,18 @@ export default function Usuarios() {
     window.location.replace("/dashboard");
   }
 
+  const usuariosFiltrados = usuarios.filter((usuario) => {
+    const texto = String(busquedaUsuario || "").toLowerCase().trim();
+
+    if (!texto) return true;
+
+    return (
+      String(usuario.nombre || "").toLowerCase().includes(texto) ||
+      String(usuario.correo || "").toLowerCase().includes(texto) ||
+      String(usuario.rol || "").toLowerCase().includes(texto)
+    );
+  });
+
   return (
     <div style={pagina}>
       <div style={contenedor}>
@@ -340,7 +382,7 @@ export default function Usuarios() {
 
             <div>
               <p style={etiqueta}>Administración de Empresa</p>
-              <h1 style={titulo}>Usuarios, Roles y Permisos</h1>
+              <h1 style={titulo}>Usuarios y Permisos</h1>
               <p style={subtitulo}>
                 Empresa seleccionada: <strong>{empresaNombre}</strong>
               </p>
@@ -365,7 +407,7 @@ export default function Usuarios() {
           <div style={cardHeader}>
             <h2 style={tituloSeccion}>Crear Usuario</h2>
             <p style={textoSuave}>
-              Crea usuarios para la empresa y asígnales un rol de acceso.
+              Crea usuarios para la empresa y asígnales un rol.
             </p>
           </div>
 
@@ -436,55 +478,85 @@ export default function Usuarios() {
 
         <div style={card}>
           <div style={cardHeader}>
-            <h2 style={tituloSeccion}>Permisos por Rol</h2>
+            <h2 style={tituloSeccion}>Buscar usuario para permisos</h2>
             <p style={textoSuave}>
-              Activa o desactiva los módulos que podrá usar cada rol dentro de esta empresa.
+              Selecciona un usuario y activa o desactiva sus funciones.
             </p>
           </div>
 
-          {roles.length === 0 ? (
-            <p style={textoSuave}>No hay roles configurados.</p>
-          ) : (
-            <div style={rolesGrid}>
-              {roles.map((rol) => (
-                <div key={rol.id} style={rolCard}>
-                  <div style={rolHeader}>
-                    <h3 style={rolTitulo}>{rol.nombre}</h3>
-                    <span style={rolEtiqueta}>Rol</span>
-                  </div>
+          <input
+            value={busquedaUsuario}
+            onChange={(e) => setBusquedaUsuario(e.target.value)}
+            placeholder="Buscar por nombre, correo o rol..."
+            style={inputStyle}
+          />
 
-                  <div style={modulosLista}>
-                    {modulosDisponibles.map((modulo) => {
-                      const activo = permisoActivo(rol.id, modulo.codigo);
+          <div style={usuariosLista}>
+            {usuariosFiltrados.map((usuario) => (
+              <button
+                key={usuario.id}
+                style={
+                  usuarioSeleccionado?.id === usuario.id
+                    ? usuarioActivo
+                    : usuarioInactivo
+                }
+                onClick={() => seleccionarUsuario(usuario)}
+              >
+                <strong>{usuario.nombre}</strong>
+                <span>{usuario.correo}</span>
+                <small>{usuario.rol || "Sin rol"}</small>
+              </button>
+            ))}
 
-                      return (
-                        <div key={modulo.codigo} style={permisoFila}>
-                          <span style={permisoNombre}>{modulo.nombre}</span>
-
-                          <button
-                            type="button"
-                            onClick={() => alternarPermiso(rol, modulo)}
-                            style={activo ? switchActivo : switchInactivo}
-                          >
-                            <span
-                              style={
-                                activo ? switchCirculoActivo : switchCirculoInactivo
-                              }
-                            />
-                          </button>
-
-                          <span style={activo ? textoActivo : textoInactivo}>
-                            {activo ? "Activado" : "Desactivado"}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+            {usuariosFiltrados.length === 0 && (
+              <p style={textoSuave}>No hay usuarios con esa búsqueda.</p>
+            )}
+          </div>
         </div>
+
+        {usuarioSeleccionado && (
+          <div style={card}>
+            <div style={cardHeader}>
+              <h2 style={tituloSeccion}>Permisos del usuario</h2>
+              <p style={textoSuave}>
+                Usuario seleccionado:{" "}
+                <strong>{usuarioSeleccionado.nombre}</strong> · Rol:{" "}
+                <strong>{usuarioSeleccionado.rol || "-"}</strong>
+              </p>
+            </div>
+
+            <div style={permisosLista}>
+              {permisosDisponibles.map((permiso) => {
+                const activo = permisoActivo(permiso.codigo);
+
+                return (
+                  <div key={permiso.codigo} style={permisoFila}>
+                    <div>
+                      <strong style={permisoNombre}>{permiso.nombre}</strong>
+                      <p style={permisoCodigo}>{permiso.codigo}</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => alternarPermiso(permiso)}
+                      style={activo ? switchActivo : switchInactivo}
+                    >
+                      <span
+                        style={
+                          activo ? switchCirculoActivo : switchCirculoInactivo
+                        }
+                      />
+                    </button>
+
+                    <span style={activo ? textoActivo : textoInactivo}>
+                      {activo ? "Activado" : "Desactivado"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div style={card}>
           <div style={cardHeader}>
@@ -550,7 +622,8 @@ export default function Usuarios() {
           </div>
 
           <p style={nota}>
-            Al finalizar, la empresa quedará lista para ingresar al Centro de Operaciones.
+            Al finalizar, la empresa quedará lista para ingresar al Centro de
+            Operaciones.
           </p>
 
           <button onClick={finalizarConfiguracion} style={botonVerde}>
@@ -589,7 +662,7 @@ const pagina = {
 };
 
 const contenedor = {
-  maxWidth: "1350px",
+  maxWidth: "1300px",
   margin: "0 auto",
 };
 
@@ -760,66 +833,67 @@ const botonNegro = {
   cursor: "pointer",
 };
 
-const rolesGrid = {
+const usuariosLista = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))",
-  gap: "18px",
+  gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
+  gap: "12px",
+  marginTop: "14px",
 };
 
-const rolCard = {
-  border: "1px solid #e5e7eb",
-  borderRadius: "16px",
-  padding: "18px",
+const usuarioActivo = {
+  background: "#dcfce7",
+  color: "#166534",
+  border: "2px solid #16a34a",
+  borderRadius: "14px",
+  padding: "14px",
+  display: "grid",
+  gap: "5px",
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const usuarioInactivo = {
   background: "#f9fafb",
-};
-
-const rolHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: "14px",
-};
-
-const rolTitulo = {
-  margin: 0,
   color: "#111827",
-  fontSize: "20px",
+  border: "1px solid #e5e7eb",
+  borderRadius: "14px",
+  padding: "14px",
+  display: "grid",
+  gap: "5px",
+  textAlign: "left",
+  cursor: "pointer",
 };
 
-const rolEtiqueta = {
-  background: "#dbeafe",
-  color: "#1e40af",
-  padding: "5px 10px",
-  borderRadius: "999px",
-  fontSize: "12px",
-  fontWeight: "bold",
-};
-
-const modulosLista = {
+const permisosLista = {
   display: "grid",
   gap: "10px",
 };
 
 const permisoFila = {
   display: "grid",
-  gridTemplateColumns: "1fr auto 92px",
+  gridTemplateColumns: "1fr auto 100px",
   alignItems: "center",
-  gap: "10px",
-  background: "#ffffff",
-  padding: "10px",
-  borderRadius: "12px",
+  gap: "12px",
+  background: "#f9fafb",
+  padding: "12px",
+  borderRadius: "14px",
   border: "1px solid #e5e7eb",
 };
 
 const permisoNombre = {
   color: "#111827",
-  fontWeight: "bold",
-  fontSize: "13px",
+  fontSize: "14px",
+};
+
+const permisoCodigo = {
+  margin: "4px 0 0",
+  color: "#9ca3af",
+  fontSize: "11px",
 };
 
 const switchActivo = {
-  width: "46px",
-  height: "24px",
+  width: "48px",
+  height: "26px",
   borderRadius: "999px",
   border: "none",
   background: "#16a34a",
@@ -831,8 +905,8 @@ const switchActivo = {
 };
 
 const switchInactivo = {
-  width: "46px",
-  height: "24px",
+  width: "48px",
+  height: "26px",
   borderRadius: "999px",
   border: "none",
   background: "#d1d5db",
@@ -844,16 +918,16 @@ const switchInactivo = {
 };
 
 const switchCirculoActivo = {
-  width: "18px",
-  height: "18px",
+  width: "20px",
+  height: "20px",
   borderRadius: "50%",
   background: "#ffffff",
   display: "block",
 };
 
 const switchCirculoInactivo = {
-  width: "18px",
-  height: "18px",
+  width: "20px",
+  height: "20px",
   borderRadius: "50%",
   background: "#ffffff",
   display: "block",
