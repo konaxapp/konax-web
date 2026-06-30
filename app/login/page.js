@@ -46,11 +46,14 @@ export default function Login() {
 
     setCargando(true);
 
+    const correoLimpio = correo.trim().toLowerCase();
+    const passwordLimpio = password.trim();
+
     const { data: usuario, error } = await supabase
       .from("usuarios")
       .select("*")
-      .eq("correo", correo.trim())
-      .eq("password", password.trim())
+      .eq("correo", correoLimpio)
+      .eq("password", passwordLimpio)
       .eq("estado", "Activo")
       .maybeSingle();
 
@@ -106,6 +109,8 @@ export default function Login() {
       return;
     }
 
+    localStorage.clear();
+
     localStorage.setItem("usuarioId", usuario.id);
     localStorage.setItem("usuarioNombre", usuario.nombre || "");
     localStorage.setItem("nombreUsuario", usuario.nombre || "");
@@ -124,7 +129,7 @@ export default function Login() {
 
     setCargando(false);
 
-    if (usuario.rol === "SuperAdmin") {
+    if (String(usuario.rol || "").toLowerCase().trim() === "superadmin") {
       router.push("/admin");
     } else {
       router.push("/dashboard");
