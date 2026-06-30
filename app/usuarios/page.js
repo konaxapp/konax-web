@@ -19,27 +19,64 @@ export default function Usuarios() {
   const [permisosUsuario, setPermisosUsuario] = useState({});
   const [guardando, setGuardando] = useState(false);
 
-  const permisosDisponibles = [
-  { codigo: "dashboard", nombre: "Inicio / Resumen" },
-  { codigo: "clientes", nombre: "Clientes" },
-  { codigo: "vista_cliente", nombre: "Ficha del cliente" },
-  { codigo: "creditos", nombre: "Créditos" },
-  { codigo: "cobranza", nombre: "Administrar cobranza" },
-  { codigo: "gestor_cobros", nombre: "Mi cartera de cobro" },
-  { codigo: "abonos", nombre: "Registrar abonos" },
-  { codigo: "pagos", nombre: "Registrar pagos" },
-  { codigo: "caja", nombre: "Caja" },
-  { codigo: "control_caja", nombre: "Control de caja" },
-  { codigo: "gastos", nombre: "Gastos" },
-  { codigo: "recargos", nombre: "Recargos" },
-  { codigo: "inventario", nombre: "Inventario" },
-  { codigo: "movimientos_inventario", nombre: "Movimientos de inventario" },
-  { codigo: "ventas", nombre: "Ventas" },
-  { codigo: "suscripciones", nombre: "Suscripciones" },
-  { codigo: "reportes", nombre: "Reportes" },
-  { codigo: "usuarios", nombre: "Usuarios" },
-  { codigo: "configuracion", nombre: "Configuración" },
-];
+  const gruposPermisos = [
+    {
+      titulo: "Panel",
+      icono: "📊",
+      permisos: [
+        { codigo: "dashboard", nombre: "Inicio / Resumen" },
+        { codigo: "reportes", nombre: "Reportes" },
+      ],
+    },
+    {
+      titulo: "Clientes",
+      icono: "👥",
+      permisos: [
+        { codigo: "clientes", nombre: "Clientes" },
+        { codigo: "vista_cliente", nombre: "Ficha del cliente" },
+      ],
+    },
+    {
+      titulo: "Créditos y Cobranza",
+      icono: "💳",
+      permisos: [
+        { codigo: "creditos", nombre: "Créditos" },
+        { codigo: "cobranza", nombre: "Administrar cobranza" },
+        { codigo: "gestor_cobros", nombre: "Mi cartera de cobro" },
+        { codigo: "abonos", nombre: "Registrar abonos" },
+      ],
+    },
+    {
+      titulo: "Caja y Finanzas",
+      icono: "💵",
+      permisos: [
+        { codigo: "caja", nombre: "Caja" },
+        { codigo: "control_caja", nombre: "Control de caja" },
+        { codigo: "gastos", nombre: "Gastos" },
+        { codigo: "recargos", nombre: "Recargos" },
+      ],
+    },
+    {
+      titulo: "Inventario y Ventas",
+      icono: "📦",
+      permisos: [
+        { codigo: "inventario", nombre: "Inventario" },
+        { codigo: "movimientos_inventario", nombre: "Movimientos de inventario" },
+        { codigo: "ventas", nombre: "Ventas" },
+      ],
+    },
+    {
+      titulo: "Administración",
+      icono: "⚙️",
+      permisos: [
+        { codigo: "suscripciones", nombre: "Suscripciones" },
+        { codigo: "usuarios", nombre: "Usuarios" },
+        { codigo: "configuracion", nombre: "Configuración" },
+      ],
+    },
+  ];
+
+  const permisosDisponibles = gruposPermisos.flatMap((grupo) => grupo.permisos);
 
   useEffect(() => {
     const id =
@@ -124,7 +161,6 @@ export default function Usuarios() {
     }
 
     const permisosArmados = {};
-
     (data || []).forEach((permiso) => {
       permisosArmados[permiso.permiso] = permiso.activo;
     });
@@ -142,8 +178,7 @@ export default function Usuarios() {
       return;
     }
 
-    const activoActual = permisoActivo(permiso.codigo);
-    const nuevoEstado = !activoActual;
+    const nuevoEstado = !permisoActivo(permiso.codigo);
 
     const { error } = await supabase.from("permisos_usuarios_empresa").upsert(
       {
@@ -153,9 +188,7 @@ export default function Usuarios() {
         activo: nuevoEstado,
         updated_at: new Date().toISOString(),
       },
-      {
-        onConflict: "empresa_id,usuario_id,permiso",
-      }
+      { onConflict: "empresa_id,usuario_id,permiso" }
     );
 
     if (error) {
@@ -167,6 +200,37 @@ export default function Usuarios() {
       ...prev,
       [permiso.codigo]: nuevoEstado,
     }));
+  }
+
+  async function cambiarTodosPermisos(activo) {
+    if (!usuarioSeleccionado) {
+      alert("Seleccione un usuario.");
+      return;
+    }
+
+    const registros = permisosDisponibles.map((permiso) => ({
+      empresa_id: empresaId,
+      usuario_id: usuarioSeleccionado.id,
+      permiso: permiso.codigo,
+      activo,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error } = await supabase
+      .from("permisos_usuarios_empresa")
+      .upsert(registros, { onConflict: "empresa_id,usuario_id,permiso" });
+
+    if (error) {
+      alert("Error actualizando permisos: " + error.message);
+      return;
+    }
+
+    const nuevos = {};
+    permisosDisponibles.forEach((permiso) => {
+      nuevos[permiso.codigo] = activo;
+    });
+
+    setPermisosUsuario(nuevos);
   }
 
   function limpiarFormulario() {
@@ -327,9 +391,7 @@ export default function Usuarios() {
 
     const { data: empresaActualizada, error } = await supabase
       .from("empresas")
-      .update({
-        configuracion_completa: true,
-      })
+      .update({ configuracion_completa: true })
       .eq("id", empresaId)
       .select("*")
       .maybeSingle();
@@ -387,6 +449,14 @@ export default function Usuarios() {
     window.location.replace("/dashboard");
   }
 
+  function volverDashboard() {
+    window.location.href = "/dashboard";
+  }
+
+  function volverEmpresas() {
+    window.location.href = "/empresas";
+  }
+
   const usuariosFiltrados = usuarios.filter((usuario) => {
     const texto = String(busquedaUsuario || "").toLowerCase().trim();
 
@@ -398,6 +468,10 @@ export default function Usuarios() {
       String(usuario.rol || "").toLowerCase().includes(texto)
     );
   });
+
+  const permisosActivos = permisosDisponibles.filter((permiso) =>
+    permisoActivo(permiso.codigo)
+  ).length;
 
   return (
     <div style={pagina}>
@@ -415,246 +489,289 @@ export default function Usuarios() {
             </div>
           </div>
 
-          <button
-            onClick={() => (window.location.href = "/empresas")}
-            style={botonVolver}
-          >
-            ← Volver a Empresas
-          </button>
+          <div style={heroBotones}>
+            <button onClick={volverDashboard} style={botonBlanco}>
+              ← Dashboard
+            </button>
+
+            <button onClick={volverEmpresas} style={botonClaro}>
+              Empresas
+            </button>
+          </div>
         </div>
 
         <div style={resumenGrid}>
-          <KPI titulo="Usuarios creados" valor={usuarios.length} icono="👥" />
-          <KPI titulo="Roles disponibles" valor={roles.length} icono="🔐" />
-          <KPI titulo="Empresa" valor={empresaNombre} icono="🏢" />
-        </div>
-
-        <div style={card}>
-          <div style={cardHeader}>
-            <h2 style={tituloSeccion}>Crear Usuario</h2>
-            <p style={textoSuave}>
-              Crea usuarios para la empresa y asígnales un rol.
-            </p>
-          </div>
-
-          <div style={grid}>
-            <Campo label="Nombre del Usuario">
-              <input
-                type="text"
-                placeholder="Nombre completo"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                style={inputStyle}
-              />
-            </Campo>
-
-            <Campo label="Correo de Acceso">
-              <input
-                type="email"
-                placeholder="usuario@empresa.com"
-                value={correo}
-                onChange={(e) => setCorreo(e.target.value)}
-                style={inputStyle}
-              />
-            </Campo>
-
-            <Campo label="Contraseña de Acceso">
-              <input
-                type="text"
-                placeholder="Ej. 123456"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                style={inputStyle}
-              />
-            </Campo>
-
-            <Campo label="Rol del Usuario">
-              <select
-                value={rolId}
-                onChange={(e) => setRolId(e.target.value)}
-                style={inputStyle}
-              >
-                {roles.length === 0 && (
-                  <option value="">No hay roles configurados</option>
-                )}
-
-                {roles.map((rol) => (
-                  <option key={rol.id} value={rol.id}>
-                    {rol.nombre}
-                  </option>
-                ))}
-              </select>
-            </Campo>
-          </div>
-
-          <div style={acciones}>
-            <button
-              onClick={crearUsuario}
-              style={botonAzul}
-              disabled={guardando}
-            >
-              {guardando ? "Guardando..." : "Crear Usuario"}
-            </button>
-
-            <button onClick={limpiarFormulario} style={botonNegro}>
-              Limpiar
-            </button>
-          </div>
-        </div>
-
-        <div style={card}>
-          <div style={cardHeader}>
-            <h2 style={tituloSeccion}>Buscar usuario para permisos</h2>
-            <p style={textoSuave}>
-              Selecciona un usuario y activa o desactiva sus funciones.
-            </p>
-          </div>
-
-          <input
-            value={busquedaUsuario}
-            onChange={(e) => setBusquedaUsuario(e.target.value)}
-            placeholder="Buscar por nombre, correo o rol..."
-            style={inputStyle}
+          <KPI titulo="Usuarios" valor={usuarios.length} icono="👥" />
+          <KPI titulo="Roles" valor={roles.length} icono="🔐" />
+          <KPI
+            titulo="Permisos activos"
+            valor={
+              usuarioSeleccionado
+                ? `${permisosActivos}/${permisosDisponibles.length}`
+                : "-"
+            }
+            icono="✅"
           />
+        </div>
 
-          <div style={usuariosLista}>
-            {usuariosFiltrados.map((usuario) => (
-              <button
-                key={usuario.id}
-                style={
-                  usuarioSeleccionado?.id === usuario.id
-                    ? usuarioActivo
-                    : usuarioInactivo
-                }
-                onClick={() => seleccionarUsuario(usuario)}
-              >
-                <strong>{usuario.nombre}</strong>
-                <span>{usuario.correo}</span>
-                <small>{usuario.rol || "Sin rol"}</small>
+        <div style={mainGrid}>
+          <div>
+            <div style={card}>
+              <div style={cardHeader}>
+                <h2 style={tituloSeccion}>Crear Usuario</h2>
+                <p style={textoSuave}>
+                  Crea usuarios y asígnales un rol inicial.
+                </p>
+              </div>
+
+              <div style={grid}>
+                <Campo label="Nombre">
+                  <input
+                    type="text"
+                    placeholder="Nombre completo"
+                    value={nombre}
+                    onChange={(e) => setNombre(e.target.value)}
+                    style={inputStyle}
+                  />
+                </Campo>
+
+                <Campo label="Correo">
+                  <input
+                    type="email"
+                    placeholder="usuario@empresa.com"
+                    value={correo}
+                    onChange={(e) => setCorreo(e.target.value)}
+                    style={inputStyle}
+                  />
+                </Campo>
+
+                <Campo label="Contraseña">
+                  <input
+                    type="text"
+                    placeholder="Ej. 123456"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    style={inputStyle}
+                  />
+                </Campo>
+
+                <Campo label="Rol">
+                  <select
+                    value={rolId}
+                    onChange={(e) => setRolId(e.target.value)}
+                    style={inputStyle}
+                  >
+                    {roles.length === 0 && (
+                      <option value="">No hay roles configurados</option>
+                    )}
+
+                    {roles.map((rol) => (
+                      <option key={rol.id} value={rol.id}>
+                        {rol.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </Campo>
+              </div>
+
+              <div style={acciones}>
+                <button
+                  onClick={crearUsuario}
+                  style={botonAzul}
+                  disabled={guardando}
+                >
+                  {guardando ? "Guardando..." : "Crear Usuario"}
+                </button>
+
+                <button onClick={limpiarFormulario} style={botonNegro}>
+                  Limpiar
+                </button>
+              </div>
+            </div>
+
+            <div style={card}>
+              <div style={cardHeader}>
+                <h2 style={tituloSeccion}>Buscar usuario</h2>
+                <p style={textoSuave}>
+                  Selecciona un usuario para modificar sus permisos.
+                </p>
+              </div>
+
+              <input
+                value={busquedaUsuario}
+                onChange={(e) => setBusquedaUsuario(e.target.value)}
+                placeholder="Buscar por nombre, correo o rol..."
+                style={inputStyle}
+              />
+
+              <div style={usuariosLista}>
+                {usuariosFiltrados.map((usuario) => (
+                  <button
+                    key={usuario.id}
+                    style={
+                      usuarioSeleccionado?.id === usuario.id
+                        ? usuarioActivo
+                        : usuarioInactivo
+                    }
+                    onClick={() => seleccionarUsuario(usuario)}
+                  >
+                    <strong>{usuario.nombre}</strong>
+                    <span>{usuario.correo}</span>
+                    <small>{usuario.rol || "Sin rol"}</small>
+                  </button>
+                ))}
+
+                {usuariosFiltrados.length === 0 && (
+                  <p style={textoSuave}>No hay usuarios con esa búsqueda.</p>
+                )}
+              </div>
+            </div>
+
+            <div style={card}>
+              <div style={cardHeader}>
+                <h2 style={tituloSeccion}>
+                  Usuarios de la Empresa ({usuarios.length})
+                </h2>
+                <p style={textoSuave}>
+                  Administra los usuarios registrados para esta empresa.
+                </p>
+              </div>
+
+              <div style={tablaBox}>
+                <table style={tabla}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>Nombre</th>
+                      <th style={thStyle}>Correo</th>
+                      <th style={thStyle}>Rol</th>
+                      <th style={thStyle}>Estado</th>
+                      <th style={thStyle}>Acciones</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {usuarios.length === 0 && (
+                      <tr>
+                        <td style={tdStyle} colSpan="5">
+                          No hay usuarios creados.
+                        </td>
+                      </tr>
+                    )}
+
+                    {usuarios.map((usuario) => (
+                      <tr key={usuario.id}>
+                        <td style={tdStyle}>
+                          <strong>{usuario.nombre}</strong>
+                        </td>
+                        <td style={tdStyle}>{usuario.correo}</td>
+                        <td style={tdStyle}>{usuario.rol || "-"}</td>
+                        <td style={tdStyle}>
+                          <span
+                            style={
+                              usuario.estado === "Activo"
+                                ? estadoActivo
+                                : estadoInactivo
+                            }
+                          >
+                            {usuario.estado || "Activo"}
+                          </span>
+                        </td>
+                        <td style={tdStyle}>
+                          <button
+                            style={botonEliminar}
+                            onClick={() => eliminarUsuario(usuario.id)}
+                          >
+                            Eliminar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <button onClick={finalizarConfiguracion} style={botonVerde}>
+                Finalizar Configuración
               </button>
-            ))}
+            </div>
+          </div>
 
-            {usuariosFiltrados.length === 0 && (
-              <p style={textoSuave}>No hay usuarios con esa búsqueda.</p>
+          <div style={panelPermisos}>
+            {!usuarioSeleccionado ? (
+              <div style={cardSticky}>
+                <h2 style={tituloSeccion}>Permisos</h2>
+                <p style={textoSuave}>
+                  Selecciona un usuario para ver y editar sus permisos.
+                </p>
+              </div>
+            ) : (
+              <div style={cardSticky}>
+                <div style={permisosHeader}>
+                  <div>
+                    <h2 style={tituloSeccion}>Permisos del usuario</h2>
+                    <p style={textoSuave}>
+                      <strong>{usuarioSeleccionado.nombre}</strong> ·{" "}
+                      {usuarioSeleccionado.rol || "-"}
+                    </p>
+                  </div>
+
+                  <div style={contadorPermisos}>
+                    {permisosActivos}/{permisosDisponibles.length}
+                  </div>
+                </div>
+
+                <div style={accionesPermisos}>
+                  <button
+                    style={botonMiniVerde}
+                    onClick={() => cambiarTodosPermisos(true)}
+                  >
+                    Activar todo
+                  </button>
+
+                  <button
+                    style={botonMiniGris}
+                    onClick={() => cambiarTodosPermisos(false)}
+                  >
+                    Desactivar todo
+                  </button>
+                </div>
+
+                <div style={gruposGrid}>
+                  {gruposPermisos.map((grupo) => (
+                    <div key={grupo.titulo} style={grupoCard}>
+                      <h3 style={grupoTitulo}>
+                        {grupo.icono} {grupo.titulo}
+                      </h3>
+
+                      <div style={permisosCards}>
+                        {grupo.permisos.map((permiso) => {
+                          const activo = permisoActivo(permiso.codigo);
+
+                          return (
+                            <button
+                              key={permiso.codigo}
+                              type="button"
+                              onClick={() => alternarPermiso(permiso)}
+                              style={activo ? permisoCardActivo : permisoCard}
+                            >
+                              <div>
+                                <strong>{permiso.nombre}</strong>
+                                <small>{permiso.codigo}</small>
+                              </div>
+
+                              <span style={activo ? switchOn : switchOff}>
+                                <span style={activo ? circuloOn : circuloOff} />
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
-        </div>
-
-        {usuarioSeleccionado && (
-          <div style={card}>
-            <div style={cardHeader}>
-              <h2 style={tituloSeccion}>Permisos del usuario</h2>
-              <p style={textoSuave}>
-                Usuario seleccionado:{" "}
-                <strong>{usuarioSeleccionado.nombre}</strong> · Rol:{" "}
-                <strong>{usuarioSeleccionado.rol || "-"}</strong>
-              </p>
-            </div>
-
-            <div style={permisosLista}>
-              {permisosDisponibles.map((permiso) => {
-                const activo = permisoActivo(permiso.codigo);
-
-                return (
-                  <div key={permiso.codigo} style={permisoFila}>
-                    <div>
-                      <strong style={permisoNombre}>{permiso.nombre}</strong>
-                      <p style={permisoCodigo}>{permiso.codigo}</p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => alternarPermiso(permiso)}
-                      style={activo ? switchActivo : switchInactivo}
-                    >
-                      <span
-                        style={
-                          activo ? switchCirculoActivo : switchCirculoInactivo
-                        }
-                      />
-                    </button>
-
-                    <span style={activo ? textoActivo : textoInactivo}>
-                      {activo ? "Activado" : "Desactivado"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        <div style={card}>
-          <div style={cardHeader}>
-            <h2 style={tituloSeccion}>
-              Usuarios de la Empresa ({usuarios.length})
-            </h2>
-            <p style={textoSuave}>
-              Debe existir al menos un Administrador activo para finalizar.
-            </p>
-          </div>
-
-          <div style={tablaBox}>
-            <table style={tabla}>
-              <thead>
-                <tr>
-                  <th style={thStyle}>Nombre</th>
-                  <th style={thStyle}>Correo</th>
-                  <th style={thStyle}>Rol</th>
-                  <th style={thStyle}>Estado</th>
-                  <th style={thStyle}>Acciones</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {usuarios.length === 0 && (
-                  <tr>
-                    <td style={tdStyle} colSpan="5">
-                      No hay usuarios creados.
-                    </td>
-                  </tr>
-                )}
-
-                {usuarios.map((usuario) => (
-                  <tr key={usuario.id}>
-                    <td style={tdStyle}>
-                      <strong>{usuario.nombre}</strong>
-                    </td>
-                    <td style={tdStyle}>{usuario.correo}</td>
-                    <td style={tdStyle}>{usuario.rol || "-"}</td>
-                    <td style={tdStyle}>
-                      <span
-                        style={
-                          usuario.estado === "Activo"
-                            ? estadoActivo
-                            : estadoInactivo
-                        }
-                      >
-                        {usuario.estado || "Activo"}
-                      </span>
-                    </td>
-                    <td style={tdStyle}>
-                      <button
-                        style={botonEliminar}
-                        onClick={() => eliminarUsuario(usuario.id)}
-                      >
-                        Eliminar
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <p style={nota}>
-            Al finalizar, la empresa quedará lista para ingresar al Centro de
-            Operaciones.
-          </p>
-
-          <button onClick={finalizarConfiguracion} style={botonVerde}>
-            Finalizar Configuración
-          </button>
         </div>
       </div>
     </div>
@@ -683,21 +800,21 @@ function KPI({ titulo, valor, icono }) {
 const pagina = {
   minHeight: "100vh",
   background: "linear-gradient(135deg, #ecfdf5 0%, #f3f4f6 45%, #ffffff 100%)",
-  padding: "35px",
+  padding: "26px",
   fontFamily: "Arial, sans-serif",
 };
 
 const contenedor = {
-  maxWidth: "1300px",
+  maxWidth: "1500px",
   margin: "0 auto",
 };
 
 const hero = {
   background: "linear-gradient(135deg, #111827, #064e3b)",
   color: "#ffffff",
-  padding: "28px",
+  padding: "26px",
   borderRadius: "22px",
-  marginBottom: "22px",
+  marginBottom: "18px",
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
@@ -709,12 +826,11 @@ const hero = {
 const heroInfo = {
   display: "flex",
   alignItems: "center",
-  gap: "18px",
+  gap: "16px",
 };
 
 const logo = {
-  width: "85px",
-  height: "auto",
+  width: "80px",
   background: "#ffffff",
   borderRadius: "16px",
   padding: "8px",
@@ -729,7 +845,7 @@ const etiqueta = {
 
 const titulo = {
   margin: "4px 0",
-  fontSize: "36px",
+  fontSize: "34px",
   fontWeight: "bold",
 };
 
@@ -738,12 +854,28 @@ const subtitulo = {
   marginTop: "6px",
 };
 
-const botonVolver = {
+const heroBotones = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap",
+};
+
+const botonBlanco = {
   background: "#ffffff",
   color: "#111827",
   border: "none",
   padding: "12px 18px",
-  borderRadius: "9px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonClaro = {
+  background: "#dcfce7",
+  color: "#064e3b",
+  border: "none",
+  padding: "12px 18px",
+  borderRadius: "10px",
   fontWeight: "bold",
   cursor: "pointer",
 };
@@ -751,13 +883,13 @@ const botonVolver = {
 const resumenGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: "16px",
-  marginBottom: "20px",
+  gap: "14px",
+  marginBottom: "18px",
 };
 
 const resumenCard = {
   background: "#ffffff",
-  padding: "20px",
+  padding: "18px",
   borderRadius: "18px",
   boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
   display: "grid",
@@ -765,7 +897,7 @@ const resumenCard = {
 };
 
 const kpiIcono = {
-  fontSize: "26px",
+  fontSize: "24px",
 };
 
 const resumenLabel = {
@@ -778,17 +910,39 @@ const resumenValor = {
   fontSize: "20px",
 };
 
+const mainGrid = {
+  display: "grid",
+  gridTemplateColumns: "minmax(420px, 1fr) minmax(520px, 1.2fr)",
+  gap: "18px",
+  alignItems: "start",
+};
+
+const panelPermisos = {
+  minWidth: 0,
+};
+
 const card = {
   background: "#ffffff",
   borderRadius: "20px",
-  padding: "26px",
-  marginBottom: "20px",
+  padding: "22px",
+  marginBottom: "18px",
   boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
   border: "1px solid #e5e7eb",
 };
 
-const cardHeader = {
+const cardSticky = {
+  background: "#ffffff",
+  borderRadius: "20px",
+  padding: "22px",
   marginBottom: "18px",
+  boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+  border: "1px solid #e5e7eb",
+  position: "sticky",
+  top: "18px",
+};
+
+const cardHeader = {
+  marginBottom: "16px",
 };
 
 const tituloSeccion = {
@@ -803,8 +957,8 @@ const textoSuave = {
 
 const grid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
-  gap: "16px",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: "14px",
 };
 
 const campo = {
@@ -832,18 +986,17 @@ const inputStyle = {
 
 const acciones = {
   display: "flex",
-  gap: "12px",
+  gap: "10px",
   flexWrap: "wrap",
-  marginTop: "20px",
+  marginTop: "18px",
 };
 
 const botonAzul = {
   background: "#2563eb",
   color: "white",
   border: "none",
-  padding: "13px 24px",
+  padding: "12px 22px",
   borderRadius: "10px",
-  fontSize: "15px",
   fontWeight: "bold",
   cursor: "pointer",
 };
@@ -852,17 +1005,16 @@ const botonNegro = {
   background: "#111827",
   color: "white",
   border: "none",
-  padding: "13px 24px",
+  padding: "12px 22px",
   borderRadius: "10px",
-  fontSize: "15px",
   fontWeight: "bold",
   cursor: "pointer",
 };
 
 const usuariosLista = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
-  gap: "12px",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: "10px",
   marginTop: "14px",
 };
 
@@ -890,110 +1042,162 @@ const usuarioInactivo = {
   cursor: "pointer",
 };
 
-const permisosLista = {
-  display: "grid",
-  gap: "10px",
-};
-
-const permisoFila = {
-  display: "grid",
-  gridTemplateColumns: "1fr auto 100px",
-  alignItems: "center",
+const permisosHeader = {
+  display: "flex",
+  justifyContent: "space-between",
   gap: "12px",
-  background: "#f9fafb",
-  padding: "12px",
-  borderRadius: "14px",
-  border: "1px solid #e5e7eb",
+  alignItems: "center",
+  marginBottom: "14px",
 };
 
-const permisoNombre = {
-  color: "#111827",
-  fontSize: "14px",
-};
-
-const permisoCodigo = {
-  margin: "4px 0 0",
-  color: "#9ca3af",
-  fontSize: "11px",
-};
-
-const switchActivo = {
-  width: "48px",
-  height: "26px",
+const contadorPermisos = {
+  background: "#064e3b",
+  color: "#ffffff",
+  padding: "10px 14px",
   borderRadius: "999px",
+  fontWeight: "bold",
+};
+
+const accionesPermisos = {
+  display: "flex",
+  gap: "10px",
+  marginBottom: "16px",
+  flexWrap: "wrap",
+};
+
+const botonMiniVerde = {
+  background: "#16a34a",
+  color: "#ffffff",
   border: "none",
+  padding: "9px 14px",
+  borderRadius: "9px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonMiniGris = {
+  background: "#6b7280",
+  color: "#ffffff",
+  border: "none",
+  padding: "9px 14px",
+  borderRadius: "9px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const gruposGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
+  gap: "14px",
+};
+
+const grupoCard = {
+  background: "#f9fafb",
+  border: "1px solid #e5e7eb",
+  borderRadius: "16px",
+  padding: "14px",
+};
+
+const grupoTitulo = {
+  margin: "0 0 10px",
+  color: "#111827",
+  fontSize: "15px",
+};
+
+const permisosCards = {
+  display: "grid",
+  gap: "8px",
+};
+
+const permisoCard = {
+  background: "#ffffff",
+  border: "1px solid #e5e7eb",
+  borderRadius: "12px",
+  padding: "11px",
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "10px",
+  alignItems: "center",
+  textAlign: "left",
+  cursor: "pointer",
+  color: "#111827",
+};
+
+const permisoCardActivo = {
+  background: "#ecfdf5",
+  border: "1px solid #86efac",
+  borderRadius: "12px",
+  padding: "11px",
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "10px",
+  alignItems: "center",
+  textAlign: "left",
+  cursor: "pointer",
+  color: "#166534",
+};
+
+const switchOn = {
+  minWidth: "44px",
+  height: "24px",
+  borderRadius: "999px",
   background: "#16a34a",
   padding: "3px",
-  cursor: "pointer",
   display: "flex",
   justifyContent: "flex-end",
   alignItems: "center",
 };
 
-const switchInactivo = {
-  width: "48px",
-  height: "26px",
+const switchOff = {
+  minWidth: "44px",
+  height: "24px",
   borderRadius: "999px",
-  border: "none",
   background: "#d1d5db",
   padding: "3px",
-  cursor: "pointer",
   display: "flex",
   justifyContent: "flex-start",
   alignItems: "center",
 };
 
-const switchCirculoActivo = {
-  width: "20px",
-  height: "20px",
+const circuloOn = {
+  width: "18px",
+  height: "18px",
   borderRadius: "50%",
   background: "#ffffff",
   display: "block",
 };
 
-const switchCirculoInactivo = {
-  width: "20px",
-  height: "20px",
+const circuloOff = {
+  width: "18px",
+  height: "18px",
   borderRadius: "50%",
   background: "#ffffff",
   display: "block",
-};
-
-const textoActivo = {
-  color: "#166534",
-  fontSize: "12px",
-  fontWeight: "bold",
-};
-
-const textoInactivo = {
-  color: "#6b7280",
-  fontSize: "12px",
-  fontWeight: "bold",
 };
 
 const tablaBox = {
   border: "1px solid #e5e7eb",
   borderRadius: "14px",
   overflowX: "auto",
-  marginBottom: "22px",
+  marginBottom: "18px",
 };
 
 const tabla = {
   width: "100%",
   borderCollapse: "collapse",
-  minWidth: "850px",
+  minWidth: "760px",
 };
 
 const thStyle = {
   textAlign: "left",
-  padding: "13px",
+  padding: "12px",
   background: "#111827",
   color: "#ffffff",
   fontSize: "13px",
 };
 
 const tdStyle = {
-  padding: "13px",
+  padding: "12px",
   borderBottom: "1px solid #f3f4f6",
   color: "#111827",
 };
@@ -1026,22 +1230,14 @@ const botonEliminar = {
   fontWeight: "bold",
 };
 
-const nota = {
-  color: "#6b7280",
-  fontSize: "14px",
-  marginBottom: "16px",
-  textAlign: "center",
-};
-
 const botonVerde = {
   width: "100%",
   background: "#16a34a",
   color: "white",
   border: "none",
-  padding: "16px",
+  padding: "15px",
   borderRadius: "12px",
-  fontSize: "17px",
+  fontSize: "16px",
   fontWeight: "bold",
   cursor: "pointer",
-  boxShadow: "0 4px 12px rgba(22,163,74,0.30)",
 };
