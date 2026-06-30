@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
 
 export default function Abonos() {
+  const [abonos, setAbonos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+
   const calcularVencimiento = () => {
     const fecha = new Date();
     fecha.setMonth(fecha.getMonth() + 3);
@@ -23,32 +28,27 @@ export default function Abonos() {
     observacion: "",
   });
 
-  const abonos = [
-    {
-      fecha: "04/06/2026",
-      cliente: "Juan Pérez",
-      producto: "Televisor 55",
-      valorProducto: 850,
-      abono: 50,
-      saldo: 800,
-      metodo: "Yappy",
-      vendedor: "Noriel",
-      vencimiento: "04/09/2026",
-      estado: "Activo",
-    },
-    {
-      fecha: "03/06/2026",
-      cliente: "María Gómez",
-      producto: "Nevera",
-      valorProducto: 1200,
-      abono: 300,
-      saldo: 900,
-      metodo: "Transferencia",
-      vendedor: "Noriel",
-      vencimiento: "03/09/2026",
-      estado: "Activo",
-    },
-  ];
+  useEffect(() => {
+    cargarAbonos();
+  }, []);
+
+  function obtenerEmpresaId() {
+    const empresaId =
+      localStorage.getItem("empresaId") ||
+      localStorage.getItem("empresaAdminCreadaId");
+
+    if (!empresaId) {
+      alert("No hay empresa activa.");
+      window.location.href = "/login";
+      return null;
+    }
+
+    return empresaId;
+  }
+
+  function volverDashboard() {
+    window.location.href = "/dashboard";
+  }
 
   const valorProducto = Number(abono.valorProducto || 0);
   const abonoRecibido = Number(abono.abonoRecibido || 0);
@@ -63,11 +63,36 @@ export default function Abonos() {
       minimumFractionDigits: 2,
     });
 
-  function volverDashboard() {
-    window.location.href = "/dashboard";
+  function fechaSimple(fecha) {
+    return String(fecha || "").slice(0, 10);
   }
 
-  function registrarAbono() {
+  async function cargarAbonos() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    setCargando(true);
+
+    const { data, error } = await supabase
+      .from("abonos")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .order("created_at", { ascending: false });
+
+    setCargando(false);
+
+    if (error) {
+      alert("Error cargando abonos: " + error.message);
+      return;
+    }
+
+    setAbonos(data || []);
+  }
+
+  async function registrarAbono() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
     if (!abono.cliente.trim()) {
       alert("Ingrese el nombre del cliente.");
       return;
@@ -93,8 +118,37 @@ export default function Abonos() {
       return;
     }
 
+    setGuardando(true);
+
+    const { error } = await supabase.from("abonos").insert([
+      {
+        empresa_id: empresaId,
+        cliente: abono.cliente.trim(),
+        cedula: abono.cedula.trim(),
+        telefono: abono.telefono.trim(),
+        vendedor: abono.vendedor.trim(),
+        codigo_producto: abono.codigoProducto.trim(),
+        producto: abono.producto.trim(),
+        valor_producto: valorProducto,
+        abono_recibido: abonoRecibido,
+        saldo: saldoPendiente,
+        fecha_vencimiento: abono.fechaVencimiento,
+        metodo: abono.metodo,
+        observacion: abono.observacion.trim(),
+        estado: saldoPendiente <= 0 ? "Cancelado" : "Activo",
+      },
+    ]);
+
+    setGuardando(false);
+
+    if (error) {
+      alert("Error registrando abono: " + error.message);
+      return;
+    }
+
     alert("Abono registrado correctamente.");
     limpiarFormulario();
+    await cargarAbonos();
   }
 
   function limpiarFormulario() {
@@ -113,6 +167,29 @@ export default function Abonos() {
     });
   }
 
+  const hoy = new Date().toISOString().split("T")[0];
+  const mesActual = new Date().toISOString().slice(0, 7);
+
+  const abonosHoy = abonos
+    .filter((item) => fechaSimple(item.created_at) === hoy)
+    .reduce((sum, item) => sum + Number(item.abono_recibido || 0), 0);
+
+  const abonosMes = abonos
+    .filter((item) => fechaSimple(item.created_at).startsWith(mesActual))
+    .reduce((sum, item) => sum + Number(item.abono_recibido || 0), 0);
+
+  const abonosActivos = abonos.filter(
+    (item) => item.estado === "Activo" && Number(item.saldo || 0) > 0
+  ).length;
+
+  const abonosVencidos = abonos.filter(
+    (item) =>
+      item.estado === "Activo" &&
+      item.fecha_vencimiento &&
+      fechaSimple(item.fecha_vencimiento) < hoy &&
+      Number(item.saldo || 0) > 0
+  ).length;
+
   return (
     <div style={pagina}>
       <div style={contenedor}>
@@ -123,7 +200,8 @@ export default function Abonos() {
             <div>
               <h1 style={titulo}>Registrar Abonos</h1>
               <p style={subtitulo}>
-                Control de abonos para separación de productos y saldos pendientes.
+                Control de abonos para separación de productos y saldos
+                pendientes.
               </p>
             </div>
           </div>
@@ -134,10 +212,10 @@ export default function Abonos() {
         </div>
 
         <div style={cardsGrid}>
-          <KPI titulo="Abonos Hoy" valor="$1,250.00" icono="💰" />
-          <KPI titulo="Abonos Mes" valor="$18,500.00" icono="📈" />
-          <KPI titulo="Abonos Activos" valor="145" icono="🧾" />
-          <KPI titulo="Abonos Vencidos" valor="12" icono="🚨" />
+          <KPI titulo="Abonos Hoy" valor={formato(abonosHoy)} icono="💰" />
+          <KPI titulo="Abonos Mes" valor={formato(abonosMes)} icono="📈" />
+          <KPI titulo="Abonos Activos" valor={abonosActivos} icono="🧾" />
+          <KPI titulo="Abonos Vencidos" valor={abonosVencidos} icono="🚨" />
         </div>
 
         <div style={card}>
@@ -308,12 +386,20 @@ export default function Abonos() {
           </Campo>
 
           <div style={acciones}>
-            <button style={boton} onClick={registrarAbono}>
-              Registrar Abono
+            <button
+              style={boton}
+              onClick={registrarAbono}
+              disabled={guardando}
+            >
+              {guardando ? "Guardando..." : "Registrar Abono"}
             </button>
 
             <button style={botonGris} onClick={limpiarFormulario}>
               Limpiar
+            </button>
+
+            <button style={botonNegro} onClick={cargarAbonos}>
+              Actualizar
             </button>
           </div>
         </div>
@@ -321,43 +407,77 @@ export default function Abonos() {
         <div style={card}>
           <h2 style={tituloSeccion}>Historial de Abonos</h2>
 
-          <div style={{ overflowX: "auto" }}>
-            <table style={tabla}>
-              <thead>
-                <tr>
-                  <th style={th}>Fecha</th>
-                  <th style={th}>Cliente</th>
-                  <th style={th}>Producto</th>
-                  <th style={th}>Valor</th>
-                  <th style={th}>Abono</th>
-                  <th style={th}>Saldo</th>
-                  <th style={th}>Método</th>
-                  <th style={th}>Vendedor</th>
-                  <th style={th}>Vencimiento</th>
-                  <th style={th}>Estado</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {abonos.map((item, index) => (
-                  <tr key={index}>
-                    <td style={td}>{item.fecha}</td>
-                    <td style={td}>{item.cliente}</td>
-                    <td style={td}>{item.producto}</td>
-                    <td style={td}>{formato(item.valorProducto)}</td>
-                    <td style={td}>{formato(item.abono)}</td>
-                    <td style={td}>{formato(item.saldo)}</td>
-                    <td style={td}>{item.metodo}</td>
-                    <td style={td}>{item.vendedor}</td>
-                    <td style={td}>{item.vencimiento}</td>
-                    <td style={td}>
-                      <span style={estadoBadge}>{item.estado}</span>
-                    </td>
+          {cargando ? (
+            <p style={nota}>Cargando abonos...</p>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={tabla}>
+                <thead>
+                  <tr>
+                    <th style={th}>Fecha</th>
+                    <th style={th}>Cliente</th>
+                    <th style={th}>Cédula</th>
+                    <th style={th}>Producto</th>
+                    <th style={th}>Valor</th>
+                    <th style={th}>Abono</th>
+                    <th style={th}>Saldo</th>
+                    <th style={th}>Método</th>
+                    <th style={th}>Vendedor</th>
+                    <th style={th}>Vencimiento</th>
+                    <th style={th}>Estado</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+
+                <tbody>
+                  {abonos.length === 0 ? (
+                    <tr>
+                      <td style={td} colSpan="11">
+                        No hay abonos registrados.
+                      </td>
+                    </tr>
+                  ) : (
+                    abonos.map((item) => {
+                      const vencido =
+                        item.estado === "Activo" &&
+                        item.fecha_vencimiento &&
+                        fechaSimple(item.fecha_vencimiento) < hoy &&
+                        Number(item.saldo || 0) > 0;
+
+                      return (
+                        <tr key={item.id}>
+                          <td style={td}>{fechaSimple(item.created_at)}</td>
+                          <td style={td}>{item.cliente || "-"}</td>
+                          <td style={td}>{item.cedula || "-"}</td>
+                          <td style={td}>{item.producto || "-"}</td>
+                          <td style={td}>{formato(item.valor_producto)}</td>
+                          <td style={td}>{formato(item.abono_recibido)}</td>
+                          <td style={td}>{formato(item.saldo)}</td>
+                          <td style={td}>{item.metodo || "-"}</td>
+                          <td style={td}>{item.vendedor || "-"}</td>
+                          <td style={td}>
+                            {fechaSimple(item.fecha_vencimiento) || "-"}
+                          </td>
+                          <td style={td}>
+                            <span
+                              style={
+                                vencido
+                                  ? estadoVencido
+                                  : item.estado === "Cancelado"
+                                  ? estadoCancelado
+                                  : estadoBadge
+                              }
+                            >
+                              {vencido ? "Vencido" : item.estado || "Activo"}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -599,6 +719,16 @@ const botonGris = {
   cursor: "pointer",
 };
 
+const botonNegro = {
+  background: "#111827",
+  color: "#ffffff",
+  border: "none",
+  padding: "12px 24px",
+  borderRadius: "9px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
 const tabla = {
   width: "100%",
   borderCollapse: "collapse",
@@ -624,4 +754,27 @@ const estadoBadge = {
   borderRadius: "999px",
   fontSize: "13px",
   fontWeight: "bold",
+};
+
+const estadoVencido = {
+  background: "#fee2e2",
+  color: "#991b1b",
+  padding: "6px 10px",
+  borderRadius: "999px",
+  fontSize: "13px",
+  fontWeight: "bold",
+};
+
+const estadoCancelado = {
+  background: "#e5e7eb",
+  color: "#374151",
+  padding: "6px 10px",
+  borderRadius: "999px",
+  fontSize: "13px",
+  fontWeight: "bold",
+};
+
+const nota = {
+  color: "#6b7280",
+  fontSize: "14px",
 };
