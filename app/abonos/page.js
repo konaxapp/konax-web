@@ -52,7 +52,7 @@ export default function Abonos() {
 
   const valorProducto = Number(abono.valorProducto || 0);
   const abonoRecibido = Number(abono.abonoRecibido || 0);
-  const saldoPendiente = valorProducto - abonoRecibido;
+  const saldoPendiente = Math.max(valorProducto - abonoRecibido, 0);
 
   const mostrarResumen =
     abono.valorProducto !== "" || abono.abonoRecibido !== "";
@@ -63,11 +63,41 @@ export default function Abonos() {
       minimumFractionDigits: 2,
     });
 
-  const registrarAbono = () => {
-    alert("Abono registrado correctamente.");
-  };
+  function volverDashboard() {
+    window.location.href = "/dashboard";
+  }
 
-  const limpiarFormulario = () => {
+  function registrarAbono() {
+    if (!abono.cliente.trim()) {
+      alert("Ingrese el nombre del cliente.");
+      return;
+    }
+
+    if (!abono.producto.trim()) {
+      alert("Ingrese el producto.");
+      return;
+    }
+
+    if (!abono.valorProducto || valorProducto <= 0) {
+      alert("Ingrese el valor del producto.");
+      return;
+    }
+
+    if (!abono.abonoRecibido || abonoRecibido <= 0) {
+      alert("Ingrese el abono recibido.");
+      return;
+    }
+
+    if (abonoRecibido > valorProducto) {
+      alert("El abono no puede ser mayor que el valor del producto.");
+      return;
+    }
+
+    alert("Abono registrado correctamente.");
+    limpiarFormulario();
+  }
+
+  function limpiarFormulario() {
     setAbono({
       cliente: "",
       cedula: "",
@@ -81,20 +111,26 @@ export default function Abonos() {
       metodo: "Efectivo",
       observacion: "",
     });
-  };
+  }
 
   return (
     <div style={pagina}>
       <div style={contenedor}>
         <div style={encabezado}>
-          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+          <div style={tituloBox}>
+            <img src="/konax-logo.png" alt="KONAX" style={logo} />
 
-          <div>
-            <h1 style={titulo}>Abonos</h1>
-            <p style={subtitulo}>
-              Control de abonos para separación de productos y saldos pendientes.
-            </p>
+            <div>
+              <h1 style={titulo}>Registrar Abonos</h1>
+              <p style={subtitulo}>
+                Control de abonos para separación de productos y saldos pendientes.
+              </p>
+            </div>
           </div>
+
+          <button style={botonVolver} onClick={volverDashboard}>
+            ← Regresar al Dashboard
+          </button>
         </div>
 
         <div style={cardsGrid}>
@@ -105,96 +141,131 @@ export default function Abonos() {
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>Registrar Abono</h2>
+          <h2 style={tituloSeccion}>Datos del Cliente</h2>
 
           <div style={grid}>
-            <input
-              placeholder="Buscar cliente..."
-              value={abono.cliente}
-              onChange={(e) =>
-                setAbono({ ...abono, cliente: e.target.value })
-              }
-              style={inputStyle}
-            />
+            <Campo label="Cliente">
+              <input
+                placeholder="Nombre del cliente"
+                value={abono.cliente}
+                onChange={(e) =>
+                  setAbono({ ...abono, cliente: e.target.value })
+                }
+                style={inputStyle}
+              />
+            </Campo>
 
-            <input
-              placeholder="Cédula"
-              value={abono.cedula}
-              onChange={(e) =>
-                setAbono({ ...abono, cedula: e.target.value })
-              }
-              style={inputStyle}
-            />
+            <Campo label="Cédula">
+              <input
+                placeholder="Cédula"
+                value={abono.cedula}
+                onChange={(e) =>
+                  setAbono({ ...abono, cedula: e.target.value })
+                }
+                style={inputStyle}
+              />
+            </Campo>
 
-            <input
-              placeholder="Teléfono"
-              value={abono.telefono}
-              onChange={(e) =>
-                setAbono({ ...abono, telefono: e.target.value })
-              }
-              style={inputStyle}
-            />
+            <Campo label="Teléfono">
+              <input
+                placeholder="Teléfono"
+                value={abono.telefono}
+                onChange={(e) =>
+                  setAbono({ ...abono, telefono: e.target.value })
+                }
+                style={inputStyle}
+              />
+            </Campo>
 
-            <input
-              placeholder="Vendedor"
-              value={abono.vendedor}
-              onChange={(e) =>
-                setAbono({ ...abono, vendedor: e.target.value })
-              }
-              style={inputStyle}
-            />
+            <Campo label="Vendedor">
+              <input
+                placeholder="Vendedor responsable"
+                value={abono.vendedor}
+                onChange={(e) =>
+                  setAbono({ ...abono, vendedor: e.target.value })
+                }
+                style={inputStyle}
+              />
+            </Campo>
+          </div>
+        </div>
 
-            <input
-              placeholder="Código del producto"
-              value={abono.codigoProducto}
-              onChange={(e) =>
-                setAbono({ ...abono, codigoProducto: e.target.value })
-              }
-              style={inputStyle}
-            />
+        <div style={card}>
+          <h2 style={tituloSeccion}>Datos del Producto</h2>
 
-            <input
-              placeholder="Producto"
-              value={abono.producto}
-              onChange={(e) =>
-                setAbono({ ...abono, producto: e.target.value })
-              }
-              style={inputStyle}
-            />
+          <div style={grid}>
+            <Campo label="Código del producto">
+              <input
+                placeholder="Código"
+                value={abono.codigoProducto}
+                onChange={(e) =>
+                  setAbono({ ...abono, codigoProducto: e.target.value })
+                }
+                style={inputStyle}
+              />
+            </Campo>
 
-            <input
-              type="number"
-              placeholder="Valor del producto"
-              value={abono.valorProducto}
-              onChange={(e) =>
-                setAbono({ ...abono, valorProducto: e.target.value })
-              }
-              style={inputStyle}
-            />
+            <Campo label="Producto">
+              <input
+                placeholder="Nombre del producto"
+                value={abono.producto}
+                onChange={(e) =>
+                  setAbono({ ...abono, producto: e.target.value })
+                }
+                style={inputStyle}
+              />
+            </Campo>
 
-            <input
-              type="number"
-              placeholder="Abono recibido"
-              value={abono.abonoRecibido}
-              onChange={(e) =>
-                setAbono({ ...abono, abonoRecibido: e.target.value })
-              }
-              style={inputStyle}
-            />
+            <Campo label="Valor del producto">
+              <input
+                type="number"
+                placeholder="0.00"
+                value={abono.valorProducto}
+                onChange={(e) =>
+                  setAbono({ ...abono, valorProducto: e.target.value })
+                }
+                style={inputStyle}
+              />
+            </Campo>
 
-            <select
-              value={abono.metodo}
-              onChange={(e) =>
-                setAbono({ ...abono, metodo: e.target.value })
-              }
-              style={inputStyle}
-            >
-              <option>Efectivo</option>
-              <option>Transferencia</option>
-              <option>Yappy</option>
-              <option>Tarjeta</option>
-              <option>Otro</option>
-            </select>
+            <Campo label="Abono recibido">
+              <input
+                type="number"
+                placeholder="0.00"
+                value={abono.abonoRecibido}
+                onChange={(e) =>
+                  setAbono({ ...abono, abonoRecibido: e.target.value })
+                }
+                style={inputStyle}
+              />
+            </Campo>
+
+            <Campo label="Método de pago">
+              <select
+                value={abono.metodo}
+                onChange={(e) =>
+                  setAbono({ ...abono, metodo: e.target.value })
+                }
+                style={inputStyle}
+              >
+                <option>Efectivo</option>
+                <option>Transferencia</option>
+                <option>Yappy</option>
+                <option>Tarjeta</option>
+                <option>Otro</option>
+              </select>
+            </Campo>
+
+            <Campo label="Fecha de vencimiento">
+              <input
+                type="date"
+                value={abono.fechaVencimiento}
+                onChange={(e) =>
+                  setAbono({ ...abono, fechaVencimiento: e.target.value })
+                }
+                style={inputStyle}
+              />
+            </Campo>
           </div>
 
           {mostrarResumen && (
@@ -225,14 +296,16 @@ export default function Abonos() {
             </div>
           )}
 
-          <textarea
-            placeholder="Observación del abono..."
-            value={abono.observacion}
-            onChange={(e) =>
-              setAbono({ ...abono, observacion: e.target.value })
-            }
-            style={textarea}
-          />
+          <Campo label="Observación">
+            <textarea
+              placeholder="Observación del abono..."
+              value={abono.observacion}
+              onChange={(e) =>
+                setAbono({ ...abono, observacion: e.target.value })
+              }
+              style={textarea}
+            />
+          </Campo>
 
           <div style={acciones}>
             <button style={boton} onClick={registrarAbono}>
@@ -291,6 +364,15 @@ export default function Abonos() {
   );
 }
 
+function Campo({ label, children }) {
+  return (
+    <div>
+      <label style={labelStyle}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
 function KPI({ titulo, valor, icono }) {
   return (
     <div style={cardKpi}>
@@ -315,27 +397,52 @@ const contenedor = {
 };
 
 const encabezado = {
+  background: "linear-gradient(135deg, #111827, #064e3b)",
+  color: "#ffffff",
+  padding: "24px",
+  borderRadius: "20px",
+  marginBottom: "18px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "16px",
+  flexWrap: "wrap",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+};
+
+const tituloBox = {
   display: "flex",
   alignItems: "center",
   gap: "14px",
-  marginBottom: "18px",
 };
 
 const logo = {
-  width: "110px",
-  height: "auto",
+  width: "90px",
+  background: "#ffffff",
+  borderRadius: "14px",
+  padding: "8px",
 };
 
 const titulo = {
   fontSize: "32px",
   margin: 0,
-  color: "#111827",
+  color: "#ffffff",
 };
 
 const subtitulo = {
-  color: "#6b7280",
+  color: "#dcfce7",
   marginTop: "5px",
   fontSize: "15px",
+};
+
+const botonVolver = {
+  background: "#ffffff",
+  color: "#111827",
+  border: "none",
+  padding: "12px 20px",
+  borderRadius: "9px",
+  fontWeight: "bold",
+  cursor: "pointer",
 };
 
 const cardsGrid = {
@@ -373,6 +480,7 @@ const card = {
 };
 
 const tituloSeccion = {
+  marginTop: 0,
   marginBottom: "16px",
   color: "#111827",
 };
@@ -383,6 +491,14 @@ const grid = {
   gap: "14px",
 };
 
+const labelStyle = {
+  display: "block",
+  marginBottom: "6px",
+  color: "#374151",
+  fontSize: "13px",
+  fontWeight: "bold",
+};
+
 const inputStyle = {
   width: "100%",
   padding: "12px",
@@ -390,6 +506,8 @@ const inputStyle = {
   border: "1px solid #d1d5db",
   boxSizing: "border-box",
   fontSize: "14px",
+  background: "#ffffff",
+  color: "#111827",
 };
 
 const resumenAbono = {
@@ -450,7 +568,8 @@ const textarea = {
   boxSizing: "border-box",
   fontSize: "14px",
   minHeight: "90px",
-  marginTop: "16px",
+  marginTop: "0px",
+  resize: "vertical",
 };
 
 const acciones = {
@@ -488,7 +607,8 @@ const tabla = {
 const th = {
   textAlign: "left",
   padding: "12px",
-  background: "#f9fafb",
+  background: "#111827",
+  color: "#ffffff",
   borderBottom: "1px solid #e5e7eb",
 };
 
