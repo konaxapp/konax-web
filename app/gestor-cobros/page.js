@@ -14,23 +14,39 @@ export default function GestorCobros() {
 
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
+
     if (!empresaId) {
       alert("No hay empresa activa.");
       return null;
     }
+
     return empresaId;
   }
 
-  function obtenerGestor() {
-    return (
-      localStorage.getItem("nombreUsuario") ||
-      localStorage.getItem("correoUsuario") ||
-      "Usuario"
-    );
+  function obtenerGestorActual() {
+    return {
+      id:
+        localStorage.getItem("usuarioId") ||
+        localStorage.getItem("adminKonaxId") ||
+        "",
+      nombre:
+        localStorage.getItem("nombreUsuario") ||
+        localStorage.getItem("usuarioNombre") ||
+        localStorage.getItem("adminKonaxNombre") ||
+        "",
+      correo:
+        localStorage.getItem("correoUsuario") ||
+        localStorage.getItem("usuarioCorreo") ||
+        "",
+    };
   }
 
   function fechaSimple(fecha) {
     return String(fecha || "").slice(0, 10);
+  }
+
+  function limpiarTexto(texto) {
+    return String(texto || "").toLowerCase().trim();
   }
 
   function obtenerManana() {
@@ -54,39 +70,59 @@ export default function GestorCobros() {
   function obtenerSemaforo(dias, saldo) {
     if (Number(saldo || 0) <= 0) return "⚫ Cancelado";
     if (dias <= 0) return "🟢 Al Día";
-    if (dias <= 30) return "🟡 1-30 días";
-    if (dias <= 90) return "🟠 31-90 días";
-    return "🔴 Cartera Vencida";
+    if (dias <= 30) return "🟡 Mora 1-30 días";
+    if (dias <= 90) return "🟠 Mora 31-90 días";
+    if (dias <= 365) return "🔴 Mora mayor a 90 días";
+    return "⚫ Mora mayor a 1 año";
   }
 
   function obtenerEstado(dias, saldo) {
     if (Number(saldo || 0) <= 0) return "Cancelado";
     if (dias <= 0) return "Al Día";
-    if (dias <= 90) return "Mora";
-    return "Cartera Vencida";
+    if (dias <= 30) return "Mora 1-30";
+    if (dias <= 90) return "Mora 31-90";
+    if (dias <= 365) return "Mora +90";
+    return "Mora +1 año";
+  }
+
+  function perteneceAlGestor(cobranza, gestor) {
+    const responsableId = String(cobranza?.responsable_cobro_id || "");
+    const responsableNombre = limpiarTexto(cobranza?.responsable_cobro);
+    const gestorId = String(gestor.id || "");
+    const gestorNombre = limpiarTexto(gestor.nombre);
+    const gestorCorreo = limpiarTexto(gestor.correo);
+
+    return (
+      (gestorId && responsableId === gestorId) ||
+      (gestorNombre && responsableNombre === gestorNombre) ||
+      (gestorCorreo && responsableNombre === gestorCorreo)
+    );
   }
 
   async function cargarCartera() {
     const empresaId = obtenerEmpresaId();
-    const gestor = obtenerGestor();
+    const gestor = obtenerGestorActual();
 
     if (!empresaId) return;
 
     const { data: cobranzaData, error: errorCobranza } = await supabase
       .from("informacion_cobranza")
       .select("*")
-      .eq("empresa_id", empresaId)
-      .eq("responsable_cobro", gestor);
+      .eq("empresa_id", empresaId);
 
     if (errorCobranza) {
       alert("Error cargando cartera del gestor: " + errorCobranza.message);
       return;
     }
 
-    const cobranzas = cobranzaData || [];
+    const cobranzas = (cobranzaData || []).filter((c) =>
+      perteneceAlGestor(c, gestor)
+    );
+
     const cuentaIds = cobranzas
       .map((c) => c.informacion_comercial_id)
       .filter(Boolean);
+
     const clienteIds = cobranzas.map((c) => c.cliente_id).filter(Boolean);
 
     let cuentas = [];
@@ -130,9 +166,12 @@ export default function GestorCobros() {
 
     const armada = cobranzas.map((cobranza) => {
       const cuenta = cuentas.find(
-        (c) => c.id === cobranza.informacion_comercial_id
+        (c) => String(c.id) === String(cobranza.informacion_comercial_id)
       );
-      const cliente = clientes.find((c) => c.id === cobranza.cliente_id);
+
+      const cliente = clientes.find(
+        (c) => String(c.id) === String(cobranza.cliente_id)
+      );
 
       const pagosDeCuenta = pagosCaja.filter((p) => {
         const cuentaPago = String(
@@ -146,8 +185,8 @@ export default function GestorCobros() {
         return (
           cuentaPago === String(cuenta?.numero_cuenta || "").trim() ||
           cedulaPago === String(cliente?.cedula || "").trim() ||
-          p.cliente_id === cliente?.id ||
-          p.informacion_comercial_id === cuenta?.id
+          String(p.cliente_id || "") === String(cliente?.id || "") ||
+          String(p.informacion_comercial_id || "") === String(cuenta?.id || "")
         );
       });
 
@@ -190,7 +229,7 @@ export default function GestorCobros() {
 
   async function registrarGestionRealizada(item, resultado) {
     const empresaId = obtenerEmpresaId();
-    const gestor = obtenerGestor();
+    const gestor = obtenerGestorActual();
 
     if (!empresaId || !resultado) return;
 
@@ -206,7 +245,8 @@ export default function GestorCobros() {
         proxima_gestion: proximaGestion,
         estado_cobranza: item.estado,
         alerta_cobranza: "Seguimiento programado",
-        prioridad_cobranza: item.estado === "Cartera Vencida" ? "Alta" : "Normal",
+        prioridad_cobranza:
+          item.dias > 90 ? "Alta" : item.dias > 0 ? "Media" : "Normal",
       })
       .eq("id", item.cobranza.id);
 
@@ -215,16 +255,29 @@ export default function GestorCobros() {
       return;
     }
 
+    await supabase.from("bitacora_cliente").insert([
+      {
+        empresa_id: empresaId,
+        cliente_id: item.cliente?.id,
+        informacion_comercial_id: item.cuenta?.id,
+        tipo_gestion: tipoGestion,
+        resultado_gestion: resultado,
+        descripcion: `Gestión rápida registrada desde Mi Cartera: ${resultado}`,
+        usuario: gestor.nombre || gestor.correo || "Gestor",
+        fecha_gestion: new Date().toISOString(),
+      },
+    ]);
+
     await supabase.from("alertas_cobranza").insert([
       {
         empresa_id: empresaId,
         cliente_id: item.cliente?.id,
         informacion_comercial_id: item.cuenta?.id,
         informacion_cobranza_id: item.cobranza?.id,
-        gestor,
+        gestor: gestor.nombre || gestor.correo || "Gestor",
         tipo_alerta: "Próxima gestión",
         descripcion: `Próxima gestión programada para ${proximaGestion}. Resultado: ${resultado}`,
-        prioridad: item.estado === "Cartera Vencida" ? "Alta" : "Media",
+        prioridad: item.dias > 90 ? "Alta" : "Media",
         fecha_alerta: proximaGestion,
         fecha_vencimiento: proximaGestion,
         estado: "Activa",
@@ -232,7 +285,7 @@ export default function GestorCobros() {
     ]);
 
     alert("Gestión registrada correctamente. Próxima gestión: mañana.");
-    cargarCartera();
+    await cargarCartera();
   }
 
   function verCliente(item) {
@@ -265,28 +318,36 @@ export default function GestorCobros() {
   const hoy = new Date().toISOString().split("T")[0];
 
   const carteraFiltrada = cartera.filter((item) => {
-    const texto = busqueda.toLowerCase();
+    const texto = limpiarTexto(busqueda);
 
     const coincideBusqueda =
       !texto ||
-      item.cliente?.nombre?.toLowerCase().includes(texto) ||
-      item.cliente?.cedula?.toLowerCase().includes(texto) ||
-      item.cuenta?.numero_cuenta?.toLowerCase().includes(texto);
+      limpiarTexto(item.cliente?.nombre).includes(texto) ||
+      limpiarTexto(item.cliente?.cedula).includes(texto) ||
+      limpiarTexto(item.cuenta?.numero_cuenta).includes(texto);
 
     if (filtroCartera === "Al Día") {
-      return coincideBusqueda && item.estado === "Al Día";
+      return coincideBusqueda && item.dias <= 0 && item.saldoCalculado > 0;
     }
 
-    if (filtroCartera === "1-30 días") {
+    if (filtroCartera === "Mora total") {
+      return coincideBusqueda && item.dias > 0;
+    }
+
+    if (filtroCartera === "Mora 1-30 días") {
       return coincideBusqueda && item.dias > 0 && item.dias <= 30;
     }
 
-    if (filtroCartera === "31-90 días") {
+    if (filtroCartera === "Mora 31-90 días") {
       return coincideBusqueda && item.dias > 30 && item.dias <= 90;
     }
 
-    if (filtroCartera === "Cartera Vencida") {
+    if (filtroCartera === "Mora mayor a 90 días") {
       return coincideBusqueda && item.dias > 90;
+    }
+
+    if (filtroCartera === "Mora mayor a 1 año") {
+      return coincideBusqueda && item.dias > 365;
     }
 
     if (filtroCartera === "Sin teléfono") {
@@ -294,7 +355,10 @@ export default function GestorCobros() {
     }
 
     if (filtroCartera === "Sin gestionar hoy") {
-      return coincideBusqueda && fechaSimple(item.cobranza?.fecha_ultima_gestion) !== hoy;
+      return (
+        coincideBusqueda &&
+        fechaSimple(item.cobranza?.fecha_ultima_gestion) !== hoy
+      );
     }
 
     if (filtroCartera === "Promesas vencidas") {
@@ -311,14 +375,11 @@ export default function GestorCobros() {
 
   const clientesAsignados = cartera.length;
 
-  const clientesGestionadosHoy = cartera.filter(
+  const gestionesDelDia = cartera.filter(
     (item) => fechaSimple(item.cobranza?.fecha_ultima_gestion) === hoy
   ).length;
 
-  const clientesNoGestionadosHoy = Math.max(
-    clientesAsignados - clientesGestionadosHoy,
-    0
-  );
+  const pendientesGestionHoy = Math.max(clientesAsignados - gestionesDelDia, 0);
 
   const promesasVencidas = cartera.filter(
     (item) =>
@@ -327,9 +388,9 @@ export default function GestorCobros() {
       fechaSimple(item.cobranza?.proxima_gestion) < hoy
   ).length;
 
-  const carteraVencidaCantidad = cartera.filter(
-    (item) => item.estado === "Cartera Vencida"
-  ).length;
+  const moraTotalCantidad = cartera.filter((item) => item.dias > 0).length;
+  const moraMayor90Cantidad = cartera.filter((item) => item.dias > 90).length;
+  const moraMayorAnoCantidad = cartera.filter((item) => item.dias > 365).length;
 
   const clientesSinTelefono = cartera.filter(
     (item) => !item.cliente?.telefono
@@ -341,25 +402,22 @@ export default function GestorCobros() {
   );
 
   const montoAlDia = cartera
-    .filter((item) => item.estado === "Al Día")
+    .filter((item) => item.dias <= 0 && item.saldoCalculado > 0)
     .reduce((sum, item) => sum + Number(item.saldoCalculado || 0), 0);
 
-  const montoMora = cartera
-    .filter((item) => item.estado === "Mora")
+  const montoMoraTotal = cartera
+    .filter((item) => item.dias > 0)
     .reduce((sum, item) => sum + Number(item.saldoCalculado || 0), 0);
 
-  const montoVencido = cartera
-    .filter((item) => item.estado === "Cartera Vencida")
+  const montoMoraMayor90 = cartera
+    .filter((item) => item.dias > 90)
     .reduce((sum, item) => sum + Number(item.saldoCalculado || 0), 0);
 
   const porcentajeAlDia =
     montoAsignado > 0 ? Math.round((montoAlDia / montoAsignado) * 100) : 0;
 
   const porcentajeMora =
-    montoAsignado > 0 ? Math.round((montoMora / montoAsignado) * 100) : 0;
-
-  const porcentajeVencido =
-    montoAsignado > 0 ? Math.round((montoVencido / montoAsignado) * 100) : 0;
+    montoAsignado > 0 ? Math.round((montoMoraTotal / montoAsignado) * 100) : 0;
 
   return (
     <div style={pagina}>
@@ -372,6 +430,10 @@ export default function GestorCobros() {
             <p style={subtitulo}>Espacio de trabajo del gestor de cobranza.</p>
           </div>
 
+          <button style={botonNegro} onClick={cargarCartera}>
+            Actualizar
+          </button>
+
           <button style={botonNegro} onClick={imprimirCartera}>
             Imprimir mi cartera
           </button>
@@ -379,27 +441,28 @@ export default function GestorCobros() {
 
         <div style={alertasGrid}>
           <Alerta titulo="Promesas vencidas" valor={promesasVencidas} />
-          <Alerta titulo="Sin gestionar hoy" valor={clientesNoGestionadosHoy} />
-          <Alerta titulo="Cartera vencida" valor={carteraVencidaCantidad} />
+          <Alerta titulo="Pendientes hoy" valor={pendientesGestionHoy} />
+          <Alerta titulo="Mora mayor a 90 días" valor={moraMayor90Cantidad} />
           <Alerta titulo="Sin teléfono" valor={clientesSinTelefono} />
         </div>
 
         <div style={kpiGrid}>
           <KPI titulo="Clientes asignados" valor={clientesAsignados} />
-          <KPI titulo="Gestionados hoy" valor={clientesGestionadosHoy} />
-          <KPI titulo="No gestionados hoy" valor={clientesNoGestionadosHoy} />
-          <KPI titulo="Gestiones hoy" valor={clientesGestionadosHoy} />
+          <KPI titulo="Gestiones del día" valor={gestionesDelDia} />
+          <KPI titulo="Pendientes de gestión" valor={pendientesGestionHoy} />
+          <KPI titulo="Mora total" valor={moraTotalCantidad} />
+          <KPI titulo="Mora +90 días" valor={moraMayor90Cantidad} />
+          <KPI titulo="Mora +1 año" valor={moraMayorAnoCantidad} />
           <KPI titulo="Monto asignado" valor={montoAsignado} tipo="dinero" />
           <KPI titulo="Monto Al Día" valor={montoAlDia} tipo="dinero" />
           <KPI titulo="% Al Día" valor={porcentajeAlDia} tipo="porcentaje" />
-          <KPI titulo="Monto en Mora" valor={montoMora} tipo="dinero" />
+          <KPI titulo="Monto en Mora" valor={montoMoraTotal} tipo="dinero" />
           <KPI titulo="% Mora" valor={porcentajeMora} tipo="porcentaje" />
-          <KPI titulo="Cartera Vencida" valor={montoVencido} tipo="dinero" />
-          <KPI titulo="% Vencida" valor={porcentajeVencido} tipo="porcentaje" />
+          <KPI titulo="Mora +90 $" valor={montoMoraMayor90} tipo="dinero" />
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>Filtros</h2>
+          <h2 style={tituloSeccion}>Filtros de cartera</h2>
 
           <div style={gridFiltros}>
             <Campo label="Buscar cliente, cédula o cuenta">
@@ -411,7 +474,7 @@ export default function GestorCobros() {
               />
             </Campo>
 
-            <Campo label="Filtrar cartera">
+            <Campo label="Ver cartera por estado de mora">
               <select
                 value={filtroCartera}
                 onChange={(e) => setFiltroCartera(e.target.value)}
@@ -419,9 +482,11 @@ export default function GestorCobros() {
               >
                 <option>Todos</option>
                 <option>Al Día</option>
-                <option>1-30 días</option>
-                <option>31-90 días</option>
-                <option>Cartera Vencida</option>
+                <option>Mora total</option>
+                <option>Mora 1-30 días</option>
+                <option>Mora 31-90 días</option>
+                <option>Mora mayor a 90 días</option>
+                <option>Mora mayor a 1 año</option>
                 <option>Promesas vencidas</option>
                 <option>Sin gestionar hoy</option>
                 <option>Sin teléfono</option>
@@ -446,7 +511,7 @@ export default function GestorCobros() {
                   <th style={th}>Pagado</th>
                   <th style={th}>Cuota</th>
                   <th style={th}>Días mora</th>
-                  <th style={th}>Ver ficha</th>
+                  <th style={th}>Vista cliente</th>
                   <th style={th}>WhatsApp</th>
                   <th style={th}>Registrar gestión</th>
                 </tr>
@@ -473,7 +538,7 @@ export default function GestorCobros() {
 
                     <td style={td}>
                       <button style={boton} onClick={() => verCliente(item)}>
-                        Ver ficha
+                        Vista cliente
                       </button>
                     </td>
 
@@ -512,7 +577,7 @@ export default function GestorCobros() {
                 {carteraFiltrada.length === 0 && (
                   <tr>
                     <td style={td} colSpan="12">
-                      No hay clientes asignados para este gestor.
+                      No hay clientes asignados con este filtro.
                     </td>
                   </tr>
                 )}
