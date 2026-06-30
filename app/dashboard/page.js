@@ -32,10 +32,10 @@ export default function Dashboard() {
       localStorage.getItem("adminKonaxRol") ||
       "";
 
-    if (!empresaId || !usuarioId) {
-      window.location.href = "/login";
-      return;
-    }
+   if (!empresaId) {
+  window.location.href = "/login";
+  return;
+  }
 
     setUsuarioRol(rolUsuarioLocal);
 
@@ -118,10 +118,17 @@ export default function Dashboard() {
     return String(rol || "").toLowerCase().trim();
   }
 
-  function esAdministrador() {
-    const rol = normalizarRol(usuarioRol);
-    return rol === "administrador" || rol === "superadmin";
-  }
+ function esAdministrador() {
+  const rol = normalizarRol(usuarioRol);
+
+  return (
+    rol === "administrador" ||
+    rol === "admin" ||
+    rol === "superadmin" ||
+    rol === "super admin" ||
+    rol === "administrador konax"
+  );
+}
 
   function moduloActivo(codigo) {
     return Boolean(modulos?.[codigo]);
