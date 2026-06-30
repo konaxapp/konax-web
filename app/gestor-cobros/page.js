@@ -12,6 +12,10 @@ export default function GestorCobros() {
     cargarCartera();
   }, []);
 
+  function volverDashboard() {
+    window.location.href = "/dashboard";
+  }
+
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
 
@@ -430,6 +434,10 @@ export default function GestorCobros() {
             <p style={subtitulo}>Espacio de trabajo del gestor de cobranza.</p>
           </div>
 
+          <button style={botonGris} onClick={volverDashboard}>
+            ← Volver al Dashboard
+          </button>
+
           <button style={botonNegro} onClick={cargarCartera}>
             Actualizar
           </button>
@@ -586,7 +594,8 @@ export default function GestorCobros() {
           </div>
 
           <p style={nota}>
-            La cartera se actualiza con pagos registrados en caja como Pago Crédito, siempre que coincida cuenta, cédula o cliente.
+            La cartera se actualiza con pagos registrados en caja como Pago
+            Crédito, siempre que coincida cuenta, cédula o cliente.
           </p>
         </div>
       </div>
@@ -764,6 +773,16 @@ const boton = {
   color: "#ffffff",
   border: "none",
   padding: "8px 12px",
+  borderRadius: "8px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonGris = {
+  background: "#6b7280",
+  color: "#ffffff",
+  border: "none",
+  padding: "11px 20px",
   borderRadius: "8px",
   fontWeight: "bold",
   cursor: "pointer",
