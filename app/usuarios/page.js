@@ -453,9 +453,6 @@ export default function Usuarios() {
     window.location.href = "/dashboard";
   }
 
-  function volverEmpresas() {
-    window.location.href = "/empresas";
-  }
 
   const usuariosFiltrados = usuarios.filter((usuario) => {
     const texto = String(busquedaUsuario || "").toLowerCase().trim();
@@ -492,10 +489,6 @@ export default function Usuarios() {
           <div style={heroBotones}>
             <button onClick={volverDashboard} style={botonBlanco}>
               ← Dashboard
-            </button>
-
-            <button onClick={volverEmpresas} style={botonClaro}>
-              Empresas
             </button>
           </div>
         </div>
