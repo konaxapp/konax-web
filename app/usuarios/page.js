@@ -756,7 +756,6 @@ export default function Usuarios() {
                             >
                               <div>
                                 <strong>{permiso.nombre}</strong>
-                                <small>{permiso.codigo}</small>
                               </div>
 
                               <span style={activo ? switchOn : switchOff}>
