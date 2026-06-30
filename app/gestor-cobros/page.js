@@ -13,69 +13,71 @@ export default function GestorCobros() {
     validarAcceso();
   }, []);
 
-  async function validarAcceso() {
-    const empresaId = localStorage.getItem("empresaId");
-    const usuarioId = localStorage.getItem("usuarioId");
+async function validarAcceso() {
+  const empresaId = localStorage.getItem("empresaId");
+  const usuarioId = localStorage.getItem("usuarioId");
 
-    const rol =
-      localStorage.getItem("usuarioRol") ||
-      localStorage.getItem("rolUsuario") ||
-      "";
+  const rol =
+    localStorage.getItem("usuarioRol") ||
+    localStorage.getItem("rolUsuario") ||
+    "";
 
-    if (!empresaId || !usuarioId) {
-      window.location.href = "/login";
-      return;
-    }
-
-    const rolNormalizado = String(rol || "").toLowerCase().trim();
-    const esAdmin =
-      rolNormalizado === "administrador" || rolNormalizado === "superadmin";
-
-    const { data: moduloEmpresa, error: errorModulo } = await supabase
-      .from("modulos_empresa")
-      .select("activo")
-      .eq("empresa_id", empresaId)
-      .eq("modulo", "gestor_cobros")
-      .maybeSingle();
-
-    if (errorModulo) {
-      alert("Error validando función: " + errorModulo.message);
-      window.location.href = "/dashboard";
-      return;
-    }
-
-    if (!moduloEmpresa?.activo) {
-      alert("Mi Cartera de Cobro no está activa en el plan de esta empresa.");
-      window.location.href = "/dashboard";
-      return;
-    }
-
-    if (!esAdmin) {
-      const { data: permisoUsuario, error: errorPermiso } = await supabase
-        .from("permisos_usuarios_empresa")
-        .select("activo")
-        .eq("empresa_id", empresaId)
-        .eq("usuario_id", usuarioId)
-        .eq("permiso", "gestor_cobros")
-        .maybeSingle();
-
-      if (errorPermiso) {
-        alert("Error validando permiso: " + errorPermiso.message);
-        window.location.href = "/dashboard";
-        return;
-      }
-
-      if (!permisoUsuario?.activo) {
-        alert("No tienes permiso para acceder a Mi Cartera de Cobro.");
-        window.location.href = "/dashboard";
-        return;
-      }
-    }
-
-    setAccesoValidado(true);
-    await cargarCartera();
+  if (!empresaId || !usuarioId) {
+    window.location.href = "/login";
+    return;
   }
 
+  const rolNormalizado = String(rol || "").toLowerCase().trim();
+  const esAdmin =
+    rolNormalizado === "administrador" || rolNormalizado === "superadmin";
+
+  const { data: moduloEmpresa, error: errorModulo } = await supabase
+    .from("empresa_modulos")
+    .select("cobranza, dashboard_cobros")
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  if (errorModulo) {
+    alert("Error validando función: " + errorModulo.message);
+    window.location.href = "/dashboard";
+    return;
+  }
+
+  const moduloActivo = Boolean(
+    moduloEmpresa?.cobranza || moduloEmpresa?.dashboard_cobros
+  );
+
+  if (!moduloActivo) {
+    alert("Mi Cartera de Cobro no está activa en el plan de esta empresa.");
+    window.location.href = "/dashboard";
+    return;
+  }
+
+  if (!esAdmin) {
+    const { data: permisoUsuario, error: errorPermiso } = await supabase
+      .from("permisos_usuarios_empresa")
+      .select("activo")
+      .eq("empresa_id", empresaId)
+      .eq("usuario_id", usuarioId)
+      .eq("permiso", "gestor_cobros")
+      .maybeSingle();
+
+    if (errorPermiso) {
+      alert("Error validando permiso: " + errorPermiso.message);
+      window.location.href = "/dashboard";
+      return;
+    }
+
+    if (!permisoUsuario?.activo) {
+      alert("No tienes permiso para acceder a Mi Cartera de Cobro.");
+      window.location.href = "/dashboard";
+      return;
+    }
+  }
+
+  setAccesoValidado(true);
+  await cargarCartera();
+}
   function volverDashboard() {
     window.location.href = "/dashboard";
   }
