@@ -74,24 +74,25 @@ export default function Dashboard() {
   }
 
   async function cargarModulosEmpresa(empresaId) {
-    const { data, error } = await supabase
-      .from("modulos_empresa")
-      .select("*")
-      .eq("empresa_id", empresaId);
+  const { data, error } = await supabase
+    .from("modulos_empresa")
+    .select("modulo, activo")
+    .eq("empresa_id", empresaId);
 
-    if (error) {
-      alert("Error cargando funciones del plan: " + error.message);
-      return;
-    }
-
-    const armados = {};
-
-    (data || []).forEach((item) => {
-      armados[item.modulo] = Boolean(item.activo);
-    });
-
-    setModulos(armados);
+  if (error) {
+    alert("Error cargando funciones del plan: " + error.message);
+    setModulos({});
+    return;
   }
+
+  const armados = {};
+
+  (data || []).forEach((item) => {
+    armados[item.modulo] = Boolean(item.activo);
+  });
+
+  setModulos(armados);
+}
 
   async function cargarPermisosUsuario(empresaId, usuarioId) {
     if (!usuarioId) {
