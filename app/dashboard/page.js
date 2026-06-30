@@ -4,15 +4,14 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function Dashboard() {
-  const [modulos, setModulos] = useState(null);
+  const [modulos, setModulos] = useState({});
   const [empresaNombre, setEmpresaNombre] = useState("");
   const [planNombre, setPlanNombre] = useState("");
-  const [planCodigo, setPlanCodigo] = useState("");
   const [estadoPlan, setEstadoPlan] = useState("");
   const [tipoNegocio, setTipoNegocio] = useState("");
-  const [categoriaNegocio, setCategoriaNegocio] = useState("");
   const [usuarioRol, setUsuarioRol] = useState("");
   const [permisosUsuario, setPermisosUsuario] = useState([]);
+  const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
     cargarDashboard();
@@ -20,13 +19,13 @@ export default function Dashboard() {
 
   async function cargarDashboard() {
     const empresaId = localStorage.getItem("empresaId");
+    const usuarioId = localStorage.getItem("usuarioId");
     const rolUsuarioLocal =
       localStorage.getItem("usuarioRol") ||
       localStorage.getItem("rolUsuario") ||
       "";
-    const rolIdLocal = localStorage.getItem("rolId") || "";
 
-    if (!empresaId) {
+    if (!empresaId || !usuarioId) {
       window.location.href = "/login";
       return;
     }
@@ -35,9 +34,7 @@ export default function Dashboard() {
 
     const { data: empresa, error: errorEmpresa } = await supabase
       .from("empresas")
-      .select(
-        "nombre, plan_nombre, plan_codigo, estado_plan, estado, tipo_negocio, categoria_negocio"
-      )
+      .select("nombre, plan_nombre, estado_plan, estado, tipo_negocio")
       .eq("id", empresaId)
       .maybeSingle();
 
@@ -61,133 +58,71 @@ export default function Dashboard() {
 
     setEmpresaNombre(empresa.nombre || "Empresa");
     setPlanNombre(empresa.plan_nombre || "Sin plan");
-    setPlanCodigo(empresa.plan_codigo || "");
     setEstadoPlan(empresa.estado_plan || "Activo");
     setTipoNegocio(empresa.tipo_negocio || "");
-    setCategoriaNegocio(empresa.categoria_negocio || "");
 
-    const { data: modulosData, error: errorModulos } = await supabase
-      .from("empresa_modulos")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
+    await cargarModulosEmpresa(empresaId);
+    await cargarPermisosUsuario(empresaId, usuarioId);
 
-    if (errorModulos) {
-      alert("Error cargando módulos: " + errorModulos.message);
-      return;
-    }
-
-    if (!modulosData) {
-      alert("Esta empresa no tiene módulos asignados.");
-      return;
-    }
-
-    setModulos(modulosData);
-    await cargarPermisosUsuario(rolIdLocal, rolUsuarioLocal);
+    setCargando(false);
   }
 
-  async function cargarPermisosUsuario(rolIdLocal, rolUsuarioLocal) {
-    const permisosBase = permisosBasePorRol(rolUsuarioLocal);
-
-    if (!rolIdLocal) {
-      setPermisosUsuario(permisosBase);
-      return;
-    }
-
+  async function cargarModulosEmpresa(empresaId) {
     const { data, error } = await supabase
-      .from("roles_permisos_konax")
-      .select("permisos_konax(modulo, accion)")
-      .eq("rol_id", rolIdLocal);
+      .from("modulos_empresa")
+      .select("*")
+      .eq("empresa_id", empresaId);
 
-    if (error || !data || data.length === 0) {
-      setPermisosUsuario(permisosBase);
+    if (error) {
+      alert("Error cargando funciones del plan: " + error.message);
       return;
     }
 
-    const permisosDB = data
-      .map((item) => item.permisos_konax?.modulo)
-      .filter(Boolean);
+    const armados = {};
 
-    setPermisosUsuario([...new Set([...permisosBase, ...permisosDB])]);
+    (data || []).forEach((item) => {
+      armados[item.modulo] = Boolean(item.activo);
+    });
+
+    setModulos(armados);
+  }
+
+  async function cargarPermisosUsuario(empresaId, usuarioId) {
+    const { data, error } = await supabase
+      .from("permisos_usuarios_empresa")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("usuario_id", usuarioId)
+      .eq("activo", true);
+
+    if (error) {
+      alert("Error cargando permisos del usuario: " + error.message);
+      return;
+    }
+
+    setPermisosUsuario((data || []).map((item) => item.permiso));
   }
 
   function normalizarRol(rol) {
     return String(rol || "").toLowerCase().trim();
   }
 
-  function permisosBasePorRol(rol) {
-    const r = normalizarRol(rol);
-
-    if (r === "superadmin" || r === "administrador") {
-      return [
-        "clientes",
-        "cuentas_por_cobrar",
-        "vista_cliente",
-        "ventas_credito",
-        "caja",
-        "control_caja",
-        "cobranza",
-        "dashboard_cobros",
-        "gestor_cobros",
-        "inventario",
-        "inventario_nuevo",
-        "suscripciones",
-        "recargos",
-        "dashboard_ventas",
-        "gastos",
-        "usuarios",
-      ];
-    }
-
-    if (r === "supervisor") {
-      return [
-        "clientes",
-        "cuentas_por_cobrar",
-        "vista_cliente",
-        "ventas_credito",
-        "caja",
-        "control_caja",
-        "cobranza",
-        "dashboard_cobros",
-        "gestor_cobros",
-        "inventario",
-        "inventario_nuevo",
-        "suscripciones",
-        "recargos",
-        "dashboard_ventas",
-        "gastos",
-      ];
-    }
-
-    if (r === "cajero") return ["vista_cliente", "caja", "control_caja"];
-
-    if (r === "vendedor") {
-      return [
-        "clientes",
-        "vista_cliente",
-        "ventas_credito",
-        "inventario",
-        "suscripciones",
-      ];
-    }
-
-    if (
-      r === "cobranza" ||
-      r === "gestor de cobro" ||
-      r === "gestor de cobranza"
-    ) {
-      return ["vista_cliente", "gestor_cobros"];
-    }
-
-    if (r === "inventario") return ["inventario", "inventario_nuevo"];
-
-    return [];
+  function esAdministrador() {
+    const rol = normalizarRol(usuarioRol);
+    return rol === "administrador" || rol === "superadmin";
   }
 
-  function tienePermiso(modulo) {
-    const r = normalizarRol(usuarioRol);
-    if (r === "superadmin" || r === "administrador") return true;
-    return permisosUsuario.includes(modulo);
+  function moduloActivo(codigo) {
+    return Boolean(modulos?.[codigo]);
+  }
+
+  function tienePermiso(codigo) {
+    if (esAdministrador()) return true;
+    return permisosUsuario.includes(codigo);
+  }
+
+  function puedeVer(codigo) {
+    return moduloActivo(codigo) && tienePermiso(codigo);
   }
 
   function cerrarSesion() {
@@ -199,200 +134,118 @@ export default function Dashboard() {
     window.location.href = ruta;
   }
 
-  function normalizar(texto) {
-    return String(texto || "").toLowerCase().trim();
-  }
-
-  function esNegocioMembresia() {
-    const tipo = normalizar(tipoNegocio);
-    const categoria = normalizar(categoriaNegocio);
-
-    return (
-      tipo.includes("gimnasio") ||
-      tipo.includes("club") ||
-      tipo.includes("academia") ||
-      tipo.includes("servicio por membresía") ||
-      tipo.includes("membres") ||
-      categoria.includes("suscripciones") ||
-      categoria.includes("membres")
-    );
-  }
-
-  function esNegocioVentaCredito() {
-    const tipo = normalizar(tipoNegocio);
-    const categoria = normalizar(categoriaNegocio);
-
-    return (
-      categoria.includes("ventas a crédito") ||
-      tipo.includes("mueblería") ||
-      tipo.includes("electronica") ||
-      tipo.includes("electrónica") ||
-      tipo.includes("distribuidora") ||
-      tipo.includes("financiera") ||
-      tipo.includes("cooperativa") ||
-      tipo.includes("empeño")
-    );
-  }
-
-  function esNegocioComercioInventario() {
-    const tipo = normalizar(tipoNegocio);
-    const categoria = normalizar(categoriaNegocio);
-
-    return (
-      categoria.includes("comercio") ||
-      tipo.includes("ferretería") ||
-      tipo.includes("ferreteria") ||
-      tipo.includes("farmacia") ||
-      tipo.includes("tienda") ||
-      tipo.includes("mercado") ||
-      tipo.includes("repuestos") ||
-      tipo.includes("boutique")
-    );
-  }
-
-  if (!modulos) {
+  if (cargando) {
     return <div style={{ padding: "30px" }}>Cargando KONAX...</div>;
   }
 
-  const esPlanCobros = planCodigo === "cobros";
-  const membresia = esNegocioMembresia();
-  const ventaCredito = esNegocioVentaCredito();
-  const comercioInventario = esNegocioComercioInventario();
-
-  const permitirCredito =
-    !membresia &&
-    ventaCredito &&
-    modulos.venta_credito &&
-    tienePermiso("ventas_credito");
-
-  const permitirInventario =
-    !membresia &&
-    (ventaCredito || comercioInventario) &&
-    modulos.inventario &&
-    tienePermiso("inventario");
-
-  const permitirNuevoProducto =
-    permitirInventario && tienePermiso("inventario_nuevo");
-
-  const permitirCobranza =
-    !membresia && modulos.cobranza && tienePermiso("cobranza");
-
-  const permitirDashboardCobros =
-    !membresia && modulos.dashboard_cobros && tienePermiso("dashboard_cobros");
-
-  const permitirGestorCobros =
-    !membresia &&
-    (modulos.dashboard_cobros || modulos.cobranza) &&
-    tienePermiso("gestor_cobros");
-
-  const permitirSuscripciones =
-    (membresia ||
-      modulos.suscripciones ||
-      categoriaNegocio === "Suscripciones y Membresías") &&
-    tienePermiso("suscripciones");
-
-  const permitirControlCaja =
-    tienePermiso("control_caja") &&
-    (modulos.control_caja ||
-      normalizarRol(usuarioRol) === "cajero" ||
-      normalizarRol(usuarioRol) === "supervisor" ||
-      normalizarRol(usuarioRol) === "administrador");
-
   const tarjetas = [
     {
-      nombre: esPlanCobros ? "Cuentas por Cobrar" : "Clientes",
+      nombre: "Clientes",
       ruta: "/clientes",
-      activo:
-        modulos.clientes &&
-        tienePermiso(esPlanCobros ? "cuentas_por_cobrar" : "clientes"),
+      activo: puedeVer("clientes"),
       icono: "👥",
     },
     {
-      nombre: "Vista Cliente",
+      nombre: "Ficha del cliente",
       ruta: "/vista-cliente",
-      activo: modulos.vista_cliente && tienePermiso("vista_cliente"),
+      activo: puedeVer("vista_cliente"),
       icono: "🧾",
     },
     {
       nombre: "Créditos",
       ruta: "/ventas-credito",
-      activo: permitirCredito,
+      activo: puedeVer("creditos"),
       icono: "💳",
     },
     {
-      nombre: "Caja Básica",
-      ruta: "/caja",
-      activo: modulos.caja && tienePermiso("caja"),
-      icono: "💵",
-    },
-    {
-      nombre: "Cobranza",
+      nombre: "Administrar cobranza",
       ruta: "/cobranza",
-      activo: permitirCobranza,
+      activo: puedeVer("cobranza"),
       icono: "📞",
     },
     {
-      nombre: "Centro de Cobranza",
-      ruta: "/dashboard-cobranza",
-      activo: permitirDashboardCobros,
-      icono: "📊",
-    },
-    {
-      nombre: "Gestor de Cobros",
+      nombre: "Mi cartera de cobro",
       ruta: "/gestor-cobros",
-      activo: permitirGestorCobros,
+      activo: puedeVer("gestor_cobros"),
       icono: "🧑‍💼",
     },
     {
-      nombre: "Inventario",
-      ruta: "/inventario",
-      activo: permitirInventario,
-      icono: "📦",
+      nombre: "Registrar abonos",
+      ruta: "/abonos",
+      activo: puedeVer("abonos"),
+      icono: "💰",
     },
     {
-      nombre: "Nuevo Producto",
-      ruta: "/inventario/nuevo",
-      activo: permitirNuevoProducto,
-      icono: "➕",
+      nombre: "Registrar pagos",
+      ruta: "/pagos",
+      activo: puedeVer("pagos"),
+      icono: "✅",
     },
     {
-      nombre: "Control Caja",
+      nombre: "Caja",
+      ruta: "/caja",
+      activo: puedeVer("caja"),
+      icono: "💵",
+    },
+    {
+      nombre: "Control de caja",
       ruta: "/control-caja",
-      activo: permitirControlCaja,
+      activo: puedeVer("control_caja"),
       icono: "🏦",
-    },
-    {
-      nombre: "Suscripciones",
-      ruta: "/suscripciones",
-      activo: permitirSuscripciones,
-      icono: "🔁",
-    },
-    {
-      nombre: "Recargos",
-      ruta: "/recargos",
-      activo: !membresia && modulos.recargos && tienePermiso("recargos"),
-      icono: "⚠️",
-    },
-    {
-      nombre: "Centro de Ventas",
-      ruta: "/dashboard-ventas",
-      activo:
-        !membresia &&
-        modulos.dashboard_ventas &&
-        tienePermiso("dashboard_ventas"),
-      icono: "📈",
     },
     {
       nombre: "Gastos",
       ruta: "/gastos",
-      activo: modulos.egresos && tienePermiso("gastos"),
+      activo: puedeVer("gastos"),
       icono: "🧮",
     },
     {
-      nombre: "Usuarios y Roles",
+      nombre: "Recargos",
+      ruta: "/recargos",
+      activo: puedeVer("recargos"),
+      icono: "⚠️",
+    },
+    {
+      nombre: "Inventario",
+      ruta: "/inventario",
+      activo: puedeVer("inventario"),
+      icono: "📦",
+    },
+    {
+      nombre: "Movimientos de inventario",
+      ruta: "/movimientos-inventario",
+      activo: puedeVer("movimientos_inventario"),
+      icono: "🔄",
+    },
+    {
+      nombre: "Ventas",
+      ruta: "/ventas",
+      activo: puedeVer("ventas"),
+      icono: "🛒",
+    },
+    {
+      nombre: "Suscripciones",
+      ruta: "/suscripciones",
+      activo: puedeVer("suscripciones"),
+      icono: "🔁",
+    },
+    {
+      nombre: "Reportes",
+      ruta: "/reportes",
+      activo: puedeVer("reportes"),
+      icono: "📈",
+    },
+    {
+      nombre: "Usuarios",
       ruta: "/usuarios",
-      activo: tienePermiso("usuarios"),
+      activo: puedeVer("usuarios"),
       icono: "🔐",
+    },
+    {
+      nombre: "Configuración",
+      ruta: "/configuracion",
+      activo: puedeVer("configuracion"),
+      icono: "⚙️",
     },
   ];
 
@@ -434,16 +287,14 @@ export default function Dashboard() {
 
       <main style={contenido}>
         <div style={hero}>
-          <div>
-            <p style={etiqueta}>Centro de Operaciones Empresariales</p>
-            <h1 style={titulo}>{empresaNombre}</h1>
-            <p style={plan}>
-              Plan activo: <strong>{planNombre}</strong> · Estado:{" "}
-              <strong>{estadoPlan}</strong>
-              <br />
-              Tipo de negocio: <strong>{tipoNegocio || "No definido"}</strong>
-            </p>
-          </div>
+          <p style={etiqueta}>Centro de Operaciones Empresariales</p>
+          <h1 style={titulo}>{empresaNombre}</h1>
+          <p style={plan}>
+            Plan activo: <strong>{planNombre}</strong> · Estado:{" "}
+            <strong>{estadoPlan}</strong>
+            <br />
+            Tipo de negocio: <strong>{tipoNegocio || "No definido"}</strong>
+          </p>
         </div>
 
         <div style={resumenGrid}>
@@ -465,7 +316,7 @@ export default function Dashboard() {
 
         {tarjetasActivas.length === 0 && (
           <div style={sinModulos}>
-            Este usuario no tiene módulos permitidos. Revise sus permisos.
+            Este usuario no tiene funciones permitidas. Revise sus permisos.
           </div>
         )}
       </main>
