@@ -6,7 +6,6 @@ import { supabase } from "../../lib/supabase";
 
 export default function PlanEmpresa() {
   const [empresa, setEmpresa] = useState(null);
-  const [modulos, setModulos] = useState(null);
   const [tipoPlan, setTipoPlan] = useState("mensual");
   const [cargando, setCargando] = useState(true);
 
@@ -18,18 +17,25 @@ export default function PlanEmpresa() {
       precioAnual: 499,
       color: "#2563eb",
       modulos: {
+        dashboard: true,
         clientes: true,
         vista_cliente: true,
+        creditos: true,
+        cobranza: true,
+        gestor_cobros: true,
+        abonos: true,
+        pagos: true,
         caja: true,
         control_caja: false,
-        cobranza: true,
-        inventario: false,
-        venta_credito: false,
-        suscripciones: false,
+        gastos: false,
         recargos: false,
-        dashboard_ventas: false,
-        dashboard_cobros: true,
-        egresos: false,
+        inventario: false,
+        movimientos_inventario: false,
+        ventas: false,
+        suscripciones: false,
+        reportes: true,
+        usuarios: true,
+        configuracion: true,
       },
     },
     {
@@ -39,18 +45,25 @@ export default function PlanEmpresa() {
       precioAnual: 999,
       color: "#10b981",
       modulos: {
+        dashboard: true,
         clientes: true,
         vista_cliente: true,
+        creditos: true,
+        cobranza: true,
+        gestor_cobros: true,
+        abonos: true,
+        pagos: true,
         caja: true,
         control_caja: true,
-        cobranza: true,
-        inventario: true,
-        venta_credito: true,
-        suscripciones: false,
+        gastos: true,
         recargos: false,
-        dashboard_ventas: true,
-        dashboard_cobros: true,
-        egresos: true,
+        inventario: true,
+        movimientos_inventario: true,
+        ventas: true,
+        suscripciones: false,
+        reportes: true,
+        usuarios: true,
+        configuracion: true,
       },
     },
     {
@@ -60,18 +73,25 @@ export default function PlanEmpresa() {
       precioAnual: 1499,
       color: "#111827",
       modulos: {
+        dashboard: true,
         clientes: true,
         vista_cliente: true,
+        creditos: true,
+        cobranza: true,
+        gestor_cobros: true,
+        abonos: true,
+        pagos: true,
         caja: true,
         control_caja: true,
-        cobranza: true,
-        inventario: true,
-        venta_credito: true,
-        suscripciones: true,
+        gastos: true,
         recargos: true,
-        dashboard_ventas: true,
-        dashboard_cobros: true,
-        egresos: true,
+        inventario: true,
+        movimientos_inventario: true,
+        ventas: true,
+        suscripciones: true,
+        reportes: true,
+        usuarios: true,
+        configuracion: true,
       },
     },
   ];
@@ -82,7 +102,9 @@ export default function PlanEmpresa() {
 
   async function cargarEmpresa() {
     const params = new URLSearchParams(window.location.search);
-    const empresaId = params.get("empresa") || localStorage.getItem("empresaAdminCreadaId");
+
+    const empresaId =
+      params.get("empresa") || localStorage.getItem("empresaAdminCreadaId");
 
     if (!empresaId) {
       alert("No hay empresa seleccionada.");
@@ -90,37 +112,31 @@ export default function PlanEmpresa() {
       return;
     }
 
-    const { data: empresaData, error: errorEmpresa } = await supabase
+    const { data, error } = await supabase
       .from("empresas")
       .select("*")
       .eq("id", empresaId)
       .maybeSingle();
 
-    if (errorEmpresa) {
-      alert("Error cargando empresa: " + errorEmpresa.message);
+    if (error) {
+      alert("Error cargando empresa: " + error.message);
       return;
     }
 
-    if (!empresaData) {
+    if (!data) {
       alert("Empresa no encontrada.");
       window.location.href = "/empresas";
       return;
     }
 
-    const { data: modulosData } = await supabase
-      .from("empresa_modulos")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
-
-    setEmpresa(empresaData);
-    setModulos(modulosData || null);
-    setTipoPlan(empresaData.plan_tipo || "mensual");
+    setEmpresa(data);
+    setTipoPlan(data.plan_tipo || "mensual");
     setCargando(false);
   }
 
   async function cambiarPlan(plan) {
-    const precio = tipoPlan === "mensual" ? plan.precioMensual : plan.precioAnual;
+    const precio =
+      tipoPlan === "mensual" ? plan.precioMensual : plan.precioAnual;
 
     const confirmar = confirm(
       `¿Deseas cambiar el plan de ${empresa.nombre} a ${plan.nombre}?`
@@ -144,32 +160,33 @@ export default function PlanEmpresa() {
       return;
     }
 
-    const payloadModulos = {
+    const admin =
+      localStorage.getItem("adminKonaxNombre") ||
+      localStorage.getItem("adminKonaxCorreo") ||
+      "KONAX";
+
+    const registros = Object.entries(plan.modulos).map(([modulo, activo]) => ({
       empresa_id: empresa.id,
-      ...plan.modulos,
-    };
+      modulo,
+      activo,
+      plan_origen: plan.nombre,
+      activado_por: admin,
+      updated_at: new Date().toISOString(),
+    }));
 
-    let errorModulos = null;
-
-    if (modulos?.id) {
-      const res = await supabase
-        .from("empresa_modulos")
-        .update(payloadModulos)
-        .eq("id", modulos.id);
-
-      errorModulos = res.error;
-    } else {
-      const res = await supabase.from("empresa_modulos").insert([payloadModulos]);
-      errorModulos = res.error;
-    }
+    const { error: errorModulos } = await supabase
+      .from("modulos_empresa")
+      .upsert(registros, {
+        onConflict: "empresa_id,modulo",
+      });
 
     if (errorModulos) {
       alert("Plan cambiado, pero error actualizando módulos: " + errorModulos.message);
       return;
     }
 
-    alert("Plan y módulos actualizados correctamente.");
-    cargarEmpresa();
+    alert("Plan y funciones actualizadas correctamente.");
+    await cargarEmpresa();
   }
 
   if (cargando) {
@@ -193,22 +210,10 @@ export default function PlanEmpresa() {
 
       <div style={cardActual}>
         <h2>Plan Actual</h2>
-
-        <p>
-          <strong>Plan:</strong> {empresa.plan_nombre || "Sin plan"}
-        </p>
-
-        <p>
-          <strong>Tipo:</strong> {empresa.plan_tipo || "No definido"}
-        </p>
-
-        <p>
-          <strong>Precio:</strong> ${Number(empresa.plan_precio || 0).toFixed(2)}
-        </p>
-
-        <p>
-          <strong>Estado:</strong> {empresa.estado_plan || "Pendiente"}
-        </p>
+        <p><strong>Plan:</strong> {empresa.plan_nombre || "Sin plan"}</p>
+        <p><strong>Tipo:</strong> {empresa.plan_tipo || "No definido"}</p>
+        <p><strong>Precio:</strong> ${Number(empresa.plan_precio || 0).toFixed(2)}</p>
+        <p><strong>Estado:</strong> {empresa.estado_plan || "Pendiente"}</p>
       </div>
 
       <div style={toggleBox}>
@@ -229,11 +234,16 @@ export default function PlanEmpresa() {
 
       <div style={grid}>
         {planes.map((plan) => {
-          const precio = tipoPlan === "mensual" ? plan.precioMensual : plan.precioAnual;
+          const precio =
+            tipoPlan === "mensual" ? plan.precioMensual : plan.precioAnual;
+
           const esActual = empresa.plan_codigo === plan.codigo;
 
           return (
-            <div key={plan.codigo} style={{ ...card, border: `2px solid ${plan.color}` }}>
+            <div
+              key={plan.codigo}
+              style={{ ...card, border: `2px solid ${plan.color}` }}
+            >
               <h2>{plan.nombre}</h2>
               <h1>${precio}</h1>
 
