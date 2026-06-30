@@ -153,6 +153,17 @@ export default function Caja() {
   const movimientosSinCliente = ["Venta Contado", "Servicio Contado"];
   const requiereCliente = !movimientosSinCliente.includes(tipoMovimiento);
 
+  const movimientosQueBajanSaldo = [
+    "Abono",
+    "Pago Crédito",
+    "Pago Credito",
+    "COBRO CRÉDITO",
+    "Cobro Crédito",
+    "Mensualidad",
+    "Renovación",
+    "Cancelación",
+  ];
+
   function volverDashboard() {
     window.location.href = "/dashboard";
   }
@@ -262,11 +273,11 @@ export default function Caja() {
       }));
     }
 
-   const { data: cuentasData, error: errorCuentas } = await supabase
-  .from("informacion_comercial")
-  .select("*")
-  .eq("empresa_id", empresaId)
-  .ilike("numero_cuenta", `%${texto}%`);
+    const { data: cuentasData, error: errorCuentas } = await supabase
+      .from("informacion_comercial")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .ilike("numero_cuenta", `%${texto}%`);
 
     if (errorCuentas) {
       alert("Error buscando cuenta: " + errorCuentas.message);
@@ -454,14 +465,22 @@ export default function Caja() {
       return;
     }
 
-    if (requiereCliente && cuentaSeleccionada) {
+    const debeBajarSaldo =
+      requiereCliente &&
+      cuentaSeleccionada &&
+      movimientosQueBajanSaldo.includes(tipoMovimiento);
+
+    if (debeBajarSaldo) {
       const nuevoSaldo =
         Number(cuentaSeleccionada.saldo_actual || 0) - Number(monto);
+
+      const saldoFinal = nuevoSaldo < 0 ? 0 : nuevoSaldo;
 
       const { error: errorSaldo } = await supabase
         .from("informacion_comercial")
         .update({
-          saldo_actual: nuevoSaldo < 0 ? 0 : nuevoSaldo,
+          saldo_actual: saldoFinal,
+          estado: saldoFinal <= 0 ? "Cancelado" : cuentaSeleccionada.estado,
         })
         .eq("empresa_id", empresaId)
         .eq("id", cuentaSeleccionada.id);
@@ -476,6 +495,7 @@ export default function Caja() {
         .update({
           fecha_ultimo_pago: fechaPago,
           monto_ultimo_pago: Number(monto),
+          estado_cobranza: saldoFinal <= 0 ? "Cancelado" : undefined,
         })
         .eq("empresa_id", empresaId)
         .eq("informacion_comercial_id", cuentaSeleccionada.id);
@@ -484,26 +504,32 @@ export default function Caja() {
         alert("Movimiento registrado, pero error actualizando cobranza: " + errorCobranza.message);
         return;
       }
-
-      if (
-        tipoMovimiento === "Suscripción" ||
-        tipoMovimiento === "Membresía" ||
-        tipoMovimiento === "Inscripción / Membresía" ||
-        tipoMovimiento === "Mensualidad" ||
-        tipoMovimiento === "Renovación"
-      ) {
-        await renovarSuscripcionDesdeCaja(
-          empresaId,
-          cuentaSeleccionada,
-          Number(monto)
-        );
-      }
     }
 
-    alert("Movimiento registrado correctamente.");
+    if (
+      tipoMovimiento === "Suscripción" ||
+      tipoMovimiento === "Membresía" ||
+      tipoMovimiento === "Inscripción / Membresía" ||
+      tipoMovimiento === "Mensualidad" ||
+      tipoMovimiento === "Renovación"
+    ) {
+      await renovarSuscripcionDesdeCaja(
+        empresaId,
+        cuentaSeleccionada,
+        Number(monto)
+      );
+    }
+
+    alert(
+      tipoMovimiento === "Venta Crédito"
+        ? "Venta crédito registrada correctamente. No se descontó saldo porque es creación de deuda."
+        : "Movimiento registrado correctamente."
+    );
+
     limpiarFormulario();
     cargarMovimientos();
   }
+
   function limpiarFormulario() {
     const opciones = obtenerOpcionesMovimiento(tipoNegocioEmpresa);
 
@@ -804,7 +830,8 @@ export default function Caja() {
             </button>
           </div>
         </div>
-<div style={card}>
+
+        <div style={card}>
           <h2 style={tituloSeccion}>Movimientos Registrados</h2>
 
           <div style={{ overflowX: "auto" }}>
