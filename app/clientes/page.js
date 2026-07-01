@@ -85,9 +85,13 @@ export default function CuentasPorCobrar() {
   }
 
   function requiereResponsableCobro() {
-    return !["Separación / Abono inicial", "Cuenta por cobrar"].includes(
-      tipoProducto
-    );
+    return ![
+      "Separación / Abono inicial",
+      "Cuenta por cobrar",
+      "Membresía",
+      "Suscripción",
+      "Mensualidad",
+    ].includes(tipoProducto);
   }
 
   function responsableFinal() {
@@ -124,26 +128,21 @@ export default function CuentasPorCobrar() {
     );
   }
 
-  function seleccionarProducto(id) {
-    setProductoId(id);
-
-    const producto = productos.find((item) => String(item.id) === String(id));
-
+  function aplicarProducto(producto) {
     if (!producto) {
-      setCodigoProducto("");
+      setProductoId("");
       setPrecioUnitario("");
       setTotalProducto("");
       return;
     }
 
     const precio = precioProducto(producto);
-
-    setCodigoProducto(producto.codigo || "");
-    setPrecioUnitario(precio);
-
     const cantidad = Number(cantidadProducto || 1);
     const total = precio * cantidad;
 
+    setProductoId(producto.id || "");
+    setCodigoProducto(producto.codigo || "");
+    setPrecioUnitario(precio);
     setTotalProducto(total);
 
     if (!montoTotal || Number(montoTotal || 0) === 0) {
@@ -160,6 +159,33 @@ export default function CuentasPorCobrar() {
 
     if (!tipoProducto) {
       setTipoProducto("Separación / Abono inicial");
+    }
+  }
+
+  function seleccionarProducto(id) {
+    const producto = productos.find((item) => String(item.id) === String(id));
+    aplicarProducto(producto || null);
+  }
+
+  function buscarProductoPorCodigo(codigo) {
+    setCodigoProducto(codigo);
+
+    const codigoLimpio = String(codigo || "").trim().toLowerCase();
+
+    if (!codigoLimpio) {
+      setProductoId("");
+      setPrecioUnitario("");
+      setTotalProducto("");
+      return;
+    }
+
+    const producto = productos.find(
+      (item) =>
+        String(item.codigo || "").trim().toLowerCase() === codigoLimpio
+    );
+
+    if (producto) {
+      aplicarProducto(producto);
     }
   }
 
@@ -689,9 +715,9 @@ export default function CuentasPorCobrar() {
               <Campo label="Código del producto">
                 <input
                   value={codigoProducto}
-                  onChange={(e) => setCodigoProducto(e.target.value)}
+                  onChange={(e) => buscarProductoPorCodigo(e.target.value)}
                   style={inputStyle}
-                  placeholder="Se llena automático"
+                  placeholder="Escriba código o seleccione producto"
                 />
               </Campo>
 
@@ -727,7 +753,7 @@ export default function CuentasPorCobrar() {
             </div>
 
             <p style={notaProducto}>
-              Este registro solo asocia el producto a la cuenta. El descuento de
+              Puedes escribir el código manualmente o seleccionar de la lista. Este registro solo asocia el producto a la cuenta. El descuento de
               inventario se debe hacer desde Caja cuando se registre el primer
               abono o la venta.
             </p>
@@ -806,9 +832,9 @@ export default function CuentasPorCobrar() {
 
           {!requiereResponsableCobro() && (
             <p style={notaSuave}>
-              Para separación, abono inicial o cuenta por cobrar simple, puedes
-              guardar sin gestor. El sistema registrará el responsable como
-              "Sin asignar".
+              Para separación, abono inicial, cuenta por cobrar simple,
+              membresía, suscripción o mensualidad, puedes guardar sin gestor.
+              El sistema registrará el responsable como "Sin asignar".
             </p>
           )}
 
