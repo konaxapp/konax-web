@@ -6,6 +6,8 @@ import { supabase } from "../../lib/supabase";
 export default function Usuarios() {
   const [empresaId, setEmpresaId] = useState("");
   const [empresaNombre, setEmpresaNombre] = useState("");
+  const [planNombre, setPlanNombre] = useState("");
+  const [modulosPlan, setModulosPlan] = useState({});
 
   const [nombre, setNombre] = useState("");
   const [correo, setCorreo] = useState("");
@@ -99,10 +101,53 @@ export default function Usuarios() {
 
   useEffect(() => {
     if (empresaId) {
+      cargarEmpresa();
+      cargarModulosPlan();
       cargarRoles();
       cargarUsuarios();
     }
   }, [empresaId]);
+
+  async function cargarEmpresa() {
+    const { data, error } = await supabase
+      .from("empresas")
+      .select("nombre, plan_nombre")
+      .eq("id", empresaId)
+      .maybeSingle();
+
+    if (error) {
+      alert("Error cargando empresa: " + error.message);
+      return;
+    }
+
+    if (data) {
+      setEmpresaNombre(data.nombre || empresaNombre || "Empresa seleccionada");
+      setPlanNombre(data.plan_nombre || "Sin plan");
+    }
+  }
+
+  async function cargarModulosPlan() {
+    const { data, error } = await supabase
+      .from("modulos_empresa")
+      .select("modulo, activo")
+      .eq("empresa_id", empresaId);
+
+    if (error) {
+      alert("Error cargando módulos del plan: " + error.message);
+      setModulosPlan({});
+      return;
+    }
+
+    const mapa = {};
+
+    (data || []).forEach((item) => {
+      mapa[item.modulo] = Boolean(item.activo);
+    });
+
+    mapa.dashboard = true;
+
+    setModulosPlan(mapa);
+  }
 
   async function cargarRoles() {
     const { data, error } = await supabase
@@ -162,10 +207,15 @@ export default function Usuarios() {
 
     const permisosArmados = {};
     (data || []).forEach((permiso) => {
-      permisosArmados[permiso.permiso] = permiso.activo;
+      permisosArmados[permiso.permiso] = Boolean(permiso.activo);
     });
 
     setPermisosUsuario(permisosArmados);
+  }
+
+  function moduloPermitidoPorPlan(codigo) {
+    if (codigo === "dashboard") return true;
+    return Boolean(modulosPlan?.[codigo]);
   }
 
   function permisoActivo(codigo) {
@@ -175,6 +225,13 @@ export default function Usuarios() {
   async function alternarPermiso(permiso) {
     if (!usuarioSeleccionado) {
       alert("Seleccione un usuario.");
+      return;
+    }
+
+    if (!moduloPermitidoPorPlan(permiso.codigo)) {
+      alert(
+        `El módulo "${permiso.nombre}" no está incluido en el plan ${planNombre || "actual"}.`
+      );
       return;
     }
 
@@ -208,13 +265,31 @@ export default function Usuarios() {
       return;
     }
 
-    const registros = permisosDisponibles.map((permiso) => ({
+    const permisosPermitidos = permisosDisponibles.filter((permiso) =>
+      moduloPermitidoPorPlan(permiso.codigo)
+    );
+
+    const permisosBloqueados = permisosDisponibles.filter(
+      (permiso) => !moduloPermitidoPorPlan(permiso.codigo)
+    );
+
+    const registrosPermitidos = permisosPermitidos.map((permiso) => ({
       empresa_id: empresaId,
       usuario_id: usuarioSeleccionado.id,
       permiso: permiso.codigo,
       activo,
       updated_at: new Date().toISOString(),
     }));
+
+    const registrosBloqueados = permisosBloqueados.map((permiso) => ({
+      empresa_id: empresaId,
+      usuario_id: usuarioSeleccionado.id,
+      permiso: permiso.codigo,
+      activo: false,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const registros = [...registrosPermitidos, ...registrosBloqueados];
 
     const { error } = await supabase
       .from("permisos_usuarios_empresa")
@@ -226,8 +301,13 @@ export default function Usuarios() {
     }
 
     const nuevos = {};
-    permisosDisponibles.forEach((permiso) => {
+
+    permisosPermitidos.forEach((permiso) => {
       nuevos[permiso.codigo] = activo;
+    });
+
+    permisosBloqueados.forEach((permiso) => {
+      nuevos[permiso.codigo] = false;
     });
 
     setPermisosUsuario(nuevos);
@@ -296,7 +376,7 @@ export default function Usuarios() {
       empresa_id: empresaId,
       usuario_id: data.id,
       permiso: permiso.codigo,
-      activo: esAdministrador,
+      activo: esAdministrador && moduloPermitidoPorPlan(permiso.codigo),
       updated_at: new Date().toISOString(),
     }));
 
@@ -453,7 +533,6 @@ export default function Usuarios() {
     window.location.href = "/dashboard";
   }
 
-
   const usuariosFiltrados = usuarios.filter((usuario) => {
     const texto = String(busquedaUsuario || "").toLowerCase().trim();
 
@@ -466,8 +545,12 @@ export default function Usuarios() {
     );
   });
 
-  const permisosActivos = permisosDisponibles.filter((permiso) =>
-    permisoActivo(permiso.codigo)
+  const permisosActivos = permisosDisponibles.filter(
+    (permiso) => permisoActivo(permiso.codigo) && moduloPermitidoPorPlan(permiso.codigo)
+  ).length;
+
+  const permisosPermitidosTotal = permisosDisponibles.filter((permiso) =>
+    moduloPermitidoPorPlan(permiso.codigo)
   ).length;
 
   return (
@@ -482,6 +565,8 @@ export default function Usuarios() {
               <h1 style={titulo}>Usuarios y Permisos</h1>
               <p style={subtitulo}>
                 Empresa seleccionada: <strong>{empresaNombre}</strong>
+                <br />
+                Plan activo: <strong>{planNombre || "Sin plan"}</strong>
               </p>
             </div>
           </div>
@@ -500,7 +585,7 @@ export default function Usuarios() {
             titulo="Permisos activos"
             valor={
               usuarioSeleccionado
-                ? `${permisosActivos}/${permisosDisponibles.length}`
+                ? `${permisosActivos}/${permisosPermitidosTotal}`
                 : "-"
             }
             icono="✅"
@@ -709,7 +794,7 @@ export default function Usuarios() {
                   </div>
 
                   <div style={contadorPermisos}>
-                    {permisosActivos}/{permisosDisponibles.length}
+                    {permisosActivos}/{permisosPermitidosTotal}
                   </div>
                 </div>
 
@@ -718,7 +803,7 @@ export default function Usuarios() {
                     style={botonMiniVerde}
                     onClick={() => cambiarTodosPermisos(true)}
                   >
-                    Activar todo
+                    Activar permitidos
                   </button>
 
                   <button
@@ -739,20 +824,36 @@ export default function Usuarios() {
                       <div style={permisosCards}>
                         {grupo.permisos.map((permiso) => {
                           const activo = permisoActivo(permiso.codigo);
+                          const permitido = moduloPermitidoPorPlan(permiso.codigo);
 
                           return (
                             <button
                               key={permiso.codigo}
                               type="button"
                               onClick={() => alternarPermiso(permiso)}
-                              style={activo ? permisoCardActivo : permisoCard}
+                              style={
+                                !permitido
+                                  ? permisoCardBloqueado
+                                  : activo
+                                  ? permisoCardActivo
+                                  : permisoCard
+                              }
                             >
                               <div>
-                                <strong>{permiso.nombre}</strong>
+                                <strong>
+                                  {permiso.nombre} {!permitido ? "🔒" : ""}
+                                </strong>
+                                {!permitido && (
+                                  <small style={textoBloqueado}>
+                                    No incluido en el plan
+                                  </small>
+                                )}
                               </div>
 
-                              <span style={activo ? switchOn : switchOff}>
-                                <span style={activo ? circuloOn : circuloOff} />
+                              <span style={activo && permitido ? switchOn : switchOff}>
+                                <span
+                                  style={activo && permitido ? circuloOn : circuloOff}
+                                />
                               </span>
                             </button>
                           );
@@ -855,16 +956,6 @@ const heroBotones = {
 const botonBlanco = {
   background: "#ffffff",
   color: "#111827",
-  border: "none",
-  padding: "12px 18px",
-  borderRadius: "10px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const botonClaro = {
-  background: "#dcfce7",
-  color: "#064e3b",
   border: "none",
   padding: "12px 18px",
   borderRadius: "10px",
@@ -1127,6 +1218,28 @@ const permisoCardActivo = {
   textAlign: "left",
   cursor: "pointer",
   color: "#166534",
+};
+
+const permisoCardBloqueado = {
+  background: "#f3f4f6",
+  border: "1px dashed #9ca3af",
+  borderRadius: "12px",
+  padding: "11px",
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "10px",
+  alignItems: "center",
+  textAlign: "left",
+  cursor: "not-allowed",
+  color: "#6b7280",
+  opacity: 0.85,
+};
+
+const textoBloqueado = {
+  display: "block",
+  marginTop: "4px",
+  color: "#9ca3af",
+  fontSize: "11px",
 };
 
 const switchOn = {
