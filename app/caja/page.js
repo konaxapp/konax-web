@@ -22,6 +22,7 @@ export default function Caja() {
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [cantidad, setCantidad] = useState("1");
   const [valorProducto, setValorProducto] = useState("");
+  const [numeroVentaAbono, setNumeroVentaAbono] = useState("");
 
   const [metodoPago, setMetodoPago] = useState("Efectivo");
   const [monto, setMonto] = useState("");
@@ -30,6 +31,7 @@ export default function Caja() {
   const [observacion, setObservacion] = useState("");
   const [movimientos, setMovimientos] = useState([]);
   const [vendedores, setVendedores] = useState([]);
+  const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
     iniciarCaja();
@@ -66,16 +68,36 @@ export default function Caja() {
     window.location.href = "/dashboard";
   }
 
+  function normalizar(texto) {
+    return String(texto || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  }
+
   function generarTransaccion() {
     return "TX-" + Date.now();
   }
 
+  function generarNumeroVenta() {
+    return "VTA-" + Date.now();
+  }
+
   function esVentaConProducto() {
-    return [
-      "Venta Contado",
-      "Venta Crédito",
-      "Abono"
-    ].includes(tipoMovimiento);
+    return ["Venta Contado", "Venta Crédito", "Abono"].includes(tipoMovimiento);
+  }
+
+  function esVentaCredito() {
+    return tipoMovimiento === "Venta Crédito";
+  }
+
+  function esVentaContado() {
+    return tipoMovimiento === "Venta Contado";
+  }
+
+  function esAbonoProducto() {
+    return tipoMovimiento === "Abono";
   }
 
   function esPagoDeCuenta() {
@@ -84,7 +106,7 @@ export default function Caja() {
       "Pago Credito",
       "Mensualidad",
       "Renovación",
-      "Cancelación"
+      "Cancelación",
     ].includes(tipoMovimiento);
   }
 
@@ -114,12 +136,14 @@ export default function Caja() {
   }
 
   function obtenerOpcionesMovimiento(tipoNegocio) {
-    const tipo = String(tipoNegocio || "").toLowerCase();
+    const tipo = normalizar(tipoNegocio);
 
     if (
       tipo.includes("gimnasio") ||
       tipo.includes("club") ||
       tipo.includes("academia") ||
+      tipo.includes("escuela") ||
+      tipo.includes("colegio") ||
       tipo.includes("suscripciones") ||
       tipo.includes("membres")
     ) {
@@ -128,14 +152,23 @@ export default function Caja() {
 
     if (
       tipo.includes("muebleria") ||
-      tipo.includes("mueblería") ||
       tipo.includes("electronica") ||
-      tipo.includes("electrónica") ||
       tipo.includes("financiera") ||
       tipo.includes("cooperativa") ||
-      tipo.includes("empeño")
+      tipo.includes("empeno")
     ) {
       return ["Venta Contado", "Venta Crédito", "Abono", "Pago Crédito", "Cancelación"];
+    }
+
+    if (
+      tipo.includes("ferreteria") ||
+      tipo.includes("farmacia") ||
+      tipo.includes("tienda") ||
+      tipo.includes("mercado") ||
+      tipo.includes("repuestos") ||
+      tipo.includes("boutique")
+    ) {
+      return ["Venta Contado", "Venta Crédito", "Abono", "Pago Crédito"];
     }
 
     return ["Venta Contado", "Venta Crédito", "Abono", "Pago Crédito", "Mensualidad"];
@@ -161,15 +194,15 @@ export default function Caja() {
   }
 
   async function cargarProductos(empresaId) {
+    // En tu sistema el inventario real se guarda en productos.
     const { data, error } = await supabase
-      .from("inventario")
+      .from("productos")
       .select("*")
       .eq("empresa_id", empresaId)
-      .eq("estado", "Activo")
       .order("nombre", { ascending: true });
 
     if (error) {
-      alert("Error cargando inventario: " + error.message);
+      alert("Error cargando productos: " + error.message);
       return;
     }
 
@@ -194,6 +227,32 @@ export default function Caja() {
     setMovimientos(data || []);
   }
 
+  function precioProducto(producto) {
+    if (!producto) return 0;
+
+    if (esVentaCredito() || esAbonoProducto()) {
+      return Number(producto.precio_credito || producto.precio_venta || 0);
+    }
+
+    return Number(producto.precio_venta || producto.precio_credito || 0);
+  }
+
+  function stockProducto(producto) {
+    return Number(producto?.stock_actual || producto?.stock || 0);
+  }
+
+  function seleccionarProducto(producto) {
+    setProductoSeleccionado(producto || null);
+    setCodigoProducto(producto?.codigo || "");
+    setConcepto(producto?.nombre || producto?.descripcion || "");
+
+    if (producto) {
+      const total = precioProducto(producto) * Number(cantidad || 1);
+      setValorProducto(total);
+      if (!esAbonoProducto()) setMonto(total);
+    }
+  }
+
   function seleccionarProductoPorCodigo(codigo) {
     setCodigoProducto(codigo);
 
@@ -201,32 +260,18 @@ export default function Caja() {
       (p) => String(p.codigo || "").trim() === String(codigo || "").trim()
     );
 
-    setProductoSeleccionado(producto || null);
-
-    if (producto) {
-      const precio =
-        tipoMovimiento === "Venta Crédito"
-          ? Number(producto.precio_credito || 0)
-          : Number(producto.precio_contado || 0);
-
-      setValorProducto(precio);
-      setConcepto(producto.nombre || producto.descripcion || "");
-      setMonto(precio);
-    }
+    seleccionarProducto(producto || null);
   }
 
   function recalcularValorProducto() {
     if (!productoSeleccionado || !esVentaConProducto()) return;
 
-    const precioUnitario =
-      tipoMovimiento === "Venta Crédito"
-        ? Number(productoSeleccionado.precio_credito || 0)
-        : Number(productoSeleccionado.precio_contado || 0);
-
-    const total = precioUnitario * Number(cantidad || 1);
-
+    const total = precioProducto(productoSeleccionado) * Number(cantidad || 1);
     setValorProducto(total);
-    setMonto(total);
+
+    if (!esAbonoProducto()) {
+      setMonto(total);
+    }
   }
 
   async function buscarClientes() {
@@ -254,20 +299,22 @@ export default function Caja() {
     }
 
     if (clientesData) {
-      resultados = clientesData.map((cliente) => ({
-        cliente,
-        cuenta: null,
-      }));
+      resultados = clientesData.map((cliente) => ({ cliente, cuenta: null }));
     }
 
-    const { data: cuentasData } = await supabase
+    const { data: cuentasData, error: errorCuentas } = await supabase
       .from("informacion_comercial")
       .select("*")
       .eq("empresa_id", empresaId)
       .ilike("numero_cuenta", `%${texto}%`);
 
+    if (errorCuentas) {
+      alert("Error buscando cuenta: " + errorCuentas.message);
+      return;
+    }
+
     if (cuentasData && cuentasData.length > 0) {
-      const idsClientes = cuentasData.map((cuenta) => cuenta.cliente_id);
+      const idsClientes = cuentasData.map((cuenta) => cuenta.cliente_id).filter(Boolean);
 
       const { data: clientesDeCuentas } = await supabase
         .from("clientes")
@@ -278,9 +325,7 @@ export default function Caja() {
       cuentasData.forEach((cuenta) => {
         const cliente = clientesDeCuentas?.find((item) => item.id === cuenta.cliente_id);
 
-        if (cliente) {
-          resultados.push({ cliente, cuenta });
-        }
+        if (cliente) resultados.push({ cliente, cuenta });
       });
     }
 
@@ -326,7 +371,7 @@ export default function Caja() {
   async function descontarInventario(empresaId) {
     if (!productoSeleccionado) return true;
 
-    const stockActual = Number(productoSeleccionado.stock || 0);
+    const stockActual = stockProducto(productoSeleccionado);
     const cantidadVenta = Number(cantidad || 1);
 
     if (cantidadVenta <= 0) {
@@ -342,10 +387,8 @@ export default function Caja() {
     const nuevoStock = stockActual - cantidadVenta;
 
     const { error } = await supabase
-      .from("inventario")
-      .update({
-        stock: nuevoStock,
-      })
+      .from("productos")
+      .update({ stock_actual: nuevoStock })
       .eq("empresa_id", empresaId)
       .eq("id", productoSeleccionado.id);
 
@@ -354,23 +397,127 @@ export default function Caja() {
       return false;
     }
 
+    await supabase.from("movimientos_inventario").insert([
+      {
+        empresa_id: empresaId,
+        producto_id: productoSeleccionado.id,
+        tipo_movimiento: "SALIDA",
+        cantidad: cantidadVenta,
+        stock_anterior: stockActual,
+        stock_nuevo: nuevoStock,
+        observacion: `${tipoMovimiento} desde caja`,
+        usuario:
+          localStorage.getItem("usuarioNombre") ||
+          localStorage.getItem("adminKonaxNombre") ||
+          "Caja",
+      },
+    ]);
+
     return true;
   }
 
-  async function actualizarSaldoCuenta(empresaId) {
-    if (!cuentaSeleccionada) return true;
+  async function asegurarClienteParaVenta(empresaId) {
+    if (clienteSeleccionado) return clienteSeleccionado;
 
-    const nuevoSaldo = Number(cuentaSeleccionada.saldo_actual || 0) - Number(monto || 0);
+    if (!nombreContado.trim()) return null;
+
+    const { data, error } = await supabase
+      .from("clientes")
+      .insert([
+        {
+          empresa_id: empresaId,
+          nombre: nombreContado.trim(),
+          cedula: cedulaContado.trim(),
+          estado: "Activo",
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      alert("Error creando cliente contado: " + error.message);
+      return null;
+    }
+
+    return data;
+  }
+
+  async function crearCuentaComercialVentaCredito(empresaId, clienteBase, numeroVenta) {
+    const totalProducto = Number(valorProducto || 0);
+    const saldoInicial = esAbonoProducto()
+      ? Math.max(totalProducto - Number(monto || 0), 0)
+      : totalProducto;
+
+    const fechaVencimiento = new Date();
+    fechaVencimiento.setMonth(fechaVencimiento.getMonth() + 1);
+
+    const { data, error } = await supabase
+      .from("informacion_comercial")
+      .insert([
+        {
+          empresa_id: empresaId,
+          cliente_id: clienteBase.id,
+          numero_cuenta: numeroVenta,
+          tipo_producto: productoSeleccionado?.categoria || "Producto",
+          descripcion:
+            productoSeleccionado?.nombre ||
+            productoSeleccionado?.descripcion ||
+            concepto ||
+            tipoMovimiento,
+          modalidad: esAbonoProducto() ? "Abono" : "Crédito",
+          monto_total: totalProducto,
+          saldo_actual: saldoInicial,
+          cuota: Number(monto || 0),
+          fecha_inicio: fechaPago,
+          fecha_vencimiento: fechaVencimiento.toISOString().split("T")[0],
+          estado: saldoInicial <= 0 ? "Cancelado" : "Activo",
+          vendedor: responsable,
+          responsable,
+          codigo_producto: codigoProducto || productoSeleccionado?.codigo || null,
+          producto_id: productoSeleccionado?.id || null,
+          numero_venta: numeroVenta,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      alert("Error creando cuenta comercial: " + error.message);
+      return null;
+    }
+
+    await supabase.from("informacion_cobranza").insert([
+      {
+        empresa_id: empresaId,
+        cliente_id: clienteBase.id,
+        informacion_comercial_id: data.id,
+        estado_cobranza: saldoInicial <= 0 ? "Cancelado" : "Al Día",
+        fecha_ultimo_pago: esAbonoProducto() ? fechaPago : null,
+        monto_ultimo_pago: esAbonoProducto() ? Number(monto || 0) : null,
+        responsable_cobro: null,
+        observacion_cobro: esAbonoProducto()
+          ? `Abono inicial registrado bajo venta ${numeroVenta}`
+          : `Venta crédito registrada bajo venta ${numeroVenta}`,
+      },
+    ]);
+
+    return data;
+  }
+
+  async function actualizarSaldoCuenta(empresaId, cuentaAplicar = cuentaSeleccionada) {
+    if (!cuentaAplicar) return true;
+
+    const nuevoSaldo = Number(cuentaAplicar.saldo_actual || 0) - Number(monto || 0);
     const saldoFinal = nuevoSaldo < 0 ? 0 : nuevoSaldo;
 
     const { error: errorSaldo } = await supabase
       .from("informacion_comercial")
       .update({
         saldo_actual: saldoFinal,
-        estado: saldoFinal <= 0 ? "Cancelado" : cuentaSeleccionada.estado,
+        estado: saldoFinal <= 0 ? "Cancelado" : cuentaAplicar.estado,
       })
       .eq("empresa_id", empresaId)
-      .eq("id", cuentaSeleccionada.id);
+      .eq("id", cuentaAplicar.id);
 
     if (errorSaldo) {
       alert("Movimiento registrado, pero error actualizando saldo: " + errorSaldo.message);
@@ -391,7 +538,7 @@ export default function Caja() {
       .from("informacion_cobranza")
       .update(datosCobranza)
       .eq("empresa_id", empresaId)
-      .eq("informacion_comercial_id", cuentaSeleccionada.id);
+      .eq("informacion_comercial_id", cuentaAplicar.id);
 
     if (errorCobranza) {
       alert("Movimiento registrado, pero error actualizando cobranza: " + errorCobranza.message);
@@ -403,7 +550,7 @@ export default function Caja() {
 
   async function guardarMovimiento() {
     const empresaId = obtenerEmpresaId();
-    if (!empresaId) return;
+    if (!empresaId || guardando) return;
 
     if (!monto || Number(monto) <= 0) {
       alert("Ingrese un monto válido mayor a cero.");
@@ -425,16 +572,42 @@ export default function Caja() {
       return;
     }
 
+    if (esVentaConProducto() && Number(cantidad || 0) <= 0) {
+      alert("Ingrese una cantidad válida.");
+      return;
+    }
+
     if (!responsable) {
       alert("Seleccione el vendedor o responsable.");
       return;
     }
 
+    if (esAbonoProducto() && Number(monto || 0) >= Number(valorProducto || 0)) {
+      alert("El abono debe ser menor que el valor total del producto. Si paga completo use Venta Contado.");
+      return;
+    }
+
+    setGuardando(true);
+
     const numeroTransaccion = generarTransaccion();
+    const numeroVenta = esVentaConProducto()
+      ? numeroVentaAbono.trim() || generarNumeroVenta()
+      : cuentaSeleccionada?.numero_cuenta || null;
+
     const usuarioRegistro =
       localStorage.getItem("usuarioNombre") ||
       localStorage.getItem("adminKonaxNombre") ||
       "Caja";
+
+    const clienteBase = esVentaConProducto()
+      ? await asegurarClienteParaVenta(empresaId)
+      : clienteSeleccionado;
+
+    if (esVentaConProducto() && !clienteBase) {
+      setGuardando(false);
+      alert("Ingrese o seleccione un cliente para registrar la venta.");
+      return;
+    }
 
     const descripcionFinal =
       concepto ||
@@ -443,13 +616,29 @@ export default function Caja() {
       observacion ||
       tipoMovimiento;
 
+    let cuentaParaMovimiento = cuentaSeleccionada;
+
+    if (esVentaCredito() || esAbonoProducto()) {
+      cuentaParaMovimiento = await crearCuentaComercialVentaCredito(
+        empresaId,
+        clienteBase,
+        numeroVenta
+      );
+
+      if (!cuentaParaMovimiento) {
+        setGuardando(false);
+        return;
+      }
+    }
+
     const { error } = await supabase.from("caja").insert([
       {
         empresa_id: empresaId,
         numero_transaccion: numeroTransaccion,
-        cliente_id: clienteSeleccionado?.id || null,
-        informacion_comercial_id: cuentaSeleccionada?.id || null,
-        numero_cuenta: cuentaSeleccionada?.numero_cuenta || null,
+        numero_venta: numeroVenta,
+        cliente_id: clienteBase?.id || clienteSeleccionado?.id || null,
+        informacion_comercial_id: cuentaParaMovimiento?.id || null,
+        numero_cuenta: cuentaParaMovimiento?.numero_cuenta || numeroVenta || null,
         fecha_pago: fechaPago,
         tipo: tipoMovimiento,
         descripcion: descripcionFinal,
@@ -457,36 +646,53 @@ export default function Caja() {
         metodo_pago: metodoPago,
         usuario: usuarioRegistro,
         vendedor_responsable: responsable,
+        responsable,
         estado: "Procesado",
-        cliente_nombre: requiereCliente
-          ? clienteSeleccionado?.nombre
-          : nombreContado || null,
-        cliente_cedula: requiereCliente
-          ? clienteSeleccionado?.cedula
-          : cedulaContado || null,
+        cliente_nombre: clienteBase?.nombre || clienteSeleccionado?.nombre || nombreContado || null,
+        cliente_cedula: clienteBase?.cedula || clienteSeleccionado?.cedula || cedulaContado || null,
+        codigo_producto: codigoProducto || productoSeleccionado?.codigo || null,
+        producto_id: productoSeleccionado?.id || null,
+        producto_nombre: productoSeleccionado?.nombre || null,
+        cantidad: esVentaConProducto() ? Number(cantidad || 1) : null,
+        valor_producto: esVentaConProducto() ? Number(valorProducto || 0) : null,
+        observacion,
       },
     ]);
 
     if (error) {
+      setGuardando(false);
       alert("Error al registrar movimiento: " + error.message);
       return;
     }
 
     if (esVentaConProducto()) {
       const okInventario = await descontarInventario(empresaId);
-      if (!okInventario) return;
+      if (!okInventario) {
+        setGuardando(false);
+        return;
+      }
     }
 
     if (esPagoDeCuenta()) {
-      const okSaldo = await actualizarSaldoCuenta(empresaId);
-      if (!okSaldo) return;
+      const okSaldo = await actualizarSaldoCuenta(empresaId, cuentaSeleccionada);
+      if (!okSaldo) {
+        setGuardando(false);
+        return;
+      }
     }
 
-    alert("Movimiento registrado correctamente.");
+    alert(
+      esAbonoProducto()
+        ? `Abono registrado correctamente bajo la venta ${numeroVenta}.`
+        : esVentaCredito()
+        ? `Venta crédito registrada correctamente con número ${numeroVenta}.`
+        : "Movimiento registrado correctamente."
+    );
 
     limpiarFormulario();
     await cargarProductos(empresaId);
     await cargarMovimientos();
+    setGuardando(false);
   }
 
   function limpiarFormulario() {
@@ -505,6 +711,7 @@ export default function Caja() {
     setProductoSeleccionado(null);
     setCantidad("1");
     setValorProducto("");
+    setNumeroVentaAbono("");
     setMetodoPago("Efectivo");
     setMonto("");
     setConcepto("");
@@ -512,10 +719,7 @@ export default function Caja() {
     setObservacion("");
   }
 
-  const totalCaja = movimientos.reduce(
-    (total, mov) => total + Number(mov.monto || 0),
-    0
-  );
+  const totalCaja = movimientos.reduce((total, mov) => total + Number(mov.monto || 0), 0);
 
   const movimientosHoy = movimientos.filter((mov) => {
     const fecha = String(mov.fecha_pago || mov.created_at || "").split("T")[0];
@@ -589,7 +793,11 @@ export default function Caja() {
             <Campo label="Tipo de movimiento">
               <select
                 value={tipoMovimiento}
-                onChange={(e) => setTipoMovimiento(e.target.value)}
+                onChange={(e) => {
+                  setTipoMovimiento(e.target.value);
+                  setMonto("");
+                  setValorProducto("");
+                }}
                 style={inputStyle}
               >
                 {opcionesMovimiento.map((opcion) => (
@@ -687,8 +895,7 @@ export default function Caja() {
 
                         setCuentaSeleccionada(cuenta);
 
-                        const vendedorCuenta =
-                          cuenta?.responsable || cuenta?.vendedor || "";
+                        const vendedorCuenta = cuenta?.responsable || cuenta?.vendedor || "";
 
                         if (vendedorCuenta) setResponsable(vendedorCuenta);
                       }}
@@ -705,15 +912,11 @@ export default function Caja() {
                 )}
 
                 <p>
-                  Cuenta:{" "}
-                  <strong>{cuentaSeleccionada?.numero_cuenta || "Sin cuenta"}</strong>
+                  Cuenta / Venta: <strong>{cuentaSeleccionada?.numero_cuenta || "Sin cuenta"}</strong>
                 </p>
 
                 <p>
-                  Saldo actual:{" "}
-                  <strong>
-                    ${Number(cuentaSeleccionada?.saldo_actual || 0).toFixed(2)}
-                  </strong>
+                  Saldo actual: <strong>${Number(cuentaSeleccionada?.saldo_actual || 0).toFixed(2)}</strong>
                 </p>
               </div>
             )}
@@ -742,16 +945,14 @@ export default function Caja() {
                       (item) => String(item.id) === String(e.target.value)
                     );
 
-                    setProductoSeleccionado(producto || null);
-                    setCodigoProducto(producto?.codigo || "");
-                    setConcepto(producto?.nombre || producto?.descripcion || "");
+                    seleccionarProducto(producto || null);
                   }}
                   style={inputStyle}
                 >
                   <option value="">Seleccione producto</option>
                   {productos.map((producto) => (
                     <option key={producto.id} value={producto.id}>
-                      {producto.codigo} - {producto.nombre} - Stock {producto.stock}
+                      {producto.codigo} - {producto.nombre} - Stock {stockProducto(producto)}
                     </option>
                   ))}
                 </select>
@@ -769,14 +970,25 @@ export default function Caja() {
               <Campo label="Valor producto">
                 <input value={valorProducto} readOnly style={inputReadOnly} />
               </Campo>
+
+              {esAbonoProducto() && (
+                <Campo label="N° venta de abono">
+                  <input
+                    value={numeroVentaAbono}
+                    onChange={(e) => setNumeroVentaAbono(e.target.value)}
+                    placeholder="Vacío = se genera automático"
+                    style={inputStyle}
+                  />
+                </Campo>
+              )}
             </div>
 
             {productoSeleccionado && (
               <div style={clienteBox}>
                 <strong>{productoSeleccionado.nombre}</strong>
                 <p>Código: {productoSeleccionado.codigo}</p>
-                <p>Stock disponible: {productoSeleccionado.stock}</p>
-                <p>Precio contado: ${Number(productoSeleccionado.precio_contado || 0).toFixed(2)}</p>
+                <p>Stock disponible: {stockProducto(productoSeleccionado)}</p>
+                <p>Precio contado: ${Number(productoSeleccionado.precio_venta || 0).toFixed(2)}</p>
                 <p>Precio crédito: ${Number(productoSeleccionado.precio_credito || 0).toFixed(2)}</p>
               </div>
             )}
@@ -802,7 +1014,7 @@ export default function Caja() {
               </select>
             </Campo>
 
-            <Campo label="Monto">
+            <Campo label={esAbonoProducto() ? "Monto abonado" : "Monto"}>
               <input
                 type="number"
                 value={monto}
@@ -845,8 +1057,8 @@ export default function Caja() {
           </Campo>
 
           <div style={acciones}>
-            <button style={boton} onClick={guardarMovimiento}>
-              Registrar Movimiento
+            <button style={boton} onClick={guardarMovimiento} disabled={guardando}>
+              {guardando ? "Guardando..." : "Registrar Movimiento"}
             </button>
 
             <button style={botonLimpiar} onClick={limpiarFormulario}>
@@ -864,14 +1076,14 @@ export default function Caja() {
                 <tr>
                   <th style={th}>Fecha</th>
                   <th style={th}>Transacción</th>
+                  <th style={th}>N° Venta</th>
                   <th style={th}>Cliente</th>
                   <th style={th}>Cédula</th>
                   <th style={th}>Cuenta</th>
+                  <th style={th}>Producto</th>
                   <th style={th}>Tipo</th>
                   <th style={th}>Método</th>
                   <th style={th}>Monto</th>
-                  <th style={th}>Concepto</th>
-                  <th style={th}>Registrado por</th>
                   <th style={th}>Vendedor / Responsable</th>
                   <th style={th}>Estado</th>
                 </tr>
@@ -889,14 +1101,14 @@ export default function Caja() {
                     <tr key={movimiento.id}>
                       <td style={td}>{movimiento.fecha_pago || movimiento.created_at}</td>
                       <td style={td}>{movimiento.numero_transaccion || "-"}</td>
+                      <td style={td}>{movimiento.numero_venta || "-"}</td>
                       <td style={td}>{movimiento.cliente_nombre || "-"}</td>
                       <td style={td}>{movimiento.cliente_cedula || "-"}</td>
                       <td style={td}>{movimiento.numero_cuenta || "-"}</td>
+                      <td style={td}>{movimiento.producto_nombre || movimiento.descripcion || "-"}</td>
                       <td style={td}>{movimiento.tipo}</td>
                       <td style={td}>{movimiento.metodo_pago}</td>
                       <td style={td}>${Number(movimiento.monto || 0).toFixed(2)}</td>
-                      <td style={td}>{movimiento.descripcion || "-"}</td>
-                      <td style={td}>{movimiento.usuario || "-"}</td>
                       <td style={td}>
                         {movimiento.vendedor_responsable || movimiento.responsable || "-"}
                       </td>
