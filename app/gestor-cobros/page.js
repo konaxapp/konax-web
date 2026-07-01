@@ -13,71 +13,72 @@ export default function GestorCobros() {
     validarAcceso();
   }, []);
 
-async function validarAcceso() {
-  const empresaId = localStorage.getItem("empresaId");
-  const usuarioId = localStorage.getItem("usuarioId");
+  async function validarAcceso() {
+    const empresaId = localStorage.getItem("empresaId");
+    const usuarioId = localStorage.getItem("usuarioId");
 
-  const rol =
-    localStorage.getItem("usuarioRol") ||
-    localStorage.getItem("rolUsuario") ||
-    "";
+    const rol =
+      localStorage.getItem("usuarioRol") ||
+      localStorage.getItem("rolUsuario") ||
+      "";
 
-  if (!empresaId || !usuarioId) {
-    window.location.href = "/login";
-    return;
-  }
+    if (!empresaId || !usuarioId) {
+      window.location.href = "/login";
+      return;
+    }
 
-  const rolNormalizado = String(rol || "").toLowerCase().trim();
-  const esAdmin =
-    rolNormalizado === "administrador" || rolNormalizado === "superadmin";
+    const rolNormalizado = String(rol || "").toLowerCase().trim();
+    const esAdmin =
+      rolNormalizado === "administrador" || rolNormalizado === "superadmin";
 
-  const { data: moduloEmpresa, error: errorModulo } = await supabase
-    .from("empresa_modulos")
-    .select("cobranza, dashboard_cobros")
-    .eq("empresa_id", empresaId)
-    .maybeSingle();
-
-  if (errorModulo) {
-    alert("Error validando función: " + errorModulo.message);
-    window.location.href = "/dashboard";
-    return;
-  }
-
-  const moduloActivo = Boolean(
-    moduloEmpresa?.cobranza || moduloEmpresa?.dashboard_cobros
-  );
-
-  if (!moduloActivo) {
-    alert("Mi Cartera de Cobro no está activa en el plan de esta empresa.");
-    window.location.href = "/dashboard";
-    return;
-  }
-
-  if (!esAdmin) {
-    const { data: permisoUsuario, error: errorPermiso } = await supabase
-      .from("permisos_usuarios_empresa")
-      .select("activo")
+    const { data: moduloEmpresa, error: errorModulo } = await supabase
+      .from("empresa_modulos")
+      .select("cobranza, dashboard_cobros")
       .eq("empresa_id", empresaId)
-      .eq("usuario_id", usuarioId)
-      .eq("permiso", "gestor_cobros")
       .maybeSingle();
 
-    if (errorPermiso) {
-      alert("Error validando permiso: " + errorPermiso.message);
+    if (errorModulo) {
+      alert("Error validando función: " + errorModulo.message);
       window.location.href = "/dashboard";
       return;
     }
 
-    if (!permisoUsuario?.activo) {
-      alert("No tienes permiso para acceder a Mi Cartera de Cobro.");
+    const moduloActivo = Boolean(
+      moduloEmpresa?.cobranza || moduloEmpresa?.dashboard_cobros
+    );
+
+    if (!moduloActivo) {
+      alert("Mi Cartera de Cobro no está activa en el plan de esta empresa.");
       window.location.href = "/dashboard";
       return;
     }
+
+    if (!esAdmin) {
+      const { data: permisoUsuario, error: errorPermiso } = await supabase
+        .from("permisos_usuarios_empresa")
+        .select("activo")
+        .eq("empresa_id", empresaId)
+        .eq("usuario_id", usuarioId)
+        .eq("permiso", "gestor_cobros")
+        .maybeSingle();
+
+      if (errorPermiso) {
+        alert("Error validando permiso: " + errorPermiso.message);
+        window.location.href = "/dashboard";
+        return;
+      }
+
+      if (!permisoUsuario?.activo) {
+        alert("No tienes permiso para acceder a Mi Cartera de Cobro.");
+        window.location.href = "/dashboard";
+        return;
+      }
+    }
+
+    setAccesoValidado(true);
+    await cargarCartera();
   }
 
-  setAccesoValidado(true);
-  await cargarCartera();
-}
   function volverDashboard() {
     window.location.href = "/dashboard";
   }
@@ -705,4 +706,216 @@ function Alerta({ titulo, valor }) {
   );
 }
 
-/* Tus estilos quedan igual desde aquí hacia abajo */
+const pagina = {
+  minHeight: "100vh",
+  background: "linear-gradient(135deg, #ecfdf5 0%, #f3f4f6 45%, #ffffff 100%)",
+  padding: "30px",
+  fontFamily: "Arial, sans-serif",
+};
+
+const contenedor = {
+  maxWidth: "1600px",
+  margin: "0 auto",
+};
+
+const encabezado = {
+  background: "linear-gradient(135deg, #111827, #064e3b)",
+  color: "#ffffff",
+  borderRadius: "22px",
+  padding: "24px",
+  display: "flex",
+  alignItems: "center",
+  gap: "14px",
+  flexWrap: "wrap",
+  marginBottom: "18px",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
+};
+
+const logo = {
+  width: "86px",
+  background: "#ffffff",
+  borderRadius: "14px",
+  padding: "8px",
+};
+
+const titulo = {
+  margin: 0,
+  fontSize: "34px",
+  color: "#ffffff",
+};
+
+const subtitulo = {
+  color: "#dcfce7",
+  marginTop: "6px",
+  marginBottom: 0,
+};
+
+const alertasGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: "14px",
+  marginBottom: "16px",
+};
+
+const cardAlerta = {
+  background: "#fff7ed",
+  border: "1px solid #fed7aa",
+  borderRadius: "16px",
+  padding: "18px",
+  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
+};
+
+const alertaTitulo = {
+  margin: 0,
+  color: "#9a3412",
+  fontSize: "13px",
+  fontWeight: "bold",
+};
+
+const alertaValor = {
+  margin: "8px 0 0",
+  color: "#7c2d12",
+  fontSize: "28px",
+};
+
+const kpiGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+  gap: "14px",
+  marginBottom: "16px",
+};
+
+const cardKpi = {
+  background: "#ffffff",
+  border: "1px solid #e5e7eb",
+  borderRadius: "16px",
+  padding: "17px",
+  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
+};
+
+const kpiTitulo = {
+  margin: 0,
+  color: "#6b7280",
+  fontSize: "13px",
+};
+
+const kpiValor = {
+  margin: "7px 0 0",
+  color: "#111827",
+  fontSize: "25px",
+};
+
+const card = {
+  background: "#ffffff",
+  borderRadius: "18px",
+  padding: "22px",
+  marginBottom: "18px",
+  boxShadow: "0 5px 18px rgba(0,0,0,0.07)",
+  border: "1px solid #e5e7eb",
+};
+
+const tituloSeccion = {
+  marginTop: 0,
+  marginBottom: "16px",
+  color: "#111827",
+};
+
+const gridFiltros = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
+  gap: "14px",
+};
+
+const labelStyle = {
+  display: "block",
+  marginBottom: "6px",
+  fontWeight: "bold",
+  color: "#374151",
+  fontSize: "13px",
+};
+
+const inputStyle = {
+  width: "100%",
+  padding: "12px",
+  borderRadius: "10px",
+  border: "1px solid #d1d5db",
+  fontSize: "14px",
+  boxSizing: "border-box",
+  background: "#ffffff",
+  color: "#111827",
+};
+
+const inputMini = {
+  ...inputStyle,
+  minWidth: "190px",
+  padding: "9px",
+};
+
+const tabla = {
+  width: "100%",
+  borderCollapse: "collapse",
+  minWidth: "1250px",
+};
+
+const th = {
+  textAlign: "left",
+  padding: "12px",
+  background: "#111827",
+  color: "#ffffff",
+  fontSize: "13px",
+  whiteSpace: "nowrap",
+};
+
+const td = {
+  padding: "12px",
+  borderBottom: "1px solid #f3f4f6",
+  color: "#111827",
+  fontSize: "13px",
+  whiteSpace: "nowrap",
+};
+
+const boton = {
+  background: "#16a34a",
+  color: "#ffffff",
+  border: "none",
+  padding: "9px 12px",
+  borderRadius: "8px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const whatsappBtn = {
+  background: "#22c55e",
+  color: "#ffffff",
+  border: "none",
+  padding: "9px 12px",
+  borderRadius: "8px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonGris = {
+  background: "#ffffff",
+  color: "#111827",
+  border: "none",
+  padding: "12px 16px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botonNegro = {
+  background: "#111827",
+  color: "#ffffff",
+  border: "1px solid rgba(255,255,255,0.25)",
+  padding: "12px 16px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const nota = {
+  marginTop: "14px",
+  color: "#6b7280",
+  fontSize: "13px",
+};
