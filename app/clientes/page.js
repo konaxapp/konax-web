@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function CuentasPorCobrar() {
@@ -25,6 +25,13 @@ export default function CuentasPorCobrar() {
   const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [estadoCuenta, setEstadoCuenta] = useState("Activo");
 
+  const [productos, setProductos] = useState([]);
+  const [productoId, setProductoId] = useState("");
+  const [codigoProducto, setCodigoProducto] = useState("");
+  const [cantidadProducto, setCantidadProducto] = useState("1");
+  const [precioUnitario, setPrecioUnitario] = useState("");
+  const [totalProducto, setTotalProducto] = useState("");
+
   const [estadoCobranza, setEstadoCobranza] = useState("Al Día");
   const [fechaUltimoPago, setFechaUltimoPago] = useState("");
   const [montoUltimoPago, setMontoUltimoPago] = useState("");
@@ -32,6 +39,19 @@ export default function CuentasPorCobrar() {
   const [observacionCobro, setObservacionCobro] = useState("");
   const [documentos, setDocumentos] = useState([]);
   const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    const empresaId = obtenerEmpresaIdSilencioso();
+    if (empresaId) cargarProductos(empresaId);
+  }, []);
+
+  useEffect(() => {
+    calcularTotalProducto();
+  }, [cantidadProducto, precioUnitario]);
+
+  function obtenerEmpresaIdSilencioso() {
+    return localStorage.getItem("empresaId");
+  }
 
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
@@ -64,6 +84,93 @@ export default function CuentasPorCobrar() {
     return Math.floor(diferencia / (1000 * 60 * 60 * 24));
   }
 
+  async function cargarProductos(empresaId) {
+    const { data, error } = await supabase
+      .from("productos")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .order("nombre", { ascending: true });
+
+    if (error) {
+      alert("Error cargando productos: " + error.message);
+      return;
+    }
+
+    setProductos(data || []);
+  }
+
+  function stockProducto(producto) {
+    return Number(producto?.stock_actual || producto?.stock || 0);
+  }
+
+  function precioProducto(producto) {
+    if (!producto) return 0;
+
+    return Number(
+      producto.precio_credito ||
+        producto.precio_venta ||
+        producto.precio_oferta ||
+        0
+    );
+  }
+
+  function seleccionarProducto(id) {
+    setProductoId(id);
+
+    const producto = productos.find((item) => String(item.id) === String(id));
+
+    if (!producto) {
+      setCodigoProducto("");
+      setPrecioUnitario("");
+      setTotalProducto("");
+      return;
+    }
+
+    const precio = precioProducto(producto);
+
+    setCodigoProducto(producto.codigo || "");
+    setPrecioUnitario(precio);
+
+    const cantidad = Number(cantidadProducto || 1);
+    const total = precio * cantidad;
+
+    setTotalProducto(total);
+
+    if (!montoTotal || Number(montoTotal || 0) === 0) {
+      setMontoTotal(total);
+    }
+
+    if (!saldoActual || Number(saldoActual || 0) === 0) {
+      setSaldoActual(total);
+    }
+
+    if (!descripcion) {
+      setDescripcion(producto.nombre || producto.descripcion || "");
+    }
+
+    if (!tipoProducto) {
+      setTipoProducto("Crédito");
+    }
+  }
+
+  function calcularTotalProducto() {
+    const cantidad = Number(cantidadProducto || 0);
+    const precio = Number(precioUnitario || 0);
+    const total = cantidad * precio;
+
+    if (precio > 0 && cantidad > 0) {
+      setTotalProducto(total);
+
+      if (!montoTotal || Number(montoTotal || 0) === 0) {
+        setMontoTotal(total);
+      }
+
+      if (!saldoActual || Number(saldoActual || 0) === 0) {
+        setSaldoActual(total);
+      }
+    }
+  }
+
   function limpiarFormulario() {
     setCedula("");
     setNombre("");
@@ -85,6 +192,12 @@ export default function CuentasPorCobrar() {
     setFechaInicio("");
     setFechaVencimiento("");
     setEstadoCuenta("Activo");
+
+    setProductoId("");
+    setCodigoProducto("");
+    setCantidadProducto("1");
+    setPrecioUnitario("");
+    setTotalProducto("");
 
     setEstadoCobranza("Al Día");
     setFechaUltimoPago("");
@@ -118,13 +231,13 @@ export default function CuentasPorCobrar() {
       return;
     }
 
-    if (!tipoProducto || !modalidad) {
-      alert("Complete tipo de cuenta y frecuencia de cobro.");
+    if (!tipoProducto) {
+      alert("Seleccione el tipo de cuenta.");
       return;
     }
 
-    if (!montoTotal && !saldoActual) {
-      alert("Ingrese monto original o saldo actual.");
+    if (!montoTotal && !saldoActual && !totalProducto) {
+      alert("Ingrese monto original, saldo actual o seleccione un producto vendido.");
       return;
     }
 
@@ -152,6 +265,28 @@ export default function CuentasPorCobrar() {
 
     if (clienteExistente) {
       clienteCreado = clienteExistente;
+
+      const { error: errorActualizarCliente } = await supabase
+        .from("clientes")
+        .update({
+          nombre,
+          telefono,
+          telefono_secundario: telefonoSecundario,
+          direccion,
+          correo,
+          referencia_nombre: referenciaNombre,
+          referencia_telefono: referenciaTelefono,
+          estado: estadoCliente,
+          observacion: observacionCobro,
+        })
+        .eq("empresa_id", empresaId)
+        .eq("id", clienteExistente.id);
+
+      if (errorActualizarCliente) {
+        setGuardando(false);
+        alert("Error actualizando cliente: " + errorActualizarCliente.message);
+        return;
+      }
     } else {
       const { data, error } = await supabase
         .from("clientes")
@@ -184,9 +319,13 @@ export default function CuentasPorCobrar() {
 
     const cuentaFinal = numeroCuenta || generarNumeroCuenta();
 
-    const montoTotalNumero = Number(montoTotal || 0);
+    const montoTotalNumero = Number(montoTotal || totalProducto || 0);
     const saldoActualNumero =
       saldoActual !== "" ? Number(saldoActual || 0) : montoTotalNumero;
+
+    const productoSeleccionado = productos.find(
+      (item) => String(item.id) === String(productoId)
+    );
 
     const { data: comercialCreado, error: errorComercial } = await supabase
       .from("informacion_comercial")
@@ -197,15 +336,25 @@ export default function CuentasPorCobrar() {
           numero_cuenta: cuentaFinal,
           tipo_producto: tipoProducto,
           descripcion,
-          modalidad,
+          modalidad: modalidad || null,
           monto_total: montoTotalNumero,
           saldo_actual: saldoActualNumero,
-          cuota: Number(cuota || 0),
+          cuota: cuota === "" ? null : Number(cuota || 0),
           fecha_inicio: fechaInicio || null,
           fecha_vencimiento: fechaVencimiento || null,
           responsable: responsableCobro,
           estado: estadoCuenta,
           observacion: observacionCobro,
+          producto_id: productoId || null,
+          codigo_producto: codigoProducto || null,
+          producto_nombre:
+            productoSeleccionado?.nombre ||
+            productoSeleccionado?.descripcion ||
+            null,
+          cantidad_producto: productoId ? Number(cantidadProducto || 0) : null,
+          precio_unitario: productoId ? Number(precioUnitario || 0) : null,
+          total_producto: productoId ? Number(totalProducto || 0) : null,
+          inventario_descontado: false,
         },
       ])
       .select()
@@ -246,7 +395,9 @@ export default function CuentasPorCobrar() {
       await subirDocumentos(clienteCreado.id, empresaId);
     } catch (error) {
       setGuardando(false);
-      alert("Cuenta creada, pero hubo error subiendo documentos: " + error.message);
+      alert(
+        "Cuenta creada, pero hubo error subiendo documentos: " + error.message
+      );
       return;
     }
 
@@ -278,7 +429,11 @@ export default function CuentasPorCobrar() {
 
         <div style={resumenGrid}>
           <KPI titulo="Cliente" valor={nombre || "Sin seleccionar"} icono="👤" />
-          <KPI titulo="Saldo actual" valor={`$${Number(saldoActual || montoTotal || 0).toFixed(2)}`} icono="💰" />
+          <KPI
+            titulo="Saldo actual"
+            valor={`$${Number(saldoActual || montoTotal || totalProducto || 0).toFixed(2)}`}
+            icono="💰"
+          />
           <KPI titulo="Estado cobranza" valor={estadoCobranza} icono="📞" />
         </div>
 
@@ -291,43 +446,87 @@ export default function CuentasPorCobrar() {
 
           <div style={grid}>
             <Campo label="Cédula / Identificación *">
-              <input value={cedula} onChange={(e) => setCedula(e.target.value)} style={inputStyle} placeholder="Ej. 8-888-888" />
+              <input
+                value={cedula}
+                onChange={(e) => setCedula(e.target.value)}
+                style={inputStyle}
+                placeholder="Ej. 8-888-888"
+              />
             </Campo>
 
             <Campo label="Nombre completo *">
-              <input value={nombre} onChange={(e) => setNombre(e.target.value)} style={inputStyle} placeholder="Nombre del cliente" />
+              <input
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                style={inputStyle}
+                placeholder="Nombre del cliente"
+              />
             </Campo>
 
             <Campo label="Correo electrónico">
-              <input value={correo} onChange={(e) => setCorreo(e.target.value)} style={inputStyle} placeholder="correo@cliente.com" />
+              <input
+                value={correo}
+                onChange={(e) => setCorreo(e.target.value)}
+                style={inputStyle}
+                placeholder="correo@cliente.com"
+              />
             </Campo>
 
             <Campo label="Teléfono principal *">
-              <input value={telefono} onChange={(e) => setTelefono(e.target.value)} style={inputStyle} placeholder="Teléfono" />
+              <input
+                value={telefono}
+                onChange={(e) => setTelefono(e.target.value)}
+                style={inputStyle}
+                placeholder="Teléfono"
+              />
             </Campo>
 
             <Campo label="Teléfono secundario">
-              <input value={telefonoSecundario} onChange={(e) => setTelefonoSecundario(e.target.value)} style={inputStyle} placeholder="Opcional" />
+              <input
+                value={telefonoSecundario}
+                onChange={(e) => setTelefonoSecundario(e.target.value)}
+                style={inputStyle}
+                placeholder="Opcional"
+              />
             </Campo>
 
             <Campo label="Estado del cliente">
-              <select value={estadoCliente} onChange={(e) => setEstadoCliente(e.target.value)} style={selectStyle}>
+              <select
+                value={estadoCliente}
+                onChange={(e) => setEstadoCliente(e.target.value)}
+                style={selectStyle}
+              >
                 <option>Activo</option>
                 <option>Inactivo</option>
               </select>
             </Campo>
 
             <Campo label="Nombre de referencia">
-              <input value={referenciaNombre} onChange={(e) => setReferenciaNombre(e.target.value)} style={inputStyle} placeholder="Referencia personal" />
+              <input
+                value={referenciaNombre}
+                onChange={(e) => setReferenciaNombre(e.target.value)}
+                style={inputStyle}
+                placeholder="Referencia personal"
+              />
             </Campo>
 
             <Campo label="Teléfono de referencia">
-              <input value={referenciaTelefono} onChange={(e) => setReferenciaTelefono(e.target.value)} style={inputStyle} placeholder="Teléfono referencia" />
+              <input
+                value={referenciaTelefono}
+                onChange={(e) => setReferenciaTelefono(e.target.value)}
+                style={inputStyle}
+                placeholder="Teléfono referencia"
+              />
             </Campo>
           </div>
 
           <Campo label="Dirección completa">
-            <textarea value={direccion} onChange={(e) => setDireccion(e.target.value)} style={textarea} placeholder="Dirección del cliente..." />
+            <textarea
+              value={direccion}
+              onChange={(e) => setDireccion(e.target.value)}
+              style={textarea}
+              placeholder="Dirección del cliente..."
+            />
           </Campo>
         </div>
 
@@ -335,20 +534,30 @@ export default function CuentasPorCobrar() {
           <SectionTitle
             icono="🧾"
             titulo="Información de la Cuenta por Cobrar"
-            texto="Monto, saldo, cuota, modalidad y fechas importantes de la cuenta."
+            texto="Monto, saldo, producto vendido, fechas y condiciones opcionales de cobro."
           />
 
           <div style={grid}>
             <Campo label="Número de cuenta">
-              <input value={numeroCuenta} onChange={(e) => setNumeroCuenta(e.target.value)} style={inputStyle} placeholder="Opcional, se genera automático" />
+              <input
+                value={numeroCuenta}
+                onChange={(e) => setNumeroCuenta(e.target.value)}
+                style={inputStyle}
+                placeholder="Opcional, se genera automático"
+              />
             </Campo>
 
             <Campo label="Tipo de cuenta *">
-              <select value={tipoProducto} onChange={(e) => setTipoProducto(e.target.value)} style={selectStyle}>
+              <select
+                value={tipoProducto}
+                onChange={(e) => setTipoProducto(e.target.value)}
+                style={selectStyle}
+              >
                 <option value="">Seleccione tipo de cuenta</option>
                 <option>Crédito</option>
                 <option>Préstamo</option>
                 <option>Cuenta por cobrar</option>
+                <option>Separación / Abono inicial</option>
                 <option>Membresía</option>
                 <option>Suscripción</option>
                 <option>Mensualidad</option>
@@ -357,41 +566,50 @@ export default function CuentasPorCobrar() {
               </select>
             </Campo>
 
-            <Campo label="Frecuencia de cobro *">
-              <select value={modalidad} onChange={(e) => setModalidad(e.target.value)} style={selectStyle}>
-                <option value="">Seleccione frecuencia</option>
-                <option>Semanal</option>
-                <option>Quincenal</option>
-                <option>Mensual</option>
-                <option>Trimestral</option>
-                <option>Semestral</option>
-                <option>Anual</option>
-                <option>Personalizada</option>
-              </select>
+            <Campo label="Monto total original *">
+              <input
+                type="number"
+                value={montoTotal}
+                onChange={(e) => setMontoTotal(e.target.value)}
+                style={inputStyle}
+                placeholder="0.00"
+              />
             </Campo>
 
-            <Campo label="Monto total original">
-              <input type="number" value={montoTotal} onChange={(e) => setMontoTotal(e.target.value)} style={inputStyle} placeholder="0.00" />
-            </Campo>
-
-            <Campo label="Saldo actual">
-              <input type="number" value={saldoActual} onChange={(e) => setSaldoActual(e.target.value)} style={inputStyle} placeholder="0.00" />
-            </Campo>
-
-            <Campo label="Cuota / Mensualidad">
-              <input type="number" value={cuota} onChange={(e) => setCuota(e.target.value)} style={inputStyle} placeholder="0.00" />
+            <Campo label="Saldo actual *">
+              <input
+                type="number"
+                value={saldoActual}
+                onChange={(e) => setSaldoActual(e.target.value)}
+                style={inputStyle}
+                placeholder="0.00"
+              />
             </Campo>
 
             <Campo label="Fecha de inicio">
-              <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} style={inputStyle} />
+              <input
+                type="date"
+                value={fechaInicio}
+                onChange={(e) => setFechaInicio(e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Fecha de vencimiento">
-              <input type="date" value={fechaVencimiento} onChange={(e) => setFechaVencimiento(e.target.value)} style={inputStyle} />
+              <input
+                type="date"
+                value={fechaVencimiento}
+                onChange={(e) => setFechaVencimiento(e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Estado de cuenta">
-              <select value={estadoCuenta} onChange={(e) => setEstadoCuenta(e.target.value)} style={selectStyle}>
+              <select
+                value={estadoCuenta}
+                onChange={(e) => setEstadoCuenta(e.target.value)}
+                style={selectStyle}
+              >
                 <option>Activo</option>
                 <option>Suspendido</option>
                 <option>Cancelado</option>
@@ -399,9 +617,115 @@ export default function CuentasPorCobrar() {
             </Campo>
           </div>
 
+          <div style={opcionalBox}>
+            <h3 style={subtituloInterno}>Condición de cobro opcional</h3>
+
+            <div style={grid}>
+              <Campo label="Cuota sugerida">
+                <input
+                  type="number"
+                  value={cuota}
+                  onChange={(e) => setCuota(e.target.value)}
+                  style={inputStyle}
+                  placeholder="Opcional. Ej. 50.00"
+                />
+              </Campo>
+
+              <Campo label="Frecuencia sugerida">
+                <select
+                  value={modalidad}
+                  onChange={(e) => setModalidad(e.target.value)}
+                  style={selectStyle}
+                >
+                  <option value="">Sin frecuencia fija</option>
+                  <option>Semanal</option>
+                  <option>Quincenal</option>
+                  <option>Mensual</option>
+                  <option>Trimestral</option>
+                  <option>Semestral</option>
+                  <option>Anual</option>
+                  <option>Personalizada</option>
+                </select>
+              </Campo>
+            </div>
+
+            <p style={notaSuave}>
+              Estos campos no son obligatorios. Úsalos solo si el negocio maneja
+              cuotas o una frecuencia pactada. Si el cliente abona montos
+              variables, déjalos vacíos.
+            </p>
+          </div>
+
+          <div style={productoBox}>
+            <h3 style={subtituloInterno}>Producto vendido</h3>
+
+            <div style={grid}>
+              <Campo label="Producto del inventario">
+                <select
+                  value={productoId}
+                  onChange={(e) => seleccionarProducto(e.target.value)}
+                  style={selectStyle}
+                >
+                  <option value="">Seleccione producto vendido</option>
+                  {productos.map((producto) => (
+                    <option key={producto.id} value={producto.id}>
+                      {producto.codigo} - {producto.nombre} - Stock{" "}
+                      {stockProducto(producto)}
+                    </option>
+                  ))}
+                </select>
+              </Campo>
+
+              <Campo label="Código del producto">
+                <input
+                  value={codigoProducto}
+                  onChange={(e) => setCodigoProducto(e.target.value)}
+                  style={inputStyle}
+                  placeholder="Se llena automático"
+                />
+              </Campo>
+
+              <Campo label="Cantidad vendida">
+                <input
+                  type="number"
+                  value={cantidadProducto}
+                  onChange={(e) => setCantidadProducto(e.target.value)}
+                  style={inputStyle}
+                  placeholder="1"
+                />
+              </Campo>
+
+              <Campo label="Precio unitario">
+                <input
+                  type="number"
+                  value={precioUnitario}
+                  onChange={(e) => setPrecioUnitario(e.target.value)}
+                  style={inputStyle}
+                  placeholder="0.00"
+                />
+              </Campo>
+
+              <Campo label="Precio total">
+                <input
+                  type="number"
+                  value={totalProducto}
+                  readOnly
+                  style={inputReadOnly}
+                  placeholder="0.00"
+                />
+              </Campo>
+            </div>
+
+            <p style={notaProducto}>
+              Este registro solo asocia el producto a la cuenta. El descuento de
+              inventario se debe hacer desde Caja cuando se registre el primer
+              abono o la venta.
+            </p>
+          </div>
+
           <Campo label="Descripción">
             <textarea
-              placeholder="Ej: Cuenta existente, préstamo personal, mensualidad pendiente, servicio pendiente..."
+              placeholder="Ej: Cliente separó sala, cuenta con saldo pendiente, abonos variables..."
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
               style={textarea}
@@ -418,7 +742,11 @@ export default function CuentasPorCobrar() {
 
           <div style={grid}>
             <Campo label="Estado de cobranza">
-              <select value={estadoCobranza} onChange={(e) => setEstadoCobranza(e.target.value)} style={selectStyle}>
+              <select
+                value={estadoCobranza}
+                onChange={(e) => setEstadoCobranza(e.target.value)}
+                style={selectStyle}
+              >
                 <option>Al Día</option>
                 <option>Mora</option>
                 <option>Legal</option>
@@ -428,15 +756,31 @@ export default function CuentasPorCobrar() {
             </Campo>
 
             <Campo label="Fecha último pago">
-              <input type="date" value={fechaUltimoPago} onChange={(e) => setFechaUltimoPago(e.target.value)} style={inputStyle} />
+              <input
+                type="date"
+                value={fechaUltimoPago}
+                onChange={(e) => setFechaUltimoPago(e.target.value)}
+                style={inputStyle}
+              />
             </Campo>
 
             <Campo label="Monto último pago">
-              <input type="number" value={montoUltimoPago} onChange={(e) => setMontoUltimoPago(e.target.value)} style={inputStyle} placeholder="0.00" />
+              <input
+                type="number"
+                value={montoUltimoPago}
+                onChange={(e) => setMontoUltimoPago(e.target.value)}
+                style={inputStyle}
+                placeholder="0.00"
+              />
             </Campo>
 
             <Campo label="Responsable de cobro *">
-              <input value={responsableCobro} onChange={(e) => setResponsableCobro(e.target.value)} style={inputStyle} placeholder="Nombre del gestor" />
+              <input
+                value={responsableCobro}
+                onChange={(e) => setResponsableCobro(e.target.value)}
+                style={inputStyle}
+                placeholder="Nombre del gestor"
+              />
             </Campo>
           </div>
 
@@ -459,7 +803,11 @@ export default function CuentasPorCobrar() {
           </Campo>
 
           <div style={acciones}>
-            <button onClick={guardarCuenta} style={botonGuardar} disabled={guardando}>
+            <button
+              onClick={guardarCuenta}
+              style={botonGuardar}
+              disabled={guardando}
+            >
               {guardando ? "Guardando..." : "Guardar Cuenta por Cobrar"}
             </button>
 
@@ -676,6 +1024,13 @@ const inputStyle = {
   color: "#111827",
 };
 
+const inputReadOnly = {
+  ...inputStyle,
+  backgroundColor: "#f3f4f6",
+  color: "#6b7280",
+  fontWeight: "bold",
+};
+
 const selectStyle = {
   ...inputStyle,
   fontWeight: "600",
@@ -685,6 +1040,50 @@ const textarea = {
   ...inputStyle,
   minHeight: "95px",
   resize: "vertical",
+};
+
+const opcionalBox = {
+  background: "#f8fafc",
+  border: "1px solid #e5e7eb",
+  borderRadius: "16px",
+  padding: "18px",
+  marginTop: "8px",
+  marginBottom: "18px",
+};
+
+const productoBox = {
+  background: "#f9fafb",
+  border: "1px solid #e5e7eb",
+  borderRadius: "16px",
+  padding: "18px",
+  marginTop: "8px",
+  marginBottom: "18px",
+};
+
+const subtituloInterno = {
+  margin: "0 0 14px",
+  color: "#111827",
+};
+
+const notaSuave = {
+  margin: "4px 0 0",
+  color: "#475569",
+  background: "#ffffff",
+  border: "1px solid #e5e7eb",
+  padding: "12px",
+  borderRadius: "12px",
+  fontSize: "13px",
+};
+
+const notaProducto = {
+  margin: "4px 0 0",
+  color: "#1e40af",
+  background: "#eff6ff",
+  border: "1px solid #bfdbfe",
+  padding: "12px",
+  borderRadius: "12px",
+  fontSize: "13px",
+  fontWeight: "bold",
 };
 
 const acciones = {
