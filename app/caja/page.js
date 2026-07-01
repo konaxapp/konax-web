@@ -52,9 +52,7 @@ export default function Caja() {
   }
 
   function obtenerEmpresaId() {
-    const empresaId =
-      localStorage.getItem("empresaId") ||
-      localStorage.getItem("empresaAdminCreadaId");
+    const empresaId = localStorage.getItem("empresaId") || localStorage.getItem("empresaAdminCreadaId");
 
     if (!empresaId) {
       alert("No hay empresa activa. Configure la empresa antes de usar Caja.");
@@ -101,13 +99,15 @@ export default function Caja() {
   }
 
   function esPagoDeCuenta() {
-    return [
-      "Pago Crédito",
-      "Pago Credito",
-      "Mensualidad",
-      "Renovación",
-      "Cancelación",
-    ].includes(tipoMovimiento);
+    return ["Pago Crédito", "Pago Credito", "Mensualidad", "Renovación", "Cancelación"].includes(tipoMovimiento);
+  }
+
+  function esAbonoExistente() {
+    return esAbonoProducto() && Boolean(cuentaSeleccionada?.id);
+  }
+
+  function esAbonoNuevoConProducto() {
+    return esAbonoProducto() && !cuentaSeleccionada?.id && Boolean(productoSeleccionado);
   }
 
   const movimientosSinCliente = ["Venta Contado", "Servicio Contado"];
@@ -194,7 +194,6 @@ export default function Caja() {
   }
 
   async function cargarProductos(empresaId) {
-    // En tu sistema el inventario real se guarda en productos.
     const { data, error } = await supabase
       .from("productos")
       .select("*")
@@ -257,10 +256,17 @@ export default function Caja() {
     setCodigoProducto(codigo);
 
     const producto = productos.find(
-      (p) => String(p.codigo || "").trim() === String(codigo || "").trim()
+      (p) => String(p.codigo || "").trim().toLowerCase() === String(codigo || "").trim().toLowerCase()
     );
 
-    seleccionarProducto(producto || null);
+    if (producto) {
+      seleccionarProducto(producto);
+      return;
+    }
+
+    setProductoSeleccionado(null);
+    setValorProducto("");
+    if (!esAbonoProducto()) setMonto("");
   }
 
   function recalcularValorProducto() {
@@ -324,7 +330,6 @@ export default function Caja() {
 
       cuentasData.forEach((cuenta) => {
         const cliente = clientesDeCuentas?.find((item) => item.id === cuenta.cliente_id);
-
         if (cliente) resultados.push({ cliente, cuenta });
       });
     }
@@ -397,7 +402,7 @@ export default function Caja() {
       return false;
     }
 
-    await supabase.from("movimientos_inventario").insert([
+    const { error: errorMovimiento } = await supabase.from("movimientos_inventario").insert([
       {
         empresa_id: empresaId,
         producto_id: productoSeleccionado.id,
@@ -412,6 +417,13 @@ export default function Caja() {
           "Caja",
       },
     ]);
+
+    if (errorMovimiento) {
+      alert(
+        "Producto descontado, pero no se registró el movimiento de inventario: " +
+          errorMovimiento.message
+      );
+    }
 
     return true;
   }
@@ -552,6 +564,14 @@ export default function Caja() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId || guardando) return;
 
+    const abonoExistente = esAbonoExistente();
+    const abonoNuevoConProducto = esAbonoNuevoConProducto();
+
+    if (!tipoMovimiento) {
+      alert("Seleccione el tipo de movimiento.");
+      return;
+    }
+
     if (!monto || Number(monto) <= 0) {
       alert("Ingrese un monto válido mayor a cero.");
       return;
@@ -567,12 +587,17 @@ export default function Caja() {
       return;
     }
 
-    if (esVentaConProducto() && !productoSeleccionado) {
-      alert("Seleccione un producto del inventario.");
+    if ((esVentaCredito() || abonoNuevoConProducto) && !productoSeleccionado) {
+      alert("Seleccione un producto válido del inventario o escriba un código existente.");
       return;
     }
 
-    if (esVentaConProducto() && Number(cantidad || 0) <= 0) {
+    if (esVentaContado() && codigoProducto.trim() && !productoSeleccionado) {
+      alert("El código escrito no existe en inventario. Seleccione un producto válido.");
+      return;
+    }
+
+    if (esVentaConProducto() && !abonoExistente && Number(cantidad || 0) <= 0) {
       alert("Ingrese una cantidad válida.");
       return;
     }
@@ -582,7 +607,12 @@ export default function Caja() {
       return;
     }
 
-    if (esAbonoProducto() && Number(monto || 0) >= Number(valorProducto || 0)) {
+    if (esAbonoProducto() && !abonoExistente && !productoSeleccionado) {
+      alert("Para un abono inicial debe seleccionar un producto del inventario.");
+      return;
+    }
+
+    if (esAbonoProducto() && !abonoExistente && Number(monto || 0) >= Number(valorProducto || 0)) {
       alert("El abono debe ser menor que el valor total del producto. Si paga completo use Venta Contado.");
       return;
     }
@@ -599,13 +629,15 @@ export default function Caja() {
       localStorage.getItem("adminKonaxNombre") ||
       "Caja";
 
-    const clienteBase = esVentaConProducto()
-      ? await asegurarClienteParaVenta(empresaId)
-      : clienteSeleccionado;
+    let clienteBase = clienteSeleccionado;
 
-    if (esVentaConProducto() && !clienteBase) {
+    if ((clienteSeleccionado || nombreContado.trim()) && esVentaConProducto()) {
+      clienteBase = await asegurarClienteParaVenta(empresaId);
+    }
+
+    if ((esVentaCredito() || esAbonoProducto()) && !clienteBase) {
       setGuardando(false);
-      alert("Ingrese o seleccione un cliente para registrar la venta.");
+      alert("Ingrese o seleccione un cliente para registrar este movimiento.");
       return;
     }
 
@@ -613,12 +645,13 @@ export default function Caja() {
       concepto ||
       productoSeleccionado?.nombre ||
       productoSeleccionado?.descripcion ||
+      cuentaSeleccionada?.descripcion ||
       observacion ||
       tipoMovimiento;
 
     let cuentaParaMovimiento = cuentaSeleccionada;
 
-    if (esVentaCredito() || esAbonoProducto()) {
+    if (esVentaCredito() || abonoNuevoConProducto) {
       cuentaParaMovimiento = await crearCuentaComercialVentaCredito(
         empresaId,
         clienteBase,
@@ -635,7 +668,7 @@ export default function Caja() {
       {
         empresa_id: empresaId,
         numero_transaccion: numeroTransaccion,
-        numero_venta: numeroVenta,
+        numero_venta: cuentaParaMovimiento?.numero_cuenta || numeroVenta || null,
         cliente_id: clienteBase?.id || clienteSeleccionado?.id || null,
         informacion_comercial_id: cuentaParaMovimiento?.id || null,
         numero_cuenta: cuentaParaMovimiento?.numero_cuenta || numeroVenta || null,
@@ -653,8 +686,8 @@ export default function Caja() {
         codigo_producto: codigoProducto || productoSeleccionado?.codigo || null,
         producto_id: productoSeleccionado?.id || null,
         producto_nombre: productoSeleccionado?.nombre || null,
-        cantidad: esVentaConProducto() ? Number(cantidad || 1) : null,
-        valor_producto: esVentaConProducto() ? Number(valorProducto || 0) : null,
+        cantidad: esVentaConProducto() && !abonoExistente ? Number(cantidad || 1) : null,
+        valor_producto: esVentaConProducto() && !abonoExistente ? Number(valorProducto || 0) : null,
         observacion,
       },
     ]);
@@ -665,7 +698,9 @@ export default function Caja() {
       return;
     }
 
-    if (esVentaConProducto()) {
+    const debeDescontarInventario = esVentaContado() || esVentaCredito() || abonoNuevoConProducto;
+
+    if (debeDescontarInventario) {
       const okInventario = await descontarInventario(empresaId);
       if (!okInventario) {
         setGuardando(false);
@@ -673,8 +708,8 @@ export default function Caja() {
       }
     }
 
-    if (esPagoDeCuenta()) {
-      const okSaldo = await actualizarSaldoCuenta(empresaId, cuentaSeleccionada);
+    if (esPagoDeCuenta() || abonoExistente) {
+      const okSaldo = await actualizarSaldoCuenta(empresaId, cuentaParaMovimiento);
       if (!okSaldo) {
         setGuardando(false);
         return;
@@ -682,8 +717,10 @@ export default function Caja() {
     }
 
     alert(
-      esAbonoProducto()
-        ? `Abono registrado correctamente bajo la venta ${numeroVenta}.`
+      abonoExistente
+        ? `Abono aplicado correctamente a la cuenta ${cuentaParaMovimiento?.numero_cuenta || ""}.`
+        : esAbonoProducto()
+        ? `Abono inicial registrado correctamente bajo la venta ${numeroVenta}.`
         : esVentaCredito()
         ? `Venta crédito registrada correctamente con número ${numeroVenta}.`
         : "Movimiento registrado correctamente."
@@ -726,10 +763,7 @@ export default function Caja() {
     return fecha === new Date().toISOString().split("T")[0];
   });
 
-  const totalHoy = movimientosHoy.reduce(
-    (total, mov) => total + Number(mov.monto || 0),
-    0
-  );
+  const totalHoy = movimientosHoy.reduce((total, mov) => total + Number(mov.monto || 0), 0);
 
   return (
     <div style={pagina}>
@@ -738,58 +772,25 @@ export default function Caja() {
           <div>
             <img src="/konax-logo.png" alt="KONAX" style={logo} />
             <h1 style={titulo}>Caja</h1>
-            <p style={subtitulo}>
-              Registro de ventas, pagos, abonos, mensualidades y contratos.
-            </p>
-            <p style={negocioTexto}>
-              Tipo de negocio: <strong>{tipoNegocioEmpresa || "General"}</strong>
-            </p>
+            <p style={subtitulo}>Registro de ventas, pagos, abonos, mensualidades y contratos.</p>
+            <p style={negocioTexto}>Tipo de negocio: <strong>{tipoNegocioEmpresa || "General"}</strong></p>
           </div>
 
-          <button onClick={volverDashboard} style={botonVolver}>
-            ← Centro de Operaciones
-          </button>
+          <button onClick={volverDashboard} style={botonVolver}>← Centro de Operaciones</button>
         </div>
 
         <div style={resumenGrid}>
-          <div style={resumenCard}>
-            <span>Movimientos</span>
-            <strong>{movimientos.length}</strong>
-          </div>
-
-          <div style={resumenCard}>
-            <span>Total registrado</span>
-            <strong>${totalCaja.toFixed(2)}</strong>
-          </div>
-
-          <div style={resumenCard}>
-            <span>Movimientos hoy</span>
-            <strong>{movimientosHoy.length}</strong>
-          </div>
-
-          <div style={resumenCard}>
-            <span>Total hoy</span>
-            <strong>${totalHoy.toFixed(2)}</strong>
-          </div>
+          <div style={resumenCard}><span>Movimientos</span><strong>{movimientos.length}</strong></div>
+          <div style={resumenCard}><span>Total registrado</span><strong>${totalCaja.toFixed(2)}</strong></div>
+          <div style={resumenCard}><span>Movimientos hoy</span><strong>{movimientosHoy.length}</strong></div>
+          <div style={resumenCard}><span>Total hoy</span><strong>${totalHoy.toFixed(2)}</strong></div>
         </div>
 
         <div style={card}>
           <h2 style={tituloSeccion}>Información General</h2>
-
           <div style={grid}>
-            <Campo label="Fecha">
-              <input
-                type="date"
-                value={fechaPago}
-                onChange={(e) => setFechaPago(e.target.value)}
-                style={inputStyle}
-              />
-            </Campo>
-
-            <Campo label="N° Transacción">
-              <input value="Automático al guardar" readOnly style={inputReadOnly} />
-            </Campo>
-
+            <Campo label="Fecha"><input type="date" value={fechaPago} onChange={(e) => setFechaPago(e.target.value)} style={inputStyle} /></Campo>
+            <Campo label="N° Transacción"><input value="Automático al guardar" readOnly style={inputReadOnly} /></Campo>
             <Campo label="Tipo de movimiento">
               <select
                 value={tipoMovimiento}
@@ -797,14 +798,13 @@ export default function Caja() {
                   setTipoMovimiento(e.target.value);
                   setMonto("");
                   setValorProducto("");
+                  setCodigoProducto("");
+                  setProductoSeleccionado(null);
+                  setNumeroVentaAbono("");
                 }}
                 style={inputStyle}
               >
-                {opcionesMovimiento.map((opcion) => (
-                  <option key={opcion} value={opcion}>
-                    {opcion}
-                  </option>
-                ))}
+                {opcionesMovimiento.map((opcion) => <option key={opcion} value={opcion}>{opcion}</option>)}
               </select>
             </Campo>
           </div>
@@ -813,23 +813,9 @@ export default function Caja() {
         {!requiereCliente && (
           <div style={card}>
             <h2 style={tituloSeccion}>Cliente Contado</h2>
-
             <div style={grid}>
-              <Campo label="Nombre del cliente">
-                <input
-                  value={nombreContado}
-                  onChange={(e) => setNombreContado(e.target.value)}
-                  style={inputStyle}
-                />
-              </Campo>
-
-              <Campo label="Cédula">
-                <input
-                  value={cedulaContado}
-                  onChange={(e) => setCedulaContado(e.target.value)}
-                  style={inputStyle}
-                />
-              </Campo>
+              <Campo label="Nombre del cliente"><input value={nombreContado} onChange={(e) => setNombreContado(e.target.value)} style={inputStyle} /></Campo>
+              <Campo label="Cédula"><input value={cedulaContado} onChange={(e) => setCedulaContado(e.target.value)} style={inputStyle} /></Campo>
             </div>
           </div>
         )}
@@ -837,22 +823,9 @@ export default function Caja() {
         {requiereCliente && (
           <div style={card}>
             <h2 style={tituloSeccion}>Cliente / Cuenta</h2>
-
             <div style={toolbar}>
-              <Campo label="Buscar cliente">
-                <input
-                  placeholder="Nombre, cédula o número de cuenta..."
-                  value={buscarCliente}
-                  onChange={(e) => setBuscarCliente(e.target.value)}
-                  style={inputStyle}
-                />
-              </Campo>
-
-              <div style={botonBuscarBox}>
-                <button style={botonSecundario} onClick={buscarClientes}>
-                  Buscar
-                </button>
-              </div>
+              <Campo label="Buscar cliente"><input placeholder="Nombre, cédula o número de cuenta..." value={buscarCliente} onChange={(e) => setBuscarCliente(e.target.value)} style={inputStyle} /></Campo>
+              <div style={botonBuscarBox}><button style={botonSecundario} onClick={buscarClientes}>Buscar</button></div>
             </div>
 
             {resultadosBusqueda.length > 0 && (
@@ -864,14 +837,7 @@ export default function Caja() {
                         <td style={td}>{item.cliente.nombre}</td>
                         <td style={td}>{item.cliente.cedula}</td>
                         <td style={td}>{item.cuenta?.numero_cuenta || "Ver cuentas"}</td>
-                        <td style={td}>
-                          <button
-                            style={botonPequeno}
-                            onClick={() => seleccionarResultado(item)}
-                          >
-                            Seleccionar
-                          </button>
-                        </td>
+                        <td style={td}><button style={botonPequeno} onClick={() => seleccionarResultado(item)}>Seleccionar</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -883,41 +849,27 @@ export default function Caja() {
               <div style={clienteBox}>
                 <strong>{clienteSeleccionado.nombre}</strong>
                 <p>Cédula: {clienteSeleccionado.cedula}</p>
-
                 {cuentasCliente.length > 0 && (
                   <Campo label="Seleccionar cuenta">
                     <select
                       value={cuentaSeleccionada?.id || ""}
                       onChange={(e) => {
-                        const cuenta = cuentasCliente.find(
-                          (item) => item.id === e.target.value
-                        );
-
-                        setCuentaSeleccionada(cuenta);
-
+                        const cuenta = cuentasCliente.find((item) => item.id === e.target.value);
+                        setCuentaSeleccionada(cuenta || null);
                         const vendedorCuenta = cuenta?.responsable || cuenta?.vendedor || "";
-
                         if (vendedorCuenta) setResponsable(vendedorCuenta);
                       }}
                       style={inputStyle}
                     >
+                      <option value="">Nueva venta / sin cuenta existente</option>
                       {cuentasCliente.map((cuenta) => (
-                        <option key={cuenta.id} value={cuenta.id}>
-                          {cuenta.numero_cuenta} - {cuenta.descripcion} - Saldo $
-                          {Number(cuenta.saldo_actual || 0).toLocaleString()}
-                        </option>
+                        <option key={cuenta.id} value={cuenta.id}>{cuenta.numero_cuenta} - {cuenta.descripcion} - Saldo ${Number(cuenta.saldo_actual || 0).toLocaleString()}</option>
                       ))}
                     </select>
                   </Campo>
                 )}
-
-                <p>
-                  Cuenta / Venta: <strong>{cuentaSeleccionada?.numero_cuenta || "Sin cuenta"}</strong>
-                </p>
-
-                <p>
-                  Saldo actual: <strong>${Number(cuentaSeleccionada?.saldo_actual || 0).toFixed(2)}</strong>
-                </p>
+                <p>Cuenta / Venta: <strong>{cuentaSeleccionada?.numero_cuenta || "Nueva venta"}</strong></p>
+                <p>Saldo actual: <strong>${Number(cuentaSeleccionada?.saldo_actual || 0).toFixed(2)}</strong></p>
               </div>
             )}
           </div>
@@ -926,62 +878,31 @@ export default function Caja() {
         {esVentaConProducto() && (
           <div style={card}>
             <h2 style={tituloSeccion}>Producto / Inventario</h2>
-
             <div style={grid}>
-              <Campo label="Código del producto">
-                <input
-                  value={codigoProducto}
-                  onChange={(e) => seleccionarProductoPorCodigo(e.target.value)}
-                  placeholder="Ej. SALA-001"
-                  style={inputStyle}
-                />
-              </Campo>
-
+              <Campo label="Código del producto"><input value={codigoProducto} onChange={(e) => seleccionarProductoPorCodigo(e.target.value)} placeholder="Ej. SALA-001" style={inputStyle} /></Campo>
               <Campo label="Seleccionar producto">
                 <select
                   value={productoSeleccionado?.id || ""}
                   onChange={(e) => {
-                    const producto = productos.find(
-                      (item) => String(item.id) === String(e.target.value)
-                    );
-
+                    const producto = productos.find((item) => String(item.id) === String(e.target.value));
                     seleccionarProducto(producto || null);
                   }}
                   style={inputStyle}
                 >
                   <option value="">Seleccione producto</option>
                   {productos.map((producto) => (
-                    <option key={producto.id} value={producto.id}>
-                      {producto.codigo} - {producto.nombre} - Stock {stockProducto(producto)}
-                    </option>
+                    <option key={producto.id} value={producto.id}>{producto.codigo} - {producto.nombre} - Stock {stockProducto(producto)}</option>
                   ))}
                 </select>
               </Campo>
-
-              <Campo label="Cantidad">
-                <input
-                  type="number"
-                  value={cantidad}
-                  onChange={(e) => setCantidad(e.target.value)}
-                  style={inputStyle}
-                />
-              </Campo>
-
-              <Campo label="Valor producto">
-                <input value={valorProducto} readOnly style={inputReadOnly} />
-              </Campo>
-
-              {esAbonoProducto() && (
-                <Campo label="N° venta de abono">
-                  <input
-                    value={numeroVentaAbono}
-                    onChange={(e) => setNumeroVentaAbono(e.target.value)}
-                    placeholder="Vacío = se genera automático"
-                    style={inputStyle}
-                  />
-                </Campo>
+              <Campo label="Cantidad"><input type="number" value={cantidad} onChange={(e) => setCantidad(e.target.value)} style={inputStyle} /></Campo>
+              <Campo label="Valor producto"><input value={valorProducto} readOnly style={inputReadOnly} /></Campo>
+              {esAbonoProducto() && !cuentaSeleccionada && (
+                <Campo label="N° venta de abono"><input value={numeroVentaAbono} onChange={(e) => setNumeroVentaAbono(e.target.value)} placeholder="Vacío = se genera automático" style={inputStyle} /></Campo>
               )}
             </div>
+
+            {esAbonoProducto() && cuentaSeleccionada && <p style={ayuda}>Este abono se aplicará a una cuenta existente. No descontará inventario nuevamente.</p>}
 
             {productoSeleccionado && (
               <div style={clienteBox}>
@@ -997,105 +918,42 @@ export default function Caja() {
 
         <div style={card}>
           <h2 style={tituloSeccion}>Detalle del Movimiento</h2>
-
           <div style={grid}>
             <Campo label="Método de pago">
-              <select
-                value={metodoPago}
-                onChange={(e) => setMetodoPago(e.target.value)}
-                style={inputStyle}
-              >
-                <option>Efectivo</option>
-                <option>Transferencia</option>
-                <option>Yappy</option>
-                <option>Tarjeta</option>
-                <option>Cheque</option>
-                <option>Otro</option>
+              <select value={metodoPago} onChange={(e) => setMetodoPago(e.target.value)} style={inputStyle}>
+                <option>Efectivo</option><option>Transferencia</option><option>Yappy</option><option>Tarjeta</option><option>Cheque</option><option>Otro</option>
               </select>
             </Campo>
-
-            <Campo label={esAbonoProducto() ? "Monto abonado" : "Monto"}>
-              <input
-                type="number"
-                value={monto}
-                onChange={(e) => setMonto(e.target.value)}
-                style={inputStyle}
-              />
-            </Campo>
-
-            <Campo label="Concepto / Descripción">
-              <input
-                value={concepto}
-                onChange={(e) => setConcepto(e.target.value)}
-                style={inputStyle}
-              />
-            </Campo>
-
+            <Campo label={esAbonoProducto() ? "Monto abonado" : "Monto"}><input type="number" value={monto} onChange={(e) => setMonto(e.target.value)} style={inputStyle} /></Campo>
+            <Campo label="Concepto / Descripción"><input value={concepto} onChange={(e) => setConcepto(e.target.value)} style={inputStyle} /></Campo>
             <Campo label="Vendedor / Responsable">
-              <select
-                value={responsable}
-                onChange={(e) => setResponsable(e.target.value)}
-                style={inputStyle}
-              >
+              <select value={responsable} onChange={(e) => setResponsable(e.target.value)} style={inputStyle}>
                 <option value="">Seleccione responsable</option>
-
-                {vendedores.map((vendedor) => (
-                  <option key={vendedor.id} value={vendedor.nombre}>
-                    {vendedor.nombre} - {vendedor.rol}
-                  </option>
-                ))}
+                {vendedores.map((vendedor) => <option key={vendedor.id} value={vendedor.nombre}>{vendedor.nombre} - {vendedor.rol}</option>)}
               </select>
             </Campo>
           </div>
 
-          <Campo label="Observación">
-            <textarea
-              value={observacion}
-              onChange={(e) => setObservacion(e.target.value)}
-              style={textarea}
-            />
-          </Campo>
+          <Campo label="Observación"><textarea value={observacion} onChange={(e) => setObservacion(e.target.value)} style={textarea} /></Campo>
 
           <div style={acciones}>
-            <button style={boton} onClick={guardarMovimiento} disabled={guardando}>
-              {guardando ? "Guardando..." : "Registrar Movimiento"}
-            </button>
-
-            <button style={botonLimpiar} onClick={limpiarFormulario}>
-              Limpiar
-            </button>
+            <button style={boton} onClick={guardarMovimiento} disabled={guardando}>{guardando ? "Guardando..." : "Registrar Movimiento"}</button>
+            <button style={botonLimpiar} onClick={limpiarFormulario}>Limpiar</button>
           </div>
         </div>
 
         <div style={card}>
           <h2 style={tituloSeccion}>Movimientos Registrados</h2>
-
           <div style={{ overflowX: "auto" }}>
             <table style={tabla}>
               <thead>
                 <tr>
-                  <th style={th}>Fecha</th>
-                  <th style={th}>Transacción</th>
-                  <th style={th}>N° Venta</th>
-                  <th style={th}>Cliente</th>
-                  <th style={th}>Cédula</th>
-                  <th style={th}>Cuenta</th>
-                  <th style={th}>Producto</th>
-                  <th style={th}>Tipo</th>
-                  <th style={th}>Método</th>
-                  <th style={th}>Monto</th>
-                  <th style={th}>Vendedor / Responsable</th>
-                  <th style={th}>Estado</th>
+                  <th style={th}>Fecha</th><th style={th}>Transacción</th><th style={th}>N° Venta</th><th style={th}>Cliente</th><th style={th}>Cédula</th><th style={th}>Cuenta</th><th style={th}>Producto</th><th style={th}>Tipo</th><th style={th}>Método</th><th style={th}>Monto</th><th style={th}>Vendedor / Responsable</th><th style={th}>Estado</th>
                 </tr>
               </thead>
-
               <tbody>
                 {movimientos.length === 0 ? (
-                  <tr>
-                    <td style={td} colSpan="12">
-                      No hay movimientos registrados.
-                    </td>
-                  </tr>
+                  <tr><td style={td} colSpan="12">No hay movimientos registrados.</td></tr>
                 ) : (
                   movimientos.map((movimiento) => (
                     <tr key={movimiento.id}>
@@ -1109,9 +967,7 @@ export default function Caja() {
                       <td style={td}>{movimiento.tipo}</td>
                       <td style={td}>{movimiento.metodo_pago}</td>
                       <td style={td}>${Number(movimiento.monto || 0).toFixed(2)}</td>
-                      <td style={td}>
-                        {movimiento.vendedor_responsable || movimiento.responsable || "-"}
-                      </td>
+                      <td style={td}>{movimiento.vendedor_responsable || movimiento.responsable || "-"}</td>
                       <td style={td}>{movimiento.estado}</td>
                     </tr>
                   ))
@@ -1134,228 +990,33 @@ function Campo({ label, children }) {
   );
 }
 
-const pagina = {
-  minHeight: "100vh",
-  background: "linear-gradient(135deg, #ecfdf5 0%, #f3f4f6 45%, #ffffff 100%)",
-  padding: "35px",
-  fontFamily: "Arial, sans-serif",
-};
-
-const contenedor = {
-  maxWidth: "1450px",
-  margin: "0 auto",
-};
-
-const header = {
-  background: "linear-gradient(135deg, #111827, #064e3b)",
-  color: "#ffffff",
-  borderRadius: "22px",
-  padding: "28px",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "20px",
-  flexWrap: "wrap",
-  marginBottom: "22px",
-  boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
-};
-
-const logo = {
-  width: "125px",
-  height: "auto",
-  marginBottom: "10px",
-  background: "#ffffff",
-  borderRadius: "14px",
-  padding: "8px",
-};
-
-const titulo = {
-  fontSize: "38px",
-  margin: "0 0 8px 0",
-  color: "#ffffff",
-};
-
-const subtitulo = {
-  color: "#dcfce7",
-  fontSize: "16px",
-  margin: 0,
-};
-
-const negocioTexto = {
-  color: "#bbf7d0",
-  fontSize: "14px",
-  marginTop: "8px",
-};
-
-const resumenGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: "16px",
-  marginBottom: "20px",
-};
-
-const resumenCard = {
-  background: "#ffffff",
-  color: "#111827",
-  padding: "20px",
-  borderRadius: "16px",
-  display: "grid",
-  gap: "8px",
-  boxShadow: "0 6px 16px rgba(0,0,0,0.08)",
-  border: "1px solid #e5e7eb",
-};
-
-const card = {
-  background: "#ffffff",
-  padding: "25px",
-  borderRadius: "18px",
-  marginBottom: "20px",
-  boxShadow: "0 6px 18px rgba(0,0,0,0.07)",
-  border: "1px solid #e5e7eb",
-};
-
-const tituloSeccion = {
-  marginTop: 0,
-  marginBottom: "20px",
-  color: "#111827",
-};
-
-const grid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))",
-  gap: "15px",
-};
-
-const toolbar = {
-  display: "grid",
-  gridTemplateColumns: "1fr auto",
-  gap: "12px",
-  alignItems: "end",
-};
-
-const campo = {
-  display: "flex",
-  flexDirection: "column",
-};
-
-const labelStyle = {
-  display: "block",
-  marginBottom: "6px",
-  fontSize: "14px",
-  color: "#374151",
-  fontWeight: "bold",
-};
-
-const inputStyle = {
-  width: "100%",
-  padding: "12px",
-  borderRadius: "9px",
-  border: "1px solid #9ca3af",
-  fontSize: "14px",
-  boxSizing: "border-box",
-  background: "#ffffff",
-  color: "#111827",
-};
-
-const inputReadOnly = {
-  ...inputStyle,
-  background: "#f3f4f6",
-  color: "#6b7280",
-  fontWeight: "bold",
-};
-
-const textarea = {
-  ...inputStyle,
-  minHeight: "110px",
-  marginTop: "0px",
-};
-
-const botonBuscarBox = {
-  display: "flex",
-  alignItems: "end",
-};
-
-const acciones = {
-  display: "flex",
-  gap: "12px",
-  flexWrap: "wrap",
-  marginTop: "18px",
-};
-
-const boton = {
-  background: "#16a34a",
-  color: "#ffffff",
-  border: "none",
-  padding: "14px 28px",
-  borderRadius: "10px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const botonLimpiar = {
-  background: "#111827",
-  color: "#ffffff",
-  border: "none",
-  padding: "14px 28px",
-  borderRadius: "10px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const botonVolver = {
-  background: "#ffffff",
-  color: "#111827",
-  border: "none",
-  padding: "13px 20px",
-  borderRadius: "10px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const botonSecundario = {
-  background: "#111827",
-  color: "#ffffff",
-  border: "none",
-  padding: "12px 18px",
-  borderRadius: "9px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const botonPequeno = {
-  background: "#16a34a",
-  color: "#ffffff",
-  border: "none",
-  padding: "8px 12px",
-  borderRadius: "8px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const clienteBox = {
-  marginTop: "15px",
-  background: "#f9fafb",
-  border: "1px solid #e5e7eb",
-  padding: "16px",
-  borderRadius: "14px",
-};
-
-const tabla = {
-  width: "100%",
-  borderCollapse: "collapse",
-};
-
-const th = {
-  textAlign: "left",
-  padding: "13px",
-  borderBottom: "1px solid #e5e7eb",
-  background: "#111827",
-  color: "#ffffff",
-  fontSize: "13px",
-};
-
-const td = {
-  padding: "13px",
-  borderBottom: "1px solid #f3f4f6",
-  fontSize: "13px",
-};
+const pagina = { minHeight: "100vh", background: "linear-gradient(135deg, #ecfdf5 0%, #f3f4f6 45%, #ffffff 100%)", padding: "35px", fontFamily: "Arial, sans-serif" };
+const contenedor = { maxWidth: "1450px", margin: "0 auto" };
+const header = { background: "linear-gradient(135deg, #111827, #064e3b)", color: "#ffffff", borderRadius: "22px", padding: "28px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "20px", flexWrap: "wrap", marginBottom: "22px", boxShadow: "0 8px 24px rgba(0,0,0,0.16)" };
+const logo = { width: "125px", height: "auto", marginBottom: "10px", background: "#ffffff", borderRadius: "14px", padding: "8px" };
+const titulo = { fontSize: "38px", margin: "0 0 8px 0", color: "#ffffff" };
+const subtitulo = { color: "#dcfce7", fontSize: "16px", margin: 0 };
+const negocioTexto = { color: "#bbf7d0", fontSize: "14px", marginTop: "8px" };
+const resumenGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "16px", marginBottom: "20px" };
+const resumenCard = { background: "#ffffff", color: "#111827", padding: "20px", borderRadius: "16px", display: "grid", gap: "8px", boxShadow: "0 6px 16px rgba(0,0,0,0.08)", border: "1px solid #e5e7eb" };
+const card = { background: "#ffffff", padding: "25px", borderRadius: "18px", marginBottom: "20px", boxShadow: "0 6px 18px rgba(0,0,0,0.07)", border: "1px solid #e5e7eb" };
+const tituloSeccion = { marginTop: 0, marginBottom: "20px", color: "#111827" };
+const grid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: "15px" };
+const toolbar = { display: "grid", gridTemplateColumns: "1fr auto", gap: "12px", alignItems: "end" };
+const campo = { display: "flex", flexDirection: "column" };
+const labelStyle = { display: "block", marginBottom: "6px", fontSize: "14px", color: "#374151", fontWeight: "bold" };
+const inputStyle = { width: "100%", padding: "12px", borderRadius: "9px", border: "1px solid #9ca3af", fontSize: "14px", boxSizing: "border-box", background: "#ffffff", color: "#111827" };
+const inputReadOnly = { ...inputStyle, background: "#f3f4f6", color: "#6b7280", fontWeight: "bold" };
+const textarea = { ...inputStyle, minHeight: "110px", marginTop: "0px" };
+const botonBuscarBox = { display: "flex", alignItems: "end" };
+const acciones = { display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "18px" };
+const boton = { background: "#16a34a", color: "#ffffff", border: "none", padding: "14px 28px", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" };
+const botonLimpiar = { background: "#111827", color: "#ffffff", border: "none", padding: "14px 28px", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" };
+const botonVolver = { background: "#ffffff", color: "#111827", border: "none", padding: "13px 20px", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" };
+const botonSecundario = { background: "#111827", color: "#ffffff", border: "none", padding: "12px 18px", borderRadius: "9px", fontWeight: "bold", cursor: "pointer" };
+const botonPequeno = { background: "#16a34a", color: "#ffffff", border: "none", padding: "8px 12px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" };
+const clienteBox = { marginTop: "15px", background: "#f9fafb", border: "1px solid #e5e7eb", padding: "16px", borderRadius: "14px" };
+const ayuda = { background: "#eff6ff", color: "#1e40af", border: "1px solid #bfdbfe", padding: "12px", borderRadius: "12px", marginTop: "14px", fontSize: "14px", fontWeight: "bold" };
+const tabla = { width: "100%", borderCollapse: "collapse" };
+const th = { textAlign: "left", padding: "13px", borderBottom: "1px solid #e5e7eb", background: "#111827", color: "#ffffff", fontSize: "13px" };
+const td = { padding: "13px", borderBottom: "1px solid #f3f4f6", fontSize: "13px" };
