@@ -84,6 +84,16 @@ export default function CuentasPorCobrar() {
     return Math.floor(diferencia / (1000 * 60 * 60 * 24));
   }
 
+  function requiereResponsableCobro() {
+    return !["Separación / Abono inicial", "Cuenta por cobrar"].includes(
+      tipoProducto
+    );
+  }
+
+  function responsableFinal() {
+    return responsableCobro.trim() || "Sin asignar";
+  }
+
   async function cargarProductos(empresaId) {
     const { data, error } = await supabase
       .from("productos")
@@ -149,7 +159,7 @@ export default function CuentasPorCobrar() {
     }
 
     if (!tipoProducto) {
-      setTipoProducto("Crédito");
+      setTipoProducto("Separación / Abono inicial");
     }
   }
 
@@ -241,7 +251,7 @@ export default function CuentasPorCobrar() {
       return;
     }
 
-    if (!responsableCobro) {
+    if (requiereResponsableCobro() && !responsableCobro.trim()) {
       alert("Ingrese responsable de cobro.");
       return;
     }
@@ -342,7 +352,7 @@ export default function CuentasPorCobrar() {
           cuota: cuota === "" ? null : Number(cuota || 0),
           fecha_inicio: fechaInicio || null,
           fecha_vencimiento: fechaVencimiento || null,
-          responsable: responsableCobro,
+          responsable: responsableFinal(),
           estado: estadoCuenta,
           observacion: observacionCobro,
           producto_id: productoId || null,
@@ -379,7 +389,7 @@ export default function CuentasPorCobrar() {
           dias_mora: diasMora,
           fecha_ultimo_pago: fechaUltimoPago || null,
           monto_ultimo_pago: Number(montoUltimoPago || 0),
-          responsable_cobro: responsableCobro,
+          responsable_cobro: responsableFinal(),
           observacion_cobro:
             observacionCobro || "Cuenta creada desde Cuentas por Cobrar",
         },
@@ -774,15 +784,33 @@ export default function CuentasPorCobrar() {
               />
             </Campo>
 
-            <Campo label="Responsable de cobro *">
+            <Campo
+              label={
+                requiereResponsableCobro()
+                  ? "Responsable de cobro *"
+                  : "Responsable de cobro"
+              }
+            >
               <input
                 value={responsableCobro}
                 onChange={(e) => setResponsableCobro(e.target.value)}
                 style={inputStyle}
-                placeholder="Nombre del gestor"
+                placeholder={
+                  requiereResponsableCobro()
+                    ? "Nombre del gestor"
+                    : "Opcional. Vacío = Sin asignar"
+                }
               />
             </Campo>
           </div>
+
+          {!requiereResponsableCobro() && (
+            <p style={notaSuave}>
+              Para separación, abono inicial o cuenta por cobrar simple, puedes
+              guardar sin gestor. El sistema registrará el responsable como
+              "Sin asignar".
+            </p>
+          )}
 
           <Campo label="Observación inicial / historial previo">
             <textarea
@@ -1066,7 +1094,7 @@ const subtituloInterno = {
 };
 
 const notaSuave = {
-  margin: "4px 0 0",
+  margin: "4px 0 14px",
   color: "#475569",
   background: "#ffffff",
   border: "1px solid #e5e7eb",
