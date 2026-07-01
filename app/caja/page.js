@@ -6,9 +6,7 @@ import { supabase } from "../../lib/supabase";
 export default function Caja() {
   const [tipoNegocioEmpresa, setTipoNegocioEmpresa] = useState("");
   const [tipoMovimiento, setTipoMovimiento] = useState("");
-  const [fechaPago, setFechaPago] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [fechaPago, setFechaPago] = useState(new Date().toISOString().split("T")[0]);
 
   const [buscarCliente, setBuscarCliente] = useState("");
   const [resultadosBusqueda, setResultadosBusqueda] = useState([]);
@@ -18,6 +16,12 @@ export default function Caja() {
 
   const [nombreContado, setNombreContado] = useState("");
   const [cedulaContado, setCedulaContado] = useState("");
+
+  const [productos, setProductos] = useState([]);
+  const [codigoProducto, setCodigoProducto] = useState("");
+  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
+  const [cantidad, setCantidad] = useState("1");
+  const [valorProducto, setValorProducto] = useState("");
 
   const [metodoPago, setMetodoPago] = useState("Efectivo");
   const [monto, setMonto] = useState("");
@@ -31,31 +35,61 @@ export default function Caja() {
     iniciarCaja();
   }, []);
 
+  useEffect(() => {
+    recalcularValorProducto();
+  }, [tipoMovimiento, productoSeleccionado, cantidad]);
+
   async function iniciarCaja() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
 
     await cargarTipoNegocioEmpresa(empresaId);
     await cargarVendedores(empresaId);
+    await cargarProductos(empresaId);
     await cargarMovimientos();
   }
 
-  async function cargarVendedores(empresaId) {
-    const { data, error } = await supabase
-      .from("usuarios")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .eq("estado", "Activo")
-      .in("rol", ["Vendedor", "Supervisor", "Administrador"])
-      .order("nombre", { ascending: true });
+  function obtenerEmpresaId() {
+    const empresaId =
+      localStorage.getItem("empresaId") ||
+      localStorage.getItem("empresaAdminCreadaId");
 
-    if (error) {
-      alert("Error cargando vendedores/responsables: " + error.message);
-      return;
+    if (!empresaId) {
+      alert("No hay empresa activa. Configure la empresa antes de usar Caja.");
+      return null;
     }
 
-    setVendedores(data || []);
+    return empresaId;
   }
+
+  function volverDashboard() {
+    window.location.href = "/dashboard";
+  }
+
+  function generarTransaccion() {
+    return "TX-" + Date.now();
+  }
+
+  function esVentaConProducto() {
+    return [
+      "Venta Contado",
+      "Venta Crédito",
+      "Abono"
+    ].includes(tipoMovimiento);
+  }
+
+  function esPagoDeCuenta() {
+    return [
+      "Pago Crédito",
+      "Pago Credito",
+      "Mensualidad",
+      "Renovación",
+      "Cancelación"
+    ].includes(tipoMovimiento);
+  }
+
+  const movimientosSinCliente = ["Venta Contado", "Servicio Contado"];
+  const requiereCliente = !movimientosSinCliente.includes(tipoMovimiento);
 
   async function cargarTipoNegocioEmpresa(empresaId) {
     const { data, error } = await supabase
@@ -86,142 +120,60 @@ export default function Caja() {
       tipo.includes("gimnasio") ||
       tipo.includes("club") ||
       tipo.includes("academia") ||
-      tipo.includes("escuela") ||
-      tipo.includes("colegio") ||
       tipo.includes("suscripciones") ||
-      tipo.includes("membresias") ||
-      tipo.includes("membresías")
+      tipo.includes("membres")
     ) {
       return ["Inscripción / Membresía", "Mensualidad", "Renovación", "Abono"];
     }
 
     if (
-      tipo.includes("iptv") ||
-      tipo.includes("internet") ||
-      tipo.includes("cable") ||
-      tipo.includes("streaming") ||
-      tipo.includes("servicio por membresía")
-    ) {
-      return ["Contrato", "Mensualidad", "Renovación", "Abono"];
-    }
-
-    if (
       tipo.includes("muebleria") ||
       tipo.includes("mueblería") ||
-      tipo.includes("electrónica") ||
       tipo.includes("electronica") ||
+      tipo.includes("electrónica") ||
       tipo.includes("financiera") ||
       tipo.includes("cooperativa") ||
-      tipo.includes("casa de empeño")
+      tipo.includes("empeño")
     ) {
-      return [
-        "Venta Contado",
-        "Venta Crédito",
-        "Abono",
-        "Pago Crédito",
-        "Cancelación",
-      ];
+      return ["Venta Contado", "Venta Crédito", "Abono", "Pago Crédito", "Cancelación"];
     }
 
-    if (
-      tipo.includes("ferreteria") ||
-      tipo.includes("ferretería") ||
-      tipo.includes("farmacia") ||
-      tipo.includes("abarroteria") ||
-      tipo.includes("abarrotería") ||
-      tipo.includes("tienda") ||
-      tipo.includes("mercado") ||
-      tipo.includes("supermercado") ||
-      tipo.includes("repuestos") ||
-      tipo.includes("boutique")
-    ) {
-      return ["Venta Contado", "Venta Crédito", "Abono", "Pago Crédito"];
-    }
-
-    return [
-      "Venta Contado",
-      "Venta Crédito",
-      "Abono",
-      "Pago Crédito",
-      "Mensualidad",
-      "Contrato",
-    ];
+    return ["Venta Contado", "Venta Crédito", "Abono", "Pago Crédito", "Mensualidad"];
   }
 
   const opcionesMovimiento = obtenerOpcionesMovimiento(tipoNegocioEmpresa);
 
-  const movimientosSinCliente = ["Venta Contado", "Servicio Contado"];
-  const requiereCliente = !movimientosSinCliente.includes(tipoMovimiento);
+  async function cargarVendedores(empresaId) {
+    const { data, error } = await supabase
+      .from("usuarios")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("estado", "Activo")
+      .in("rol", ["Vendedor", "Supervisor", "Administrador"])
+      .order("nombre", { ascending: true });
 
-  const movimientosQueBajanSaldo = [
-    "Abono",
-    "Pago Crédito",
-    "Pago Credito",
-    "COBRO CRÉDITO",
-    "Cobro Crédito",
-    "Mensualidad",
-    "Renovación",
-    "Cancelación",
-  ];
-
-  function volverDashboard() {
-    window.location.href = "/dashboard";
-  }
-
-  function obtenerEmpresaId() {
-    const empresaId =
-      localStorage.getItem("empresaId") ||
-      localStorage.getItem("empresaAdminCreadaId");
-
-    if (!empresaId) {
-      alert("No hay empresa activa. Configure la empresa antes de usar Caja.");
-      return null;
+    if (error) {
+      alert("Error cargando vendedores: " + error.message);
+      return;
     }
 
-    return empresaId;
+    setVendedores(data || []);
   }
 
-  function generarTransaccion() {
-    return "TX-" + Date.now();
-  }
+  async function cargarProductos(empresaId) {
+    const { data, error } = await supabase
+      .from("inventario")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("estado", "Activo")
+      .order("nombre", { ascending: true });
 
-  function sumarMesesFecha(fechaTexto, meses) {
-    if (!fechaTexto) return "";
+    if (error) {
+      alert("Error cargando inventario: " + error.message);
+      return;
+    }
 
-    const [anio, mes, dia] = fechaTexto.split("-").map(Number);
-    const fecha = new Date(anio, mes - 1 + meses, dia);
-
-    return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(
-      2,
-      "0"
-    )}-${String(fecha.getDate()).padStart(2, "0")}`;
-  }
-
-  function calcularDiasParaVencer(fechaVencimiento) {
-    if (!fechaVencimiento) return 0;
-
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-
-    const [anio, mes, dia] = fechaVencimiento.split("-").map(Number);
-    const vence = new Date(anio, mes - 1, dia);
-    vence.setHours(0, 0, 0, 0);
-
-    return Math.ceil((vence - hoy) / (1000 * 60 * 60 * 24));
-  }
-
-  function calcularNuevoVencimiento(fechaActual, periodicidad) {
-    const fechaBase =
-      calcularDiasParaVencer(fechaActual) < 0
-        ? new Date().toISOString().split("T")[0]
-        : fechaActual;
-
-    if (periodicidad === "Mensual") return sumarMesesFecha(fechaBase, 1);
-    if (periodicidad === "Trimestral") return sumarMesesFecha(fechaBase, 3);
-    if (periodicidad === "Semestral") return sumarMesesFecha(fechaBase, 6);
-    if (periodicidad === "Anual") return sumarMesesFecha(fechaBase, 12);
-
-    return sumarMesesFecha(fechaBase, 1);
+    setProductos(data || []);
   }
 
   async function cargarMovimientos() {
@@ -240,6 +192,41 @@ export default function Caja() {
     }
 
     setMovimientos(data || []);
+  }
+
+  function seleccionarProductoPorCodigo(codigo) {
+    setCodigoProducto(codigo);
+
+    const producto = productos.find(
+      (p) => String(p.codigo || "").trim() === String(codigo || "").trim()
+    );
+
+    setProductoSeleccionado(producto || null);
+
+    if (producto) {
+      const precio =
+        tipoMovimiento === "Venta Crédito"
+          ? Number(producto.precio_credito || 0)
+          : Number(producto.precio_contado || 0);
+
+      setValorProducto(precio);
+      setConcepto(producto.nombre || producto.descripcion || "");
+      setMonto(precio);
+    }
+  }
+
+  function recalcularValorProducto() {
+    if (!productoSeleccionado || !esVentaConProducto()) return;
+
+    const precioUnitario =
+      tipoMovimiento === "Venta Crédito"
+        ? Number(productoSeleccionado.precio_credito || 0)
+        : Number(productoSeleccionado.precio_contado || 0);
+
+    const total = precioUnitario * Number(cantidad || 1);
+
+    setValorProducto(total);
+    setMonto(total);
   }
 
   async function buscarClientes() {
@@ -266,49 +253,33 @@ export default function Caja() {
       return;
     }
 
-    if (clientesData && clientesData.length > 0) {
+    if (clientesData) {
       resultados = clientesData.map((cliente) => ({
         cliente,
         cuenta: null,
       }));
     }
 
-    const { data: cuentasData, error: errorCuentas } = await supabase
+    const { data: cuentasData } = await supabase
       .from("informacion_comercial")
       .select("*")
       .eq("empresa_id", empresaId)
       .ilike("numero_cuenta", `%${texto}%`);
 
-    if (errorCuentas) {
-      alert("Error buscando cuenta: " + errorCuentas.message);
-      return;
-    }
-
     if (cuentasData && cuentasData.length > 0) {
       const idsClientes = cuentasData.map((cuenta) => cuenta.cliente_id);
 
-      const { data: clientesDeCuentas, error: errorClientesCuentas } =
-        await supabase
-          .from("clientes")
-          .select("*")
-          .eq("empresa_id", empresaId)
-          .in("id", idsClientes);
-
-      if (errorClientesCuentas) {
-        alert("Error buscando clientes de cuentas: " + errorClientesCuentas.message);
-        return;
-      }
+      const { data: clientesDeCuentas } = await supabase
+        .from("clientes")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .in("id", idsClientes);
 
       cuentasData.forEach((cuenta) => {
-        const cliente = clientesDeCuentas?.find(
-          (item) => item.id === cuenta.cliente_id
-        );
+        const cliente = clientesDeCuentas?.find((item) => item.id === cuenta.cliente_id);
 
         if (cliente) {
-          resultados.push({
-            cliente,
-            cuenta,
-          });
+          resultados.push({ cliente, cuenta });
         }
       });
     }
@@ -334,7 +305,6 @@ export default function Caja() {
       .order("created_at", { ascending: false });
 
     if (error || !data || data.length === 0) {
-      alert("Cliente seleccionado, pero no tiene cuenta comercial.");
       setCuentasCliente([]);
       setCuentaSeleccionada(null);
       return;
@@ -350,60 +320,85 @@ export default function Caja() {
       data[0]?.vendedor ||
       "";
 
-    if (vendedorCuenta) {
-      setResponsable(vendedorCuenta);
-    }
+    if (vendedorCuenta) setResponsable(vendedorCuenta);
   }
 
-  async function renovarSuscripcionDesdeCaja(empresaId, cuenta, montoPago) {
-    const { data: suscripcion, error } = await supabase
-      .from("suscripciones")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .eq("informacion_comercial_id", cuenta.id)
-      .maybeSingle();
+  async function descontarInventario(empresaId) {
+    if (!productoSeleccionado) return true;
 
-    if (error || !suscripcion) return;
+    const stockActual = Number(productoSeleccionado.stock || 0);
+    const cantidadVenta = Number(cantidad || 1);
 
-    const nuevaFecha = calcularNuevoVencimiento(
-      suscripcion.fecha_vencimiento,
-      suscripcion.periodicidad
-    );
+    if (cantidadVenta <= 0) {
+      alert("La cantidad debe ser mayor a cero.");
+      return false;
+    }
 
-    const precio = Number(suscripcion.precio || cuenta.cuota || montoPago || 0);
+    if (stockActual < cantidadVenta) {
+      alert("Stock insuficiente para este producto.");
+      return false;
+    }
 
-    await supabase
-      .from("suscripciones")
+    const nuevoStock = stockActual - cantidadVenta;
+
+    const { error } = await supabase
+      .from("inventario")
       .update({
-        fecha_vencimiento: nuevaFecha,
-        estado: "Activo",
+        stock: nuevoStock,
       })
-      .eq("id", suscripcion.id)
-      .eq("empresa_id", empresaId);
+      .eq("empresa_id", empresaId)
+      .eq("id", productoSeleccionado.id);
 
-    await supabase
+    if (error) {
+      alert("Error descontando inventario: " + error.message);
+      return false;
+    }
+
+    return true;
+  }
+
+  async function actualizarSaldoCuenta(empresaId) {
+    if (!cuentaSeleccionada) return true;
+
+    const nuevoSaldo = Number(cuentaSeleccionada.saldo_actual || 0) - Number(monto || 0);
+    const saldoFinal = nuevoSaldo < 0 ? 0 : nuevoSaldo;
+
+    const { error: errorSaldo } = await supabase
       .from("informacion_comercial")
       .update({
-        fecha_vencimiento: nuevaFecha,
-        saldo_actual: precio,
-        estado: "Activo",
-        estado_servicio: "Activo",
-        fecha_suspension: null,
-        fecha_cancelacion: null,
-        motivo_suspension: null,
-      })
-      .eq("id", cuenta.id)
-      .eq("empresa_id", empresaId);
-
-    await supabase
-      .from("informacion_cobranza")
-      .update({
-        estado_cobranza: "Al Día",
-        fecha_ultimo_pago: fechaPago,
-        monto_ultimo_pago: Number(montoPago),
+        saldo_actual: saldoFinal,
+        estado: saldoFinal <= 0 ? "Cancelado" : cuentaSeleccionada.estado,
       })
       .eq("empresa_id", empresaId)
-      .eq("informacion_comercial_id", cuenta.id);
+      .eq("id", cuentaSeleccionada.id);
+
+    if (errorSaldo) {
+      alert("Movimiento registrado, pero error actualizando saldo: " + errorSaldo.message);
+      return false;
+    }
+
+    const datosCobranza = {
+      fecha_ultimo_pago: fechaPago,
+      monto_ultimo_pago: Number(monto),
+    };
+
+    if (saldoFinal <= 0) {
+      datosCobranza.estado_cobranza = "Cancelado";
+      datosCobranza.estado_promesa = null;
+    }
+
+    const { error: errorCobranza } = await supabase
+      .from("informacion_cobranza")
+      .update(datosCobranza)
+      .eq("empresa_id", empresaId)
+      .eq("informacion_comercial_id", cuentaSeleccionada.id);
+
+    if (errorCobranza) {
+      alert("Movimiento registrado, pero error actualizando cobranza: " + errorCobranza.message);
+      return false;
+    }
+
+    return true;
   }
 
   async function guardarMovimiento() {
@@ -420,8 +415,13 @@ export default function Caja() {
       return;
     }
 
-    if (requiereCliente && !cuentaSeleccionada) {
-      alert("Seleccione una cuenta.");
+    if (esPagoDeCuenta() && !cuentaSeleccionada) {
+      alert("Seleccione una cuenta para aplicar el pago.");
+      return;
+    }
+
+    if (esVentaConProducto() && !productoSeleccionado) {
+      alert("Seleccione un producto del inventario.");
       return;
     }
 
@@ -436,6 +436,13 @@ export default function Caja() {
       localStorage.getItem("adminKonaxNombre") ||
       "Caja";
 
+    const descripcionFinal =
+      concepto ||
+      productoSeleccionado?.nombre ||
+      productoSeleccionado?.descripcion ||
+      observacion ||
+      tipoMovimiento;
+
     const { error } = await supabase.from("caja").insert([
       {
         empresa_id: empresaId,
@@ -445,7 +452,7 @@ export default function Caja() {
         numero_cuenta: cuentaSeleccionada?.numero_cuenta || null,
         fecha_pago: fechaPago,
         tipo: tipoMovimiento,
-        descripcion: concepto || observacion || tipoMovimiento,
+        descripcion: descripcionFinal,
         monto: Number(monto),
         metodo_pago: metodoPago,
         usuario: usuarioRegistro,
@@ -465,69 +472,21 @@ export default function Caja() {
       return;
     }
 
-    const debeBajarSaldo =
-      requiereCliente &&
-      cuentaSeleccionada &&
-      movimientosQueBajanSaldo.includes(tipoMovimiento);
-
-    if (debeBajarSaldo) {
-      const nuevoSaldo =
-        Number(cuentaSeleccionada.saldo_actual || 0) - Number(monto);
-
-      const saldoFinal = nuevoSaldo < 0 ? 0 : nuevoSaldo;
-
-      const { error: errorSaldo } = await supabase
-        .from("informacion_comercial")
-        .update({
-          saldo_actual: saldoFinal,
-          estado: saldoFinal <= 0 ? "Cancelado" : cuentaSeleccionada.estado,
-        })
-        .eq("empresa_id", empresaId)
-        .eq("id", cuentaSeleccionada.id);
-
-      if (errorSaldo) {
-        alert("Movimiento registrado, pero error actualizando saldo: " + errorSaldo.message);
-        return;
-      }
-
-      const { error: errorCobranza } = await supabase
-        .from("informacion_cobranza")
-        .update({
-          fecha_ultimo_pago: fechaPago,
-          monto_ultimo_pago: Number(monto),
-          estado_cobranza: saldoFinal <= 0 ? "Cancelado" : undefined,
-        })
-        .eq("empresa_id", empresaId)
-        .eq("informacion_comercial_id", cuentaSeleccionada.id);
-
-      if (errorCobranza) {
-        alert("Movimiento registrado, pero error actualizando cobranza: " + errorCobranza.message);
-        return;
-      }
+    if (esVentaConProducto()) {
+      const okInventario = await descontarInventario(empresaId);
+      if (!okInventario) return;
     }
 
-    if (
-      tipoMovimiento === "Suscripción" ||
-      tipoMovimiento === "Membresía" ||
-      tipoMovimiento === "Inscripción / Membresía" ||
-      tipoMovimiento === "Mensualidad" ||
-      tipoMovimiento === "Renovación"
-    ) {
-      await renovarSuscripcionDesdeCaja(
-        empresaId,
-        cuentaSeleccionada,
-        Number(monto)
-      );
+    if (esPagoDeCuenta()) {
+      const okSaldo = await actualizarSaldoCuenta(empresaId);
+      if (!okSaldo) return;
     }
 
-    alert(
-      tipoMovimiento === "Venta Crédito"
-        ? "Venta crédito registrada correctamente. No se descontó saldo porque es creación de deuda."
-        : "Movimiento registrado correctamente."
-    );
+    alert("Movimiento registrado correctamente.");
 
     limpiarFormulario();
-    cargarMovimientos();
+    await cargarProductos(empresaId);
+    await cargarMovimientos();
   }
 
   function limpiarFormulario() {
@@ -542,6 +501,10 @@ export default function Caja() {
     setCuentaSeleccionada(null);
     setNombreContado("");
     setCedulaContado("");
+    setCodigoProducto("");
+    setProductoSeleccionado(null);
+    setCantidad("1");
+    setValorProducto("");
     setMetodoPago("Efectivo");
     setMonto("");
     setConcepto("");
@@ -572,7 +535,7 @@ export default function Caja() {
             <img src="/konax-logo.png" alt="KONAX" style={logo} />
             <h1 style={titulo}>Caja</h1>
             <p style={subtitulo}>
-              Registro de ventas, pagos, abonos, mensualidades, membresías y contratos.
+              Registro de ventas, pagos, abonos, mensualidades y contratos.
             </p>
             <p style={negocioTexto}>
               Tipo de negocio: <strong>{tipoNegocioEmpresa || "General"}</strong>
@@ -713,7 +676,7 @@ export default function Caja() {
                 <strong>{clienteSeleccionado.nombre}</strong>
                 <p>Cédula: {clienteSeleccionado.cedula}</p>
 
-                {cuentasCliente.length > 1 && (
+                {cuentasCliente.length > 0 && (
                   <Campo label="Seleccionar cuenta">
                     <select
                       value={cuentaSeleccionada?.id || ""}
@@ -727,9 +690,7 @@ export default function Caja() {
                         const vendedorCuenta =
                           cuenta?.responsable || cuenta?.vendedor || "";
 
-                        if (vendedorCuenta) {
-                          setResponsable(vendedorCuenta);
-                        }
+                        if (vendedorCuenta) setResponsable(vendedorCuenta);
                       }}
                       style={inputStyle}
                     >
@@ -754,6 +715,69 @@ export default function Caja() {
                     ${Number(cuentaSeleccionada?.saldo_actual || 0).toFixed(2)}
                   </strong>
                 </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {esVentaConProducto() && (
+          <div style={card}>
+            <h2 style={tituloSeccion}>Producto / Inventario</h2>
+
+            <div style={grid}>
+              <Campo label="Código del producto">
+                <input
+                  value={codigoProducto}
+                  onChange={(e) => seleccionarProductoPorCodigo(e.target.value)}
+                  placeholder="Ej. SALA-001"
+                  style={inputStyle}
+                />
+              </Campo>
+
+              <Campo label="Seleccionar producto">
+                <select
+                  value={productoSeleccionado?.id || ""}
+                  onChange={(e) => {
+                    const producto = productos.find(
+                      (item) => String(item.id) === String(e.target.value)
+                    );
+
+                    setProductoSeleccionado(producto || null);
+                    setCodigoProducto(producto?.codigo || "");
+                    setConcepto(producto?.nombre || producto?.descripcion || "");
+                  }}
+                  style={inputStyle}
+                >
+                  <option value="">Seleccione producto</option>
+                  {productos.map((producto) => (
+                    <option key={producto.id} value={producto.id}>
+                      {producto.codigo} - {producto.nombre} - Stock {producto.stock}
+                    </option>
+                  ))}
+                </select>
+              </Campo>
+
+              <Campo label="Cantidad">
+                <input
+                  type="number"
+                  value={cantidad}
+                  onChange={(e) => setCantidad(e.target.value)}
+                  style={inputStyle}
+                />
+              </Campo>
+
+              <Campo label="Valor producto">
+                <input value={valorProducto} readOnly style={inputReadOnly} />
+              </Campo>
+            </div>
+
+            {productoSeleccionado && (
+              <div style={clienteBox}>
+                <strong>{productoSeleccionado.nombre}</strong>
+                <p>Código: {productoSeleccionado.codigo}</p>
+                <p>Stock disponible: {productoSeleccionado.stock}</p>
+                <p>Precio contado: ${Number(productoSeleccionado.precio_contado || 0).toFixed(2)}</p>
+                <p>Precio crédito: ${Number(productoSeleccionado.precio_credito || 0).toFixed(2)}</p>
               </div>
             )}
           </div>
@@ -863,24 +887,18 @@ export default function Caja() {
                 ) : (
                   movimientos.map((movimiento) => (
                     <tr key={movimiento.id}>
-                      <td style={td}>
-                        {movimiento.fecha_pago || movimiento.created_at}
-                      </td>
+                      <td style={td}>{movimiento.fecha_pago || movimiento.created_at}</td>
                       <td style={td}>{movimiento.numero_transaccion || "-"}</td>
                       <td style={td}>{movimiento.cliente_nombre || "-"}</td>
                       <td style={td}>{movimiento.cliente_cedula || "-"}</td>
                       <td style={td}>{movimiento.numero_cuenta || "-"}</td>
                       <td style={td}>{movimiento.tipo}</td>
                       <td style={td}>{movimiento.metodo_pago}</td>
-                      <td style={td}>
-                        ${Number(movimiento.monto || 0).toFixed(2)}
-                      </td>
+                      <td style={td}>${Number(movimiento.monto || 0).toFixed(2)}</td>
                       <td style={td}>{movimiento.descripcion || "-"}</td>
                       <td style={td}>{movimiento.usuario || "-"}</td>
                       <td style={td}>
-                        {movimiento.vendedor_responsable ||
-                          movimiento.responsable ||
-                          "-"}
+                        {movimiento.vendedor_responsable || movimiento.responsable || "-"}
                       </td>
                       <td style={td}>{movimiento.estado}</td>
                     </tr>
