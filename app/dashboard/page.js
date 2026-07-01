@@ -23,7 +23,8 @@ export default function Dashboard() {
       localStorage.getItem("empresaAdminCreadaId");
 
     const usuarioId =
-      localStorage.getItem("usuarioId") || localStorage.getItem("adminKonaxId");
+      localStorage.getItem("usuarioId") ||
+      localStorage.getItem("adminKonaxId");
 
     const rolUsuarioLocal =
       localStorage.getItem("usuarioRol") ||
@@ -56,7 +57,10 @@ export default function Dashboard() {
       return;
     }
 
-    if (empresa.estado === "Suspendido" || empresa.estado_plan === "Suspendido") {
+    if (
+      empresa.estado === "Suspendido" ||
+      empresa.estado_plan === "Suspendido"
+    ) {
       alert("El servicio de esta empresa está suspendido.");
       localStorage.clear();
       window.location.href = "/login";
@@ -76,45 +80,25 @@ export default function Dashboard() {
 
   async function cargarModulosEmpresa(empresaId) {
     const { data, error } = await supabase
-      .from("empresa_modulos")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
+      .from("modulos_empresa")
+      .select("modulo, activo")
+      .eq("empresa_id", empresaId);
 
     if (error) {
-      alert("Error cargando módulos de empresa: " + error.message);
+      alert("Error cargando módulos del plan: " + error.message);
       setModulos({});
       return;
     }
 
-    if (!data) {
-      setModulos({});
-      return;
-    }
+    const mapa = {};
 
-    setModulos({
-      dashboard: true,
-      clientes: Boolean(data.clientes),
-      vista_cliente: Boolean(data.vista_cliente),
-      creditos: Boolean(data.venta_credito),
-      caja: Boolean(data.caja),
-      control_caja: Boolean(data.control_caja),
-      cobranza: Boolean(data.cobranza),
-      gestor_cobros: Boolean(data.cobranza || data.dashboard_cobros),
-      abonos: Boolean(data.caja || data.cobranza),
-      pagos: false,
-      inventario: Boolean(data.inventario),
-      movimientos_inventario: Boolean(data.inventario),
-      ventas: Boolean(data.venta_credito),
-      suscripciones: Boolean(data.suscripciones),
-      recargos: Boolean(data.recargos),
-      reportes: Boolean(data.dashboard_ventas || data.dashboard_cobros),
-      usuarios: true,
-      configuracion: true,
-      dashboard_ventas: Boolean(data.dashboard_ventas),
-      dashboard_cobros: Boolean(data.dashboard_cobros),
-      gastos: Boolean(data.egresos),
+    (data || []).forEach((item) => {
+      mapa[item.modulo] = Boolean(item.activo);
     });
+
+    mapa.dashboard = true;
+
+    setModulos(mapa);
   }
 
   async function cargarPermisosUsuario(empresaId, usuarioId) {
@@ -140,7 +124,12 @@ export default function Dashboard() {
     setPermisosUsuario(permisos);
   }
 
+  function esAdministrador() {
+    return String(usuarioRol || "").toLowerCase().trim() === "administrador";
+  }
+
   function moduloActivo(codigo) {
+    if (codigo === "dashboard") return true;
     return Boolean(modulos?.[codigo]);
   }
 
@@ -149,7 +138,13 @@ export default function Dashboard() {
   }
 
   function puedeVer(codigoModulo, codigoPermiso = codigoModulo) {
-    return moduloActivo(codigoModulo) && tienePermiso(codigoPermiso);
+    const incluidoEnPlan = moduloActivo(codigoModulo);
+
+    if (!incluidoEnPlan) return false;
+
+    if (esAdministrador()) return true;
+
+    return tienePermiso(codigoPermiso);
   }
 
   function cerrarSesion() {
@@ -228,7 +223,8 @@ export default function Dashboard() {
           <p style={etiqueta}>Centro de Operaciones Empresariales</p>
           <h1 style={titulo}>{empresaNombre}</h1>
           <p style={plan}>
-            Plan activo: <strong>{planNombre}</strong> · Estado: <strong>{estadoPlan}</strong>
+            Plan activo: <strong>{planNombre}</strong> · Estado:{" "}
+            <strong>{estadoPlan}</strong>
             <br />
             Tipo de negocio: <strong>{tipoNegocio || "No definido"}</strong>
           </p>
@@ -253,7 +249,7 @@ export default function Dashboard() {
 
         {tarjetasActivas.length === 0 && (
           <div style={sinModulos}>
-            Este usuario no tiene funciones permitidas. Revise sus permisos.
+            Este usuario no tiene funciones permitidas o el plan no tiene módulos cargados.
           </div>
         )}
       </main>
@@ -261,25 +257,166 @@ export default function Dashboard() {
   );
 }
 
-const layout = { display: "flex", minHeight: "100vh", background: "#eef2f7", fontFamily: "Arial, sans-serif" };
-const sidebar = { width: "260px", background: "linear-gradient(180deg, #111827, #064e3b)", color: "#ffffff", padding: "22px 16px", boxSizing: "border-box", position: "sticky", top: 0, height: "100vh", overflowY: "auto" };
-const brandBox = { display: "flex", alignItems: "center", gap: "12px", marginBottom: "22px" };
-const logo = { width: "58px", background: "#ffffff", borderRadius: "14px", padding: "7px" };
-const brandTitle = { margin: 0, fontSize: "22px" };
-const brandSub = { margin: "4px 0 0", color: "#bbf7d0", fontSize: "12px" };
-const empresaBox = { background: "rgba(255,255,255,0.10)", padding: "14px", borderRadius: "14px", marginBottom: "18px", display: "grid", gap: "5px", fontSize: "14px" };
-const menu = { display: "grid", gap: "8px" };
-const menuItem = { width: "100%", display: "flex", alignItems: "center", gap: "10px", background: "rgba(255,255,255,0.08)", color: "#ffffff", border: "1px solid rgba(255,255,255,0.08)", padding: "12px", borderRadius: "12px", cursor: "pointer", fontWeight: "bold", textAlign: "left" };
-const menuIcono = { fontSize: "19px" };
-const botonSalir = { width: "100%", marginTop: "18px", background: "#ffffff", color: "#111827", border: "none", padding: "12px", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" };
-const contenido = { flex: 1, padding: "30px", boxSizing: "border-box" };
-const hero = { background: "linear-gradient(135deg, #111827, #064e3b)", color: "#ffffff", padding: "28px", borderRadius: "22px", marginBottom: "22px", boxShadow: "0 8px 24px rgba(0,0,0,0.16)" };
-const etiqueta = { margin: 0, color: "#bbf7d0", fontSize: "14px", fontWeight: "bold" };
-const titulo = { margin: "4px 0", fontSize: "36px", fontWeight: "bold" };
-const plan = { color: "#dcfce7", marginTop: "6px", fontSize: "15px" };
-const resumenGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "16px", marginBottom: "22px" };
-const resumenCard = { background: "#ffffff", padding: "20px", borderRadius: "18px", boxShadow: "0 3px 12px rgba(0,0,0,0.06)" };
-const resumenLabel = { margin: 0, color: "#6b7280", fontSize: "13px" };
-const resumenValor = { margin: "8px 0 0", color: "#111827", fontSize: "30px" };
-const resumenValorTexto = { margin: "8px 0 0", color: "#111827", fontSize: "22px" };
-const sinModulos = { background: "#ffffff", padding: "20px", borderRadius: "12px", color: "#666", marginTop: "20px" };
+const layout = {
+  display: "flex",
+  minHeight: "100vh",
+  background: "#eef2f7",
+  fontFamily: "Arial, sans-serif",
+};
+
+const sidebar = {
+  width: "260px",
+  background: "linear-gradient(180deg, #111827, #064e3b)",
+  color: "#ffffff",
+  padding: "22px 16px",
+  boxSizing: "border-box",
+  position: "sticky",
+  top: 0,
+  height: "100vh",
+  overflowY: "auto",
+};
+
+const brandBox = {
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  marginBottom: "22px",
+};
+
+const logo = {
+  width: "58px",
+  background: "#ffffff",
+  borderRadius: "14px",
+  padding: "7px",
+};
+
+const brandTitle = {
+  margin: 0,
+  fontSize: "22px",
+};
+
+const brandSub = {
+  margin: "4px 0 0",
+  color: "#bbf7d0",
+  fontSize: "12px",
+};
+
+const empresaBox = {
+  background: "rgba(255,255,255,0.10)",
+  padding: "14px",
+  borderRadius: "14px",
+  marginBottom: "18px",
+  display: "grid",
+  gap: "5px",
+  fontSize: "14px",
+};
+
+const menu = {
+  display: "grid",
+  gap: "8px",
+};
+
+const menuItem = {
+  width: "100%",
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  background: "rgba(255,255,255,0.08)",
+  color: "#ffffff",
+  border: "1px solid rgba(255,255,255,0.08)",
+  padding: "12px",
+  borderRadius: "12px",
+  cursor: "pointer",
+  fontWeight: "bold",
+  textAlign: "left",
+};
+
+const menuIcono = {
+  fontSize: "19px",
+};
+
+const botonSalir = {
+  width: "100%",
+  marginTop: "18px",
+  background: "#ffffff",
+  color: "#111827",
+  border: "none",
+  padding: "12px",
+  borderRadius: "10px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const contenido = {
+  flex: 1,
+  padding: "30px",
+  boxSizing: "border-box",
+};
+
+const hero = {
+  background: "linear-gradient(135deg, #111827, #064e3b)",
+  color: "#ffffff",
+  padding: "28px",
+  borderRadius: "22px",
+  marginBottom: "22px",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
+};
+
+const etiqueta = {
+  margin: 0,
+  color: "#bbf7d0",
+  fontSize: "14px",
+  fontWeight: "bold",
+};
+
+const titulo = {
+  margin: "4px 0",
+  fontSize: "36px",
+  fontWeight: "bold",
+};
+
+const plan = {
+  color: "#dcfce7",
+  marginTop: "6px",
+  fontSize: "15px",
+};
+
+const resumenGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: "16px",
+  marginBottom: "22px",
+};
+
+const resumenCard = {
+  background: "#ffffff",
+  padding: "20px",
+  borderRadius: "18px",
+  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
+};
+
+const resumenLabel = {
+  margin: 0,
+  color: "#6b7280",
+  fontSize: "13px",
+};
+
+const resumenValor = {
+  margin: "8px 0 0",
+  color: "#111827",
+  fontSize: "30px",
+};
+
+const resumenValorTexto = {
+  margin: "8px 0 0",
+  color: "#111827",
+  fontSize: "22px",
+};
+
+const sinModulos = {
+  background: "#ffffff",
+  padding: "20px",
+  borderRadius: "12px",
+  color: "#666",
+  marginTop: "20px",
+};
