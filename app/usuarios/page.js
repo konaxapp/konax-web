@@ -7,6 +7,7 @@ export default function Usuarios() {
   const [empresaId, setEmpresaId] = useState("");
   const [empresaNombre, setEmpresaNombre] = useState("");
   const [planNombre, setPlanNombre] = useState("");
+  const [planCodigo, setPlanCodigo] = useState("");
   const [modulosPlan, setModulosPlan] = useState({});
 
   const [nombre, setNombre] = useState("");
@@ -108,10 +109,108 @@ export default function Usuarios() {
     }
   }, [empresaId]);
 
+  function construirModulosPorPlan(codigoPlan) {
+    const codigo = String(codigoPlan || "").toLowerCase().trim();
+
+    if (codigo === "cobros") {
+      return {
+        dashboard: true,
+        reportes: true,
+        clientes: true,
+        vista_cliente: true,
+        creditos: true,
+        cobranza: true,
+        gestor_cobros: true,
+        abonos: true,
+        caja: true,
+        control_caja: true,
+        gastos: false,
+        recargos: false,
+        inventario: false,
+        movimientos_inventario: false,
+        ventas: false,
+        suscripciones: false,
+        dashboard_ventas: false,
+        usuarios: true,
+        configuracion: true,
+      };
+    }
+
+    if (codigo === "ventas_gestion") {
+      return {
+        dashboard: true,
+        reportes: true,
+        clientes: true,
+        vista_cliente: true,
+        creditos: true,
+        cobranza: true,
+        gestor_cobros: true,
+        abonos: true,
+        caja: true,
+        control_caja: true,
+        gastos: true,
+        inventario: true,
+        movimientos_inventario: true,
+        ventas: true,
+        recargos: false,
+        suscripciones: false,
+        dashboard_ventas: true,
+        usuarios: true,
+        configuracion: true,
+      };
+    }
+
+    if (codigo === "pro") {
+      return {
+        dashboard: true,
+        reportes: true,
+        clientes: true,
+        vista_cliente: true,
+        creditos: true,
+        cobranza: true,
+        gestor_cobros: true,
+        abonos: true,
+        caja: true,
+        control_caja: true,
+        gastos: true,
+        recargos: true,
+        inventario: true,
+        movimientos_inventario: true,
+        ventas: true,
+        suscripciones: true,
+        dashboard_ventas: true,
+        usuarios: true,
+        configuracion: true,
+      };
+    }
+
+    return {
+      dashboard: true,
+      reportes: false,
+      clientes: false,
+      vista_cliente: false,
+      creditos: false,
+      cobranza: false,
+      gestor_cobros: false,
+      abonos: false,
+      caja: false,
+      control_caja: false,
+      gastos: false,
+      recargos: false,
+      inventario: false,
+      movimientos_inventario: false,
+      ventas: false,
+      suscripciones: false,
+      dashboard_ventas: false,
+      usuarios: false,
+      configuracion: false,
+    };
+  }
+
   async function cargarEmpresa() {
     const { data, error } = await supabase
       .from("empresas")
-      .select("nombre, plan_nombre")
+      .select("nombre, plan_nombre, plan_codigo")
       .eq("id", empresaId)
       .maybeSingle();
 
@@ -123,30 +222,75 @@ export default function Usuarios() {
     if (data) {
       setEmpresaNombre(data.nombre || empresaNombre || "Empresa seleccionada");
       setPlanNombre(data.plan_nombre || "Sin plan");
+      setPlanCodigo(data.plan_codigo || "");
     }
   }
 
   async function cargarModulosPlan() {
+    const { data: empresa, error: errorEmpresa } = await supabase
+      .from("empresas")
+      .select("plan_codigo, plan_nombre")
+      .eq("id", empresaId)
+      .maybeSingle();
+
+    if (errorEmpresa) {
+      alert("Error cargando plan de empresa: " + errorEmpresa.message);
+      setModulosPlan(construirModulosPorPlan(""));
+      return;
+    }
+
+    const codigoPlan = String(empresa?.plan_codigo || "").toLowerCase().trim();
+    const modulosBase = construirModulosPorPlan(codigoPlan);
+
     const { data, error } = await supabase
       .from("modulos_empresa")
       .select("modulo, activo")
       .eq("empresa_id", empresaId);
 
     if (error) {
-      alert("Error cargando módulos del plan: " + error.message);
-      setModulosPlan({});
+      setModulosPlan(modulosBase);
       return;
     }
 
-    const mapa = {};
-
+    const mapaTabla = {};
     (data || []).forEach((item) => {
-      mapa[item.modulo] = Boolean(item.activo);
+      mapaTabla[item.modulo] = Boolean(item.activo);
     });
 
-    mapa.dashboard = true;
+    const tieneFilas = (data || []).length > 0;
 
-    setModulosPlan(mapa);
+    if (!tieneFilas) {
+      setModulosPlan(modulosBase);
+      return;
+    }
+
+    const mapaFinal = {
+      ...modulosBase,
+      ...mapaTabla,
+      dashboard: true,
+    };
+
+    if (codigoPlan === "cobros") {
+      mapaFinal.clientes = true;
+      mapaFinal.vista_cliente = true;
+      mapaFinal.creditos = true;
+      mapaFinal.cobranza = true;
+      mapaFinal.gestor_cobros = true;
+      mapaFinal.abonos = true;
+      mapaFinal.caja = true;
+      mapaFinal.control_caja = true;
+      mapaFinal.reportes = true;
+      mapaFinal.usuarios = true;
+      mapaFinal.configuracion = true;
+      mapaFinal.gastos = false;
+      mapaFinal.recargos = false;
+      mapaFinal.inventario = false;
+      mapaFinal.movimientos_inventario = false;
+      mapaFinal.ventas = false;
+      mapaFinal.suscripciones = false;
+    }
+
+    setModulosPlan(mapaFinal);
   }
 
   async function cargarRoles() {
@@ -229,9 +373,7 @@ export default function Usuarios() {
     }
 
     if (!moduloPermitidoPorPlan(permiso.codigo)) {
-      alert(
-        `El módulo "${permiso.nombre}" no está incluido en el plan ${planNombre || "actual"}.`
-      );
+      alert(`El módulo "${permiso.nombre}" no está incluido en el plan ${planNombre || "actual"}.`);
       return;
     }
 
@@ -368,9 +510,7 @@ export default function Usuarios() {
       return;
     }
 
-    const esAdministrador =
-      String(rolSeleccionado.nombre || "").toLowerCase().trim() ===
-      "administrador";
+    const esAdministrador = String(rolSeleccionado.nombre || "").toLowerCase().trim() === "administrador";
 
     const permisosIniciales = permisosDisponibles.map((permiso) => ({
       empresa_id: empresaId,
@@ -387,10 +527,7 @@ export default function Usuarios() {
       });
 
     if (errorPermisos) {
-      alert(
-        "Usuario creado, pero hubo error creando permisos: " +
-          errorPermisos.message
-      );
+      alert("Usuario creado, pero hubo error creando permisos: " + errorPermisos.message);
       return;
     }
 
@@ -460,8 +597,7 @@ export default function Usuarios() {
     }
 
     const administradorEmpresa = (usuariosActuales || []).find(
-      (usuario) =>
-        String(usuario.rol || "").toLowerCase().trim() === "administrador"
+      (usuario) => String(usuario.rol || "").toLowerCase().trim() === "administrador"
     );
 
     if (!administradorEmpresa) {
@@ -497,7 +633,6 @@ export default function Usuarios() {
     localStorage.removeItem("adminKonaxNombre");
     localStorage.removeItem("adminKonaxCorreo");
     localStorage.removeItem("adminKonaxRol");
-
     localStorage.removeItem("empresaAdminCreadaId");
     localStorage.removeItem("empresaAdminCreadaNombre");
     localStorage.removeItem("categoriaNegocioAdmin");
@@ -508,22 +643,13 @@ export default function Usuarios() {
     localStorage.setItem("nombreUsuario", administradorEmpresa.nombre || "");
     localStorage.setItem("usuarioCorreo", administradorEmpresa.correo || "");
     localStorage.setItem("correoUsuario", administradorEmpresa.correo || "");
-
     localStorage.setItem("empresaId", empresaId);
-    localStorage.setItem(
-      "empresaNombre",
-      empresaActualizada?.nombre || empresaNombre || ""
-    );
-
+    localStorage.setItem("empresaNombre", empresaActualizada?.nombre || empresaNombre || "");
     localStorage.setItem("usuarioRol", "Administrador");
     localStorage.setItem("rolUsuario", "Administrador");
     localStorage.setItem("rolId", administradorEmpresa.rol_id || "");
-
     localStorage.setItem("tipoNegocio", empresaActualizada?.tipo_negocio || "");
-    localStorage.setItem(
-      "categoriaNegocio",
-      empresaActualizada?.categoria_negocio || ""
-    );
+    localStorage.setItem("categoriaNegocio", empresaActualizada?.categoria_negocio || "");
 
     alert("Configuración finalizada.");
     window.location.replace("/dashboard");
@@ -583,11 +709,7 @@ export default function Usuarios() {
           <KPI titulo="Roles" valor={roles.length} icono="🔐" />
           <KPI
             titulo="Permisos activos"
-            valor={
-              usuarioSeleccionado
-                ? `${permisosActivos}/${permisosPermitidosTotal}`
-                : "-"
-            }
+            valor={usuarioSeleccionado ? `${permisosActivos}/${permisosPermitidosTotal}` : "-"}
             icono="✅"
           />
         </div>
@@ -597,122 +719,66 @@ export default function Usuarios() {
             <div style={card}>
               <div style={cardHeader}>
                 <h2 style={tituloSeccion}>Crear Usuario</h2>
-                <p style={textoSuave}>
-                  Crea usuarios y asígnales un rol inicial.
-                </p>
+                <p style={textoSuave}>Crea usuarios y asígnales un rol inicial.</p>
               </div>
 
               <div style={grid}>
                 <Campo label="Nombre">
-                  <input
-                    type="text"
-                    placeholder="Nombre completo"
-                    value={nombre}
-                    onChange={(e) => setNombre(e.target.value)}
-                    style={inputStyle}
-                  />
+                  <input type="text" placeholder="Nombre completo" value={nombre} onChange={(e) => setNombre(e.target.value)} style={inputStyle} />
                 </Campo>
 
                 <Campo label="Correo">
-                  <input
-                    type="email"
-                    placeholder="usuario@empresa.com"
-                    value={correo}
-                    onChange={(e) => setCorreo(e.target.value)}
-                    style={inputStyle}
-                  />
+                  <input type="email" placeholder="usuario@empresa.com" value={correo} onChange={(e) => setCorreo(e.target.value)} style={inputStyle} />
                 </Campo>
 
                 <Campo label="Contraseña">
-                  <input
-                    type="text"
-                    placeholder="Ej. 123456"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    style={inputStyle}
-                  />
+                  <input type="text" placeholder="Ej. 123456" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} />
                 </Campo>
 
                 <Campo label="Rol">
-                  <select
-                    value={rolId}
-                    onChange={(e) => setRolId(e.target.value)}
-                    style={inputStyle}
-                  >
-                    {roles.length === 0 && (
-                      <option value="">No hay roles configurados</option>
-                    )}
-
+                  <select value={rolId} onChange={(e) => setRolId(e.target.value)} style={inputStyle}>
+                    {roles.length === 0 && <option value="">No hay roles configurados</option>}
                     {roles.map((rol) => (
-                      <option key={rol.id} value={rol.id}>
-                        {rol.nombre}
-                      </option>
+                      <option key={rol.id} value={rol.id}>{rol.nombre}</option>
                     ))}
                   </select>
                 </Campo>
               </div>
 
               <div style={acciones}>
-                <button
-                  onClick={crearUsuario}
-                  style={botonAzul}
-                  disabled={guardando}
-                >
+                <button onClick={crearUsuario} style={botonAzul} disabled={guardando}>
                   {guardando ? "Guardando..." : "Crear Usuario"}
                 </button>
 
-                <button onClick={limpiarFormulario} style={botonNegro}>
-                  Limpiar
-                </button>
+                <button onClick={limpiarFormulario} style={botonNegro}>Limpiar</button>
               </div>
             </div>
 
             <div style={card}>
               <div style={cardHeader}>
                 <h2 style={tituloSeccion}>Buscar usuario</h2>
-                <p style={textoSuave}>
-                  Selecciona un usuario para modificar sus permisos.
-                </p>
+                <p style={textoSuave}>Selecciona un usuario para modificar sus permisos.</p>
               </div>
 
-              <input
-                value={busquedaUsuario}
-                onChange={(e) => setBusquedaUsuario(e.target.value)}
-                placeholder="Buscar por nombre, correo o rol..."
-                style={inputStyle}
-              />
+              <input value={busquedaUsuario} onChange={(e) => setBusquedaUsuario(e.target.value)} placeholder="Buscar por nombre, correo o rol..." style={inputStyle} />
 
               <div style={usuariosLista}>
                 {usuariosFiltrados.map((usuario) => (
-                  <button
-                    key={usuario.id}
-                    style={
-                      usuarioSeleccionado?.id === usuario.id
-                        ? usuarioActivo
-                        : usuarioInactivo
-                    }
-                    onClick={() => seleccionarUsuario(usuario)}
-                  >
+                  <button key={usuario.id} style={usuarioSeleccionado?.id === usuario.id ? usuarioActivo : usuarioInactivo} onClick={() => seleccionarUsuario(usuario)}>
                     <strong>{usuario.nombre}</strong>
                     <span>{usuario.correo}</span>
                     <small>{usuario.rol || "Sin rol"}</small>
                   </button>
                 ))}
 
-                {usuariosFiltrados.length === 0 && (
-                  <p style={textoSuave}>No hay usuarios con esa búsqueda.</p>
-                )}
+                {usuariosFiltrados.length === 0 && <p style={textoSuave}>No hay usuarios con esa búsqueda.</p>}
               </div>
             </div>
 
             <div style={card}>
               <div style={cardHeader}>
-                <h2 style={tituloSeccion}>
-                  Usuarios de la Empresa ({usuarios.length})
-                </h2>
-                <p style={textoSuave}>
-                  Administra los usuarios registrados para esta empresa.
-                </p>
+                <h2 style={tituloSeccion}>Usuarios de la Empresa ({usuarios.length})</h2>
+                <p style={textoSuave}>Administra los usuarios registrados para esta empresa.</p>
               </div>
 
               <div style={tablaBox}>
@@ -730,37 +796,20 @@ export default function Usuarios() {
                   <tbody>
                     {usuarios.length === 0 && (
                       <tr>
-                        <td style={tdStyle} colSpan="5">
-                          No hay usuarios creados.
-                        </td>
+                        <td style={tdStyle} colSpan="5">No hay usuarios creados.</td>
                       </tr>
                     )}
 
                     {usuarios.map((usuario) => (
                       <tr key={usuario.id}>
-                        <td style={tdStyle}>
-                          <strong>{usuario.nombre}</strong>
-                        </td>
+                        <td style={tdStyle}><strong>{usuario.nombre}</strong></td>
                         <td style={tdStyle}>{usuario.correo}</td>
                         <td style={tdStyle}>{usuario.rol || "-"}</td>
                         <td style={tdStyle}>
-                          <span
-                            style={
-                              usuario.estado === "Activo"
-                                ? estadoActivo
-                                : estadoInactivo
-                            }
-                          >
-                            {usuario.estado || "Activo"}
-                          </span>
+                          <span style={usuario.estado === "Activo" ? estadoActivo : estadoInactivo}>{usuario.estado || "Activo"}</span>
                         </td>
                         <td style={tdStyle}>
-                          <button
-                            style={botonEliminar}
-                            onClick={() => eliminarUsuario(usuario.id)}
-                          >
-                            Eliminar
-                          </button>
+                          <button style={botonEliminar} onClick={() => eliminarUsuario(usuario.id)}>Eliminar</button>
                         </td>
                       </tr>
                     ))}
@@ -768,9 +817,7 @@ export default function Usuarios() {
                 </table>
               </div>
 
-              <button onClick={finalizarConfiguracion} style={botonVerde}>
-                Finalizar Configuración
-              </button>
+              <button onClick={finalizarConfiguracion} style={botonVerde}>Finalizar Configuración</button>
             </div>
           </div>
 
@@ -778,48 +825,28 @@ export default function Usuarios() {
             {!usuarioSeleccionado ? (
               <div style={cardSticky}>
                 <h2 style={tituloSeccion}>Permisos</h2>
-                <p style={textoSuave}>
-                  Selecciona un usuario para ver y editar sus permisos.
-                </p>
+                <p style={textoSuave}>Selecciona un usuario para ver y editar sus permisos.</p>
               </div>
             ) : (
               <div style={cardSticky}>
                 <div style={permisosHeader}>
                   <div>
                     <h2 style={tituloSeccion}>Permisos del usuario</h2>
-                    <p style={textoSuave}>
-                      <strong>{usuarioSeleccionado.nombre}</strong> ·{" "}
-                      {usuarioSeleccionado.rol || "-"}
-                    </p>
+                    <p style={textoSuave}><strong>{usuarioSeleccionado.nombre}</strong> · {usuarioSeleccionado.rol || "-"}</p>
                   </div>
 
-                  <div style={contadorPermisos}>
-                    {permisosActivos}/{permisosPermitidosTotal}
-                  </div>
+                  <div style={contadorPermisos}>{permisosActivos}/{permisosPermitidosTotal}</div>
                 </div>
 
                 <div style={accionesPermisos}>
-                  <button
-                    style={botonMiniVerde}
-                    onClick={() => cambiarTodosPermisos(true)}
-                  >
-                    Activar permitidos
-                  </button>
-
-                  <button
-                    style={botonMiniGris}
-                    onClick={() => cambiarTodosPermisos(false)}
-                  >
-                    Desactivar todo
-                  </button>
+                  <button style={botonMiniVerde} onClick={() => cambiarTodosPermisos(true)}>Activar permitidos</button>
+                  <button style={botonMiniGris} onClick={() => cambiarTodosPermisos(false)}>Desactivar todo</button>
                 </div>
 
                 <div style={gruposGrid}>
                   {gruposPermisos.map((grupo) => (
                     <div key={grupo.titulo} style={grupoCard}>
-                      <h3 style={grupoTitulo}>
-                        {grupo.icono} {grupo.titulo}
-                      </h3>
+                      <h3 style={grupoTitulo}>{grupo.icono} {grupo.titulo}</h3>
 
                       <div style={permisosCards}>
                         {grupo.permisos.map((permiso) => {
@@ -827,33 +854,14 @@ export default function Usuarios() {
                           const permitido = moduloPermitidoPorPlan(permiso.codigo);
 
                           return (
-                            <button
-                              key={permiso.codigo}
-                              type="button"
-                              onClick={() => alternarPermiso(permiso)}
-                              style={
-                                !permitido
-                                  ? permisoCardBloqueado
-                                  : activo
-                                  ? permisoCardActivo
-                                  : permisoCard
-                              }
-                            >
+                            <button key={permiso.codigo} type="button" onClick={() => alternarPermiso(permiso)} style={!permitido ? permisoCardBloqueado : activo ? permisoCardActivo : permisoCard}>
                               <div>
-                                <strong>
-                                  {permiso.nombre} {!permitido ? "🔒" : ""}
-                                </strong>
-                                {!permitido && (
-                                  <small style={textoBloqueado}>
-                                    No incluido en el plan
-                                  </small>
-                                )}
+                                <strong>{permiso.nombre} {!permitido ? "🔒" : ""}</strong>
+                                {!permitido && <small style={textoBloqueado}>No incluido en el plan</small>}
                               </div>
 
                               <span style={activo && permitido ? switchOn : switchOff}>
-                                <span
-                                  style={activo && permitido ? circuloOn : circuloOff}
-                                />
+                                <span style={activo && permitido ? circuloOn : circuloOff} />
                               </span>
                             </button>
                           );
@@ -890,459 +898,60 @@ function KPI({ titulo, valor, icono }) {
   );
 }
 
-const pagina = {
-  minHeight: "100vh",
-  background: "linear-gradient(135deg, #ecfdf5 0%, #f3f4f6 45%, #ffffff 100%)",
-  padding: "26px",
-  fontFamily: "Arial, sans-serif",
-};
-
-const contenedor = {
-  maxWidth: "1500px",
-  margin: "0 auto",
-};
-
-const hero = {
-  background: "linear-gradient(135deg, #111827, #064e3b)",
-  color: "#ffffff",
-  padding: "26px",
-  borderRadius: "22px",
-  marginBottom: "18px",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "20px",
-  flexWrap: "wrap",
-  boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
-};
-
-const heroInfo = {
-  display: "flex",
-  alignItems: "center",
-  gap: "16px",
-};
-
-const logo = {
-  width: "80px",
-  background: "#ffffff",
-  borderRadius: "16px",
-  padding: "8px",
-};
-
-const etiqueta = {
-  margin: 0,
-  color: "#bbf7d0",
-  fontSize: "14px",
-  fontWeight: "bold",
-};
-
-const titulo = {
-  margin: "4px 0",
-  fontSize: "34px",
-  fontWeight: "bold",
-};
-
-const subtitulo = {
-  color: "#dcfce7",
-  marginTop: "6px",
-};
-
-const heroBotones = {
-  display: "flex",
-  gap: "10px",
-  flexWrap: "wrap",
-};
-
-const botonBlanco = {
-  background: "#ffffff",
-  color: "#111827",
-  border: "none",
-  padding: "12px 18px",
-  borderRadius: "10px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const resumenGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: "14px",
-  marginBottom: "18px",
-};
-
-const resumenCard = {
-  background: "#ffffff",
-  padding: "18px",
-  borderRadius: "18px",
-  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
-  display: "grid",
-  gap: "6px",
-};
-
-const kpiIcono = {
-  fontSize: "24px",
-};
-
-const resumenLabel = {
-  color: "#6b7280",
-  fontSize: "13px",
-};
-
-const resumenValor = {
-  color: "#111827",
-  fontSize: "20px",
-};
-
-const mainGrid = {
-  display: "grid",
-  gridTemplateColumns: "minmax(420px, 1fr) minmax(520px, 1.2fr)",
-  gap: "18px",
-  alignItems: "start",
-};
-
-const panelPermisos = {
-  minWidth: 0,
-};
-
-const card = {
-  background: "#ffffff",
-  borderRadius: "20px",
-  padding: "22px",
-  marginBottom: "18px",
-  boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
-  border: "1px solid #e5e7eb",
-};
-
-const cardSticky = {
-  background: "#ffffff",
-  borderRadius: "20px",
-  padding: "22px",
-  marginBottom: "18px",
-  boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
-  border: "1px solid #e5e7eb",
-  position: "sticky",
-  top: "18px",
-};
-
-const cardHeader = {
-  marginBottom: "16px",
-};
-
-const tituloSeccion = {
-  margin: 0,
-  color: "#111827",
-};
-
-const textoSuave = {
-  color: "#6b7280",
-  marginTop: "6px",
-};
-
-const grid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: "14px",
-};
-
-const campo = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "6px",
-};
-
-const labelStyle = {
-  color: "#374151",
-  fontSize: "13px",
-  fontWeight: "bold",
-};
-
-const inputStyle = {
-  width: "100%",
-  padding: "12px",
-  borderRadius: "10px",
-  border: "1px solid #d1d5db",
-  fontSize: "14px",
-  boxSizing: "border-box",
-  background: "#ffffff",
-  color: "#111827",
-};
-
-const acciones = {
-  display: "flex",
-  gap: "10px",
-  flexWrap: "wrap",
-  marginTop: "18px",
-};
-
-const botonAzul = {
-  background: "#2563eb",
-  color: "white",
-  border: "none",
-  padding: "12px 22px",
-  borderRadius: "10px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const botonNegro = {
-  background: "#111827",
-  color: "white",
-  border: "none",
-  padding: "12px 22px",
-  borderRadius: "10px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const usuariosLista = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: "10px",
-  marginTop: "14px",
-};
-
-const usuarioActivo = {
-  background: "#dcfce7",
-  color: "#166534",
-  border: "2px solid #16a34a",
-  borderRadius: "14px",
-  padding: "14px",
-  display: "grid",
-  gap: "5px",
-  textAlign: "left",
-  cursor: "pointer",
-};
-
-const usuarioInactivo = {
-  background: "#f9fafb",
-  color: "#111827",
-  border: "1px solid #e5e7eb",
-  borderRadius: "14px",
-  padding: "14px",
-  display: "grid",
-  gap: "5px",
-  textAlign: "left",
-  cursor: "pointer",
-};
-
-const permisosHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "12px",
-  alignItems: "center",
-  marginBottom: "14px",
-};
-
-const contadorPermisos = {
-  background: "#064e3b",
-  color: "#ffffff",
-  padding: "10px 14px",
-  borderRadius: "999px",
-  fontWeight: "bold",
-};
-
-const accionesPermisos = {
-  display: "flex",
-  gap: "10px",
-  marginBottom: "16px",
-  flexWrap: "wrap",
-};
-
-const botonMiniVerde = {
-  background: "#16a34a",
-  color: "#ffffff",
-  border: "none",
-  padding: "9px 14px",
-  borderRadius: "9px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const botonMiniGris = {
-  background: "#6b7280",
-  color: "#ffffff",
-  border: "none",
-  padding: "9px 14px",
-  borderRadius: "9px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const gruposGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
-  gap: "14px",
-};
-
-const grupoCard = {
-  background: "#f9fafb",
-  border: "1px solid #e5e7eb",
-  borderRadius: "16px",
-  padding: "14px",
-};
-
-const grupoTitulo = {
-  margin: "0 0 10px",
-  color: "#111827",
-  fontSize: "15px",
-};
-
-const permisosCards = {
-  display: "grid",
-  gap: "8px",
-};
-
-const permisoCard = {
-  background: "#ffffff",
-  border: "1px solid #e5e7eb",
-  borderRadius: "12px",
-  padding: "11px",
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "10px",
-  alignItems: "center",
-  textAlign: "left",
-  cursor: "pointer",
-  color: "#111827",
-};
-
-const permisoCardActivo = {
-  background: "#ecfdf5",
-  border: "1px solid #86efac",
-  borderRadius: "12px",
-  padding: "11px",
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "10px",
-  alignItems: "center",
-  textAlign: "left",
-  cursor: "pointer",
-  color: "#166534",
-};
-
-const permisoCardBloqueado = {
-  background: "#f3f4f6",
-  border: "1px dashed #9ca3af",
-  borderRadius: "12px",
-  padding: "11px",
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "10px",
-  alignItems: "center",
-  textAlign: "left",
-  cursor: "not-allowed",
-  color: "#6b7280",
-  opacity: 0.85,
-};
-
-const textoBloqueado = {
-  display: "block",
-  marginTop: "4px",
-  color: "#9ca3af",
-  fontSize: "11px",
-};
-
-const switchOn = {
-  minWidth: "44px",
-  height: "24px",
-  borderRadius: "999px",
-  background: "#16a34a",
-  padding: "3px",
-  display: "flex",
-  justifyContent: "flex-end",
-  alignItems: "center",
-};
-
-const switchOff = {
-  minWidth: "44px",
-  height: "24px",
-  borderRadius: "999px",
-  background: "#d1d5db",
-  padding: "3px",
-  display: "flex",
-  justifyContent: "flex-start",
-  alignItems: "center",
-};
-
-const circuloOn = {
-  width: "18px",
-  height: "18px",
-  borderRadius: "50%",
-  background: "#ffffff",
-  display: "block",
-};
-
-const circuloOff = {
-  width: "18px",
-  height: "18px",
-  borderRadius: "50%",
-  background: "#ffffff",
-  display: "block",
-};
-
-const tablaBox = {
-  border: "1px solid #e5e7eb",
-  borderRadius: "14px",
-  overflowX: "auto",
-  marginBottom: "18px",
-};
-
-const tabla = {
-  width: "100%",
-  borderCollapse: "collapse",
-  minWidth: "760px",
-};
-
-const thStyle = {
-  textAlign: "left",
-  padding: "12px",
-  background: "#111827",
-  color: "#ffffff",
-  fontSize: "13px",
-};
-
-const tdStyle = {
-  padding: "12px",
-  borderBottom: "1px solid #f3f4f6",
-  color: "#111827",
-};
-
-const estadoActivo = {
-  background: "#dcfce7",
-  color: "#166534",
-  padding: "5px 9px",
-  borderRadius: "999px",
-  fontWeight: "bold",
-  fontSize: "12px",
-};
-
-const estadoInactivo = {
-  background: "#fee2e2",
-  color: "#991b1b",
-  padding: "5px 9px",
-  borderRadius: "999px",
-  fontWeight: "bold",
-  fontSize: "12px",
-};
-
-const botonEliminar = {
-  background: "#dc2626",
-  color: "#ffffff",
-  border: "none",
-  padding: "8px 11px",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "bold",
-};
-
-const botonVerde = {
-  width: "100%",
-  background: "#16a34a",
-  color: "white",
-  border: "none",
-  padding: "15px",
-  borderRadius: "12px",
-  fontSize: "16px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
+const pagina = { minHeight: "100vh", background: "linear-gradient(135deg, #ecfdf5 0%, #f3f4f6 45%, #ffffff 100%)", padding: "26px", fontFamily: "Arial, sans-serif" };
+const contenedor = { maxWidth: "1500px", margin: "0 auto" };
+const hero = { background: "linear-gradient(135deg, #111827, #064e3b)", color: "#ffffff", padding: "26px", borderRadius: "22px", marginBottom: "18px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "20px", flexWrap: "wrap", boxShadow: "0 8px 24px rgba(0,0,0,0.16)" };
+const heroInfo = { display: "flex", alignItems: "center", gap: "16px" };
+const logo = { width: "80px", background: "#ffffff", borderRadius: "16px", padding: "8px" };
+const etiqueta = { margin: 0, color: "#bbf7d0", fontSize: "14px", fontWeight: "bold" };
+const titulo = { margin: "4px 0", fontSize: "34px", fontWeight: "bold" };
+const subtitulo = { color: "#dcfce7", marginTop: "6px" };
+const heroBotones = { display: "flex", gap: "10px", flexWrap: "wrap" };
+const botonBlanco = { background: "#ffffff", color: "#111827", border: "none", padding: "12px 18px", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" };
+const resumenGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "14px", marginBottom: "18px" };
+const resumenCard = { background: "#ffffff", padding: "18px", borderRadius: "18px", boxShadow: "0 3px 12px rgba(0,0,0,0.06)", display: "grid", gap: "6px" };
+const kpiIcono = { fontSize: "24px" };
+const resumenLabel = { color: "#6b7280", fontSize: "13px" };
+const resumenValor = { color: "#111827", fontSize: "20px" };
+const mainGrid = { display: "grid", gridTemplateColumns: "minmax(420px, 1fr) minmax(520px, 1.2fr)", gap: "18px", alignItems: "start" };
+const panelPermisos = { minWidth: 0 };
+const card = { background: "#ffffff", borderRadius: "20px", padding: "22px", marginBottom: "18px", boxShadow: "0 6px 18px rgba(0,0,0,0.08)", border: "1px solid #e5e7eb" };
+const cardSticky = { background: "#ffffff", borderRadius: "20px", padding: "22px", marginBottom: "18px", boxShadow: "0 6px 18px rgba(0,0,0,0.08)", border: "1px solid #e5e7eb", position: "sticky", top: "18px" };
+const cardHeader = { marginBottom: "16px" };
+const tituloSeccion = { margin: 0, color: "#111827" };
+const textoSuave = { color: "#6b7280", marginTop: "6px" };
+const grid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "14px" };
+const campo = { display: "flex", flexDirection: "column", gap: "6px" };
+const labelStyle = { color: "#374151", fontSize: "13px", fontWeight: "bold" };
+const inputStyle = { width: "100%", padding: "12px", borderRadius: "10px", border: "1px solid #d1d5db", fontSize: "14px", boxSizing: "border-box", background: "#ffffff", color: "#111827" };
+const acciones = { display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "18px" };
+const botonAzul = { background: "#2563eb", color: "white", border: "none", padding: "12px 22px", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" };
+const botonNegro = { background: "#111827", color: "white", border: "none", padding: "12px 22px", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" };
+const usuariosLista = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "10px", marginTop: "14px" };
+const usuarioActivo = { background: "#dcfce7", color: "#166534", border: "2px solid #16a34a", borderRadius: "14px", padding: "14px", display: "grid", gap: "5px", textAlign: "left", cursor: "pointer" };
+const usuarioInactivo = { background: "#f9fafb", color: "#111827", border: "1px solid #e5e7eb", borderRadius: "14px", padding: "14px", display: "grid", gap: "5px", textAlign: "left", cursor: "pointer" };
+const permisosHeader = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginBottom: "14px" };
+const contadorPermisos = { background: "#064e3b", color: "#ffffff", padding: "10px 14px", borderRadius: "999px", fontWeight: "bold" };
+const accionesPermisos = { display: "flex", gap: "10px", marginBottom: "16px", flexWrap: "wrap" };
+const botonMiniVerde = { background: "#16a34a", color: "#ffffff", border: "none", padding: "9px 14px", borderRadius: "9px", fontWeight: "bold", cursor: "pointer" };
+const botonMiniGris = { background: "#6b7280", color: "#ffffff", border: "none", padding: "9px 14px", borderRadius: "9px", fontWeight: "bold", cursor: "pointer" };
+const gruposGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: "14px" };
+const grupoCard = { background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "16px", padding: "14px" };
+const grupoTitulo = { margin: "0 0 10px", color: "#111827", fontSize: "15px" };
+const permisosCards = { display: "grid", gap: "8px" };
+const permisoCard = { background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "11px", display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "center", textAlign: "left", cursor: "pointer", color: "#111827" };
+const permisoCardActivo = { background: "#ecfdf5", border: "1px solid #86efac", borderRadius: "12px", padding: "11px", display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "center", textAlign: "left", cursor: "pointer", color: "#166534" };
+const permisoCardBloqueado = { background: "#f3f4f6", border: "1px dashed #9ca3af", borderRadius: "12px", padding: "11px", display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "center", textAlign: "left", cursor: "not-allowed", color: "#6b7280", opacity: 0.85 };
+const textoBloqueado = { display: "block", marginTop: "4px", color: "#9ca3af", fontSize: "11px" };
+const switchOn = { minWidth: "44px", height: "24px", borderRadius: "999px", background: "#16a34a", padding: "3px", display: "flex", justifyContent: "flex-end", alignItems: "center" };
+const switchOff = { minWidth: "44px", height: "24px", borderRadius: "999px", background: "#d1d5db", padding: "3px", display: "flex", justifyContent: "flex-start", alignItems: "center" };
+const circuloOn = { width: "18px", height: "18px", borderRadius: "50%", background: "#ffffff", display: "block" };
+const circuloOff = { width: "18px", height: "18px", borderRadius: "50%", background: "#ffffff", display: "block" };
+const tablaBox = { border: "1px solid #e5e7eb", borderRadius: "14px", overflowX: "auto", marginBottom: "18px" };
+const tabla = { width: "100%", borderCollapse: "collapse", minWidth: "760px" };
+const thStyle = { textAlign: "left", padding: "12px", background: "#111827", color: "#ffffff", fontSize: "13px" };
+const tdStyle = { padding: "12px", borderBottom: "1px solid #f3f4f6", color: "#111827" };
+const estadoActivo = { background: "#dcfce7", color: "#166534", padding: "5px 9px", borderRadius: "999px", fontWeight: "bold", fontSize: "12px" };
+const estadoInactivo = { background: "#fee2e2", color: "#991b1b", padding: "5px 9px", borderRadius: "999px", fontWeight: "bold", fontSize: "12px" };
+const botonEliminar = { background: "#dc2626", color: "#ffffff", border: "none", padding: "8px 11px", borderRadius: "8px", cursor: "pointer", fontWeight: "bold" };
+const botonVerde = { width: "100%", background: "#16a34a", color: "white", border: "none", padding: "15px", borderRadius: "12px", fontSize: "16px", fontWeight: "bold", cursor: "pointer" };
