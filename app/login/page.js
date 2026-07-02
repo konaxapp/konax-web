@@ -111,13 +111,14 @@ export default function Login() {
 
     localStorage.clear();
 
-    localStorage.setItem("usuarioId", usuario.id);
+    localStorage.setItem("usuarioId", usuario.id || "");
     localStorage.setItem("usuarioNombre", usuario.nombre || "");
     localStorage.setItem("nombreUsuario", usuario.nombre || "");
     localStorage.setItem("usuarioCorreo", usuario.correo || "");
     localStorage.setItem("correoUsuario", usuario.correo || "");
 
     localStorage.setItem("empresaId", usuario.empresa_id || "");
+    localStorage.setItem("empresa_id", usuario.empresa_id || "");
     localStorage.setItem("empresaNombre", empresa.nombre || "");
 
     localStorage.setItem("usuarioRol", usuario.rol || "");
@@ -126,6 +127,11 @@ export default function Login() {
 
     localStorage.setItem("tipoNegocio", empresa.tipo_negocio || "");
     localStorage.setItem("categoriaNegocio", empresa.categoria_negocio || "");
+
+    localStorage.setItem("planCodigo", empresa.plan_codigo || "");
+    localStorage.setItem("planNombre", empresa.plan_nombre || "");
+    localStorage.setItem("estadoPlan", empresa.estado_plan || "");
+    localStorage.setItem("estadoEmpresa", empresa.estado || "");
 
     setCargando(false);
 
