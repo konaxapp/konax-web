@@ -9,6 +9,7 @@ export default function Usuarios() {
   const [planNombre, setPlanNombre] = useState("");
   const [planCodigo, setPlanCodigo] = useState("");
   const [modulosPlan, setModulosPlan] = useState({});
+  const [adminMasterKonax, setAdminMasterKonax] = useState(false);
 
   const [nombre, setNombre] = useState("");
   const [correo, setCorreo] = useState("");
@@ -89,6 +90,26 @@ export default function Usuarios() {
     const nombreEmpresa =
       localStorage.getItem("empresaAdminCreadaNombre") ||
       localStorage.getItem("empresaNombre");
+
+    const rolActual =
+      localStorage.getItem("adminKonaxRol") ||
+      localStorage.getItem("usuarioRol") ||
+      localStorage.getItem("rolUsuario") ||
+      "";
+
+    const correoActual =
+      localStorage.getItem("adminKonaxCorreo") ||
+      localStorage.getItem("usuarioCorreo") ||
+      localStorage.getItem("correoUsuario") ||
+      "";
+
+    const esMaster =
+      String(rolActual || "").toLowerCase().trim() === "superadmin" ||
+      String(rolActual || "").toLowerCase().trim() === "admin master" ||
+      String(rolActual || "").toLowerCase().trim() === "administrador master" ||
+      String(correoActual || "").toLowerCase().includes("admin");
+
+    setAdminMasterKonax(esMaster);
 
     if (!id) {
       alert("No hay empresa seleccionada.");
@@ -357,7 +378,12 @@ export default function Usuarios() {
     setPermisosUsuario(permisosArmados);
   }
 
+  function esAdminMasterKonax() {
+    return Boolean(adminMasterKonax);
+  }
+
   function moduloPermitidoPorPlan(codigo) {
+    if (esAdminMasterKonax()) return true;
     if (codigo === "dashboard") return true;
     return Boolean(modulosPlan?.[codigo]);
   }
@@ -407,13 +433,17 @@ export default function Usuarios() {
       return;
     }
 
-    const permisosPermitidos = permisosDisponibles.filter((permiso) =>
-      moduloPermitidoPorPlan(permiso.codigo)
-    );
+    const permisosPermitidos = esAdminMasterKonax()
+      ? permisosDisponibles
+      : permisosDisponibles.filter((permiso) =>
+          moduloPermitidoPorPlan(permiso.codigo)
+        );
 
-    const permisosBloqueados = permisosDisponibles.filter(
-      (permiso) => !moduloPermitidoPorPlan(permiso.codigo)
-    );
+    const permisosBloqueados = esAdminMasterKonax()
+      ? []
+      : permisosDisponibles.filter(
+          (permiso) => !moduloPermitidoPorPlan(permiso.codigo)
+        );
 
     const registrosPermitidos = permisosPermitidos.map((permiso) => ({
       empresa_id: empresaId,
@@ -694,6 +724,11 @@ export default function Usuarios() {
                 <br />
                 Plan activo: <strong>{planNombre || "Sin plan"}</strong>
               </p>
+              {adminMasterKonax && (
+                <p style={modoMaster}>
+                  Modo Administrador KONAX: puedes activar o desactivar todos los módulos.
+                </p>
+              )}
             </div>
           </div>
 
@@ -839,7 +874,7 @@ export default function Usuarios() {
                 </div>
 
                 <div style={accionesPermisos}>
-                  <button style={botonMiniVerde} onClick={() => cambiarTodosPermisos(true)}>Activar permitidos</button>
+                  <button style={botonMiniVerde} onClick={() => cambiarTodosPermisos(true)}>{adminMasterKonax ? "Activar todo" : "Activar permitidos"}</button>
                   <button style={botonMiniGris} onClick={() => cambiarTodosPermisos(false)}>Desactivar todo</button>
                 </div>
 
@@ -906,6 +941,7 @@ const logo = { width: "80px", background: "#ffffff", borderRadius: "16px", paddi
 const etiqueta = { margin: 0, color: "#bbf7d0", fontSize: "14px", fontWeight: "bold" };
 const titulo = { margin: "4px 0", fontSize: "34px", fontWeight: "bold" };
 const subtitulo = { color: "#dcfce7", marginTop: "6px" };
+const modoMaster = { background: "#dcfce7", color: "#166534", padding: "8px 10px", borderRadius: "10px", marginTop: "10px", fontWeight: "bold", display: "inline-block" };
 const heroBotones = { display: "flex", gap: "10px", flexWrap: "wrap" };
 const botonBlanco = { background: "#ffffff", color: "#111827", border: "none", padding: "12px 18px", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" };
 const resumenGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "14px", marginBottom: "18px" };
