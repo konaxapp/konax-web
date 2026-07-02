@@ -723,9 +723,11 @@ export default function Caja() {
 
     // IMPORTANTE:
     // Venta Crédito NO mueve inventario.
-    // Solo Venta Contado descuenta inventario.
+    // Venta Contado descuenta inventario.
+    // Abono inicial con producto descuenta inventario.
+    // Venta Crédito NO descuenta inventario.
     // Abono existente NO descuenta inventario.
-    const debeDescontarInventario = esVentaContado();
+    const debeDescontarInventario = esVentaContado() || abonoNuevoConProducto;
 
     if (debeDescontarInventario) {
       const okInventario = await descontarInventario(empresaId);
