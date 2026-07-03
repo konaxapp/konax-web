@@ -328,16 +328,18 @@ export default function Caja() {
     if (cuentasData && cuentasData.length > 0) {
       const idsClientes = cuentasData.map((cuenta) => cuenta.cliente_id).filter(Boolean);
 
-      const { data: clientesDeCuentas } = await supabase
-        .from("clientes")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .in("id", idsClientes);
+      if (idsClientes.length > 0) {
+        const { data: clientesDeCuentas } = await supabase
+          .from("clientes")
+          .select("*")
+          .eq("empresa_id", empresaId)
+          .in("id", idsClientes);
 
-      cuentasData.forEach((cuenta) => {
-        const cliente = clientesDeCuentas?.find((item) => item.id === cuenta.cliente_id);
-        if (cliente) resultados.push({ cliente, cuenta });
-      });
+        cuentasData.forEach((cuenta) => {
+          const cliente = clientesDeCuentas?.find((item) => item.id === cuenta.cliente_id);
+          if (cliente) resultados.push({ cliente, cuenta });
+        });
+      }
     }
 
     setResultadosBusqueda(resultados);
@@ -506,20 +508,24 @@ export default function Caja() {
       return null;
     }
 
-    await supabase.from("informacion_cobranza").insert([
+    const { error: errorCobranza } = await supabase.from("informacion_cobranza").insert([
       {
         empresa_id: empresaId,
         cliente_id: clienteBase.id,
         informacion_comercial_id: data.id,
         estado_cobranza: saldoInicial <= 0 ? "Cancelado" : "Al Día",
         fecha_ultimo_pago: esAbonoProducto() ? fechaPago : null,
-        monto_ultimo_pago: esAbonoProducto() ? Number(monto || 0) : null,
+        monto_ultimo_pago: esAbonoProducto() ? Number(monto || 0) : 0,
         responsable_cobro: null,
         observacion_cobro: esAbonoProducto()
           ? `Abono inicial registrado bajo venta ${numeroVenta}`
           : `Venta crédito registrada bajo venta ${numeroVenta}`,
       },
     ]);
+
+    if (errorCobranza) {
+      alert("Cuenta creada, pero hubo error creando cobranza: " + errorCobranza.message);
+    }
 
     return data;
   }
@@ -680,38 +686,49 @@ export default function Caja() {
       }
     }
 
-    const clienteNombreFinal = clienteBase?.nombre || clienteSeleccionado?.nombre || nombreContado || null;
-    const clienteCedulaFinal = clienteBase?.cedula || clienteSeleccionado?.cedula || cedulaContado || null;
-    const clienteDireccionFinal = obtenerDireccionCliente(clienteBase) || obtenerDireccionCliente(clienteSeleccionado) || direccionContado || null;
-    const clienteTelefonoFinal = obtenerTelefonoCliente(clienteBase) || obtenerTelefonoCliente(clienteSeleccionado) || telefonoContado || null;
+    const clienteNombreFinal =
+      clienteBase?.nombre || clienteSeleccionado?.nombre || nombreContado || null;
+    const clienteCedulaFinal =
+      clienteBase?.cedula || clienteSeleccionado?.cedula || cedulaContado || null;
+    const clienteDireccionFinal =
+      obtenerDireccionCliente(clienteBase) ||
+      obtenerDireccionCliente(clienteSeleccionado) ||
+      direccionContado ||
+      null;
+    const clienteTelefonoFinal =
+      obtenerTelefonoCliente(clienteBase) ||
+      obtenerTelefonoCliente(clienteSeleccionado) ||
+      telefonoContado ||
+      null;
 
+    /*
+      IMPORTANTE:
+      Este insert solo usa columnas que existen actualmente en public.caja:
+      id, empresa_id, tipo, descripcion, monto, metodo_pago, usuario, created_at,
+      numero_transaccion, fecha_pago, caja_estado, cliente_id,
+      informacion_comercial_id, numero_cuenta, estado, cliente_nombre,
+      cliente_cedula, vendedor_responsable, cliente_direccion, cliente_telefono.
+    */
     const { error } = await supabase.from("caja").insert([
       {
         empresa_id: empresaId,
-        numero_transaccion: numeroTransaccion,
-        numero_venta: cuentaParaMovimiento?.numero_cuenta || numeroVenta || null,
-        cliente_id: clienteBase?.id || clienteSeleccionado?.id || null,
-        informacion_comercial_id: cuentaParaMovimiento?.id || null,
-        numero_cuenta: cuentaParaMovimiento?.numero_cuenta || numeroVenta || null,
-        fecha_pago: fechaPago,
         tipo: tipoMovimiento,
         descripcion: descripcionFinal,
         monto: Number(monto),
         metodo_pago: metodoPago,
         usuario: usuarioRegistro,
-        vendedor_responsable: responsable,
-        responsable,
+        numero_transaccion: numeroTransaccion,
+        fecha_pago: fechaPago,
+        caja_estado: "Activa",
+        cliente_id: clienteBase?.id || clienteSeleccionado?.id || null,
+        informacion_comercial_id: cuentaParaMovimiento?.id || null,
+        numero_cuenta: cuentaParaMovimiento?.numero_cuenta || numeroVenta || null,
         estado: "Procesado",
         cliente_nombre: clienteNombreFinal,
         cliente_cedula: clienteCedulaFinal,
+        vendedor_responsable: responsable,
         cliente_direccion: clienteDireccionFinal,
         cliente_telefono: clienteTelefonoFinal,
-        codigo_producto: codigoProducto || productoSeleccionado?.codigo || null,
-        producto_id: productoSeleccionado?.id || null,
-        producto_nombre: productoSeleccionado?.nombre || null,
-        cantidad: esVentaConProducto() && !abonoExistente ? Number(cantidad || 1) : null,
-        valor_producto: esVentaConProducto() && !abonoExistente ? Number(valorProducto || 0) : null,
-        observacion,
       },
     ]);
 
@@ -721,11 +738,12 @@ export default function Caja() {
       return;
     }
 
-    // IMPORTANTE:
     // Venta Crédito NO mueve inventario.
-    // Solo Venta Contado descuenta inventario.
-    // Abono existente NO descuenta inventario.
-    const debeDescontarInventario = esVentaContado();
+    // Pago Crédito NO mueve inventario.
+    // Abono existente NO mueve inventario.
+    // Venta Contado SÍ descuenta inventario.
+    // Abono inicial con producto SÍ descuenta inventario.
+    const debeDescontarInventario = esVentaContado() || abonoNuevoConProducto;
 
     if (debeDescontarInventario) {
       const okInventario = await descontarInventario(empresaId);
@@ -1159,13 +1177,11 @@ export default function Caja() {
                 <tr>
                   <th style={th}>Fecha</th>
                   <th style={th}>Transacción</th>
-                  <th style={th}>N° Venta</th>
                   <th style={th}>Cliente</th>
                   <th style={th}>Cédula</th>
                   <th style={th}>Dirección</th>
                   <th style={th}>Teléfono</th>
                   <th style={th}>Cuenta</th>
-                  <th style={th}>Producto</th>
                   <th style={th}>Tipo</th>
                   <th style={th}>Método</th>
                   <th style={th}>Monto</th>
@@ -1176,7 +1192,7 @@ export default function Caja() {
               <tbody>
                 {movimientos.length === 0 ? (
                   <tr>
-                    <td style={td} colSpan="14">
+                    <td style={td} colSpan="12">
                       No hay movimientos registrados.
                     </td>
                   </tr>
@@ -1185,19 +1201,15 @@ export default function Caja() {
                     <tr key={movimiento.id}>
                       <td style={td}>{movimiento.fecha_pago || movimiento.created_at}</td>
                       <td style={td}>{movimiento.numero_transaccion || "-"}</td>
-                      <td style={td}>{movimiento.numero_venta || "-"}</td>
                       <td style={td}>{movimiento.cliente_nombre || "-"}</td>
                       <td style={td}>{movimiento.cliente_cedula || "-"}</td>
                       <td style={td}>{movimiento.cliente_direccion || "-"}</td>
                       <td style={td}>{movimiento.cliente_telefono || "-"}</td>
                       <td style={td}>{movimiento.numero_cuenta || "-"}</td>
-                      <td style={td}>{movimiento.producto_nombre || movimiento.descripcion || "-"}</td>
                       <td style={td}>{movimiento.tipo}</td>
                       <td style={td}>{movimiento.metodo_pago}</td>
                       <td style={td}>${Number(movimiento.monto || 0).toFixed(2)}</td>
-                      <td style={td}>
-                        {movimiento.vendedor_responsable || movimiento.responsable || "-"}
-                      </td>
+                      <td style={td}>{movimiento.vendedor_responsable || "-"}</td>
                       <td style={td}>{movimiento.estado}</td>
                     </tr>
                   ))
