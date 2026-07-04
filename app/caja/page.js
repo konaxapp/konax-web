@@ -533,14 +533,14 @@ export default function Caja() {
   async function actualizarSaldoCuenta(empresaId, cuentaAplicar = cuentaSeleccionada) {
     if (!cuentaAplicar?.id) {
       alert("No se encontró la cuenta comercial para aplicar el pago.");
-      return false;
+      return null;
     }
 
     const montoPago = Number(monto || 0);
 
     if (montoPago <= 0) {
       alert("El monto del pago debe ser mayor a cero.");
-      return false;
+      return null;
     }
 
     const { data: cuentaActual, error: errorCuenta } = await supabase
@@ -552,49 +552,42 @@ export default function Caja() {
 
     if (errorCuenta) {
       alert("Error consultando cuenta comercial: " + errorCuenta.message);
-      return false;
+      return null;
     }
 
     if (!cuentaActual) {
       alert("No se encontró la cuenta comercial para actualizar el saldo.");
-      return false;
+      return null;
     }
 
     const saldoAnterior = Number(cuentaActual.saldo_actual || 0);
 
     if (saldoAnterior <= 0) {
       alert("Esta cuenta ya está cancelada y no tiene saldo pendiente.");
-      return false;
+      return null;
     }
 
     if (montoPago > saldoAnterior) {
       alert(
         `El pago de $${montoPago.toFixed(2)} supera el saldo pendiente de $${saldoAnterior.toFixed(2)}.`
       );
-      return false;
+      return null;
     }
 
     const saldoFinal = Math.max(saldoAnterior - montoPago, 0);
 
-    const { data: cuentaActualizada, error: errorSaldo } = await supabase
+    const { error: errorSaldo } = await supabase
       .from("informacion_comercial")
       .update({
         saldo_actual: saldoFinal,
         estado: saldoFinal <= 0 ? "Cancelado" : "Activo",
       })
       .eq("empresa_id", empresaId)
-      .eq("id", cuentaActual.id)
-      .select("*")
-      .maybeSingle();
+      .eq("id", cuentaActual.id);
 
     if (errorSaldo) {
-      alert("Movimiento registrado, pero error actualizando saldo: " + errorSaldo.message);
-      return false;
-    }
-
-    if (!cuentaActualizada) {
-      alert("Movimiento registrado, pero no se confirmó la actualización del saldo.");
-      return false;
+      alert("Error actualizando saldo: " + errorSaldo.message);
+      return null;
     }
 
     const datosCobranza = {
@@ -615,7 +608,7 @@ export default function Caja() {
         "Saldo actualizado, pero hubo error buscando cobranza: " +
           errorBuscarCobranza.message
       );
-      return false;
+      return null;
     }
 
     if (cobranzaExistente?.id) {
@@ -630,7 +623,7 @@ export default function Caja() {
           "Saldo actualizado, pero hubo error actualizando cobranza: " +
             errorActualizarCobranza.message
         );
-        return false;
+        return null;
       }
     } else {
       const { error: errorCrearCobranza } = await supabase
@@ -653,14 +646,14 @@ export default function Caja() {
           "Saldo actualizado, pero hubo error creando cobranza: " +
             errorCrearCobranza.message
         );
-        return false;
+        return null;
       }
     }
 
     const cuentaLocalActualizada = {
-      ...cuentaAplicar,
-      ...cuentaActualizada,
+      ...cuentaActual,
       saldo_actual: saldoFinal,
+      estado: saldoFinal <= 0 ? "Cancelado" : "Activo",
     };
 
     setCuentaSeleccionada(cuentaLocalActualizada);
@@ -671,7 +664,7 @@ export default function Caja() {
       )
     );
 
-    return true;
+    return cuentaLocalActualizada;
   }
 
   function obtenerDireccionCliente(cliente) {
@@ -786,6 +779,18 @@ export default function Caja() {
       }
     }
 
+    const debeActualizarSaldo = esPagoDeCuenta() || abonoExistente;
+
+    if (debeActualizarSaldo) {
+      const cuentaActualizada = await actualizarSaldoCuenta(empresaId, cuentaParaMovimiento);
+      if (!cuentaActualizada) {
+        setGuardando(false);
+        return;
+      }
+
+      cuentaParaMovimiento = cuentaActualizada;
+    }
+
     const clienteNombreFinal =
       clienteBase?.nombre || clienteSeleccionado?.nombre || nombreContado || null;
     const clienteCedulaFinal =
@@ -826,7 +831,10 @@ export default function Caja() {
 
     if (error) {
       setGuardando(false);
-      alert("Error al registrar movimiento: " + error.message);
+      alert(
+        "El saldo se actualizó, pero hubo error registrando el movimiento en caja: " +
+          error.message
+      );
       return;
     }
 
@@ -835,14 +843,6 @@ export default function Caja() {
     if (debeDescontarInventario) {
       const okInventario = await descontarInventario(empresaId);
       if (!okInventario) {
-        setGuardando(false);
-        return;
-      }
-    }
-
-    if (esPagoDeCuenta() || abonoExistente) {
-      const okSaldo = await actualizarSaldoCuenta(empresaId, cuentaParaMovimiento);
-      if (!okSaldo) {
         setGuardando(false);
         return;
       }
