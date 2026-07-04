@@ -531,45 +531,145 @@ export default function Caja() {
   }
 
   async function actualizarSaldoCuenta(empresaId, cuentaAplicar = cuentaSeleccionada) {
-    if (!cuentaAplicar) return true;
+    if (!cuentaAplicar?.id) {
+      alert("No se encontró la cuenta comercial para aplicar el pago.");
+      return false;
+    }
 
-    const nuevoSaldo = Number(cuentaAplicar.saldo_actual || 0) - Number(monto || 0);
-    const saldoFinal = nuevoSaldo < 0 ? 0 : nuevoSaldo;
+    const montoPago = Number(monto || 0);
 
-    const { error: errorSaldo } = await supabase
+    if (montoPago <= 0) {
+      alert("El monto del pago debe ser mayor a cero.");
+      return false;
+    }
+
+    const { data: cuentaActual, error: errorCuenta } = await supabase
+      .from("informacion_comercial")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("id", cuentaAplicar.id)
+      .maybeSingle();
+
+    if (errorCuenta) {
+      alert("Error consultando cuenta comercial: " + errorCuenta.message);
+      return false;
+    }
+
+    if (!cuentaActual) {
+      alert("No se encontró la cuenta comercial para actualizar el saldo.");
+      return false;
+    }
+
+    const saldoAnterior = Number(cuentaActual.saldo_actual || 0);
+
+    if (saldoAnterior <= 0) {
+      alert("Esta cuenta ya está cancelada y no tiene saldo pendiente.");
+      return false;
+    }
+
+    if (montoPago > saldoAnterior) {
+      alert(
+        `El pago de $${montoPago.toFixed(2)} supera el saldo pendiente de $${saldoAnterior.toFixed(2)}.`
+      );
+      return false;
+    }
+
+    const saldoFinal = Math.max(saldoAnterior - montoPago, 0);
+
+    const { data: cuentaActualizada, error: errorSaldo } = await supabase
       .from("informacion_comercial")
       .update({
         saldo_actual: saldoFinal,
-        estado: saldoFinal <= 0 ? "Cancelado" : cuentaAplicar.estado,
+        estado: saldoFinal <= 0 ? "Cancelado" : "Activo",
       })
       .eq("empresa_id", empresaId)
-      .eq("id", cuentaAplicar.id);
+      .eq("id", cuentaActual.id)
+      .select("*")
+      .maybeSingle();
 
     if (errorSaldo) {
       alert("Movimiento registrado, pero error actualizando saldo: " + errorSaldo.message);
       return false;
     }
 
-    const datosCobranza = {
-      fecha_ultimo_pago: fechaPago,
-      monto_ultimo_pago: Number(monto),
-    };
-
-    if (saldoFinal <= 0) {
-      datosCobranza.estado_cobranza = "Cancelado";
-      datosCobranza.estado_promesa = null;
-    }
-
-    const { error: errorCobranza } = await supabase
-      .from("informacion_cobranza")
-      .update(datosCobranza)
-      .eq("empresa_id", empresaId)
-      .eq("informacion_comercial_id", cuentaAplicar.id);
-
-    if (errorCobranza) {
-      alert("Movimiento registrado, pero error actualizando cobranza: " + errorCobranza.message);
+    if (!cuentaActualizada) {
+      alert("Movimiento registrado, pero no se confirmó la actualización del saldo.");
       return false;
     }
+
+    const datosCobranza = {
+      fecha_ultimo_pago: fechaPago,
+      monto_ultimo_pago: montoPago,
+      estado_cobranza: saldoFinal <= 0 ? "Cancelado" : "Al Día",
+    };
+
+    const { data: cobranzaExistente, error: errorBuscarCobranza } = await supabase
+      .from("informacion_cobranza")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("informacion_comercial_id", cuentaActual.id)
+      .maybeSingle();
+
+    if (errorBuscarCobranza) {
+      alert(
+        "Saldo actualizado, pero hubo error buscando cobranza: " +
+          errorBuscarCobranza.message
+      );
+      return false;
+    }
+
+    if (cobranzaExistente?.id) {
+      const { error: errorActualizarCobranza } = await supabase
+        .from("informacion_cobranza")
+        .update(datosCobranza)
+        .eq("empresa_id", empresaId)
+        .eq("id", cobranzaExistente.id);
+
+      if (errorActualizarCobranza) {
+        alert(
+          "Saldo actualizado, pero hubo error actualizando cobranza: " +
+            errorActualizarCobranza.message
+        );
+        return false;
+      }
+    } else {
+      const { error: errorCrearCobranza } = await supabase
+        .from("informacion_cobranza")
+        .insert([
+          {
+            empresa_id: empresaId,
+            cliente_id: cuentaActual.cliente_id || clienteSeleccionado?.id || null,
+            informacion_comercial_id: cuentaActual.id,
+            estado_cobranza: saldoFinal <= 0 ? "Cancelado" : "Al Día",
+            fecha_ultimo_pago: fechaPago,
+            monto_ultimo_pago: montoPago,
+            responsable_cobro: null,
+            observacion_cobro: `Registro creado automáticamente desde Caja. Pago aplicado a la cuenta ${cuentaActual.numero_cuenta || ""}.`,
+          },
+        ]);
+
+      if (errorCrearCobranza) {
+        alert(
+          "Saldo actualizado, pero hubo error creando cobranza: " +
+            errorCrearCobranza.message
+        );
+        return false;
+      }
+    }
+
+    const cuentaLocalActualizada = {
+      ...cuentaAplicar,
+      ...cuentaActualizada,
+      saldo_actual: saldoFinal,
+    };
+
+    setCuentaSeleccionada(cuentaLocalActualizada);
+
+    setCuentasCliente((cuentasActuales) =>
+      cuentasActuales.map((cuenta) =>
+        cuenta.id === cuentaActual.id ? cuentaLocalActualizada : cuenta
+      )
+    );
 
     return true;
   }
@@ -701,14 +801,6 @@ export default function Caja() {
       telefonoContado ||
       null;
 
-    /*
-      IMPORTANTE:
-      Este insert solo usa columnas que existen actualmente en public.caja:
-      id, empresa_id, tipo, descripcion, monto, metodo_pago, usuario, created_at,
-      numero_transaccion, fecha_pago, caja_estado, cliente_id,
-      informacion_comercial_id, numero_cuenta, estado, cliente_nombre,
-      cliente_cedula, vendedor_responsable, cliente_direccion, cliente_telefono.
-    */
     const { error } = await supabase.from("caja").insert([
       {
         empresa_id: empresaId,
@@ -738,11 +830,6 @@ export default function Caja() {
       return;
     }
 
-    // Venta Crédito NO mueve inventario.
-    // Pago Crédito NO mueve inventario.
-    // Abono existente NO mueve inventario.
-    // Venta Contado SÍ descuenta inventario.
-    // Abono inicial con producto SÍ descuenta inventario.
     const debeDescontarInventario = esVentaContado() || abonoNuevoConProducto;
 
     if (debeDescontarInventario) {
