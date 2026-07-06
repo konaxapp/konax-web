@@ -15,6 +15,7 @@ export default function VistaCliente() {
   const [pagos, setPagos] = useState([]);
   const [gestiones, setGestiones] = useState([]);
   const [documentos, setDocumentos] = useState([]);
+  const [recargos, setRecargos] = useState([]);
 
   const [tipoGestion, setTipoGestion] = useState("Llamada");
   const [resultadoGestion, setResultadoGestion] = useState("Pendiente");
@@ -68,9 +69,7 @@ export default function VistaCliente() {
       .eq("id", empresaId)
       .maybeSingle();
 
-    if (!error) {
-      setEmpresa(data || null);
-    }
+    if (!error) setEmpresa(data || null);
   }
 
   function nombreEmpresa() {
@@ -79,6 +78,16 @@ export default function VistaCliente() {
       empresa?.nombre_empresa ||
       empresa?.razon_social ||
       "KONAX Gestión"
+    );
+  }
+
+  function subtituloEmpresa() {
+    return (
+      empresa?.subtitulo ||
+      empresa?.actividad ||
+      empresa?.categoria_negocio ||
+      empresa?.tipo_negocio ||
+      ""
     );
   }
 
@@ -132,12 +141,32 @@ export default function VistaCliente() {
   }
 
   function formatoDinero(valor) {
-    return "$" + Number(valor || 0).toLocaleString();
+    return "$" + Number(valor || 0).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   }
 
   function formatoFecha(fecha) {
     if (!fecha) return "-";
+
+    const texto = String(fecha).slice(0, 10);
+    const partes = texto.split("-");
+
+    if (partes.length === 3) {
+      return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+
+    return texto;
+  }
+
+  function fechaISO(fecha) {
+    if (!fecha) return "";
     return String(fecha).slice(0, 10);
+  }
+
+  function limpiarTexto(texto) {
+    return String(texto || "").toLowerCase().trim();
   }
 
   async function buscarClienteAutomatico(valorBusqueda) {
@@ -272,6 +301,7 @@ export default function VistaCliente() {
       setCobranza(null);
       setPagos([]);
       setGestiones([]);
+      setRecargos([]);
     }
 
     await cargarDocumentos(clienteBase.id);
@@ -288,10 +318,7 @@ export default function VistaCliente() {
       .eq("informacion_comercial_id", cuentaId)
       .maybeSingle();
 
-    if (errorCobranza) {
-      console.error("Error cargando cobranza:", errorCobranza);
-    }
-
+    if (errorCobranza) console.error("Error cargando cobranza:", errorCobranza);
     setCobranza(cobranzaData || null);
 
     const { data: pagosData, error: errorPagos } = await supabase
@@ -305,7 +332,7 @@ export default function VistaCliente() {
       setPagos([]);
     } else {
       const pagosRelacionados = (pagosData || []).filter((pago) => {
-        const tipo = String(pago.tipo || "").toLowerCase().trim();
+        const tipo = limpiarTexto(pago.tipo);
 
         const esPago =
           tipo === "pago crédito" ||
@@ -350,6 +377,8 @@ export default function VistaCliente() {
       setPagos(pagosRelacionados);
     }
 
+    await cargarRecargosRelacionados(clienteId, cuentaId, numeroCuenta, cedulaCliente);
+
     const { data: gestionesData, error: errorGestiones } = await supabase
       .from("bitacora_cliente")
       .select("*")
@@ -364,6 +393,58 @@ export default function VistaCliente() {
     } else {
       setGestiones(gestionesData || []);
     }
+  }
+
+  async function cargarRecargosRelacionados(clienteId, cuentaId, numeroCuenta, cedulaCliente) {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId) return;
+
+    const posiblesTablas = ["historial_recargos", "recargos", "HISTORIAL_RECARGOS"];
+
+    for (const tablaRecargos of posiblesTablas) {
+      const { data, error } = await supabase
+        .from(tablaRecargos)
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .order("created_at", { ascending: false });
+
+      if (error) continue;
+
+      const relacionados = (data || []).filter((recargo) => {
+        const coincideCuentaId =
+          recargo.informacion_comercial_id &&
+          String(recargo.informacion_comercial_id) === String(cuentaId);
+
+        const cuentaRecargo = String(
+          recargo.numero_cuenta || recargo.cuenta || recargo.codigo_cuenta || ""
+        ).trim();
+
+        const coincideNumeroCuenta =
+          numeroCuenta && cuentaRecargo === String(numeroCuenta).trim();
+
+        const cedulaRecargo = String(
+          recargo.cliente_cedula || recargo.cedula || recargo.identificacion || ""
+        ).trim();
+
+        const coincideCedula =
+          cedulaCliente && cedulaRecargo === String(cedulaCliente).trim();
+
+        const coincideClienteId =
+          recargo.cliente_id && String(recargo.cliente_id) === String(clienteId);
+
+        return (
+          coincideCuentaId ||
+          coincideNumeroCuenta ||
+          coincideCedula ||
+          coincideClienteId
+        );
+      });
+
+      setRecargos(relacionados);
+      return;
+    }
+
+    setRecargos([]);
   }
 
   async function cambiarCuenta(cuentaId) {
@@ -629,8 +710,156 @@ export default function VistaCliente() {
           }
 
           .documento {
-            max-width: 900px;
+            max-width: 760px;
             margin: 0 auto;
+          }
+
+          .ec-membrete {
+            text-align: center;
+            margin-bottom: 10px;
+          }
+
+          .ec-negocio {
+            font-size: 14px;
+            font-weight: bold;
+            color: #1f2937;
+            text-transform: uppercase;
+          }
+
+          .ec-subtitulo {
+            font-size: 9px;
+            color: #6b7280;
+            margin-top: 5px;
+          }
+
+          .ec-barra-azul {
+            height: 8px;
+            background: #1f4e79;
+            margin: 8px 0 12px;
+          }
+
+          .ec-titulo {
+            text-align: center;
+            font-size: 24px;
+            font-weight: 800;
+            color: #1f2937;
+            margin: 0;
+          }
+
+          .ec-descripcion {
+            text-align: center;
+            color: #6b7280;
+            font-size: 9px;
+            margin-top: 8px;
+          }
+
+          .ec-contacto {
+            text-align: center;
+            color: #6b7280;
+            font-size: 8px;
+            margin-top: 8px;
+          }
+
+          .ec-seccion-clara {
+            background: #eaf2f8;
+            color: #1f4e79;
+            font-weight: bold;
+            font-size: 11px;
+            padding: 8px;
+            margin-top: 20px;
+            border: 1px solid #d1d5db;
+          }
+
+          .ec-seccion-azul {
+            background: #1f4e79;
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 11px;
+            padding: 8px;
+            margin-top: 20px;
+          }
+
+          .ec-tabla-info {
+            width: 100%;
+            border-collapse: collapse;
+          }
+
+          .ec-tabla-info td {
+            border: 1px solid #d1d5db;
+            padding: 9px;
+            font-size: 10px;
+          }
+
+          .ec-label {
+            background: #f3f4f6;
+            font-weight: bold;
+            color: #374151;
+            width: 25%;
+          }
+
+          .ec-valor {
+            background: #ffffff;
+            color: #111827;
+          }
+
+          .ec-saldo {
+            color: #1f4e79;
+            font-weight: bold;
+            font-size: 13px;
+          }
+
+          .ec-linea-dorada {
+            height: 5px;
+            background: #d4af37;
+            margin-top: 20px;
+          }
+
+          .ec-historial-titulo {
+            margin-top: 16px;
+            margin-bottom: 8px;
+            color: #1f2937;
+            font-size: 11px;
+            font-weight: bold;
+          }
+
+          .ec-tabla-mov {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0;
+          }
+
+          .ec-tabla-mov th {
+            background: #1f4e79;
+            color: #ffffff;
+            text-align: center;
+            padding: 9px;
+            font-size: 10px;
+            border: 1px solid #d1d5db;
+          }
+
+          .ec-tabla-mov td {
+            padding: 8px;
+            font-size: 9px;
+            border: 1px solid #d1d5db;
+            vertical-align: middle;
+          }
+
+          .ec-centro {
+            text-align: center;
+          }
+
+          .ec-derecha {
+            text-align: right;
+          }
+
+          .ec-pago {
+            color: #047857;
+            font-weight: bold;
+          }
+
+          .ec-recargo {
+            color: #b91c1c;
+            font-weight: bold;
           }
 
           .membrete {
@@ -666,61 +895,9 @@ export default function VistaCliente() {
             margin: 0 0 8px;
           }
 
-          h2 {
-            font-size: 19px;
-            margin-top: 28px;
-            margin-bottom: 12px;
-            border-bottom: 1px solid #d1d5db;
-            padding-bottom: 8px;
-          }
-
           .dato {
             margin: 7px 0;
             line-height: 1.5;
-          }
-
-          .resumen {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
-            margin-top: 15px;
-          }
-
-          .resumen-item {
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
-            padding: 13px;
-          }
-
-          .resumen-label {
-            color: #6b7280;
-            font-size: 12px;
-          }
-
-          .resumen-valor {
-            font-size: 18px;
-            font-weight: bold;
-            margin-top: 5px;
-          }
-
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 12px;
-          }
-
-          th {
-            background: #111827;
-            color: #ffffff;
-            text-align: left;
-            padding: 10px;
-            font-size: 13px;
-          }
-
-          td {
-            border-bottom: 1px solid #e5e7eb;
-            padding: 10px;
-            font-size: 13px;
           }
 
           .texto-carta {
@@ -781,6 +958,174 @@ export default function VistaCliente() {
     ventana.document.close();
   }
 
+  function datosContactoEmpresaLinea() {
+    return [telefonoEmpresa(), correoEmpresa(), direccionEmpresa()]
+      .filter(Boolean)
+      .join(" | ");
+  }
+
+  function generarHistorialMovimientosEstadoCuenta() {
+    const movimientos = [];
+
+    pagos.forEach((pago) => {
+      movimientos.push({
+        fecha: pago.fecha_pago || pago.created_at,
+        tipo: "PAGO",
+        monto: Number(pago.monto || 0),
+        observacion: pago.descripcion || pago.observacion || pago.metodo_pago || "-",
+      });
+    });
+
+    recargos.forEach((recargo) => {
+      movimientos.push({
+        fecha:
+          recargo.fecha ||
+          recargo.fecha_recargo ||
+          recargo.created_at ||
+          recargo.fecha_movimiento,
+        tipo: "RECARGO",
+        monto: Number(
+          recargo.monto ||
+            recargo.valor ||
+            recargo.monto_recargo ||
+            recargo.recargo ||
+            0
+        ),
+        observacion:
+          recargo.observacion ||
+          recargo.descripcion ||
+          recargo.motivo ||
+          "Recargo registrado",
+      });
+    });
+
+    movimientos.sort((a, b) => new Date(a.fecha || 0) - new Date(b.fecha || 0));
+
+    return movimientos;
+  }
+
+  function generarEstadoCuenta() {
+    if (!cliente || !cuenta) {
+      alert("Seleccione un cliente y una cuenta.");
+      return;
+    }
+
+    const historial = generarHistorialMovimientosEstadoCuenta();
+
+    const filasHistorial =
+      historial.length > 0
+        ? historial
+            .map((mov, index) => {
+              const fondo = index % 2 === 0 ? "#ffffff" : "#f9fafb";
+              const claseTipo = mov.tipo === "PAGO" ? "ec-pago" : "ec-recargo";
+
+              return `
+                <tr style="background:${fondo};">
+                  <td class="ec-centro">${formatoFecha(mov.fecha)}</td>
+                  <td class="ec-centro ${claseTipo}">${mov.tipo}</td>
+                  <td class="ec-derecha">${formatoDinero(mov.monto)}</td>
+                  <td>${mov.observacion || "-"}</td>
+                </tr>
+              `;
+            })
+            .join("")
+        : `
+            <tr>
+              <td colspan="4" class="ec-centro" style="color:#6b7280;font-style:italic;background:#f9fafb;">
+                No hay pagos ni recargos registrados para este cliente.
+              </td>
+            </tr>
+          `;
+
+    abrirDocumentoHTML(
+      `Estado de Cuenta ${cuenta.numero_cuenta || ""}`,
+      `
+        <div class="ec-membrete">
+          <div class="ec-negocio">${nombreEmpresa()}</div>
+          <div class="ec-subtitulo">${subtituloEmpresa() || ""}</div>
+        </div>
+
+        <div class="ec-barra-azul"></div>
+
+        <h1 class="ec-titulo">ESTADO DE CUENTA</h1>
+
+        <div class="ec-descripcion">
+          Documento generado para consulta del saldo, pagos y recargos registrados.
+        </div>
+
+        ${
+          datosContactoEmpresaLinea()
+            ? `<div class="ec-contacto">${datosContactoEmpresaLinea()}</div>`
+            : ""
+        }
+
+        <div class="ec-seccion-clara">DATOS DEL CLIENTE</div>
+
+        <table class="ec-tabla-info">
+          <tbody>
+            <tr>
+              <td class="ec-label">Cliente</td>
+              <td class="ec-valor" colspan="3">${cliente.nombre || "-"}</td>
+            </tr>
+            <tr>
+              <td class="ec-label">Cédula</td>
+              <td class="ec-valor">${cliente.cedula || "-"}</td>
+              <td class="ec-label">Fecha emisión</td>
+              <td class="ec-valor">${formatoFecha(new Date().toISOString())}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="ec-seccion-azul">RESUMEN DE CUENTA</div>
+
+        <table class="ec-tabla-info">
+          <tbody>
+            <tr>
+              <td class="ec-label">Saldo actual</td>
+              <td class="ec-valor ec-saldo">${formatoDinero(cuenta.saldo_actual)}</td>
+              <td class="ec-label">Fecha vencimiento</td>
+              <td class="ec-valor">${formatoFecha(cuenta.fecha_vencimiento)}</td>
+            </tr>
+            <tr>
+              <td class="ec-label">Estado</td>
+              <td class="ec-valor" colspan="3">
+                ${cobranza?.estado_cobranza || cuenta.estado || "-"}
+              </td>
+            </tr>
+            <tr>
+              <td class="ec-label">Cuenta</td>
+              <td class="ec-valor">${cuenta.numero_cuenta || "-"}</td>
+              <td class="ec-label">Monto total</td>
+              <td class="ec-valor">${formatoDinero(cuenta.monto_total)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="ec-linea-dorada"></div>
+
+        <div class="ec-historial-titulo">HISTORIAL DE MOVIMIENTOS</div>
+
+        <table class="ec-tabla-mov">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Tipo</th>
+              <th>Monto</th>
+              <th>Observación</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filasHistorial}
+          </tbody>
+        </table>
+
+        <div class="pie">
+          Estado de cuenta generado por ${nombreEmpresa()} mediante KONAX Gestión.
+        </div>
+      `
+    );
+  }
+
   function generarMembrete(tituloDocumento) {
     const detalles = [
       direccionEmpresa(),
@@ -805,99 +1150,6 @@ export default function VistaCliente() {
         </div>
       </div>
     `;
-  }
-
-  function generarEstadoCuenta() {
-    if (!cliente || !cuenta) {
-      alert("Seleccione un cliente y una cuenta.");
-      return;
-    }
-
-    const filasPagos =
-      pagos.length > 0
-        ? pagos
-            .map(
-              (pago) => `
-                <tr>
-                  <td>${formatoFecha(pago.fecha_pago || pago.created_at)}</td>
-                  <td>${formatoDinero(pago.monto)}</td>
-                  <td>${pago.metodo_pago || pago.metodo || "-"}</td>
-                  <td>${pago.descripcion || pago.observacion || "-"}</td>
-                </tr>
-              `
-            )
-            .join("")
-        : `
-            <tr>
-              <td colspan="4">No hay pagos registrados para esta cuenta.</td>
-            </tr>
-          `;
-
-    const totalPagado = Math.max(
-      Number(cuenta?.monto_total || 0) - Number(cuenta?.saldo_actual || 0),
-      0
-    );
-
-    abrirDocumentoHTML(
-      `Estado de Cuenta ${cuenta.numero_cuenta || ""}`,
-      `
-        ${generarMembrete("Estado de Cuenta")}
-
-        <h2>Datos del Cliente</h2>
-        <p class="dato"><strong>Cliente:</strong> ${cliente.nombre || "-"}</p>
-        <p class="dato"><strong>Cédula:</strong> ${cliente.cedula || "-"}</p>
-        <p class="dato"><strong>Teléfono:</strong> ${cliente.telefono || "-"}</p>
-        <p class="dato"><strong>Correo:</strong> ${cliente.correo || "-"}</p>
-        <p class="dato"><strong>Dirección:</strong> ${cliente.direccion || "-"}</p>
-
-        <h2>Información Comercial</h2>
-        <p class="dato"><strong>Número de cuenta:</strong> ${cuenta.numero_cuenta || "-"}</p>
-        <p class="dato"><strong>Tipo:</strong> ${cuenta.tipo_producto || "-"}</p>
-        <p class="dato"><strong>Descripción:</strong> ${cuenta.descripcion || "-"}</p>
-
-        <div class="resumen">
-          <div class="resumen-item">
-            <div class="resumen-label">Monto Total</div>
-            <div class="resumen-valor">${formatoDinero(cuenta.monto_total)}</div>
-          </div>
-
-          <div class="resumen-item">
-            <div class="resumen-label">Total Pagado</div>
-            <div class="resumen-valor">${formatoDinero(totalPagado)}</div>
-          </div>
-
-          <div class="resumen-item">
-            <div class="resumen-label">Saldo Actual</div>
-            <div class="resumen-valor">${formatoDinero(cuenta.saldo_actual)}</div>
-          </div>
-
-          <div class="resumen-item">
-            <div class="resumen-label">Días de Atraso</div>
-            <div class="resumen-valor">${diasAtraso}</div>
-          </div>
-        </div>
-
-        <h2>Historial de Pagos</h2>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Monto</th>
-              <th>Método</th>
-              <th>Observación</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${filasPagos}
-          </tbody>
-        </table>
-
-        <div class="pie">
-          Estado de cuenta generado por ${nombreEmpresa()} mediante KONAX Gestión.
-        </div>
-      `
-    );
   }
 
   function generarCartaMora() {
@@ -1000,7 +1252,7 @@ export default function VistaCliente() {
             <img src="/konax-logo.png" alt="KONAX" style={logo} />
             <div>
               <h1 style={titulo}>Vista Cliente</h1>
-              <p style={subtituloEmpresa}>{nombreEmpresa()}</p>
+              <p style={subtituloVista}>{nombreEmpresa()}</p>
             </div>
           </div>
 
@@ -1335,7 +1587,7 @@ const titulo = {
   color: "#111827",
 };
 
-const subtituloEmpresa = {
+const subtituloVista = {
   margin: 0,
   color: "#6b7280",
   fontSize: "13px",
