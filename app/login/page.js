@@ -16,7 +16,7 @@ export default function Login() {
   }
 
   async function suspenderEmpresa(empresa) {
-    await supabase
+    const { error: errorSuspension } = await supabase
       .from("empresas")
       .update({
         estado: "Suspendido",
@@ -25,120 +25,273 @@ export default function Login() {
       })
       .eq("id", empresa.id);
 
-    await supabase.from("bitacora_konax").insert([
-      {
-        empresa_id: empresa.id,
-        empresa_nombre: empresa.nombre,
-        accion: "Suspensión automática",
-        descripcion: `La empresa ${empresa.nombre} fue suspendida automáticamente por vencimiento de facturación.`,
-        estado_anterior: empresa.estado,
-        estado_nuevo: "Suspendido",
-        usuario: "Sistema KONAX",
-      },
-    ]);
+    if (errorSuspension) {
+      console.error(
+        "Error suspendiendo empresa:",
+        errorSuspension.message
+      );
+      return;
+    }
+
+    const { error: errorBitacora } = await supabase
+      .from("bitacora_konax")
+      .insert([
+        {
+          empresa_id: empresa.id,
+          empresa_nombre: empresa.nombre,
+          accion: "Suspensión automática",
+          descripcion: `La empresa ${empresa.nombre} fue suspendida automáticamente por vencimiento de facturación.`,
+          estado_anterior: empresa.estado,
+          estado_nuevo: "Suspendido",
+          usuario: "Sistema KONAX",
+        },
+      ]);
+
+    if (errorBitacora) {
+      console.error(
+        "Error registrando suspensión en bitácora:",
+        errorBitacora.message
+      );
+    }
+  }
+
+  function limpiarSesionAnterior() {
+    localStorage.clear();
+  }
+
+  function guardarSesion(usuario, empresa) {
+    /*
+      ======================================================
+      SESIÓN ÚNICA OFICIAL DE KONAX
+      ======================================================
+
+      TODAS LAS PANTALLAS DEBEN LEER ESTAS CLAVES:
+
+      empresaId
+      empresaNombre
+
+      usuarioId
+      usuarioNombre
+      usuarioCorreo
+      usuarioRol
+      rolId
+
+      tipoNegocio
+      categoriaNegocio
+
+      planCodigo
+      planNombre
+      estadoPlan
+      estadoEmpresa
+    */
+
+    localStorage.setItem("empresaId", String(usuario.empresa_id || ""));
+    localStorage.setItem("empresaNombre", String(empresa.nombre || ""));
+
+    localStorage.setItem("usuarioId", String(usuario.id || ""));
+    localStorage.setItem("usuarioNombre", String(usuario.nombre || ""));
+    localStorage.setItem("usuarioCorreo", String(usuario.correo || ""));
+    localStorage.setItem("usuarioRol", String(usuario.rol || ""));
+    localStorage.setItem("rolId", String(usuario.rol_id || ""));
+
+    localStorage.setItem(
+      "tipoNegocio",
+      String(empresa.tipo_negocio || "")
+    );
+
+    localStorage.setItem(
+      "categoriaNegocio",
+      String(empresa.categoria_negocio || "")
+    );
+
+    localStorage.setItem(
+      "planCodigo",
+      String(empresa.plan_codigo || "")
+    );
+
+    localStorage.setItem(
+      "planNombre",
+      String(empresa.plan_nombre || "")
+    );
+
+    localStorage.setItem(
+      "estadoPlan",
+      String(empresa.estado_plan || "")
+    );
+
+    localStorage.setItem(
+      "estadoEmpresa",
+      String(empresa.estado || "")
+    );
   }
 
   async function iniciarSesion() {
-    if (!correo || !password) {
-      alert("Ingrese correo y contraseña");
+    if (cargando) return;
+
+    if (!correo.trim() || !password.trim()) {
+      alert("Ingrese correo y contraseña.");
       return;
     }
 
     setCargando(true);
 
-    const correoLimpio = correo.trim().toLowerCase();
-    const passwordLimpio = password.trim();
+    try {
+      const correoLimpio = correo.trim().toLowerCase();
+      const passwordLimpio = password.trim();
 
-    const { data: usuario, error } = await supabase
-      .from("usuarios")
-      .select("*")
-      .eq("correo", correoLimpio)
-      .eq("password", passwordLimpio)
-      .eq("estado", "Activo")
-      .maybeSingle();
+      /*
+        ======================================================
+        1. BUSCAR USUARIO
+        ======================================================
+      */
 
-    if (error) {
-      setCargando(false);
-      alert(error.message);
-      return;
-    }
+      const { data: usuario, error: errorUsuario } = await supabase
+        .from("usuarios")
+        .select("*")
+        .eq("correo", correoLimpio)
+        .eq("password", passwordLimpio)
+        .eq("estado", "Activo")
+        .maybeSingle();
 
-    if (!usuario) {
-      setCargando(false);
-      alert("Usuario o contraseña incorrectos");
-      return;
-    }
-
-    const { data: empresa, error: errorEmpresa } = await supabase
-      .from("empresas")
-      .select("*")
-      .eq("id", usuario.empresa_id)
-      .maybeSingle();
-
-    if (errorEmpresa) {
-      setCargando(false);
-      alert("Error verificando empresa: " + errorEmpresa.message);
-      return;
-    }
-
-    if (!empresa) {
-      setCargando(false);
-      alert("Este usuario no tiene empresa asignada.");
-      return;
-    }
-
-    const hoy = fechaHoy();
-    const vencimiento = empresa.fecha_proxima_facturacion;
-
-    const estaVencida =
-      vencimiento && hoy > vencimiento && empresa.estado_pago !== "Al día";
-
-    if (
-      empresa.estado === "Suspendido" ||
-      empresa.estado_plan === "Suspendido" ||
-      estaVencida
-    ) {
-      if (estaVencida && empresa.estado_plan !== "Suspendido") {
-        await suspenderEmpresa(empresa);
+      if (errorUsuario) {
+        alert("Error iniciando sesión: " + errorUsuario.message);
+        return;
       }
 
-      setCargando(false);
+      if (!usuario) {
+        alert("Usuario o contraseña incorrectos.");
+        return;
+      }
+
+      if (!usuario.empresa_id) {
+        alert("Este usuario no tiene empresa asignada.");
+        return;
+      }
+
+      /*
+        ======================================================
+        2. BUSCAR EMPRESA DEL USUARIO
+        ======================================================
+      */
+
+      const { data: empresa, error: errorEmpresa } = await supabase
+        .from("empresas")
+        .select("*")
+        .eq("id", usuario.empresa_id)
+        .maybeSingle();
+
+      if (errorEmpresa) {
+        alert(
+          "Error verificando empresa: " +
+            errorEmpresa.message
+        );
+        return;
+      }
+
+      if (!empresa) {
+        alert("La empresa asignada al usuario no existe.");
+        return;
+      }
+
+      /*
+        ======================================================
+        3. VALIDAR FACTURACIÓN
+        ======================================================
+      */
+
+      const hoy = fechaHoy();
+      const vencimiento = empresa.fecha_proxima_facturacion;
+
+      const estaVencida =
+        Boolean(vencimiento) &&
+        hoy > vencimiento &&
+        empresa.estado_pago !== "Al día";
+
+      if (
+        empresa.estado === "Suspendido" ||
+        empresa.estado_plan === "Suspendido" ||
+        estaVencida
+      ) {
+        if (
+          estaVencida &&
+          empresa.estado_plan !== "Suspendido"
+        ) {
+          await suspenderEmpresa(empresa);
+        }
+
+        alert(
+          "El servicio de esta empresa está suspendido por facturación pendiente. Contacte a KONAX."
+        );
+
+        return;
+      }
+
+      /*
+        ======================================================
+        4. BORRAR COMPLETAMENTE SESIÓN ANTERIOR
+        ======================================================
+      */
+
+      limpiarSesionAnterior();
+
+      /*
+        ======================================================
+        5. CREAR UNA ÚNICA SESIÓN
+        ======================================================
+      */
+
+      guardarSesion(usuario, empresa);
+
+      /*
+        ======================================================
+        6. VERIFICACIÓN DE SEGURIDAD DE SESIÓN
+        ======================================================
+      */
+
+      const empresaSesion = localStorage.getItem("empresaId");
+      const usuarioSesion = localStorage.getItem("usuarioId");
+      const rolSesion = localStorage.getItem("usuarioRol");
+
+      if (!empresaSesion || !usuarioSesion || !rolSesion) {
+        limpiarSesionAnterior();
+
+        alert(
+          "No fue posible crear correctamente la sesión."
+        );
+
+        return;
+      }
+
+      /*
+        ======================================================
+        7. REDIRECCIÓN SEGÚN ROL
+        ======================================================
+      */
+
+      const rolNormalizado = String(usuario.rol || "")
+        .toLowerCase()
+        .trim();
+
+      if (rolNormalizado === "superadmin") {
+        router.replace("/admin");
+        return;
+      }
+
+      router.replace("/dashboard");
+    } catch (errorGeneral) {
+      console.error("Error inesperado en Login:", errorGeneral);
+
       alert(
-        "El servicio de esta empresa está suspendido por facturación pendiente. Contacte a KONAX."
+        "Ocurrió un error inesperado al iniciar sesión."
       );
-      return;
+    } finally {
+      setCargando(false);
     }
+  }
 
-    localStorage.clear();
-
-    localStorage.setItem("usuarioId", usuario.id || "");
-    localStorage.setItem("usuarioNombre", usuario.nombre || "");
-    localStorage.setItem("nombreUsuario", usuario.nombre || "");
-    localStorage.setItem("usuarioCorreo", usuario.correo || "");
-    localStorage.setItem("correoUsuario", usuario.correo || "");
-
-    localStorage.setItem("empresaId", usuario.empresa_id || "");
-    localStorage.setItem("empresa_id", usuario.empresa_id || "");
-    localStorage.setItem("empresaNombre", empresa.nombre || "");
-
-    localStorage.setItem("usuarioRol", usuario.rol || "");
-    localStorage.setItem("rolUsuario", usuario.rol || "");
-    localStorage.setItem("rolId", usuario.rol_id || "");
-
-    localStorage.setItem("tipoNegocio", empresa.tipo_negocio || "");
-    localStorage.setItem("categoriaNegocio", empresa.categoria_negocio || "");
-
-    localStorage.setItem("planCodigo", empresa.plan_codigo || "");
-    localStorage.setItem("planNombre", empresa.plan_nombre || "");
-    localStorage.setItem("estadoPlan", empresa.estado_plan || "");
-    localStorage.setItem("estadoEmpresa", empresa.estado || "");
-
-    setCargando(false);
-
-    if (String(usuario.rol || "").toLowerCase().trim() === "superadmin") {
-      router.push("/admin");
-    } else {
-      router.push("/dashboard");
+  function manejarTecla(evento) {
+    if (evento.key === "Enter" && !cargando) {
+      iniciarSesion();
     }
   }
 
@@ -149,38 +302,61 @@ export default function Login() {
 
       <div style={modal}>
         <div style={logoFila}>
-          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+          <img
+            src="/konax-logo.png"
+            alt="KONAX"
+            style={logo}
+          />
+
           <h1 style={marca}>KONAX</h1>
         </div>
 
         <h2 style={titulo}>Bienvenido</h2>
 
-        <p style={subtitulo}>Ingresa a tu cuenta empresarial aquí</p>
+        <p style={subtitulo}>
+          Ingresa a tu cuenta empresarial aquí
+        </p>
 
         <div style={campo}>
           <label style={label}>Correo</label>
+
           <input
             type="email"
             placeholder="correo@empresa.com"
             value={correo}
             onChange={(e) => setCorreo(e.target.value)}
+            onKeyDown={manejarTecla}
+            autoComplete="email"
             style={input}
           />
         </div>
 
         <div style={campo}>
           <label style={label}>Contraseña</label>
+
           <input
             type="password"
             placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={manejarTecla}
+            autoComplete="current-password"
             style={input}
           />
         </div>
 
-        <button onClick={iniciarSesion} disabled={cargando} style={boton}>
-          {cargando ? "Ingresando..." : "Iniciar Sesión →"}
+        <button
+          onClick={iniciarSesion}
+          disabled={cargando}
+          style={{
+            ...boton,
+            opacity: cargando ? 0.7 : 1,
+            cursor: cargando ? "not-allowed" : "pointer",
+          }}
+        >
+          {cargando
+            ? "Ingresando..."
+            : "Iniciar Sesión →"}
         </button>
 
         <p style={olvido}>¿Olvidaste tu contraseña?</p>
@@ -303,13 +479,13 @@ const input = {
 const boton = {
   width: "100%",
   padding: "16px",
-  background: "linear-gradient(135deg, #2dd4bf, #10b981)",
+  background:
+    "linear-gradient(135deg, #2dd4bf, #10b981)",
   color: "#052e2b",
   border: "none",
   borderRadius: "13px",
   fontSize: "17px",
   fontWeight: "bold",
-  cursor: "pointer",
   marginTop: "6px",
 };
 
