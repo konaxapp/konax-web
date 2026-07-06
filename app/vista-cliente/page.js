@@ -7,6 +7,7 @@ export default function VistaCliente() {
   const [buscar, setBuscar] = useState("");
   const [resultados, setResultados] = useState([]);
 
+  const [empresa, setEmpresa] = useState(null);
   const [cliente, setCliente] = useState(null);
   const [cuentas, setCuentas] = useState([]);
   const [cuenta, setCuenta] = useState(null);
@@ -26,6 +27,8 @@ export default function VistaCliente() {
   const [archivo, setArchivo] = useState(null);
 
   useEffect(() => {
+    cargarEmpresaActiva();
+
     const busquedaGuardada = localStorage.getItem("busquedaVistaCliente");
 
     if (busquedaGuardada) {
@@ -40,16 +43,55 @@ export default function VistaCliente() {
   }
 
   function obtenerEmpresaId() {
-    const empresaId = localStorage.getItem("empresaId");
+    const empresaId =
+      localStorage.getItem("empresaId") ||
+      localStorage.getItem("empresaAdminCreadaId");
 
     if (!empresaId) {
-      alert(
-        "No hay empresa activa. Configure la empresa antes de usar Vista Cliente."
-      );
+      alert("No hay empresa activa. Configure la empresa antes de usar Vista Cliente.");
       return null;
     }
 
     return empresaId;
+  }
+
+  async function cargarEmpresaActiva() {
+    const empresaId =
+      localStorage.getItem("empresaId") ||
+      localStorage.getItem("empresaAdminCreadaId");
+
+    if (!empresaId) return;
+
+    const { data, error } = await supabase
+      .from("empresas")
+      .select("*")
+      .eq("id", empresaId)
+      .maybeSingle();
+
+    if (!error) {
+      setEmpresa(data || null);
+    }
+  }
+
+  function nombreEmpresa() {
+    return (
+      empresa?.nombre ||
+      empresa?.nombre_empresa ||
+      empresa?.razon_social ||
+      "KONAX Gestión"
+    );
+  }
+
+  function telefonoEmpresa() {
+    return empresa?.telefono || empresa?.telefono_empresa || "";
+  }
+
+  function correoEmpresa() {
+    return empresa?.correo || empresa?.email || empresa?.correo_empresa || "";
+  }
+
+  function direccionEmpresa() {
+    return empresa?.direccion || empresa?.direccion_empresa || "";
   }
 
   function obtenerUsuarioActual() {
@@ -75,7 +117,6 @@ export default function VistaCliente() {
 
     const hoy = new Date();
     const vencimiento = new Date(fechaVencimiento);
-
     const diferencia = hoy - vencimiento;
 
     if (diferencia <= 0) return 0;
@@ -96,18 +137,17 @@ export default function VistaCliente() {
 
   function formatoFecha(fecha) {
     if (!fecha) return "-";
-
     return String(fecha).slice(0, 10);
   }
 
   async function buscarClienteAutomatico(valorBusqueda) {
     const empresaId = obtenerEmpresaId();
-
     if (!empresaId) return;
 
     const texto = String(valorBusqueda || "").trim();
-
     if (texto.length < 3) return;
+
+    await cargarEmpresaActiva();
 
     let encontrados = [];
 
@@ -141,50 +181,43 @@ export default function VistaCliente() {
     }
 
     if (cuentasData && cuentasData.length > 0) {
-      const ids = [...new Set(cuentasData.map((item) => item.cliente_id))];
+      const ids = [...new Set(cuentasData.map((item) => item.cliente_id).filter(Boolean))];
 
-      const { data: clientesDeCuentas, error: errorClientesCuentas } =
-        await supabase
-          .from("clientes")
-          .select("*")
-          .eq("empresa_id", empresaId)
-          .in("id", ids);
+      if (ids.length > 0) {
+        const { data: clientesDeCuentas, error: errorClientesCuentas } =
+          await supabase
+            .from("clientes")
+            .select("*")
+            .eq("empresa_id", empresaId)
+            .in("id", ids);
 
-      if (errorClientesCuentas) {
-        alert(
-          "Error buscando clientes de cuentas: " +
-            errorClientesCuentas.message
-        );
-        return;
-      }
-
-      cuentasData.forEach((cuentaEncontrada) => {
-        const clienteEncontrado = clientesDeCuentas?.find(
-          (item) =>
-            String(item.id) === String(cuentaEncontrada.cliente_id)
-        );
-
-        if (clienteEncontrado) {
-          encontrados.push({
-            cliente: clienteEncontrado,
-            cuenta: cuentaEncontrada,
-          });
+        if (errorClientesCuentas) {
+          alert("Error buscando clientes de cuentas: " + errorClientesCuentas.message);
+          return;
         }
-      });
+
+        cuentasData.forEach((cuentaEncontrada) => {
+          const clienteEncontrado = clientesDeCuentas?.find(
+            (item) => String(item.id) === String(cuentaEncontrada.cliente_id)
+          );
+
+          if (clienteEncontrado) {
+            encontrados.push({
+              cliente: clienteEncontrado,
+              cuenta: cuentaEncontrada,
+            });
+          }
+        });
+      }
     }
 
     const unicos = [];
 
     encontrados.forEach((item) => {
-      const clave = `${item.cliente?.id || ""}-${
-        item.cuenta?.id || "cliente"
-      }`;
+      const clave = `${item.cliente?.id || ""}-${item.cuenta?.id || "cliente"}`;
 
       if (!unicos.some((x) => x.clave === clave)) {
-        unicos.push({
-          clave,
-          ...item,
-        });
+        unicos.push({ clave, ...item });
       }
     });
 
@@ -201,8 +234,9 @@ export default function VistaCliente() {
 
   async function seleccionarCliente(resultado) {
     const empresaId = obtenerEmpresaId();
-
     if (!empresaId) return;
+
+    await cargarEmpresaActiva();
 
     const clienteBase = resultado.cliente;
 
@@ -222,8 +256,7 @@ export default function VistaCliente() {
       return;
     }
 
-    const cuentaSeleccionada =
-      resultado.cuenta || cuentasData?.[0] || null;
+    const cuentaSeleccionada = resultado.cuenta || cuentasData?.[0] || null;
 
     setCuentas(cuentasData || []);
     setCuenta(cuentaSeleccionada);
@@ -244,14 +277,8 @@ export default function VistaCliente() {
     await cargarDocumentos(clienteBase.id);
   }
 
-  async function cargarDatosRelacionados(
-    clienteId,
-    cuentaId,
-    numeroCuenta,
-    cedulaCliente
-  ) {
+  async function cargarDatosRelacionados(clienteId, cuentaId, numeroCuenta, cedulaCliente) {
     const empresaId = obtenerEmpresaId();
-
     if (!empresaId || !cuentaId) return;
 
     const { data: cobranzaData, error: errorCobranza } = await supabase
@@ -266,20 +293,6 @@ export default function VistaCliente() {
     }
 
     setCobranza(cobranzaData || null);
-
-    /*
-      IMPORTANTE:
-
-      Primero intentamos buscar los pagos correctamente relacionados
-      mediante informacion_comercial_id.
-
-      Si existen pagos antiguos sin ese ID, también buscamos por:
-      - número de cuenta
-      - cédula
-      - cliente_id
-
-      Así el historial puede recuperar registros anteriores.
-    */
 
     const { data: pagosData, error: errorPagos } = await supabase
       .from("caja")
@@ -299,7 +312,9 @@ export default function VistaCliente() {
           tipo === "pago credito" ||
           tipo === "cobro crédito" ||
           tipo === "cobro credito" ||
-          tipo === "mensualidad";
+          tipo === "mensualidad" ||
+          tipo === "cancelación" ||
+          tipo === "cancelacion";
 
         if (!esPago) return false;
 
@@ -308,30 +323,21 @@ export default function VistaCliente() {
           String(pago.informacion_comercial_id) === String(cuentaId);
 
         const cuentaPago = String(
-          pago.numero_cuenta ||
-            pago.cuenta ||
-            pago.codigo_cuenta ||
-            ""
+          pago.numero_cuenta || pago.cuenta || pago.codigo_cuenta || ""
         ).trim();
 
         const coincideNumeroCuenta =
-          numeroCuenta &&
-          cuentaPago === String(numeroCuenta).trim();
+          numeroCuenta && cuentaPago === String(numeroCuenta).trim();
 
         const cedulaPago = String(
-          pago.cliente_cedula ||
-            pago.cedula ||
-            pago.identificacion ||
-            ""
+          pago.cliente_cedula || pago.cedula || pago.identificacion || ""
         ).trim();
 
         const coincideCedula =
-          cedulaCliente &&
-          cedulaPago === String(cedulaCliente).trim();
+          cedulaCliente && cedulaPago === String(cedulaCliente).trim();
 
         const coincideClienteId =
-          pago.cliente_id &&
-          String(pago.cliente_id) === String(clienteId);
+          pago.cliente_id && String(pago.cliente_id) === String(clienteId);
 
         return (
           coincideCuentaId ||
@@ -361,9 +367,7 @@ export default function VistaCliente() {
   }
 
   async function cambiarCuenta(cuentaId) {
-    const nuevaCuenta = cuentas.find(
-      (item) => String(item.id) === String(cuentaId)
-    );
+    const nuevaCuenta = cuentas.find((item) => String(item.id) === String(cuentaId));
 
     if (!nuevaCuenta || !cliente) return;
 
@@ -379,7 +383,6 @@ export default function VistaCliente() {
 
   async function guardarGestion() {
     const empresaId = obtenerEmpresaId();
-
     if (!empresaId) return;
 
     if (!cliente || !cuenta) {
@@ -425,17 +428,11 @@ export default function VistaCliente() {
 
     setObservacion("");
 
-    await cargarDatosRelacionados(
-      cliente.id,
-      cuenta.id,
-      cuenta.numero_cuenta,
-      cliente.cedula
-    );
+    await cargarDatosRelacionados(cliente.id, cuenta.id, cuenta.numero_cuenta, cliente.cedula);
   }
 
   async function registrarPromesa() {
     const empresaId = obtenerEmpresaId();
-
     if (!empresaId) return;
 
     if (!cliente || !cuenta) {
@@ -514,19 +511,13 @@ export default function VistaCliente() {
     setMontoPromesa("");
     setObservacionPromesa("");
 
-    await cargarDatosRelacionados(
-      cliente.id,
-      cuenta.id,
-      cuenta.numero_cuenta,
-      cliente.cedula
-    );
+    await cargarDatosRelacionados(cliente.id, cuenta.id, cuenta.numero_cuenta, cliente.cedula);
 
     alert("Promesa de pago registrada correctamente.");
   }
 
   async function cargarDocumentos(clienteId) {
     const empresaId = obtenerEmpresaId();
-
     if (!empresaId) return;
 
     const { data, error } = await supabase.storage
@@ -544,7 +535,6 @@ export default function VistaCliente() {
 
   async function subirDocumento() {
     const empresaId = obtenerEmpresaId();
-
     if (!empresaId) return;
 
     if (!cliente) {
@@ -558,10 +548,7 @@ export default function VistaCliente() {
     }
 
     const nombreLimpio = archivo.name.replace(/\s+/g, "_");
-
-    const ruta = `empresas/${empresaId}/clientes/${
-      cliente.id
-    }/${Date.now()}-${nombreLimpio}`;
+    const ruta = `empresas/${empresaId}/clientes/${cliente.id}/${Date.now()}-${nombreLimpio}`;
 
     const { error } = await supabase.storage
       .from("documentos-clientes")
@@ -573,13 +560,11 @@ export default function VistaCliente() {
     }
 
     setArchivo(null);
-
     await cargarDocumentos(cliente.id);
   }
 
   async function verDocumento(nombre) {
     const empresaId = obtenerEmpresaId();
-
     if (!empresaId || !cliente) return;
 
     const ruta = `empresas/${empresaId}/clientes/${cliente.id}/${nombre}`;
@@ -600,9 +585,7 @@ export default function VistaCliente() {
     const ventana = window.open("", "_blank");
 
     if (!ventana) {
-      alert(
-        "El navegador bloqueó la ventana emergente. Habilite ventanas emergentes para KONAX."
-      );
+      alert("El navegador bloqueó la ventana emergente. Habilite ventanas emergentes para KONAX.");
       return;
     }
 
@@ -610,22 +593,13 @@ export default function VistaCliente() {
 
     ventana.document.write(`
       <!DOCTYPE html>
-
       <html lang="es">
-
       <head>
-
         <meta charset="UTF-8" />
-
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1.0"
-        />
-
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>${tituloDocumento}</title>
 
         <style>
-
           * {
             box-sizing: border-box;
           }
@@ -659,21 +633,37 @@ export default function VistaCliente() {
             margin: 0 auto;
           }
 
-          .encabezado {
+          .membrete {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 18px;
             border-bottom: 3px solid #111827;
-            padding-bottom: 16px;
-            margin-bottom: 25px;
+            padding-bottom: 18px;
+            margin-bottom: 28px;
           }
 
-          .marca {
+          .empresa-nombre {
             font-size: 28px;
             font-weight: 800;
-            letter-spacing: 2px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+          }
+
+          .empresa-detalle {
+            color: #6b7280;
+            margin-top: 6px;
+            line-height: 1.5;
+            font-size: 13px;
+          }
+
+          .documento-titulo {
+            text-align: right;
           }
 
           h1 {
             font-size: 28px;
-            margin: 18px 0 8px;
+            margin: 0 0 8px;
           }
 
           h2 {
@@ -743,6 +733,13 @@ export default function VistaCliente() {
             margin-top: 65px;
           }
 
+          .linea-firma {
+            width: 260px;
+            border-top: 1px solid #111827;
+            margin-top: 50px;
+            padding-top: 8px;
+          }
+
           .pie {
             border-top: 1px solid #e5e7eb;
             margin-top: 40px;
@@ -752,7 +749,6 @@ export default function VistaCliente() {
           }
 
           @media print {
-
             body {
               padding: 0;
             }
@@ -764,20 +760,13 @@ export default function VistaCliente() {
             .documento {
               max-width: none;
             }
-
           }
-
         </style>
-
       </head>
 
       <body>
-
         <div class="barra">
-          <button
-            class="boton-imprimir"
-            onclick="window.print()"
-          >
+          <button class="boton-imprimir" onclick="window.print()">
             Imprimir / Guardar PDF
           </button>
         </div>
@@ -785,13 +774,37 @@ export default function VistaCliente() {
         <div class="documento">
           ${contenidoHTML}
         </div>
-
       </body>
-
       </html>
     `);
 
     ventana.document.close();
+  }
+
+  function generarMembrete(tituloDocumento) {
+    const detalles = [
+      direccionEmpresa(),
+      telefonoEmpresa() ? `Tel: ${telefonoEmpresa()}` : "",
+      correoEmpresa() ? `Correo: ${correoEmpresa()}` : "",
+    ]
+      .filter(Boolean)
+      .join("<br/>");
+
+    return `
+      <div class="membrete">
+        <div>
+          <div class="empresa-nombre">${nombreEmpresa()}</div>
+          <div class="empresa-detalle">
+            ${detalles || "Documento generado desde KONAX Gestión"}
+          </div>
+        </div>
+
+        <div class="documento-titulo">
+          <h1>${tituloDocumento}</h1>
+          <p class="dato"><strong>Fecha:</strong> ${formatoFecha(new Date().toISOString())}</p>
+        </div>
+      </div>
+    `;
   }
 
   function generarEstadoCuenta() {
@@ -806,134 +819,67 @@ export default function VistaCliente() {
             .map(
               (pago) => `
                 <tr>
-                  <td>
-                    ${formatoFecha(pago.fecha_pago || pago.created_at)}
-                  </td>
-
-                  <td>
-                    ${formatoDinero(pago.monto)}
-                  </td>
-
-                  <td>
-                    ${pago.metodo_pago || pago.metodo || "-"}
-                  </td>
-
-                  <td>
-                    ${pago.descripcion || pago.observacion || "-"}
-                  </td>
+                  <td>${formatoFecha(pago.fecha_pago || pago.created_at)}</td>
+                  <td>${formatoDinero(pago.monto)}</td>
+                  <td>${pago.metodo_pago || pago.metodo || "-"}</td>
+                  <td>${pago.descripcion || pago.observacion || "-"}</td>
                 </tr>
               `
             )
             .join("")
         : `
             <tr>
-              <td colspan="4">
-                No hay pagos registrados para esta cuenta.
-              </td>
+              <td colspan="4">No hay pagos registrados para esta cuenta.</td>
             </tr>
           `;
 
-    const totalPagado = pagos.reduce(
-      (suma, pago) => suma + Number(pago.monto || 0),
+    const totalPagado = Math.max(
+      Number(cuenta?.monto_total || 0) - Number(cuenta?.saldo_actual || 0),
       0
     );
 
     abrirDocumentoHTML(
       `Estado de Cuenta ${cuenta.numero_cuenta || ""}`,
       `
-        <div class="encabezado">
-
-          <div class="marca">KONAX</div>
-
-          <h1>Estado de Cuenta</h1>
-
-          <p>
-            Fecha de emisión:
-            ${formatoFecha(new Date().toISOString())}
-          </p>
-
-        </div>
+        ${generarMembrete("Estado de Cuenta")}
 
         <h2>Datos del Cliente</h2>
-
-        <p class="dato">
-          <strong>Cliente:</strong>
-          ${cliente.nombre || "-"}
-        </p>
-
-        <p class="dato">
-          <strong>Cédula:</strong>
-          ${cliente.cedula || "-"}
-        </p>
-
-        <p class="dato">
-          <strong>Teléfono:</strong>
-          ${cliente.telefono || "-"}
-        </p>
-
-        <p class="dato">
-          <strong>Correo:</strong>
-          ${cliente.correo || "-"}
-        </p>
-
-        <p class="dato">
-          <strong>Dirección:</strong>
-          ${cliente.direccion || "-"}
-        </p>
+        <p class="dato"><strong>Cliente:</strong> ${cliente.nombre || "-"}</p>
+        <p class="dato"><strong>Cédula:</strong> ${cliente.cedula || "-"}</p>
+        <p class="dato"><strong>Teléfono:</strong> ${cliente.telefono || "-"}</p>
+        <p class="dato"><strong>Correo:</strong> ${cliente.correo || "-"}</p>
+        <p class="dato"><strong>Dirección:</strong> ${cliente.direccion || "-"}</p>
 
         <h2>Información Comercial</h2>
-
-        <p class="dato">
-          <strong>Número de cuenta:</strong>
-          ${cuenta.numero_cuenta || "-"}
-        </p>
-
-        <p class="dato">
-          <strong>Tipo:</strong>
-          ${cuenta.tipo_producto || "-"}
-        </p>
-
-        <p class="dato">
-          <strong>Descripción:</strong>
-          ${cuenta.descripcion || "-"}
-        </p>
+        <p class="dato"><strong>Número de cuenta:</strong> ${cuenta.numero_cuenta || "-"}</p>
+        <p class="dato"><strong>Tipo:</strong> ${cuenta.tipo_producto || "-"}</p>
+        <p class="dato"><strong>Descripción:</strong> ${cuenta.descripcion || "-"}</p>
 
         <div class="resumen">
-
           <div class="resumen-item">
             <div class="resumen-label">Monto Total</div>
-            <div class="resumen-valor">
-              ${formatoDinero(cuenta.monto_total)}
-            </div>
+            <div class="resumen-valor">${formatoDinero(cuenta.monto_total)}</div>
           </div>
 
           <div class="resumen-item">
-            <div class="resumen-label">Total Pagado Registrado</div>
-            <div class="resumen-valor">
-              ${formatoDinero(totalPagado)}
-            </div>
+            <div class="resumen-label">Total Pagado</div>
+            <div class="resumen-valor">${formatoDinero(totalPagado)}</div>
           </div>
 
           <div class="resumen-item">
             <div class="resumen-label">Saldo Actual</div>
-            <div class="resumen-valor">
-              ${formatoDinero(cuenta.saldo_actual)}
-            </div>
+            <div class="resumen-valor">${formatoDinero(cuenta.saldo_actual)}</div>
           </div>
 
           <div class="resumen-item">
             <div class="resumen-label">Días de Atraso</div>
-            <div class="resumen-valor">
-              ${diasAtraso}
-            </div>
+            <div class="resumen-valor">${diasAtraso}</div>
           </div>
-
         </div>
 
         <h2>Historial de Pagos</h2>
 
         <table>
-
           <thead>
             <tr>
               <th>Fecha</th>
@@ -942,15 +888,13 @@ export default function VistaCliente() {
               <th>Observación</th>
             </tr>
           </thead>
-
           <tbody>
             ${filasPagos}
           </tbody>
-
         </table>
 
         <div class="pie">
-          Documento generado desde KONAX Gestión.
+          Estado de cuenta generado por ${nombreEmpresa()} mediante KONAX Gestión.
         </div>
       `
     );
@@ -976,86 +920,46 @@ export default function VistaCliente() {
     }
 
     abrirDocumentoHTML(
-      `Carta de Mora ${cuenta.numero_cuenta || ""}`,
+      `Carta de Cobro ${cuenta.numero_cuenta || ""}`,
       `
-        <div class="encabezado">
+        ${generarMembrete("Carta de Cobro")}
 
-          <div class="marca">KONAX</div>
-
-          <h1>Carta de Cobro</h1>
-
-          <p>
-            Fecha:
-            ${formatoFecha(new Date().toISOString())}
-          </p>
-
-        </div>
-
-        <p class="dato">
-          Señor(a):
-        </p>
-
-        <p class="dato">
-          <strong>${cliente.nombre || "-"}</strong>
-        </p>
-
-        <p class="dato">
-          Cédula: ${cliente.cedula || "-"}
-        </p>
-
-        <p class="dato">
-          Dirección: ${cliente.direccion || "-"}
-        </p>
-
-        <p class="dato">
-          Teléfono: ${cliente.telefono || "-"}
-        </p>
+        <p class="dato">Señor(a):</p>
+        <p class="dato"><strong>${cliente.nombre || "-"}</strong></p>
+        <p class="dato">Cédula: ${cliente.cedula || "-"}</p>
+        <p class="dato">Dirección: ${cliente.direccion || "-"}</p>
+        <p class="dato">Teléfono: ${cliente.telefono || "-"}</p>
 
         <p class="texto-carta">
-
-          Por medio de la presente le comunicamos que la cuenta número
-
-          <strong>${cuenta.numero_cuenta || "-"}</strong>
-
+          Por medio de la presente, <strong>${nombreEmpresa()}</strong> le comunica
+          que la cuenta número <strong>${cuenta.numero_cuenta || "-"}</strong>
           mantiene un saldo pendiente de
-
           <strong>${formatoDinero(cuenta.saldo_actual)}</strong>.
-
           Actualmente la cuenta registra
-
           <strong>${diasAtraso} día(s) de atraso</strong>.
-
         </p>
 
         <p class="texto-carta">
-
-          Le solicitamos realizar el pago correspondiente o comunicarse
-          con el área de cobranza para regularizar el estado de su cuenta.
-
+          Le solicitamos realizar el pago correspondiente o comunicarse con el
+          área de cobranza para regularizar el estado de su cuenta.
         </p>
 
         <p class="texto-carta">
-
-          En caso de haber realizado el pago recientemente, agradecemos
-          remitir el comprobante correspondiente para verificar y
-          actualizar nuestros registros.
-
+          En caso de haber realizado el pago recientemente, agradecemos remitir
+          el comprobante correspondiente para verificar y actualizar nuestros registros.
         </p>
 
         <div class="firma">
-
           <p>Atentamente,</p>
 
-          <p>
-            <strong>Departamento de Cobranza</strong>
-          </p>
-
-          <p>KONAX Gestión</p>
-
+          <div class="linea-firma">
+            <strong>Departamento de Cobranza</strong><br/>
+            ${nombreEmpresa()}
+          </div>
         </div>
 
         <div class="pie">
-          Comunicación generada desde KONAX Gestión.
+          Comunicación generada por ${nombreEmpresa()} mediante KONAX Gestión.
         </div>
       `
     );
@@ -1076,10 +980,8 @@ export default function VistaCliente() {
     }
 
     const mensaje = cuenta
-      ? `Hola ${cliente.nombre || ""}, le contactamos con relación a su cuenta ${
-          cuenta.numero_cuenta || ""
-        }.`
-      : `Hola ${cliente.nombre || ""}.`;
+      ? `Hola ${cliente.nombre || ""}, le contactamos de ${nombreEmpresa()} con relación a su cuenta ${cuenta.numero_cuenta || ""}.`
+      : `Hola ${cliente.nombre || ""}, le contactamos de ${nombreEmpresa()}.`;
 
     window.open(
       `https://wa.me/507${telefono}?text=${encodeURIComponent(mensaje)}`,
@@ -1087,27 +989,19 @@ export default function VistaCliente() {
     );
   }
 
-  const diasAtraso = calcularDiasAtraso(
-    cuenta?.fecha_vencimiento,
-    cuenta?.saldo_actual
-  );
-
+  const diasAtraso = calcularDiasAtraso(cuenta?.fecha_vencimiento, cuenta?.saldo_actual);
   const semaforo = obtenerSemaforo(diasAtraso);
 
   return (
     <div style={pagina}>
       <div style={contenedor}>
         <div style={encabezado}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "14px",
-            }}
-          >
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
             <img src="/konax-logo.png" alt="KONAX" style={logo} />
-
-            <h1 style={titulo}>Vista Cliente</h1>
+            <div>
+              <h1 style={titulo}>Vista Cliente</h1>
+              <p style={subtituloEmpresa}>{nombreEmpresa()}</p>
+            </div>
           </div>
 
           <button onClick={volverDashboard} style={botonDashboard}>
@@ -1142,16 +1036,9 @@ export default function VistaCliente() {
                     <tr key={item.clave || index}>
                       <td style={td}>{item.cliente.nombre}</td>
                       <td style={td}>{item.cliente.cedula}</td>
-
+                      <td style={td}>{item.cuenta?.numero_cuenta || "Ver cuentas"}</td>
                       <td style={td}>
-                        {item.cuenta?.numero_cuenta || "Ver cuentas"}
-                      </td>
-
-                      <td style={td}>
-                        <button
-                          style={boton}
-                          onClick={() => seleccionarCliente(item)}
-                        >
+                        <button style={boton} onClick={() => seleccionarCliente(item)}>
                           Seleccionar
                         </button>
                       </td>
@@ -1166,24 +1053,15 @@ export default function VistaCliente() {
         {cliente && (
           <>
             <div style={acciones}>
-              <button
-                style={botonSecundario}
-                onClick={generarEstadoCuenta}
-              >
+              <button style={botonSecundario} onClick={generarEstadoCuenta}>
                 Descargar Estado de Cuenta
               </button>
 
-              <button
-                style={botonSecundario}
-                onClick={generarCartaMora}
-              >
+              <button style={botonSecundario} onClick={generarCartaMora}>
                 Generar Carta de Mora
               </button>
 
-              <button
-                style={whatsappBtn}
-                onClick={abrirWhatsAppCliente}
-              >
+              <button style={whatsappBtn} onClick={abrirWhatsAppCliente}>
                 WhatsApp
               </button>
             </div>
@@ -1191,11 +1069,7 @@ export default function VistaCliente() {
             <div style={gridResumen}>
               <div style={card}>
                 <h3>Cliente</h3>
-
-                <p>
-                  <strong>{cliente.nombre}</strong>
-                </p>
-
+                <p><strong>{cliente.nombre}</strong></p>
                 <p>Cédula: {cliente.cedula}</p>
                 <p>Teléfono: {cliente.telefono}</p>
                 <p>Correo: {cliente.correo || "-"}</p>
@@ -1220,57 +1094,31 @@ export default function VistaCliente() {
                 )}
 
                 <p>Cuenta: {cuenta?.numero_cuenta || "-"}</p>
-
                 <p>Tipo: {cuenta?.tipo_producto || "-"}</p>
-
                 <p>Descripción: {cuenta?.descripcion || "-"}</p>
-
                 <p>Modalidad: {cuenta?.modalidad || "-"}</p>
-
-                <p>
-                  Monto total:{" "}
-                  {formatoDinero(cuenta?.monto_total)}
-                </p>
-
-                <p>
-                  Saldo actual:{" "}
-                  {formatoDinero(cuenta?.saldo_actual)}
-                </p>
-
-                <p>
-                  Cuota:{" "}
-                  {formatoDinero(cuenta?.cuota)}
-                </p>
+                <p>Monto total: {formatoDinero(cuenta?.monto_total)}</p>
+                <p>Saldo actual: {formatoDinero(cuenta?.saldo_actual)}</p>
+                <p>Cuota: {formatoDinero(cuenta?.cuota)}</p>
               </div>
 
               <div style={card}>
                 <h3>Cobranza</h3>
-
                 <p>
-                  Estado: {semaforo}{" "}
-                  {cobranza?.estado_cobranza ||
-                    cuenta?.estado ||
-                    "-"}
+                  Estado: {semaforo} {cobranza?.estado_cobranza || cuenta?.estado || "-"}
                 </p>
+                <p><strong>Días de atraso:</strong> {diasAtraso}</p>
+                <p>Fecha último pago: {formatoFecha(cobranza?.fecha_ultimo_pago)}</p>
+                <p>Monto último pago: {formatoDinero(cobranza?.monto_ultimo_pago)}</p>
+                <p>Responsable: {cobranza?.responsable_cobro || "-"}</p>
 
-                <p>
-                  <strong>Días de atraso:</strong> {diasAtraso}
-                </p>
-
-                <p>
-                  Fecha último pago:{" "}
-                  {formatoFecha(cobranza?.fecha_ultimo_pago)}
-                </p>
-
-                <p>
-                  Monto último pago:{" "}
-                  {formatoDinero(cobranza?.monto_ultimo_pago)}
-                </p>
-
-                <p>
-                  Responsable:{" "}
-                  {cobranza?.responsable_cobro || "-"}
-                </p>
+                {cobranza?.estado_promesa === "Activa" && (
+                  <div style={promesaActivaBox}>
+                    <strong>Promesa activa</strong>
+                    <p>Fecha: {formatoFecha(cobranza?.fecha_promesa || cobranza?.proxima_gestion)}</p>
+                    <p>Monto: {formatoDinero(cobranza?.monto_promesa)}</p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1298,9 +1146,7 @@ export default function VistaCliente() {
                 <input
                   placeholder="Observación de la promesa"
                   value={observacionPromesa}
-                  onChange={(e) =>
-                    setObservacionPromesa(e.target.value)
-                  }
+                  onChange={(e) => setObservacionPromesa(e.target.value)}
                   style={inputStyle}
                 />
               </div>
@@ -1327,27 +1173,10 @@ export default function VistaCliente() {
                   <tbody>
                     {pagos.map((pago) => (
                       <tr key={pago.id}>
-                        <td style={td}>
-                          {formatoFecha(
-                            pago.fecha_pago || pago.created_at
-                          )}
-                        </td>
-
-                        <td style={td}>
-                          {formatoDinero(pago.monto)}
-                        </td>
-
-                        <td style={td}>
-                          {pago.metodo_pago ||
-                            pago.metodo ||
-                            "-"}
-                        </td>
-
-                        <td style={td}>
-                          {pago.descripcion ||
-                            pago.observacion ||
-                            "-"}
-                        </td>
+                        <td style={td}>{formatoFecha(pago.fecha_pago || pago.created_at)}</td>
+                        <td style={td}>{formatoDinero(pago.monto)}</td>
+                        <td style={td}>{pago.metodo_pago || pago.metodo || "-"}</td>
+                        <td style={td}>{pago.descripcion || pago.observacion || "-"}</td>
                       </tr>
                     ))}
 
@@ -1364,9 +1193,7 @@ export default function VistaCliente() {
             </div>
 
             <div style={card}>
-              <h2 style={tituloSeccion}>
-                Observaciones de Gestión
-              </h2>
+              <h2 style={tituloSeccion}>Observaciones de Gestión</h2>
 
               <div style={gridFormulario}>
                 <select
@@ -1384,9 +1211,7 @@ export default function VistaCliente() {
 
                 <select
                   value={resultadoGestion}
-                  onChange={(e) =>
-                    setResultadoGestion(e.target.value)
-                  }
+                  onChange={(e) => setResultadoGestion(e.target.value)}
                   style={inputStyle}
                 >
                   <option>Pendiente</option>
@@ -1412,20 +1237,10 @@ export default function VistaCliente() {
                 {gestiones.map((item) => (
                   <div key={item.id} style={observacionBox}>
                     <strong>
-                      {formatoFecha(item.fecha_gestion)} —{" "}
-                      {item.usuario || "Sin usuario"}
+                      {formatoFecha(item.fecha_gestion)} — {item.usuario || "Sin usuario"}
                     </strong>
-
-                    <p>
-                      {item.tipo_gestion || "-"} /{" "}
-                      {item.resultado_gestion || "-"}
-                    </p>
-
-                    <p>
-                      {item.observacion ||
-                        item.descripcion ||
-                        "-"}
-                    </p>
+                    <p>{item.tipo_gestion || "-"} / {item.resultado_gestion || "-"}</p>
+                    <p>{item.observacion || item.descripcion || "-"}</p>
                   </div>
                 ))}
 
@@ -1440,9 +1255,7 @@ export default function VistaCliente() {
 
               <input
                 type="file"
-                onChange={(e) =>
-                  setArchivo(e.target.files?.[0] || null)
-                }
+                onChange={(e) => setArchivo(e.target.files?.[0] || null)}
                 style={inputStyle}
               />
 
@@ -1463,12 +1276,8 @@ export default function VistaCliente() {
                     {documentos.map((doc) => (
                       <tr key={doc.name}>
                         <td style={td}>{doc.name}</td>
-
                         <td style={td}>
-                          <button
-                            style={accionBtn}
-                            onClick={() => verDocumento(doc.name)}
-                          >
+                          <button style={accionBtn} onClick={() => verDocumento(doc.name)}>
                             Ver
                           </button>
                         </td>
@@ -1524,6 +1333,13 @@ const titulo = {
   fontSize: "28px",
   marginBottom: "4px",
   color: "#111827",
+};
+
+const subtituloEmpresa = {
+  margin: 0,
+  color: "#6b7280",
+  fontSize: "13px",
+  fontWeight: "bold",
 };
 
 const gridResumen = {
@@ -1655,4 +1471,13 @@ const botonDashboard = {
   borderRadius: "8px",
   fontWeight: "bold",
   cursor: "pointer",
+};
+
+const promesaActivaBox = {
+  marginTop: "10px",
+  background: "#ecfdf5",
+  border: "1px solid #bbf7d0",
+  padding: "10px",
+  borderRadius: "10px",
+  color: "#166534",
 };
