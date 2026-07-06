@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
 export default function Dashboard() {
+  const router = useRouter();
+
   const [modulos, setModulos] = useState({});
   const [empresaNombre, setEmpresaNombre] = useState("");
   const [planNombre, setPlanNombre] = useState("");
@@ -17,32 +20,126 @@ export default function Dashboard() {
     cargarDashboard();
   }, []);
 
+  function limpiarSesionYSalir(mensaje = "") {
+    if (mensaje) {
+      alert(mensaje);
+    }
+
+    localStorage.clear();
+    router.replace("/login");
+  }
+
   async function cargarDashboard() {
-    const empresaId =
-      localStorage.getItem("empresaId") ||
-      localStorage.getItem("empresa_id") ||
-      localStorage.getItem("empresaAdminCreadaId");
+    setCargando(true);
 
-    const usuarioId =
-      localStorage.getItem("usuarioId") ||
-      localStorage.getItem("adminKonaxId");
+    /*
+      =====================================================
+      SESIÓN OFICIAL KONAX
+      =====================================================
 
-    const rolUsuarioLocal =
-      localStorage.getItem("usuarioRol") ||
-      localStorage.getItem("rolUsuario") ||
-      localStorage.getItem("adminKonaxRol") ||
-      "";
+      Este Dashboard SOLO utiliza:
 
-    if (!empresaId) {
-      window.location.href = "/login";
+      empresaId
+      empresaNombre
+
+      usuarioId
+      usuarioNombre
+      usuarioCorreo
+      usuarioRol
+      rolId
+
+      tipoNegocio
+      categoriaNegocio
+
+      planCodigo
+      planNombre
+      estadoPlan
+      estadoEmpresa
+    */
+
+    const empresaId = localStorage.getItem("empresaId");
+    const usuarioId = localStorage.getItem("usuarioId");
+
+    if (!empresaId || !usuarioId) {
+      limpiarSesionYSalir(
+        "La sesión no es válida. Inicie sesión nuevamente."
+      );
       return;
     }
 
-    setUsuarioRol(rolUsuarioLocal);
+    /*
+      =====================================================
+      1. VALIDAR USUARIO ACTIVO
+      =====================================================
+    */
+
+    const { data: usuario, error: errorUsuario } = await supabase
+      .from("usuarios")
+      .select("id, empresa_id, nombre, correo, rol, rol_id, estado")
+      .eq("id", usuarioId)
+      .maybeSingle();
+
+    if (errorUsuario) {
+      alert("Error validando usuario: " + errorUsuario.message);
+      setCargando(false);
+      return;
+    }
+
+    if (!usuario) {
+      limpiarSesionYSalir(
+        "El usuario de la sesión ya no existe."
+      );
+      return;
+    }
+
+    if (String(usuario.estado || "").toLowerCase().trim() !== "activo") {
+      limpiarSesionYSalir(
+        "Este usuario se encuentra inactivo."
+      );
+      return;
+    }
+
+    /*
+      =====================================================
+      2. VALIDAR EMPRESA DEL USUARIO
+      =====================================================
+
+      Esta es la validación principal que evita sesiones cruzadas.
+
+      empresaId guardado en navegador
+      debe coincidir con
+      usuario.empresa_id en Supabase.
+    */
+
+    if (String(usuario.empresa_id) !== String(empresaId)) {
+      limpiarSesionYSalir(
+        "La empresa activa no corresponde al usuario autenticado."
+      );
+      return;
+    }
+
+    /*
+      =====================================================
+      3. CARGAR EMPRESA ACTIVA
+      =====================================================
+    */
 
     const { data: empresa, error: errorEmpresa } = await supabase
       .from("empresas")
-      .select("nombre, plan_nombre, plan_codigo, estado_plan, estado, tipo_negocio")
+      .select(
+        `
+          id,
+          nombre,
+          plan_nombre,
+          plan_codigo,
+          estado_plan,
+          estado,
+          estado_pago,
+          fecha_proxima_facturacion,
+          tipo_negocio,
+          categoria_negocio
+        `
+      )
       .eq("id", empresaId)
       .maybeSingle();
 
@@ -53,57 +150,122 @@ export default function Dashboard() {
     }
 
     if (!empresa) {
-      alert("Empresa no encontrada.");
-      window.location.href = "/login";
+      limpiarSesionYSalir(
+        "La empresa de esta sesión ya no existe."
+      );
       return;
     }
 
-    if (empresa.estado === "Suspendido" || empresa.estado_plan === "Suspendido") {
-      alert("El servicio de esta empresa está suspendido.");
-      localStorage.clear();
-      window.location.href = "/login";
+    /*
+      =====================================================
+      4. VALIDAR ESTADO DE EMPRESA Y PLAN
+      =====================================================
+    */
+
+    const empresaSuspendida =
+      String(empresa.estado || "").toLowerCase().trim() === "suspendido";
+
+    const planSuspendido =
+      String(empresa.estado_plan || "").toLowerCase().trim() === "suspendido";
+
+    if (empresaSuspendida || planSuspendido) {
+      limpiarSesionYSalir(
+        "El servicio de esta empresa está suspendido."
+      );
       return;
     }
+
+    /*
+      =====================================================
+      5. SINCRONIZAR LOCALSTORAGE
+      =====================================================
+
+      Después de validar usuario y empresa contra Supabase,
+      actualizamos únicamente las claves oficiales.
+
+      Así evitamos datos viejos.
+    */
+
+    localStorage.setItem("empresaId", empresa.id || "");
+    localStorage.setItem("empresaNombre", empresa.nombre || "");
+
+    localStorage.setItem("usuarioId", usuario.id || "");
+    localStorage.setItem("usuarioNombre", usuario.nombre || "");
+    localStorage.setItem("usuarioCorreo", usuario.correo || "");
+    localStorage.setItem("usuarioRol", usuario.rol || "");
+    localStorage.setItem("rolId", usuario.rol_id || "");
+
+    localStorage.setItem("tipoNegocio", empresa.tipo_negocio || "");
+    localStorage.setItem(
+      "categoriaNegocio",
+      empresa.categoria_negocio || ""
+    );
+
+    localStorage.setItem("planCodigo", empresa.plan_codigo || "");
+    localStorage.setItem("planNombre", empresa.plan_nombre || "");
+    localStorage.setItem("estadoPlan", empresa.estado_plan || "");
+    localStorage.setItem("estadoEmpresa", empresa.estado || "");
+
+    /*
+      =====================================================
+      6. ACTUALIZAR ESTADO VISUAL
+      =====================================================
+    */
 
     setEmpresaNombre(empresa.nombre || "Empresa");
     setPlanNombre(empresa.plan_nombre || "Sin plan");
     setEstadoPlan(empresa.estado_plan || "Activo");
     setTipoNegocio(empresa.tipo_negocio || "");
+    setUsuarioRol(usuario.rol || "");
 
-    const modulosEmpresa = await cargarModulosEmpresa(
-      empresaId,
-      empresa.plan_codigo
-    );
+    /*
+      =====================================================
+      7. CARGAR MÓDULOS Y PERMISOS
+      =====================================================
+    */
 
-    const permisos = await cargarPermisosUsuario(empresaId, usuarioId);
+    const [modulosEmpresa, permisos] = await Promise.all([
+      cargarModulosEmpresa(empresaId, empresa.plan_codigo),
+      cargarPermisosUsuario(empresaId, usuarioId),
+    ]);
 
     setModulos(modulosEmpresa);
     setPermisosUsuario(permisos);
+
     setCargando(false);
   }
 
   function construirModulosPorPlan(codigoPlan) {
-    const codigo = String(codigoPlan || "").toLowerCase().trim();
+    const codigo = String(codigoPlan || "")
+      .toLowerCase()
+      .trim();
 
     if (codigo === "cobros") {
       return {
         dashboard: true,
+
         clientes: true,
         vista_cliente: true,
         creditos: true,
+
         cobranza: true,
         dashboard_cobros: true,
         gestor_cobros: true,
+
         abonos: true,
         caja: true,
         control_caja: true,
+
         reportes: true,
 
         pagos: false,
+
         inventario: false,
         movimientos_inventario: false,
+
         ventas: false,
         dashboard_ventas: false,
+
         suscripciones: false,
         recargos: false,
         gastos: false,
@@ -116,21 +278,27 @@ export default function Dashboard() {
     if (codigo === "ventas_gestion") {
       return {
         dashboard: true,
+
         clientes: true,
         vista_cliente: true,
         creditos: true,
+
         cobranza: true,
         dashboard_cobros: true,
         gestor_cobros: true,
+
         abonos: true,
         caja: true,
         control_caja: true,
+
         reportes: true,
 
         inventario: true,
         movimientos_inventario: true,
+
         ventas: true,
         dashboard_ventas: true,
+
         gastos: true,
 
         pagos: false,
@@ -145,26 +313,33 @@ export default function Dashboard() {
     if (codigo === "pro") {
       return {
         dashboard: true,
+
         clientes: true,
         vista_cliente: true,
         creditos: true,
+
         cobranza: true,
         dashboard_cobros: true,
         gestor_cobros: true,
+
         abonos: true,
         caja: true,
         control_caja: true,
+
         reportes: true,
 
         inventario: true,
         movimientos_inventario: true,
+
         ventas: true,
         dashboard_ventas: true,
+
         gastos: true,
         recargos: true,
         suscripciones: true,
 
         pagos: false,
+
         usuarios: true,
         configuracion: true,
       };
@@ -172,24 +347,32 @@ export default function Dashboard() {
 
     return {
       dashboard: true,
+
       clientes: false,
       vista_cliente: false,
       creditos: false,
+
       cobranza: false,
       dashboard_cobros: false,
       gestor_cobros: false,
+
       abonos: false,
       caja: false,
       control_caja: false,
+
       reportes: false,
       pagos: false,
+
       inventario: false,
       movimientos_inventario: false,
+
       ventas: false,
       dashboard_ventas: false,
+
       gastos: false,
       recargos: false,
       suscripciones: false,
+
       usuarios: false,
       configuracion: false,
     };
@@ -198,18 +381,6 @@ export default function Dashboard() {
   async function cargarModulosEmpresa(empresaId, planCodigo) {
     const basePlan = construirModulosPorPlan(planCodigo);
 
-    /*
-      IMPORTANTE:
-      Esta pantalla lee la tabla public.empresa_modulos.
-
-      Esa tabla tiene columnas tipo:
-      clientes, caja, control_caja, vista_cliente, cobranza,
-      inventario, venta_credito, suscripciones, recargos,
-      dashboard_ventas, dashboard_cobros, egresos.
-
-      No debe leer modulos_empresa aquí, porque modulos_empresa es formato:
-      modulo / activo.
-    */
     const { data, error } = await supabase
       .from("empresa_modulos")
       .select("*")
@@ -227,24 +398,43 @@ export default function Dashboard() {
 
     const mapaTabla = {
       dashboard: true,
+
       clientes: Boolean(data.clientes),
       vista_cliente: Boolean(data.vista_cliente),
       creditos: Boolean(data.venta_credito),
+
       caja: Boolean(data.caja),
       control_caja: Boolean(data.control_caja),
+
       cobranza: Boolean(data.cobranza),
       dashboard_cobros: Boolean(data.dashboard_cobros),
-      gestor_cobros: Boolean(data.cobranza || data.dashboard_cobros),
+
+      gestor_cobros: Boolean(
+        data.cobranza || data.dashboard_cobros
+      ),
+
       abonos: Boolean(data.caja || data.cobranza),
+
       pagos: false,
+
       inventario: Boolean(data.inventario),
+
       movimientos_inventario: Boolean(data.inventario),
+
       ventas: Boolean(data.venta_credito),
+
       dashboard_ventas: Boolean(data.dashboard_ventas),
+
       suscripciones: Boolean(data.suscripciones),
+
       recargos: Boolean(data.recargos),
+
       gastos: Boolean(data.egresos),
-      reportes: Boolean(data.dashboard_cobros || data.dashboard_ventas),
+
+      reportes: Boolean(
+        data.dashboard_cobros || data.dashboard_ventas
+      ),
+
       usuarios: true,
       configuracion: true,
     };
@@ -255,30 +445,43 @@ export default function Dashboard() {
       dashboard: true,
     };
 
-    const codigo = String(planCodigo || "").toLowerCase().trim();
+    const codigo = String(planCodigo || "")
+      .toLowerCase()
+      .trim();
 
     /*
-      Para KONAX Cobros, se fuerzan los módulos base del plan
-      aunque empresa_modulos venga incompleto o con columnas apagadas.
+      =====================================================
+      PLAN KONAX COBROS
+      =====================================================
+
+      Se mantienen activos los módulos base contratados,
+      aunque empresa_modulos esté incompleto.
     */
+
     if (codigo === "cobros") {
       mapaFinal.clientes = true;
       mapaFinal.vista_cliente = true;
       mapaFinal.creditos = true;
+
       mapaFinal.cobranza = true;
       mapaFinal.dashboard_cobros = true;
       mapaFinal.gestor_cobros = true;
+
       mapaFinal.abonos = true;
       mapaFinal.caja = true;
       mapaFinal.control_caja = true;
+
       mapaFinal.reportes = true;
+
       mapaFinal.usuarios = true;
       mapaFinal.configuracion = true;
 
       mapaFinal.inventario = false;
       mapaFinal.movimientos_inventario = false;
+
       mapaFinal.ventas = false;
       mapaFinal.dashboard_ventas = false;
+
       mapaFinal.gastos = false;
       mapaFinal.recargos = false;
       mapaFinal.suscripciones = false;
@@ -288,7 +491,9 @@ export default function Dashboard() {
   }
 
   async function cargarPermisosUsuario(empresaId, usuarioId) {
-    if (!usuarioId) return [];
+    if (!usuarioId) {
+      return [];
+    }
 
     const { data, error } = await supabase
       .from("permisos_usuarios_empresa")
@@ -302,11 +507,15 @@ export default function Dashboard() {
       return [];
     }
 
-    return (data || []).map((item) => item.permiso).filter(Boolean);
+    return (data || [])
+      .map((item) => item.permiso)
+      .filter(Boolean);
   }
 
   function esAdministrador() {
-    const rol = String(usuarioRol || "").toLowerCase().trim();
+    const rol = String(usuarioRol || "")
+      .toLowerCase()
+      .trim();
 
     return (
       rol === "administrador" ||
@@ -317,67 +526,192 @@ export default function Dashboard() {
   }
 
   function moduloActivo(codigo) {
-    if (codigo === "dashboard") return true;
+    if (codigo === "dashboard") {
+      return true;
+    }
+
     return Boolean(modulos?.[codigo]);
   }
 
   function tienePermiso(codigo) {
-    if (codigo === "dashboard") return true;
+    if (codigo === "dashboard") {
+      return true;
+    }
+
     return permisosUsuario.includes(codigo);
   }
 
   function puedeVer(codigoModulo, codigoPermiso = codigoModulo) {
-    const incluidoEnPlan = moduloActivo(codigoModulo);
+    if (!moduloActivo(codigoModulo)) {
+      return false;
+    }
 
-    if (!incluidoEnPlan) return false;
-
-    if (esAdministrador()) return true;
+    if (esAdministrador()) {
+      return true;
+    }
 
     return tienePermiso(codigoPermiso);
   }
 
-  function cerrarSesion() {
+  async function cerrarSesion() {
+    /*
+      Si después implementamos Supabase Auth:
+      await supabase.auth.signOut();
+
+      Actualmente KONAX usa sesión propia mediante tabla usuarios.
+    */
+
     localStorage.clear();
-    window.location.href = "/login";
+
+    router.replace("/login");
   }
 
   function abrirModulo(ruta) {
-    window.location.href = ruta;
+    router.push(ruta);
   }
 
   if (cargando) {
-    return <div style={{ padding: "30px" }}>Cargando KONAX...</div>;
+    return (
+      <div style={cargandoPagina}>
+        <div style={cargandoCard}>
+          <strong>Cargando KONAX...</strong>
+          <p>Validando usuario, empresa y permisos.</p>
+        </div>
+      </div>
+    );
   }
 
   const tarjetas = [
-    { nombre: "Clientes", ruta: "/clientes", activo: puedeVer("clientes"), icono: "👥" },
-    { nombre: "Vista Cliente", ruta: "/vista-cliente", activo: puedeVer("vista_cliente"), icono: "🧾" },
-    { nombre: "Créditos", ruta: "/ventas-credito", activo: puedeVer("creditos"), icono: "💳" },
-    { nombre: "Caja", ruta: "/caja", activo: puedeVer("caja"), icono: "💵" },
-    { nombre: "Cobranza", ruta: "/cobranza", activo: puedeVer("cobranza"), icono: "📞" },
-    { nombre: "Centro de Cobranza", ruta: "/dashboard-cobranza", activo: puedeVer("dashboard_cobros"), icono: "📊" },
-    { nombre: "Mi cartera de cobro", ruta: "/gestor-cobros", activo: puedeVer("gestor_cobros"), icono: "🧑‍💼" },
-    { nombre: "Registrar Abonos", ruta: "/abonos", activo: puedeVer("abonos"), icono: "💰" },
-    { nombre: "Control Caja", ruta: "/control-caja", activo: puedeVer("control_caja"), icono: "🏦" },
-    { nombre: "Inventario", ruta: "/inventario", activo: puedeVer("inventario"), icono: "📦" },
-    { nombre: "Movimientos Inventario", ruta: "/movimientos-inventario", activo: puedeVer("movimientos_inventario"), icono: "🔄" },
-    { nombre: "Ventas", ruta: "/ventas", activo: puedeVer("ventas"), icono: "🛒" },
-    { nombre: "Suscripciones", ruta: "/suscripciones", activo: puedeVer("suscripciones"), icono: "🔁" },
-    { nombre: "Recargos", ruta: "/recargos", activo: puedeVer("recargos"), icono: "⚠️" },
-    { nombre: "Centro de Ventas", ruta: "/dashboard-ventas", activo: puedeVer("dashboard_ventas"), icono: "📈" },
-    { nombre: "Gastos", ruta: "/gastos", activo: puedeVer("gastos"), icono: "🧮" },
-    { nombre: "Reportes", ruta: "/reportes", activo: puedeVer("reportes"), icono: "📋" },
-    { nombre: "Usuarios y Roles", ruta: "/usuarios", activo: puedeVer("usuarios"), icono: "🔐" },
-    { nombre: "Configuración", ruta: "/configuracion", activo: puedeVer("configuracion"), icono: "⚙️" },
+    {
+      nombre: "Clientes",
+      ruta: "/clientes",
+      activo: puedeVer("clientes"),
+      icono: "👥",
+    },
+    {
+      nombre: "Vista Cliente",
+      ruta: "/vista-cliente",
+      activo: puedeVer("vista_cliente"),
+      icono: "🧾",
+    },
+    {
+      nombre: "Créditos",
+      ruta: "/ventas-credito",
+      activo: puedeVer("creditos"),
+      icono: "💳",
+    },
+    {
+      nombre: "Caja",
+      ruta: "/caja",
+      activo: puedeVer("caja"),
+      icono: "💵",
+    },
+    {
+      nombre: "Cobranza",
+      ruta: "/cobranza",
+      activo: puedeVer("cobranza"),
+      icono: "📞",
+    },
+    {
+      nombre: "Centro de Cobranza",
+      ruta: "/dashboard-cobranza",
+      activo: puedeVer("dashboard_cobros"),
+      icono: "📊",
+    },
+    {
+      nombre: "Mi cartera de cobro",
+      ruta: "/gestor-cobros",
+      activo: puedeVer("gestor_cobros"),
+      icono: "🧑‍💼",
+    },
+    {
+      nombre: "Registrar Abonos",
+      ruta: "/abonos",
+      activo: puedeVer("abonos"),
+      icono: "💰",
+    },
+    {
+      nombre: "Control Caja",
+      ruta: "/control-caja",
+      activo: puedeVer("control_caja"),
+      icono: "🏦",
+    },
+    {
+      nombre: "Inventario",
+      ruta: "/inventario",
+      activo: puedeVer("inventario"),
+      icono: "📦",
+    },
+    {
+      nombre: "Movimientos Inventario",
+      ruta: "/movimientos-inventario",
+      activo: puedeVer("movimientos_inventario"),
+      icono: "🔄",
+    },
+    {
+      nombre: "Ventas",
+      ruta: "/ventas",
+      activo: puedeVer("ventas"),
+      icono: "🛒",
+    },
+    {
+      nombre: "Suscripciones",
+      ruta: "/suscripciones",
+      activo: puedeVer("suscripciones"),
+      icono: "🔁",
+    },
+    {
+      nombre: "Recargos",
+      ruta: "/recargos",
+      activo: puedeVer("recargos"),
+      icono: "⚠️",
+    },
+    {
+      nombre: "Centro de Ventas",
+      ruta: "/dashboard-ventas",
+      activo: puedeVer("dashboard_ventas"),
+      icono: "📈",
+    },
+    {
+      nombre: "Gastos",
+      ruta: "/gastos",
+      activo: puedeVer("gastos"),
+      icono: "🧮",
+    },
+    {
+      nombre: "Reportes",
+      ruta: "/reportes",
+      activo: puedeVer("reportes"),
+      icono: "📋",
+    },
+    {
+      nombre: "Usuarios y Roles",
+      ruta: "/usuarios",
+      activo: puedeVer("usuarios"),
+      icono: "🔐",
+    },
+    {
+      nombre: "Configuración",
+      ruta: "/configuracion",
+      activo: puedeVer("configuracion"),
+      icono: "⚙️",
+    },
   ];
 
-  const tarjetasActivas = tarjetas.filter((item) => item.activo);
+  const tarjetasActivas = tarjetas.filter(
+    (item) => item.activo
+  );
 
   return (
     <div style={layout}>
       <aside style={sidebar}>
         <div style={brandBox}>
-          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+          <img
+            src="/konax-logo.png"
+            alt="KONAX"
+            style={logo}
+          />
+
           <div>
             <h2 style={brandTitle}>KONAX</h2>
             <p style={brandSub}>Panel Empresarial</p>
@@ -402,49 +736,93 @@ export default function Dashboard() {
           ))}
         </nav>
 
-        <button onClick={cerrarSesion} style={botonSalir}>
+        <button
+          onClick={cerrarSesion}
+          style={botonSalir}
+        >
           Cerrar sesión
         </button>
       </aside>
 
       <main style={contenido}>
         <div style={hero}>
-          <p style={etiqueta}>Centro de Operaciones Empresariales</p>
-          <h1 style={titulo}>{empresaNombre}</h1>
+          <p style={etiqueta}>
+            Centro de Operaciones Empresariales
+          </p>
+
+          <h1 style={titulo}>
+            {empresaNombre}
+          </h1>
+
           <p style={plan}>
-            Plan activo: <strong>{planNombre}</strong> · Estado:{" "}
-            <strong>{estadoPlan}</strong>
+            Plan activo: <strong>{planNombre}</strong>
+            {" · "}
+            Estado: <strong>{estadoPlan}</strong>
+
             <br />
-            Tipo de negocio: <strong>{tipoNegocio || "No definido"}</strong>
+
+            Tipo de negocio:{" "}
+            <strong>
+              {tipoNegocio || "No definido"}
+            </strong>
           </p>
         </div>
 
         <div style={resumenGrid}>
           <div style={resumenCard}>
-            <p style={resumenLabel}>Opciones disponibles</p>
-            <h2 style={resumenValor}>{tarjetasActivas.length}</h2>
+            <p style={resumenLabel}>
+              Opciones disponibles
+            </p>
+
+            <h2 style={resumenValor}>
+              {tarjetasActivas.length}
+            </h2>
           </div>
 
           <div style={resumenCard}>
             <p style={resumenLabel}>Plan</p>
-            <h2 style={resumenValorTexto}>{planNombre}</h2>
+
+            <h2 style={resumenValorTexto}>
+              {planNombre}
+            </h2>
           </div>
 
           <div style={resumenCard}>
             <p style={resumenLabel}>Rol</p>
-            <h2 style={resumenValorTexto}>{usuarioRol || "Sin rol"}</h2>
+
+            <h2 style={resumenValorTexto}>
+              {usuarioRol || "Sin rol"}
+            </h2>
           </div>
         </div>
 
         {tarjetasActivas.length === 0 && (
           <div style={sinModulos}>
-            Este usuario no tiene funciones permitidas. Revise sus permisos.
+            Este usuario no tiene funciones permitidas.
+            Revise sus permisos.
           </div>
         )}
       </main>
     </div>
   );
 }
+
+const cargandoPagina = {
+  minHeight: "100vh",
+  background: "#eef2f7",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  fontFamily: "Arial, sans-serif",
+};
+
+const cargandoCard = {
+  background: "#ffffff",
+  padding: "25px",
+  borderRadius: "16px",
+  boxShadow: "0 4px 18px rgba(0,0,0,0.08)",
+  color: "#111827",
+};
 
 const layout = {
   display: "flex",
@@ -572,7 +950,8 @@ const plan = {
 
 const resumenGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gridTemplateColumns:
+    "repeat(auto-fit,minmax(220px,1fr))",
   gap: "16px",
   marginBottom: "22px",
 };
