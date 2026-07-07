@@ -36,25 +36,6 @@ export default function Dashboard() {
       =====================================================
       SESIÓN OFICIAL KONAX
       =====================================================
-
-      Este Dashboard SOLO utiliza:
-
-      empresaId
-      empresaNombre
-
-      usuarioId
-      usuarioNombre
-      usuarioCorreo
-      usuarioRol
-      rolId
-
-      tipoNegocio
-      categoriaNegocio
-
-      planCodigo
-      planNombre
-      estadoPlan
-      estadoEmpresa
     */
 
     const empresaId = localStorage.getItem("empresaId");
@@ -86,16 +67,12 @@ export default function Dashboard() {
     }
 
     if (!usuario) {
-      limpiarSesionYSalir(
-        "El usuario de la sesión ya no existe."
-      );
+      limpiarSesionYSalir("El usuario de la sesión ya no existe.");
       return;
     }
 
     if (String(usuario.estado || "").toLowerCase().trim() !== "activo") {
-      limpiarSesionYSalir(
-        "Este usuario se encuentra inactivo."
-      );
+      limpiarSesionYSalir("Este usuario se encuentra inactivo.");
       return;
     }
 
@@ -103,12 +80,6 @@ export default function Dashboard() {
       =====================================================
       2. VALIDAR EMPRESA DEL USUARIO
       =====================================================
-
-      Esta es la validación principal que evita sesiones cruzadas.
-
-      empresaId guardado en navegador
-      debe coincidir con
-      usuario.empresa_id en Supabase.
     */
 
     if (String(usuario.empresa_id) !== String(empresaId)) {
@@ -150,9 +121,7 @@ export default function Dashboard() {
     }
 
     if (!empresa) {
-      limpiarSesionYSalir(
-        "La empresa de esta sesión ya no existe."
-      );
+      limpiarSesionYSalir("La empresa de esta sesión ya no existe.");
       return;
     }
 
@@ -169,9 +138,7 @@ export default function Dashboard() {
       String(empresa.estado_plan || "").toLowerCase().trim() === "suspendido";
 
     if (empresaSuspendida || planSuspendido) {
-      limpiarSesionYSalir(
-        "El servicio de esta empresa está suspendido."
-      );
+      limpiarSesionYSalir("El servicio de esta empresa está suspendido.");
       return;
     }
 
@@ -179,11 +146,6 @@ export default function Dashboard() {
       =====================================================
       5. SINCRONIZAR LOCALSTORAGE
       =====================================================
-
-      Después de validar usuario y empresa contra Supabase,
-      actualizamos únicamente las claves oficiales.
-
-      Así evitamos datos viejos.
     */
 
     localStorage.setItem("empresaId", empresa.id || "");
@@ -453,9 +415,6 @@ export default function Dashboard() {
       =====================================================
       PLAN KONAX COBROS
       =====================================================
-
-      Se mantienen activos los módulos base contratados,
-      aunque empresa_modulos esté incompleto.
     */
 
     if (codigo === "cobros") {
@@ -554,15 +513,7 @@ export default function Dashboard() {
   }
 
   async function cerrarSesion() {
-    /*
-      Si después implementamos Supabase Auth:
-      await supabase.auth.signOut();
-
-      Actualmente KONAX usa sesión propia mediante tabla usuarios.
-    */
-
     localStorage.clear();
-
     router.replace("/login");
   }
 
@@ -684,23 +635,28 @@ export default function Dashboard() {
       activo: puedeVer("reportes"),
       icono: "📋",
     },
+
+    /*
+      =====================================================
+      OPCIONES EXCLUSIVAS DEL ADMINISTRADOR
+      =====================================================
+    */
+
     {
       nombre: "Usuarios y Roles",
       ruta: "/usuarios",
-      activo: puedeVer("usuarios"),
+      activo: esAdministrador() && moduloActivo("usuarios"),
       icono: "🔐",
     },
     {
       nombre: "Configuración",
-      ruta: "/configuracion",
-      activo: puedeVer("configuracion"),
+      ruta: "/admin-configuracion",
+      activo: esAdministrador() && moduloActivo("configuracion"),
       icono: "⚙️",
     },
   ];
 
-  const tarjetasActivas = tarjetas.filter(
-    (item) => item.activo
-  );
+  const tarjetasActivas = tarjetas.filter((item) => item.activo);
 
   return (
     <div style={layout}>
@@ -762,17 +718,13 @@ export default function Dashboard() {
             <br />
 
             Tipo de negocio:{" "}
-            <strong>
-              {tipoNegocio || "No definido"}
-            </strong>
+            <strong>{tipoNegocio || "No definido"}</strong>
           </p>
         </div>
 
         <div style={resumenGrid}>
           <div style={resumenCard}>
-            <p style={resumenLabel}>
-              Opciones disponibles
-            </p>
+            <p style={resumenLabel}>Opciones disponibles</p>
 
             <h2 style={resumenValor}>
               {tarjetasActivas.length}
@@ -950,8 +902,7 @@ const plan = {
 
 const resumenGrid = {
   display: "grid",
-  gridTemplateColumns:
-    "repeat(auto-fit,minmax(220px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
   gap: "16px",
   marginBottom: "22px",
 };
