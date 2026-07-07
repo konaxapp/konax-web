@@ -77,86 +77,70 @@ export default function CobranzaGeneral() {
   }
 
   function calcularDiasAtraso(fechaVencimiento, saldoActual) {
-    if (!fechaVencimiento || Number(saldoActual || 0) <= 0) {
-      return 0;
-    }
+    if (!fechaVencimiento || Number(saldoActual || 0) <= 0) return 0;
 
-    const hoyTexto = new Date().toISOString().slice(0, 10);
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
 
-    const hoy = new Date(`${hoyTexto}T00:00:00`);
-
-    const vencimientoTexto = fechaSimple(fechaVencimiento);
-
-    const vencimiento = new Date(`${vencimientoTexto}T00:00:00`);
+    const fecha = fechaSimple(fechaVencimiento);
+    const vencimiento = new Date(`${fecha}T00:00:00`);
 
     const diferencia = hoy.getTime() - vencimiento.getTime();
 
-    if (diferencia <= 0) {
-      return 0;
-    }
+    if (diferencia <= 0) return 0;
 
     return Math.floor(diferencia / (1000 * 60 * 60 * 24));
   }
 
   function obtenerRangoMora(dias, saldo) {
     if (Number(saldo || 0) <= 0) return "Cancelado";
-
     if (dias <= 0) return "Al Día";
-
     if (dias <= 30) return "1-30 días";
-
     if (dias <= 90) return "31-90 días";
-
     if (dias <= 180) return "91-180 días";
-
     return "181+ días";
   }
 
-  function obtenerEstadoReal(cuenta, cobranza, dias) {
-    const saldo = Number(cuenta?.saldo_actual || 0);
-
-    if (saldo <= 0) {
-      return "Cancelado";
-    }
-
-    const estadoCobranza = limpiarTexto(cobranza?.estado_cobranza);
-
-    const estadoCuenta = limpiarTexto(cuenta?.estado);
-
-    /*
-      ESTADOS ADMINISTRATIVOS EXPLÍCITOS
-
-      Estos estados tienen prioridad porque representan
-      una decisión administrativa del negocio.
-    */
-
-    if (
-      estadoCobranza === "suspendido" ||
-      estadoCuenta === "suspendido"
-    ) {
-      return "Suspendido";
-    }
-
-    if (
-      estadoCobranza === "legal" ||
-      estadoCuenta === "legal"
-    ) {
-      return "Legal";
-    }
-
-    /*
-      ESTADO AUTOMÁTICO SEGÚN VENCIMIENTO
-    */
-
-    if (dias <= 0) {
-      return "Al Día";
-    }
-
-    if (dias <= 90) {
-      return "Mora";
-    }
-
+  function obtenerEstadoPorDias(dias, saldo) {
+    if (Number(saldo || 0) <= 0) return "Cancelado";
+    if (dias <= 0) return "Al Día";
+    if (dias <= 90) return "Mora";
     return "Legal";
+  }
+
+  /*
+  ============================================================
+  GESTIÓN REAL
+  ============================================================
+
+  Esta función evita que los movimientos administrativos
+  de asignación y reasignación cuenten como gestiones reales.
+  */
+
+  function esGestionReal(gestion) {
+    const tipo = limpiarTexto(gestion?.tipo_gestion);
+    const resultado = limpiarTexto(gestion?.resultado_gestion);
+
+    const tiposAdministrativos = [
+      "asignación de gestor",
+      "asignacion de gestor",
+      "reasignación de cartera",
+      "reasignacion de cartera",
+    ];
+
+    const resultadosAdministrativos = [
+      "gestor asignado",
+    ];
+
+    if (tiposAdministrativos.includes(tipo)) {
+      return false;
+    }
+
+    if (resultadosAdministrativos.includes(resultado)) {
+      return false;
+    }
+
+    return true;
   }
 
   async function cargarDatos() {
@@ -167,7 +151,6 @@ export default function CobranzaGeneral() {
 
   async function cargarGestores() {
     const empresaId = obtenerEmpresaId();
-
     if (!empresaId) return;
 
     const { data, error } = await supabase
@@ -175,11 +158,7 @@ export default function CobranzaGeneral() {
       .select("id,nombre,rol,estado,empresa_id")
       .eq("empresa_id", empresaId)
       .eq("estado", "Activo")
-      .in("rol", [
-        "Gestor de Cobro",
-        "Gestor de Cobranza",
-        "Cobranza",
-      ])
+      .in("rol", ["Gestor de Cobro", "Gestor de Cobranza", "Cobranza"])
       .order("nombre", { ascending: true });
 
     if (error) {
@@ -192,7 +171,6 @@ export default function CobranzaGeneral() {
 
   async function cargarCartera() {
     const empresaId = obtenerEmpresaId();
-
     if (!empresaId) return;
 
     const { data: cuentasData, error: errorCuentas } = await supabase
@@ -209,16 +187,10 @@ export default function CobranzaGeneral() {
     const cuentas = cuentasData || [];
 
     const clienteIds = [
-      ...new Set(
-        cuentas
-          .map((cuenta) => cuenta.cliente_id)
-          .filter(Boolean)
-      ),
+      ...new Set(cuentas.map((c) => c.cliente_id).filter(Boolean)),
     ];
 
-    const cuentaIds = cuentas
-      .map((cuenta) => cuenta.id)
-      .filter(Boolean);
+    const cuentaIds = cuentas.map((c) => c.id).filter(Boolean);
 
     let clientes = [];
     let cobranzas = [];
@@ -258,15 +230,13 @@ export default function CobranzaGeneral() {
 
     const carteraArmada = cuentas.map((cuenta) => {
       const cliente = clientes.find(
-        (cliente) =>
-          String(cliente.id) === String(cuenta.cliente_id)
+        (c) => String(c.id) === String(cuenta.cliente_id)
       );
 
       const cobranza =
         cobranzas.find(
-          (registro) =>
-            String(registro.informacion_comercial_id) ===
-            String(cuenta.id)
+          (c) =>
+            String(c.informacion_comercial_id) === String(cuenta.id)
         ) || null;
 
       const dias = calcularDiasAtraso(
@@ -274,11 +244,26 @@ export default function CobranzaGeneral() {
         cuenta.saldo_actual
       );
 
-      const estado = obtenerEstadoReal(
-        cuenta,
-        cobranza,
-        dias
-      );
+      /*
+      IMPORTANTE:
+
+      El estado operativo se calcula por saldo y vencimiento.
+
+      No usamos directamente cuenta.estado = "Activo",
+      porque "Activo" no significa "Al Día".
+      */
+
+      let estado = obtenerEstadoPorDias(dias, cuenta.saldo_actual);
+
+      const estadoCobranza = limpiarTexto(cobranza?.estado_cobranza);
+
+      if (estadoCobranza === "suspendido") {
+        estado = "Suspendido";
+      }
+
+      if (estadoCobranza === "legal") {
+        estado = "Legal";
+      }
 
       return {
         cuenta,
@@ -286,10 +271,7 @@ export default function CobranzaGeneral() {
         cobranza,
         dias,
         estado,
-        rangoMora: obtenerRangoMora(
-          dias,
-          cuenta.saldo_actual
-        ),
+        rangoMora: obtenerRangoMora(dias, cuenta.saldo_actual),
       };
     });
 
@@ -298,7 +280,6 @@ export default function CobranzaGeneral() {
 
   async function cargarGestiones() {
     const empresaId = obtenerEmpresaId();
-
     if (!empresaId) return;
 
     const { data, error } = await supabase
@@ -343,18 +324,13 @@ export default function CobranzaGeneral() {
   }
 
   function coincideTipoBusqueda(item) {
-    const valor = limpiarTexto(
-      filtrosAplicados.valorBusqueda
-    );
+    const valor = limpiarTexto(filtrosAplicados.valorBusqueda);
 
     if (!valor) return true;
 
     const cliente = item.cliente || {};
     const cuenta = item.cuenta || {};
-
-    const gestor =
-      item.cobranza?.responsable_cobro ||
-      "Sin asignar";
+    const gestor = item.cobranza?.responsable_cobro || "Sin asignar";
 
     if (filtrosAplicados.tipoBusqueda === "Cédula") {
       return limpiarCedula(cliente.cedula).includes(
@@ -400,11 +376,7 @@ export default function CobranzaGeneral() {
       filtrosAplicados.moraBusqueda === "Todos" ||
       item.rangoMora === filtrosAplicados.moraBusqueda;
 
-    return (
-      coincideTipoBusqueda(item) &&
-      coincideEstado &&
-      coincideMora
-    );
+    return coincideTipoBusqueda(item) && coincideEstado && coincideMora;
   });
 
   function toggleCuenta(id) {
@@ -427,14 +399,13 @@ export default function CobranzaGeneral() {
 
   function obtenerGestorPorIdONombre(id, nombre) {
     const porId = usuariosGestores.find(
-      (usuario) => String(usuario.id) === String(id)
+      (u) => String(u.id) === String(id)
     );
 
     if (porId) return porId;
 
     const porNombre = usuariosGestores.find(
-      (usuario) =>
-        limpiarTexto(usuario.nombre) === limpiarTexto(nombre)
+      (u) => limpiarTexto(u.nombre) === limpiarTexto(nombre)
     );
 
     return porNombre || null;
@@ -453,13 +424,8 @@ export default function CobranzaGeneral() {
     );
 
     setCuentaSeleccionada(item);
-
-    setGestorSeleccionado(
-      gestorActual?.id || ""
-    );
-
+    setGestorSeleccionado(gestorActual?.id || "");
     setObservacionAsignacion("");
-
     setModalAsignar(true);
   }
 
@@ -470,11 +436,7 @@ export default function CobranzaGeneral() {
     setObservacionAsignacion("");
   }
 
-  async function guardarAsignacionActual(
-    item,
-    gestor,
-    observacion
-  ) {
+  async function guardarAsignacionActual(item, gestor, observacion) {
     const empresaId = obtenerEmpresaId();
 
     if (!empresaId) {
@@ -496,87 +458,54 @@ export default function CobranzaGeneral() {
     if (!gestor?.id || !gestor?.nombre) {
       return {
         error: {
-          message:
-            "El gestor seleccionado no tiene ID o nombre válido.",
+          message: "El gestor seleccionado no tiene ID o nombre válido.",
         },
       };
     }
 
     const ahora = new Date().toISOString();
-
-    const hoy = ahora.slice(0, 10);
-
-    /*
-      CORRECCIÓN IMPORTANTE
-
-      El estado guardado se calcula nuevamente.
-
-      No usamos un estado antiguo almacenado en
-      informacion_cobranza.
-    */
-
-    const diasActuales = calcularDiasAtraso(
-      item.cuenta.fecha_vencimiento,
-      item.cuenta.saldo_actual
-    );
-
-    const estadoReal = obtenerEstadoReal(
-      item.cuenta,
-      item.cobranza,
-      diasActuales
-    );
+    const hoy = ahora.split("T")[0];
 
     const datosGuardar = {
       responsable_cobro: gestor.nombre,
       responsable_cobro_id: gestor.id,
-
       fecha_asignacion: hoy,
-
       usuario_asignacion: usuarioActual(),
-
       observacion_asignacion: observacion || "",
-
-      estado_cobranza: estadoReal,
-
+      estado_cobranza: item.estado || "Al Día",
       updated_at: ahora,
     };
 
-    const {
-      data: actualizados,
-      error: errorUpdate,
-    } = await supabase
-      .from("informacion_cobranza")
-      .update(datosGuardar)
-      .eq("empresa_id", empresaId)
-      .eq(
-        "informacion_comercial_id",
-        item.cuenta.id
-      )
-      .select("*");
+    const { data: actualizados, error: errorUpdate } =
+      await supabase
+        .from("informacion_cobranza")
+        .update(datosGuardar)
+        .eq("empresa_id", empresaId)
+        .eq("informacion_comercial_id", item.cuenta.id)
+        .select("*");
 
     if (errorUpdate) {
       return { error: errorUpdate };
     }
 
     if (actualizados && actualizados.length > 0) {
-      const actualizadoReciente =
-        actualizados.sort((a, b) => {
-          const fechaA = new Date(
-            a.updated_at ||
-              a.fecha_asignacion ||
-              a.created_at ||
-              0
-          );
+      const actualizadoReciente = actualizados.sort((a, b) => {
+        const fechaA = new Date(
+          a.updated_at ||
+            a.fecha_asignacion ||
+            a.created_at ||
+            0
+        );
 
-          const fechaB = new Date(
-            b.updated_at ||
-              b.fecha_asignacion ||
-              b.created_at ||
-              0
-          );
+        const fechaB = new Date(
+          b.updated_at ||
+            b.fecha_asignacion ||
+            b.created_at ||
+            0
+        );
 
-          return fechaB - fechaA;
-        })[0];
+        return fechaB - fechaA;
+      })[0];
 
       return {
         error: null,
@@ -586,27 +515,22 @@ export default function CobranzaGeneral() {
 
     const datosInsertar = {
       empresa_id: empresaId,
-
       cliente_id:
         item.cliente?.id ||
         item.cuenta?.cliente_id ||
         null,
 
-      informacion_comercial_id:
-        item.cuenta.id,
+      informacion_comercial_id: item.cuenta.id,
 
       responsable_cobro: gestor.nombre,
-
       responsable_cobro_id: gestor.id,
 
       fecha_asignacion: hoy,
-
       usuario_asignacion: usuarioActual(),
 
-      observacion_asignacion:
-        observacion || "",
+      observacion_asignacion: observacion || "",
 
-      estado_cobranza: estadoReal,
+      estado_cobranza: item.estado || "Al Día",
 
       fecha_ultimo_pago:
         item.cuenta?.fecha_ultimo_pago ||
@@ -619,14 +543,12 @@ export default function CobranzaGeneral() {
       updated_at: ahora,
     };
 
-    const {
-      data: insertado,
-      error: errorInsertar,
-    } = await supabase
-      .from("informacion_cobranza")
-      .insert([datosInsertar])
-      .select("*")
-      .maybeSingle();
+    const { data: insertado, error: errorInsertar } =
+      await supabase
+        .from("informacion_cobranza")
+        .insert([datosInsertar])
+        .select("*")
+        .maybeSingle();
 
     if (errorInsertar) {
       return { error: errorInsertar };
@@ -650,9 +572,7 @@ export default function CobranzaGeneral() {
     }
 
     const gestor = usuariosGestores.find(
-      (usuario) =>
-        String(usuario.id) ===
-        String(gestorSeleccionado)
+      (u) => String(u.id) === String(gestorSeleccionado)
     );
 
     if (!gestor) {
@@ -660,21 +580,14 @@ export default function CobranzaGeneral() {
       return;
     }
 
-    const {
-      error,
-      cobranzaActualizada,
-    } = await guardarAsignacionActual(
+    const { error } = await guardarAsignacionActual(
       cuentaSeleccionada,
       gestor,
       observacionAsignacion
     );
 
     if (error) {
-      alert(
-        "Error asignando gestor: " +
-          error.message
-      );
-
+      alert("Error asignando gestor: " + error.message);
       return;
     }
 
@@ -687,52 +600,11 @@ export default function CobranzaGeneral() {
       },
     ]);
 
-    setCartera((prev) =>
-      prev.map((item) =>
-        String(item.cuenta.id) ===
-        String(cuentaSeleccionada.cuenta.id)
-          ? {
-              ...item,
-
-              cobranza:
-                cobranzaActualizada ||
-                {
-                  ...(item.cobranza || {}),
-
-                  responsable_cobro:
-                    gestor.nombre,
-
-                  responsable_cobro_id:
-                    gestor.id,
-
-                  fecha_asignacion:
-                    new Date()
-                      .toISOString()
-                      .slice(0, 10),
-
-                  usuario_asignacion:
-                    usuarioActual(),
-
-                  observacion_asignacion:
-                    observacionAsignacion || "",
-
-                  estado_cobranza:
-                    item.estado,
-
-                  updated_at:
-                    new Date().toISOString(),
-                },
-            }
-          : item
-      )
-    );
-
     alert("Gestor asignado correctamente.");
 
     cerrarModalAsignar();
 
     await cargarCartera();
-
     await cargarGestiones();
   }
 
@@ -743,17 +615,12 @@ export default function CobranzaGeneral() {
     }
 
     if (!gestorMasivo) {
-      alert(
-        "Seleccione el gestor que recibirá la cartera."
-      );
-
+      alert("Seleccione el gestor que recibirá la cartera.");
       return;
     }
 
     const gestor = usuariosGestores.find(
-      (usuario) =>
-        String(usuario.id) ===
-        String(gestorMasivo)
+      (u) => String(u.id) === String(gestorMasivo)
     );
 
     if (!gestor) {
@@ -767,28 +634,19 @@ export default function CobranzaGeneral() {
 
     if (!confirmar) return;
 
-    const cuentasParaAsignar = cartera.filter(
-      (item) =>
-        cuentasSeleccionadas.includes(
-          item.cuenta.id
-        )
+    const cuentasParaAsignar = cartera.filter((item) =>
+      cuentasSeleccionadas.includes(item.cuenta.id)
     );
 
     for (const item of cuentasParaAsignar) {
-      const { error } =
-        await guardarAsignacionActual(
-          item,
-          gestor,
-          observacionMasiva ||
-            "Reasignación de cartera"
-        );
+      const { error } = await guardarAsignacionActual(
+        item,
+        gestor,
+        observacionMasiva || "Reasignación de cartera"
+      );
 
       if (error) {
-        alert(
-          "Error asignando cuenta: " +
-            error.message
-        );
-
+        alert("Error asignando cuenta: " + error.message);
         return;
       }
     }
@@ -805,45 +663,36 @@ export default function CobranzaGeneral() {
     alert("Cartera reasignada correctamente.");
 
     setCuentasSeleccionadas([]);
-
     setGestorMasivo("");
-
     setObservacionMasiva("");
 
     await cargarCartera();
-
     await cargarGestiones();
   }
 
-  async function registrarBitacoraAsignacion(
-    registros
-  ) {
+  async function registrarBitacoraAsignacion(registros) {
     const empresaId = obtenerEmpresaId();
 
-    if (!empresaId || registros.length === 0) {
-      return;
-    }
+    if (!empresaId || registros.length === 0) return;
 
-    const payload = registros.map((registro) => {
+    const payload = registros.map((r) => {
       const texto =
-        `Cliente asignado a ${registro.gestor}. ` +
-        `${registro.observacion || ""}`;
+        `Cliente asignado a ${r.gestor}. ${r.observacion || ""}`;
 
       return {
         empresa_id: empresaId,
 
         cliente_id:
-          registro.item.cliente?.id ||
-          registro.item.cuenta?.cliente_id ||
+          r.item.cliente?.id ||
+          r.item.cuenta?.cliente_id ||
           null,
 
         informacion_comercial_id:
-          registro.item.cuenta.id,
+          r.item.cuenta.id,
 
-        tipo_gestion: registro.tipo,
+        tipo_gestion: r.tipo,
 
-        resultado_gestion:
-          "Gestor asignado",
+        resultado_gestion: "Gestor asignado",
 
         descripcion: texto,
 
@@ -851,8 +700,7 @@ export default function CobranzaGeneral() {
 
         usuario: usuarioActual(),
 
-        fecha_gestion:
-          new Date().toISOString(),
+        fecha_gestion: new Date().toISOString(),
       };
     });
 
@@ -868,6 +716,12 @@ export default function CobranzaGeneral() {
     }
   }
 
+  /*
+  ============================================================
+  LISTA DE GESTORES
+  ============================================================
+  */
+
   const gestoresDesdeCartera = cartera
     .map((item) => ({
       id:
@@ -879,7 +733,7 @@ export default function CobranzaGeneral() {
         item.cobranza?.responsable_cobro ||
         "Sin asignar",
     }))
-    .filter((gestor) => gestor.nombre);
+    .filter((g) => g.nombre);
 
   const gestoresBase = [
     {
@@ -887,9 +741,9 @@ export default function CobranzaGeneral() {
       nombre: "Todos",
     },
 
-    ...usuariosGestores.map((usuario) => ({
-      id: String(usuario.id),
-      nombre: usuario.nombre,
+    ...usuariosGestores.map((u) => ({
+      id: String(u.id),
+      nombre: u.nombre,
     })),
 
     ...gestoresDesdeCartera,
@@ -904,73 +758,103 @@ export default function CobranzaGeneral() {
     (gestor, index, self) =>
       index ===
       self.findIndex(
-        (otro) =>
-          limpiarTexto(otro.nombre) ===
+        (g) =>
+          limpiarTexto(g.nombre) ===
           limpiarTexto(gestor.nombre)
       )
   );
 
+  /*
+  ============================================================
+  MEDICIÓN DE GESTORES CORREGIDA
+  ============================================================
+  */
+
   const gestoresMedicion = gestores
-    .filter((gestor) => gestor.nombre !== "Todos")
+    .filter((g) => g.nombre !== "Todos")
 
     .filter(
-      (gestor) =>
+      (g) =>
         gestorMedicion === "Todos" ||
-        String(gestor.id) ===
-          String(gestorMedicion) ||
-        limpiarTexto(gestor.nombre) ===
+        String(g.id) === String(gestorMedicion) ||
+        limpiarTexto(g.nombre) ===
           limpiarTexto(gestorMedicion)
     )
 
     .map((gestor) => {
-      const carteraGestor = cartera.filter(
-        (item) => {
-          const responsableId =
-            item.cobranza?.responsable_cobro_id;
+      /*
+      CUENTAS ACTUALMENTE ASIGNADAS AL GESTOR
+      */
 
-          const responsableNombre =
-            item.cobranza?.responsable_cobro;
+      const carteraGestor = cartera.filter((item) => {
+        const responsableId =
+          item.cobranza?.responsable_cobro_id;
 
-          if (gestor.nombre === "Sin asignar") {
-            return (
-              !responsableId &&
-              !responsableNombre
-            );
-          }
+        const responsableNombre =
+          item.cobranza?.responsable_cobro;
+
+        if (gestor.nombre === "Sin asignar") {
+          return !responsableId && !responsableNombre;
+        }
+
+        return (
+          String(responsableId) === String(gestor.id) ||
+          limpiarTexto(responsableNombre) ===
+            limpiarTexto(gestor.nombre)
+        );
+      });
+
+      const cuentasAsignadas = carteraGestor.length;
+
+      /*
+      IDS DE LAS CUENTAS ASIGNADAS
+      */
+
+      const idsCuentasGestor = new Set(
+        carteraGestor.map((item) =>
+          String(item.cuenta.id)
+        )
+      );
+
+      /*
+      SOLO GESTIONES REALES.
+
+      Las asignaciones y reasignaciones
+      quedan excluidas.
+      */
+
+      const gestionesGestor = gestiones.filter(
+        (gestion) => {
+          const cuentaId = String(
+            gestion.informacion_comercial_id || ""
+          );
 
           return (
-            String(responsableId) ===
-              String(gestor.id) ||
-            limpiarTexto(responsableNombre) ===
-              limpiarTexto(gestor.nombre)
+            idsCuentasGestor.has(cuentaId) &&
+            esGestionReal(gestion)
           );
         }
       );
 
-      const cuentasAsignadas =
-        carteraGestor.length;
+      /*
+      CLIENTES GESTIONADOS.
 
-      const gestionesGestor =
-        gestiones.filter((gestion) =>
-          carteraGestor.some(
-            (item) =>
-              String(item.cuenta.id) ===
-              String(
-                gestion.informacion_comercial_id
-              )
-          )
-        );
+      Una cuenta cuenta una sola vez,
+      aunque tenga 10 llamadas o visitas.
+      */
 
-      const cuentasGestionadas = [
-        ...new Set(
-          gestionesGestor
-            .map(
-              (gestion) =>
-                gestion.informacion_comercial_id
+      const cuentasGestionadasIds = new Set(
+        gestionesGestor
+          .map((gestion) =>
+            String(
+              gestion.informacion_comercial_id || ""
             )
-            .filter(Boolean)
-        ),
-      ].length;
+          )
+          .filter(Boolean)
+      );
+
+      const cuentasGestionadas =
+        cuentasGestionadasIds.size;
 
       const pendientes = Math.max(
         cuentasAsignadas - cuentasGestionadas,
@@ -980,9 +864,7 @@ export default function CobranzaGeneral() {
       const porcentaje =
         cuentasAsignadas > 0
           ? Math.round(
-              (cuentasGestionadas /
-                cuentasAsignadas) *
-                100
+              (cuentasGestionadas / cuentasAsignadas) * 100
             )
           : 0;
 
@@ -1011,8 +893,7 @@ export default function CobranzaGeneral() {
             </h1>
 
             <p style={subtituloHero}>
-              Busca clientes, selecciona cuentas y
-              asigna gestores de cobro.
+              Busca clientes, selecciona cuentas y asigna gestores de cobro.
             </p>
           </div>
 
@@ -1193,9 +1074,7 @@ export default function CobranzaGeneral() {
               <input
                 value={observacionMasiva}
                 onChange={(e) =>
-                  setObservacionMasiva(
-                    e.target.value
-                  )
+                  setObservacionMasiva(e.target.value)
                 }
                 placeholder="Ej. Cambio de zona, producto o carga de trabajo"
                 style={inputStyle}
@@ -1219,8 +1098,8 @@ export default function CobranzaGeneral() {
           </h2>
 
           <p style={ayuda}>
-            Aquí ves el estado real de cada cuenta y
-            el gestor actualmente responsable.
+            Aquí ves el gestor actual de cada cliente
+            según la asignación más reciente.
           </p>
 
           <div
@@ -1292,9 +1171,7 @@ export default function CobranzaGeneral() {
                     </td>
 
                     <td style={td}>
-                      {fechaSimple(
-                        item.cuenta?.fecha_vencimiento
-                      ) || "-"}
+                      {item.cuenta?.fecha_vencimiento || "-"}
                     </td>
 
                     <td style={td}>
@@ -1307,8 +1184,6 @@ export default function CobranzaGeneral() {
                           item.estado === "Al Día" ||
                           item.estado === "Cancelado"
                             ? estadoVerde
-                            : item.estado === "Mora"
-                            ? estadoAmarillo
                             : estadoRojo
                         }
                       >
@@ -1343,8 +1218,7 @@ export default function CobranzaGeneral() {
                       style={td}
                       colSpan={12}
                     >
-                      No hay clientes con los filtros
-                      aplicados.
+                      No hay clientes con los filtros aplicados.
                     </td>
                   </tr>
                 )}
@@ -1361,8 +1235,8 @@ export default function CobranzaGeneral() {
               </h2>
 
               <p style={ayuda}>
-                Revisa la carga asignada y avance de
-                gestión por cobrador.
+                Revisa la carga asignada y avance
+                de gestión por cobrador.
               </p>
             </div>
 
@@ -1428,6 +1302,17 @@ export default function CobranzaGeneral() {
                     </td>
                   </tr>
                 ))}
+
+                {gestoresMedicion.length === 0 && (
+                  <tr>
+                    <td
+                      style={td}
+                      colSpan={5}
+                    >
+                      No hay gestores para mostrar.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -1556,7 +1441,8 @@ const hero = {
   alignItems: "center",
   gap: "16px",
   flexWrap: "wrap",
-  boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
+  boxShadow:
+    "0 8px 24px rgba(0,0,0,0.16)",
 };
 
 const tituloHero = {
@@ -1577,7 +1463,8 @@ const card = {
   padding: "22px",
   borderRadius: "18px",
   marginBottom: "16px",
-  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
+  boxShadow:
+    "0 3px 12px rgba(0,0,0,0.06)",
   border: "1px solid #e5e7eb",
 };
 
@@ -1598,7 +1485,7 @@ const tituloSeccion = {
 
 const ayuda = {
   marginTop: "6px",
-  marginBottom: "14px",
+  marginBottom: 0,
   color: "#6b7280",
   fontSize: "14px",
 };
@@ -1609,6 +1496,7 @@ const gridFiltros = {
     "repeat(auto-fit,minmax(210px,1fr))",
   gap: "14px",
   alignItems: "end",
+  marginTop: "14px",
 };
 
 const gridAsignacion = {
@@ -1746,14 +1634,6 @@ const estadoVerde = {
   fontWeight: "bold",
 };
 
-const estadoAmarillo = {
-  background: "#fef3c7",
-  color: "#92400e",
-  padding: "5px 10px",
-  borderRadius: "999px",
-  fontWeight: "bold",
-};
-
 const estadoRojo = {
   background: "#fee2e2",
   color: "#991b1b",
@@ -1779,7 +1659,8 @@ const modal = {
   background: "#ffffff",
   padding: "24px",
   borderRadius: "18px",
-  boxShadow: "0 10px 30px rgba(0,0,0,0.20)",
+  boxShadow:
+    "0 10px 30px rgba(0,0,0,0.20)",
 };
 
 const accionesModal = {
