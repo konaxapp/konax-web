@@ -23,11 +23,13 @@ export default function AdminConfiguracion() {
 
   function obtenerEmpresaId() {
     const empresaId = localStorage.getItem("empresaId");
+
     if (!empresaId) {
       alert("No hay empresa activa.");
       window.location.href = "/login";
       return null;
     }
+
     return empresaId;
   }
 
@@ -62,24 +64,55 @@ export default function AdminConfiguracion() {
 
     setCargando(true);
 
-    const { data: usuarioData } = await supabase
+    const { data: usuarioData, error: errorUsuario } = await supabase
       .from("usuarios")
       .select("*")
       .eq("id", usuarioId)
       .maybeSingle();
 
-    const { data: empresaData } = await supabase
+    if (errorUsuario) {
+      alert("Error cargando usuario: " + errorUsuario.message);
+      setCargando(false);
+      return;
+    }
+
+    const { data: empresaData, error: errorEmpresa } = await supabase
       .from("empresas")
       .select("*")
       .eq("id", empresaId)
       .maybeSingle();
 
+    if (errorEmpresa) {
+      alert("Error cargando empresa: " + errorEmpresa.message);
+      setCargando(false);
+      return;
+    }
+
     setUsuario(usuarioData || null);
     setEmpresa(empresaData || null);
 
     const sonidosGuardados = localStorage.getItem("konaxSonidos");
+
     if (sonidosGuardados) {
-      setSonidos(JSON.parse(sonidosGuardados));
+      try {
+        const sonidosParseados = JSON.parse(sonidosGuardados);
+
+        setSonidos({
+          pago: sonidosParseados?.pago ?? true,
+          cuenta: sonidosParseados?.cuenta ?? true,
+          gestion: sonidosParseados?.gestion ?? true,
+          promesa: sonidosParseados?.promesa ?? true,
+        });
+      } catch (error) {
+        localStorage.removeItem("konaxSonidos");
+
+        setSonidos({
+          pago: true,
+          cuenta: true,
+          gestion: true,
+          promesa: true,
+        });
+      }
     }
 
     setCargando(false);
@@ -90,11 +123,17 @@ export default function AdminConfiguracion() {
   }
 
   function actualizarUsuario(campo, valor) {
-    setUsuario((prev) => ({ ...prev, [campo]: valor }));
+    setUsuario((prev) => ({
+      ...prev,
+      [campo]: valor,
+    }));
   }
 
   function actualizarEmpresa(campo, valor) {
-    setEmpresa((prev) => ({ ...prev, [campo]: valor }));
+    setEmpresa((prev) => ({
+      ...prev,
+      [campo]: valor,
+    }));
   }
 
   async function guardarPerfil() {
@@ -153,15 +192,22 @@ export default function AdminConfiguracion() {
   }
 
   function actualizarSonido(campo, valor) {
-    const nuevo = { ...sonidos, [campo]: valor };
+    const nuevo = {
+      ...sonidos,
+      [campo]: valor,
+    };
+
     setSonidos(nuevo);
     localStorage.setItem("konaxSonidos", JSON.stringify(nuevo));
   }
 
   function probarSonido() {
     const audio = new Audio("/sounds/konax-alert.mp3");
+
     audio.play().catch(() => {
-      alert("No se pudo reproducir el sonido. Verifica que exista /public/sounds/konax-alert.mp3");
+      alert(
+        "No se pudo reproducir el sonido. Verifica que exista /public/sounds/konax-alert.mp3"
+      );
     });
   }
 
@@ -175,7 +221,9 @@ export default function AdminConfiguracion() {
         <div style={header}>
           <div>
             <h1 style={titulo}>Configuraciones</h1>
-            <p style={subtitulo}>Ajustes básicos de cuenta, negocio, plan y notificaciones.</p>
+            <p style={subtitulo}>
+              Ajustes básicos de cuenta, negocio, plan y notificaciones.
+            </p>
           </div>
 
           <button style={botonVolver} onClick={volverDashboard}>
@@ -186,14 +234,34 @@ export default function AdminConfiguracion() {
         <div style={layout}>
           <aside style={menu}>
             <Grupo titulo="Mi cuenta" />
-            <Item texto="Mi perfil" activo={seccion === "perfil"} onClick={() => setSeccion("perfil")} />
+
+            <Item
+              texto="Mi perfil"
+              activo={seccion === "perfil"}
+              onClick={() => setSeccion("perfil")}
+            />
 
             <Separador />
 
             <Grupo titulo="Mi negocio" />
-            <Item texto="Perfil empresarial" activo={seccion === "empresa"} onClick={() => setSeccion("empresa")} />
-            <Item texto="Mi plan" activo={seccion === "plan"} onClick={() => setSeccion("plan")} />
-            <Item texto="Sonidos y notificaciones" activo={seccion === "sonidos"} onClick={() => setSeccion("sonidos")} />
+
+            <Item
+              texto="Perfil empresarial"
+              activo={seccion === "empresa"}
+              onClick={() => setSeccion("empresa")}
+            />
+
+            <Item
+              texto="Mi plan"
+              activo={seccion === "plan"}
+              onClick={() => setSeccion("plan")}
+            />
+
+            <Item
+              texto="Sonidos y notificaciones"
+              activo={seccion === "sonidos"}
+              onClick={() => setSeccion("sonidos")}
+            />
           </aside>
 
           <main style={contenido}>
@@ -202,7 +270,9 @@ export default function AdminConfiguracion() {
                 <Campo label="Nombre">
                   <input
                     value={usuario?.nombre || ""}
-                    onChange={(e) => actualizarUsuario("nombre", e.target.value)}
+                    onChange={(e) =>
+                      actualizarUsuario("nombre", e.target.value)
+                    }
                     style={input}
                   />
                 </Campo>
@@ -210,13 +280,19 @@ export default function AdminConfiguracion() {
                 <Campo label="Correo">
                   <input
                     value={usuario?.correo || ""}
-                    onChange={(e) => actualizarUsuario("correo", e.target.value)}
+                    onChange={(e) =>
+                      actualizarUsuario("correo", e.target.value)
+                    }
                     style={input}
                   />
                 </Campo>
 
                 <Campo label="Rol">
-                  <input value={usuario?.rol || ""} disabled style={inputDisabled} />
+                  <input
+                    value={usuario?.rol || ""}
+                    disabled
+                    style={inputDisabled}
+                  />
                 </Campo>
 
                 <button style={botonGuardar} onClick={guardarPerfil}>
@@ -230,7 +306,9 @@ export default function AdminConfiguracion() {
                 <Campo label="Nombre del negocio">
                   <input
                     value={empresa?.nombre || ""}
-                    onChange={(e) => actualizarEmpresa("nombre", e.target.value)}
+                    onChange={(e) =>
+                      actualizarEmpresa("nombre", e.target.value)
+                    }
                     style={input}
                   />
                 </Campo>
@@ -238,7 +316,9 @@ export default function AdminConfiguracion() {
                 <Campo label="Teléfono">
                   <input
                     value={empresa?.telefono || ""}
-                    onChange={(e) => actualizarEmpresa("telefono", e.target.value)}
+                    onChange={(e) =>
+                      actualizarEmpresa("telefono", e.target.value)
+                    }
                     style={input}
                   />
                 </Campo>
@@ -246,7 +326,9 @@ export default function AdminConfiguracion() {
                 <Campo label="Correo">
                   <input
                     value={empresa?.correo || ""}
-                    onChange={(e) => actualizarEmpresa("correo", e.target.value)}
+                    onChange={(e) =>
+                      actualizarEmpresa("correo", e.target.value)
+                    }
                     style={input}
                   />
                 </Campo>
@@ -254,7 +336,9 @@ export default function AdminConfiguracion() {
                 <Campo label="Tipo de negocio">
                   <input
                     value={empresa?.tipo_negocio || ""}
-                    onChange={(e) => actualizarEmpresa("tipo_negocio", e.target.value)}
+                    onChange={(e) =>
+                      actualizarEmpresa("tipo_negocio", e.target.value)
+                    }
                     style={input}
                   />
                 </Campo>
@@ -262,7 +346,9 @@ export default function AdminConfiguracion() {
                 <Campo label="Dirección">
                   <textarea
                     value={empresa?.direccion || ""}
-                    onChange={(e) => actualizarEmpresa("direccion", e.target.value)}
+                    onChange={(e) =>
+                      actualizarEmpresa("direccion", e.target.value)
+                    }
                     style={textarea}
                   />
                 </Campo>
@@ -278,11 +364,15 @@ export default function AdminConfiguracion() {
                 <div style={planBox}>
                   <p style={labelPlan}>Plan actual</p>
                   <h2>{empresa?.plan_nombre || "Sin plan"}</h2>
-                  <span style={badge}>{empresa?.estado_plan || empresa?.estado || "Activo"}</span>
+
+                  <span style={badge}>
+                    {empresa?.estado_plan || empresa?.estado || "Activo"}
+                  </span>
                 </div>
 
                 <p style={texto}>
-                  Este apartado es informativo. Los cambios de plan y módulos deben ser realizados por KONAX.
+                  Este apartado es informativo. Los cambios de plan y módulos
+                  deben ser realizados por KONAX.
                 </p>
               </Card>
             )}
@@ -367,6 +457,7 @@ function Switch({ label, checked, onChange }) {
   return (
     <div style={switchFila}>
       <span>{label}</span>
+
       <input
         type="checkbox"
         checked={checked}
