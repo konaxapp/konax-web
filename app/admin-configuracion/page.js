@@ -3,34 +3,27 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
+const SONIDOS_DEFAULT = {
+  pago: true,
+  cuenta: true,
+  gestion: true,
+  promesa: true,
+};
+
 export default function AdminConfiguracion() {
   const [seccion, setSeccion] = useState("perfil");
   const [empresa, setEmpresa] = useState(null);
   const [usuario, setUsuario] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
-
-  const [sonidos, setSonidos] = useState({
-    pago: true,
-    cuenta: true,
-    gestion: true,
-    promesa: true,
-  });
+  const [sonidos, setSonidos] = useState(SONIDOS_DEFAULT);
 
   useEffect(() => {
     cargarDatos();
   }, []);
 
   function obtenerEmpresaId() {
-    const empresaId = localStorage.getItem("empresaId");
-
-    if (!empresaId) {
-      alert("No hay empresa activa.");
-      window.location.href = "/login";
-      return null;
-    }
-
-    return empresaId;
+    return localStorage.getItem("empresaId");
   }
 
   function obtenerUsuarioId() {
@@ -51,10 +44,15 @@ export default function AdminConfiguracion() {
   }
 
   async function cargarDatos() {
+    setCargando(true);
+
     const empresaId = obtenerEmpresaId();
     const usuarioId = obtenerUsuarioId();
 
     if (!empresaId || !usuarioId) {
+      alert("La sesión no es válida. Inicie sesión nuevamente.");
+      localStorage.clear();
+      window.location.href = "/login";
       return;
     }
 
@@ -64,25 +62,12 @@ export default function AdminConfiguracion() {
       return;
     }
 
-    setCargando(true);
-
-    const [
-      { data: usuarioData, error: errorUsuario },
-      { data: empresaData, error: errorEmpresa },
-    ] = await Promise.all([
-      supabase
-        .from("usuarios")
-        .select("*")
-        .eq("id", usuarioId)
-        .eq("empresa_id", empresaId)
-        .maybeSingle(),
-
-      supabase
-        .from("empresas")
-        .select("*")
-        .eq("id", empresaId)
-        .maybeSingle(),
-    ]);
+    const { data: usuarioData, error: errorUsuario } = await supabase
+      .from("usuarios")
+      .select("*")
+      .eq("id", usuarioId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
 
     if (errorUsuario) {
       alert("Error cargando usuario: " + errorUsuario.message);
@@ -90,43 +75,43 @@ export default function AdminConfiguracion() {
       return;
     }
 
+    const { data: empresaData, error: errorEmpresa } = await supabase
+      .from("empresas")
+      .select("*")
+      .eq("id", empresaId)
+      .maybeSingle();
+
     if (errorEmpresa) {
       alert("Error cargando empresa: " + errorEmpresa.message);
       setCargando(false);
       return;
     }
 
-    if (!usuarioData) {
-      alert("No se encontró el usuario de la sesión.");
-      window.location.href = "/login";
-      return;
-    }
-
-    if (!empresaData) {
-      alert("No se encontró la empresa activa.");
-      window.location.href = "/login";
+    if (!usuarioData || !empresaData) {
+      alert("No se pudo cargar la configuración.");
+      setCargando(false);
       return;
     }
 
     setUsuario(usuarioData);
     setEmpresa(empresaData);
 
-    const sonidosGuardados = localStorage.getItem("konaxSonidos");
+    try {
+      const sonidosGuardados = localStorage.getItem("konaxSonidos");
 
-    if (sonidosGuardados) {
-      try {
-        const configuracionSonidos = JSON.parse(sonidosGuardados);
+      if (sonidosGuardados) {
+        const parseado = JSON.parse(sonidosGuardados);
 
-        setSonidos((prev) => ({
-          ...prev,
-          ...configuracionSonidos,
-        }));
-      } catch (error) {
-        console.error(
-          "No se pudo leer la configuración de sonidos:",
-          error
-        );
+        setSonidos({
+          pago: parseado?.pago ?? true,
+          cuenta: parseado?.cuenta ?? true,
+          gestion: parseado?.gestion ?? true,
+          promesa: parseado?.promesa ?? true,
+        });
       }
+    } catch (error) {
+      localStorage.removeItem("konaxSonidos");
+      setSonidos(SONIDOS_DEFAULT);
     }
 
     setCargando(false);
@@ -136,31 +121,24 @@ export default function AdminConfiguracion() {
     window.location.href = "/dashboard";
   }
 
-  function actualizarUsuario(campo, valor) {
+  function actualizarUsuario(campoNombre, valor) {
     setUsuario((prev) => ({
       ...prev,
-      [campo]: valor,
+      [campoNombre]: valor,
     }));
   }
 
-  function actualizarEmpresa(campo, valor) {
+  function actualizarEmpresa(campoNombre, valor) {
     setEmpresa((prev) => ({
       ...prev,
-      [campo]: valor,
+      [campoNombre]: valor,
     }));
   }
 
   async function guardarPerfil() {
-    if (!usuario?.id) {
-      alert("No hay usuario válido para actualizar.");
-      return;
-    }
+    if (!usuario?.id) return;
 
     const empresaId = obtenerEmpresaId();
-
-    if (!empresaId) {
-      return;
-    }
 
     setGuardando(true);
 
@@ -180,30 +158,16 @@ export default function AdminConfiguracion() {
       return;
     }
 
-    localStorage.setItem(
-      "usuarioNombre",
-      String(usuario.nombre || "").trim()
-    );
-
-    localStorage.setItem(
-      "usuarioCorreo",
-      String(usuario.correo || "").trim()
-    );
+    localStorage.setItem("usuarioNombre", usuario.nombre || "");
+    localStorage.setItem("usuarioCorreo", usuario.correo || "");
 
     alert("Perfil actualizado correctamente.");
   }
 
   async function guardarEmpresa() {
-    if (!empresa?.id) {
-      alert("No hay empresa válida para actualizar.");
-      return;
-    }
+    if (!empresa?.id) return;
 
     const empresaId = obtenerEmpresaId();
-
-    if (!empresaId) {
-      return;
-    }
 
     setGuardando(true);
 
@@ -215,9 +179,7 @@ export default function AdminConfiguracion() {
         correo: String(empresa.correo || "").trim(),
         direccion: String(empresa.direccion || "").trim(),
         tipo_negocio: String(empresa.tipo_negocio || "").trim(),
-        categoria_negocio: String(
-          empresa.categoria_negocio || ""
-        ).trim(),
+        categoria_negocio: String(empresa.categoria_negocio || "").trim(),
       })
       .eq("id", empresaId);
 
@@ -228,48 +190,30 @@ export default function AdminConfiguracion() {
       return;
     }
 
-    localStorage.setItem(
-      "empresaNombre",
-      String(empresa.nombre || "").trim()
-    );
-
-    localStorage.setItem(
-      "tipoNegocio",
-      String(empresa.tipo_negocio || "").trim()
-    );
-
-    localStorage.setItem(
-      "categoriaNegocio",
-      String(empresa.categoria_negocio || "").trim()
-    );
+    localStorage.setItem("empresaNombre", empresa.nombre || "");
+    localStorage.setItem("tipoNegocio", empresa.tipo_negocio || "");
+    localStorage.setItem("categoriaNegocio", empresa.categoria_negocio || "");
 
     alert("Perfil empresarial actualizado correctamente.");
   }
 
-  function actualizarSonido(campo, valor) {
+  function actualizarSonido(campoNombre, valor) {
     const nuevaConfiguracion = {
       ...sonidos,
-      [campo]: valor,
+      [campoNombre]: valor,
     };
 
     setSonidos(nuevaConfiguracion);
-
-    localStorage.setItem(
-      "konaxSonidos",
-      JSON.stringify(nuevaConfiguracion)
-    );
+    localStorage.setItem("konaxSonidos", JSON.stringify(nuevaConfiguracion));
   }
 
   function probarSonido() {
     const audio = new Audio("/sounds/konax-alert.wav");
-
     audio.volume = 0.7;
 
-    audio.play().catch((error) => {
-      console.error("Error reproduciendo sonido:", error);
-
+    audio.play().catch(() => {
       alert(
-        "No se pudo reproducir el sonido. Verifica que exista el archivo public/sounds/konax-alert.wav"
+        "No se pudo reproducir el sonido. Verifica que exista public/sounds/konax-alert.wav"
       );
     });
   }
@@ -279,10 +223,7 @@ export default function AdminConfiguracion() {
       <div style={cargandoPagina}>
         <div style={cargandoCard}>
           <strong>Cargando configuración...</strong>
-
-          <p>
-            Consultando perfil, empresa y preferencias.
-          </p>
+          <p>Consultando perfil, empresa y preferencias.</p>
         </div>
       </div>
     );
@@ -294,17 +235,12 @@ export default function AdminConfiguracion() {
         <div style={header}>
           <div>
             <h1 style={titulo}>Configuraciones</h1>
-
             <p style={subtitulo}>
-              Ajustes básicos de cuenta, negocio, plan y
-              notificaciones.
+              Ajustes básicos de cuenta, negocio, plan y notificaciones.
             </p>
           </div>
 
-          <button
-            style={botonVolver}
-            onClick={volverDashboard}
-          >
+          <button style={botonVolver} onClick={volverDashboard}>
             ← Volver
           </button>
         </div>
@@ -345,34 +281,28 @@ export default function AdminConfiguracion() {
           <main style={contenido}>
             {seccion === "perfil" && (
               <Card titulo="Mi perfil">
-                <Campo label="Nombre">
+                <Campo labelTexto="Nombre">
                   <input
                     value={usuario?.nombre || ""}
                     onChange={(e) =>
-                      actualizarUsuario(
-                        "nombre",
-                        e.target.value
-                      )
+                      actualizarUsuario("nombre", e.target.value)
                     }
                     style={input}
                   />
                 </Campo>
 
-                <Campo label="Correo">
+                <Campo labelTexto="Correo">
                   <input
                     type="email"
                     value={usuario?.correo || ""}
                     onChange={(e) =>
-                      actualizarUsuario(
-                        "correo",
-                        e.target.value
-                      )
+                      actualizarUsuario("correo", e.target.value)
                     }
                     style={input}
                   />
                 </Campo>
 
-                <Campo label="Rol">
+                <Campo labelTexto="Rol">
                   <input
                     value={usuario?.rol || ""}
                     disabled
@@ -385,76 +315,59 @@ export default function AdminConfiguracion() {
                   onClick={guardarPerfil}
                   disabled={guardando}
                 >
-                  {guardando
-                    ? "Guardando..."
-                    : "Guardar perfil"}
+                  {guardando ? "Guardando..." : "Guardar perfil"}
                 </button>
               </Card>
             )}
 
             {seccion === "empresa" && (
               <Card titulo="Perfil empresarial">
-                <Campo label="Nombre del negocio">
+                <Campo labelTexto="Nombre del negocio">
                   <input
                     value={empresa?.nombre || ""}
                     onChange={(e) =>
-                      actualizarEmpresa(
-                        "nombre",
-                        e.target.value
-                      )
+                      actualizarEmpresa("nombre", e.target.value)
                     }
                     style={input}
                   />
                 </Campo>
 
-                <Campo label="Teléfono">
+                <Campo labelTexto="Teléfono">
                   <input
                     value={empresa?.telefono || ""}
                     onChange={(e) =>
-                      actualizarEmpresa(
-                        "telefono",
-                        e.target.value
-                      )
+                      actualizarEmpresa("telefono", e.target.value)
                     }
                     style={input}
                   />
                 </Campo>
 
-                <Campo label="Correo">
+                <Campo labelTexto="Correo">
                   <input
                     type="email"
                     value={empresa?.correo || ""}
                     onChange={(e) =>
-                      actualizarEmpresa(
-                        "correo",
-                        e.target.value
-                      )
+                      actualizarEmpresa("correo", e.target.value)
                     }
                     style={input}
                   />
                 </Campo>
 
-                <Campo label="Tipo de negocio">
+                <Campo labelTexto="Tipo de negocio">
                   <input
                     value={empresa?.tipo_negocio || ""}
                     onChange={(e) =>
-                      actualizarEmpresa(
-                        "tipo_negocio",
-                        e.target.value
-                      )
+                      actualizarEmpresa("tipo_negocio", e.target.value)
                     }
                     style={input}
                   />
                 </Campo>
 
-                <Campo label="Dirección">
+                <Campo labelTexto="Dirección">
                   <textarea
                     value={empresa?.direccion || ""}
                     onChange={(e) =>
-                      actualizarEmpresa(
-                        "direccion",
-                        e.target.value
-                      )
+                      actualizarEmpresa("direccion", e.target.value)
                     }
                     style={textarea}
                   />
@@ -465,9 +378,7 @@ export default function AdminConfiguracion() {
                   onClick={guardarEmpresa}
                   disabled={guardando}
                 >
-                  {guardando
-                    ? "Guardando..."
-                    : "Guardar negocio"}
+                  {guardando ? "Guardando..." : "Guardar negocio"}
                 </button>
               </Card>
             )}
@@ -475,25 +386,20 @@ export default function AdminConfiguracion() {
             {seccion === "plan" && (
               <Card titulo="Mi plan">
                 <div style={planBox}>
-                  <p style={labelPlan}>
-                    Plan actual
-                  </p>
+                  <p style={labelPlan}>Plan actual</p>
 
                   <h2 style={nombrePlan}>
                     {empresa?.plan_nombre || "Sin plan"}
                   </h2>
 
                   <span style={badge}>
-                    {empresa?.estado_plan ||
-                      empresa?.estado ||
-                      "Activo"}
+                    {empresa?.estado_plan || empresa?.estado || "Activo"}
                   </span>
                 </div>
 
                 <p style={texto}>
-                  Este apartado es informativo. Los cambios
-                  de plan y módulos son administrados por
-                  KONAX.
+                  Este apartado es informativo. Los cambios de plan y módulos
+                  son administrados por KONAX.
                 </p>
               </Card>
             )}
@@ -501,46 +407,34 @@ export default function AdminConfiguracion() {
             {seccion === "sonidos" && (
               <Card titulo="Sonidos y notificaciones">
                 <p style={texto}>
-                  Activa sonidos para eventos importantes
-                  del negocio.
+                  Activa sonidos para eventos importantes del negocio.
                 </p>
 
                 <Switch
-                  label="Sonido cuando se registra un pago"
+                  labelTexto="Sonido cuando se registra un pago"
                   checked={sonidos.pago}
-                  onChange={(valor) =>
-                    actualizarSonido("pago", valor)
-                  }
+                  onChange={(valor) => actualizarSonido("pago", valor)}
                 />
 
                 <Switch
-                  label="Sonido cuando se crea una cuenta"
+                  labelTexto="Sonido cuando se crea una cuenta"
                   checked={sonidos.cuenta}
-                  onChange={(valor) =>
-                    actualizarSonido("cuenta", valor)
-                  }
+                  onChange={(valor) => actualizarSonido("cuenta", valor)}
                 />
 
                 <Switch
-                  label="Sonido cuando se guarda una gestión"
+                  labelTexto="Sonido cuando se guarda una gestión"
                   checked={sonidos.gestion}
-                  onChange={(valor) =>
-                    actualizarSonido("gestion", valor)
-                  }
+                  onChange={(valor) => actualizarSonido("gestion", valor)}
                 />
 
                 <Switch
-                  label="Sonido para promesas vencidas"
+                  labelTexto="Sonido para promesas vencidas"
                   checked={sonidos.promesa}
-                  onChange={(valor) =>
-                    actualizarSonido("promesa", valor)
-                  }
+                  onChange={(valor) => actualizarSonido("promesa", valor)}
                 />
 
-                <button
-                  style={botonProbar}
-                  onClick={probarSonido}
-                >
+                <button style={botonProbar} onClick={probarSonido}>
                   ▶ Probar sonido
                 </button>
               </Card>
@@ -558,11 +452,7 @@ function Grupo({ titulo }) {
 
 function Item({ texto, activo, onClick }) {
   return (
-    <button
-      type="button"
-      style={activo ? itemActivo : item}
-      onClick={onClick}
-    >
+    <button type="button" style={activo ? itemActivo : item} onClick={onClick}>
       {texto}
     </button>
   );
@@ -576,33 +466,29 @@ function Card({ titulo, children }) {
   return (
     <div style={card}>
       <h2 style={cardTitulo}>{titulo}</h2>
-
       {children}
     </div>
   );
 }
 
-function Campo({ label, children }) {
+function Campo({ labelTexto, children }) {
   return (
     <div style={campo}>
-      <label style={label}>{label}</label>
-
+      <label style={labelStyle}>{labelTexto}</label>
       {children}
     </div>
   );
 }
 
-function Switch({ label, checked, onChange }) {
+function Switch({ labelTexto, checked, onChange }) {
   return (
     <div style={switchFila}>
-      <span>{label}</span>
+      <span>{labelTexto}</span>
 
       <input
         type="checkbox"
         checked={Boolean(checked)}
-        onChange={(e) =>
-          onChange(e.target.checked)
-        }
+        onChange={(e) => onChange(e.target.checked)}
         style={check}
       />
     </div>
@@ -726,7 +612,7 @@ const campo = {
   marginBottom: "16px",
 };
 
-const label = {
+const labelStyle = {
   display: "block",
   marginBottom: "6px",
   color: "#374151",
