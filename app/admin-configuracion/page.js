@@ -3,20 +3,12 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const SONIDOS_DEFAULT = {
-  pago: true,
-  cuenta: true,
-  gestion: true,
-  promesa: true,
-};
-
 export default function AdminConfiguracion() {
   const [seccion, setSeccion] = useState("perfil");
   const [empresa, setEmpresa] = useState(null);
   const [usuario, setUsuario] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
-  const [sonidos, setSonidos] = useState(SONIDOS_DEFAULT);
 
   useEffect(() => {
     cargarDatos();
@@ -89,23 +81,6 @@ export default function AdminConfiguracion() {
 
     setUsuario(usuarioData || null);
     setEmpresa(empresaData || null);
-
-    try {
-      const guardado = localStorage.getItem("konaxSonidos");
-      if (guardado) {
-        const parseado = JSON.parse(guardado);
-        setSonidos({
-          pago: parseado?.pago ?? true,
-          cuenta: parseado?.cuenta ?? true,
-          gestion: parseado?.gestion ?? true,
-          promesa: parseado?.promesa ?? true,
-        });
-      }
-    } catch {
-      localStorage.removeItem("konaxSonidos");
-      setSonidos(SONIDOS_DEFAULT);
-    }
-
     setCargando(false);
   }
 
@@ -185,34 +160,13 @@ export default function AdminConfiguracion() {
     alert("Perfil empresarial actualizado correctamente.");
   }
 
-  function actualizarSonido(campoNombre, valor) {
-    const nuevaConfiguracion = {
-      ...sonidos,
-      [campoNombre]: valor,
-    };
-
-    setSonidos(nuevaConfiguracion);
-    localStorage.setItem("konaxSonidos", JSON.stringify(nuevaConfiguracion));
-  }
-
-  function probarSonido() {
-    const audio = new Audio("/sounds/konax-alert.wav");
-    audio.volume = 0.7;
-
-    audio.play().catch(() => {
-      alert(
-        "No se pudo reproducir el sonido. Verifica que exista public/sounds/konax-alert.wav"
-      );
-    });
-  }
-
   if (cargando) {
     return (
       <div style={cargandoPagina}>
         <div style={cargandoCard}>
           <img src="/konax-logo.png" alt="KONAX" style={logoCarga} />
           <strong>Cargando configuración...</strong>
-          <p style={textoSuave}>Validando empresa, usuario y preferencias.</p>
+          <p style={textoSuave}>Validando empresa y usuario.</p>
         </div>
       </div>
     );
@@ -229,7 +183,7 @@ export default function AdminConfiguracion() {
               <p style={eyebrow}>Panel Administrativo</p>
               <h1 style={titulo}>Configuraciones</h1>
               <p style={subtitulo}>
-                Administra tu cuenta, negocio, plan y notificaciones del sistema.
+                Administra tu perfil, negocio y plan activo.
               </p>
             </div>
           </div>
@@ -282,13 +236,6 @@ export default function AdminConfiguracion() {
               activo={seccion === "plan"}
               onClick={() => setSeccion("plan")}
             />
-
-            <Item
-              texto="Sonidos y notificaciones"
-              icono="🔔"
-              activo={seccion === "sonidos"}
-              onClick={() => setSeccion("sonidos")}
-            />
           </aside>
 
           <main style={contenido}>
@@ -328,7 +275,7 @@ export default function AdminConfiguracion() {
             {seccion === "empresa" && (
               <Card
                 titulo="Perfil empresarial"
-                descripcion="Información pública y administrativa del negocio."
+                descripcion="Información administrativa del negocio."
                 icono="🏢"
               >
                 <Campo labelTexto="Nombre del negocio">
@@ -401,46 +348,6 @@ export default function AdminConfiguracion() {
                 </div>
               </Card>
             )}
-
-            {seccion === "sonidos" && (
-              <Card
-                titulo="Sonidos y notificaciones"
-                descripcion="Personaliza alertas sonoras para eventos importantes."
-                icono="🔔"
-              >
-                <Switch
-                  labelTexto="Sonido cuando se registra un pago"
-                  detalle="Ideal para confirmar ingresos en caja."
-                  checked={sonidos.pago}
-                  onChange={(valor) => actualizarSonido("pago", valor)}
-                />
-
-                <Switch
-                  labelTexto="Sonido cuando se crea una cuenta"
-                  detalle="Aviso al registrar una nueva cuenta por cobrar."
-                  checked={sonidos.cuenta}
-                  onChange={(valor) => actualizarSonido("cuenta", valor)}
-                />
-
-                <Switch
-                  labelTexto="Sonido cuando se guarda una gestión"
-                  detalle="Confirmación de seguimiento registrado."
-                  checked={sonidos.gestion}
-                  onChange={(valor) => actualizarSonido("gestion", valor)}
-                />
-
-                <Switch
-                  labelTexto="Sonido para promesas vencidas"
-                  detalle="Alerta para atención de cartera vencida."
-                  checked={sonidos.promesa}
-                  onChange={(valor) => actualizarSonido("promesa", valor)}
-                />
-
-                <button style={botonProbar} onClick={probarSonido}>
-                  ▶ Probar sonido
-                </button>
-              </Card>
-            )}
           </main>
         </div>
       </div>
@@ -500,24 +407,6 @@ function Campo({ labelTexto, children }) {
   );
 }
 
-function Switch({ labelTexto, detalle, checked, onChange }) {
-  return (
-    <div style={switchFila}>
-      <div>
-        <strong>{labelTexto}</strong>
-        <p style={switchDetalle}>{detalle}</p>
-      </div>
-
-      <input
-        type="checkbox"
-        checked={Boolean(checked)}
-        onChange={(e) => onChange(e.target.checked)}
-        style={check}
-      />
-    </div>
-  );
-}
-
 const cargandoPagina = {
   minHeight: "100vh",
   background: "#eef2f7",
@@ -543,8 +432,7 @@ const logoCarga = {
 
 const pagina = {
   minHeight: "100vh",
-  background:
-    "linear-gradient(135deg, #eef2f7 0%, #f8fafc 45%, #ecfdf5 100%)",
+  background: "linear-gradient(135deg, #eef2f7 0%, #f8fafc 45%, #ecfdf5 100%)",
   padding: "24px",
   fontFamily: "Arial, sans-serif",
 };
@@ -801,17 +689,6 @@ const botonGuardar = {
   marginTop: "10px",
 };
 
-const botonProbar = {
-  background: "#047857",
-  color: "#ffffff",
-  border: "none",
-  padding: "13px 22px",
-  borderRadius: "12px",
-  fontWeight: "bold",
-  cursor: "pointer",
-  marginTop: "10px",
-};
-
 const botonVolver = {
   background: "#ffffff",
   color: "#111827",
@@ -857,32 +734,6 @@ const badge = {
 const texto = {
   color: "#4b5563",
   lineHeight: 1.6,
-};
-
-const switchFila = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "20px",
-  padding: "17px",
-  border: "1px solid #e5e7eb",
-  borderRadius: "14px",
-  marginBottom: "12px",
-  color: "#111827",
-  background: "#f9fafb",
-};
-
-const switchDetalle = {
-  margin: "5px 0 0",
-  color: "#6b7280",
-  fontSize: "13px",
-};
-
-const check = {
-  width: "23px",
-  height: "23px",
-  cursor: "pointer",
-  flexShrink: 0,
 };
 
 const textoSuave = {
