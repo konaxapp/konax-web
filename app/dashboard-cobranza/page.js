@@ -45,7 +45,13 @@ export default function DashboardCobranza() {
   }
 
   function hoyISO() {
-    return new Date().toISOString().slice(0, 10);
+    const fecha = new Date();
+
+    const year = fecha.getFullYear();
+    const month = String(fecha.getMonth() + 1).padStart(2, "0");
+    const day = String(fecha.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
   }
 
   function inicioMesActual() {
@@ -59,25 +65,17 @@ export default function DashboardCobranza() {
   function finMesActual() {
     const fecha = new Date();
 
-    return new Date(
+    const ultimoDia = new Date(
       fecha.getFullYear(),
       fecha.getMonth() + 1,
       0
-    )
-      .toISOString()
-      .slice(0, 10);
-  }
+    );
 
-  function inicioMesSiguiente() {
-    const fecha = new Date();
-
-    return new Date(
-      fecha.getFullYear(),
-      fecha.getMonth() + 1,
-      1
-    )
-      .toISOString()
-      .slice(0, 10);
+    return `${ultimoDia.getFullYear()}-${String(
+      ultimoDia.getMonth() + 1
+    ).padStart(2, "0")}-${String(
+      ultimoDia.getDate()
+    ).padStart(2, "0")}`;
   }
 
   function formato(numero) {
@@ -91,10 +89,7 @@ export default function DashboardCobranza() {
   }
 
   function calcularDiasAtraso(fechaVencimiento, saldoActual) {
-    if (
-      !fechaVencimiento ||
-      Number(saldoActual || 0) <= 0
-    ) {
+    if (!fechaVencimiento || Number(saldoActual || 0) <= 0) {
       return 0;
     }
 
@@ -104,16 +99,13 @@ export default function DashboardCobranza() {
       `${fechaSimple(fechaVencimiento)}T00:00:00`
     );
 
-    const diferencia =
-      hoy.getTime() - vencimiento.getTime();
+    const diferencia = hoy.getTime() - vencimiento.getTime();
 
     if (diferencia <= 0) {
       return 0;
     }
 
-    return Math.floor(
-      diferencia / (1000 * 60 * 60 * 24)
-    );
+    return Math.floor(diferencia / (1000 * 60 * 60 * 24));
   }
 
   function estadoCuenta(cuenta, cobranza) {
@@ -127,9 +119,7 @@ export default function DashboardCobranza() {
       cobranza?.estado_cobranza
     );
 
-    const estadoComercial = limpiarTexto(
-      cuenta?.estado
-    );
+    const estadoComercial = limpiarTexto(cuenta?.estado);
 
     if (
       estadoCobranza === "legal" ||
@@ -150,11 +140,7 @@ export default function DashboardCobranza() {
       saldo
     );
 
-    if (dias <= 0) {
-      return "Al Día";
-    }
-
-    return "Mora";
+    return dias > 0 ? "Mora" : "Al Día";
   }
 
   function riesgoCartera(dias, saldo, estado) {
@@ -247,8 +233,7 @@ export default function DashboardCobranza() {
 
     const porCuentaId =
       pago.informacion_comercial_id &&
-      String(pago.informacion_comercial_id) ===
-        String(cuenta.id);
+      String(pago.informacion_comercial_id) === String(cuenta.id);
 
     const porNumeroCuenta =
       pago.numero_cuenta &&
@@ -257,8 +242,7 @@ export default function DashboardCobranza() {
 
     const porClienteId =
       pago.cliente_id &&
-      String(pago.cliente_id) ===
-        String(cuenta.cliente_id);
+      String(pago.cliente_id) === String(cuenta.cliente_id);
 
     const cedulaPago = String(
       pago.cliente_cedula ||
@@ -279,11 +263,7 @@ export default function DashboardCobranza() {
     );
   }
 
-  function sumarPagos(
-    pagosCuenta,
-    desde = "",
-    hasta = ""
-  ) {
+  function sumarPagos(pagosCuenta, desde = "", hasta = "") {
     return pagosCuenta
       .filter((pago) => {
         const fecha = fechaPago(pago);
@@ -295,8 +275,7 @@ export default function DashboardCobranza() {
         return true;
       })
       .reduce(
-        (sum, pago) =>
-          sum + Number(pago.monto || 0),
+        (sum, pago) => sum + Number(pago.monto || 0),
         0
       );
   }
@@ -341,52 +320,16 @@ export default function DashboardCobranza() {
         .eq("empresa_id", empresaId),
     ]);
 
-    if (cuentasRes.error) {
-      alert(
-        "Error cargando cuentas: " +
-          cuentasRes.error.message
-      );
+    const errores = [
+      cuentasRes.error,
+      clientesRes.error,
+      cobranzasRes.error,
+      pagosRes.error,
+      gestionesRes.error,
+    ].filter(Boolean);
 
-      setCargando(false);
-      return;
-    }
-
-    if (clientesRes.error) {
-      alert(
-        "Error cargando clientes: " +
-          clientesRes.error.message
-      );
-
-      setCargando(false);
-      return;
-    }
-
-    if (cobranzasRes.error) {
-      alert(
-        "Error cargando cobranza: " +
-          cobranzasRes.error.message
-      );
-
-      setCargando(false);
-      return;
-    }
-
-    if (pagosRes.error) {
-      alert(
-        "Error cargando pagos: " +
-          pagosRes.error.message
-      );
-
-      setCargando(false);
-      return;
-    }
-
-    if (gestionesRes.error) {
-      alert(
-        "Error cargando gestiones: " +
-          gestionesRes.error.message
-      );
-
+    if (errores.length > 0) {
+      alert("Error cargando Dashboard: " + errores[0].message);
       setCargando(false);
       return;
     }
@@ -408,50 +351,34 @@ export default function DashboardCobranza() {
 
   const inicioMes = inicioMesActual();
   const finMes = finMesActual();
-  const inicioSiguiente = inicioMesSiguiente();
   const hoy = hoyISO();
 
   const cartera = useMemo(() => {
     return cuentas.map((cuenta) => {
       const cliente = clientes.find(
-        (c) =>
-          String(c.id) ===
-          String(cuenta.cliente_id)
+        (c) => String(c.id) === String(cuenta.cliente_id)
       );
 
       const cobranza = cobranzas.find(
         (c) =>
-          String(c.informacion_comercial_id) ===
-          String(cuenta.id)
+          String(c.informacion_comercial_id) === String(cuenta.id)
       );
 
       const pagosCuenta = pagos.filter(
         (pago) =>
           pagoEsValido(pago) &&
-          pagoPerteneceCuenta(
-            pago,
-            cuenta,
-            cliente
-          )
+          pagoPerteneceCuenta(pago, cuenta, cliente)
       );
 
-      const montoOriginal = Number(
-        cuenta.monto_total || 0
-      );
-
-      const saldoPendiente = Number(
-        cuenta.saldo_actual || 0
-      );
+      const montoOriginal = Number(cuenta.monto_total || 0);
+      const saldoPendiente = Number(cuenta.saldo_actual || 0);
 
       const dias = calcularDiasAtraso(
         cuenta.fecha_vencimiento,
         saldoPendiente
       );
 
-      const estado = estadoCuenta(
-        cuenta,
-        cobranza
-      );
+      const estado = estadoCuenta(cuenta, cobranza);
 
       const riesgo = riesgoCartera(
         dias,
@@ -470,42 +397,36 @@ export default function DashboardCobranza() {
         cuenta?.vendedor ||
         "Sin asignar";
 
-      const cobradoPeriodo = sumarPagos(
-        pagosCuenta,
-        filtroDesde,
-        filtroHasta
-      );
-
-      const cobradoMes = sumarPagos(
-        pagosCuenta,
-        inicioMes,
-        finMes
-      );
-
-      const cobradoHoy = sumarPagos(
-        pagosCuenta,
-        hoy,
-        hoy
-      );
-
       return {
         cuenta,
         cliente,
         cobranza,
         pagosCuenta,
-
         montoOriginal,
         saldoPendiente,
-
         dias,
         estado,
         riesgo,
         semaforo,
         gestor,
 
-        cobradoPeriodo,
-        cobradoMes,
-        cobradoHoy,
+        cobradoPeriodo: sumarPagos(
+          pagosCuenta,
+          filtroDesde,
+          filtroHasta
+        ),
+
+        cobradoMes: sumarPagos(
+          pagosCuenta,
+          inicioMes,
+          finMes
+        ),
+
+        cobradoHoy: sumarPagos(
+          pagosCuenta,
+          hoy,
+          hoy
+        ),
       };
     });
   }, [
@@ -520,140 +441,76 @@ export default function DashboardCobranza() {
   const gestores = [
     "Todos",
     ...new Set(
-      cartera
-        .map((item) => item.gestor)
-        .filter(Boolean)
+      cartera.map((item) => item.gestor).filter(Boolean)
     ),
   ];
-
-  /*
-    =====================================================
-    UNIVERSO SEGÚN GESTOR
-    =====================================================
-  */
 
   const carteraPorGestor =
     filtroGestor === "Todos"
       ? cartera
       : cartera.filter(
-          (item) =>
-            item.gestor === filtroGestor
+          (item) => item.gestor === filtroGestor
         );
 
-  const carteraActivaPorGestor =
-    carteraPorGestor.filter(
-      (item) => item.saldoPendiente > 0
-    );
+  const carteraActivaPorGestor = carteraPorGestor.filter(
+    (item) => item.saldoPendiente > 0
+  );
 
-  /*
-    =====================================================
-    RESUMEN EJECUTIVO
-    =====================================================
+  const carteraOriginal = carteraPorGestor.reduce(
+    (sum, item) => sum + item.montoOriginal,
+    0
+  );
 
-    Cartera Original:
-    TODAS las cuentas, incluso canceladas.
-
-    Saldo Pendiente:
-    saldo actual real.
-
-    Total Recuperado:
-    Cartera Original - Saldo Pendiente.
-
-    SIEMPRE DEBE CUMPLIRSE:
-
-    Cartera Original
-    -
-    Total Recuperado
-    =
-    Saldo Pendiente
-  */
-
-  const carteraOriginal =
-    carteraPorGestor.reduce(
-      (sum, item) =>
-        sum + item.montoOriginal,
-      0
-    );
-
-  const saldoPendiente =
-    carteraPorGestor.reduce(
-      (sum, item) =>
-        sum + item.saldoPendiente,
-      0
-    );
+  const saldoPendiente = carteraPorGestor.reduce(
+    (sum, item) => sum + item.saldoPendiente,
+    0
+  );
 
   const totalRecuperado = Math.max(
     carteraOriginal - saldoPendiente,
     0
   );
 
-  /*
-    =====================================================
-    CARTERA ACTUAL
-    =====================================================
-  */
+  const carteraAlDia = carteraActivaPorGestor
+    .filter((item) => item.dias <= 0)
+    .reduce(
+      (sum, item) => sum + item.saldoPendiente,
+      0
+    );
 
-  const carteraAlDia =
-    carteraActivaPorGestor
-      .filter(
-        (item) =>
-          item.semaforo === "Al día"
-      )
-      .reduce(
-        (sum, item) =>
-          sum + item.saldoPendiente,
-        0
-      );
-
-  const carteraMora =
-    carteraActivaPorGestor
-      .filter((item) => item.dias > 0)
-      .reduce(
-        (sum, item) =>
-          sum + item.saldoPendiente,
-        0
-      );
+  const carteraMora = carteraActivaPorGestor
+    .filter((item) => item.dias > 0)
+    .reduce(
+      (sum, item) => sum + item.saldoPendiente,
+      0
+    );
 
   const porcentajeMora =
     saldoPendiente > 0
       ? (carteraMora / saldoPendiente) * 100
       : 0;
 
-  /*
-    =====================================================
-    COBROS
-    =====================================================
-  */
+  const cobradoHoy = carteraPorGestor.reduce(
+    (sum, item) => sum + item.cobradoHoy,
+    0
+  );
 
-  const cobradoHoy =
-    carteraPorGestor.reduce(
-      (sum, item) =>
-        sum + item.cobradoHoy,
-      0
-    );
+  const cobradoMes = carteraPorGestor.reduce(
+    (sum, item) => sum + item.cobradoMes,
+    0
+  );
 
-  const cobradoMes =
-    carteraPorGestor.reduce(
-      (sum, item) =>
-        sum + item.cobradoMes,
-      0
-    );
-
-  const cobradoPeriodo =
-    carteraPorGestor.reduce(
-      (sum, item) =>
-        sum + item.cobradoPeriodo,
-      0
-    );
+  const cobradoPeriodo = carteraPorGestor.reduce(
+    (sum, item) => sum + item.cobradoPeriodo,
+    0
+  );
 
   const saldoInicioPeriodo =
     saldoPendiente + cobradoPeriodo;
 
   const recuperacionPeriodo =
     saldoInicioPeriodo > 0
-      ? (cobradoPeriodo /
-          saldoInicioPeriodo) *
-        100
+      ? (cobradoPeriodo / saldoInicioPeriodo) * 100
       : 0;
 
   /*
@@ -662,37 +519,31 @@ export default function DashboardCobranza() {
     =====================================================
   */
 
-  const vencimientosMes =
-    carteraPorGestor.filter((item) => {
-      const vencimiento = fechaSimple(
-        item.cuenta?.fecha_vencimiento
-      );
-
-      return (
-        vencimiento >= inicioMes &&
-        vencimiento <= finMes
-      );
-    });
-
-  const montoVencimientosMes =
-    vencimientosMes.reduce(
-      (sum, item) =>
-        sum +
-        item.saldoPendiente +
-        item.cobradoMes,
-      0
+  const vencimientosMes = carteraPorGestor.filter((item) => {
+    const vencimiento = fechaSimple(
+      item.cuenta?.fecha_vencimiento
     );
 
-  const cobradoVencimientosMes =
-    vencimientosMes.reduce(
-      (sum, item) =>
-        sum + item.cobradoMes,
-      0
+    return (
+      vencimiento &&
+      vencimiento >= inicioMes &&
+      vencimiento <= finMes
     );
+  });
+
+  const montoVencimientosMes = vencimientosMes.reduce(
+    (sum, item) =>
+      sum + item.saldoPendiente + item.cobradoMes,
+    0
+  );
+
+  const cobradoVencimientosMes = vencimientosMes.reduce(
+    (sum, item) => sum + item.cobradoMes,
+    0
+  );
 
   const pendienteMes = Math.max(
-    montoVencimientosMes -
-      cobradoVencimientosMes,
+    montoVencimientosMes - cobradoVencimientosMes,
     0
   );
 
@@ -702,65 +553,63 @@ export default function DashboardCobranza() {
     =====================================================
   */
 
-  const moraAnterior =
-    carteraPorGestor.filter((item) => {
+  const moraAnterior = carteraPorGestor.filter((item) => {
+    const vencimiento = fechaSimple(
+      item.cuenta?.fecha_vencimiento
+    );
+
+    return vencimiento && vencimiento < inicioMes;
+  });
+
+  const moraAnteriorInicio = moraAnterior.reduce(
+    (sum, item) =>
+      sum + item.saldoPendiente + item.cobradoMes,
+    0
+  );
+
+  const moraAnteriorRecuperada = moraAnterior.reduce(
+    (sum, item) => sum + item.cobradoMes,
+    0
+  );
+
+  const moraAnteriorPendiente = moraAnterior.reduce(
+    (sum, item) => sum + item.saldoPendiente,
+    0
+  );
+
+  /*
+    =====================================================
+    SALDO VENCIDO PENDIENTE
+    =====================================================
+
+    Incluye únicamente cuentas que:
+
+    1. Mantienen saldo pendiente.
+    2. Ya alcanzaron su fecha de vencimiento.
+    3. No incluye cuentas con vencimiento futuro.
+
+    IMPORTANTE:
+
+    Una cuenta que vence HOY ya debe considerarse vencida
+    si todavía mantiene saldo pendiente.
+  */
+
+  const saldoVencidoPendiente = carteraPorGestor
+    .filter((item) => {
       const vencimiento = fechaSimple(
         item.cuenta?.fecha_vencimiento
       );
 
       return (
+        item.saldoPendiente > 0 &&
         vencimiento &&
-        vencimiento < inicioMes
+        vencimiento <= hoy
       );
-    });
-
-  const moraAnteriorInicio =
-    moraAnterior.reduce(
-      (sum, item) =>
-        sum +
-        item.saldoPendiente +
-        item.cobradoMes,
+    })
+    .reduce(
+      (sum, item) => sum + item.saldoPendiente,
       0
     );
-
-  const moraAnteriorRecuperada =
-    moraAnterior.reduce(
-      (sum, item) =>
-        sum + item.cobradoMes,
-      0
-    );
-
-  const moraAnteriorPendiente =
-    moraAnterior.reduce(
-      (sum, item) =>
-        sum + item.saldoPendiente,
-      0
-    );
-
-  /*
-    =====================================================
-    CARTERA TRASLADADA
-    =====================================================
-  */
-
-  const carteraTrasladada =
-    carteraPorGestor
-      .filter((item) => {
-        const vencimiento = fechaSimple(
-          item.cuenta?.fecha_vencimiento
-        );
-
-        return (
-          item.saldoPendiente > 0 &&
-          vencimiento &&
-          vencimiento < inicioSiguiente
-        );
-      })
-      .reduce(
-        (sum, item) =>
-          sum + item.saldoPendiente,
-        0
-      );
 
   /*
     =====================================================
@@ -768,222 +617,155 @@ export default function DashboardCobranza() {
     =====================================================
   */
 
-  const gestionesPeriodo =
-    gestiones.filter((gestion) => {
-      const fecha = fechaSimple(
-        gestion.fecha_gestion ||
-          gestion.created_at
+  const gestionesPeriodo = gestiones.filter((gestion) => {
+    const fecha = fechaSimple(
+      gestion.fecha_gestion || gestion.created_at
+    );
+
+    if (!fecha) return false;
+
+    if (filtroDesde && fecha < filtroDesde) {
+      return false;
+    }
+
+    if (filtroHasta && fecha > filtroHasta) {
+      return false;
+    }
+
+    if (filtroGestor !== "Todos") {
+      const usuario = limpiarTexto(gestion.usuario);
+
+      return (
+        usuario === limpiarTexto(filtroGestor) ||
+        usuario.startsWith(
+          limpiarTexto(filtroGestor) + " ("
+        )
       );
+    }
 
-      if (!fecha) return false;
-
-      if (
-        filtroDesde &&
-        fecha < filtroDesde
-      ) {
-        return false;
-      }
-
-      if (
-        filtroHasta &&
-        fecha > filtroHasta
-      ) {
-        return false;
-      }
-
-      if (filtroGestor !== "Todos") {
-        const usuario = limpiarTexto(
-          gestion.usuario
-        );
-
-        return (
-          usuario ===
-            limpiarTexto(filtroGestor) ||
-          usuario.startsWith(
-            limpiarTexto(filtroGestor) +
-              " ("
-          )
-        );
-      }
-
-      return true;
-    });
+    return true;
+  });
 
   function promesaTienePago(promesa) {
-    const cuentaRelacionada =
-      cartera.find(
-        (item) =>
-          String(item.cuenta?.id) ===
-          String(
-            promesa.informacion_comercial_id
-          )
-      );
+    const cuentaRelacionada = cartera.find(
+      (item) =>
+        String(item.cuenta?.id) ===
+        String(promesa.informacion_comercial_id)
+    );
 
     if (!cuentaRelacionada) {
       return false;
     }
 
     const fechaRegistro = fechaSimple(
-      promesa.fecha_gestion ||
-        promesa.created_at
+      promesa.fecha_gestion || promesa.created_at
     );
 
     const fechaPromesa = fechaSimple(
       promesa.proxima_gestion
     );
 
-    return cuentaRelacionada.pagosCuenta.some(
-      (pago) => {
-        const fecha = fechaPago(pago);
+    return cuentaRelacionada.pagosCuenta.some((pago) => {
+      const fecha = fechaPago(pago);
 
-        if (!fecha) return false;
+      if (!fecha) return false;
 
-        if (
-          fechaRegistro &&
-          fecha < fechaRegistro
-        ) {
-          return false;
-        }
-
-        if (
-          fechaPromesa &&
-          fecha > fechaPromesa
-        ) {
-          return false;
-        }
-
-        return true;
+      if (fechaRegistro && fecha < fechaRegistro) {
+        return false;
       }
-    );
+
+      if (fechaPromesa && fecha > fechaPromesa) {
+        return false;
+      }
+
+      return true;
+    });
   }
 
-  const promesasPeriodo =
-    gestionesPeriodo.filter((gestion) => {
-      const tipo = limpiarTexto(
-        gestion.tipo_gestion
-      );
+  const promesasPeriodo = gestionesPeriodo.filter((gestion) => {
+    const tipo = limpiarTexto(gestion.tipo_gestion);
 
-      const resultado = limpiarTexto(
-        gestion.resultado_gestion
-      );
+    const resultado = limpiarTexto(
+      gestion.resultado_gestion
+    );
 
-      return (
-        tipo === "promesa de pago" ||
-        resultado ===
-          "promesa registrada" ||
-        resultado ===
-          "promesa de pago"
-      );
-    });
+    return (
+      tipo === "promesa de pago" ||
+      resultado === "promesa registrada" ||
+      resultado === "promesa de pago"
+    );
+  });
 
-  const promesasCumplidas =
-    promesasPeriodo.filter((promesa) =>
-      promesaTienePago(promesa)
-    ).length;
+  const promesasCumplidas = promesasPeriodo.filter(
+    (promesa) => promesaTienePago(promesa)
+  ).length;
 
-  const promesasActivas =
-    promesasPeriodo.filter((promesa) => {
-      const fecha = fechaSimple(
-        promesa.proxima_gestion
-      );
+  const promesasActivas = promesasPeriodo.filter((promesa) => {
+    const fecha = fechaSimple(promesa.proxima_gestion);
 
-      return (
-        fecha &&
-        fecha >= hoy &&
-        !promesaTienePago(promesa)
-      );
-    }).length;
+    return (
+      fecha &&
+      fecha >= hoy &&
+      !promesaTienePago(promesa)
+    );
+  }).length;
 
-  const promesasIncumplidas =
-    promesasPeriodo.filter((promesa) => {
-      const fecha = fechaSimple(
-        promesa.proxima_gestion
-      );
+  const promesasIncumplidas = promesasPeriodo.filter(
+    (promesa) => {
+      const fecha = fechaSimple(promesa.proxima_gestion);
 
       return (
         fecha &&
         fecha < hoy &&
         !promesaTienePago(promesa)
       );
-    }).length;
-
-  /*
-    =====================================================
-    SEMÁFORO
-    =====================================================
-  */
+    }
+  ).length;
 
   const semaforo = [
     {
       rango: "Al día",
       icono: "🟢",
-      items:
-        carteraActivaPorGestor.filter(
-          (item) =>
-            item.semaforo === "Al día"
-        ),
+      items: carteraActivaPorGestor.filter(
+        (item) => item.semaforo === "Al día"
+      ),
     },
-
     {
       rango: "1-30 días",
       icono: "🟡",
-      items:
-        carteraActivaPorGestor.filter(
-          (item) =>
-            item.semaforo ===
-            "1-30 días"
-        ),
+      items: carteraActivaPorGestor.filter(
+        (item) => item.semaforo === "1-30 días"
+      ),
     },
-
     {
       rango: "31-60 días",
       icono: "🟠",
-      items:
-        carteraActivaPorGestor.filter(
-          (item) =>
-            item.semaforo ===
-            "31-60 días"
-        ),
+      items: carteraActivaPorGestor.filter(
+        (item) => item.semaforo === "31-60 días"
+      ),
     },
-
     {
       rango: "61-90 días",
       icono: "🟧",
-      items:
-        carteraActivaPorGestor.filter(
-          (item) =>
-            item.semaforo ===
-            "61-90 días"
-        ),
+      items: carteraActivaPorGestor.filter(
+        (item) => item.semaforo === "61-90 días"
+      ),
     },
-
     {
       rango: "Más de 90 días",
       icono: "🔴",
-      items:
-        carteraActivaPorGestor.filter(
-          (item) =>
-            item.semaforo ===
-            "Más de 90 días"
-        ),
+      items: carteraActivaPorGestor.filter(
+        (item) => item.semaforo === "Más de 90 días"
+      ),
     },
   ].map((rango) => ({
     ...rango,
-
     clientes: rango.items.length,
-
     monto: rango.items.reduce(
-      (sum, item) =>
-        sum + item.saldoPendiente,
+      (sum, item) => sum + item.saldoPendiente,
       0
     ),
   }));
-
-  /*
-    =====================================================
-    RIESGO
-    =====================================================
-  */
 
   const riesgo = [
     "Al día",
@@ -992,20 +774,15 @@ export default function DashboardCobranza() {
     "Riesgo alto",
     "Legal",
   ].map((nivel) => {
-    const items =
-      carteraActivaPorGestor.filter(
-        (item) =>
-          item.riesgo === nivel
-      );
+    const items = carteraActivaPorGestor.filter(
+      (item) => item.riesgo === nivel
+    );
 
     return {
       riesgo: nivel,
-
       clientes: items.length,
-
       monto: items.reduce(
-        (sum, item) =>
-          sum + item.saldoPendiente,
+        (sum, item) => sum + item.saldoPendiente,
         0
       ),
     };
@@ -1018,151 +795,97 @@ export default function DashboardCobranza() {
   */
 
   const rankingGestores = gestores
-    .filter(
-      (gestor) =>
-        gestor !== "Todos"
-    )
+    .filter((gestor) => gestor !== "Todos")
     .map((gestor) => {
-      const cuentasGestor =
-        cartera.filter(
-          (item) =>
-            item.gestor === gestor
-        );
+      const cuentasGestor = cartera.filter(
+        (item) => item.gestor === gestor
+      );
 
-      const cuentasActivas =
-        cuentasGestor.filter(
-          (item) =>
-            item.saldoPendiente > 0
-        );
+      const cuentasActivas = cuentasGestor.filter(
+        (item) => item.saldoPendiente > 0
+      );
 
-      const cobrado =
-        cuentasGestor.reduce(
-          (sum, item) =>
-            sum +
-            item.cobradoPeriodo,
-          0
-        );
+      const cobrado = cuentasGestor.reduce(
+        (sum, item) => sum + item.cobradoPeriodo,
+        0
+      );
 
-      const saldo =
-        cuentasActivas.reduce(
-          (sum, item) =>
-            sum +
-            item.saldoPendiente,
-          0
-        );
+      const saldo = cuentasActivas.reduce(
+        (sum, item) => sum + item.saldoPendiente,
+        0
+      );
 
-      const saldoInicio =
-        saldo + cobrado;
+      const saldoInicio = saldo + cobrado;
 
-      const gestionesGestor =
-        gestionesPeriodo.filter(
-          (gestion) => {
-            const usuario =
-              limpiarTexto(
-                gestion.usuario
-              );
+      const gestionesGestor = gestionesPeriodo.filter(
+        (gestion) => {
+          const usuario = limpiarTexto(gestion.usuario);
 
-            return (
-              usuario ===
-                limpiarTexto(gestor) ||
-              usuario.startsWith(
-                limpiarTexto(gestor) +
-                  " ("
-              )
-            );
-          }
-        );
+          return (
+            usuario === limpiarTexto(gestor) ||
+            usuario.startsWith(
+              limpiarTexto(gestor) + " ("
+            )
+          );
+        }
+      );
 
-      const promesasGestor =
-        gestionesGestor.filter(
-          (gestion) => {
-            const tipo =
-              limpiarTexto(
-                gestion.tipo_gestion
-              );
+      const promesasGestor = gestionesGestor.filter(
+        (gestion) => {
+          const tipo = limpiarTexto(
+            gestion.tipo_gestion
+          );
 
-            const resultado =
-              limpiarTexto(
-                gestion.resultado_gestion
-              );
+          const resultado = limpiarTexto(
+            gestion.resultado_gestion
+          );
 
-            return (
-              tipo ===
-                "promesa de pago" ||
-              resultado ===
-                "promesa registrada" ||
-              resultado ===
-                "promesa de pago"
-            );
-          }
-        );
+          return (
+            tipo === "promesa de pago" ||
+            resultado === "promesa registrada" ||
+            resultado === "promesa de pago"
+          );
+        }
+      );
 
       const promesasCumplidasGestor =
         promesasGestor.filter(
-          (promesa) =>
-            promesaTienePago(promesa)
+          (promesa) => promesaTienePago(promesa)
         ).length;
 
       return {
         gestor,
+        clientesAsignados: cuentasActivas.length,
 
-        clientesAsignados:
-          cuentasActivas.length,
+        clientesGestionados: new Set(
+          gestionesGestor
+            .map((gestion) => gestion.cliente_id)
+            .filter(Boolean)
+        ).size,
 
-        clientesGestionados:
-          new Set(
-            gestionesGestor
-              .map(
-                (gestion) =>
-                  gestion.cliente_id
-              )
-              .filter(Boolean)
-          ).size,
-
-        gestiones:
-          gestionesGestor.length,
-
-        promesas:
-          promesasGestor.length,
-
-        promesasCumplidas:
-          promesasCumplidasGestor,
-
+        gestiones: gestionesGestor.length,
+        promesas: promesasGestor.length,
+        promesasCumplidas: promesasCumplidasGestor,
         cobrado,
 
         recuperacion:
           saldoInicio > 0
-            ? (cobrado /
-                saldoInicio) *
-              100
+            ? (cobrado / saldoInicio) * 100
             : 0,
       };
     });
 
-  /*
-    =====================================================
-    TOP CLIENTES
-    =====================================================
-  */
-
-  const mayorRiesgo = [
-    ...carteraActivaPorGestor,
-  ]
+  const mayorRiesgo = [...carteraActivaPorGestor]
     .sort(
       (a, b) =>
         b.dias - a.dias ||
-        b.saldoPendiente -
-          a.saldoPendiente
+        b.saldoPendiente - a.saldoPendiente
     )
     .slice(0, 10);
 
-  const mayorSaldo = [
-    ...carteraActivaPorGestor,
-  ]
+  const mayorSaldo = [...carteraActivaPorGestor]
     .sort(
-      (a, b) =>
-        b.saldoPendiente -
-        a.saldoPendiente
+      (a, b) => b.saldoPendiente - a.saldoPendiente
     )
     .slice(0, 10);
 
@@ -1170,13 +893,11 @@ export default function DashboardCobranza() {
     return (
       <div style={pagina}>
         <div style={cargandoBox}>
-          <strong>
-            Cargando Dashboard Cobranza...
-          </strong>
+          <strong>Cargando Dashboard Cobranza...</strong>
 
           <p>
-            Calculando cartera, recuperación,
-            mora, promesas y gestores.
+            Calculando cartera, recuperación, mora,
+            promesas y gestores.
           </p>
         </div>
       </div>
@@ -1200,9 +921,8 @@ export default function DashboardCobranza() {
               </h1>
 
               <p style={subtitulo}>
-                Administración de cartera,
-                recuperación, riesgo, promesas
-                y gestores.
+                Administración de cartera, recuperación,
+                riesgo, promesas y gestores.
               </p>
             </div>
           </div>
@@ -1237,9 +957,8 @@ export default function DashboardCobranza() {
           </h2>
 
           <p style={nota}>
-            Las fechas afectan cobros,
-            gestiones, promesas y efectividad
-            de gestores. La cartera representa
+            Las fechas afectan cobros, gestiones, promesas
+            y efectividad de gestores. La cartera representa
             el estado actual.
           </p>
 
@@ -1249,9 +968,7 @@ export default function DashboardCobranza() {
                 type="date"
                 value={filtroDesde}
                 onChange={(e) =>
-                  setFiltroDesde(
-                    e.target.value
-                  )
+                  setFiltroDesde(e.target.value)
                 }
                 style={inputStyle}
               />
@@ -1262,9 +979,7 @@ export default function DashboardCobranza() {
                 type="date"
                 value={filtroHasta}
                 onChange={(e) =>
-                  setFiltroHasta(
-                    e.target.value
-                  )
+                  setFiltroHasta(e.target.value)
                 }
                 style={inputStyle}
               />
@@ -1274,19 +989,15 @@ export default function DashboardCobranza() {
               <select
                 value={filtroGestor}
                 onChange={(e) =>
-                  setFiltroGestor(
-                    e.target.value
-                  )
+                  setFiltroGestor(e.target.value)
                 }
                 style={inputStyle}
               >
-                {gestores.map(
-                  (gestor) => (
-                    <option key={gestor}>
-                      {gestor}
-                    </option>
-                  )
-                )}
+                {gestores.map((gestor) => (
+                  <option key={gestor}>
+                    {gestor}
+                  </option>
+                ))}
               </select>
             </Campo>
           </div>
@@ -1336,9 +1047,7 @@ export default function DashboardCobranza() {
 
           <KPI
             titulo="% Mora"
-            valor={`${porcentajeMora.toFixed(
-              1
-            )}%`}
+            valor={`${porcentajeMora.toFixed(1)}%`}
             icono="📈"
           />
 
@@ -1350,9 +1059,7 @@ export default function DashboardCobranza() {
 
           <KPI
             titulo="% Recuperación Periodo"
-            valor={`${recuperacionPeriodo.toFixed(
-              1
-            )}%`}
+            valor={`${recuperacionPeriodo.toFixed(1)}%`}
             icono="🎯"
           />
         </div>
@@ -1364,9 +1071,7 @@ export default function DashboardCobranza() {
         <div style={kpiGrid}>
           <KPI
             titulo="Vencimientos del Mes"
-            valor={formato(
-              montoVencimientosMes
-            )}
+            valor={formato(montoVencimientosMes)}
             icono="📅"
           />
 
@@ -1378,9 +1083,7 @@ export default function DashboardCobranza() {
 
           <KPI
             titulo="Cobrado de Vencimientos"
-            valor={formato(
-              cobradoVencimientosMes
-            )}
+            valor={formato(cobradoVencimientosMes)}
             icono="✅"
           />
 
@@ -1392,33 +1095,25 @@ export default function DashboardCobranza() {
 
           <KPI
             titulo="Mora Anterior"
-            valor={formato(
-              moraAnteriorInicio
-            )}
+            valor={formato(moraAnteriorInicio)}
             icono="📂"
           />
 
           <KPI
             titulo="Mora Recuperada"
-            valor={formato(
-              moraAnteriorRecuperada
-            )}
+            valor={formato(moraAnteriorRecuperada)}
             icono="♻️"
           />
 
           <KPI
             titulo="Mora Pendiente"
-            valor={formato(
-              moraAnteriorPendiente
-            )}
+            valor={formato(moraAnteriorPendiente)}
             icono="⚠️"
           />
 
           <KPI
-            titulo="Cartera Trasladada"
-            valor={formato(
-              carteraTrasladada
-            )}
+            titulo="Saldo Vencido Pendiente"
+            valor={formato(saldoVencidoPendiente)}
             icono="➡️"
           />
         </div>
@@ -1469,32 +1164,27 @@ export default function DashboardCobranza() {
               <thead>
                 <tr>
                   <th style={th}>Rango</th>
-                  <th style={th}>
-                    Clientes
-                  </th>
+                  <th style={th}>Clientes</th>
                   <th style={th}>Monto</th>
                 </tr>
               </thead>
 
               <tbody>
-                {semaforo.map(
-                  (item) => (
-                    <tr key={item.rango}>
-                      <td style={td}>
-                        {item.icono}{" "}
-                        {item.rango}
-                      </td>
+                {semaforo.map((item) => (
+                  <tr key={item.rango}>
+                    <td style={td}>
+                      {item.icono} {item.rango}
+                    </td>
 
-                      <td style={td}>
-                        {item.clientes}
-                      </td>
+                    <td style={td}>
+                      {item.clientes}
+                    </td>
 
-                      <td style={td}>
-                        {formato(item.monto)}
-                      </td>
-                    </tr>
-                  )
-                )}
+                    <td style={td}>
+                      {formato(item.monto)}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -1508,31 +1198,27 @@ export default function DashboardCobranza() {
               <thead>
                 <tr>
                   <th style={th}>Riesgo</th>
-                  <th style={th}>
-                    Clientes
-                  </th>
+                  <th style={th}>Clientes</th>
                   <th style={th}>Monto</th>
                 </tr>
               </thead>
 
               <tbody>
-                {riesgo.map(
-                  (item) => (
-                    <tr key={item.riesgo}>
-                      <td style={td}>
-                        {item.riesgo}
-                      </td>
+                {riesgo.map((item) => (
+                  <tr key={item.riesgo}>
+                    <td style={td}>
+                      {item.riesgo}
+                    </td>
 
-                      <td style={td}>
-                        {item.clientes}
-                      </td>
+                    <td style={td}>
+                      {item.clientes}
+                    </td>
 
-                      <td style={td}>
-                        {formato(item.monto)}
-                      </td>
-                    </tr>
-                  )
-                )}
+                    <td style={td}>
+                      {formato(item.monto)}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -1550,20 +1236,16 @@ export default function DashboardCobranza() {
             "Monto recuperado",
             "% recuperación",
           ]}
-          filas={rankingGestores.map(
-            (g) => [
-              g.gestor,
-              g.clientesAsignados,
-              g.clientesGestionados,
-              g.gestiones,
-              g.promesas,
-              g.promesasCumplidas,
-              formato(g.cobrado),
-              `${g.recuperacion.toFixed(
-                1
-              )}%`,
-            ]
-          )}
+          filas={rankingGestores.map((g) => [
+            g.gestor,
+            g.clientesAsignados,
+            g.clientesGestionados,
+            g.gestiones,
+            g.promesas,
+            g.promesasCumplidas,
+            formato(g.cobrado),
+            `${g.recuperacion.toFixed(1)}%`,
+          ])}
         />
 
         <Tabla
@@ -1576,25 +1258,14 @@ export default function DashboardCobranza() {
             "Saldo",
             "Gestor",
           ]}
-          filas={mayorRiesgo.map(
-            (item) => [
-              item.cliente?.nombre ||
-                "Sin nombre",
-
-              item.cuenta?.numero_cuenta ||
-                "-",
-
-              item.dias,
-
-              item.riesgo,
-
-              formato(
-                item.saldoPendiente
-              ),
-
-              item.gestor,
-            ]
-          )}
+          filas={mayorRiesgo.map((item) => [
+            item.cliente?.nombre || "Sin nombre",
+            item.cuenta?.numero_cuenta || "-",
+            item.dias,
+            item.riesgo,
+            formato(item.saldoPendiente),
+            item.gestor,
+          ])}
         />
 
         <Tabla
@@ -1606,23 +1277,13 @@ export default function DashboardCobranza() {
             "Estado",
             "Gestor",
           ]}
-          filas={mayorSaldo.map(
-            (item) => [
-              item.cliente?.nombre ||
-                "Sin nombre",
-
-              item.cuenta?.numero_cuenta ||
-                "-",
-
-              formato(
-                item.saldoPendiente
-              ),
-
-              item.estado,
-
-              item.gestor,
-            ]
-          )}
+          filas={mayorSaldo.map((item) => [
+            item.cliente?.nombre || "Sin nombre",
+            item.cuenta?.numero_cuenta || "-",
+            formato(item.saldoPendiente),
+            item.estado,
+            item.gestor,
+          ])}
         />
       </div>
     </div>
@@ -1632,10 +1293,7 @@ export default function DashboardCobranza() {
 function Campo({ label, children }) {
   return (
     <div>
-      <label style={labelStyle}>
-        {label}
-      </label>
-
+      <label style={labelStyle}>{label}</label>
       {children}
     </div>
   );
@@ -1644,87 +1302,47 @@ function Campo({ label, children }) {
 function KPI({ titulo, valor, icono }) {
   return (
     <div style={cardIndicador}>
-      <div style={iconoBox}>
-        {icono}
-      </div>
-
-      <p style={cardTitulo}>
-        {titulo}
-      </p>
-
-      <h2 style={cardNumero}>
-        {valor}
-      </h2>
+      <div style={iconoBox}>{icono}</div>
+      <p style={cardTitulo}>{titulo}</p>
+      <h2 style={cardNumero}>{valor}</h2>
     </div>
   );
 }
 
-function Tabla({
-  titulo,
-  columnas,
-  filas,
-}) {
+function Tabla({ titulo, columnas, filas }) {
   return (
     <div style={card}>
-      <h2 style={tituloSeccion}>
-        {titulo}
-      </h2>
+      <h2 style={tituloSeccion}>{titulo}</h2>
 
-      <div
-        style={{
-          overflowX: "auto",
-        }}
-      >
+      <div style={{ overflowX: "auto" }}>
         <table style={tabla}>
           <thead>
             <tr>
-              {columnas.map(
-                (columna, index) => (
-                  <th
-                    key={index}
-                    style={th}
-                  >
-                    {columna}
-                  </th>
-                )
-              )}
+              {columnas.map((columna, index) => (
+                <th key={index} style={th}>
+                  {columna}
+                </th>
+              ))}
             </tr>
           </thead>
 
           <tbody>
             {filas.length === 0 ? (
               <tr>
-                <td
-                  style={td}
-                  colSpan={
-                    columnas.length
-                  }
-                >
+                <td style={td} colSpan={columnas.length}>
                   No hay datos disponibles.
                 </td>
               </tr>
             ) : (
-              filas.map(
-                (fila, index) => (
-                  <tr key={index}>
-                    {fila.map(
-                      (
-                        celda,
-                        indiceCelda
-                      ) => (
-                        <td
-                          key={
-                            indiceCelda
-                          }
-                          style={td}
-                        >
-                          {celda}
-                        </td>
-                      )
-                    )}
-                  </tr>
-                )
-              )
+              filas.map((fila, index) => (
+                <tr key={index}>
+                  {fila.map((celda, indiceCelda) => (
+                    <td key={indiceCelda} style={td}>
+                      {celda}
+                    </td>
+                  ))}
+                </tr>
+              ))
             )}
           </tbody>
         </table>
@@ -1751,13 +1369,11 @@ const cargandoBox = {
   background: "#ffffff",
   padding: "25px",
   borderRadius: "16px",
-  boxShadow:
-    "0 3px 12px rgba(0,0,0,0.08)",
+  boxShadow: "0 3px 12px rgba(0,0,0,0.08)",
 };
 
 const encabezado = {
-  background:
-    "linear-gradient(135deg, #111827, #1e40af)",
+  background: "linear-gradient(135deg, #111827, #1e40af)",
   color: "#ffffff",
   padding: "24px",
   borderRadius: "20px",
@@ -1767,8 +1383,7 @@ const encabezado = {
   alignItems: "center",
   gap: "16px",
   flexWrap: "wrap",
-  boxShadow:
-    "0 8px 24px rgba(0,0,0,0.14)",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
 };
 
 const tituloBox = {
@@ -1847,8 +1462,7 @@ const card = {
   padding: "18px",
   borderRadius: "16px",
   marginBottom: "16px",
-  boxShadow:
-    "0 3px 12px rgba(0,0,0,0.06)",
+  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
 };
 
 const tituloSeccion = {
@@ -1870,8 +1484,7 @@ const nota = {
 
 const gridFiltros = {
   display: "grid",
-  gridTemplateColumns:
-    "repeat(auto-fit,minmax(210px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
   gap: "12px",
 };
 
@@ -1895,8 +1508,7 @@ const inputStyle = {
 
 const kpiGrid = {
   display: "grid",
-  gridTemplateColumns:
-    "repeat(auto-fit,minmax(210px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
   gap: "14px",
   marginBottom: "16px",
 };
@@ -1905,8 +1517,7 @@ const cardIndicador = {
   background: "#ffffff",
   padding: "18px",
   borderRadius: "16px",
-  boxShadow:
-    "0 3px 12px rgba(0,0,0,0.06)",
+  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
 };
 
 const iconoBox = {
@@ -1928,8 +1539,7 @@ const cardNumero = {
 
 const gridDos = {
   display: "grid",
-  gridTemplateColumns:
-    "repeat(auto-fit,minmax(360px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(360px,1fr))",
   gap: "16px",
 };
 
@@ -1948,6 +1558,5 @@ const th = {
 
 const td = {
   padding: "11px",
-  borderBottom:
-    "1px solid #e5e7eb",
+  borderBottom: "1px solid #e5e7eb",
 };
