@@ -17,44 +17,40 @@ export default function VistaCliente() {
   const [documentos, setDocumentos] = useState([]);
   const [recargos, setRecargos] = useState([]);
 
-  const [tipoGestion, setTipoGestion] =
-    useState("Llamada");
-
+  const [tipoGestion, setTipoGestion] = useState("Llamada");
   const [resultadoGestion, setResultadoGestion] =
     useState("Pendiente");
+  const [observacion, setObservacion] = useState("");
 
-  const [observacion, setObservacion] =
+  const [fechaPromesa, setFechaPromesa] = useState("");
+  const [montoPromesa, setMontoPromesa] = useState("");
+  const [observacionPromesa, setObservacionPromesa] =
     useState("");
-
-  const [fechaPromesa, setFechaPromesa] =
-    useState("");
-
-  const [montoPromesa, setMontoPromesa] =
-    useState("");
-
-  const [
-    observacionPromesa,
-    setObservacionPromesa,
-  ] = useState("");
 
   const [archivo, setArchivo] = useState(null);
+
   const [cargandoSesion, setCargandoSesion] =
     useState(true);
+  const [buscando, setBuscando] = useState(false);
+  const [guardandoGestion, setGuardandoGestion] =
+    useState(false);
+  const [guardandoPromesa, setGuardandoPromesa] =
+    useState(false);
+  const [subiendoDocumento, setSubiendoDocumento] =
+    useState(false);
 
   useEffect(() => {
     iniciarVistaCliente();
   }, []);
 
   async function iniciarVistaCliente() {
-    const sesionValida =
-      await validarSesionActual();
+    const sesionValida = await validarSesionActual();
 
     if (!sesionValida) return;
 
-    const busquedaGuardada =
-      localStorage.getItem(
-        "busquedaVistaCliente"
-      );
+    const busquedaGuardada = localStorage.getItem(
+      "busquedaVistaCliente"
+    );
 
     if (busquedaGuardada) {
       setBuscar(busquedaGuardada);
@@ -93,20 +89,123 @@ export default function VistaCliente() {
     window.location.replace("/login");
   }
 
-  function fechaLocalISO() {
-    const fecha = new Date();
+  /*
+    ============================================================
+    FECHA LOCAL DE PANAMÁ
+    ============================================================
 
-    const year = fecha.getFullYear();
+    Esta función devuelve la fecha real de Panamá en formato:
 
-    const month = String(
-      fecha.getMonth() + 1
-    ).padStart(2, "0");
+    YYYY-MM-DD
 
-    const day = String(
-      fecha.getDate()
-    ).padStart(2, "0");
+    Se utiliza para validar la fecha prometida.
+  */
+
+  function fechaPanamaISO() {
+    const partes = new Intl.DateTimeFormat(
+      "en-CA",
+      {
+        timeZone: "America/Panama",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }
+    ).formatToParts(new Date());
+
+    const year =
+      partes.find(
+        (parte) => parte.type === "year"
+      )?.value || "";
+
+    const month =
+      partes.find(
+        (parte) => parte.type === "month"
+      )?.value || "";
+
+    const day =
+      partes.find(
+        (parte) => parte.type === "day"
+      )?.value || "";
 
     return `${year}-${month}-${day}`;
+  }
+
+  /*
+    ============================================================
+    FORMATO DE FECHA
+    ============================================================
+
+    Si recibe solamente YYYY-MM-DD, respeta esa fecha.
+
+    Si recibe un timestamp completo, lo convierte a la zona
+    horaria de Panamá antes de mostrarlo.
+  */
+
+  function formatoFecha(fecha) {
+    if (!fecha) {
+      return "-";
+    }
+
+    const texto = String(fecha).trim();
+
+    const esFechaSimple =
+      /^\d{4}-\d{2}-\d{2}$/.test(texto);
+
+    if (esFechaSimple) {
+      const [year, month, day] =
+        texto.split("-");
+
+      return `${day}/${month}/${year}`;
+    }
+
+    const fechaObjeto = new Date(texto);
+
+    if (
+      Number.isNaN(
+        fechaObjeto.getTime()
+      )
+    ) {
+      return texto;
+    }
+
+    return new Intl.DateTimeFormat(
+      "es-PA",
+      {
+        timeZone: "America/Panama",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }
+    ).format(fechaObjeto);
+  }
+
+  function formatoFechaHora(fecha) {
+    if (!fecha) {
+      return "-";
+    }
+
+    const fechaObjeto = new Date(fecha);
+
+    if (
+      Number.isNaN(
+        fechaObjeto.getTime()
+      )
+    ) {
+      return formatoFecha(fecha);
+    }
+
+    return new Intl.DateTimeFormat(
+      "es-PA",
+      {
+        timeZone: "America/Panama",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      }
+    ).format(fechaObjeto);
   }
 
   async function validarSesionActual() {
@@ -132,9 +231,18 @@ export default function VistaCliente() {
       .eq("id", usuarioId)
       .maybeSingle();
 
-    if (errorUsuario || !usuario) {
+    if (errorUsuario) {
       cerrarSesionInvalida(
-        "Error verificando la sesión."
+        "Error verificando la sesión: " +
+          errorUsuario.message
+      );
+
+      return false;
+    }
+
+    if (!usuario) {
+      cerrarSesionInvalida(
+        "El usuario de la sesión ya no existe."
       );
 
       return false;
@@ -172,9 +280,18 @@ export default function VistaCliente() {
       .eq("id", empresaId)
       .maybeSingle();
 
-    if (errorEmpresa || !empresaData) {
+    if (errorEmpresa) {
       cerrarSesionInvalida(
-        "Error verificando la empresa."
+        "Error verificando la empresa: " +
+          errorEmpresa.message
+      );
+
+      return false;
+    }
+
+    if (!empresaData) {
+      cerrarSesionInvalida(
+        "La empresa de la sesión no existe."
       );
 
       return false;
@@ -248,7 +365,9 @@ export default function VistaCliente() {
   }
 
   function volverDashboard() {
-    window.location.assign("/dashboard");
+    window.location.assign(
+      "/dashboard"
+    );
   }
 
   function nombreEmpresa() {
@@ -257,41 +376,6 @@ export default function VistaCliente() {
       empresa?.nombre_empresa ||
       empresa?.razon_social ||
       "KONAX Gestión"
-    );
-  }
-
-  function subtituloEmpresa() {
-    return (
-      empresa?.subtitulo ||
-      empresa?.actividad ||
-      empresa?.categoria_negocio ||
-      empresa?.tipo_negocio ||
-      ""
-    );
-  }
-
-  function telefonoEmpresa() {
-    return (
-      empresa?.telefono ||
-      empresa?.telefono_empresa ||
-      ""
-    );
-  }
-
-  function correoEmpresa() {
-    return (
-      empresa?.correo ||
-      empresa?.email ||
-      empresa?.correo_empresa ||
-      ""
-    );
-  }
-
-  function direccionEmpresa() {
-    return (
-      empresa?.direccion ||
-      empresa?.direccion_empresa ||
-      ""
     );
   }
 
@@ -306,8 +390,12 @@ export default function VistaCliente() {
       "";
 
     const rol =
-      localStorage.getItem("usuarioRol") ||
-      localStorage.getItem("rolUsuario") ||
+      localStorage.getItem(
+        "usuarioRol"
+      ) ||
+      localStorage.getItem(
+        "rolUsuario"
+      ) ||
       "";
 
     if (nombre && rol) {
@@ -325,6 +413,25 @@ export default function VistaCliente() {
     return "Usuario";
   }
 
+  function limpiarTexto(texto) {
+    return String(texto || "")
+      .toLowerCase()
+      .trim();
+  }
+
+  function formatoDinero(valor) {
+    return (
+      "$" +
+      Number(valor || 0).toLocaleString(
+        "es-PA",
+        {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }
+      )
+    );
+  }
+
   function calcularDiasAtraso(
     fechaVencimiento,
     saldoActual
@@ -337,14 +444,15 @@ export default function VistaCliente() {
     }
 
     const hoy = new Date(
-      `${fechaLocalISO()}T00:00:00`
+      `${fechaPanamaISO()}T00:00:00`
     );
 
+    const textoVencimiento = String(
+      fechaVencimiento
+    ).slice(0, 10);
+
     const vencimiento = new Date(
-      `${String(fechaVencimiento).slice(
-        0,
-        10
-      )}T00:00:00`
+      `${textoVencimiento}T00:00:00`
     );
 
     const diferencia =
@@ -367,9 +475,35 @@ export default function VistaCliente() {
     }
 
     if (
-      Number(cuenta.saldo_actual || 0) <= 0
+      Number(
+        cuenta.saldo_actual || 0
+      ) <= 0
     ) {
       return "Cancelado";
+    }
+
+    const estadoCobranza =
+      limpiarTexto(
+        cobranza?.estado_cobranza
+      );
+
+    const estadoComercial =
+      limpiarTexto(
+        cuenta?.estado
+      );
+
+    if (
+      estadoCobranza === "legal" ||
+      estadoComercial === "legal"
+    ) {
+      return "Legal";
+    }
+
+    if (
+      estadoCobranza === "suspendido" ||
+      estadoComercial === "suspendido"
+    ) {
+      return "Suspendido";
     }
 
     if (diasAtraso > 0) {
@@ -387,46 +521,11 @@ export default function VistaCliente() {
     return "🔴";
   }
 
-  function formatoDinero(valor) {
-    return (
-      "$" +
-      Number(valor || 0).toLocaleString(
-        undefined,
-        {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        }
-      )
-    );
-  }
-
-  function formatoFecha(fecha) {
-    if (!fecha) {
-      return "-";
-    }
-
-    const texto = String(fecha).slice(
-      0,
-      10
-    );
-
-    const partes = texto.split("-");
-
-    if (partes.length === 3) {
-      return `${partes[2]}/${partes[1]}/${partes[0]}`;
-    }
-
-    return texto;
-  }
-
-  function limpiarTexto(texto) {
-    return String(texto || "")
-      .toLowerCase()
-      .trim();
-  }
-
   function pagoEsValido(pago) {
-    const tipo = limpiarTexto(pago?.tipo);
+    const tipo = limpiarTexto(
+      pago?.tipo
+    );
+
     const estado = limpiarTexto(
       pago?.estado
     );
@@ -475,6 +574,12 @@ export default function VistaCliente() {
       return;
     }
 
+    if (buscando) {
+      return;
+    }
+
+    setBuscando(true);
+
     let encontrados = [];
 
     const {
@@ -489,6 +594,8 @@ export default function VistaCliente() {
       );
 
     if (errorClientes) {
+      setBuscando(false);
+
       alert(
         "Error buscando cliente: " +
           errorClientes.message
@@ -500,7 +607,8 @@ export default function VistaCliente() {
     if (clientesData) {
       encontrados = clientesData.map(
         (clienteEncontrado) => ({
-          cliente: clienteEncontrado,
+          cliente:
+            clienteEncontrado,
           cuenta: null,
         })
       );
@@ -519,6 +627,8 @@ export default function VistaCliente() {
       );
 
     if (errorCuentas) {
+      setBuscando(false);
+
       alert(
         "Error buscando cuenta: " +
           errorCuentas.message
@@ -554,6 +664,8 @@ export default function VistaCliente() {
           .in("id", ids);
 
         if (errorClientesCuentas) {
+          setBuscando(false);
+
           alert(
             "Error buscando clientes de cuentas: " +
               errorClientesCuentas.message
@@ -577,6 +689,7 @@ export default function VistaCliente() {
               encontrados.push({
                 cliente:
                   clienteEncontrado,
+
                 cuenta:
                   cuentaEncontrada,
               });
@@ -595,7 +708,8 @@ export default function VistaCliente() {
 
       if (
         !unicos.some(
-          (x) => x.clave === clave
+          (registro) =>
+            registro.clave === clave
         )
       ) {
         unicos.push({
@@ -604,6 +718,8 @@ export default function VistaCliente() {
         });
       }
     });
+
+    setBuscando(false);
 
     if (unicos.length === 0) {
       setResultados([]);
@@ -657,8 +773,9 @@ export default function VistaCliente() {
       resultado.cliente;
 
     if (
-      String(clienteBase.empresa_id) !==
-      String(empresaId)
+      String(
+        clienteBase.empresa_id
+      ) !== String(empresaId)
     ) {
       alert(
         "Este cliente no pertenece a la empresa activa."
@@ -669,7 +786,9 @@ export default function VistaCliente() {
 
     setCliente(clienteBase);
     setResultados([]);
-    setBuscar(clienteBase.nombre || "");
+    setBuscar(
+      clienteBase.nombre || ""
+    );
 
     const {
       data: cuentasData,
@@ -702,6 +821,11 @@ export default function VistaCliente() {
 
     setCuentas(cuentasData || []);
     setCuenta(cuentaSeleccionada);
+
+    setFechaPromesa("");
+    setMontoPromesa("");
+    setObservacionPromesa("");
+    setObservacion("");
 
     if (cuentaSeleccionada) {
       await cargarDatosRelacionados(
@@ -754,7 +878,9 @@ export default function VistaCliente() {
       );
     }
 
-    setCobranza(cobranzaData || null);
+    setCobranza(
+      cobranzaData || null
+    );
 
     const {
       data: pagosData,
@@ -798,7 +924,9 @@ export default function VistaCliente() {
         const coincideNumeroCuenta =
           numeroCuenta &&
           cuentaPago ===
-            String(numeroCuenta).trim();
+            String(
+              numeroCuenta
+            ).trim();
 
         const cedulaPago = String(
           pago.cliente_cedula ||
@@ -810,22 +938,27 @@ export default function VistaCliente() {
         const coincideCedula =
           cedulaCliente &&
           cedulaPago ===
-            String(cedulaCliente).trim();
+            String(
+              cedulaCliente
+            ).trim();
 
         const coincideClienteId =
           pago.cliente_id &&
-          String(pago.cliente_id) ===
-            String(clienteId);
+          String(
+            pago.cliente_id
+          ) === String(clienteId);
 
         return (
           coincideCuentaId ||
           coincideNumeroCuenta ||
-          coincideClienteId ||
-          coincideCedula
+          coincideCedula ||
+          coincideClienteId
         );
       });
 
-      setPagos(pagosRelacionados);
+      setPagos(
+        pagosRelacionados
+      );
     }
 
     await cargarRecargosRelacionados(
@@ -842,7 +975,10 @@ export default function VistaCliente() {
       .from("bitacora_cliente")
       .select("*")
       .eq("empresa_id", empresaId)
-      .eq("cliente_id", clienteId)
+      .eq(
+        "cliente_id",
+        clienteId
+      )
       .eq(
         "informacion_comercial_id",
         cuentaId
@@ -873,7 +1009,9 @@ export default function VistaCliente() {
   ) {
     const empresaId = obtenerEmpresaId();
 
-    if (!empresaId) return;
+    if (!empresaId) {
+      return;
+    }
 
     const posiblesTablas = [
       "historial_recargos",
@@ -890,7 +1028,10 @@ export default function VistaCliente() {
       } = await supabase
         .from(tablaRecargos)
         .select("*")
-        .eq("empresa_id", empresaId)
+        .eq(
+          "empresa_id",
+          empresaId
+        )
         .order("created_at", {
           ascending: false,
         });
@@ -908,34 +1049,41 @@ export default function VistaCliente() {
             recargo.informacion_comercial_id
           ) === String(cuentaId);
 
-        const cuentaRecargo = String(
-          recargo.numero_cuenta ||
-            recargo.cuenta ||
-            recargo.codigo_cuenta ||
-            ""
-        ).trim();
+        const cuentaRecargo =
+          String(
+            recargo.numero_cuenta ||
+              recargo.cuenta ||
+              recargo.codigo_cuenta ||
+              ""
+          ).trim();
 
         const coincideNumeroCuenta =
           numeroCuenta &&
           cuentaRecargo ===
-            String(numeroCuenta).trim();
+            String(
+              numeroCuenta
+            ).trim();
 
-        const cedulaRecargo = String(
-          recargo.cliente_cedula ||
-            recargo.cedula ||
-            recargo.identificacion ||
-            ""
-        ).trim();
+        const cedulaRecargo =
+          String(
+            recargo.cliente_cedula ||
+              recargo.cedula ||
+              recargo.identificacion ||
+              ""
+          ).trim();
 
         const coincideCedula =
           cedulaCliente &&
           cedulaRecargo ===
-            String(cedulaCliente).trim();
+            String(
+              cedulaCliente
+            ).trim();
 
         const coincideClienteId =
           recargo.cliente_id &&
-          String(recargo.cliente_id) ===
-            String(clienteId);
+          String(
+            recargo.cliente_id
+          ) === String(clienteId);
 
         return (
           coincideCuentaId ||
@@ -955,13 +1103,17 @@ export default function VistaCliente() {
   async function cambiarCuenta(
     cuentaId
   ) {
-    const nuevaCuenta = cuentas.find(
-      (item) =>
-        String(item.id) ===
-        String(cuentaId)
-    );
+    const nuevaCuenta =
+      cuentas.find(
+        (item) =>
+          String(item.id) ===
+          String(cuentaId)
+      );
 
-    if (!nuevaCuenta || !cliente) {
+    if (
+      !nuevaCuenta ||
+      !cliente
+    ) {
       return;
     }
 
@@ -970,6 +1122,7 @@ export default function VistaCliente() {
     setFechaPromesa("");
     setMontoPromesa("");
     setObservacionPromesa("");
+    setObservacion("");
 
     await cargarDatosRelacionados(
       cliente.id,
@@ -979,8 +1132,17 @@ export default function VistaCliente() {
     );
   }
 
+  /*
+    ============================================================
+    GUARDAR GESTIÓN NORMAL
+    ============================================================
+
+    No utiliza columnas inexistentes en informacion_cobranza.
+  */
+
   async function guardarGestion() {
-    const empresaId = obtenerEmpresaId();
+    const empresaId =
+      obtenerEmpresaId();
 
     if (!empresaId) {
       cerrarSesionInvalida(
@@ -1006,6 +1168,12 @@ export default function VistaCliente() {
       return;
     }
 
+    if (guardandoGestion) {
+      return;
+    }
+
+    setGuardandoGestion(true);
+
     const usuarioActual =
       obtenerUsuarioActual();
 
@@ -1013,13 +1181,14 @@ export default function VistaCliente() {
       new Date().toISOString();
 
     const {
-      error,
+      error: errorGestion,
     } = await supabase
       .from("bitacora_cliente")
       .insert([
         {
           empresa_id: empresaId,
           cliente_id: cliente.id,
+
           informacion_comercial_id:
             cuenta.id,
 
@@ -1045,40 +1214,62 @@ export default function VistaCliente() {
         },
       ]);
 
-    if (error) {
+    if (errorGestion) {
+      setGuardandoGestion(false);
+
       alert(
         "Error guardando gestión: " +
-          error.message
+          errorGestion.message
       );
 
       return;
     }
 
     const {
-      error: errorCobranza,
+      data: cobranzaExistente,
+      error: errorBuscarCobranza,
     } = await supabase
       .from("informacion_cobranza")
-      .update({
-        ultimo_resultado_gestion:
-          resultadoGestion,
-
-        ultima_observacion:
-          observacion.trim(),
-
-        fecha_ultima_gestion:
-          fechaRegistro,
-      })
+      .select("id")
       .eq("empresa_id", empresaId)
       .eq(
         "informacion_comercial_id",
         cuenta.id
-      );
+      )
+      .maybeSingle();
 
-    if (errorCobranza) {
+    if (errorBuscarCobranza) {
       console.error(
-        "La gestión se guardó, pero no se actualizó el resumen de cobranza:",
-        errorCobranza
+        "La gestión se guardó, pero no se pudo consultar cobranza:",
+        errorBuscarCobranza
       );
+    } else if (
+      cobranzaExistente?.id
+    ) {
+      const {
+        error: errorActualizarCobranza,
+      } = await supabase
+        .from(
+          "informacion_cobranza"
+        )
+        .update({
+          observacion_cobro:
+            observacion.trim(),
+        })
+        .eq("empresa_id", empresaId)
+        .eq(
+          "id",
+          cobranzaExistente.id
+        );
+
+      if (
+        errorActualizarCobranza
+      ) {
+        console.error(
+          "La gestión se guardó, pero no se actualizó observacion_cobro:",
+          errorActualizarCobranza
+        );
+      }
     }
 
     setObservacion("");
@@ -1090,10 +1281,28 @@ export default function VistaCliente() {
       cliente.cedula
     );
 
+    setGuardandoGestion(false);
+
     alert(
       "Gestión registrada correctamente."
     );
   }
+
+  /*
+    ============================================================
+    REGISTRAR PROMESA
+    ============================================================
+
+    Guarda:
+
+    bitacora_cliente.monto_promesa
+    bitacora_cliente.proxima_gestion
+
+    En informacion_cobranza solamente actualiza:
+
+    proxima_gestion
+    observacion_cobro
+  */
 
   async function registrarPromesa() {
     const empresaId =
@@ -1168,18 +1377,24 @@ export default function VistaCliente() {
       return;
     }
 
-    const hoyLocal =
-      fechaLocalISO();
+    const hoyPanama =
+      fechaPanamaISO();
 
     if (
-      fechaPromesa < hoyLocal
+      fechaPromesa < hoyPanama
     ) {
       alert(
-        "La fecha prometida no puede ser anterior a la fecha actual."
+        "La fecha prometida no puede ser anterior a la fecha actual de Panamá."
       );
 
       return;
     }
+
+    if (guardandoPromesa) {
+      return;
+    }
+
+    setGuardandoPromesa(true);
 
     const usuarioActual =
       obtenerUsuarioActual();
@@ -1187,23 +1402,19 @@ export default function VistaCliente() {
     const fechaRegistro =
       new Date().toISOString();
 
-    const partesTexto = [
+    const textoPromesa = [
       `Promesa de pago para ${formatoFecha(
         fechaPromesa
       )}`,
-      `por ${formatoDinero(monto)}.`,
-    ];
 
-    if (
-      observacionPromesa.trim()
-    ) {
-      partesTexto.push(
-        observacionPromesa.trim()
-      );
-    }
+      `por ${formatoDinero(
+        monto
+      )}.`,
 
-    const textoPromesa =
-      partesTexto.join(" ");
+      observacionPromesa.trim(),
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     const {
       error: errorPromesa,
@@ -1212,7 +1423,9 @@ export default function VistaCliente() {
       .insert([
         {
           empresa_id: empresaId,
-          cliente_id: cliente.id,
+
+          cliente_id:
+            cliente.id,
 
           informacion_comercial_id:
             cuenta.id,
@@ -1223,15 +1436,6 @@ export default function VistaCliente() {
           resultado_gestion:
             "Promesa registrada",
 
-          fecha_gestion:
-            fechaRegistro,
-
-          proxima_gestion:
-            fechaPromesa,
-
-          monto_promesa:
-            monto,
-
           observacion:
             textoPromesa,
 
@@ -1240,10 +1444,21 @@ export default function VistaCliente() {
 
           usuario:
             usuarioActual,
+
+          fecha_gestion:
+            fechaRegistro,
+
+          proxima_gestion:
+            fechaPromesa,
+
+          monto_promesa:
+            monto,
         },
       ]);
 
     if (errorPromesa) {
+      setGuardandoPromesa(false);
+
       alert(
         "Error registrando promesa de pago: " +
           errorPromesa.message
@@ -1286,15 +1501,6 @@ export default function VistaCliente() {
 
           observacion_cobro:
             textoPromesa,
-
-          ultimo_resultado_gestion:
-            "Promesa registrada",
-
-          fecha_ultima_gestion:
-            fechaRegistro,
-
-          ultima_observacion:
-            textoPromesa,
         })
         .eq("empresa_id", empresaId)
         .eq(
@@ -1306,8 +1512,46 @@ export default function VistaCliente() {
         errorActualizarCobranza
       ) {
         console.error(
-          "La promesa fue guardada, pero no se actualizó el resumen de cobranza:",
+          "La promesa fue guardada, pero no se actualizó cobranza:",
           errorActualizarCobranza
+        );
+      }
+    } else {
+      const {
+        error: errorCrearCobranza,
+      } = await supabase
+        .from(
+          "informacion_cobranza"
+        )
+        .insert([
+          {
+            empresa_id:
+              empresaId,
+
+            cliente_id:
+              cliente.id,
+
+            informacion_comercial_id:
+              cuenta.id,
+
+            estado_cobranza:
+              obtenerEstadoCalculado(),
+
+            proxima_gestion:
+              fechaPromesa,
+
+            observacion_cobro:
+              textoPromesa,
+
+            responsable_cobro:
+              null,
+          },
+        ]);
+
+      if (errorCrearCobranza) {
+        console.error(
+          "La promesa fue guardada, pero no se pudo crear cobranza:",
+          errorCrearCobranza
         );
       }
     }
@@ -1323,8 +1567,10 @@ export default function VistaCliente() {
       cliente.cedula
     );
 
+    setGuardandoPromesa(false);
+
     alert(
-      `Promesa de pago registrada correctamente por ${formatoDinero(
+      `Promesa registrada correctamente por ${formatoDinero(
         monto
       )}.`
     );
@@ -1333,7 +1579,8 @@ export default function VistaCliente() {
   async function cargarDocumentos(
     clienteId
   ) {
-    const empresaId = obtenerEmpresaId();
+    const empresaId =
+      obtenerEmpresaId();
 
     if (!empresaId) {
       return;
@@ -1362,7 +1609,8 @@ export default function VistaCliente() {
   }
 
   async function subirDocumento() {
-    const empresaId = obtenerEmpresaId();
+    const empresaId =
+      obtenerEmpresaId();
 
     if (!empresaId) {
       cerrarSesionInvalida(
@@ -1388,6 +1636,12 @@ export default function VistaCliente() {
       return;
     }
 
+    if (subiendoDocumento) {
+      return;
+    }
+
+    setSubiendoDocumento(true);
+
     const nombreLimpio =
       archivo.name.replace(
         /\s+/g,
@@ -1403,9 +1657,14 @@ export default function VistaCliente() {
       error,
     } = await supabase.storage
       .from("documentos-clientes")
-      .upload(ruta, archivo);
+      .upload(
+        ruta,
+        archivo
+      );
 
     if (error) {
+      setSubiendoDocumento(false);
+
       alert(
         "Error subiendo documento: " +
           error.message
@@ -1420,6 +1679,8 @@ export default function VistaCliente() {
       cliente.id
     );
 
+    setSubiendoDocumento(false);
+
     alert(
       "Documento cargado correctamente."
     );
@@ -1428,7 +1689,8 @@ export default function VistaCliente() {
   async function verDocumento(
     nombre
   ) {
-    const empresaId = obtenerEmpresaId();
+    const empresaId =
+      obtenerEmpresaId();
 
     if (!empresaId || !cliente) {
       return;
@@ -1488,14 +1750,8 @@ export default function VistaCliente() {
     }
 
     const mensaje = cuenta
-      ? `Hola ${
-          cliente.nombre || ""
-        }, le contactamos de ${nombreEmpresa()} con relación a su cuenta ${
-          cuenta.numero_cuenta || ""
-        }.`
-      : `Hola ${
-          cliente.nombre || ""
-        }, le contactamos de ${nombreEmpresa()}.`;
+      ? `Hola ${cliente.nombre || ""}, le contactamos de ${nombreEmpresa()} con relación a su cuenta ${cuenta.numero_cuenta || ""}.`
+      : `Hola ${cliente.nombre || ""}, le contactamos de ${nombreEmpresa()}.`;
 
     window.open(
       `https://wa.me/507${telefono}?text=${encodeURIComponent(
@@ -1512,21 +1768,25 @@ export default function VistaCliente() {
     );
 
   const semaforo =
-    obtenerSemaforo(diasAtraso);
+    obtenerSemaforo(
+      diasAtraso
+    );
 
   const estadoCalculado =
     obtenerEstadoCalculado();
 
   if (cargandoSesion) {
     return (
-      <div
-        style={{
-          padding: "30px",
-          fontFamily:
-            "Arial, sans-serif",
-        }}
-      >
-        Validando sesión de KONAX...
+      <div style={cargandoPagina}>
+        <div style={cargandoCard}>
+          <strong>
+            Validando sesión de KONAX...
+          </strong>
+
+          <p>
+            Cargando información de la empresa.
+          </p>
+        </div>
       </div>
     );
   }
@@ -1535,7 +1795,7 @@ export default function VistaCliente() {
     <div style={pagina}>
       <div style={contenedor}>
         <div style={encabezado}>
-          <div style={marcaBox}>
+          <div style={encabezadoMarca}>
             <img
               src="/konax-logo.png"
               alt="KONAX"
@@ -1547,11 +1807,7 @@ export default function VistaCliente() {
                 Vista Cliente
               </h1>
 
-              <p
-                style={
-                  subtituloVista
-                }
-              >
+              <p style={subtituloVista}>
                 {nombreEmpresa()}
               </p>
             </div>
@@ -1570,30 +1826,23 @@ export default function VistaCliente() {
         </div>
 
         <div style={card}>
-          <h2
-            style={
-              tituloSeccion
-            }
-          >
+          <h2 style={tituloSeccion}>
             Buscar Cliente
           </h2>
 
-          <div
-            style={
-              gridFormulario
-            }
-          >
+          <div style={gridFormulario}>
             <input
               placeholder="Buscar por nombre, cédula o número de cuenta"
               value={buscar}
-              onChange={(e) =>
+              onChange={(event) =>
                 setBuscar(
-                  e.target.value
+                  event.target.value
                 )
               }
-              onKeyDown={(e) => {
+              onKeyDown={(event) => {
                 if (
-                  e.key === "Enter"
+                  event.key ===
+                  "Enter"
                 ) {
                   buscarCliente();
                 }
@@ -1603,73 +1852,57 @@ export default function VistaCliente() {
 
             <button
               style={
-                botonSecundario
+                buscando
+                  ? botonDeshabilitado
+                  : botonSecundario
               }
               onClick={
                 buscarCliente
               }
+              disabled={buscando}
             >
-              Buscar
+              {buscando
+                ? "Buscando..."
+                : "Buscar"}
             </button>
           </div>
 
-          {resultados.length >
-            0 && (
-            <div
-              style={{
-                overflowX:
-                  "auto",
-              }}
-            >
-              <table
-                style={tabla}
-              >
+          {resultados.length > 0 && (
+            <div style={tablaScroll}>
+              <table style={tabla}>
                 <tbody>
                   {resultados.map(
-                    (
-                      item,
-                      index
-                    ) => (
+                    (item, index) => (
                       <tr
                         key={
                           item.clave ||
                           index
                         }
                       >
-                        <td
-                          style={td}
-                        >
+                        <td style={td}>
                           {
-                            item
-                              .cliente
+                            item.cliente
                               .nombre
                           }
                         </td>
 
-                        <td
-                          style={td}
-                        >
+                        <td style={td}>
                           {
-                            item
-                              .cliente
+                            item.cliente
                               .cedula
                           }
                         </td>
 
-                        <td
-                          style={td}
-                        >
+                        <td style={td}>
                           {item.cuenta
                             ?.numero_cuenta ||
                             "Ver cuentas"}
                         </td>
 
-                        <td
-                          style={td}
-                        >
+                        <td style={td}>
                           <button
                             style={
-                              boton
+                              botonSeleccionar
                             }
                             onClick={() =>
                               seleccionarCliente(
@@ -1691,15 +1924,9 @@ export default function VistaCliente() {
 
         {cliente && (
           <>
-            <div
-              style={
-                acciones
-              }
-            >
+            <div style={acciones}>
               <button
-                style={
-                  whatsappBtn
-                }
+                style={whatsappBtn}
                 onClick={
                   abrirWhatsAppCliente
                 }
@@ -1708,23 +1935,15 @@ export default function VistaCliente() {
               </button>
             </div>
 
-            <div
-              style={
-                gridResumen
-              }
-            >
-              <div
-                style={card}
-              >
-                <h3>
+            <div style={gridResumen}>
+              <div style={card}>
+                <h3 style={tituloTarjeta}>
                   Cliente
                 </h3>
 
                 <p>
                   <strong>
-                    {
-                      cliente.nombre
-                    }
+                    {cliente.nombre}
                   </strong>
                 </p>
 
@@ -1753,43 +1972,30 @@ export default function VistaCliente() {
                 </p>
               </div>
 
-              <div
-                style={card}
-              >
-                <h3>
+              <div style={card}>
+                <h3 style={tituloTarjeta}>
                   Información Comercial
                 </h3>
 
-                {cuentas.length >
-                  1 && (
+                {cuentas.length > 1 && (
                   <select
                     value={
                       cuenta?.id ||
                       ""
                     }
-                    onChange={(
-                      e
-                    ) =>
+                    onChange={(event) =>
                       cambiarCuenta(
-                        e.target
+                        event.target
                           .value
                       )
                     }
-                    style={
-                      inputStyle
-                    }
+                    style={inputStyle}
                   >
                     {cuentas.map(
-                      (
-                        item
-                      ) => (
+                      (item) => (
                         <option
-                          key={
-                            item.id
-                          }
-                          value={
-                            item.id
-                          }
+                          key={item.id}
+                          value={item.id}
                         >
                           {
                             item.numero_cuenta
@@ -1851,19 +2057,17 @@ export default function VistaCliente() {
                 </p>
               </div>
 
-              <div
-                style={card}
-              >
-                <h3>
+              <div style={card}>
+                <h3 style={tituloTarjeta}>
                   Cobranza
                 </h3>
 
                 <p>
                   Estado:{" "}
-                  {semaforo}{" "}
-                  {
-                    estadoCalculado
-                  }
+                  <strong>
+                    {semaforo}{" "}
+                    {estadoCalculado}
+                  </strong>
                 </p>
 
                 <p>
@@ -1874,8 +2078,7 @@ export default function VistaCliente() {
                 </p>
 
                 <p>
-                  Fecha último
-                  pago:{" "}
+                  Fecha último pago:{" "}
                   {formatoFecha(
                     cobranza
                       ?.fecha_ultimo_pago
@@ -1883,8 +2086,7 @@ export default function VistaCliente() {
                 </p>
 
                 <p>
-                  Monto último
-                  pago:{" "}
+                  Monto último pago:{" "}
                   {formatoDinero(
                     cobranza
                       ?.monto_ultimo_pago
@@ -1908,140 +2110,79 @@ export default function VistaCliente() {
               </div>
             </div>
 
-            <div
-              style={
-                promesaCard
-              }
-            >
-              <div
-                style={
-                  promesaHeader
-                }
-              >
-                <div>
-                  <p
-                    style={
-                      promesaEtiqueta
-                    }
-                  >
-                    Compromiso de cobro
-                  </p>
+            <div style={cardPromesa}>
+              <div style={encabezadoPromesa}>
+                <div style={iconoPromesa}>
+                  🤝
+                </div>
 
-                  <h2
-                    style={
-                      promesaTitulo
-                    }
-                  >
+                <div>
+                  <h2 style={tituloSeccion}>
                     Promesa de Pago
                   </h2>
 
-                  <p
-                    style={
-                      promesaDescripcion
-                    }
-                  >
-                    Registra la fecha y el
-                    monto que el cliente se
-                    comprometió a pagar.
+                  <p style={textoAyuda}>
+                    Registre la fecha y el monto que el cliente se comprometió a pagar.
                   </p>
-                </div>
-
-                <div
-                  style={
-                    promesaSaldoBox
-                  }
-                >
-                  <span>
-                    Saldo actual
-                  </span>
-
-                  <strong>
-                    {formatoDinero(
-                      cuenta?.saldo_actual
-                    )}
-                  </strong>
                 </div>
               </div>
 
-              <div
-                style={
-                  gridPromesa
-                }
-              >
+              <div style={gridPromesa}>
                 <div>
-                  <label
-                    style={
-                      labelStyle
-                    }
-                  >
+                  <label style={labelStyle}>
                     Fecha prometida
                   </label>
 
                   <input
                     type="date"
-                    min={
-                      fechaLocalISO()
-                    }
-                    value={
-                      fechaPromesa
-                    }
-                    onChange={(
-                      e
-                    ) =>
+                    min={fechaPanamaISO()}
+                    value={fechaPromesa}
+                    onChange={(event) =>
                       setFechaPromesa(
-                        e.target
+                        event.target
                           .value
                       )
                     }
-                    style={
-                      inputStyle
-                    }
+                    style={inputStyle}
                   />
                 </div>
 
                 <div>
-                  <label
-                    style={
-                      labelStyle
-                    }
-                  >
+                  <label style={labelStyle}>
                     Monto prometido
                   </label>
 
                   <input
                     type="number"
                     min="0.01"
+                    step="0.01"
                     max={
                       Number(
                         cuenta?.saldo_actual ||
                           0
                       ) || undefined
                     }
-                    step="0.01"
                     placeholder="Ej. 300.00"
-                    value={
-                      montoPromesa
-                    }
-                    onChange={(
-                      e
-                    ) =>
+                    value={montoPromesa}
+                    onChange={(event) =>
                       setMontoPromesa(
-                        e.target
+                        event.target
                           .value
                       )
                     }
-                    style={
-                      inputStyle
-                    }
+                    style={inputStyle}
                   />
+
+                  <small style={textoPequeno}>
+                    Saldo disponible:{" "}
+                    {formatoDinero(
+                      cuenta?.saldo_actual
+                    )}
+                  </small>
                 </div>
 
                 <div>
-                  <label
-                    style={
-                      labelStyle
-                    }
-                  >
+                  <label style={labelStyle}>
                     Observación
                   </label>
 
@@ -2050,76 +2191,58 @@ export default function VistaCliente() {
                     value={
                       observacionPromesa
                     }
-                    onChange={(
-                      e
-                    ) =>
+                    onChange={(event) =>
                       setObservacionPromesa(
-                        e.target
+                        event.target
                           .value
                       )
                     }
-                    style={
-                      inputStyle
-                    }
+                    style={inputStyle}
                   />
                 </div>
               </div>
 
               <button
                 style={
-                  botonPromesa
+                  guardandoPromesa
+                    ? botonDeshabilitado
+                    : botonPromesa
                 }
                 onClick={
                   registrarPromesa
                 }
+                disabled={
+                  guardandoPromesa
+                }
               >
-                Registrar Promesa
+                {guardandoPromesa
+                  ? "Registrando promesa..."
+                  : "Registrar Promesa"}
               </button>
             </div>
 
-            <div
-              style={card}
-            >
-              <h2
-                style={
-                  tituloSeccion
-                }
-              >
+            <div style={card}>
+              <h2 style={tituloSeccion}>
                 Historial de Pagos
               </h2>
 
-              <div
-                style={{
-                  overflowX:
-                    "auto",
-                }}
-              >
-                <table
-                  style={tabla}
-                >
+              <div style={tablaScroll}>
+                <table style={tabla}>
                   <thead>
                     <tr>
-                      <th
-                        style={th}
-                      >
+                      <th style={th}>
                         Fecha
                       </th>
 
-                      <th
-                        style={th}
-                      >
+                      <th style={th}>
                         Monto
                       </th>
 
-                      <th
-                        style={th}
-                      >
+                      <th style={th}>
                         Método
                       </th>
 
-                      <th
-                        style={th}
-                      >
+                      <th style={th}>
                         Observación
                       </th>
                     </tr>
@@ -2128,47 +2251,27 @@ export default function VistaCliente() {
                   <tbody>
                     {pagos.map(
                       (pago) => (
-                        <tr
-                          key={
-                            pago.id
-                          }
-                        >
-                          <td
-                            style={
-                              td
-                            }
-                          >
+                        <tr key={pago.id}>
+                          <td style={td}>
                             {formatoFecha(
                               pago.fecha_pago ||
                                 pago.created_at
                             )}
                           </td>
 
-                          <td
-                            style={
-                              td
-                            }
-                          >
+                          <td style={td}>
                             {formatoDinero(
                               pago.monto
                             )}
                           </td>
 
-                          <td
-                            style={
-                              td
-                            }
-                          >
+                          <td style={td}>
                             {pago.metodo_pago ||
                               pago.metodo ||
                               "-"}
                           </td>
 
-                          <td
-                            style={
-                              td
-                            }
-                          >
+                          <td style={td}>
                             {pago.descripcion ||
                               pago.observacion ||
                               "-"}
@@ -2177,16 +2280,13 @@ export default function VistaCliente() {
                       )
                     )}
 
-                    {pagos.length ===
-                      0 && (
+                    {pagos.length === 0 && (
                       <tr>
                         <td
                           style={td}
                           colSpan="4"
                         >
-                          No hay pagos
-                          registrados para
-                          esta cuenta.
+                          No hay pagos registrados para esta cuenta.
                         </td>
                       </tr>
                     )}
@@ -2195,37 +2295,21 @@ export default function VistaCliente() {
               </div>
             </div>
 
-            <div
-              style={card}
-            >
-              <h2
-                style={
-                  tituloSeccion
-                }
-              >
+            <div style={card}>
+              <h2 style={tituloSeccion}>
                 Observaciones de Gestión
               </h2>
 
-              <div
-                style={
-                  gridFormulario
-                }
-              >
+              <div style={gridFormulario}>
                 <select
-                  value={
-                    tipoGestion
-                  }
-                  onChange={(
-                    e
-                  ) =>
+                  value={tipoGestion}
+                  onChange={(event) =>
                     setTipoGestion(
-                      e.target
+                      event.target
                         .value
                     )
                   }
-                  style={
-                    inputStyle
-                  }
+                  style={inputStyle}
                 >
                   <option>
                     Llamada
@@ -2252,17 +2336,13 @@ export default function VistaCliente() {
                   value={
                     resultadoGestion
                   }
-                  onChange={(
-                    e
-                  ) =>
+                  onChange={(event) =>
                     setResultadoGestion(
-                      e.target
+                      event.target
                         .value
                     )
                   }
-                  style={
-                    inputStyle
-                  }
+                  style={inputStyle}
                 >
                   <option>
                     Pendiente
@@ -2279,37 +2359,43 @@ export default function VistaCliente() {
                   <option>
                     Pago Realizado
                   </option>
+
+                  <option>
+                    Reprogramar
+                  </option>
                 </select>
               </div>
 
               <textarea
                 placeholder="Agregar nueva observación..."
-                value={
-                  observacion
-                }
-                onChange={(e) =>
+                value={observacion}
+                onChange={(event) =>
                   setObservacion(
-                    e.target.value
+                    event.target.value
                   )
                 }
                 style={textarea}
               />
 
               <button
-                style={boton}
+                style={
+                  guardandoGestion
+                    ? botonDeshabilitado
+                    : boton
+                }
                 onClick={
                   guardarGestion
                 }
+                disabled={
+                  guardandoGestion
+                }
               >
-                Guardar Observación
+                {guardandoGestion
+                  ? "Guardando..."
+                  : "Guardar Observación"}
               </button>
 
-              <div
-                style={{
-                  marginTop:
-                    "14px",
-                }}
-              >
+              <div style={historialGestiones}>
                 {gestiones.map(
                   (item) => {
                     const esPromesa =
@@ -2324,23 +2410,30 @@ export default function VistaCliente() {
 
                     return (
                       <div
-                        key={
-                          item.id
-                        }
+                        key={item.id}
                         style={
                           esPromesa
-                            ? observacionPromesaBox
+                            ? promesaHistorialBox
                             : observacionBox
                         }
                       >
-                        <strong>
-                          {formatoFecha(
-                            item.fecha_gestion
+                        <div style={gestionCabecera}>
+                          <strong>
+                            {formatoFechaHora(
+                              item.fecha_gestion ||
+                                item.created_at
+                            )}
+                            {" — "}
+                            {item.usuario ||
+                              "Sin usuario"}
+                          </strong>
+
+                          {esPromesa && (
+                            <span style={badgePromesa}>
+                              Promesa
+                            </span>
                           )}
-                          {" — "}
-                          {item.usuario ||
-                            "Sin usuario"}
-                        </strong>
+                        </div>
 
                         <p>
                           {item.tipo_gestion ||
@@ -2359,79 +2452,50 @@ export default function VistaCliente() {
                         {Number(
                           item.monto_promesa ||
                             0
-                        ) >
-                          0 && (
-                          <div
-                            style={
-                              detallePromesaBox
-                            }
-                          >
-                            <p>
-                              <strong>
-                                Monto prometido:
-                              </strong>{" "}
-                              {formatoDinero(
-                                item.monto_promesa
-                              )}
-                            </p>
-
-                            <p>
-                              <strong>
-                                Fecha prometida:
-                              </strong>{" "}
-                              {formatoFecha(
-                                item.proxima_gestion
-                              )}
-                            </p>
-                          </div>
+                        ) > 0 && (
+                          <p>
+                            <strong>
+                              Monto prometido:
+                            </strong>{" "}
+                            {formatoDinero(
+                              item.monto_promesa
+                            )}
+                          </p>
                         )}
 
-                        {!Number(
-                          item.monto_promesa ||
-                            0
-                        ) &&
-                          item.proxima_gestion && (
-                            <p>
-                              <strong>
-                                Próxima gestión:
-                              </strong>{" "}
-                              {formatoFecha(
-                                item.proxima_gestion
-                              )}
-                            </p>
-                          )}
+                        {item.proxima_gestion && (
+                          <p>
+                            <strong>
+                              Fecha prometida:
+                            </strong>{" "}
+                            {formatoFecha(
+                              item.proxima_gestion
+                            )}
+                          </p>
+                        )}
                       </div>
                     );
                   }
                 )}
 
-                {gestiones.length ===
-                  0 && (
+                {gestiones.length === 0 && (
                   <p>
-                    No hay gestiones
-                    registradas para esta
-                    cuenta.
+                    No hay gestiones registradas para esta cuenta.
                   </p>
                 )}
               </div>
             </div>
 
-            <div
-              style={card}
-            >
-              <h2
-                style={
-                  tituloSeccion
-                }
-              >
+            <div style={card}>
+              <h2 style={tituloSeccion}>
                 📁 Expediente Digital
               </h2>
 
               <input
                 type="file"
-                onChange={(e) =>
+                onChange={(event) =>
                   setArchivo(
-                    e.target
+                    event.target
                       .files?.[0] ||
                       null
                   )
@@ -2440,34 +2504,32 @@ export default function VistaCliente() {
               />
 
               <button
-                style={boton}
+                style={
+                  subiendoDocumento
+                    ? botonDeshabilitado
+                    : boton
+                }
                 onClick={
                   subirDocumento
                 }
+                disabled={
+                  subiendoDocumento
+                }
               >
-                + Subir Documento
+                {subiendoDocumento
+                  ? "Subiendo..."
+                  : "+ Subir Documento"}
               </button>
 
-              <div
-                style={{
-                  overflowX:
-                    "auto",
-                }}
-              >
-                <table
-                  style={tabla}
-                >
+              <div style={tablaScroll}>
+                <table style={tabla}>
                   <thead>
                     <tr>
-                      <th
-                        style={th}
-                      >
+                      <th style={th}>
                         Archivo
                       </th>
 
-                      <th
-                        style={th}
-                      >
+                      <th style={th}>
                         Acción
                       </th>
                     </tr>
@@ -2475,34 +2537,26 @@ export default function VistaCliente() {
 
                   <tbody>
                     {documentos.map(
-                      (doc) => (
+                      (documento) => (
                         <tr
                           key={
-                            doc.name
+                            documento.name
                           }
                         >
-                          <td
-                            style={
-                              td
-                            }
-                          >
+                          <td style={td}>
                             {
-                              doc.name
+                              documento.name
                             }
                           </td>
 
-                          <td
-                            style={
-                              td
-                            }
-                          >
+                          <td style={td}>
                             <button
                               style={
                                 accionBtn
                               }
                               onClick={() =>
                                 verDocumento(
-                                  doc.name
+                                  documento.name
                                 )
                               }
                             >
@@ -2513,16 +2567,13 @@ export default function VistaCliente() {
                       )
                     )}
 
-                    {documentos.length ===
-                      0 && (
+                    {documentos.length === 0 && (
                       <tr>
                         <td
                           style={td}
                           colSpan="2"
                         >
-                          No hay
-                          documentos
-                          cargados.
+                          No hay documentos cargados.
                         </td>
                       </tr>
                     )}
@@ -2537,10 +2588,29 @@ export default function VistaCliente() {
   );
 }
 
+const cargandoPagina = {
+  minHeight: "100vh",
+  background: "#f3f4f6",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "20px",
+  fontFamily: "Arial, sans-serif",
+};
+
+const cargandoCard = {
+  background: "#ffffff",
+  padding: "26px",
+  borderRadius: "16px",
+  boxShadow:
+    "0 4px 18px rgba(0,0,0,0.08)",
+  color: "#111827",
+};
+
 const pagina = {
   minHeight: "100vh",
   background:
-    "linear-gradient(135deg, #ecfdf5 0%, #f3f4f6 45%, #ffffff 100%)",
+    "linear-gradient(135deg, #f3f4f6 0%, #eef2ff 50%, #ecfdf5 100%)",
   padding: "20px",
   fontFamily: "Arial, sans-serif",
 };
@@ -2551,34 +2621,34 @@ const contenedor = {
 };
 
 const encabezado = {
+  background:
+    "linear-gradient(135deg, #111827, #064e3b)",
+  color: "#ffffff",
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   gap: "14px",
-  marginBottom: "16px",
+  marginBottom: "18px",
   flexWrap: "wrap",
-  background:
-    "linear-gradient(135deg, #111827, #064e3b)",
-  padding: "20px",
-  borderRadius: "18px",
-  color: "#ffffff",
+  borderRadius: "20px",
+  padding: "22px",
   boxShadow:
     "0 8px 24px rgba(0,0,0,0.14)",
 };
 
-const marcaBox = {
+const encabezadoMarca = {
   display: "flex",
   alignItems: "center",
   gap: "14px",
 };
 
 const logo = {
-  width: "95px",
+  width: "90px",
   maxWidth: "100%",
   height: "auto",
   background: "#ffffff",
-  borderRadius: "12px",
   padding: "7px",
+  borderRadius: "14px",
 };
 
 const titulo = {
@@ -2607,6 +2677,7 @@ const gridFormulario = {
   gridTemplateColumns:
     "repeat(auto-fit,minmax(220px,1fr))",
   gap: "12px",
+  alignItems: "end",
 };
 
 const gridPromesa = {
@@ -2622,77 +2693,61 @@ const card = {
   borderRadius: "16px",
   marginBottom: "14px",
   boxShadow:
-    "0 4px 14px rgba(0,0,0,0.06)",
+    "0 3px 12px rgba(0,0,0,0.06)",
   border: "1px solid #e5e7eb",
 };
 
-const promesaCard = {
-  background:
-    "linear-gradient(135deg, #ffffff, #ecfdf5)",
-  padding: "22px",
-  borderRadius: "18px",
-  marginBottom: "14px",
-  boxShadow:
-    "0 6px 18px rgba(0,0,0,0.07)",
+const cardPromesa = {
+  ...card,
   border: "1px solid #bbf7d0",
+  background:
+    "linear-gradient(135deg, #ffffff, #f0fdf4)",
 };
 
-const promesaHeader = {
+const encabezadoPromesa = {
   display: "flex",
-  justifyContent: "space-between",
   alignItems: "center",
-  gap: "16px",
-  flexWrap: "wrap",
+  gap: "12px",
   marginBottom: "18px",
 };
 
-const promesaEtiqueta = {
-  margin: 0,
-  color: "#15803d",
-  fontSize: "12px",
-  fontWeight: "bold",
-  textTransform: "uppercase",
-  letterSpacing: "0.6px",
+const iconoPromesa = {
+  width: "48px",
+  height: "48px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#dcfce7",
+  borderRadius: "14px",
+  fontSize: "24px",
 };
 
-const promesaTitulo = {
-  margin: "5px 0",
+const tituloTarjeta = {
+  marginTop: 0,
   color: "#111827",
-  fontSize: "27px",
 };
 
-const promesaDescripcion = {
+const tituloSeccion = {
+  marginTop: 0,
+  marginBottom: "12px",
+  color: "#111827",
+};
+
+const textoAyuda = {
   margin: 0,
   color: "#6b7280",
   fontSize: "14px",
 };
 
-const promesaSaldoBox = {
-  display: "grid",
-  gap: "5px",
-  background: "#ffffff",
-  border: "1px solid #d1fae5",
-  borderRadius: "14px",
-  padding: "13px 18px",
-  color: "#374151",
-  minWidth: "180px",
+const textoPequeno = {
+  display: "block",
+  color: "#6b7280",
+  marginTop: "-4px",
+  marginBottom: "8px",
 };
 
-const botonPromesa = {
-  marginTop: "12px",
-  background: "#15803d",
-  color: "#ffffff",
-  border: "none",
-  padding: "12px 24px",
-  borderRadius: "10px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const tituloSeccion = {
-  marginTop: 0,
-  marginBottom: "14px",
-  color: "#111827",
+const tablaScroll = {
+  overflowX: "auto",
 };
 
 const tabla = {
@@ -2704,42 +2759,49 @@ const tabla = {
 const th = {
   textAlign: "left",
   padding: "11px",
-  borderBottom: "1px solid #e5e7eb",
+  borderBottom:
+    "1px solid #e5e7eb",
   background: "#111827",
   color: "#ffffff",
+  whiteSpace: "nowrap",
 };
 
 const td = {
   padding: "11px",
-  borderBottom: "1px solid #f3f4f6",
+  borderBottom:
+    "1px solid #f3f4f6",
 };
 
 const textarea = {
   width: "100%",
   padding: "11px",
   borderRadius: "9px",
-  border: "1px solid #d1d5db",
+  border:
+    "1px solid #d1d5db",
   fontSize: "14px",
   boxSizing: "border-box",
-  minHeight: "90px",
+  minHeight: "95px",
   marginBottom: "10px",
+  color: "#111827",
+  background: "#ffffff",
 };
 
 const inputStyle = {
   width: "100%",
   padding: "11px",
   borderRadius: "9px",
-  border: "1px solid #d1d5db",
+  border:
+    "1px solid #d1d5db",
   fontSize: "14px",
   boxSizing: "border-box",
   marginBottom: "10px",
-  background: "#ffffff",
   color: "#111827",
+  background: "#ffffff",
 };
 
 const labelStyle = {
   display: "block",
-  marginBottom: "7px",
+  marginBottom: "6px",
   color: "#374151",
   fontSize: "13px",
   fontWeight: "bold",
@@ -2756,27 +2818,68 @@ const boton = {
   cursor: "pointer",
 };
 
+const botonPromesa = {
+  ...boton,
+  background: "#047857",
+};
+
+const botonDeshabilitado = {
+  marginTop: "10px",
+  background: "#9ca3af",
+  color: "#ffffff",
+  border: "none",
+  padding: "11px 22px",
+  borderRadius: "9px",
+  fontWeight: "bold",
+  cursor: "not-allowed",
+};
+
+const botonSeleccionar = {
+  background: "#16a34a",
+  color: "#ffffff",
+  border: "none",
+  padding: "8px 14px",
+  borderRadius: "8px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
 const observacionBox = {
   background: "#f9fafb",
   padding: "13px",
   borderRadius: "11px",
   marginBottom: "9px",
-  border: "1px solid #e5e7eb",
+  border:
+    "1px solid #e5e7eb",
 };
 
-const observacionPromesaBox = {
+const promesaHistorialBox = {
   ...observacionBox,
-  background: "#ecfdf5",
-  border: "1px solid #bbf7d0",
+  background: "#f0fdf4",
+  border:
+    "1px solid #bbf7d0",
 };
 
-const detallePromesaBox = {
-  marginTop: "9px",
-  padding: "10px",
-  background: "#ffffff",
-  borderRadius: "9px",
-  border: "1px solid #d1fae5",
+const gestionCabecera = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "10px",
+  flexWrap: "wrap",
+};
+
+const badgePromesa = {
+  display: "inline-block",
+  background: "#dcfce7",
   color: "#166534",
+  padding: "5px 10px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: "bold",
+};
+
+const historialGestiones = {
+  marginTop: "16px",
 };
 
 const acciones = {
@@ -2801,7 +2904,8 @@ const accionBtn = {
   padding: "7px 12px",
   marginRight: "6px",
   borderRadius: "8px",
-  border: "1px solid #d1d5db",
+  border:
+    "1px solid #d1d5db",
   background: "#ffffff",
   cursor: "pointer",
 };
