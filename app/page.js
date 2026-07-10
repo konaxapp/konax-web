@@ -1,134 +1,25 @@
 "use client";
 
-import { useState } from "react";
-import { supabase } from "../lib/supabase";
+import { useEffect } from "react";
 
 export default function Home() {
-  const [correo, setCorreo] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmarPassword, setConfirmarPassword] = useState("");
-  const [mostrarPassword, setMostrarPassword] = useState(false);
-  const [mostrarConfirmacion, setMostrarConfirmacion] = useState(false);
-  const [cargando, setCargando] = useState(false);
-
-  async function crearCuenta() {
-    if (!correo || !password || !confirmarPassword) {
-      alert("Complete correo, contraseña y confirmación.");
-      return;
-    }
-
-    if (password !== confirmarPassword) {
-      alert("Las contraseñas no coinciden.");
-      return;
-    }
-
-    if (password.length < 6) {
-      alert("La contraseña debe tener mínimo 6 caracteres.");
-      return;
-    }
-
-    setCargando(true);
-
-    const { data, error } = await supabase.auth.signUp({
-      email: correo,
-      password,
-    });
-
-    setCargando(false);
-
-    if (error) {
-      alert("Error al crear cuenta: " + error.message);
-      return;
-    }
-
-    if (data?.user?.id) {
-      localStorage.setItem("usuarioId", data.user.id);
-      localStorage.setItem("correoUsuario", correo);
-    }
-
-    window.location.href = "/empresas";
-  }
+  useEffect(() => {
+    window.location.replace("/login");
+  }, []);
 
   return (
     <div style={pagina}>
       <div style={card}>
+        <img
+          src="/konax-logo.png"
+          alt="KONAX"
+          style={logo}
+        />
+
         <h1 style={titulo}>KONAX</h1>
 
-        <p style={subtitulo}>Crear cuenta</p>
-
-        <div style={campo}>
-          <label>Correo electrónico</label>
-          <input
-            type="email"
-            placeholder="correo@empresa.com"
-            value={correo}
-            onChange={(e) => setCorreo(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
-
-        <div style={campo}>
-          <label>Contraseña</label>
-
-          <div style={passwordBox}>
-            <input
-              type={mostrarPassword ? "text" : "password"}
-              placeholder="********"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={inputPassword}
-            />
-
-            <button
-              type="button"
-              onClick={() => setMostrarPassword(!mostrarPassword)}
-              style={botonMostrar}
-            >
-              {mostrarPassword ? "Ocultar" : "Mostrar"}
-            </button>
-          </div>
-        </div>
-
-        <div style={campo}>
-          <label>Confirmar contraseña</label>
-
-          <div style={passwordBox}>
-            <input
-              type={mostrarConfirmacion ? "text" : "password"}
-              placeholder="********"
-              value={confirmarPassword}
-              onChange={(e) => setConfirmarPassword(e.target.value)}
-              style={inputPassword}
-            />
-
-            <button
-              type="button"
-              onClick={() => setMostrarConfirmacion(!mostrarConfirmacion)}
-              style={botonMostrar}
-            >
-              {mostrarConfirmacion ? "Ocultar" : "Mostrar"}
-            </button>
-          </div>
-        </div>
-
-        <button onClick={crearCuenta} style={boton} disabled={cargando}>
-          {cargando ? "Creando cuenta..." : "Crear cuenta"}
-        </button>
-
-        <p style={login}>
-          ¿Ya tienes cuenta?{" "}
-          <span onClick={() => (window.location.href = "/login")} style={link}>
-            Iniciar sesión
-          </span>
-        </p>
-
-        <p style={login}>
-          <span
-            onClick={() => (window.location.href = "/recuperar-password")}
-            style={link}
-          >
-            ¿Olvidaste tu contraseña?
-          </span>
+        <p style={texto}>
+          Abriendo el inicio de sesión...
         </p>
       </div>
     </div>
@@ -140,88 +31,44 @@ const pagina = {
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
-  background: "#f5f7fb",
+  padding: "20px",
+  background:
+    "radial-gradient(circle at top, #12345c 0%, #07111f 48%, #020617 100%)",
   fontFamily: "Arial, sans-serif",
 };
 
 const card = {
-  width: "420px",
+  width: "100%",
+  maxWidth: "380px",
+  padding: "34px",
+  borderRadius: "24px",
+  textAlign: "center",
+  background: "rgba(15, 23, 42, 0.92)",
+  border: "1px solid rgba(34, 211, 238, 0.35)",
+  boxShadow:
+    "0 24px 70px rgba(0, 0, 0, 0.45)",
+};
+
+const logo = {
+  width: "95px",
+  maxWidth: "100%",
+  height: "auto",
+  marginBottom: "14px",
+  padding: "7px",
+  borderRadius: "14px",
   background: "#ffffff",
-  padding: "40px",
-  borderRadius: "12px",
-  boxShadow: "0 4px 15px rgba(0,0,0,0.08)",
 };
 
 const titulo = {
-  textAlign: "center",
-  marginBottom: "10px",
+  margin: "0 0 10px",
+  color: "#ffffff",
+  fontSize: "34px",
+  letterSpacing: "2px",
 };
 
-const subtitulo = {
-  textAlign: "center",
-  color: "#666",
-  marginBottom: "30px",
-};
-
-const campo = {
-  marginBottom: "15px",
-};
-
-const inputStyle = {
-  width: "100%",
-  padding: "12px",
-  marginTop: "5px",
-  borderRadius: "8px",
-  border: "1px solid #ccc",
-  boxSizing: "border-box",
-};
-
-const passwordBox = {
-  position: "relative",
-  marginTop: "5px",
-};
-
-const inputPassword = {
-  width: "100%",
-  padding: "12px",
-  paddingRight: "80px",
-  borderRadius: "8px",
-  border: "1px solid #ccc",
-  boxSizing: "border-box",
-};
-
-const botonMostrar = {
-  position: "absolute",
-  right: "10px",
-  top: "50%",
-  transform: "translateY(-50%)",
-  border: "none",
-  background: "transparent",
-  cursor: "pointer",
-  color: "#2563eb",
-  fontWeight: "600",
-  fontSize: "13px",
-};
-
-const boton = {
-  width: "100%",
-  padding: "14px",
-  background: "#111827",
-  color: "white",
-  border: "none",
-  borderRadius: "8px",
-  fontSize: "16px",
-  cursor: "pointer",
-};
-
-const login = {
-  textAlign: "center",
-  marginTop: "18px",
-  color: "#666",
-};
-
-const link = {
-  color: "#2563eb",
+const texto = {
+  margin: 0,
+  color: "#67e8f9",
+  fontSize: "15px",
   fontWeight: "bold",
-  cursor: "pointer",
 };
