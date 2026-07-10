@@ -24,7 +24,9 @@ export default function DashboardCobranza() {
   }
 
   function obtenerEmpresaId() {
-    const empresaId = localStorage.getItem("empresaId");
+    const empresaId =
+      localStorage.getItem("empresaId") ||
+      localStorage.getItem("empresa_id");
 
     if (!empresaId) {
       alert("No hay empresa activa.");
@@ -35,99 +37,339 @@ export default function DashboardCobranza() {
     return empresaId;
   }
 
-  function fechaSimple(fecha) {
-    if (!fecha) return "";
-    return String(fecha).slice(0, 10);
-  }
-
   function limpiarTexto(texto) {
-    return String(texto || "").toLowerCase().trim();
+    return String(texto || "")
+      .toLowerCase()
+      .trim();
   }
 
-  function hoyISO() {
-    const fecha = new Date();
-    const year = fecha.getFullYear();
-    const month = String(fecha.getMonth() + 1).padStart(2, "0");
-    const day = String(fecha.getDate()).padStart(2, "0");
+  function esFechaSimple(fecha) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(
+      String(fecha || "").trim()
+    );
+  }
+
+  function fechaPanamaISO(fecha = new Date()) {
+    const objetoFecha =
+      fecha instanceof Date
+        ? fecha
+        : new Date(fecha);
+
+    if (
+      Number.isNaN(
+        objetoFecha.getTime()
+      )
+    ) {
+      return "";
+    }
+
+    const partes =
+      new Intl.DateTimeFormat(
+        "en-CA",
+        {
+          timeZone: "America/Panama",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }
+      ).formatToParts(objetoFecha);
+
+    const year =
+      partes.find(
+        (parte) =>
+          parte.type === "year"
+      )?.value || "";
+
+    const month =
+      partes.find(
+        (parte) =>
+          parte.type === "month"
+      )?.value || "";
+
+    const day =
+      partes.find(
+        (parte) =>
+          parte.type === "day"
+      )?.value || "";
+
     return `${year}-${month}-${day}`;
   }
 
+  function fechaSimple(fecha) {
+    if (!fecha) {
+      return "";
+    }
+
+    const texto =
+      String(fecha).trim();
+
+    if (esFechaSimple(texto)) {
+      return texto;
+    }
+
+    return fechaPanamaISO(texto);
+  }
+
+  function fechaPago(pago) {
+    if (pago?.fecha_pago) {
+      return fechaSimple(
+        pago.fecha_pago
+      );
+    }
+
+    if (pago?.fecha) {
+      return fechaSimple(
+        pago.fecha
+      );
+    }
+
+    return fechaSimple(
+      pago?.created_at
+    );
+  }
+
+  function fechaGestion(gestion) {
+    return fechaSimple(
+      gestion?.fecha_gestion ||
+        gestion?.created_at
+    );
+  }
+
+  function hoyISO() {
+    return fechaPanamaISO(
+      new Date()
+    );
+  }
+
   function inicioMesActual() {
-    const fecha = new Date();
-    return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-01`;
+    const hoy = hoyISO();
+
+    if (!hoy) {
+      return "";
+    }
+
+    return `${hoy.slice(0, 7)}-01`;
   }
 
   function finMesActual() {
-    const fecha = new Date();
-    const ultimoDia = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0);
+    const hoy = hoyISO();
 
-    return `${ultimoDia.getFullYear()}-${String(ultimoDia.getMonth() + 1).padStart(2, "0")}-${String(
-      ultimoDia.getDate()
+    if (!hoy) {
+      return "";
+    }
+
+    const [year, month] =
+      hoy.split("-").map(Number);
+
+    const ultimoDia =
+      new Date(
+        year,
+        month,
+        0
+      ).getDate();
+
+    return `${year}-${String(
+      month
+    ).padStart(2, "0")}-${String(
+      ultimoDia
     ).padStart(2, "0")}`;
   }
 
   function formato(numero) {
     return (
       "USD " +
-      Number(numero || 0).toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
+      Number(
+        numero || 0
+      ).toLocaleString(
+        "en-US",
+        {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }
+      )
     );
   }
 
-  function calcularDiasAtraso(fechaVencimiento, saldoActual) {
-    if (!fechaVencimiento || Number(saldoActual || 0) <= 0) return 0;
+  function calcularDiasAtraso(
+    fechaVencimiento,
+    saldoActual
+  ) {
+    if (
+      !fechaVencimiento ||
+      Number(
+        saldoActual || 0
+      ) <= 0
+    ) {
+      return 0;
+    }
 
-    const hoy = new Date(`${hoyISO()}T00:00:00`);
-    const vencimiento = new Date(`${fechaSimple(fechaVencimiento)}T00:00:00`);
-    const diferencia = hoy.getTime() - vencimiento.getTime();
+    const hoy =
+      new Date(
+        `${hoyISO()}T00:00:00`
+      );
 
-    if (diferencia <= 0) return 0;
+    const vencimientoTexto =
+      fechaSimple(
+        fechaVencimiento
+      );
 
-    return Math.floor(diferencia / (1000 * 60 * 60 * 24));
+    if (!vencimientoTexto) {
+      return 0;
+    }
+
+    const vencimiento =
+      new Date(
+        `${vencimientoTexto}T00:00:00`
+      );
+
+    const diferencia =
+      hoy.getTime() -
+      vencimiento.getTime();
+
+    if (diferencia <= 0) {
+      return 0;
+    }
+
+    return Math.floor(
+      diferencia /
+        (1000 * 60 * 60 * 24)
+    );
   }
 
-  function estadoCuenta(cuenta, cobranza) {
-    const saldo = Number(cuenta?.saldo_actual || 0);
+  function estadoCuenta(
+    cuenta,
+    cobranza
+  ) {
+    const saldo =
+      Number(
+        cuenta?.saldo_actual ||
+          0
+      );
 
-    if (saldo <= 0) return "Cancelado";
+    if (saldo <= 0) {
+      return "Cancelado";
+    }
 
-    const estadoCobranza = limpiarTexto(cobranza?.estado_cobranza);
-    const estadoComercial = limpiarTexto(cuenta?.estado);
+    const estadoCobranza =
+      limpiarTexto(
+        cobranza?.estado_cobranza
+      );
 
-    if (estadoCobranza === "legal" || estadoComercial === "legal") return "Legal";
-    if (estadoCobranza === "suspendido" || estadoComercial === "suspendido") return "Suspendido";
+    const estadoComercial =
+      limpiarTexto(
+        cuenta?.estado
+      );
 
-    const dias = calcularDiasAtraso(cuenta?.fecha_vencimiento, saldo);
+    if (
+      estadoCobranza ===
+        "legal" ||
+      estadoComercial ===
+        "legal"
+    ) {
+      return "Legal";
+    }
 
-    return dias > 0 ? "Mora" : "Al Día";
+    if (
+      estadoCobranza ===
+        "suspendido" ||
+      estadoComercial ===
+        "suspendido"
+    ) {
+      return "Suspendido";
+    }
+
+    const dias =
+      calcularDiasAtraso(
+        cuenta?.fecha_vencimiento,
+        saldo
+      );
+
+    return dias > 0
+      ? "Mora"
+      : "Al Día";
   }
 
-  function riesgoCartera(dias, saldo, estado) {
-    if (Number(saldo || 0) <= 0) return "Cancelado";
-    if (estado === "Legal") return "Legal";
-    if (dias <= 0) return "Al día";
-    if (dias <= 30) return "Riesgo bajo";
-    if (dias <= 60) return "Riesgo medio";
-    if (dias <= 90) return "Riesgo alto";
+  function riesgoCartera(
+    dias,
+    saldo,
+    estado
+  ) {
+    if (
+      Number(saldo || 0) <= 0
+    ) {
+      return "Cancelado";
+    }
+
+    if (estado === "Legal") {
+      return "Legal";
+    }
+
+    if (dias <= 0) {
+      return "Al día";
+    }
+
+    if (dias <= 30) {
+      return "Riesgo bajo";
+    }
+
+    if (dias <= 60) {
+      return "Riesgo medio";
+    }
+
+    if (dias <= 90) {
+      return "Riesgo alto";
+    }
+
     return "Legal";
   }
 
-  function rangoSemaforo(dias, saldo) {
-    if (Number(saldo || 0) <= 0) return "Cancelado";
-    if (dias <= 0) return "Al día";
-    if (dias <= 30) return "1-30 días";
-    if (dias <= 60) return "31-60 días";
-    if (dias <= 90) return "61-90 días";
+  function rangoSemaforo(
+    dias,
+    saldo
+  ) {
+    if (
+      Number(saldo || 0) <= 0
+    ) {
+      return "Cancelado";
+    }
+
+    if (dias <= 0) {
+      return "Al día";
+    }
+
+    if (dias <= 30) {
+      return "1-30 días";
+    }
+
+    if (dias <= 60) {
+      return "31-60 días";
+    }
+
+    if (dias <= 90) {
+      return "61-90 días";
+    }
+
     return "Más de 90 días";
   }
 
   function pagoEsValido(pago) {
-    const estado = limpiarTexto(pago?.estado);
-    const tipo = limpiarTexto(pago?.tipo);
+    const estado =
+      limpiarTexto(
+        pago?.estado
+      );
 
-    if (estado && estado !== "procesado" && estado !== "activo") return false;
+    const tipo =
+      limpiarTexto(
+        pago?.tipo
+      );
+
+    if (
+      estado &&
+      estado !== "procesado" &&
+      estado !== "activo"
+    ) {
+      return false;
+    }
 
     return [
       "pago crédito",
@@ -140,55 +382,163 @@ export default function DashboardCobranza() {
     ].includes(tipo);
   }
 
-  function fechaPago(pago) {
-    return fechaSimple(pago?.fecha_pago || pago?.fecha || pago?.created_at);
+  function clavePago(
+    pago,
+    indice = 0
+  ) {
+    if (pago?.id) {
+      return String(pago.id);
+    }
+
+    return [
+      pago?.numero_transaccion ||
+        "",
+      pago?.informacion_comercial_id ||
+        "",
+      pago?.numero_cuenta ||
+        "",
+      fechaPago(pago),
+      pago?.monto || "",
+      indice,
+    ].join("|");
   }
 
-  function pagoPerteneceCuenta(pago, cuenta, cliente) {
-    if (!pago || !cuenta) return false;
+  function pagosValidosUnicos(
+    listaPagos
+  ) {
+    const mapa =
+      new Map();
 
-    const porCuentaId =
-      pago.informacion_comercial_id && String(pago.informacion_comercial_id) === String(cuenta.id);
+    (listaPagos || [])
+      .filter(pagoEsValido)
+      .forEach(
+        (pago, indice) => {
+          const clave =
+            clavePago(
+              pago,
+              indice
+            );
 
-    const porNumeroCuenta =
-      pago.numero_cuenta &&
-      String(pago.numero_cuenta).trim() === String(cuenta.numero_cuenta || "").trim();
+          if (
+            !mapa.has(clave)
+          ) {
+            mapa.set(
+              clave,
+              pago
+            );
+          }
+        }
+      );
 
-    const porClienteId = pago.cliente_id && String(pago.cliente_id) === String(cuenta.cliente_id);
-
-    const cedulaPago = String(pago.cliente_cedula || pago.cedula || pago.identificacion || "").trim();
-
-    const porCedula = cliente?.cedula && cedulaPago === String(cliente.cedula).trim();
-
-    return porCuentaId || porNumeroCuenta || porClienteId || porCedula;
+    return [
+      ...mapa.values(),
+    ];
   }
 
-  function sumarPagos(pagosCuenta, desde = "", hasta = "") {
-    return pagosCuenta
+  function sumarPagos(
+    pagosCuenta,
+    desde = "",
+    hasta = ""
+  ) {
+    return (
+      pagosCuenta || []
+    )
       .filter((pago) => {
-        const fecha = fechaPago(pago);
+        const fecha =
+          fechaPago(pago);
 
-        if (!fecha) return false;
-        if (desde && fecha < desde) return false;
-        if (hasta && fecha > hasta) return false;
+        if (!fecha) {
+          return false;
+        }
+
+        if (
+          desde &&
+          fecha < desde
+        ) {
+          return false;
+        }
+
+        if (
+          hasta &&
+          fecha > hasta
+        ) {
+          return false;
+        }
 
         return true;
       })
-      .reduce((sum, pago) => sum + Number(pago.monto || 0), 0);
+      .reduce(
+        (sum, pago) =>
+          sum +
+          Number(
+            pago.monto || 0
+          ),
+        0
+      );
   }
 
   async function cargarDatos() {
-    const empresaId = obtenerEmpresaId();
-    if (!empresaId) return;
+    const empresaId =
+      obtenerEmpresaId();
+
+    if (!empresaId) {
+      return;
+    }
 
     setCargando(true);
 
-    const [cuentasRes, clientesRes, cobranzasRes, pagosRes, gestionesRes] = await Promise.all([
-      supabase.from("informacion_comercial").select("*").eq("empresa_id", empresaId),
-      supabase.from("clientes").select("*").eq("empresa_id", empresaId),
-      supabase.from("informacion_cobranza").select("*").eq("empresa_id", empresaId),
-      supabase.from("caja").select("*").eq("empresa_id", empresaId),
-      supabase.from("bitacora_cliente").select("*").eq("empresa_id", empresaId),
+    const [
+      cuentasRes,
+      clientesRes,
+      cobranzasRes,
+      pagosRes,
+      gestionesRes,
+    ] = await Promise.all([
+      supabase
+        .from(
+          "informacion_comercial"
+        )
+        .select("*")
+        .eq(
+          "empresa_id",
+          empresaId
+        ),
+
+      supabase
+        .from("clientes")
+        .select("*")
+        .eq(
+          "empresa_id",
+          empresaId
+        ),
+
+      supabase
+        .from(
+          "informacion_cobranza"
+        )
+        .select("*")
+        .eq(
+          "empresa_id",
+          empresaId
+        ),
+
+      supabase
+        .from("caja")
+        .select("*")
+        .eq(
+          "empresa_id",
+          empresaId
+        ),
+
+      supabase
+        .from(
+          "bitacora_cliente"
+        )
+        .select("*")
+        .eq(
+          "empresa_id",
+          empresaId
+        ),
     ]);
 
     const errores = [
@@ -200,16 +550,34 @@ export default function DashboardCobranza() {
     ].filter(Boolean);
 
     if (errores.length > 0) {
-      alert("Error cargando Dashboard: " + errores[0].message);
+      alert(
+        "Error cargando Dashboard: " +
+          errores[0].message
+      );
+
       setCargando(false);
       return;
     }
 
-    setCuentas(cuentasRes.data || []);
-    setClientes(clientesRes.data || []);
-    setCobranzas(cobranzasRes.data || []);
-    setPagos(pagosRes.data || []);
-    setGestiones(gestionesRes.data || []);
+    setCuentas(
+      cuentasRes.data || []
+    );
+
+    setClientes(
+      clientesRes.data || []
+    );
+
+    setCobranzas(
+      cobranzasRes.data || []
+    );
+
+    setPagos(
+      pagosRes.data || []
+    );
+
+    setGestiones(
+      gestionesRes.data || []
+    );
 
     setCargando(false);
   }
@@ -217,394 +585,1406 @@ export default function DashboardCobranza() {
   function limpiarFiltros() {
     setFiltroDesde("");
     setFiltroHasta("");
-    setFiltroGestor("Todos");
-  }
-
-  const inicioMes = inicioMesActual();
-  const finMes = finMesActual();
-  const hoy = hoyISO();
-
-  const cartera = useMemo(() => {
-    return cuentas.map((cuenta) => {
-      const cliente = clientes.find((c) => String(c.id) === String(cuenta.cliente_id));
-
-      const cobranza = cobranzas.find(
-        (c) => String(c.informacion_comercial_id) === String(cuenta.id)
-      );
-
-      const pagosCuenta = pagos.filter(
-        (pago) => pagoEsValido(pago) && pagoPerteneceCuenta(pago, cuenta, cliente)
-      );
-
-      const montoOriginal = Number(cuenta.monto_total || 0);
-      const saldoPendiente = Number(cuenta.saldo_actual || 0);
-      const dias = calcularDiasAtraso(cuenta.fecha_vencimiento, saldoPendiente);
-      const estado = estadoCuenta(cuenta, cobranza);
-      const riesgo = riesgoCartera(dias, saldoPendiente, estado);
-      const semaforo = rangoSemaforo(dias, saldoPendiente);
-
-      const gestor =
-        cobranza?.responsable_cobro ||
-        cuenta?.responsable ||
-        cuenta?.vendedor ||
-        "Sin asignar";
-
-      return {
-        cuenta,
-        cliente,
-        cobranza,
-        pagosCuenta,
-        montoOriginal,
-        saldoPendiente,
-        dias,
-        estado,
-        riesgo,
-        semaforo,
-        gestor,
-        cobradoPeriodo: sumarPagos(pagosCuenta, filtroDesde, filtroHasta),
-        cobradoMes: sumarPagos(pagosCuenta, inicioMes, finMes),
-        cobradoHoy: sumarPagos(pagosCuenta, hoy, hoy),
-      };
-    });
-  }, [cuentas, clientes, cobranzas, pagos, filtroDesde, filtroHasta, inicioMes, finMes, hoy]);
-
-  const gestores = ["Todos", ...new Set(cartera.map((item) => item.gestor).filter(Boolean))];
-
-  const carteraPorGestor =
-    filtroGestor === "Todos" ? cartera : cartera.filter((item) => item.gestor === filtroGestor);
-
-  const carteraActivaPorGestor = carteraPorGestor.filter((item) => item.saldoPendiente > 0);
-
-  const carteraOriginal = carteraPorGestor.reduce((sum, item) => sum + item.montoOriginal, 0);
-  const saldoPendiente = carteraPorGestor.reduce((sum, item) => sum + item.saldoPendiente, 0);
-  const totalRecuperado = Math.max(carteraOriginal - saldoPendiente, 0);
-
-  const carteraAlDia = carteraActivaPorGestor
-    .filter((item) => item.dias <= 0)
-    .reduce((sum, item) => sum + item.saldoPendiente, 0);
-
-  const carteraMora = carteraActivaPorGestor
-    .filter((item) => item.dias > 0)
-    .reduce((sum, item) => sum + item.saldoPendiente, 0);
-
-  const porcentajeMora = saldoPendiente > 0 ? (carteraMora / saldoPendiente) * 100 : 0;
-
-  const cobradoHoy = carteraPorGestor.reduce((sum, item) => sum + item.cobradoHoy, 0);
-  const cobradoMes = carteraPorGestor.reduce((sum, item) => sum + item.cobradoMes, 0);
-  const cobradoPeriodo = carteraPorGestor.reduce((sum, item) => sum + item.cobradoPeriodo, 0);
-
-  const saldoInicioPeriodo = saldoPendiente + cobradoPeriodo;
-  const recuperacionPeriodo =
-    saldoInicioPeriodo > 0 ? (cobradoPeriodo / saldoInicioPeriodo) * 100 : 0;
-
-  const vencimientosMes = carteraPorGestor.filter((item) => {
-    const vencimiento = fechaSimple(item.cuenta?.fecha_vencimiento);
-    return vencimiento && vencimiento >= inicioMes && vencimiento <= finMes;
-  });
-
-  const montoVencimientosMes = vencimientosMes.reduce(
-    (sum, item) => sum + item.saldoPendiente + item.cobradoMes,
-    0
-  );
-
-  const cobradoVencimientosMes = vencimientosMes.reduce((sum, item) => sum + item.cobradoMes, 0);
-
-  const pendienteMes = Math.max(montoVencimientosMes - cobradoVencimientosMes, 0);
-
-  const moraAnterior = carteraPorGestor.filter((item) => {
-    const vencimiento = fechaSimple(item.cuenta?.fecha_vencimiento);
-    return vencimiento && vencimiento < inicioMes;
-  });
-
-  const moraAnteriorInicio = moraAnterior.reduce(
-    (sum, item) => sum + item.saldoPendiente + item.cobradoMes,
-    0
-  );
-
-  const moraAnteriorRecuperada = moraAnterior.reduce((sum, item) => sum + item.cobradoMes, 0);
-
-  const moraAnteriorPendiente = moraAnterior.reduce((sum, item) => sum + item.saldoPendiente, 0);
-
-  const saldoVencidoPendiente = carteraPorGestor
-    .filter((item) => {
-      const vencimiento = fechaSimple(item.cuenta?.fecha_vencimiento);
-
-      return item.saldoPendiente > 0 && vencimiento && vencimiento <= hoy;
-    })
-    .reduce((sum, item) => sum + item.saldoPendiente, 0);
-
-  const gestionesPeriodo = gestiones.filter((gestion) => {
-    const fecha = fechaSimple(gestion.fecha_gestion || gestion.created_at);
-
-    if (!fecha) return false;
-    if (filtroDesde && fecha < filtroDesde) return false;
-    if (filtroHasta && fecha > filtroHasta) return false;
-
-    if (filtroGestor !== "Todos") {
-      const usuario = limpiarTexto(gestion.usuario);
-
-      return (
-        usuario === limpiarTexto(filtroGestor) ||
-        usuario.startsWith(limpiarTexto(filtroGestor) + " (")
-      );
-    }
-
-    return true;
-  });
-
-  function esPromesaPago(gestion) {
-    const tipo = limpiarTexto(gestion?.tipo_gestion);
-    const resultado = limpiarTexto(gestion?.resultado_gestion);
-
-    return (
-      tipo === "promesa de pago" ||
-      resultado === "promesa registrada" ||
-      resultado === "promesa de pago"
+    setFiltroGestor(
+      "Todos"
     );
   }
 
-  function obtenerCuentaDePromesa(promesa) {
-    if (!promesa) return null;
+  const hoy = hoyISO();
+  const inicioMes =
+    inicioMesActual();
+  const finMes =
+    finMesActual();
 
-    if (promesa.informacion_comercial_id) {
-      const cuentaDirecta = cartera.find(
-        (item) => String(item.cuenta?.id) === String(promesa.informacion_comercial_id)
+  /*
+    ============================================================
+    CARTERA Y ASIGNACIÓN ÚNICA DE PAGOS
+    ============================================================
+
+    El pago se asigna siguiendo este orden:
+
+    1. informacion_comercial_id
+    2. numero_cuenta
+    3. cliente_id, solamente si el cliente tiene una sola cuenta
+    4. cédula, solamente si el cliente tiene una sola cuenta
+
+    Esto evita que el mismo pago sea contado en varias cuentas.
+  */
+
+  const cartera = useMemo(() => {
+    const baseCartera =
+      cuentas.map((cuenta) => {
+        const cliente =
+          clientes.find(
+            (item) =>
+              String(item.id) ===
+              String(
+                cuenta.cliente_id
+              )
+          );
+
+        const cobranza =
+          cobranzas.find(
+            (item) =>
+              String(
+                item.informacion_comercial_id
+              ) ===
+              String(cuenta.id)
+          );
+
+        const montoOriginal =
+          Number(
+            cuenta.monto_total ||
+              0
+          );
+
+        const saldoPendiente =
+          Number(
+            cuenta.saldo_actual ||
+              0
+          );
+
+        const dias =
+          calcularDiasAtraso(
+            cuenta.fecha_vencimiento,
+            saldoPendiente
+          );
+
+        const estado =
+          estadoCuenta(
+            cuenta,
+            cobranza
+          );
+
+        const riesgo =
+          riesgoCartera(
+            dias,
+            saldoPendiente,
+            estado
+          );
+
+        const semaforo =
+          rangoSemaforo(
+            dias,
+            saldoPendiente
+          );
+
+        const gestor =
+          cobranza?.responsable_cobro ||
+          cuenta?.responsable ||
+          cuenta?.vendedor ||
+          "Sin asignar";
+
+        return {
+          cuenta,
+          cliente,
+          cobranza,
+          montoOriginal,
+          saldoPendiente,
+          dias,
+          estado,
+          riesgo,
+          semaforo,
+          gestor,
+          pagosCuenta: [],
+          cobradoPeriodo: 0,
+          cobradoMes: 0,
+          cobradoHoy: 0,
+        };
+      });
+
+    const pagosUnicos =
+      pagosValidosUnicos(
+        pagos
       );
 
-      if (cuentaDirecta) return cuentaDirecta;
-    }
+    const mapaPagos =
+      new Map();
 
-    if (promesa.cliente_id) {
-      const cuentasCliente = cartera.filter(
-        (item) => String(item.cuenta?.cliente_id) === String(promesa.cliente_id)
-      );
-
-      if (cuentasCliente.length === 1) return cuentasCliente[0];
-    }
-
-    return null;
-  }
-
-  function obtenerFechaRegistroPromesa(promesa) {
-    return fechaSimple(promesa?.fecha_gestion || promesa?.created_at);
-  }
-
-  function obtenerFechaCompromisoPromesa(promesa) {
-    return fechaSimple(promesa?.proxima_gestion);
-  }
-
-  function obtenerClavePromesa(promesa, indice = 0) {
-    if (promesa?.id) return String(promesa.id);
-
-    return [
-      promesa?.informacion_comercial_id || "",
-      promesa?.cliente_id || "",
-      obtenerFechaRegistroPromesa(promesa),
-      obtenerFechaCompromisoPromesa(promesa),
-      indice,
-    ].join("|");
-  }
-
-  const todasLasPromesasOrdenadas = gestiones
-    .filter(esPromesaPago)
-    .map((promesa, indiceOriginal) => ({
-      promesa,
-      indiceOriginal,
-      fechaRegistro: obtenerFechaRegistroPromesa(promesa),
-      fechaCompromiso: obtenerFechaCompromisoPromesa(promesa),
-    }))
-    .filter((item) => item.fechaRegistro && item.fechaCompromiso)
-    .sort((a, b) => {
-      if (a.fechaRegistro !== b.fechaRegistro) return a.fechaRegistro.localeCompare(b.fechaRegistro);
-      if (a.fechaCompromiso !== b.fechaCompromiso) {
-        return a.fechaCompromiso.localeCompare(b.fechaCompromiso);
+    baseCartera.forEach(
+      (item) => {
+        mapaPagos.set(
+          String(
+            item.cuenta.id
+          ),
+          []
+        );
       }
+    );
 
-      return String(a.promesa?.created_at || "").localeCompare(String(b.promesa?.created_at || ""));
-    });
+    pagosUnicos.forEach(
+      (pago) => {
+        let cuentaDestino =
+          null;
 
-  const pagosUtilizados = new Set();
-  const clasificacionPromesas = new Map();
+        if (
+          pago.informacion_comercial_id
+        ) {
+          cuentaDestino =
+            baseCartera.find(
+              (item) =>
+                String(
+                  item.cuenta.id
+                ) ===
+                String(
+                  pago.informacion_comercial_id
+                )
+            );
+        }
 
-  todasLasPromesasOrdenadas.forEach(({ promesa, indiceOriginal, fechaRegistro, fechaCompromiso }) => {
-    const clavePromesa = obtenerClavePromesa(promesa, indiceOriginal);
-    const cuentaRelacionada = obtenerCuentaDePromesa(promesa);
+        if (
+          !cuentaDestino &&
+          pago.numero_cuenta
+        ) {
+          cuentaDestino =
+            baseCartera.find(
+              (item) =>
+                String(
+                  item.cuenta
+                    .numero_cuenta ||
+                    ""
+                ).trim() ===
+                String(
+                  pago.numero_cuenta
+                ).trim()
+            );
+        }
 
-    if (!cuentaRelacionada) {
-      clasificacionPromesas.set(clavePromesa, fechaCompromiso < hoy ? "Incumplida" : "Activa");
-      return;
-    }
+        if (
+          !cuentaDestino &&
+          pago.cliente_id
+        ) {
+          const cuentasCliente =
+            baseCartera.filter(
+              (item) =>
+                String(
+                  item.cuenta
+                    .cliente_id
+                ) ===
+                String(
+                  pago.cliente_id
+                )
+            );
 
-    const pagosOrdenados = [...cuentaRelacionada.pagosCuenta].sort((a, b) => {
-      const fechaA = fechaPago(a);
-      const fechaB = fechaPago(b);
+          if (
+            cuentasCliente.length ===
+            1
+          ) {
+            cuentaDestino =
+              cuentasCliente[0];
+          }
+        }
 
-      if (fechaA !== fechaB) return fechaA.localeCompare(fechaB);
+        if (
+          !cuentaDestino
+        ) {
+          const cedulaPago =
+            String(
+              pago.cliente_cedula ||
+                pago.cedula ||
+                pago.identificacion ||
+                ""
+            ).trim();
 
-      return String(a.created_at || "").localeCompare(String(b.created_at || ""));
-    });
+          if (cedulaPago) {
+            const cuentasCedula =
+              baseCartera.filter(
+                (item) =>
+                  String(
+                    item.cliente
+                      ?.cedula ||
+                      ""
+                  ).trim() ===
+                  cedulaPago
+              );
 
-    const pagoCompatible = pagosOrdenados.find((pago, indicePago) => {
-      const fecha = fechaPago(pago);
+            if (
+              cuentasCedula.length ===
+              1
+            ) {
+              cuentaDestino =
+                cuentasCedula[0];
+            }
+          }
+        }
 
-      if (!fecha) return false;
+        if (cuentaDestino) {
+          const claveCuenta =
+            String(
+              cuentaDestino
+                .cuenta.id
+            );
 
-      const clavePago = pago.id
-        ? String(pago.id)
-        : [
-            pago.numero_transaccion || "",
-            pago.informacion_comercial_id || "",
-            fecha,
-            pago.monto || "",
-            indicePago,
-          ].join("|");
+          const pagosCuenta =
+            mapaPagos.get(
+              claveCuenta
+            ) || [];
 
-      if (pagosUtilizados.has(clavePago)) return false;
-      if (fecha < fechaRegistro) return false;
-      if (fecha > fechaCompromiso) return false;
+          pagosCuenta.push(
+            pago
+          );
 
-      return true;
-    });
+          mapaPagos.set(
+            claveCuenta,
+            pagosCuenta
+          );
+        }
+      }
+    );
 
-    if (pagoCompatible) {
-      const indicePago = pagosOrdenados.indexOf(pagoCompatible);
+    return baseCartera.map(
+      (item) => {
+        const pagosCuenta =
+          mapaPagos.get(
+            String(
+              item.cuenta.id
+            )
+          ) || [];
 
-      const clavePago = pagoCompatible.id
-        ? String(pagoCompatible.id)
-        : [
-            pagoCompatible.numero_transaccion || "",
-            pagoCompatible.informacion_comercial_id || "",
-            fechaPago(pagoCompatible),
-            pagoCompatible.monto || "",
-            indicePago,
-          ].join("|");
+        return {
+          ...item,
 
-      pagosUtilizados.add(clavePago);
-      clasificacionPromesas.set(clavePromesa, "Cumplida");
-      return;
-    }
+          pagosCuenta,
 
-    clasificacionPromesas.set(clavePromesa, fechaCompromiso < hoy ? "Incumplida" : "Activa");
-  });
+          cobradoPeriodo:
+            sumarPagos(
+              pagosCuenta,
+              filtroDesde,
+              filtroHasta
+            ),
 
-  function obtenerEstadoPromesa(promesa) {
-    const indiceOriginal = gestiones.findIndex((gestion) => gestion === promesa);
+          cobradoMes:
+            sumarPagos(
+              pagosCuenta,
+              inicioMes,
+              finMes
+            ),
 
-    const clavePromesa = obtenerClavePromesa(promesa, indiceOriginal >= 0 ? indiceOriginal : 0);
+          cobradoHoy:
+            sumarPagos(
+              pagosCuenta,
+              hoy,
+              hoy
+            ),
+        };
+      }
+    );
+  }, [
+    cuentas,
+    clientes,
+    cobranzas,
+    pagos,
+    filtroDesde,
+    filtroHasta,
+    inicioMes,
+    finMes,
+    hoy,
+  ]);
 
-    return clasificacionPromesas.get(clavePromesa) || "Activa";
+  const gestores = [
+    "Todos",
+    ...new Set(
+      cartera
+        .map(
+          (item) =>
+            item.gestor
+        )
+        .filter(Boolean)
+    ),
+  ];
+
+  const carteraPorGestor =
+    filtroGestor ===
+    "Todos"
+      ? cartera
+      : cartera.filter(
+          (item) =>
+            item.gestor ===
+            filtroGestor
+        );
+
+  const carteraActivaPorGestor =
+    carteraPorGestor.filter(
+      (item) =>
+        item.saldoPendiente >
+        0
+    );
+
+  /*
+    ============================================================
+    RESUMEN EJECUTIVO
+    ============================================================
+  */
+
+  const carteraOriginal =
+    carteraPorGestor.reduce(
+      (sum, item) =>
+        sum +
+        item.montoOriginal,
+      0
+    );
+
+  const saldoPendiente =
+    carteraPorGestor.reduce(
+      (sum, item) =>
+        sum +
+        item.saldoPendiente,
+      0
+    );
+
+  const totalRecuperado =
+    Math.max(
+      carteraOriginal -
+        saldoPendiente,
+      0
+    );
+
+  const carteraAlDia =
+    carteraActivaPorGestor
+      .filter(
+        (item) =>
+          item.dias <= 0
+      )
+      .reduce(
+        (sum, item) =>
+          sum +
+          item.saldoPendiente,
+        0
+      );
+
+  const carteraMora =
+    carteraActivaPorGestor
+      .filter(
+        (item) =>
+          item.dias > 0
+      )
+      .reduce(
+        (sum, item) =>
+          sum +
+          item.saldoPendiente,
+        0
+      );
+
+  const porcentajeMora =
+    saldoPendiente > 0
+      ? (carteraMora /
+          saldoPendiente) *
+        100
+      : 0;
+
+  /*
+    ============================================================
+    COBROS DIRECTOS DE CAJA
+    ============================================================
+
+    Ya no se suman mediante coincidencias amplias por cédula.
+    Cada pago fue asignado una única vez dentro de cartera.
+  */
+
+  const cobradoHoy =
+    carteraPorGestor.reduce(
+      (sum, item) =>
+        sum +
+        item.cobradoHoy,
+      0
+    );
+
+  const cobradoMes =
+    carteraPorGestor.reduce(
+      (sum, item) =>
+        sum +
+        item.cobradoMes,
+      0
+    );
+
+  const cobradoPeriodo =
+    carteraPorGestor.reduce(
+      (sum, item) =>
+        sum +
+        item.cobradoPeriodo,
+      0
+    );
+
+  const saldoInicioPeriodo =
+    saldoPendiente +
+    cobradoPeriodo;
+
+  const recuperacionPeriodo =
+    saldoInicioPeriodo > 0
+      ? (cobradoPeriodo /
+          saldoInicioPeriodo) *
+        100
+      : 0;
+
+  /*
+    ============================================================
+    CIERRE MENSUAL
+    ============================================================
+  */
+
+  const vencimientosMes =
+    carteraPorGestor.filter(
+      (item) => {
+        const vencimiento =
+          fechaSimple(
+            item.cuenta
+              ?.fecha_vencimiento
+          );
+
+        return (
+          vencimiento &&
+          vencimiento >=
+            inicioMes &&
+          vencimiento <=
+            finMes
+        );
+      }
+    );
+
+  const montoVencimientosMes =
+    vencimientosMes.reduce(
+      (sum, item) =>
+        sum +
+        item.saldoPendiente +
+        item.cobradoMes,
+      0
+    );
+
+  const cobradoVencimientosMes =
+    vencimientosMes.reduce(
+      (sum, item) =>
+        sum +
+        item.cobradoMes,
+      0
+    );
+
+  const pendienteMes =
+    Math.max(
+      montoVencimientosMes -
+        cobradoVencimientosMes,
+      0
+    );
+
+  const moraAnterior =
+    carteraPorGestor.filter(
+      (item) => {
+        const vencimiento =
+          fechaSimple(
+            item.cuenta
+              ?.fecha_vencimiento
+          );
+
+        return (
+          vencimiento &&
+          vencimiento <
+            inicioMes
+        );
+      }
+    );
+
+  const moraAnteriorInicio =
+    moraAnterior.reduce(
+      (sum, item) =>
+        sum +
+        item.saldoPendiente +
+        item.cobradoMes,
+      0
+    );
+
+  const moraAnteriorRecuperada =
+    moraAnterior.reduce(
+      (sum, item) =>
+        sum +
+        item.cobradoMes,
+      0
+    );
+
+  const moraAnteriorPendiente =
+    moraAnterior.reduce(
+      (sum, item) =>
+        sum +
+        item.saldoPendiente,
+      0
+    );
+
+  const saldoVencidoPendiente =
+    carteraPorGestor
+      .filter((item) => {
+        const vencimiento =
+          fechaSimple(
+            item.cuenta
+              ?.fecha_vencimiento
+          );
+
+        return (
+          item.saldoPendiente >
+            0 &&
+          vencimiento &&
+          vencimiento <= hoy
+        );
+      })
+      .reduce(
+        (sum, item) =>
+          sum +
+          item.saldoPendiente,
+        0
+      );
+
+  /*
+    ============================================================
+    GESTIONES DEL PERÍODO
+    ============================================================
+  */
+
+  const gestionesPeriodo =
+    gestiones.filter(
+      (gestion) => {
+        const fecha =
+          fechaGestion(
+            gestion
+          );
+
+        if (!fecha) {
+          return false;
+        }
+
+        if (
+          filtroDesde &&
+          fecha <
+            filtroDesde
+        ) {
+          return false;
+        }
+
+        if (
+          filtroHasta &&
+          fecha >
+            filtroHasta
+        ) {
+          return false;
+        }
+
+        if (
+          filtroGestor !==
+          "Todos"
+        ) {
+          const usuario =
+            limpiarTexto(
+              gestion.usuario
+            );
+
+          const gestor =
+            limpiarTexto(
+              filtroGestor
+            );
+
+          return (
+            usuario === gestor ||
+            usuario.startsWith(
+              `${gestor} (`
+            )
+          );
+        }
+
+        return true;
+      }
+    );
+
+  function esPromesaPago(
+    gestion
+  ) {
+    const tipo =
+      limpiarTexto(
+        gestion?.tipo_gestion
+      );
+
+    const resultado =
+      limpiarTexto(
+        gestion?.resultado_gestion
+      );
+
+    return (
+      tipo ===
+        "promesa de pago" ||
+      resultado ===
+        "promesa registrada" ||
+      resultado ===
+        "promesa de pago"
+    );
   }
 
-  function promesaTienePago(promesa) {
-    return obtenerEstadoPromesa(promesa) === "Cumplida";
-  }
+  /*
+    ============================================================
+    CLASIFICACIÓN DE PROMESAS POR MONTO
+    ============================================================
 
-  const promesasPeriodo = gestionesPeriodo.filter(esPromesaPago);
+    La asignación se hace por cuenta y en orden cronológico.
 
-  const promesasCumplidas = promesasPeriodo.filter(
-    (promesa) => obtenerEstadoPromesa(promesa) === "Cumplida"
-  ).length;
+    Cada dólar de un pago solamente se puede utilizar una vez.
+  */
 
-  const promesasActivas = promesasPeriodo.filter(
-    (promesa) => obtenerEstadoPromesa(promesa) === "Activa"
-  ).length;
+  const detallePromesas =
+    useMemo(() => {
+      const promesasValidas =
+        gestiones
+          .filter(
+            esPromesaPago
+          )
+          .filter(
+            (promesa) =>
+              Number(
+                promesa.monto_promesa ||
+                  0
+              ) > 0
+          )
+          .map(
+            (
+              promesa,
+              indice
+            ) => ({
+              promesa,
+              indice,
+              cuentaId:
+                promesa.informacion_comercial_id
+                  ? String(
+                      promesa.informacion_comercial_id
+                    )
+                  : "",
+              clienteId:
+                promesa.cliente_id
+                  ? String(
+                      promesa.cliente_id
+                    )
+                  : "",
+              fechaRegistro:
+                fechaGestion(
+                  promesa
+                ),
+              fechaCompromiso:
+                fechaSimple(
+                  promesa.proxima_gestion
+                ),
+              montoPrometido:
+                Number(
+                  promesa.monto_promesa ||
+                    0
+                ),
+            })
+          )
+          .filter(
+            (item) =>
+              item.cuentaId &&
+              item.fechaRegistro &&
+              item.fechaCompromiso
+          )
+          .sort(
+            (a, b) => {
+              if (
+                a.cuentaId !==
+                b.cuentaId
+              ) {
+                return a.cuentaId.localeCompare(
+                  b.cuentaId
+                );
+              }
 
-  const promesasIncumplidas = promesasPeriodo.filter(
-    (promesa) => obtenerEstadoPromesa(promesa) === "Incumplida"
-  ).length;
+              if (
+                a.fechaRegistro !==
+                b.fechaRegistro
+              ) {
+                return a.fechaRegistro.localeCompare(
+                  b.fechaRegistro
+                );
+              }
+
+              return String(
+                a.promesa
+                  .created_at ||
+                  ""
+              ).localeCompare(
+                String(
+                  b.promesa
+                    .created_at ||
+                    ""
+                )
+              );
+            }
+          );
+
+      const resultado = [];
+
+      const gruposCuenta =
+        new Map();
+
+      promesasValidas.forEach(
+        (item) => {
+          const grupo =
+            gruposCuenta.get(
+              item.cuentaId
+            ) || [];
+
+          grupo.push(item);
+
+          gruposCuenta.set(
+            item.cuentaId,
+            grupo
+          );
+        }
+      );
+
+      gruposCuenta.forEach(
+        (
+          promesasCuenta,
+          cuentaId
+        ) => {
+          const cuentaRelacionada =
+            cartera.find(
+              (item) =>
+                String(
+                  item.cuenta.id
+                ) ===
+                String(cuentaId)
+            );
+
+          const pagosCuenta =
+            [
+              ...(
+                cuentaRelacionada
+                  ?.pagosCuenta ||
+                []
+              ),
+            ]
+              .map(
+                (
+                  pago,
+                  indice
+                ) => ({
+                  pago,
+                  clave:
+                    clavePago(
+                      pago,
+                      indice
+                    ),
+                  fecha:
+                    fechaPago(
+                      pago
+                    ),
+                  restante:
+                    Math.max(
+                      Number(
+                        pago.monto ||
+                          0
+                      ),
+                      0
+                    ),
+                })
+              )
+              .filter(
+                (item) =>
+                  item.fecha &&
+                  item.restante >
+                    0
+              )
+              .sort(
+                (a, b) => {
+                  if (
+                    a.fecha !==
+                    b.fecha
+                  ) {
+                    return a.fecha.localeCompare(
+                      b.fecha
+                    );
+                  }
+
+                  return String(
+                    a.pago
+                      .created_at ||
+                      ""
+                  ).localeCompare(
+                    String(
+                      b.pago
+                        .created_at ||
+                        ""
+                    )
+                  );
+                }
+              );
+
+          promesasCuenta.forEach(
+            (item) => {
+              let pendiente =
+                item.montoPrometido;
+
+              let pagadoATiempo =
+                0;
+
+              let pagadoTarde =
+                0;
+
+              pagosCuenta.forEach(
+                (pagoDisponible) => {
+                  if (
+                    pendiente <= 0
+                  ) {
+                    return;
+                  }
+
+                  if (
+                    pagoDisponible.restante <=
+                    0
+                  ) {
+                    return;
+                  }
+
+                  if (
+                    pagoDisponible.fecha <
+                    item.fechaRegistro
+                  ) {
+                    return;
+                  }
+
+                  const aplicar =
+                    Math.min(
+                      pendiente,
+                      pagoDisponible.restante
+                    );
+
+                  if (
+                    aplicar <= 0
+                  ) {
+                    return;
+                  }
+
+                  if (
+                    pagoDisponible.fecha <=
+                    item.fechaCompromiso
+                  ) {
+                    pagadoATiempo +=
+                      aplicar;
+                  } else {
+                    pagadoTarde +=
+                      aplicar;
+                  }
+
+                  pendiente -=
+                    aplicar;
+
+                  pagoDisponible.restante -=
+                    aplicar;
+                }
+              );
+
+              const pagadoTotal =
+                pagadoATiempo +
+                pagadoTarde;
+
+              let estado =
+                "Activa";
+
+              if (
+                pagadoATiempo >=
+                item.montoPrometido
+              ) {
+                estado =
+                  "Cumplida";
+              } else if (
+                pagadoTotal >=
+                item.montoPrometido
+              ) {
+                estado =
+                  "Cumplida fuera de fecha";
+              } else if (
+                hoy >
+                item.fechaCompromiso
+              ) {
+                estado =
+                  "Incumplida";
+              } else if (
+                pagadoTotal > 0
+              ) {
+                estado =
+                  "Parcial";
+              }
+
+              const cliente =
+                clientes.find(
+                  (registro) =>
+                    String(
+                      registro.id
+                    ) ===
+                    String(
+                      item.clienteId
+                    )
+                );
+
+              resultado.push({
+                ...item,
+                cliente,
+                cuentaRelacionada,
+                pagadoATiempo,
+                pagadoTarde,
+                pagadoTotal,
+                pendientePromesa:
+                  Math.max(
+                    item.montoPrometido -
+                      pagadoTotal,
+                    0
+                  ),
+                estado,
+                gestorPromesa:
+                  item.promesa
+                    .usuario ||
+                  cuentaRelacionada
+                    ?.gestor ||
+                  "Sin asignar",
+              });
+            }
+          );
+        }
+      );
+
+      return resultado;
+    }, [
+      gestiones,
+      cartera,
+      clientes,
+      hoy,
+    ]);
+
+  const promesasPeriodoDetalle =
+    detallePromesas.filter(
+      (item) => {
+        const fecha =
+          item.fechaRegistro;
+
+        if (
+          filtroDesde &&
+          fecha <
+            filtroDesde
+        ) {
+          return false;
+        }
+
+        if (
+          filtroHasta &&
+          fecha >
+            filtroHasta
+        ) {
+          return false;
+        }
+
+        if (
+          filtroGestor !==
+          "Todos"
+        ) {
+          const usuario =
+            limpiarTexto(
+              item.promesa
+                .usuario
+            );
+
+          const gestor =
+            limpiarTexto(
+              filtroGestor
+            );
+
+          return (
+            usuario === gestor ||
+            usuario.startsWith(
+              `${gestor} (`
+            ) ||
+            limpiarTexto(
+              item.cuentaRelacionada
+                ?.gestor
+            ) === gestor
+          );
+        }
+
+        return true;
+      }
+    );
+
+  const promesasActivas =
+    promesasPeriodoDetalle.filter(
+      (item) =>
+        item.estado ===
+        "Activa"
+    ).length;
+
+  const promesasParciales =
+    promesasPeriodoDetalle.filter(
+      (item) =>
+        item.estado ===
+        "Parcial"
+    ).length;
+
+  const promesasCumplidas =
+    promesasPeriodoDetalle.filter(
+      (item) =>
+        item.estado ===
+        "Cumplida"
+    ).length;
+
+  const promesasIncumplidas =
+    promesasPeriodoDetalle.filter(
+      (item) =>
+        item.estado ===
+        "Incumplida"
+    ).length;
+
+  const promesasFueraFecha =
+    promesasPeriodoDetalle.filter(
+      (item) =>
+        item.estado ===
+        "Cumplida fuera de fecha"
+    ).length;
+
+  /*
+    ============================================================
+    SEMÁFORO
+    ============================================================
+  */
 
   const semaforo = [
     {
       rango: "Al día",
       icono: "🟢",
-      items: carteraActivaPorGestor.filter((item) => item.semaforo === "Al día"),
+      items:
+        carteraActivaPorGestor.filter(
+          (item) =>
+            item.semaforo ===
+            "Al día"
+        ),
     },
     {
       rango: "1-30 días",
       icono: "🟡",
-      items: carteraActivaPorGestor.filter((item) => item.semaforo === "1-30 días"),
+      items:
+        carteraActivaPorGestor.filter(
+          (item) =>
+            item.semaforo ===
+            "1-30 días"
+        ),
     },
     {
       rango: "31-60 días",
       icono: "🟠",
-      items: carteraActivaPorGestor.filter((item) => item.semaforo === "31-60 días"),
+      items:
+        carteraActivaPorGestor.filter(
+          (item) =>
+            item.semaforo ===
+            "31-60 días"
+        ),
     },
     {
       rango: "61-90 días",
       icono: "🟧",
-      items: carteraActivaPorGestor.filter((item) => item.semaforo === "61-90 días"),
+      items:
+        carteraActivaPorGestor.filter(
+          (item) =>
+            item.semaforo ===
+            "61-90 días"
+        ),
     },
     {
-      rango: "Más de 90 días",
+      rango:
+        "Más de 90 días",
       icono: "🔴",
-      items: carteraActivaPorGestor.filter((item) => item.semaforo === "Más de 90 días"),
+      items:
+        carteraActivaPorGestor.filter(
+          (item) =>
+            item.semaforo ===
+            "Más de 90 días"
+        ),
     },
   ].map((rango) => ({
     ...rango,
-    clientes: rango.items.length,
-    monto: rango.items.reduce((sum, item) => sum + item.saldoPendiente, 0),
+
+    clientes:
+      rango.items.length,
+
+    monto:
+      rango.items.reduce(
+        (sum, item) =>
+          sum +
+          item.saldoPendiente,
+        0
+      ),
   }));
 
-  const riesgo = ["Al día", "Riesgo bajo", "Riesgo medio", "Riesgo alto", "Legal"].map((nivel) => {
-    const items = carteraActivaPorGestor.filter((item) => item.riesgo === nivel);
+  /*
+    ============================================================
+    RIESGO
+    ============================================================
+  */
+
+  const riesgo = [
+    "Al día",
+    "Riesgo bajo",
+    "Riesgo medio",
+    "Riesgo alto",
+    "Legal",
+  ].map((nivel) => {
+    const items =
+      carteraActivaPorGestor.filter(
+        (item) =>
+          item.riesgo ===
+          nivel
+      );
 
     return {
       riesgo: nivel,
-      clientes: items.length,
-      monto: items.reduce((sum, item) => sum + item.saldoPendiente, 0),
+
+      clientes:
+        items.length,
+
+      monto:
+        items.reduce(
+          (sum, item) =>
+            sum +
+            item.saldoPendiente,
+          0
+        ),
     };
   });
 
-  const rankingGestores = gestores
-    .filter((gestor) => gestor !== "Todos")
-    .map((gestor) => {
-      const cuentasGestor = cartera.filter((item) => item.gestor === gestor);
-      const cuentasActivas = cuentasGestor.filter((item) => item.saldoPendiente > 0);
+  /*
+    ============================================================
+    EFECTIVIDAD POR GESTOR
+    ============================================================
+  */
 
-      const cobrado = cuentasGestor.reduce((sum, item) => sum + item.cobradoPeriodo, 0);
-      const saldo = cuentasActivas.reduce((sum, item) => sum + item.saldoPendiente, 0);
-      const saldoInicio = saldo + cobrado;
+  const rankingGestores =
+    gestores
+      .filter(
+        (gestor) =>
+          gestor !== "Todos"
+      )
+      .map((gestor) => {
+        const cuentasGestor =
+          cartera.filter(
+            (item) =>
+              item.gestor ===
+              gestor
+          );
 
-      const gestionesGestor = gestionesPeriodo.filter((gestion) => {
-        const usuario = limpiarTexto(gestion.usuario);
+        const cuentasActivas =
+          cuentasGestor.filter(
+            (item) =>
+              item.saldoPendiente >
+              0
+          );
 
-        return usuario === limpiarTexto(gestor) || usuario.startsWith(limpiarTexto(gestor) + " (");
+        const cobrado =
+          cuentasGestor.reduce(
+            (sum, item) =>
+              sum +
+              item.cobradoPeriodo,
+            0
+          );
+
+        const saldo =
+          cuentasActivas.reduce(
+            (sum, item) =>
+              sum +
+              item.saldoPendiente,
+            0
+          );
+
+        const saldoInicio =
+          saldo + cobrado;
+
+        const gestionesGestor =
+          gestionesPeriodo.filter(
+            (gestion) => {
+              const usuario =
+                limpiarTexto(
+                  gestion.usuario
+                );
+
+              const nombreGestor =
+                limpiarTexto(
+                  gestor
+                );
+
+              return (
+                usuario ===
+                  nombreGestor ||
+                usuario.startsWith(
+                  `${nombreGestor} (`
+                )
+              );
+            }
+          );
+
+        const promesasGestor =
+          promesasPeriodoDetalle.filter(
+            (promesa) => {
+              const usuario =
+                limpiarTexto(
+                  promesa.promesa
+                    .usuario
+                );
+
+              const nombreGestor =
+                limpiarTexto(
+                  gestor
+                );
+
+              return (
+                usuario ===
+                  nombreGestor ||
+                usuario.startsWith(
+                  `${nombreGestor} (`
+                ) ||
+                limpiarTexto(
+                  promesa
+                    .cuentaRelacionada
+                    ?.gestor
+                ) === nombreGestor
+              );
+            }
+          );
+
+        const promesasCumplidasGestor =
+          promesasGestor.filter(
+            (promesa) =>
+              promesa.estado ===
+              "Cumplida"
+          ).length;
+
+        const promesasParcialesGestor =
+          promesasGestor.filter(
+            (promesa) =>
+              promesa.estado ===
+              "Parcial"
+          ).length;
+
+        return {
+          gestor,
+
+          clientesAsignados:
+            cuentasActivas.length,
+
+          clientesGestionados:
+            new Set(
+              gestionesGestor
+                .map(
+                  (gestion) =>
+                    gestion.cliente_id
+                )
+                .filter(Boolean)
+            ).size,
+
+          gestiones:
+            gestionesGestor.length,
+
+          promesas:
+            promesasGestor.length,
+
+          promesasCumplidas:
+            promesasCumplidasGestor,
+
+          promesasParciales:
+            promesasParcialesGestor,
+
+          cobrado,
+
+          recuperacion:
+            saldoInicio > 0
+              ? (cobrado /
+                  saldoInicio) *
+                100
+              : 0,
+        };
       });
 
-      const promesasGestor = gestionesGestor.filter(esPromesaPago);
+  /*
+    ============================================================
+    TOP CLIENTES
+    ============================================================
+  */
 
-      const promesasCumplidasGestor = promesasGestor.filter(
-        (promesa) => obtenerEstadoPromesa(promesa) === "Cumplida"
-      ).length;
-
-      return {
-        gestor,
-        clientesAsignados: cuentasActivas.length,
-        clientesGestionados: new Set(
-          gestionesGestor.map((gestion) => gestion.cliente_id).filter(Boolean)
-        ).size,
-        gestiones: gestionesGestor.length,
-        promesas: promesasGestor.length,
-        promesasCumplidas: promesasCumplidasGestor,
-        cobrado,
-        recuperacion: saldoInicio > 0 ? (cobrado / saldoInicio) * 100 : 0,
-      };
-    });
-
-  const mayorRiesgo = [...carteraActivaPorGestor]
-    .sort((a, b) => b.dias - a.dias || b.saldoPendiente - a.saldoPendiente)
+  const mayorRiesgo = [
+    ...carteraActivaPorGestor,
+  ]
+    .sort(
+      (a, b) =>
+        b.dias -
+          a.dias ||
+        b.saldoPendiente -
+          a.saldoPendiente
+    )
     .slice(0, 10);
 
-  const mayorSaldo = [...carteraActivaPorGestor]
-    .sort((a, b) => b.saldoPendiente - a.saldoPendiente)
+  const mayorSaldo = [
+    ...carteraActivaPorGestor,
+  ]
+    .sort(
+      (a, b) =>
+        b.saldoPendiente -
+        a.saldoPendiente
+    )
     .slice(0, 10);
+
+  const promesasDetalleFilas =
+    [...promesasPeriodoDetalle]
+      .sort((a, b) => {
+        if (
+          a.fechaCompromiso !==
+          b.fechaCompromiso
+        ) {
+          return a.fechaCompromiso.localeCompare(
+            b.fechaCompromiso
+          );
+        }
+
+        return a.fechaRegistro.localeCompare(
+          b.fechaRegistro
+        );
+      })
+      .map((item) => [
+        item.cliente?.nombre ||
+          "Sin nombre",
+
+        item.cuentaRelacionada
+          ?.cuenta
+          ?.numero_cuenta ||
+          "-",
+
+        item.fechaCompromiso,
+
+        formato(
+          item.montoPrometido
+        ),
+
+        formato(
+          item.pagadoTotal
+        ),
+
+        formato(
+          item.pendientePromesa
+        ),
+
+        item.estado,
+
+        item.promesa.usuario ||
+          item.cuentaRelacionada
+            ?.gestor ||
+          "Sin asignar",
+      ]);
 
   if (cargando) {
     return (
       <div style={pagina}>
         <div style={cargandoBox}>
-          <strong>Cargando Dashboard Cobranza...</strong>
-          <p>Calculando cartera, recuperación, mora, promesas y gestores.</p>
+          <strong>
+            Cargando Dashboard Cobranza...
+          </strong>
+
+          <p>
+            Calculando cartera, pagos, promesas y gestores.
+          </p>
         </div>
       </div>
     );
@@ -615,10 +1995,17 @@ export default function DashboardCobranza() {
       <div style={contenedor}>
         <div style={encabezado}>
           <div style={tituloBox}>
-            <img src="/konax-logo.png" alt="KONAX" style={logo} />
+            <img
+              src="/konax-logo.png"
+              alt="KONAX"
+              style={logo}
+            />
 
             <div>
-              <h1 style={titulo}>Dashboard Cobranza</h1>
+              <h1 style={titulo}>
+                Dashboard Cobranza
+              </h1>
+
               <p style={subtitulo}>
                 Administración de cartera, recuperación, riesgo, promesas y gestores.
               </p>
@@ -626,26 +2013,42 @@ export default function DashboardCobranza() {
           </div>
 
           <div style={accionesTop}>
-            <button style={botonDashboard} onClick={volverDashboard}>
+            <button
+              style={botonDashboard}
+              onClick={
+                volverDashboard
+              }
+            >
               ← Volver al Dashboard
             </button>
 
-            <button style={botonActualizar} onClick={cargarDatos}>
+            <button
+              style={botonActualizar}
+              onClick={
+                cargarDatos
+              }
+            >
               Actualizar
             </button>
 
-            <button style={botonNegro} onClick={() => window.print()}>
+            <button
+              style={botonNegro}
+              onClick={() =>
+                window.print()
+              }
+            >
               Imprimir Reporte
             </button>
           </div>
         </div>
 
         <div style={card}>
-          <h2 style={tituloSeccion}>Filtros de análisis</h2>
+          <h2 style={tituloSeccion}>
+            Filtros de análisis
+          </h2>
 
           <p style={nota}>
-            Las fechas afectan cobros, gestiones, promesas y efectividad de gestores. La cartera representa
-            el estado actual.
+            Las fechas afectan cobros, gestiones, promesas y efectividad de gestores. La cartera representa el estado actual.
           </p>
 
           <div style={gridFiltros}>
@@ -653,7 +2056,11 @@ export default function DashboardCobranza() {
               <input
                 type="date"
                 value={filtroDesde}
-                onChange={(e) => setFiltroDesde(e.target.value)}
+                onChange={(event) =>
+                  setFiltroDesde(
+                    event.target.value
+                  )
+                }
                 style={inputStyle}
               />
             </Campo>
@@ -662,7 +2069,11 @@ export default function DashboardCobranza() {
               <input
                 type="date"
                 value={filtroHasta}
-                onChange={(e) => setFiltroHasta(e.target.value)}
+                onChange={(event) =>
+                  setFiltroHasta(
+                    event.target.value
+                  )
+                }
                 style={inputStyle}
               />
             </Campo>
@@ -670,108 +2081,354 @@ export default function DashboardCobranza() {
             <Campo label="Gestor">
               <select
                 value={filtroGestor}
-                onChange={(e) => setFiltroGestor(e.target.value)}
+                onChange={(event) =>
+                  setFiltroGestor(
+                    event.target.value
+                  )
+                }
                 style={inputStyle}
               >
-                {gestores.map((gestor) => (
-                  <option key={gestor}>{gestor}</option>
-                ))}
+                {gestores.map(
+                  (gestor) => (
+                    <option
+                      key={gestor}
+                      value={gestor}
+                    >
+                      {gestor}
+                    </option>
+                  )
+                )}
               </select>
             </Campo>
           </div>
 
-          <button style={botonGris} onClick={limpiarFiltros}>
+          <button
+            style={botonGris}
+            onClick={
+              limpiarFiltros
+            }
+          >
             Limpiar filtros
           </button>
         </div>
 
-        <h2 style={seccionTitulo}>Resumen Ejecutivo</h2>
+        <h2 style={seccionTitulo}>
+          Resumen Ejecutivo
+        </h2>
 
         <div style={kpiGrid}>
-          <KPI titulo="Cartera Original" valor={formato(carteraOriginal)} icono="🏦" />
-          <KPI titulo="Total Recuperado" valor={formato(totalRecuperado)} icono="✅" />
-          <KPI titulo="Saldo Pendiente" valor={formato(saldoPendiente)} icono="💰" />
-          <KPI titulo="Cartera Al Día" valor={formato(carteraAlDia)} icono="🟢" />
-          <KPI titulo="Cartera en Mora" valor={formato(carteraMora)} icono="🔴" />
-          <KPI titulo="% Mora" valor={`${porcentajeMora.toFixed(1)}%`} icono="📈" />
-          <KPI titulo="Cobrado Periodo" valor={formato(cobradoPeriodo)} icono="🧾" />
+          <KPI
+            titulo="Cartera Original"
+            valor={formato(
+              carteraOriginal
+            )}
+            icono="🏦"
+          />
+
+          <KPI
+            titulo="Total Recuperado"
+            valor={formato(
+              totalRecuperado
+            )}
+            icono="✅"
+          />
+
+          <KPI
+            titulo="Saldo Pendiente"
+            valor={formato(
+              saldoPendiente
+            )}
+            icono="💰"
+          />
+
+          <KPI
+            titulo="Cartera Al Día"
+            valor={formato(
+              carteraAlDia
+            )}
+            icono="🟢"
+          />
+
+          <KPI
+            titulo="Cartera en Mora"
+            valor={formato(
+              carteraMora
+            )}
+            icono="🔴"
+          />
+
+          <KPI
+            titulo="% Mora"
+            valor={`${porcentajeMora.toFixed(
+              1
+            )}%`}
+            icono="📈"
+          />
+
+          <KPI
+            titulo="Cobrado Periodo"
+            valor={formato(
+              cobradoPeriodo
+            )}
+            icono="🧾"
+          />
+
           <KPI
             titulo="% Recuperación Periodo"
-            valor={`${recuperacionPeriodo.toFixed(1)}%`}
+            valor={`${recuperacionPeriodo.toFixed(
+              1
+            )}%`}
             icono="🎯"
           />
         </div>
 
-        <h2 style={seccionTitulo}>Cierre Mensual</h2>
+        <h2 style={seccionTitulo}>
+          Cierre Mensual
+        </h2>
 
         <div style={kpiGrid}>
-          <KPI titulo="Vencimientos del Mes" valor={formato(montoVencimientosMes)} icono="📅" />
-          <KPI titulo="Cobrado del Mes" valor={formato(cobradoMes)} icono="💵" />
-          <KPI titulo="Cobrado de Vencimientos" valor={formato(cobradoVencimientosMes)} icono="✅" />
-          <KPI titulo="Pendiente del Mes" valor={formato(pendienteMes)} icono="⏳" />
-          <KPI titulo="Mora Anterior" valor={formato(moraAnteriorInicio)} icono="📂" />
-          <KPI titulo="Mora Recuperada" valor={formato(moraAnteriorRecuperada)} icono="♻️" />
-          <KPI titulo="Mora Pendiente" valor={formato(moraAnteriorPendiente)} icono="⚠️" />
-          <KPI titulo="Saldo Vencido Pendiente" valor={formato(saldoVencidoPendiente)} icono="➡️" />
+          <KPI
+            titulo="Vencimientos del Mes"
+            valor={formato(
+              montoVencimientosMes
+            )}
+            icono="📅"
+          />
+
+          <KPI
+            titulo="Cobrado del Mes"
+            valor={formato(
+              cobradoMes
+            )}
+            icono="💵"
+          />
+
+          <KPI
+            titulo="Cobrado de Vencimientos"
+            valor={formato(
+              cobradoVencimientosMes
+            )}
+            icono="✅"
+          />
+
+          <KPI
+            titulo="Pendiente del Mes"
+            valor={formato(
+              pendienteMes
+            )}
+            icono="⏳"
+          />
+
+          <KPI
+            titulo="Mora Anterior"
+            valor={formato(
+              moraAnteriorInicio
+            )}
+            icono="📂"
+          />
+
+          <KPI
+            titulo="Mora Recuperada"
+            valor={formato(
+              moraAnteriorRecuperada
+            )}
+            icono="♻️"
+          />
+
+          <KPI
+            titulo="Mora Pendiente"
+            valor={formato(
+              moraAnteriorPendiente
+            )}
+            icono="⚠️"
+          />
+
+          <KPI
+            titulo="Saldo Vencido Pendiente"
+            valor={formato(
+              saldoVencidoPendiente
+            )}
+            icono="➡️"
+          />
         </div>
 
-        <h2 style={seccionTitulo}>Promesas y Actividad</h2>
+        <h2 style={seccionTitulo}>
+          Promesas y Actividad
+        </h2>
 
         <div style={kpiGrid}>
-          <KPI titulo="Cobrado Hoy" valor={formato(cobradoHoy)} icono="📅" />
-          <KPI titulo="Promesas Activas" valor={promesasActivas} icono="🤝" />
-          <KPI titulo="Promesas Cumplidas" valor={promesasCumplidas} icono="✅" />
-          <KPI titulo="Promesas Incumplidas" valor={promesasIncumplidas} icono="⚠️" />
-          <KPI titulo="Gestiones Periodo" valor={gestionesPeriodo.length} icono="☎️" />
+          <KPI
+            titulo="Cobrado Hoy"
+            valor={formato(
+              cobradoHoy
+            )}
+            icono="📅"
+          />
+
+          <KPI
+            titulo="Promesas Activas"
+            valor={promesasActivas}
+            icono="🤝"
+          />
+
+          <KPI
+            titulo="Promesas Parciales"
+            valor={promesasParciales}
+            icono="🟡"
+          />
+
+          <KPI
+            titulo="Promesas Cumplidas"
+            valor={promesasCumplidas}
+            icono="✅"
+          />
+
+          <KPI
+            titulo="Promesas Incumplidas"
+            valor={
+              promesasIncumplidas
+            }
+            icono="⚠️"
+          />
+
+          <KPI
+            titulo="Cumplidas Fuera de Fecha"
+            valor={
+              promesasFueraFecha
+            }
+            icono="🕒"
+          />
+
+          <KPI
+            titulo="Gestiones Periodo"
+            valor={
+              gestionesPeriodo.length
+            }
+            icono="☎️"
+          />
         </div>
+
+        <Tabla
+          titulo="Detalle de Promesas"
+          columnas={[
+            "Cliente",
+            "Cuenta",
+            "Fecha prometida",
+            "Monto prometido",
+            "Pagado aplicado",
+            "Pendiente",
+            "Estado",
+            "Gestor",
+          ]}
+          filas={
+            promesasDetalleFilas
+          }
+        />
 
         <div style={gridDos}>
           <div style={card}>
-            <h2 style={tituloSeccion}>Semáforo de Cartera</h2>
+            <h2 style={tituloSeccion}>
+              Semáforo de Cartera
+            </h2>
 
             <table style={tabla}>
               <thead>
                 <tr>
-                  <th style={th}>Rango</th>
-                  <th style={th}>Clientes</th>
-                  <th style={th}>Monto</th>
+                  <th style={th}>
+                    Rango
+                  </th>
+
+                  <th style={th}>
+                    Clientes
+                  </th>
+
+                  <th style={th}>
+                    Monto
+                  </th>
                 </tr>
               </thead>
 
               <tbody>
-                {semaforo.map((item) => (
-                  <tr key={item.rango}>
-                    <td style={td}>
-                      {item.icono} {item.rango}
-                    </td>
-                    <td style={td}>{item.clientes}</td>
-                    <td style={td}>{formato(item.monto)}</td>
-                  </tr>
-                ))}
+                {semaforo.map(
+                  (item) => (
+                    <tr
+                      key={
+                        item.rango
+                      }
+                    >
+                      <td style={td}>
+                        {item.icono}{" "}
+                        {item.rango}
+                      </td>
+
+                      <td style={td}>
+                        {
+                          item.clientes
+                        }
+                      </td>
+
+                      <td style={td}>
+                        {formato(
+                          item.monto
+                        )}
+                      </td>
+                    </tr>
+                  )
+                )}
               </tbody>
             </table>
           </div>
 
           <div style={card}>
-            <h2 style={tituloSeccion}>Riesgo de Cartera</h2>
+            <h2 style={tituloSeccion}>
+              Riesgo de Cartera
+            </h2>
 
             <table style={tabla}>
               <thead>
                 <tr>
-                  <th style={th}>Riesgo</th>
-                  <th style={th}>Clientes</th>
-                  <th style={th}>Monto</th>
+                  <th style={th}>
+                    Riesgo
+                  </th>
+
+                  <th style={th}>
+                    Clientes
+                  </th>
+
+                  <th style={th}>
+                    Monto
+                  </th>
                 </tr>
               </thead>
 
               <tbody>
-                {riesgo.map((item) => (
-                  <tr key={item.riesgo}>
-                    <td style={td}>{item.riesgo}</td>
-                    <td style={td}>{item.clientes}</td>
-                    <td style={td}>{formato(item.monto)}</td>
-                  </tr>
-                ))}
+                {riesgo.map(
+                  (item) => (
+                    <tr
+                      key={
+                        item.riesgo
+                      }
+                    >
+                      <td style={td}>
+                        {
+                          item.riesgo
+                        }
+                      </td>
+
+                      <td style={td}>
+                        {
+                          item.clientes
+                        }
+                      </td>
+
+                      <td style={td}>
+                        {formato(
+                          item.monto
+                        )}
+                      </td>
+                    </tr>
+                  )
+                )}
               </tbody>
             </table>
           </div>
@@ -785,104 +2442,207 @@ export default function DashboardCobranza() {
             "Clientes gestionados",
             "Gestiones",
             "Promesas",
+            "Promesas parciales",
             "Promesas cumplidas",
             "Monto recuperado",
             "% recuperación",
           ]}
-          filas={rankingGestores.map((g) => [
-            g.gestor,
-            g.clientesAsignados,
-            g.clientesGestionados,
-            g.gestiones,
-            g.promesas,
-            g.promesasCumplidas,
-            formato(g.cobrado),
-            `${g.recuperacion.toFixed(1)}%`,
-          ])}
+          filas={rankingGestores.map(
+            (gestor) => [
+              gestor.gestor,
+              gestor.clientesAsignados,
+              gestor.clientesGestionados,
+              gestor.gestiones,
+              gestor.promesas,
+              gestor.promesasParciales,
+              gestor.promesasCumplidas,
+              formato(
+                gestor.cobrado
+              ),
+              `${gestor.recuperacion.toFixed(
+                1
+              )}%`,
+            ]
+          )}
         />
 
         <Tabla
           titulo="Top Clientes de Mayor Riesgo"
-          columnas={["Cliente", "Cuenta", "Días", "Riesgo", "Saldo", "Gestor"]}
-          filas={mayorRiesgo.map((item) => [
-            item.cliente?.nombre || "Sin nombre",
-            item.cuenta?.numero_cuenta || "-",
-            item.dias,
-            item.riesgo,
-            formato(item.saldoPendiente),
-            item.gestor,
-          ])}
+          columnas={[
+            "Cliente",
+            "Cuenta",
+            "Días",
+            "Riesgo",
+            "Saldo",
+            "Gestor",
+          ]}
+          filas={mayorRiesgo.map(
+            (item) => [
+              item.cliente?.nombre ||
+                "Sin nombre",
+
+              item.cuenta
+                ?.numero_cuenta ||
+                "-",
+
+              item.dias,
+
+              item.riesgo,
+
+              formato(
+                item.saldoPendiente
+              ),
+
+              item.gestor,
+            ]
+          )}
         />
 
         <Tabla
           titulo="Top Clientes con Mayor Saldo"
-          columnas={["Cliente", "Cuenta", "Saldo", "Estado", "Gestor"]}
-          filas={mayorSaldo.map((item) => [
-            item.cliente?.nombre || "Sin nombre",
-            item.cuenta?.numero_cuenta || "-",
-            formato(item.saldoPendiente),
-            item.estado,
-            item.gestor,
-          ])}
+          columnas={[
+            "Cliente",
+            "Cuenta",
+            "Saldo",
+            "Estado",
+            "Gestor",
+          ]}
+          filas={mayorSaldo.map(
+            (item) => [
+              item.cliente?.nombre ||
+                "Sin nombre",
+
+              item.cuenta
+                ?.numero_cuenta ||
+                "-",
+
+              formato(
+                item.saldoPendiente
+              ),
+
+              item.estado,
+
+              item.gestor,
+            ]
+          )}
         />
       </div>
     </div>
   );
 }
 
-function Campo({ label, children }) {
+function Campo({
+  label,
+  children,
+}) {
   return (
     <div>
-      <label style={labelStyle}>{label}</label>
+      <label style={labelStyle}>
+        {label}
+      </label>
+
       {children}
     </div>
   );
 }
 
-function KPI({ titulo, valor, icono }) {
+function KPI({
+  titulo,
+  valor,
+  icono,
+}) {
   return (
     <div style={cardIndicador}>
-      <div style={iconoBox}>{icono}</div>
-      <p style={cardTitulo}>{titulo}</p>
-      <h2 style={cardNumero}>{valor}</h2>
+      <div style={iconoBox}>
+        {icono}
+      </div>
+
+      <p style={cardTitulo}>
+        {titulo}
+      </p>
+
+      <h2 style={cardNumero}>
+        {valor}
+      </h2>
     </div>
   );
 }
 
-function Tabla({ titulo, columnas, filas }) {
+function Tabla({
+  titulo,
+  columnas,
+  filas,
+}) {
   return (
     <div style={card}>
-      <h2 style={tituloSeccion}>{titulo}</h2>
+      <h2 style={tituloSeccion}>
+        {titulo}
+      </h2>
 
-      <div style={{ overflowX: "auto" }}>
+      <div
+        style={{
+          overflowX: "auto",
+        }}
+      >
         <table style={tabla}>
           <thead>
             <tr>
-              {columnas.map((columna, index) => (
-                <th key={index} style={th}>
-                  {columna}
-                </th>
-              ))}
+              {columnas.map(
+                (
+                  columna,
+                  index
+                ) => (
+                  <th
+                    key={index}
+                    style={th}
+                  >
+                    {columna}
+                  </th>
+                )
+              )}
             </tr>
           </thead>
 
           <tbody>
-            {filas.length === 0 ? (
+            {filas.length ===
+            0 ? (
               <tr>
-                <td style={td} colSpan={columnas.length}>
+                <td
+                  style={td}
+                  colSpan={
+                    columnas.length
+                  }
+                >
                   No hay datos disponibles.
                 </td>
               </tr>
             ) : (
-              filas.map((fila, index) => (
-                <tr key={index}>
-                  {fila.map((celda, indiceCelda) => (
-                    <td key={indiceCelda} style={td}>
-                      {celda}
-                    </td>
-                  ))}
-                </tr>
-              ))
+              filas.map(
+                (
+                  fila,
+                  index
+                ) => (
+                  <tr
+                    key={index}
+                  >
+                    {fila.map(
+                      (
+                        celda,
+                        indiceCelda
+                      ) => (
+                        <td
+                          key={
+                            indiceCelda
+                          }
+                          style={td}
+                        >
+                          {celda}
+                        </td>
+                      )
+                    )}
+                  </tr>
+                )
+              )
             )}
           </tbody>
         </table>
@@ -895,7 +2655,8 @@ const pagina = {
   minHeight: "100vh",
   background: "#eef2f7",
   padding: "20px",
-  fontFamily: "Arial, sans-serif",
+  fontFamily:
+    "Arial, sans-serif",
 };
 
 const contenedor = {
@@ -909,21 +2670,25 @@ const cargandoBox = {
   background: "#ffffff",
   padding: "25px",
   borderRadius: "16px",
-  boxShadow: "0 3px 12px rgba(0,0,0,0.08)",
+  boxShadow:
+    "0 3px 12px rgba(0,0,0,0.08)",
 };
 
 const encabezado = {
-  background: "linear-gradient(135deg, #111827, #1e40af)",
+  background:
+    "linear-gradient(135deg, #111827, #1e40af)",
   color: "#ffffff",
   padding: "24px",
   borderRadius: "20px",
   marginBottom: "18px",
   display: "flex",
-  justifyContent: "space-between",
+  justifyContent:
+    "space-between",
   alignItems: "center",
   gap: "16px",
   flexWrap: "wrap",
-  boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+  boxShadow:
+    "0 8px 24px rgba(0,0,0,0.14)",
 };
 
 const tituloBox = {
@@ -969,7 +2734,8 @@ const botonDashboard = {
 const botonActualizar = {
   background: "#16a34a",
   color: "#ffffff",
-  border: "1px solid #ffffff",
+  border:
+    "1px solid #ffffff",
   padding: "12px 20px",
   borderRadius: "9px",
   fontWeight: "bold",
@@ -979,7 +2745,8 @@ const botonActualizar = {
 const botonNegro = {
   background: "#111827",
   color: "#ffffff",
-  border: "1px solid #ffffff",
+  border:
+    "1px solid #ffffff",
   padding: "12px 20px",
   borderRadius: "9px",
   fontWeight: "bold",
@@ -1002,7 +2769,8 @@ const card = {
   padding: "18px",
   borderRadius: "16px",
   marginBottom: "16px",
-  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
+  boxShadow:
+    "0 3px 12px rgba(0,0,0,0.06)",
 };
 
 const tituloSeccion = {
@@ -1012,7 +2780,8 @@ const tituloSeccion = {
 };
 
 const seccionTitulo = {
-  margin: "22px 0 12px",
+  margin:
+    "22px 0 12px",
   color: "#111827",
 };
 
@@ -1024,7 +2793,8 @@ const nota = {
 
 const gridFiltros = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+  gridTemplateColumns:
+    "repeat(auto-fit,minmax(210px,1fr))",
   gap: "12px",
 };
 
@@ -1040,7 +2810,8 @@ const inputStyle = {
   width: "100%",
   padding: "11px",
   borderRadius: "8px",
-  border: "1px solid #d1d5db",
+  border:
+    "1px solid #d1d5db",
   boxSizing: "border-box",
   background: "#ffffff",
   color: "#111827",
@@ -1048,7 +2819,8 @@ const inputStyle = {
 
 const kpiGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+  gridTemplateColumns:
+    "repeat(auto-fit,minmax(210px,1fr))",
   gap: "14px",
   marginBottom: "16px",
 };
@@ -1057,7 +2829,8 @@ const cardIndicador = {
   background: "#ffffff",
   padding: "18px",
   borderRadius: "16px",
-  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
+  boxShadow:
+    "0 3px 12px rgba(0,0,0,0.06)",
 };
 
 const iconoBox = {
@@ -1079,13 +2852,15 @@ const cardNumero = {
 
 const gridDos = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(360px,1fr))",
+  gridTemplateColumns:
+    "repeat(auto-fit,minmax(360px,1fr))",
   gap: "16px",
 };
 
 const tabla = {
   width: "100%",
-  borderCollapse: "collapse",
+  borderCollapse:
+    "collapse",
 };
 
 const th = {
@@ -1098,5 +2873,6 @@ const th = {
 
 const td = {
   padding: "11px",
-  borderBottom: "1px solid #e5e7eb",
+  borderBottom:
+    "1px solid #e5e7eb",
 };
