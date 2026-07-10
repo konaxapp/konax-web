@@ -39,58 +39,28 @@ export default function DashboardCobranza() {
 
   function limpiarTexto(texto) {
     return String(texto || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase()
       .trim();
   }
 
-  function esFechaSimple(fecha) {
-    return /^\d{4}-\d{2}-\d{2}$/.test(
-      String(fecha || "").trim()
-    );
-  }
-
-  function fechaPanamaISO(fecha = new Date()) {
-    const objetoFecha =
-      fecha instanceof Date
-        ? fecha
-        : new Date(fecha);
-
-    if (
-      Number.isNaN(
-        objetoFecha.getTime()
-      )
-    ) {
-      return "";
-    }
-
-    const partes =
-      new Intl.DateTimeFormat(
-        "en-CA",
-        {
-          timeZone: "America/Panama",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-        }
-      ).formatToParts(objetoFecha);
+  function fechaPanamaISO() {
+    const partes = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Panama",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date());
 
     const year =
-      partes.find(
-        (parte) =>
-          parte.type === "year"
-      )?.value || "";
+      partes.find((parte) => parte.type === "year")?.value || "";
 
     const month =
-      partes.find(
-        (parte) =>
-          parte.type === "month"
-      )?.value || "";
+      partes.find((parte) => parte.type === "month")?.value || "";
 
     const day =
-      partes.find(
-        (parte) =>
-          parte.type === "day"
-      )?.value || "";
+      partes.find((parte) => parte.type === "day")?.value || "";
 
     return `${year}-${month}-${day}`;
   }
@@ -100,203 +70,156 @@ export default function DashboardCobranza() {
       return "";
     }
 
-    const texto =
-      String(fecha).trim();
+    const texto = String(fecha).trim();
 
-    if (esFechaSimple(texto)) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
       return texto;
     }
 
-    return fechaPanamaISO(texto);
-  }
+    const fechaObjeto = new Date(texto);
 
-  function fechaPago(pago) {
-    if (pago?.fecha_pago) {
-      return fechaSimple(
-        pago.fecha_pago
-      );
+    if (Number.isNaN(fechaObjeto.getTime())) {
+      return texto.slice(0, 10);
     }
 
-    if (pago?.fecha) {
-      return fechaSimple(
-        pago.fecha
-      );
+    const partes = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Panama",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(fechaObjeto);
+
+    const year =
+      partes.find((parte) => parte.type === "year")?.value || "";
+
+    const month =
+      partes.find((parte) => parte.type === "month")?.value || "";
+
+    const day =
+      partes.find((parte) => parte.type === "day")?.value || "";
+
+    return `${year}-${month}-${day}`;
+  }
+
+  function formatoFecha(fecha) {
+    const texto = fechaSimple(fecha);
+
+    if (!texto) {
+      return "-";
     }
 
-    return fechaSimple(
-      pago?.created_at
-    );
-  }
+    const partes = texto.split("-");
 
-  function fechaGestion(gestion) {
-    return fechaSimple(
-      gestion?.fecha_gestion ||
-        gestion?.created_at
-    );
-  }
+    if (partes.length !== 3) {
+      return texto;
+    }
 
-  function hoyISO() {
-    return fechaPanamaISO(
-      new Date()
-    );
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
   }
 
   function inicioMesActual() {
-    const hoy = hoyISO();
-
-    if (!hoy) {
-      return "";
-    }
+    const hoy = fechaPanamaISO();
 
     return `${hoy.slice(0, 7)}-01`;
   }
 
   function finMesActual() {
-    const hoy = hoyISO();
+    const hoy = fechaPanamaISO();
+    const [year, month] = hoy.split("-").map(Number);
 
-    if (!hoy) {
-      return "";
-    }
+    const ultimoDia = new Date(year, month, 0);
 
-    const [year, month] =
-      hoy.split("-").map(Number);
-
-    const ultimoDia =
-      new Date(
-        year,
-        month,
-        0
-      ).getDate();
-
-    return `${year}-${String(
-      month
-    ).padStart(2, "0")}-${String(
-      ultimoDia
+    return `${year}-${String(month).padStart(2, "0")}-${String(
+      ultimoDia.getDate()
     ).padStart(2, "0")}`;
   }
 
   function formato(numero) {
     return (
       "USD " +
-      Number(
-        numero || 0
-      ).toLocaleString(
-        "en-US",
-        {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        }
-      )
+      Number(numero || 0).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
     );
   }
 
-  function calcularDiasAtraso(
-    fechaVencimiento,
-    saldoActual
-  ) {
+  function calcularDiasAtraso(fechaVencimiento, saldoActual) {
     if (
       !fechaVencimiento ||
-      Number(
-        saldoActual || 0
-      ) <= 0
+      Number(saldoActual || 0) <= 0
     ) {
       return 0;
     }
 
-    const hoy =
-      new Date(
-        `${hoyISO()}T00:00:00`
-      );
+    const hoy = new Date(
+      `${fechaPanamaISO()}T00:00:00`
+    );
 
     const vencimientoTexto =
-      fechaSimple(
-        fechaVencimiento
-      );
+      fechaSimple(fechaVencimiento);
 
     if (!vencimientoTexto) {
       return 0;
     }
 
-    const vencimiento =
-      new Date(
-        `${vencimientoTexto}T00:00:00`
-      );
+    const vencimiento = new Date(
+      `${vencimientoTexto}T00:00:00`
+    );
 
     const diferencia =
-      hoy.getTime() -
-      vencimiento.getTime();
+      hoy.getTime() - vencimiento.getTime();
 
     if (diferencia <= 0) {
       return 0;
     }
 
     return Math.floor(
-      diferencia /
-        (1000 * 60 * 60 * 24)
+      diferencia / (1000 * 60 * 60 * 24)
     );
   }
 
-  function estadoCuenta(
-    cuenta,
-    cobranza
-  ) {
-    const saldo =
-      Number(
-        cuenta?.saldo_actual ||
-          0
-      );
+  function estadoCuenta(cuenta, cobranza) {
+    const saldo = Number(
+      cuenta?.saldo_actual || 0
+    );
 
     if (saldo <= 0) {
       return "Cancelado";
     }
 
-    const estadoCobranza =
-      limpiarTexto(
-        cobranza?.estado_cobranza
-      );
+    const estadoCobranza = limpiarTexto(
+      cobranza?.estado_cobranza
+    );
 
-    const estadoComercial =
-      limpiarTexto(
-        cuenta?.estado
-      );
+    const estadoComercial = limpiarTexto(
+      cuenta?.estado
+    );
 
     if (
-      estadoCobranza ===
-        "legal" ||
-      estadoComercial ===
-        "legal"
+      estadoCobranza === "legal" ||
+      estadoComercial === "legal"
     ) {
       return "Legal";
     }
 
     if (
-      estadoCobranza ===
-        "suspendido" ||
-      estadoComercial ===
-        "suspendido"
+      estadoCobranza === "suspendido" ||
+      estadoComercial === "suspendido"
     ) {
       return "Suspendido";
     }
 
-    const dias =
-      calcularDiasAtraso(
-        cuenta?.fecha_vencimiento,
-        saldo
-      );
+    const dias = calcularDiasAtraso(
+      cuenta?.fecha_vencimiento,
+      saldo
+    );
 
-    return dias > 0
-      ? "Mora"
-      : "Al Día";
+    return dias > 0 ? "Mora" : "Al Día";
   }
 
-  function riesgoCartera(
-    dias,
-    saldo,
-    estado
-  ) {
-    if (
-      Number(saldo || 0) <= 0
-    ) {
+  function riesgoCartera(dias, saldo, estado) {
+    if (Number(saldo || 0) <= 0) {
       return "Cancelado";
     }
 
@@ -323,13 +246,8 @@ export default function DashboardCobranza() {
     return "Legal";
   }
 
-  function rangoSemaforo(
-    dias,
-    saldo
-  ) {
-    if (
-      Number(saldo || 0) <= 0
-    ) {
+  function rangoSemaforo(dias, saldo) {
+    if (Number(saldo || 0) <= 0) {
       return "Cancelado";
     }
 
@@ -353,15 +271,13 @@ export default function DashboardCobranza() {
   }
 
   function pagoEsValido(pago) {
-    const estado =
-      limpiarTexto(
-        pago?.estado
-      );
+    const estado = limpiarTexto(
+      pago?.estado
+    );
 
-    const tipo =
-      limpiarTexto(
-        pago?.tipo
-      );
+    const tipo = limpiarTexto(
+      pago?.tipo
+    );
 
     if (
       estado &&
@@ -372,80 +288,131 @@ export default function DashboardCobranza() {
     }
 
     return [
-      "pago crédito",
       "pago credito",
-      "cobro crédito",
       "cobro credito",
       "mensualidad",
-      "cancelación",
       "cancelacion",
     ].includes(tipo);
   }
 
-  function clavePago(
-    pago,
-    indice = 0
-  ) {
+  function fechaPago(pago) {
+    if (pago?.fecha_pago) {
+      return fechaSimple(
+        pago.fecha_pago
+      );
+    }
+
+    if (pago?.fecha) {
+      return fechaSimple(
+        pago.fecha
+      );
+    }
+
+    return fechaSimple(
+      pago?.created_at
+    );
+  }
+
+  function obtenerClavePago(pago, indice = 0) {
     if (pago?.id) {
       return String(pago.id);
     }
 
     return [
-      pago?.numero_transaccion ||
-        "",
-      pago?.informacion_comercial_id ||
-        "",
-      pago?.numero_cuenta ||
-        "",
+      pago?.numero_transaccion || "",
+      pago?.informacion_comercial_id || "",
+      pago?.cliente_id || "",
       fechaPago(pago),
-      pago?.monto || "",
+      pago?.monto || 0,
       indice,
     ].join("|");
   }
 
-  function pagosValidosUnicos(
-    listaPagos
-  ) {
-    const mapa =
-      new Map();
+  function obtenerPagosUnicos(listaPagos) {
+    const mapa = new Map();
 
-    (listaPagos || [])
-      .filter(pagoEsValido)
-      .forEach(
-        (pago, indice) => {
-          const clave =
-            clavePago(
-              pago,
-              indice
-            );
-
-          if (
-            !mapa.has(clave)
-          ) {
-            mapa.set(
-              clave,
-              pago
-            );
-          }
-        }
+    listaPagos.forEach((pago, indice) => {
+      const clave = obtenerClavePago(
+        pago,
+        indice
       );
 
-    return [
-      ...mapa.values(),
-    ];
+      if (!mapa.has(clave)) {
+        mapa.set(clave, pago);
+      }
+    });
+
+    return [...mapa.values()];
+  }
+
+  function pagoPerteneceCuenta(
+    pago,
+    cuenta,
+    cliente
+  ) {
+    if (!pago || !cuenta) {
+      return false;
+    }
+
+    if (
+      pago.informacion_comercial_id &&
+      String(
+        pago.informacion_comercial_id
+      ) === String(cuenta.id)
+    ) {
+      return true;
+    }
+
+    if (
+      pago.numero_cuenta &&
+      cuenta.numero_cuenta &&
+      String(pago.numero_cuenta).trim() ===
+        String(cuenta.numero_cuenta).trim()
+    ) {
+      return true;
+    }
+
+    if (
+      pago.cliente_id &&
+      String(pago.cliente_id) ===
+        String(cuenta.cliente_id)
+    ) {
+      return true;
+    }
+
+    const cedulaPago = String(
+      pago.cliente_cedula ||
+        pago.cedula ||
+        pago.identificacion ||
+        ""
+    ).trim();
+
+    if (
+      cliente?.cedula &&
+      cedulaPago &&
+      cedulaPago ===
+        String(cliente.cedula).trim()
+    ) {
+      return true;
+    }
+
+    return false;
   }
 
   function sumarPagos(
-    pagosCuenta,
+    listaPagos,
     desde = "",
     hasta = ""
   ) {
-    return (
-      pagosCuenta || []
+    return obtenerPagosUnicos(
+      listaPagos
     )
       .filter((pago) => {
-        const fecha =
-          fechaPago(pago);
+        if (!pagoEsValido(pago)) {
+          return false;
+        }
+
+        const fecha = fechaPago(pago);
 
         if (!fecha) {
           return false;
@@ -468,13 +435,69 @@ export default function DashboardCobranza() {
         return true;
       })
       .reduce(
-        (sum, pago) =>
-          sum +
-          Number(
-            pago.monto || 0
-          ),
+        (suma, pago) =>
+          suma +
+          Number(pago.monto || 0),
         0
       );
+  }
+
+  function obtenerItemCarteraDePago(
+    pago,
+    listaCartera
+  ) {
+    if (
+      pago?.informacion_comercial_id
+    ) {
+      const porId = listaCartera.find(
+        (item) =>
+          String(item.cuenta?.id) ===
+          String(
+            pago.informacion_comercial_id
+          )
+      );
+
+      if (porId) {
+        return porId;
+      }
+    }
+
+    if (pago?.numero_cuenta) {
+      const porCuenta =
+        listaCartera.find(
+          (item) =>
+            String(
+              item.cuenta?.numero_cuenta ||
+                ""
+            ).trim() ===
+            String(
+              pago.numero_cuenta
+            ).trim()
+        );
+
+      if (porCuenta) {
+        return porCuenta;
+      }
+    }
+
+    if (pago?.cliente_id) {
+      const cuentasCliente =
+        listaCartera.filter(
+          (item) =>
+            String(
+              item.cuenta?.cliente_id
+            ) ===
+            String(pago.cliente_id)
+        );
+
+      if (
+        cuentasCliente.length === 1
+      ) {
+        return cuentasCliente[0];
+      }
+    }
+
+    return null;
   }
 
   async function cargarDatos() {
@@ -585,317 +608,116 @@ export default function DashboardCobranza() {
   function limpiarFiltros() {
     setFiltroDesde("");
     setFiltroHasta("");
-    setFiltroGestor(
-      "Todos"
-    );
+    setFiltroGestor("Todos");
   }
 
-  const hoy = hoyISO();
-  const inicioMes =
-    inicioMesActual();
-  const finMes =
-    finMesActual();
+  const hoy = fechaPanamaISO();
+  const inicioMes = inicioMesActual();
+  const finMes = finMesActual();
 
-  /*
-    ============================================================
-    CARTERA Y ASIGNACIÓN ÚNICA DE PAGOS
-    ============================================================
-
-    El pago se asigna siguiendo este orden:
-
-    1. informacion_comercial_id
-    2. numero_cuenta
-    3. cliente_id, solamente si el cliente tiene una sola cuenta
-    4. cédula, solamente si el cliente tiene una sola cuenta
-
-    Esto evita que el mismo pago sea contado en varias cuentas.
-  */
+  const pagosValidosUnicos = useMemo(() => {
+    return obtenerPagosUnicos(
+      pagos.filter(pagoEsValido)
+    );
+  }, [pagos]);
 
   const cartera = useMemo(() => {
-    const baseCartera =
-      cuentas.map((cuenta) => {
-        const cliente =
-          clientes.find(
-            (item) =>
-              String(item.id) ===
-              String(
-                cuenta.cliente_id
-              )
-          );
-
-        const cobranza =
-          cobranzas.find(
-            (item) =>
-              String(
-                item.informacion_comercial_id
-              ) ===
-              String(cuenta.id)
-          );
-
-        const montoOriginal =
-          Number(
-            cuenta.monto_total ||
-              0
-          );
-
-        const saldoPendiente =
-          Number(
-            cuenta.saldo_actual ||
-              0
-          );
-
-        const dias =
-          calcularDiasAtraso(
-            cuenta.fecha_vencimiento,
-            saldoPendiente
-          );
-
-        const estado =
-          estadoCuenta(
-            cuenta,
-            cobranza
-          );
-
-        const riesgo =
-          riesgoCartera(
-            dias,
-            saldoPendiente,
-            estado
-          );
-
-        const semaforo =
-          rangoSemaforo(
-            dias,
-            saldoPendiente
-          );
-
-        const gestor =
-          cobranza?.responsable_cobro ||
-          cuenta?.responsable ||
-          cuenta?.vendedor ||
-          "Sin asignar";
-
-        return {
-          cuenta,
-          cliente,
-          cobranza,
-          montoOriginal,
-          saldoPendiente,
-          dias,
-          estado,
-          riesgo,
-          semaforo,
-          gestor,
-          pagosCuenta: [],
-          cobradoPeriodo: 0,
-          cobradoMes: 0,
-          cobradoHoy: 0,
-        };
-      });
-
-    const pagosUnicos =
-      pagosValidosUnicos(
-        pagos
+    return cuentas.map((cuenta) => {
+      const cliente = clientes.find(
+        (item) =>
+          String(item.id) ===
+          String(cuenta.cliente_id)
       );
 
-    const mapaPagos =
-      new Map();
-
-    baseCartera.forEach(
-      (item) => {
-        mapaPagos.set(
-          String(
-            item.cuenta.id
-          ),
-          []
+      const cobranza =
+        cobranzas.find(
+          (item) =>
+            String(
+              item.informacion_comercial_id
+            ) === String(cuenta.id)
         );
-      }
-    );
 
-    pagosUnicos.forEach(
-      (pago) => {
-        let cuentaDestino =
-          null;
-
-        if (
-          pago.informacion_comercial_id
-        ) {
-          cuentaDestino =
-            baseCartera.find(
-              (item) =>
-                String(
-                  item.cuenta.id
-                ) ===
-                String(
-                  pago.informacion_comercial_id
-                )
-            );
-        }
-
-        if (
-          !cuentaDestino &&
-          pago.numero_cuenta
-        ) {
-          cuentaDestino =
-            baseCartera.find(
-              (item) =>
-                String(
-                  item.cuenta
-                    .numero_cuenta ||
-                    ""
-                ).trim() ===
-                String(
-                  pago.numero_cuenta
-                ).trim()
-            );
-        }
-
-        if (
-          !cuentaDestino &&
-          pago.cliente_id
-        ) {
-          const cuentasCliente =
-            baseCartera.filter(
-              (item) =>
-                String(
-                  item.cuenta
-                    .cliente_id
-                ) ===
-                String(
-                  pago.cliente_id
-                )
-            );
-
-          if (
-            cuentasCliente.length ===
-            1
-          ) {
-            cuentaDestino =
-              cuentasCliente[0];
-          }
-        }
-
-        if (
-          !cuentaDestino
-        ) {
-          const cedulaPago =
-            String(
-              pago.cliente_cedula ||
-                pago.cedula ||
-                pago.identificacion ||
-                ""
-            ).trim();
-
-          if (cedulaPago) {
-            const cuentasCedula =
-              baseCartera.filter(
-                (item) =>
-                  String(
-                    item.cliente
-                      ?.cedula ||
-                      ""
-                  ).trim() ===
-                  cedulaPago
-              );
-
-            if (
-              cuentasCedula.length ===
-              1
-            ) {
-              cuentaDestino =
-                cuentasCedula[0];
-            }
-          }
-        }
-
-        if (cuentaDestino) {
-          const claveCuenta =
-            String(
-              cuentaDestino
-                .cuenta.id
-            );
-
-          const pagosCuenta =
-            mapaPagos.get(
-              claveCuenta
-            ) || [];
-
-          pagosCuenta.push(
-            pago
-          );
-
-          mapaPagos.set(
-            claveCuenta,
-            pagosCuenta
-          );
-        }
-      }
-    );
-
-    return baseCartera.map(
-      (item) => {
-        const pagosCuenta =
-          mapaPagos.get(
-            String(
-              item.cuenta.id
+      const pagosCuenta =
+        pagosValidosUnicos.filter(
+          (pago) =>
+            pagoPerteneceCuenta(
+              pago,
+              cuenta,
+              cliente
             )
-          ) || [];
+        );
 
-        return {
-          ...item,
+      const montoOriginal = Number(
+        cuenta.monto_total || 0
+      );
 
-          pagosCuenta,
+      const saldoPendiente = Number(
+        cuenta.saldo_actual || 0
+      );
 
-          cobradoPeriodo:
-            sumarPagos(
-              pagosCuenta,
-              filtroDesde,
-              filtroHasta
-            ),
+      const dias =
+        calcularDiasAtraso(
+          cuenta.fecha_vencimiento,
+          saldoPendiente
+        );
 
-          cobradoMes:
-            sumarPagos(
-              pagosCuenta,
-              inicioMes,
-              finMes
-            ),
+      const estado =
+        estadoCuenta(
+          cuenta,
+          cobranza
+        );
 
-          cobradoHoy:
-            sumarPagos(
-              pagosCuenta,
-              hoy,
-              hoy
-            ),
-        };
-      }
-    );
+      const riesgo =
+        riesgoCartera(
+          dias,
+          saldoPendiente,
+          estado
+        );
+
+      const semaforo =
+        rangoSemaforo(
+          dias,
+          saldoPendiente
+        );
+
+      const gestor =
+        cobranza?.responsable_cobro ||
+        cuenta?.responsable ||
+        cuenta?.vendedor ||
+        "Sin asignar";
+
+      return {
+        cuenta,
+        cliente,
+        cobranza,
+        pagosCuenta,
+        montoOriginal,
+        saldoPendiente,
+        dias,
+        estado,
+        riesgo,
+        semaforo,
+        gestor,
+      };
+    });
   }, [
     cuentas,
     clientes,
     cobranzas,
-    pagos,
-    filtroDesde,
-    filtroHasta,
-    inicioMes,
-    finMes,
-    hoy,
+    pagosValidosUnicos,
   ]);
 
   const gestores = [
     "Todos",
     ...new Set(
       cartera
-        .map(
-          (item) =>
-            item.gestor
-        )
+        .map((item) => item.gestor)
         .filter(Boolean)
     ),
   ];
 
   const carteraPorGestor =
-    filtroGestor ===
-    "Todos"
+    filtroGestor === "Todos"
       ? cartera
       : cartera.filter(
           (item) =>
@@ -906,28 +728,45 @@ export default function DashboardCobranza() {
   const carteraActivaPorGestor =
     carteraPorGestor.filter(
       (item) =>
-        item.saldoPendiente >
-        0
+        item.saldoPendiente > 0
     );
 
-  /*
-    ============================================================
-    RESUMEN EJECUTIVO
-    ============================================================
-  */
+  function pagoPerteneceGestor(pago) {
+    if (
+      filtroGestor === "Todos"
+    ) {
+      return true;
+    }
+
+    const itemCartera =
+      obtenerItemCarteraDePago(
+        pago,
+        cartera
+      );
+
+    return (
+      itemCartera?.gestor ===
+      filtroGestor
+    );
+  }
+
+  const pagosSegunGestor =
+    pagosValidosUnicos.filter(
+      pagoPerteneceGestor
+    );
 
   const carteraOriginal =
     carteraPorGestor.reduce(
-      (sum, item) =>
-        sum +
+      (suma, item) =>
+        suma +
         item.montoOriginal,
       0
     );
 
   const saldoPendiente =
     carteraPorGestor.reduce(
-      (sum, item) =>
-        sum +
+      (suma, item) =>
+        suma +
         item.saldoPendiente,
       0
     );
@@ -946,8 +785,8 @@ export default function DashboardCobranza() {
           item.dias <= 0
       )
       .reduce(
-        (sum, item) =>
-          sum +
+        (suma, item) =>
+          suma +
           item.saldoPendiente,
         0
       );
@@ -959,8 +798,8 @@ export default function DashboardCobranza() {
           item.dias > 0
       )
       .reduce(
-        (sum, item) =>
-          sum +
+        (suma, item) =>
+          suma +
           item.saldoPendiente,
         0
       );
@@ -974,35 +813,32 @@ export default function DashboardCobranza() {
 
   /*
     ============================================================
-    COBROS DIRECTOS DE CAJA
+    COBROS DIRECTOS DESDE CAJA
     ============================================================
 
-    Ya no se suman mediante coincidencias amplias por cédula.
-    Cada pago fue asignado una única vez dentro de cartera.
+    Cada movimiento se cuenta una sola vez.
+
+    Cobrado Hoy utiliza exclusivamente la fecha de pago y la
+    fecha actual de Panamá.
   */
 
-  const cobradoHoy =
-    carteraPorGestor.reduce(
-      (sum, item) =>
-        sum +
-        item.cobradoHoy,
-      0
-    );
+  const cobradoHoy = sumarPagos(
+    pagosSegunGestor,
+    hoy,
+    hoy
+  );
 
-  const cobradoMes =
-    carteraPorGestor.reduce(
-      (sum, item) =>
-        sum +
-        item.cobradoMes,
-      0
-    );
+  const cobradoMes = sumarPagos(
+    pagosSegunGestor,
+    inicioMes,
+    finMes
+  );
 
   const cobradoPeriodo =
-    carteraPorGestor.reduce(
-      (sum, item) =>
-        sum +
-        item.cobradoPeriodo,
-      0
+    sumarPagos(
+      pagosSegunGestor,
+      filtroDesde,
+      filtroHasta
     );
 
   const saldoInicioPeriodo =
@@ -1015,12 +851,6 @@ export default function DashboardCobranza() {
           saldoInicioPeriodo) *
         100
       : 0;
-
-  /*
-    ============================================================
-    CIERRE MENSUAL
-    ============================================================
-  */
 
   const vencimientosMes =
     carteraPorGestor.filter(
@@ -1043,18 +873,32 @@ export default function DashboardCobranza() {
 
   const montoVencimientosMes =
     vencimientosMes.reduce(
-      (sum, item) =>
-        sum +
-        item.saldoPendiente +
-        item.cobradoMes,
+      (suma, item) => {
+        const cobradoCuentaMes =
+          sumarPagos(
+            item.pagosCuenta,
+            inicioMes,
+            finMes
+          );
+
+        return (
+          suma +
+          item.saldoPendiente +
+          cobradoCuentaMes
+        );
+      },
       0
     );
 
   const cobradoVencimientosMes =
     vencimientosMes.reduce(
-      (sum, item) =>
-        sum +
-        item.cobradoMes,
+      (suma, item) =>
+        suma +
+        sumarPagos(
+          item.pagosCuenta,
+          inicioMes,
+          finMes
+        ),
       0
     );
 
@@ -1084,25 +928,39 @@ export default function DashboardCobranza() {
 
   const moraAnteriorInicio =
     moraAnterior.reduce(
-      (sum, item) =>
-        sum +
-        item.saldoPendiente +
-        item.cobradoMes,
+      (suma, item) => {
+        const cobradoCuentaMes =
+          sumarPagos(
+            item.pagosCuenta,
+            inicioMes,
+            finMes
+          );
+
+        return (
+          suma +
+          item.saldoPendiente +
+          cobradoCuentaMes
+        );
+      },
       0
     );
 
   const moraAnteriorRecuperada =
     moraAnterior.reduce(
-      (sum, item) =>
-        sum +
-        item.cobradoMes,
+      (suma, item) =>
+        suma +
+        sumarPagos(
+          item.pagosCuenta,
+          inicioMes,
+          finMes
+        ),
       0
     );
 
   const moraAnteriorPendiente =
     moraAnterior.reduce(
-      (sum, item) =>
-        sum +
+      (suma, item) =>
+        suma +
         item.saldoPendiente,
       0
     );
@@ -1124,79 +982,73 @@ export default function DashboardCobranza() {
         );
       })
       .reduce(
-        (sum, item) =>
-          sum +
+        (suma, item) =>
+          suma +
           item.saldoPendiente,
         0
       );
 
-  /*
-    ============================================================
-    GESTIONES DEL PERÍODO
-    ============================================================
-  */
+  function gestionPerteneceGestor(
+    gestion,
+    gestor
+  ) {
+    if (
+      gestor === "Todos"
+    ) {
+      return true;
+    }
+
+    const usuario =
+      limpiarTexto(
+        gestion?.usuario
+      );
+
+    const nombreGestor =
+      limpiarTexto(gestor);
+
+    return (
+      usuario === nombreGestor ||
+      usuario.startsWith(
+        `${nombreGestor} (`
+      )
+    );
+  }
 
   const gestionesPeriodo =
-    gestiones.filter(
-      (gestion) => {
-        const fecha =
-          fechaGestion(
-            gestion
-          );
-
-        if (!fecha) {
-          return false;
-        }
-
-        if (
-          filtroDesde &&
-          fecha <
-            filtroDesde
-        ) {
-          return false;
-        }
-
-        if (
-          filtroHasta &&
-          fecha >
-            filtroHasta
-        ) {
-          return false;
-        }
-
-        if (
-          filtroGestor !==
-          "Todos"
-        ) {
-          const usuario =
-            limpiarTexto(
-              gestion.usuario
-            );
-
-          const gestor =
-            limpiarTexto(
-              filtroGestor
-            );
-
-          return (
-            usuario === gestor ||
-            usuario.startsWith(
-              `${gestor} (`
-            )
-          );
-        }
-
-        return true;
-      }
-    );
-
-  function esPromesaPago(
-    gestion
-  ) {
-    const tipo =
-      limpiarTexto(
-        gestion?.tipo_gestion
+    gestiones.filter((gestion) => {
+      const fecha = fechaSimple(
+        gestion.fecha_gestion ||
+          gestion.created_at
       );
+
+      if (!fecha) {
+        return false;
+      }
+
+      if (
+        filtroDesde &&
+        fecha < filtroDesde
+      ) {
+        return false;
+      }
+
+      if (
+        filtroHasta &&
+        fecha > filtroHasta
+      ) {
+        return false;
+      }
+
+      return gestionPerteneceGestor(
+        gestion,
+        filtroGestor
+      );
+    });
+
+  function esPromesaPago(gestion) {
+    const tipo = limpiarTexto(
+      gestion?.tipo_gestion
+    );
 
     const resultado =
       limpiarTexto(
@@ -1204,8 +1056,7 @@ export default function DashboardCobranza() {
       );
 
     return (
-      tipo ===
-        "promesa de pago" ||
+      tipo === "promesa de pago" ||
       resultado ===
         "promesa registrada" ||
       resultado ===
@@ -1213,437 +1064,534 @@ export default function DashboardCobranza() {
     );
   }
 
+  function obtenerCuentaDePromesa(
+    promesa
+  ) {
+    if (!promesa) {
+      return null;
+    }
+
+    if (
+      promesa.informacion_comercial_id
+    ) {
+      const cuentaDirecta =
+        cartera.find(
+          (item) =>
+            String(
+              item.cuenta?.id
+            ) ===
+            String(
+              promesa.informacion_comercial_id
+            )
+        );
+
+      if (cuentaDirecta) {
+        return cuentaDirecta;
+      }
+    }
+
+    if (promesa.cliente_id) {
+      const cuentasCliente =
+        cartera.filter(
+          (item) =>
+            String(
+              item.cuenta
+                ?.cliente_id
+            ) ===
+            String(
+              promesa.cliente_id
+            )
+        );
+
+      if (
+        cuentasCliente.length ===
+        1
+      ) {
+        return cuentasCliente[0];
+      }
+    }
+
+    return null;
+  }
+
+  function obtenerFechaRegistroPromesa(
+    promesa
+  ) {
+    return fechaSimple(
+      promesa?.fecha_gestion ||
+        promesa?.created_at
+    );
+  }
+
+  function obtenerFechaCompromisoPromesa(
+    promesa
+  ) {
+    return fechaSimple(
+      promesa?.proxima_gestion
+    );
+  }
+
+  function obtenerClavePromesa(
+    promesa,
+    indice = 0
+  ) {
+    if (promesa?.id) {
+      return String(promesa.id);
+    }
+
+    return [
+      promesa
+        ?.informacion_comercial_id ||
+        "",
+      promesa?.cliente_id || "",
+      obtenerFechaRegistroPromesa(
+        promesa
+      ),
+      obtenerFechaCompromisoPromesa(
+        promesa
+      ),
+      promesa?.monto_promesa || 0,
+      indice,
+    ].join("|");
+  }
+
   /*
     ============================================================
-    CLASIFICACIÓN DE PROMESAS POR MONTO
+    CLASIFICACIÓN DE PROMESAS
     ============================================================
 
-    La asignación se hace por cuenta y en orden cronológico.
+    Activa:
+    No tiene pagos aplicados y aún no venció.
 
-    Cada dólar de un pago solamente se puede utilizar una vez.
+    Parcial:
+    Recibió una parte del monto, pero aún no completó y no venció.
+
+    Cumplida:
+    Completó el monto prometido dentro de la fecha acordada.
+
+    Incumplida:
+    Llegó la fecha y no completó el monto.
+
+    Cumplida fuera de fecha:
+    Completó el monto después de la fecha acordada.
+
+    Los pagos se consumen de forma cronológica y no pueden
+    reutilizarse en otra promesa.
   */
 
-  const detallePromesas =
-    useMemo(() => {
-      const promesasValidas =
-        gestiones
-          .filter(
-            esPromesaPago
-          )
-          .filter(
-            (promesa) =>
+  const todasLasPromesas =
+    gestiones
+      .filter(esPromesaPago)
+      .map(
+        (
+          promesa,
+          indiceOriginal
+        ) => {
+          const cuentaRelacionada =
+            obtenerCuentaDePromesa(
+              promesa
+            );
+
+          return {
+            promesa,
+            indiceOriginal,
+            cuentaRelacionada,
+            fechaRegistro:
+              obtenerFechaRegistroPromesa(
+                promesa
+              ),
+            fechaCompromiso:
+              obtenerFechaCompromisoPromesa(
+                promesa
+              ),
+            montoPrometido:
               Number(
                 promesa.monto_promesa ||
                   0
-              ) > 0
-          )
-          .map(
-            (
-              promesa,
-              indice
-            ) => ({
-              promesa,
-              indice,
-              cuentaId:
-                promesa.informacion_comercial_id
-                  ? String(
-                      promesa.informacion_comercial_id
-                    )
-                  : "",
-              clienteId:
-                promesa.cliente_id
-                  ? String(
-                      promesa.cliente_id
-                    )
-                  : "",
-              fechaRegistro:
-                fechaGestion(
-                  promesa
-                ),
-              fechaCompromiso:
-                fechaSimple(
-                  promesa.proxima_gestion
-                ),
-              montoPrometido:
-                Number(
-                  promesa.monto_promesa ||
-                    0
-                ),
-            })
-          )
-          .filter(
-            (item) =>
-              item.cuentaId &&
-              item.fechaRegistro &&
-              item.fechaCompromiso
-          )
-          .sort(
-            (a, b) => {
-              if (
-                a.cuentaId !==
-                b.cuentaId
-              ) {
-                return a.cuentaId.localeCompare(
-                  b.cuentaId
-                );
-              }
-
-              if (
-                a.fechaRegistro !==
-                b.fechaRegistro
-              ) {
-                return a.fechaRegistro.localeCompare(
-                  b.fechaRegistro
-                );
-              }
-
-              return String(
-                a.promesa
-                  .created_at ||
-                  ""
-              ).localeCompare(
-                String(
-                  b.promesa
-                    .created_at ||
-                    ""
-                )
-              );
-            }
-          );
-
-      const resultado = [];
-
-      const gruposCuenta =
-        new Map();
-
-      promesasValidas.forEach(
-        (item) => {
-          const grupo =
-            gruposCuenta.get(
-              item.cuentaId
-            ) || [];
-
-          grupo.push(item);
-
-          gruposCuenta.set(
-            item.cuentaId,
-            grupo
-          );
-        }
-      );
-
-      gruposCuenta.forEach(
-        (
-          promesasCuenta,
-          cuentaId
-        ) => {
-          const cuentaRelacionada =
-            cartera.find(
-              (item) =>
-                String(
-                  item.cuenta.id
-                ) ===
-                String(cuentaId)
-            );
-
-          const pagosCuenta =
-            [
-              ...(
-                cuentaRelacionada
-                  ?.pagosCuenta ||
-                []
               ),
-            ]
-              .map(
-                (
-                  pago,
-                  indice
-                ) => ({
-                  pago,
-                  clave:
-                    clavePago(
-                      pago,
-                      indice
-                    ),
-                  fecha:
-                    fechaPago(
-                      pago
-                    ),
-                  restante:
-                    Math.max(
-                      Number(
-                        pago.monto ||
-                          0
-                      ),
-                      0
-                    ),
-                })
-              )
-              .filter(
-                (item) =>
-                  item.fecha &&
-                  item.restante >
-                    0
-              )
-              .sort(
-                (a, b) => {
-                  if (
-                    a.fecha !==
-                    b.fecha
-                  ) {
-                    return a.fecha.localeCompare(
-                      b.fecha
-                    );
-                  }
-
-                  return String(
-                    a.pago
-                      .created_at ||
-                      ""
-                  ).localeCompare(
-                    String(
-                      b.pago
-                        .created_at ||
-                        ""
-                    )
-                  );
-                }
-              );
-
-          promesasCuenta.forEach(
-            (item) => {
-              let pendiente =
-                item.montoPrometido;
-
-              let pagadoATiempo =
-                0;
-
-              let pagadoTarde =
-                0;
-
-              pagosCuenta.forEach(
-                (pagoDisponible) => {
-                  if (
-                    pendiente <= 0
-                  ) {
-                    return;
-                  }
-
-                  if (
-                    pagoDisponible.restante <=
-                    0
-                  ) {
-                    return;
-                  }
-
-                  if (
-                    pagoDisponible.fecha <
-                    item.fechaRegistro
-                  ) {
-                    return;
-                  }
-
-                  const aplicar =
-                    Math.min(
-                      pendiente,
-                      pagoDisponible.restante
-                    );
-
-                  if (
-                    aplicar <= 0
-                  ) {
-                    return;
-                  }
-
-                  if (
-                    pagoDisponible.fecha <=
-                    item.fechaCompromiso
-                  ) {
-                    pagadoATiempo +=
-                      aplicar;
-                  } else {
-                    pagadoTarde +=
-                      aplicar;
-                  }
-
-                  pendiente -=
-                    aplicar;
-
-                  pagoDisponible.restante -=
-                    aplicar;
-                }
-              );
-
-              const pagadoTotal =
-                pagadoATiempo +
-                pagadoTarde;
-
-              let estado =
-                "Activa";
-
-              if (
-                pagadoATiempo >=
-                item.montoPrometido
-              ) {
-                estado =
-                  "Cumplida";
-              } else if (
-                pagadoTotal >=
-                item.montoPrometido
-              ) {
-                estado =
-                  "Cumplida fuera de fecha";
-              } else if (
-                hoy >
-                item.fechaCompromiso
-              ) {
-                estado =
-                  "Incumplida";
-              } else if (
-                pagadoTotal > 0
-              ) {
-                estado =
-                  "Parcial";
-              }
-
-              const cliente =
-                clientes.find(
-                  (registro) =>
-                    String(
-                      registro.id
-                    ) ===
-                    String(
-                      item.clienteId
-                    )
-                );
-
-              resultado.push({
-                ...item,
-                cliente,
-                cuentaRelacionada,
-                pagadoATiempo,
-                pagadoTarde,
-                pagadoTotal,
-                pendientePromesa:
-                  Math.max(
-                    item.montoPrometido -
-                      pagadoTotal,
-                    0
-                  ),
-                estado,
-                gestorPromesa:
-                  item.promesa
-                    .usuario ||
-                  cuentaRelacionada
-                    ?.gestor ||
-                  "Sin asignar",
-              });
-            }
+          };
+        }
+      )
+      .filter(
+        (item) =>
+          item.fechaRegistro &&
+          item.fechaCompromiso
+      )
+      .sort((a, b) => {
+        if (
+          a.fechaRegistro !==
+          b.fechaRegistro
+        ) {
+          return a.fechaRegistro.localeCompare(
+            b.fechaRegistro
           );
+        }
+
+        if (
+          a.fechaCompromiso !==
+          b.fechaCompromiso
+        ) {
+          return a.fechaCompromiso.localeCompare(
+            b.fechaCompromiso
+          );
+        }
+
+        return String(
+          a.promesa?.created_at ||
+            ""
+        ).localeCompare(
+          String(
+            b.promesa?.created_at ||
+              ""
+          )
+        );
+      });
+
+  const saldoDisponiblePorPago =
+    new Map();
+
+  pagosValidosUnicos.forEach(
+    (pago, indice) => {
+      saldoDisponiblePorPago.set(
+        obtenerClavePago(
+          pago,
+          indice
+        ),
+        Number(pago.monto || 0)
+      );
+    }
+  );
+
+  const resultadoPromesas =
+    new Map();
+
+  todasLasPromesas.forEach(
+    (itemPromesa) => {
+      const {
+        promesa,
+        indiceOriginal,
+        cuentaRelacionada,
+        fechaRegistro,
+        fechaCompromiso,
+        montoPrometido,
+      } = itemPromesa;
+
+      const clavePromesa =
+        obtenerClavePromesa(
+          promesa,
+          indiceOriginal
+        );
+
+      if (
+        !cuentaRelacionada ||
+        montoPrometido <= 0
+      ) {
+        resultadoPromesas.set(
+          clavePromesa,
+          {
+            estado:
+              fechaCompromiso < hoy
+                ? "Incumplida"
+                : "Activa",
+            montoPrometido,
+            montoPagadoEnFecha: 0,
+            montoPagadoTarde: 0,
+            montoAplicadoTotal: 0,
+            montoPendiente:
+              Math.max(
+                montoPrometido,
+                0
+              ),
+            fechaCumplimiento: "",
+          }
+        );
+
+        return;
+      }
+
+      const pagosOrdenados =
+        [...cuentaRelacionada.pagosCuenta]
+          .filter((pago) => {
+            const fecha =
+              fechaPago(pago);
+
+            return (
+              fecha &&
+              fecha >=
+                fechaRegistro
+            );
+          })
+          .sort((a, b) => {
+            const fechaA =
+              fechaPago(a);
+
+            const fechaB =
+              fechaPago(b);
+
+            if (
+              fechaA !== fechaB
+            ) {
+              return fechaA.localeCompare(
+                fechaB
+              );
+            }
+
+            return String(
+              a.created_at || ""
+            ).localeCompare(
+              String(
+                b.created_at || ""
+              )
+            );
+          });
+
+      let montoPagadoEnFecha = 0;
+      let montoPagadoTarde = 0;
+      let fechaCumplimiento = "";
+
+      for (
+        let indicePago = 0;
+        indicePago <
+        pagosOrdenados.length;
+        indicePago += 1
+      ) {
+        if (
+          montoPagadoEnFecha +
+            montoPagadoTarde >=
+          montoPrometido
+        ) {
+          break;
+        }
+
+        const pago =
+          pagosOrdenados[indicePago];
+
+        const clavePago =
+          obtenerClavePago(
+            pago,
+            pagosValidosUnicos.indexOf(
+              pago
+            ) >= 0
+              ? pagosValidosUnicos.indexOf(
+                  pago
+                )
+              : indicePago
+          );
+
+        const disponible =
+          Number(
+            saldoDisponiblePorPago.get(
+              clavePago
+            ) || 0
+          );
+
+        if (disponible <= 0) {
+          continue;
+        }
+
+        const faltante =
+          montoPrometido -
+          montoPagadoEnFecha -
+          montoPagadoTarde;
+
+        const montoAplicar =
+          Math.min(
+            disponible,
+            faltante
+          );
+
+        const fecha =
+          fechaPago(pago);
+
+        if (
+          fecha <=
+          fechaCompromiso
+        ) {
+          montoPagadoEnFecha +=
+            montoAplicar;
+        } else {
+          montoPagadoTarde +=
+            montoAplicar;
+        }
+
+        saldoDisponiblePorPago.set(
+          clavePago,
+          disponible -
+            montoAplicar
+        );
+
+        if (
+          montoPagadoEnFecha +
+            montoPagadoTarde >=
+          montoPrometido
+        ) {
+          fechaCumplimiento =
+            fecha;
+        }
+      }
+
+      const montoAplicadoTotal =
+        montoPagadoEnFecha +
+        montoPagadoTarde;
+
+      const montoPendiente =
+        Math.max(
+          montoPrometido -
+            montoAplicadoTotal,
+          0
+        );
+
+      let estadoPromesa =
+        "Activa";
+
+      if (
+        montoAplicadoTotal >=
+        montoPrometido
+      ) {
+        estadoPromesa =
+          montoPagadoEnFecha >=
+          montoPrometido
+            ? "Cumplida"
+            : "Cumplida fuera de fecha";
+      } else if (
+        fechaCompromiso < hoy
+      ) {
+        estadoPromesa =
+          "Incumplida";
+      } else if (
+        montoAplicadoTotal > 0
+      ) {
+        estadoPromesa =
+          "Parcial";
+      } else {
+        estadoPromesa =
+          "Activa";
+      }
+
+      resultadoPromesas.set(
+        clavePromesa,
+        {
+          estado:
+            estadoPromesa,
+          montoPrometido,
+          montoPagadoEnFecha,
+          montoPagadoTarde,
+          montoAplicadoTotal,
+          montoPendiente,
+          fechaCumplimiento,
         }
       );
+    }
+  );
 
-      return resultado;
-    }, [
-      gestiones,
-      cartera,
-      clientes,
-      hoy,
-    ]);
+  function obtenerResultadoPromesa(
+    promesa
+  ) {
+    const indiceOriginal =
+      gestiones.findIndex(
+        (gestion) =>
+          gestion === promesa ||
+          String(
+            gestion.id || ""
+          ) ===
+            String(
+              promesa?.id || ""
+            )
+      );
 
-  const promesasPeriodoDetalle =
-    detallePromesas.filter(
-      (item) => {
-        const fecha =
-          item.fechaRegistro;
+    const clave =
+      obtenerClavePromesa(
+        promesa,
+        indiceOriginal >= 0
+          ? indiceOriginal
+          : 0
+      );
 
-        if (
-          filtroDesde &&
-          fecha <
-            filtroDesde
-        ) {
-          return false;
-        }
+    return (
+      resultadoPromesas.get(clave) || {
+        estado: "Activa",
+        montoPrometido: Number(
+          promesa?.monto_promesa ||
+            0
+        ),
+        montoPagadoEnFecha: 0,
+        montoPagadoTarde: 0,
+        montoAplicadoTotal: 0,
+        montoPendiente: Number(
+          promesa?.monto_promesa ||
+            0
+        ),
+        fechaCumplimiento: "",
+      }
+    );
+  }
 
-        if (
-          filtroHasta &&
-          fecha >
-            filtroHasta
-        ) {
-          return false;
-        }
+  const promesasPeriodo =
+    gestionesPeriodo.filter(
+      esPromesaPago
+    );
 
-        if (
-          filtroGestor !==
-          "Todos"
-        ) {
-          const usuario =
-            limpiarTexto(
-              item.promesa
-                .usuario
-            );
-
-          const gestor =
-            limpiarTexto(
-              filtroGestor
-            );
-
-          return (
-            usuario === gestor ||
-            usuario.startsWith(
-              `${gestor} (`
-            ) ||
-            limpiarTexto(
-              item.cuentaRelacionada
-                ?.gestor
-            ) === gestor
+  const promesasDetalladas =
+    promesasPeriodo.map(
+      (promesa) => {
+        const resultado =
+          obtenerResultadoPromesa(
+            promesa
           );
-        }
 
-        return true;
+        const cuentaRelacionada =
+          obtenerCuentaDePromesa(
+            promesa
+          );
+
+        return {
+          promesa,
+          resultado,
+          cuentaRelacionada,
+          cliente:
+            cuentaRelacionada?.cliente,
+          gestor:
+            cuentaRelacionada?.gestor ||
+            promesa.usuario ||
+            "Sin asignar",
+        };
       }
     );
 
   const promesasActivas =
-    promesasPeriodoDetalle.filter(
+    promesasDetalladas.filter(
       (item) =>
-        item.estado ===
+        item.resultado.estado ===
         "Activa"
     ).length;
 
   const promesasParciales =
-    promesasPeriodoDetalle.filter(
+    promesasDetalladas.filter(
       (item) =>
-        item.estado ===
+        item.resultado.estado ===
         "Parcial"
     ).length;
 
   const promesasCumplidas =
-    promesasPeriodoDetalle.filter(
+    promesasDetalladas.filter(
       (item) =>
-        item.estado ===
+        item.resultado.estado ===
         "Cumplida"
     ).length;
 
   const promesasIncumplidas =
-    promesasPeriodoDetalle.filter(
+    promesasDetalladas.filter(
       (item) =>
-        item.estado ===
+        item.resultado.estado ===
         "Incumplida"
     ).length;
 
   const promesasFueraFecha =
-    promesasPeriodoDetalle.filter(
+    promesasDetalladas.filter(
       (item) =>
-        item.estado ===
+        item.resultado.estado ===
         "Cumplida fuera de fecha"
     ).length;
-
-  /*
-    ============================================================
-    SEMÁFORO
-    ============================================================
-  */
 
   const semaforo = [
     {
@@ -1687,8 +1635,7 @@ export default function DashboardCobranza() {
         ),
     },
     {
-      rango:
-        "Más de 90 días",
+      rango: "Más de 90 días",
       icono: "🔴",
       items:
         carteraActivaPorGestor.filter(
@@ -1699,24 +1646,16 @@ export default function DashboardCobranza() {
     },
   ].map((rango) => ({
     ...rango,
-
     clientes:
       rango.items.length,
-
     monto:
       rango.items.reduce(
-        (sum, item) =>
-          sum +
+        (suma, item) =>
+          suma +
           item.saldoPendiente,
         0
       ),
   }));
-
-  /*
-    ============================================================
-    RIESGO
-    ============================================================
-  */
 
   const riesgo = [
     "Al día",
@@ -1728,31 +1667,20 @@ export default function DashboardCobranza() {
     const items =
       carteraActivaPorGestor.filter(
         (item) =>
-          item.riesgo ===
-          nivel
+          item.riesgo === nivel
       );
 
     return {
       riesgo: nivel,
-
-      clientes:
-        items.length,
-
-      monto:
-        items.reduce(
-          (sum, item) =>
-            sum +
-            item.saldoPendiente,
-          0
-        ),
+      clientes: items.length,
+      monto: items.reduce(
+        (suma, item) =>
+          suma +
+          item.saldoPendiente,
+        0
+      ),
     };
   });
-
-  /*
-    ============================================================
-    EFECTIVIDAD POR GESTOR
-    ============================================================
-  */
 
   const rankingGestores =
     gestores
@@ -1764,8 +1692,7 @@ export default function DashboardCobranza() {
         const cuentasGestor =
           cartera.filter(
             (item) =>
-              item.gestor ===
-              gestor
+              item.gestor === gestor
           );
 
         const cuentasActivas =
@@ -1775,18 +1702,33 @@ export default function DashboardCobranza() {
               0
           );
 
+        const pagosGestor =
+          pagosValidosUnicos.filter(
+            (pago) => {
+              const itemCartera =
+                obtenerItemCarteraDePago(
+                  pago,
+                  cartera
+                );
+
+              return (
+                itemCartera?.gestor ===
+                gestor
+              );
+            }
+          );
+
         const cobrado =
-          cuentasGestor.reduce(
-            (sum, item) =>
-              sum +
-              item.cobradoPeriodo,
-            0
+          sumarPagos(
+            pagosGestor,
+            filtroDesde,
+            filtroHasta
           );
 
         const saldo =
           cuentasActivas.reduce(
-            (sum, item) =>
-              sum +
+            (suma, item) =>
+              suma +
               item.saldoPendiente,
             0
           );
@@ -1796,73 +1738,47 @@ export default function DashboardCobranza() {
 
         const gestionesGestor =
           gestionesPeriodo.filter(
-            (gestion) => {
-              const usuario =
-                limpiarTexto(
-                  gestion.usuario
-                );
-
-              const nombreGestor =
-                limpiarTexto(
-                  gestor
-                );
-
-              return (
-                usuario ===
-                  nombreGestor ||
-                usuario.startsWith(
-                  `${nombreGestor} (`
-                )
-              );
-            }
+            (gestion) =>
+              gestionPerteneceGestor(
+                gestion,
+                gestor
+              )
           );
 
         const promesasGestor =
-          promesasPeriodoDetalle.filter(
-            (promesa) => {
-              const usuario =
-                limpiarTexto(
-                  promesa.promesa
-                    .usuario
-                );
-
-              const nombreGestor =
-                limpiarTexto(
-                  gestor
-                );
-
-              return (
-                usuario ===
-                  nombreGestor ||
-                usuario.startsWith(
-                  `${nombreGestor} (`
-                ) ||
-                limpiarTexto(
-                  promesa
-                    .cuentaRelacionada
-                    ?.gestor
-                ) === nombreGestor
-              );
-            }
+          gestionesGestor.filter(
+            esPromesaPago
           );
 
-        const promesasCumplidasGestor =
+        const cumplidasGestor =
           promesasGestor.filter(
             (promesa) =>
-              promesa.estado ===
+              obtenerResultadoPromesa(
+                promesa
+              ).estado ===
               "Cumplida"
           ).length;
 
-        const promesasParcialesGestor =
+        const parcialesGestor =
           promesasGestor.filter(
             (promesa) =>
-              promesa.estado ===
+              obtenerResultadoPromesa(
+                promesa
+              ).estado ===
               "Parcial"
+          ).length;
+
+        const incumplidasGestor =
+          promesasGestor.filter(
+            (promesa) =>
+              obtenerResultadoPromesa(
+                promesa
+              ).estado ===
+              "Incumplida"
           ).length;
 
         return {
           gestor,
-
           clientesAsignados:
             cuentasActivas.length,
 
@@ -1883,10 +1799,13 @@ export default function DashboardCobranza() {
             promesasGestor.length,
 
           promesasCumplidas:
-            promesasCumplidasGestor,
+            cumplidasGestor,
 
           promesasParciales:
-            promesasParcialesGestor,
+            parcialesGestor,
+
+          promesasIncumplidas:
+            incumplidasGestor,
 
           cobrado,
 
@@ -1899,19 +1818,12 @@ export default function DashboardCobranza() {
         };
       });
 
-  /*
-    ============================================================
-    TOP CLIENTES
-    ============================================================
-  */
-
   const mayorRiesgo = [
     ...carteraActivaPorGestor,
   ]
     .sort(
       (a, b) =>
-        b.dias -
-          a.dias ||
+        b.dias - a.dias ||
         b.saldoPendiente -
           a.saldoPendiente
     )
@@ -1927,53 +1839,6 @@ export default function DashboardCobranza() {
     )
     .slice(0, 10);
 
-  const promesasDetalleFilas =
-    [...promesasPeriodoDetalle]
-      .sort((a, b) => {
-        if (
-          a.fechaCompromiso !==
-          b.fechaCompromiso
-        ) {
-          return a.fechaCompromiso.localeCompare(
-            b.fechaCompromiso
-          );
-        }
-
-        return a.fechaRegistro.localeCompare(
-          b.fechaRegistro
-        );
-      })
-      .map((item) => [
-        item.cliente?.nombre ||
-          "Sin nombre",
-
-        item.cuentaRelacionada
-          ?.cuenta
-          ?.numero_cuenta ||
-          "-",
-
-        item.fechaCompromiso,
-
-        formato(
-          item.montoPrometido
-        ),
-
-        formato(
-          item.pagadoTotal
-        ),
-
-        formato(
-          item.pendientePromesa
-        ),
-
-        item.estado,
-
-        item.promesa.usuario ||
-          item.cuentaRelacionada
-            ?.gestor ||
-          "Sin asignar",
-      ]);
-
   if (cargando) {
     return (
       <div style={pagina}>
@@ -1983,7 +1848,7 @@ export default function DashboardCobranza() {
           </strong>
 
           <p>
-            Calculando cartera, pagos, promesas y gestores.
+            Calculando cartera, cobros, promesas y gestores.
           </p>
         </div>
       </div>
@@ -2007,7 +1872,15 @@ export default function DashboardCobranza() {
               </h1>
 
               <p style={subtitulo}>
-                Administración de cartera, recuperación, riesgo, promesas y gestores.
+                Administración de cartera, recuperación,
+                riesgo, promesas y gestores.
+              </p>
+
+              <p style={fechaDashboard}>
+                Fecha de análisis en Panamá:{" "}
+                <strong>
+                  {formatoFecha(hoy)}
+                </strong>
               </p>
             </div>
           </div>
@@ -2015,18 +1888,14 @@ export default function DashboardCobranza() {
           <div style={accionesTop}>
             <button
               style={botonDashboard}
-              onClick={
-                volverDashboard
-              }
+              onClick={volverDashboard}
             >
               ← Volver al Dashboard
             </button>
 
             <button
               style={botonActualizar}
-              onClick={
-                cargarDatos
-              }
+              onClick={cargarDatos}
             >
               Actualizar
             </button>
@@ -2048,7 +1917,9 @@ export default function DashboardCobranza() {
           </h2>
 
           <p style={nota}>
-            Las fechas afectan cobros, gestiones, promesas y efectividad de gestores. La cartera representa el estado actual.
+            Las fechas afectan cobros, gestiones,
+            promesas y efectividad de gestores.
+            La cartera muestra el saldo actual.
           </p>
 
           <div style={gridFiltros}>
@@ -2104,9 +1975,7 @@ export default function DashboardCobranza() {
 
           <button
             style={botonGris}
-            onClick={
-              limpiarFiltros
-            }
+            onClick={limpiarFiltros}
           >
             Limpiar filtros
           </button>
@@ -2296,7 +2165,7 @@ export default function DashboardCobranza() {
             valor={
               promesasFueraFecha
             }
-            icono="🕒"
+            icono="⏰"
           />
 
           <KPI
@@ -2313,16 +2182,56 @@ export default function DashboardCobranza() {
           columnas={[
             "Cliente",
             "Cuenta",
+            "Fecha registro",
             "Fecha prometida",
-            "Monto prometido",
+            "Prometido",
             "Pagado aplicado",
             "Pendiente",
             "Estado",
             "Gestor",
           ]}
-          filas={
-            promesasDetalleFilas
-          }
+          filas={promesasDetalladas.map(
+            (item) => [
+              item.cliente?.nombre ||
+                "Sin nombre",
+
+              item.cuentaRelacionada
+                ?.cuenta
+                ?.numero_cuenta ||
+                "-",
+
+              formatoFecha(
+                item.promesa
+                  ?.fecha_gestion ||
+                  item.promesa
+                    ?.created_at
+              ),
+
+              formatoFecha(
+                item.promesa
+                  ?.proxima_gestion
+              ),
+
+              formato(
+                item.resultado
+                  .montoPrometido
+              ),
+
+              formato(
+                item.resultado
+                  .montoAplicadoTotal
+              ),
+
+              formato(
+                item.resultado
+                  .montoPendiente
+              ),
+
+              item.resultado.estado,
+
+              item.gestor,
+            ]
+          )}
         />
 
         <div style={gridDos}>
@@ -2352,9 +2261,7 @@ export default function DashboardCobranza() {
                 {semaforo.map(
                   (item) => (
                     <tr
-                      key={
-                        item.rango
-                      }
+                      key={item.rango}
                     >
                       <td style={td}>
                         {item.icono}{" "}
@@ -2410,9 +2317,7 @@ export default function DashboardCobranza() {
                       }
                     >
                       <td style={td}>
-                        {
-                          item.riesgo
-                        }
+                        {item.riesgo}
                       </td>
 
                       <td style={td}>
@@ -2442,8 +2347,9 @@ export default function DashboardCobranza() {
             "Clientes gestionados",
             "Gestiones",
             "Promesas",
-            "Promesas parciales",
-            "Promesas cumplidas",
+            "Cumplidas",
+            "Parciales",
+            "Incumplidas",
             "Monto recuperado",
             "% recuperación",
           ]}
@@ -2454,8 +2360,9 @@ export default function DashboardCobranza() {
               gestor.clientesGestionados,
               gestor.gestiones,
               gestor.promesas,
-              gestor.promesasParciales,
               gestor.promesasCumplidas,
+              gestor.promesasParciales,
+              gestor.promesasIncumplidas,
               formato(
                 gestor.cobrado
               ),
@@ -2604,8 +2511,7 @@ function Tabla({
           </thead>
 
           <tbody>
-            {filas.length ===
-            0 ? (
+            {filas.length === 0 ? (
               <tr>
                 <td
                   style={td}
@@ -2622,9 +2528,7 @@ function Tabla({
                   fila,
                   index
                 ) => (
-                  <tr
-                    key={index}
-                  >
+                  <tr key={index}>
                     {fila.map(
                       (
                         celda,
@@ -2655,8 +2559,7 @@ const pagina = {
   minHeight: "100vh",
   background: "#eef2f7",
   padding: "20px",
-  fontFamily:
-    "Arial, sans-serif",
+  fontFamily: "Arial, sans-serif",
 };
 
 const contenedor = {
@@ -2715,6 +2618,12 @@ const subtitulo = {
   fontSize: "15px",
 };
 
+const fechaDashboard = {
+  margin: "7px 0 0",
+  color: "#bfdbfe",
+  fontSize: "13px",
+};
+
 const accionesTop = {
   display: "flex",
   gap: "10px",
@@ -2734,8 +2643,7 @@ const botonDashboard = {
 const botonActualizar = {
   background: "#16a34a",
   color: "#ffffff",
-  border:
-    "1px solid #ffffff",
+  border: "1px solid #ffffff",
   padding: "12px 20px",
   borderRadius: "9px",
   fontWeight: "bold",
@@ -2745,8 +2653,7 @@ const botonActualizar = {
 const botonNegro = {
   background: "#111827",
   color: "#ffffff",
-  border:
-    "1px solid #ffffff",
+  border: "1px solid #ffffff",
   padding: "12px 20px",
   borderRadius: "9px",
   fontWeight: "bold",
@@ -2780,8 +2687,7 @@ const tituloSeccion = {
 };
 
 const seccionTitulo = {
-  margin:
-    "22px 0 12px",
+  margin: "22px 0 12px",
   color: "#111827",
 };
 
@@ -2859,8 +2765,7 @@ const gridDos = {
 
 const tabla = {
   width: "100%",
-  borderCollapse:
-    "collapse",
+  borderCollapse: "collapse",
 };
 
 const th = {
