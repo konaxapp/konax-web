@@ -29,7 +29,7 @@ export default function CuentasPorCobrar() {
   const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [estadoCuenta, setEstadoCuenta] = useState("Activo");
 
-  const [estadoCobranza, setEstadoCobranza] = useState("Al Día");
+  const [estadoCobranza, setEstadoCobranza] = useState("Sin definir");
   const [fechaUltimoPago, setFechaUltimoPago] = useState("");
   const [montoUltimoPago, setMontoUltimoPago] = useState("");
   const [responsableCobro, setResponsableCobro] = useState("");
@@ -43,21 +43,27 @@ export default function CuentasPorCobrar() {
   }, []);
 
   useEffect(() => {
-    const saldoNumero =
+    const saldoParaCalcular =
       saldoActual !== ""
-        ? Number(saldoActual || 0)
-        : Number(montoTotal || 0);
+        ? saldoActual
+        : montoTotal !== ""
+        ? montoTotal
+        : "";
 
     const estadoAutomatico = calcularEstadoCobranzaAutomatico(
       fechaVencimiento,
-      saldoNumero
+      saldoParaCalcular
     );
 
     setEstadoCobranza(estadoAutomatico);
 
     if (estadoAutomatico === "Cancelado") {
       setEstadoCuenta("Cancelado");
-    } else if (estadoCuenta === "Cancelado" && saldoNumero > 0) {
+    } else if (
+      estadoAutomatico !== "Sin definir" &&
+      estadoCuenta === "Cancelado" &&
+      Number(saldoParaCalcular || 0) > 0
+    ) {
       setEstadoCuenta("Activo");
     }
   }, [fechaVencimiento, saldoActual, montoTotal]);
@@ -277,8 +283,16 @@ export default function CuentasPorCobrar() {
     return `${year}-${month}-${day}`;
   }
 
-  function calcularDiasMora(fecha, saldo = 0) {
-    if (!fecha || Number(saldo || 0) <= 0) return 0;
+  function calcularDiasMora(fecha, saldo = "") {
+    if (
+      saldo === "" ||
+      saldo === null ||
+      saldo === undefined ||
+      !fecha ||
+      Number(saldo || 0) <= 0
+    ) {
+      return 0;
+    }
 
     const hoyTexto = obtenerFechaLocalISO();
     const hoy = new Date(`${hoyTexto}T00:00:00`);
@@ -294,6 +308,10 @@ export default function CuentasPorCobrar() {
   }
 
   function calcularEstadoCobranzaAutomatico(fecha, saldo) {
+    if (saldo === "" || saldo === null || saldo === undefined) {
+      return "Sin definir";
+    }
+
     const saldoNumero = Number(saldo || 0);
 
     if (saldoNumero <= 0) {
@@ -339,7 +357,7 @@ export default function CuentasPorCobrar() {
     setFechaVencimiento("");
     setEstadoCuenta("Activo");
 
-    setEstadoCobranza("Al Día");
+    setEstadoCobranza("Sin definir");
     setFechaUltimoPago("");
     setMontoUltimoPago("");
     setResponsableCobro("");
@@ -648,11 +666,20 @@ export default function CuentasPorCobrar() {
   const saldoVisual =
     saldoActual !== ""
       ? Number(saldoActual || 0)
-      : Number(montoTotal || 0);
+      : montoTotal !== ""
+      ? Number(montoTotal || 0)
+      : 0;
+
+  const saldoParaEstadoVisual =
+    saldoActual !== ""
+      ? saldoActual
+      : montoTotal !== ""
+      ? montoTotal
+      : "";
 
   const diasMoraVisual = calcularDiasMora(
     fechaVencimiento,
-    saldoVisual
+    saldoParaEstadoVisual
   );
 
   return (
@@ -882,7 +909,7 @@ export default function CuentasPorCobrar() {
                 value={estadoCuenta}
                 onChange={(e) => setEstadoCuenta(e.target.value)}
                 style={selectStyle}
-                disabled={saldoVisual <= 0}
+                disabled={saldoParaEstadoVisual !== "" && saldoVisual <= 0}
               >
                 <option>Activo</option>
                 <option>Suspendido</option>
