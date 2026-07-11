@@ -24,14 +24,6 @@ export default function DashboardCobranza() {
     cargarDatos();
   }, []);
 
-  /*
-    Verifica cada 30 segundos si cambió el día en Panamá.
-
-    Ejemplo:
-    09/07/2026 a las 11:59 p. m. → Cobrado Hoy = USD 500
-    10/07/2026 a las 12:01 a. m. → Cobrado Hoy = USD 0
-    si todavía no existen pagos con fecha_pago 10/07/2026.
-  */
   useEffect(() => {
     const intervalo = window.setInterval(() => {
       const nuevaFecha = obtenerFechaPanama();
@@ -127,14 +119,6 @@ export default function DashboardCobranza() {
     return obtenerFechaPanama(fechaObjeto);
   }
 
-  /*
-    Esta es la fecha operativa real de un cobro.
-
-    Para Caja usamos estrictamente fecha_pago.
-
-    No utilizamos created_at para inventar una fecha de pago,
-    porque created_at solo indica cuándo se insertó el registro.
-  */
   function fechaOperativaPago(pago) {
     if (!pago?.fecha_pago) {
       return "";
@@ -143,10 +127,16 @@ export default function DashboardCobranza() {
     return String(pago.fecha_pago).slice(0, 10);
   }
 
+  /*
+    CORRECCIÓN IMPORTANTE:
+    Para saber cuándo se registró realmente una gestión o promesa,
+    se usa primero created_at porque contiene fecha y hora exacta.
+    fecha_gestion puede contener solamente YYYY-MM-DD.
+  */
   function fechaRegistroGestion(gestion) {
     return fechaSimple(
-      gestion?.fecha_gestion ||
-        gestion?.created_at
+      gestion?.created_at ||
+        gestion?.fecha_gestion
     );
   }
 
@@ -158,10 +148,15 @@ export default function DashboardCobranza() {
     return Number.isNaN(valor) ? 0 : valor;
   }
 
+  /*
+    CORRECCIÓN IMPORTANTE:
+    Se usa primero created_at para impedir que un pago registrado antes
+    de la promesa, pero durante el mismo día, sea aplicado a esa promesa.
+  */
   function timestampRegistroPromesa(promesa) {
     return timestampSeguro(
-      promesa?.fecha_gestion ||
-        promesa?.created_at
+      promesa?.created_at ||
+        promesa?.fecha_gestion
     );
   }
 
@@ -333,18 +328,6 @@ export default function DashboardCobranza() {
     return "Más de 90 días";
   }
 
-  /*
-    Solo estos movimientos representan recuperación de cartera.
-
-    No cuenta:
-    - Apertura de Caja
-    - Caja menuda
-    - Venta Contado
-    - Venta Crédito
-    - Abono inicial de separación
-    - Gastos
-    - Ingresos manuales
-  */
   function pagoEsValido(pago) {
     const estado = normalizarTexto(pago?.estado);
     const tipo = normalizarTexto(pago?.tipo);
@@ -422,11 +405,6 @@ export default function DashboardCobranza() {
     if (!empresaId) return;
 
     setCargando(true);
-
-    /*
-      Al pulsar Actualizar también se vuelve a consultar
-      la fecha operativa real de Panamá.
-    */
     setFechaOperativa(obtenerFechaPanama());
 
     const [
@@ -503,12 +481,6 @@ export default function DashboardCobranza() {
       pagos.filter(pagoEsValido)
     );
   }, [pagos]);
-
-  /*
-    ============================================================
-    CONSTRUCCIÓN DE CARTERA
-    ============================================================
-  */
 
   const cartera = useMemo(() => {
     const base = cuentas.map((cuenta) => {
@@ -741,12 +713,6 @@ export default function DashboardCobranza() {
       pagoCorrespondeFiltroGestor
     );
 
-  /*
-    ============================================================
-    RESUMEN EJECUTIVO
-    ============================================================
-  */
-
   const carteraOriginal =
     carteraPorGestor.reduce(
       (suma, item) =>
@@ -789,22 +755,6 @@ export default function DashboardCobranza() {
       ? (carteraMora / saldoPendiente) * 100
       : 0;
 
-  /*
-    ============================================================
-    COBRADO HOY
-    ============================================================
-
-    Se calcula exclusivamente con:
-
-    fecha_pago = fecha actual de Panamá
-    estado = Procesado o Activo
-    tipo = Pago Crédito, Cobro Crédito, Mensualidad o Cancelación
-
-    No depende del cierre manual de caja.
-    El cambio de día lo reinicia automáticamente porque consulta
-    únicamente la nueva fecha operativa.
-  */
-
   const cobradoHoy = sumarPagos(
     pagosFiltradosPorGestor,
     fechaOperativa,
@@ -830,12 +780,6 @@ export default function DashboardCobranza() {
     saldoInicioPeriodo > 0
       ? (cobradoPeriodo / saldoInicioPeriodo) * 100
       : 0;
-
-  /*
-    ============================================================
-    CIERRE MENSUAL
-    ============================================================
-  */
 
   const vencimientosMes =
     carteraPorGestor.filter((item) => {
@@ -948,12 +892,6 @@ export default function DashboardCobranza() {
         0
       );
 
-  /*
-    ============================================================
-    GESTIONES
-    ============================================================
-  */
-
   function gestionPerteneceGestor(gestion, gestor) {
     if (gestor === "Todos") {
       return true;
@@ -1050,20 +988,6 @@ export default function DashboardCobranza() {
       indice,
     ].join("|");
   }
-
-  /*
-    ============================================================
-    EVALUACIÓN DE PROMESAS
-    ============================================================
-
-    Reglas:
-
-    1. Un pago anterior al registro de la promesa no cuenta.
-    2. Aunque el pago y la promesa sean del mismo día, se compara
-       created_at para saber cuál ocurrió primero.
-    3. Los pagos se consumen cronológicamente.
-    4. Un mismo pago no se reutiliza para varias promesas.
-  */
 
   const resultadosPromesas = useMemo(() => {
     const promesasOrdenadas = gestiones
@@ -1163,10 +1087,6 @@ export default function DashboardCobranza() {
 
           if (!fechaPago) continue;
 
-          /*
-            Si existe created_at en ambos registros, el pago debe
-            haberse creado después de la promesa.
-          */
           const timestampPago =
             timestampRegistroPago(pago);
 
@@ -1178,9 +1098,6 @@ export default function DashboardCobranza() {
             continue;
           }
 
-          /*
-            Respaldo para registros antiguos sin timestamps válidos.
-          */
           if (
             (!timestampRegistro || !timestampPago) &&
             fechaPago < fechaRegistro
@@ -1368,12 +1285,6 @@ export default function DashboardCobranza() {
         "Cumplida fuera de fecha"
     ).length;
 
-  /*
-    ============================================================
-    SEMÁFORO Y RIESGO
-    ============================================================
-  */
-
   const semaforo = [
     {
       rango: "Al día",
@@ -1442,12 +1353,6 @@ export default function DashboardCobranza() {
       ),
     };
   });
-
-  /*
-    ============================================================
-    EFECTIVIDAD POR GESTOR
-    ============================================================
-  */
 
   const rankingGestores = gestores
     .filter((gestor) => gestor !== "Todos")
@@ -1685,53 +1590,14 @@ export default function DashboardCobranza() {
         </h2>
 
         <div style={kpiGrid}>
-          <KPI
-            titulo="Cartera Original"
-            valor={formato(carteraOriginal)}
-            icono="🏦"
-          />
-
-          <KPI
-            titulo="Total Recuperado"
-            valor={formato(totalRecuperado)}
-            icono="✅"
-          />
-
-          <KPI
-            titulo="Saldo Pendiente"
-            valor={formato(saldoPendiente)}
-            icono="💰"
-          />
-
-          <KPI
-            titulo="Cartera Al Día"
-            valor={formato(carteraAlDia)}
-            icono="🟢"
-          />
-
-          <KPI
-            titulo="Cartera en Mora"
-            valor={formato(carteraMora)}
-            icono="🔴"
-          />
-
-          <KPI
-            titulo="% Mora"
-            valor={`${porcentajeMora.toFixed(1)}%`}
-            icono="📈"
-          />
-
-          <KPI
-            titulo="Cobrado Periodo"
-            valor={formato(cobradoPeriodo)}
-            icono="🧾"
-          />
-
-          <KPI
-            titulo="% Recuperación Periodo"
-            valor={`${recuperacionPeriodo.toFixed(1)}%`}
-            icono="🎯"
-          />
+          <KPI titulo="Cartera Original" valor={formato(carteraOriginal)} icono="🏦" />
+          <KPI titulo="Total Recuperado" valor={formato(totalRecuperado)} icono="✅" />
+          <KPI titulo="Saldo Pendiente" valor={formato(saldoPendiente)} icono="💰" />
+          <KPI titulo="Cartera Al Día" valor={formato(carteraAlDia)} icono="🟢" />
+          <KPI titulo="Cartera en Mora" valor={formato(carteraMora)} icono="🔴" />
+          <KPI titulo="% Mora" valor={`${porcentajeMora.toFixed(1)}%`} icono="📈" />
+          <KPI titulo="Cobrado Periodo" valor={formato(cobradoPeriodo)} icono="🧾" />
+          <KPI titulo="% Recuperación Periodo" valor={`${recuperacionPeriodo.toFixed(1)}%`} icono="🎯" />
         </div>
 
         <h2 style={seccionTitulo}>
@@ -1739,53 +1605,14 @@ export default function DashboardCobranza() {
         </h2>
 
         <div style={kpiGrid}>
-          <KPI
-            titulo="Vencimientos del Mes"
-            valor={formato(montoVencimientosMes)}
-            icono="📅"
-          />
-
-          <KPI
-            titulo="Cobrado del Mes"
-            valor={formato(cobradoMes)}
-            icono="💵"
-          />
-
-          <KPI
-            titulo="Cobrado de Vencimientos"
-            valor={formato(cobradoVencimientosMes)}
-            icono="✅"
-          />
-
-          <KPI
-            titulo="Pendiente del Mes"
-            valor={formato(pendienteMes)}
-            icono="⏳"
-          />
-
-          <KPI
-            titulo="Mora Anterior"
-            valor={formato(moraAnteriorInicio)}
-            icono="📂"
-          />
-
-          <KPI
-            titulo="Mora Recuperada"
-            valor={formato(moraAnteriorRecuperada)}
-            icono="♻️"
-          />
-
-          <KPI
-            titulo="Mora Pendiente"
-            valor={formato(moraAnteriorPendiente)}
-            icono="⚠️"
-          />
-
-          <KPI
-            titulo="Saldo Vencido Pendiente"
-            valor={formato(saldoVencidoPendiente)}
-            icono="➡️"
-          />
+          <KPI titulo="Vencimientos del Mes" valor={formato(montoVencimientosMes)} icono="📅" />
+          <KPI titulo="Cobrado del Mes" valor={formato(cobradoMes)} icono="💵" />
+          <KPI titulo="Cobrado de Vencimientos" valor={formato(cobradoVencimientosMes)} icono="✅" />
+          <KPI titulo="Pendiente del Mes" valor={formato(pendienteMes)} icono="⏳" />
+          <KPI titulo="Mora Anterior" valor={formato(moraAnteriorInicio)} icono="📂" />
+          <KPI titulo="Mora Recuperada" valor={formato(moraAnteriorRecuperada)} icono="♻️" />
+          <KPI titulo="Mora Pendiente" valor={formato(moraAnteriorPendiente)} icono="⚠️" />
+          <KPI titulo="Saldo Vencido Pendiente" valor={formato(saldoVencidoPendiente)} icono="➡️" />
         </div>
 
         <h2 style={seccionTitulo}>
@@ -1793,47 +1620,13 @@ export default function DashboardCobranza() {
         </h2>
 
         <div style={kpiGrid}>
-          <KPI
-            titulo="Cobrado Hoy"
-            valor={formato(cobradoHoy)}
-            icono="📅"
-          />
-
-          <KPI
-            titulo="Promesas Activas"
-            valor={promesasActivas}
-            icono="🤝"
-          />
-
-          <KPI
-            titulo="Promesas Parciales"
-            valor={promesasParciales}
-            icono="🟡"
-          />
-
-          <KPI
-            titulo="Promesas Cumplidas"
-            valor={promesasCumplidas}
-            icono="✅"
-          />
-
-          <KPI
-            titulo="Promesas Incumplidas"
-            valor={promesasIncumplidas}
-            icono="⚠️"
-          />
-
-          <KPI
-            titulo="Cumplidas Fuera de Fecha"
-            valor={promesasFueraFecha}
-            icono="⏰"
-          />
-
-          <KPI
-            titulo="Gestiones Periodo"
-            valor={gestionesPeriodo.length}
-            icono="☎️"
-          />
+          <KPI titulo="Cobrado Hoy" valor={formato(cobradoHoy)} icono="📅" />
+          <KPI titulo="Promesas Activas" valor={promesasActivas} icono="🤝" />
+          <KPI titulo="Promesas Parciales" valor={promesasParciales} icono="🟡" />
+          <KPI titulo="Promesas Cumplidas" valor={promesasCumplidas} icono="✅" />
+          <KPI titulo="Promesas Incumplidas" valor={promesasIncumplidas} icono="⚠️" />
+          <KPI titulo="Cumplidas Fuera de Fecha" valor={promesasFueraFecha} icono="⏰" />
+          <KPI titulo="Gestiones Periodo" valor={gestionesPeriodo.length} icono="☎️" />
         </div>
 
         <Tabla
@@ -1851,33 +1644,13 @@ export default function DashboardCobranza() {
           ]}
           filas={promesasDetalladas.map((item) => [
             item.cliente?.nombre || "Sin nombre",
-
-            item.cuentaRelacionada?.cuenta
-              ?.numero_cuenta || "-",
-
-            formatoFecha(
-              item.promesa.fecha_gestion ||
-                item.promesa.created_at
-            ),
-
-            formatoFecha(
-              item.promesa.proxima_gestion
-            ),
-
-            formato(
-              item.resultado.montoPrometido
-            ),
-
-            formato(
-              item.resultado.pagadoTotal
-            ),
-
-            formato(
-              item.resultado.pendiente
-            ),
-
+            item.cuentaRelacionada?.cuenta?.numero_cuenta || "-",
+            formatoFecha(item.promesa.created_at || item.promesa.fecha_gestion),
+            formatoFecha(item.promesa.proxima_gestion),
+            formato(item.resultado.montoPrometido),
+            formato(item.resultado.pagadoTotal),
+            formato(item.resultado.pendiente),
             item.resultado.estado,
-
             item.gestor,
           ])}
         />
