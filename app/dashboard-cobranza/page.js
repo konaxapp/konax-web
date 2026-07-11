@@ -143,7 +143,33 @@ export default function DashboardCobranza() {
   function timestampSeguro(fecha) {
     if (!fecha) return 0;
 
-    const valor = new Date(fecha).getTime();
+    let texto = String(fecha).trim();
+
+    /*
+      PostgreSQL puede devolver fechas así:
+      2026-07-11 03:39:48.088951
+
+      La promesa puede venir así:
+      2026-07-11T03:47:54.676304+00:00
+
+      Para compararlas correctamente:
+      1. Convertimos el espacio entre fecha y hora en "T".
+      2. Si la fecha no trae zona horaria, la tratamos como UTC.
+      3. Comparamos ambas usando milisegundos UTC.
+    */
+
+    texto = texto.replace(" ", "T");
+
+    const tieneZonaHoraria =
+      /Z$/i.test(texto) ||
+      /[+-]\d{2}:\d{2}$/.test(texto) ||
+      /[+-]\d{2}$/.test(texto);
+
+    if (!tieneZonaHoraria) {
+      texto += "Z";
+    }
+
+    const valor = new Date(texto).getTime();
 
     return Number.isNaN(valor) ? 0 : valor;
   }
