@@ -645,6 +645,16 @@ export default function CuentasPorCobrar() {
     );
   }
 
+  const saldoVisual =
+    saldoActual !== ""
+      ? Number(saldoActual || 0)
+      : Number(montoTotal || 0);
+
+  const diasMoraVisual = calcularDiasMora(
+    fechaVencimiento,
+    saldoVisual
+  );
+
   return (
     <div style={pagina}>
       <div style={contenedor}>
@@ -681,9 +691,7 @@ export default function CuentasPorCobrar() {
 
           <KPI
             titulo="Saldo actual"
-            valor={`$${Number(
-              saldoActual || montoTotal || 0
-            ).toFixed(2)}`}
+            valor={`$${saldoVisual.toFixed(2)}`}
             icono="💰"
           />
 
@@ -874,7 +882,7 @@ export default function CuentasPorCobrar() {
                 value={estadoCuenta}
                 onChange={(e) => setEstadoCuenta(e.target.value)}
                 style={selectStyle}
-                disabled={Number(saldoActual || montoTotal || 0) <= 0}
+                disabled={saldoVisual <= 0}
               >
                 <option>Activo</option>
                 <option>Suspendido</option>
@@ -897,7 +905,7 @@ export default function CuentasPorCobrar() {
           <SectionTitle
             icono="📞"
             titulo="Información de Cobranza Inicial"
-            texto="El estado se calcula automáticamente con el saldo y la fecha de vencimiento."
+            texto="Estado, días de mora, último pago y responsable de cobro."
           />
 
           <div style={grid}>
@@ -911,12 +919,7 @@ export default function CuentasPorCobrar() {
 
             <Campo label="Días de mora calculados">
               <input
-                value={calcularDiasMora(
-                  fechaVencimiento,
-                  saldoActual !== ""
-                    ? Number(saldoActual || 0)
-                    : Number(montoTotal || 0)
-                )}
+                value={diasMoraVisual}
                 readOnly
                 style={inputAutomatico}
               />
@@ -965,14 +968,6 @@ export default function CuentasPorCobrar() {
               </select>
             </Campo>
           </div>
-
-          <p style={notaSuave}>
-            Si la cuenta tiene saldo y la fecha de vencimiento ya pasó,
-            el sistema la guardará como <strong>Mora</strong>. Si el saldo
-            es cero, quedará <strong>Cancelada</strong>. Si no está vencida,
-            quedará <strong>Al Día</strong>. La fecha del último pago debe
-            quedar vacía cuando todavía no existe un pago real.
-          </p>
 
           <Campo label="Observación inicial / historial previo">
             <textarea
@@ -1264,17 +1259,6 @@ const textarea = {
   ...inputStyle,
   minHeight: "95px",
   resize: "vertical",
-};
-
-const notaSuave = {
-  margin: "4px 0 14px",
-  color: "#475569",
-  background: "#f8fafc",
-  border: "1px solid #e5e7eb",
-  padding: "12px",
-  borderRadius: "12px",
-  fontSize: "13px",
-  lineHeight: 1.5,
 };
 
 const acciones = {
