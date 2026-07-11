@@ -8,6 +8,7 @@ export default function CuentasPorCobrar() {
   const router = useRouter();
 
   const [accesoValidado, setAccesoValidado] = useState(false);
+  const [gestores, setGestores] = useState([]);
 
   const [cedula, setCedula] = useState("");
   const [nombre, setNombre] = useState("");
@@ -41,8 +42,32 @@ export default function CuentasPorCobrar() {
     validarAcceso();
   }, []);
 
+  useEffect(() => {
+    const saldoNumero =
+      saldoActual !== ""
+        ? Number(saldoActual || 0)
+        : Number(montoTotal || 0);
+
+    const estadoAutomatico = calcularEstadoCobranzaAutomatico(
+      fechaVencimiento,
+      saldoNumero
+    );
+
+    setEstadoCobranza(estadoAutomatico);
+
+    if (estadoAutomatico === "Cancelado") {
+      setEstadoCuenta("Cancelado");
+    } else if (estadoCuenta === "Cancelado" && saldoNumero > 0) {
+      setEstadoCuenta("Activo");
+    }
+  }, [fechaVencimiento, saldoActual, montoTotal]);
+
   function normalizar(texto) {
-    return String(texto || "").toLowerCase().trim();
+    return String(texto || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
   }
 
   function esAdministrador(rol) {
@@ -106,12 +131,6 @@ export default function CuentasPorCobrar() {
       return;
     }
 
-    /*
-      =====================================================
-      1. VALIDAR USUARIO ACTIVO
-      =====================================================
-    */
-
     const { data: usuario, error: errorUsuario } = await supabase
       .from("usuarios")
       .select("id, empresa_id, rol, estado")
@@ -133,24 +152,12 @@ export default function CuentasPorCobrar() {
       return;
     }
 
-    /*
-      =====================================================
-      2. VALIDAR QUE EL USUARIO PERTENECE A LA EMPRESA
-      =====================================================
-    */
-
     if (String(usuario.empresa_id) !== String(empresaId)) {
       limpiarSesionYSalir(
         "La empresa activa no corresponde al usuario autenticado."
       );
       return;
     }
-
-    /*
-      =====================================================
-      3. VALIDAR EMPRESA ACTIVA
-      =====================================================
-    */
 
     const { data: empresa, error: errorEmpresa } = await supabase
       .from("empresas")
@@ -178,12 +185,6 @@ export default function CuentasPorCobrar() {
       return;
     }
 
-    /*
-      =====================================================
-      4. VALIDAR MÓDULO CLIENTES
-      =====================================================
-    */
-
     const { data: moduloEmpresa, error: errorModulo } = await supabase
       .from("empresa_modulos")
       .select("clientes")
@@ -200,12 +201,6 @@ export default function CuentasPorCobrar() {
       router.replace("/dashboard");
       return;
     }
-
-    /*
-      =====================================================
-      5. VALIDAR PERMISO DEL USUARIO
-      =====================================================
-    */
 
     if (!esAdministrador(usuario.rol)) {
       const { data: permiso, error: errorPermiso } = await supabase
@@ -228,25 +223,44 @@ export default function CuentasPorCobrar() {
       }
     }
 
-    /*
-      =====================================================
-      6. SINCRONIZAR ROL OFICIAL
-      =====================================================
-    */
-
     localStorage.setItem("usuarioRol", usuario.rol || "");
+
+    await cargarGestores(empresaId);
 
     setAccesoValidado(true);
   }
 
-  function volverCentroOperaciones() {
-    /*
-      No modifica localStorage.
-      No reconstruye empresa.
-      No reconstruye usuario.
-      Solo navega al Dashboard.
-    */
+  async function cargarGestores(empresaId) {
+    const { data, error } = await supabase
+      .from("usuarios")
+      .select("id, nombre, correo, rol, estado")
+      .eq("empresa_id", empresaId)
+      .eq("estado", "Activo")
+      .order("nombre", { ascending: true });
 
+    if (error) {
+      alert("Error cargando gestores: " + error.message);
+      setGestores([]);
+      return;
+    }
+
+    const gestoresActivos = (data || []).filter((usuario) => {
+      const rol = normalizar(usuario.rol);
+
+      return (
+        rol === "gestor de cobro" ||
+        rol === "gestor de cobros" ||
+        rol === "gestor cobranza" ||
+        rol === "cobrador" ||
+        rol === "supervisor" ||
+        rol === "administrador"
+      );
+    });
+
+    setGestores(gestoresActivos);
+  }
+
+  function volverCentroOperaciones() {
     router.push("/dashboard");
   }
 
@@ -254,16 +268,51 @@ export default function CuentasPorCobrar() {
     return "KX-" + Date.now();
   }
 
-  function calcularDiasMora(fecha) {
-    if (!fecha) return 0;
-
+  function obtenerFechaLocalISO() {
     const hoy = new Date();
-    const vencimiento = new Date(fecha);
-    const diferencia = hoy - vencimiento;
+    const year = hoy.getFullYear();
+    const month = String(hoy.getMonth() + 1).padStart(2, "0");
+    const day = String(hoy.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  }
+
+  function calcularDiasMora(fecha, saldo = 0) {
+    if (!fecha || Number(saldo || 0) <= 0) return 0;
+
+    const hoyTexto = obtenerFechaLocalISO();
+    const hoy = new Date(`${hoyTexto}T00:00:00`);
+    const vencimiento = new Date(`${fecha}T00:00:00`);
+
+    if (Number.isNaN(vencimiento.getTime())) return 0;
+
+    const diferencia = hoy.getTime() - vencimiento.getTime();
 
     if (diferencia <= 0) return 0;
 
     return Math.floor(diferencia / (1000 * 60 * 60 * 24));
+  }
+
+  function calcularEstadoCobranzaAutomatico(fecha, saldo) {
+    const saldoNumero = Number(saldo || 0);
+
+    if (saldoNumero <= 0) {
+      return "Cancelado";
+    }
+
+    if (!fecha) {
+      return "Al Día";
+    }
+
+    const hoyTexto = obtenerFechaLocalISO();
+    const hoy = new Date(`${hoyTexto}T00:00:00`);
+    const vencimiento = new Date(`${fecha}T00:00:00`);
+
+    if (Number.isNaN(vencimiento.getTime())) {
+      return "Al Día";
+    }
+
+    return vencimiento < hoy ? "Mora" : "Al Día";
   }
 
   function responsableFinal() {
@@ -383,16 +432,65 @@ export default function CuentasPorCobrar() {
       return;
     }
 
+    const montoTotalNumero = Number(montoTotal || saldoActual || 0);
+
+    const saldoActualNumero =
+      saldoActual !== ""
+        ? Number(saldoActual || 0)
+        : montoTotalNumero;
+
+    if (montoTotalNumero < 0 || saldoActualNumero < 0) {
+      alert("Los montos no pueden ser negativos.");
+      return;
+    }
+
+    if (saldoActualNumero > montoTotalNumero && montoTotalNumero > 0) {
+      alert("El saldo actual no puede superar el monto total original.");
+      return;
+    }
+
+    const montoUltimoPagoNumero = Number(montoUltimoPago || 0);
+
+    if (montoUltimoPagoNumero < 0) {
+      alert("El monto del último pago no puede ser negativo.");
+      return;
+    }
+
+    if (fechaUltimoPago && montoUltimoPagoNumero <= 0) {
+      alert(
+        "Si coloca una fecha de último pago, también debe ingresar el monto pagado."
+      );
+      return;
+    }
+
+    if (!fechaUltimoPago && montoUltimoPagoNumero > 0) {
+      alert(
+        "Si ingresa un monto de último pago, también debe colocar la fecha del pago."
+      );
+      return;
+    }
+
+    const estadoCobranzaFinal = calcularEstadoCobranzaAutomatico(
+      fechaVencimiento,
+      saldoActualNumero
+    );
+
+    const diasMora = calcularDiasMora(
+      fechaVencimiento,
+      saldoActualNumero
+    );
+
+    const estadoCuentaFinal =
+      saldoActualNumero <= 0
+        ? "Cancelado"
+        : estadoCuenta === "Cancelado"
+        ? "Activo"
+        : estadoCuenta;
+
     setGuardando(true);
 
     try {
       let clienteCreado = null;
-
-      /*
-        =====================================================
-        BUSCAR CLIENTE EXISTENTE
-        =====================================================
-      */
 
       const {
         data: clienteExistente,
@@ -401,7 +499,7 @@ export default function CuentasPorCobrar() {
         .from("clientes")
         .select("*")
         .eq("empresa_id", empresaId)
-        .eq("cedula", cedula)
+        .eq("cedula", cedula.trim())
         .maybeSingle();
 
       if (errorBuscarCliente) {
@@ -410,27 +508,21 @@ export default function CuentasPorCobrar() {
         );
       }
 
-      /*
-        =====================================================
-        ACTUALIZAR O CREAR CLIENTE
-        =====================================================
-      */
-
       if (clienteExistente) {
         clienteCreado = clienteExistente;
 
         const { error: errorActualizarCliente } = await supabase
           .from("clientes")
           .update({
-            nombre,
-            telefono,
-            telefono_secundario: telefonoSecundario,
-            direccion,
-            correo,
-            referencia_nombre: referenciaNombre,
-            referencia_telefono: referenciaTelefono,
+            nombre: nombre.trim(),
+            telefono: telefono.trim(),
+            telefono_secundario: telefonoSecundario.trim(),
+            direccion: direccion.trim(),
+            correo: correo.trim(),
+            referencia_nombre: referenciaNombre.trim(),
+            referencia_telefono: referenciaTelefono.trim(),
             estado: estadoCliente,
-            observacion: observacionCobro,
+            observacion: observacionCobro.trim(),
           })
           .eq("empresa_id", empresaId)
           .eq("id", clienteExistente.id);
@@ -447,16 +539,16 @@ export default function CuentasPorCobrar() {
           .insert([
             {
               empresa_id: empresaId,
-              cedula,
-              nombre,
-              telefono,
-              telefono_secundario: telefonoSecundario,
-              direccion,
-              correo,
-              referencia_nombre: referenciaNombre,
-              referencia_telefono: referenciaTelefono,
+              cedula: cedula.trim(),
+              nombre: nombre.trim(),
+              telefono: telefono.trim(),
+              telefono_secundario: telefonoSecundario.trim(),
+              direccion: direccion.trim(),
+              correo: correo.trim(),
+              referencia_nombre: referenciaNombre.trim(),
+              referencia_telefono: referenciaTelefono.trim(),
               estado: estadoCliente,
-              observacion: observacionCobro,
+              observacion: observacionCobro.trim(),
             },
           ])
           .select()
@@ -469,22 +561,7 @@ export default function CuentasPorCobrar() {
         clienteCreado = data;
       }
 
-      /*
-        =====================================================
-        CREAR INFORMACIÓN COMERCIAL
-        =====================================================
-      */
-
-      const cuentaFinal = numeroCuenta || generarNumeroCuenta();
-
-      const montoTotalNumero = Number(
-        montoTotal || saldoActual || 0
-      );
-
-      const saldoActualNumero =
-        saldoActual !== ""
-          ? Number(saldoActual || 0)
-          : montoTotalNumero;
+      const cuentaFinal = numeroCuenta.trim() || generarNumeroCuenta();
 
       const {
         data: comercialCreado,
@@ -497,7 +574,7 @@ export default function CuentasPorCobrar() {
             cliente_id: clienteCreado.id,
             numero_cuenta: cuentaFinal,
             tipo_producto: tipoProducto,
-            descripcion,
+            descripcion: descripcion.trim(),
             modalidad: null,
             monto_total: montoTotalNumero,
             saldo_actual: saldoActualNumero,
@@ -505,8 +582,8 @@ export default function CuentasPorCobrar() {
             fecha_inicio: fechaInicio || null,
             fecha_vencimiento: fechaVencimiento || null,
             responsable: responsableFinal(),
-            estado: estadoCuenta,
-            observacion: observacionCobro,
+            estado: estadoCuentaFinal,
+            observacion: observacionCobro.trim(),
           },
         ])
         .select()
@@ -519,14 +596,6 @@ export default function CuentasPorCobrar() {
         );
       }
 
-      /*
-        =====================================================
-        CREAR INFORMACIÓN DE COBRANZA
-        =====================================================
-      */
-
-      const diasMora = calcularDiasMora(fechaVencimiento);
-
       const { error: errorCobranza } = await supabase
         .from("informacion_cobranza")
         .insert([
@@ -534,13 +603,13 @@ export default function CuentasPorCobrar() {
             empresa_id: empresaId,
             cliente_id: clienteCreado.id,
             informacion_comercial_id: comercialCreado.id,
-            estado_cobranza: estadoCobranza || "Al Día",
+            estado_cobranza: estadoCobranzaFinal,
             dias_mora: diasMora,
             fecha_ultimo_pago: fechaUltimoPago || null,
-            monto_ultimo_pago: Number(montoUltimoPago || 0),
+            monto_ultimo_pago: montoUltimoPagoNumero,
             responsable_cobro: responsableFinal(),
             observacion_cobro:
-              observacionCobro ||
+              observacionCobro.trim() ||
               "Cuenta creada desde Cuentas por Cobrar",
           },
         ]);
@@ -551,17 +620,10 @@ export default function CuentasPorCobrar() {
         );
       }
 
-      /*
-        =====================================================
-        SUBIR DOCUMENTOS
-        =====================================================
-      */
-
       await subirDocumentos(clienteCreado.id, empresaId);
 
       alert(
-        "Cuenta por cobrar registrada correctamente. Cuenta: " +
-          cuentaFinal
+        `Cuenta por cobrar registrada correctamente. Cuenta: ${cuentaFinal}. Estado: ${estadoCobranzaFinal}. Días de mora: ${diasMora}.`
       );
 
       limpiarFormulario();
@@ -766,6 +828,8 @@ export default function CuentasPorCobrar() {
             <Campo label="Monto total original *">
               <input
                 type="number"
+                min="0"
+                step="0.01"
                 value={montoTotal}
                 onChange={(e) => setMontoTotal(e.target.value)}
                 style={inputStyle}
@@ -776,6 +840,8 @@ export default function CuentasPorCobrar() {
             <Campo label="Saldo actual *">
               <input
                 type="number"
+                min="0"
+                step="0.01"
                 value={saldoActual}
                 onChange={(e) => setSaldoActual(e.target.value)}
                 style={inputStyle}
@@ -808,6 +874,7 @@ export default function CuentasPorCobrar() {
                 value={estadoCuenta}
                 onChange={(e) => setEstadoCuenta(e.target.value)}
                 style={selectStyle}
+                disabled={Number(saldoActual || montoTotal || 0) <= 0}
               >
                 <option>Activo</option>
                 <option>Suspendido</option>
@@ -830,24 +897,29 @@ export default function CuentasPorCobrar() {
           <SectionTitle
             icono="📞"
             titulo="Información de Cobranza Inicial"
-            texto="Estado inicial, último pago, responsable y observaciones de cobro."
+            texto="El estado se calcula automáticamente con el saldo y la fecha de vencimiento."
           />
 
           <div style={grid}>
-            <Campo label="Estado de cobranza">
-              <select
+            <Campo label="Estado de cobranza automático">
+              <input
                 value={estadoCobranza}
-                onChange={(e) =>
-                  setEstadoCobranza(e.target.value)
-                }
-                style={selectStyle}
-              >
-                <option>Al Día</option>
-                <option>Mora</option>
-                <option>Legal</option>
-                <option>Suspendido</option>
-                <option>Cancelado</option>
-              </select>
+                readOnly
+                style={inputAutomatico}
+              />
+            </Campo>
+
+            <Campo label="Días de mora calculados">
+              <input
+                value={calcularDiasMora(
+                  fechaVencimiento,
+                  saldoActual !== ""
+                    ? Number(saldoActual || 0)
+                    : Number(montoTotal || 0)
+                )}
+                readOnly
+                style={inputAutomatico}
+              />
             </Campo>
 
             <Campo label="Fecha último pago">
@@ -864,6 +936,8 @@ export default function CuentasPorCobrar() {
             <Campo label="Monto último pago">
               <input
                 type="number"
+                min="0"
+                step="0.01"
                 value={montoUltimoPago}
                 onChange={(e) =>
                   setMontoUltimoPago(e.target.value)
@@ -874,20 +948,30 @@ export default function CuentasPorCobrar() {
             </Campo>
 
             <Campo label="Responsable de cobro">
-              <input
+              <select
                 value={responsableCobro}
                 onChange={(e) =>
                   setResponsableCobro(e.target.value)
                 }
-                style={inputStyle}
-                placeholder="Opcional. Vacío = Sin asignar"
-              />
+                style={selectStyle}
+              >
+                <option value="">Sin asignar</option>
+
+                {gestores.map((gestor) => (
+                  <option key={gestor.id} value={gestor.nombre}>
+                    {gestor.nombre} - {gestor.rol}
+                  </option>
+                ))}
+              </select>
             </Campo>
           </div>
 
           <p style={notaSuave}>
-            El responsable de cobro es opcional. Si lo dejas vacío,
-            el sistema guardará la cuenta como "Sin asignar".
+            Si la cuenta tiene saldo y la fecha de vencimiento ya pasó,
+            el sistema la guardará como <strong>Mora</strong>. Si el saldo
+            es cero, quedará <strong>Cancelada</strong>. Si no está vencida,
+            quedará <strong>Al Día</strong>. La fecha del último pago debe
+            quedar vacía cuando todavía no existe un pago real.
           </p>
 
           <Campo label="Observación inicial / historial previo">
@@ -1163,6 +1247,14 @@ const inputStyle = {
   color: "#111827",
 };
 
+const inputAutomatico = {
+  ...inputStyle,
+  backgroundColor: "#ecfdf5",
+  color: "#166534",
+  border: "1px solid #86efac",
+  fontWeight: "bold",
+};
+
 const selectStyle = {
   ...inputStyle,
   fontWeight: "600",
@@ -1177,11 +1269,12 @@ const textarea = {
 const notaSuave = {
   margin: "4px 0 14px",
   color: "#475569",
-  background: "#ffffff",
+  background: "#f8fafc",
   border: "1px solid #e5e7eb",
   padding: "12px",
   borderRadius: "12px",
   fontSize: "13px",
+  lineHeight: 1.5,
 };
 
 const acciones = {
