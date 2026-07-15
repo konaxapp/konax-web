@@ -423,11 +423,13 @@ export default function Login() {
 
         .login-page {
           min-height: 100vh;
-          padding: 28px;
+          height: 100vh;
+          padding: 14px 20px;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
+          overflow: hidden;
           font-family: Arial, sans-serif;
           color: #111827;
           background:
@@ -451,10 +453,11 @@ export default function Login() {
         }
 
         .login-card {
-          width: min(620px, 100%);
-          padding: 56px;
+          width: min(560px, 100%);
+          max-height: calc(100vh - 48px);
+          padding: 34px 40px;
           border: 1px solid #e2e9e5;
-          border-radius: 30px;
+          border-radius: 24px;
           background: rgba(255, 255, 255, 0.96);
           box-shadow:
             0 28px 80px rgba(15, 23, 42, 0.14);
@@ -463,36 +466,36 @@ export default function Login() {
 
         .form-heading {
           text-align: center;
-          margin-bottom: 38px;
+          margin-bottom: 24px;
         }
 
         .form-heading > span {
           display: block;
           margin-bottom: 12px;
-          font-size: 31px;
+          font-size: 27px;
           font-weight: 800;
         }
 
         .form-logo {
-          width: 390px;
+          width: 300px;
           max-width: 88%;
           display: block;
-          margin: 0 auto 18px;
+          margin: 0 auto 10px;
         }
 
         .form-heading p {
           margin: 0;
           color: #69727d;
-          font-size: 20px;
+          font-size: 17px;
         }
 
         .field-group {
-          margin-bottom: 22px;
+          margin-bottom: 16px;
         }
 
         .field-group label {
           display: block;
-          margin-bottom: 9px;
+          margin-bottom: 7px;
           font-size: 15px;
           font-weight: 800;
         }
@@ -513,10 +516,10 @@ export default function Login() {
 
         .input-wrap input {
           width: 100%;
-          min-height: 60px;
-          padding: 15px 54px;
+          min-height: 50px;
+          padding: 12px 48px;
           border: 1px solid #d6dfda;
-          border-radius: 14px;
+          border-radius: 11px;
           background: #ffffff;
           color: #111827;
           font-size: 16px;
@@ -542,11 +545,11 @@ export default function Login() {
           border: 0;
           background: transparent;
           cursor: pointer;
-          font-size: 18px;
+          font-size: 16px;
         }
 
         .form-options {
-          margin: 4px 0 26px;
+          margin: 2px 0 18px;
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -579,7 +582,7 @@ export default function Login() {
 
         .login-button {
           width: 100%;
-          min-height: 60px;
+          min-height: 50px;
           border: 0;
           border-radius: 14px;
           background: linear-gradient(
@@ -608,8 +611,8 @@ export default function Login() {
         }
 
         .demo-row {
-          margin-top: 30px;
-          padding-top: 24px;
+          margin-top: 18px;
+          padding-top: 16px;
           border-top: 1px solid #e5ebe7;
           display: flex;
           justify-content: center;
@@ -628,7 +631,7 @@ export default function Login() {
         }
 
         .security-note {
-          margin-top: 22px;
+          margin-top: 12px;
           display: flex;
           align-items: center;
           gap: 9px;
@@ -639,46 +642,125 @@ export default function Login() {
 
         @media (max-width: 620px) {
           .login-page {
-            padding: 14px;
-            justify-content: flex-start;
+            min-height: 100vh;
+            height: 100vh;
+            padding: 10px;
+            justify-content: center;
+            overflow: hidden;
           }
 
           .login-card {
-            margin-top: 18px;
-            padding: 34px 22px;
-            border-radius: 22px;
+            width: 100%;
+            max-height: calc(100vh - 28px);
+            margin: 0;
+            padding: 24px 18px;
+            border-radius: 18px;
           }
 
           .form-heading {
-            margin-bottom: 30px;
+            margin-bottom: 20px;
           }
 
           .form-heading > span {
-            font-size: 27px;
+            font-size: 24px;
+            margin-bottom: 8px;
           }
 
           .form-logo {
-            width: 320px;
-            max-width: 92%;
+            width: 245px;
+            max-width: 88%;
+            margin-bottom: 8px;
           }
 
           .form-heading p {
-            font-size: 17px;
+            font-size: 15px;
           }
 
-          .form-options {
-            align-items: flex-start;
-            flex-direction: column;
-            gap: 14px;
+          .field-group {
+            margin-bottom: 13px;
+          }
+
+          .field-group label {
+            font-size: 14px;
           }
 
           .input-wrap input {
-            min-height: 56px;
+            min-height: 48px;
+            font-size: 15px;
+          }
+
+          .form-options {
+            margin-bottom: 16px;
+            gap: 10px;
+            font-size: 13px;
+          }
+
+          .remember-option,
+          .forgot-link {
+            font-size: 13px;
+          }
+
+          .login-button {
+            min-height: 48px;
+            font-size: 16px;
           }
 
           .demo-row {
-            align-items: flex-start;
-            flex-direction: column;
+            margin-top: 14px;
+            padding-top: 14px;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+          }
+
+          .security-note {
+            display: none;
+          }
+        }
+
+        @media (max-height: 700px) {
+          .login-page {
+            padding: 8px 16px;
+          }
+
+          .login-card {
+            max-height: calc(100vh - 20px);
+            padding: 24px 34px;
+          }
+
+          .form-heading {
+            margin-bottom: 18px;
+          }
+
+          .form-logo {
+            width: 250px;
+            margin-bottom: 8px;
+          }
+
+          .field-group {
+            margin-bottom: 12px;
+          }
+
+          .input-wrap input {
+            min-height: 46px;
+          }
+
+          .form-options {
+            margin-bottom: 14px;
+          }
+
+          .login-button {
+            min-height: 48px;
+          }
+
+          .demo-row {
+            margin-top: 12px;
+            padding-top: 12px;
+          }
+
+          .security-note {
+            display: none;
           }
         }
       `}</style>
