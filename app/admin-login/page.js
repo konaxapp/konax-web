@@ -129,7 +129,7 @@ export default function AdminLogin() {
           <span>Administración KONAX</span>
 
           <img
-            src="/konax-logo-final.png"
+            src="/konax-logo-.png"
             alt="KONAX"
             className="form-logo"
           />
