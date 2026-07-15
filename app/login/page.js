@@ -296,7 +296,7 @@ export default function Login() {
           <span>Bienvenido a</span>
 
           <img
-            src="/konax-logo-final.png"
+            src="/konax-logo.png"
             alt="KONAX"
             className="form-logo"
           />
@@ -766,5 +766,4 @@ export default function Login() {
       `}</style>
     </main>
   );
-
 }
