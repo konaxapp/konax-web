@@ -291,209 +291,129 @@ export default function Login() {
 
   return (
     <main className="login-page">
-      <div className="login-shell">
-        <section className="commercial-panel">
-          <div className="brand-block">
-            <img
-              src="/konax-logo-final.png"
-              alt="KONAX"
-              className="brand-logo"
+      <section className="login-card">
+        <div className="form-heading">
+          <span>Bienvenido a</span>
+
+          <img
+            src="/konax-logo-final.png"
+            alt="KONAX"
+            className="form-logo"
+          />
+
+          <p>Ingresa a tu cuenta empresarial</p>
+        </div>
+
+        <div className="field-group">
+          <label htmlFor="correo">
+            Correo electrónico
+          </label>
+
+          <div className="input-wrap">
+            <span className="input-icon">✉</span>
+
+            <input
+              id="correo"
+              type="email"
+              placeholder="correo@empresa.com"
+              value={correo}
+              onChange={(e) =>
+                setCorreo(e.target.value)
+              }
+              onKeyDown={manejarTecla}
+              autoComplete="email"
             />
-
-            <h1>
-              Controla tu negocio,
-              <span> vende más, cobra mejor.</span>
-            </h1>
-
-            <p className="commercial-copy">
-              La plataforma todo en uno para gestionar
-              ventas a crédito, cobranza, clientes y
-              reportes desde un solo lugar.
-            </p>
           </div>
+        </div>
 
-          <div className="benefits-list">
-            <article className="benefit-item">
-              <div className="benefit-icon">👥</div>
-              <div>
-                <h3>Clientes y créditos</h3>
-                <p>
-                  Organiza tu cartera y conoce el estado
-                  de cada cliente.
-                </p>
-              </div>
-            </article>
+        <div className="field-group">
+          <label htmlFor="password">
+            Contraseña
+          </label>
 
-            <article className="benefit-item">
-              <div className="benefit-icon">💲</div>
-              <div>
-                <h3>Cobranza eficiente</h3>
-                <p>
-                  Gestiona abonos, promesas de pago y
-                  controla la mora en tiempo real.
-                </p>
-              </div>
-            </article>
+          <div className="input-wrap">
+            <span className="input-icon">🔒</span>
 
-            <article className="benefit-item">
-              <div className="benefit-icon">📊</div>
-              <div>
-                <h3>Reportes e indicadores</h3>
-                <p>
-                  Toma mejores decisiones con información
-                  clara y actualizada.
-                </p>
-              </div>
-            </article>
-
-            <article className="benefit-item">
-              <div className="benefit-icon">🔒</div>
-              <div>
-                <h3>Seguridad y respaldo</h3>
-                <p>
-                  Tu información siempre protegida y
-                  disponible.
-                </p>
-              </div>
-            </article>
-          </div>
-        </section>
-
-        <section className="form-panel">
-          <div className="login-card">
-            <div className="mobile-brand">
-              <img
-                src="/konax-logo-final.png"
-                alt="KONAX"
-              />
-            </div>
-
-            <div className="form-heading">
-              <span>Bienvenido a</span>
-
-              <img
-                src="/konax-logo-final.png"
-                alt="KONAX"
-                className="form-logo"
-              />
-
-              <p>Ingresa a tu cuenta empresarial</p>
-            </div>
-
-            <div className="field-group">
-              <label htmlFor="correo">
-                Correo electrónico
-              </label>
-
-              <div className="input-wrap">
-                <span className="input-icon">✉</span>
-
-                <input
-                  id="correo"
-                  type="email"
-                  placeholder="correo@empresa.com"
-                  value={correo}
-                  onChange={(e) =>
-                    setCorreo(e.target.value)
-                  }
-                  onKeyDown={manejarTecla}
-                  autoComplete="email"
-                />
-              </div>
-            </div>
-
-            <div className="field-group">
-              <label htmlFor="password">
-                Contraseña
-              </label>
-
-              <div className="input-wrap">
-                <span className="input-icon">🔒</span>
-
-                <input
-                  id="password"
-                  type={
-                    mostrarPassword
-                      ? "text"
-                      : "password"
-                  }
-                  placeholder="Ingresa tu contraseña"
-                  value={password}
-                  onChange={(e) =>
-                    setPassword(e.target.value)
-                  }
-                  onKeyDown={manejarTecla}
-                  autoComplete="current-password"
-                />
-
-                <button
-                  type="button"
-                  className="show-password"
-                  onClick={() =>
-                    setMostrarPassword(
-                      (valor) => !valor
-                    )
-                  }
-                  aria-label={
-                    mostrarPassword
-                      ? "Ocultar contraseña"
-                      : "Mostrar contraseña"
-                  }
-                >
-                  {mostrarPassword ? "🙈" : "👁"}
-                </button>
-              </div>
-            </div>
-
-            <div className="form-options">
-              <label className="remember-option">
-                <input
-                  type="checkbox"
-                  checked={recordarme}
-                  onChange={(e) =>
-                    setRecordarme(e.target.checked)
-                  }
-                />
-                <span>Recordarme</span>
-              </label>
-
-              <button
-                type="button"
-                className="forgot-link"
-                onClick={recuperarPassword}
-              >
-                ¿Olvidaste tu contraseña?
-              </button>
-            </div>
+            <input
+              id="password"
+              type={
+                mostrarPassword ? "text" : "password"
+              }
+              placeholder="Ingresa tu contraseña"
+              value={password}
+              onChange={(e) =>
+                setPassword(e.target.value)
+              }
+              onKeyDown={manejarTecla}
+              autoComplete="current-password"
+            />
 
             <button
               type="button"
-              onClick={iniciarSesion}
-              disabled={cargando}
-              className="login-button"
+              className="show-password"
+              onClick={() =>
+                setMostrarPassword(
+                  (valor) => !valor
+                )
+              }
+              aria-label={
+                mostrarPassword
+                  ? "Ocultar contraseña"
+                  : "Mostrar contraseña"
+              }
             >
-              {cargando
-                ? "Ingresando..."
-                : "Iniciar sesión  →"}
+              {mostrarPassword ? "🙈" : "👁"}
             </button>
-
-            <div className="demo-row">
-              <span>¿No tienes una cuenta?</span>
-
-              <button
-                type="button"
-                onClick={solicitarDemo}
-              >
-                Solicitar demo
-              </button>
-            </div>
           </div>
+        </div>
 
-          <div className="security-note">
-            <span>🛡</span>
-            Plataforma segura y confiable
-          </div>
-        </section>
+        <div className="form-options">
+          <label className="remember-option">
+            <input
+              type="checkbox"
+              checked={recordarme}
+              onChange={(e) =>
+                setRecordarme(e.target.checked)
+              }
+            />
+            <span>Recordarme</span>
+          </label>
+
+          <button
+            type="button"
+            className="forgot-link"
+            onClick={recuperarPassword}
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={iniciarSesion}
+          disabled={cargando}
+          className="login-button"
+        >
+          {cargando
+            ? "Ingresando..."
+            : "Iniciar sesión  →"}
+        </button>
+
+        <div className="demo-row">
+          <span>¿No tienes una cuenta?</span>
+
+          <button
+            type="button"
+            onClick={solicitarDemo}
+          >
+            Solicitar demo
+          </button>
+        </div>
+      </section>
+
+      <div className="security-note">
+        <span>🛡</span>
+        Plataforma segura y confiable
       </div>
 
       <style jsx>{`
@@ -503,174 +423,42 @@ export default function Login() {
 
         .login-page {
           min-height: 100vh;
-          padding: 42px;
+          padding: 28px;
           display: flex;
+          flex-direction: column;
           align-items: center;
           justify-content: center;
           font-family: Arial, sans-serif;
           color: #111827;
           background:
             radial-gradient(
-              circle at 6% 85%,
-              rgba(22, 163, 74, 0.18),
+              circle at 8% 88%,
+              rgba(22, 163, 74, 0.16),
               transparent 30%
             ),
             radial-gradient(
-              circle at 95% 80%,
-              rgba(16, 185, 129, 0.18),
+              circle at 92% 82%,
+              rgba(16, 185, 129, 0.16),
               transparent 28%
             ),
             linear-gradient(
               135deg,
               #ffffff 0%,
-              #f3faf6 48%,
+              #f3faf6 50%,
               #ffffff 100%
             );
           overflow-x: hidden;
         }
 
-        .login-shell {
-          width: min(1420px, 100%);
-          min-height: 780px;
-          display: grid;
-          grid-template-columns: 0.92fr 1.08fr;
-          border: 1px solid rgba(15, 118, 78, 0.08);
-          border-radius: 34px;
-          overflow: hidden;
-          background: rgba(255, 255, 255, 0.8);
-          box-shadow:
-            0 28px 80px rgba(15, 23, 42, 0.12);
-          backdrop-filter: blur(10px);
-        }
-
-        .commercial-panel {
-          position: relative;
-          padding: 70px 64px;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          background:
-            radial-gradient(
-              circle at 15% 15%,
-              rgba(34, 197, 94, 0.11),
-              transparent 27%
-            ),
-            linear-gradient(
-              160deg,
-              #fbfffc 0%,
-              #effaf3 100%
-            );
-        }
-
-        .commercial-panel::after {
-          content: "";
-          position: absolute;
-          left: -120px;
-          bottom: -150px;
-          width: 430px;
-          height: 430px;
-          border-radius: 50%;
-          background: linear-gradient(
-            135deg,
-            #14532d,
-            #22c55e
-          );
-          opacity: 0.92;
-        }
-
-        .brand-block,
-        .benefits-list {
-          position: relative;
-          z-index: 1;
-        }
-
-        .brand-logo {
-          width: 420px;
-          max-width: 92%;
-          display: block;
-          margin-bottom: 54px;
-        }
-
-        .brand-block h1 {
-          max-width: 600px;
-          margin: 0 0 24px;
-          font-size: clamp(42px, 4.5vw, 68px);
-          line-height: 1.06;
-          letter-spacing: -2px;
-        }
-
-        .brand-block h1 span {
-          display: block;
-          color: #16834f;
-        }
-
-        .commercial-copy {
-          max-width: 560px;
-          margin: 0;
-          color: #5b6470;
-          font-size: 20px;
-          line-height: 1.65;
-        }
-
-        .benefits-list {
-          display: grid;
-          gap: 18px;
-          margin-top: 48px;
-        }
-
-        .benefit-item {
-          display: grid;
-          grid-template-columns: 66px 1fr;
-          align-items: center;
-          gap: 18px;
-        }
-
-        .benefit-icon {
-          width: 66px;
-          height: 66px;
-          display: grid;
-          place-items: center;
-          border: 1px solid #e1ebe5;
-          border-radius: 18px;
-          background: #ffffff;
-          font-size: 30px;
-          box-shadow:
-            0 8px 22px rgba(15, 23, 42, 0.08);
-        }
-
-        .benefit-item h3 {
-          margin: 0 0 6px;
-          font-size: 19px;
-        }
-
-        .benefit-item p {
-          margin: 0;
-          color: #5f6874;
-          font-size: 15px;
-          line-height: 1.55;
-        }
-
-        .form-panel {
-          padding: 58px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          background: rgba(255, 255, 255, 0.92);
-        }
-
         .login-card {
           width: min(620px, 100%);
-          padding: 54px;
-          border: 1px solid #e4ebe7;
-          border-radius: 28px;
-          background: #ffffff;
+          padding: 56px;
+          border: 1px solid #e2e9e5;
+          border-radius: 30px;
+          background: rgba(255, 255, 255, 0.96);
           box-shadow:
-            0 22px 60px rgba(15, 23, 42, 0.12);
-        }
-
-        .mobile-brand {
-          display: none;
+            0 28px 80px rgba(15, 23, 42, 0.14);
+          backdrop-filter: blur(8px);
         }
 
         .form-heading {
@@ -681,13 +469,13 @@ export default function Login() {
         .form-heading > span {
           display: block;
           margin-bottom: 12px;
-          font-size: 30px;
+          font-size: 31px;
           font-weight: 800;
         }
 
         .form-logo {
-          width: 360px;
-          max-width: 85%;
+          width: 390px;
+          max-width: 88%;
           display: block;
           margin: 0 auto 18px;
         }
@@ -725,10 +513,10 @@ export default function Login() {
 
         .input-wrap input {
           width: 100%;
-          min-height: 58px;
+          min-height: 60px;
           padding: 15px 54px;
           border: 1px solid #d6dfda;
-          border-radius: 13px;
+          border-radius: 14px;
           background: #ffffff;
           color: #111827;
           font-size: 16px;
@@ -791,16 +579,16 @@ export default function Login() {
 
         .login-button {
           width: 100%;
-          min-height: 58px;
+          min-height: 60px;
           border: 0;
-          border-radius: 13px;
+          border-radius: 14px;
           background: linear-gradient(
             135deg,
             #117a46,
             #1aa55f
           );
           color: #ffffff;
-          font-size: 17px;
+          font-size: 18px;
           font-weight: 800;
           cursor: pointer;
           transition: 0.2s ease;
@@ -849,65 +637,16 @@ export default function Login() {
           font-weight: 800;
         }
 
-        @media (max-width: 1100px) {
-          .login-page {
-            padding: 24px;
-          }
-
-          .login-shell {
-            grid-template-columns: 1fr;
-          }
-
-          .commercial-panel {
-            display: none;
-          }
-
-          .form-panel {
-            padding: 34px;
-          }
-
-          .mobile-brand {
-            display: block;
-            text-align: center;
-            margin-bottom: 26px;
-          }
-
-          .mobile-brand img {
-            width: 330px;
-            max-width: 85%;
-          }
-
-          .form-heading .form-logo {
-            display: none;
-          }
-
-          .form-heading > span {
-            font-size: 32px;
-          }
-        }
-
         @media (max-width: 620px) {
           .login-page {
             padding: 14px;
-            align-items: flex-start;
-          }
-
-          .login-shell {
-            min-height: auto;
-            border-radius: 22px;
-          }
-
-          .form-panel {
-            padding: 20px;
+            justify-content: flex-start;
           }
 
           .login-card {
-            padding: 30px 22px;
-            border-radius: 20px;
-          }
-
-          .mobile-brand img {
-            width: 280px;
+            margin-top: 18px;
+            padding: 34px 22px;
+            border-radius: 22px;
           }
 
           .form-heading {
@@ -915,7 +654,12 @@ export default function Login() {
           }
 
           .form-heading > span {
-            font-size: 28px;
+            font-size: 27px;
+          }
+
+          .form-logo {
+            width: 320px;
+            max-width: 92%;
           }
 
           .form-heading p {
@@ -940,4 +684,5 @@ export default function Login() {
       `}</style>
     </main>
   );
+
 }
