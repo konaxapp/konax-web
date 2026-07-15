@@ -10,6 +10,8 @@ export default function Login() {
   const [correo, setCorreo] = useState("");
   const [password, setPassword] = useState("");
   const [cargando, setCargando] = useState(false);
+  const [mostrarPassword, setMostrarPassword] = useState(false);
+  const [recordarme, setRecordarme] = useState(true);
 
   function fechaHoy() {
     return new Date().toISOString().split("T")[0];
@@ -60,39 +62,35 @@ export default function Login() {
   }
 
   function guardarSesion(usuario, empresa) {
-    /*
-      ======================================================
-      SESIÓN ÚNICA OFICIAL DE KONAX
-      ======================================================
+    localStorage.setItem(
+      "empresaId",
+      String(usuario.empresa_id || "")
+    );
+    localStorage.setItem(
+      "empresaNombre",
+      String(empresa.nombre || "")
+    );
 
-      TODAS LAS PANTALLAS DEBEN LEER ESTAS CLAVES:
-
-      empresaId
-      empresaNombre
-
-      usuarioId
-      usuarioNombre
-      usuarioCorreo
-      usuarioRol
-      rolId
-
-      tipoNegocio
-      categoriaNegocio
-
-      planCodigo
-      planNombre
-      estadoPlan
-      estadoEmpresa
-    */
-
-    localStorage.setItem("empresaId", String(usuario.empresa_id || ""));
-    localStorage.setItem("empresaNombre", String(empresa.nombre || ""));
-
-    localStorage.setItem("usuarioId", String(usuario.id || ""));
-    localStorage.setItem("usuarioNombre", String(usuario.nombre || ""));
-    localStorage.setItem("usuarioCorreo", String(usuario.correo || ""));
-    localStorage.setItem("usuarioRol", String(usuario.rol || ""));
-    localStorage.setItem("rolId", String(usuario.rol_id || ""));
+    localStorage.setItem(
+      "usuarioId",
+      String(usuario.id || "")
+    );
+    localStorage.setItem(
+      "usuarioNombre",
+      String(usuario.nombre || "")
+    );
+    localStorage.setItem(
+      "usuarioCorreo",
+      String(usuario.correo || "")
+    );
+    localStorage.setItem(
+      "usuarioRol",
+      String(usuario.rol || "")
+    );
+    localStorage.setItem(
+      "rolId",
+      String(usuario.rol_id || "")
+    );
 
     localStorage.setItem(
       "tipoNegocio",
@@ -123,6 +121,11 @@ export default function Login() {
       "estadoEmpresa",
       String(empresa.estado || "")
     );
+
+    localStorage.setItem(
+      "recordarme",
+      recordarme ? "true" : "false"
+    );
   }
 
   async function iniciarSesion() {
@@ -139,22 +142,20 @@ export default function Login() {
       const correoLimpio = correo.trim().toLowerCase();
       const passwordLimpio = password.trim();
 
-      /*
-        ======================================================
-        1. BUSCAR USUARIO
-        ======================================================
-      */
-
-      const { data: usuario, error: errorUsuario } = await supabase
-        .from("usuarios")
-        .select("*")
-        .eq("correo", correoLimpio)
-        .eq("password", passwordLimpio)
-        .eq("estado", "Activo")
-        .maybeSingle();
+      const { data: usuario, error: errorUsuario } =
+        await supabase
+          .from("usuarios")
+          .select("*")
+          .eq("correo", correoLimpio)
+          .eq("password", passwordLimpio)
+          .eq("estado", "Activo")
+          .maybeSingle();
 
       if (errorUsuario) {
-        alert("Error iniciando sesión: " + errorUsuario.message);
+        alert(
+          "Error iniciando sesión: " +
+            errorUsuario.message
+        );
         return;
       }
 
@@ -168,17 +169,12 @@ export default function Login() {
         return;
       }
 
-      /*
-        ======================================================
-        2. BUSCAR EMPRESA DEL USUARIO
-        ======================================================
-      */
-
-      const { data: empresa, error: errorEmpresa } = await supabase
-        .from("empresas")
-        .select("*")
-        .eq("id", usuario.empresa_id)
-        .maybeSingle();
+      const { data: empresa, error: errorEmpresa } =
+        await supabase
+          .from("empresas")
+          .select("*")
+          .eq("id", usuario.empresa_id)
+          .maybeSingle();
 
       if (errorEmpresa) {
         alert(
@@ -189,18 +185,15 @@ export default function Login() {
       }
 
       if (!empresa) {
-        alert("La empresa asignada al usuario no existe.");
+        alert(
+          "La empresa asignada al usuario no existe."
+        );
         return;
       }
 
-      /*
-        ======================================================
-        3. VALIDAR FACTURACIÓN
-        ======================================================
-      */
-
       const hoy = fechaHoy();
-      const vencimiento = empresa.fecha_proxima_facturacion;
+      const vencimiento =
+        empresa.fecha_proxima_facturacion;
 
       const estaVencida =
         Boolean(vencimiento) &&
@@ -226,33 +219,21 @@ export default function Login() {
         return;
       }
 
-      /*
-        ======================================================
-        4. BORRAR COMPLETAMENTE SESIÓN ANTERIOR
-        ======================================================
-      */
-
       limpiarSesionAnterior();
-
-      /*
-        ======================================================
-        5. CREAR UNA ÚNICA SESIÓN
-        ======================================================
-      */
-
       guardarSesion(usuario, empresa);
 
-      /*
-        ======================================================
-        6. VERIFICACIÓN DE SEGURIDAD DE SESIÓN
-        ======================================================
-      */
+      const empresaSesion =
+        localStorage.getItem("empresaId");
+      const usuarioSesion =
+        localStorage.getItem("usuarioId");
+      const rolSesion =
+        localStorage.getItem("usuarioRol");
 
-      const empresaSesion = localStorage.getItem("empresaId");
-      const usuarioSesion = localStorage.getItem("usuarioId");
-      const rolSesion = localStorage.getItem("usuarioRol");
-
-      if (!empresaSesion || !usuarioSesion || !rolSesion) {
+      if (
+        !empresaSesion ||
+        !usuarioSesion ||
+        !rolSesion
+      ) {
         limpiarSesionAnterior();
 
         alert(
@@ -262,13 +243,9 @@ export default function Login() {
         return;
       }
 
-      /*
-        ======================================================
-        7. REDIRECCIÓN SEGÚN ROL
-        ======================================================
-      */
-
-      const rolNormalizado = String(usuario.rol || "")
+      const rolNormalizado = String(
+        usuario.rol || ""
+      )
         .toLowerCase()
         .trim();
 
@@ -279,7 +256,10 @@ export default function Login() {
 
       router.replace("/dashboard");
     } catch (errorGeneral) {
-      console.error("Error inesperado en Login:", errorGeneral);
+      console.error(
+        "Error inesperado en Login:",
+        errorGeneral
+      );
 
       alert(
         "Ocurrió un error inesperado al iniciar sesión."
@@ -295,204 +275,669 @@ export default function Login() {
     }
   }
 
+  function solicitarDemo() {
+    window.open(
+      "https://wa.me/50760211024?text=Hola,%20quiero%20solicitar%20una%20demostración%20de%20KONAX.",
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  function recuperarPassword() {
+    alert(
+      "Para recuperar su contraseña, contacte al administrador de su empresa o al soporte de KONAX."
+    );
+  }
+
   return (
-    <div style={pagina}>
-      <div style={blurUno}></div>
-      <div style={blurDos}></div>
+    <main className="login-page">
+      <div className="login-shell">
+        <section className="commercial-panel">
+          <div className="brand-block">
+            <img
+              src="/konax-logo-final.png"
+              alt="KONAX"
+              className="brand-logo"
+            />
 
-      <div style={modal}>
-        <div style={logoFila}>
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            style={logo}
-          />
+            <h1>
+              Controla tu negocio,
+              <span> vende más, cobra mejor.</span>
+            </h1>
 
-          <h1 style={marca}>KONAX</h1>
-        </div>
+            <p className="commercial-copy">
+              La plataforma todo en uno para gestionar
+              ventas a crédito, cobranza, clientes y
+              reportes desde un solo lugar.
+            </p>
+          </div>
 
-        <h2 style={titulo}>Bienvenido</h2>
+          <div className="benefits-list">
+            <article className="benefit-item">
+              <div className="benefit-icon">👥</div>
+              <div>
+                <h3>Clientes y créditos</h3>
+                <p>
+                  Organiza tu cartera y conoce el estado
+                  de cada cliente.
+                </p>
+              </div>
+            </article>
 
-        <p style={subtitulo}>
-          Ingresa a tu cuenta empresarial aquí
-        </p>
+            <article className="benefit-item">
+              <div className="benefit-icon">💲</div>
+              <div>
+                <h3>Cobranza eficiente</h3>
+                <p>
+                  Gestiona abonos, promesas de pago y
+                  controla la mora en tiempo real.
+                </p>
+              </div>
+            </article>
 
-        <div style={campo}>
-          <label style={label}>Correo</label>
+            <article className="benefit-item">
+              <div className="benefit-icon">📊</div>
+              <div>
+                <h3>Reportes e indicadores</h3>
+                <p>
+                  Toma mejores decisiones con información
+                  clara y actualizada.
+                </p>
+              </div>
+            </article>
 
-          <input
-            type="email"
-            placeholder="correo@empresa.com"
-            value={correo}
-            onChange={(e) => setCorreo(e.target.value)}
-            onKeyDown={manejarTecla}
-            autoComplete="email"
-            style={input}
-          />
-        </div>
+            <article className="benefit-item">
+              <div className="benefit-icon">🔒</div>
+              <div>
+                <h3>Seguridad y respaldo</h3>
+                <p>
+                  Tu información siempre protegida y
+                  disponible.
+                </p>
+              </div>
+            </article>
+          </div>
+        </section>
 
-        <div style={campo}>
-          <label style={label}>Contraseña</label>
+        <section className="form-panel">
+          <div className="login-card">
+            <div className="mobile-brand">
+              <img
+                src="/konax-logo-final.png"
+                alt="KONAX"
+              />
+            </div>
 
-          <input
-            type="password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={manejarTecla}
-            autoComplete="current-password"
-            style={input}
-          />
-        </div>
+            <div className="form-heading">
+              <span>Bienvenido a</span>
 
-        <button
-          onClick={iniciarSesion}
-          disabled={cargando}
-          style={{
-            ...boton,
-            opacity: cargando ? 0.7 : 1,
-            cursor: cargando ? "not-allowed" : "pointer",
-          }}
-        >
-          {cargando
-            ? "Ingresando..."
-            : "Iniciar Sesión →"}
-        </button>
+              <img
+                src="/konax-logo-final.png"
+                alt="KONAX"
+                className="form-logo"
+              />
 
-        <p style={olvido}>¿Olvidaste tu contraseña?</p>
+              <p>Ingresa a tu cuenta empresarial</p>
+            </div>
+
+            <div className="field-group">
+              <label htmlFor="correo">
+                Correo electrónico
+              </label>
+
+              <div className="input-wrap">
+                <span className="input-icon">✉</span>
+
+                <input
+                  id="correo"
+                  type="email"
+                  placeholder="correo@empresa.com"
+                  value={correo}
+                  onChange={(e) =>
+                    setCorreo(e.target.value)
+                  }
+                  onKeyDown={manejarTecla}
+                  autoComplete="email"
+                />
+              </div>
+            </div>
+
+            <div className="field-group">
+              <label htmlFor="password">
+                Contraseña
+              </label>
+
+              <div className="input-wrap">
+                <span className="input-icon">🔒</span>
+
+                <input
+                  id="password"
+                  type={
+                    mostrarPassword
+                      ? "text"
+                      : "password"
+                  }
+                  placeholder="Ingresa tu contraseña"
+                  value={password}
+                  onChange={(e) =>
+                    setPassword(e.target.value)
+                  }
+                  onKeyDown={manejarTecla}
+                  autoComplete="current-password"
+                />
+
+                <button
+                  type="button"
+                  className="show-password"
+                  onClick={() =>
+                    setMostrarPassword(
+                      (valor) => !valor
+                    )
+                  }
+                  aria-label={
+                    mostrarPassword
+                      ? "Ocultar contraseña"
+                      : "Mostrar contraseña"
+                  }
+                >
+                  {mostrarPassword ? "🙈" : "👁"}
+                </button>
+              </div>
+            </div>
+
+            <div className="form-options">
+              <label className="remember-option">
+                <input
+                  type="checkbox"
+                  checked={recordarme}
+                  onChange={(e) =>
+                    setRecordarme(e.target.checked)
+                  }
+                />
+                <span>Recordarme</span>
+              </label>
+
+              <button
+                type="button"
+                className="forgot-link"
+                onClick={recuperarPassword}
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={iniciarSesion}
+              disabled={cargando}
+              className="login-button"
+            >
+              {cargando
+                ? "Ingresando..."
+                : "Iniciar sesión  →"}
+            </button>
+
+            <div className="demo-row">
+              <span>¿No tienes una cuenta?</span>
+
+              <button
+                type="button"
+                onClick={solicitarDemo}
+              >
+                Solicitar demo
+              </button>
+            </div>
+          </div>
+
+          <div className="security-note">
+            <span>🛡</span>
+            Plataforma segura y confiable
+          </div>
+        </section>
       </div>
-    </div>
+
+      <style jsx>{`
+        * {
+          box-sizing: border-box;
+        }
+
+        .login-page {
+          min-height: 100vh;
+          padding: 42px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: Arial, sans-serif;
+          color: #111827;
+          background:
+            radial-gradient(
+              circle at 6% 85%,
+              rgba(22, 163, 74, 0.18),
+              transparent 30%
+            ),
+            radial-gradient(
+              circle at 95% 80%,
+              rgba(16, 185, 129, 0.18),
+              transparent 28%
+            ),
+            linear-gradient(
+              135deg,
+              #ffffff 0%,
+              #f3faf6 48%,
+              #ffffff 100%
+            );
+          overflow-x: hidden;
+        }
+
+        .login-shell {
+          width: min(1420px, 100%);
+          min-height: 780px;
+          display: grid;
+          grid-template-columns: 0.92fr 1.08fr;
+          border: 1px solid rgba(15, 118, 78, 0.08);
+          border-radius: 34px;
+          overflow: hidden;
+          background: rgba(255, 255, 255, 0.8);
+          box-shadow:
+            0 28px 80px rgba(15, 23, 42, 0.12);
+          backdrop-filter: blur(10px);
+        }
+
+        .commercial-panel {
+          position: relative;
+          padding: 70px 64px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          background:
+            radial-gradient(
+              circle at 15% 15%,
+              rgba(34, 197, 94, 0.11),
+              transparent 27%
+            ),
+            linear-gradient(
+              160deg,
+              #fbfffc 0%,
+              #effaf3 100%
+            );
+        }
+
+        .commercial-panel::after {
+          content: "";
+          position: absolute;
+          left: -120px;
+          bottom: -150px;
+          width: 430px;
+          height: 430px;
+          border-radius: 50%;
+          background: linear-gradient(
+            135deg,
+            #14532d,
+            #22c55e
+          );
+          opacity: 0.92;
+        }
+
+        .brand-block,
+        .benefits-list {
+          position: relative;
+          z-index: 1;
+        }
+
+        .brand-logo {
+          width: 420px;
+          max-width: 92%;
+          display: block;
+          margin-bottom: 54px;
+        }
+
+        .brand-block h1 {
+          max-width: 600px;
+          margin: 0 0 24px;
+          font-size: clamp(42px, 4.5vw, 68px);
+          line-height: 1.06;
+          letter-spacing: -2px;
+        }
+
+        .brand-block h1 span {
+          display: block;
+          color: #16834f;
+        }
+
+        .commercial-copy {
+          max-width: 560px;
+          margin: 0;
+          color: #5b6470;
+          font-size: 20px;
+          line-height: 1.65;
+        }
+
+        .benefits-list {
+          display: grid;
+          gap: 18px;
+          margin-top: 48px;
+        }
+
+        .benefit-item {
+          display: grid;
+          grid-template-columns: 66px 1fr;
+          align-items: center;
+          gap: 18px;
+        }
+
+        .benefit-icon {
+          width: 66px;
+          height: 66px;
+          display: grid;
+          place-items: center;
+          border: 1px solid #e1ebe5;
+          border-radius: 18px;
+          background: #ffffff;
+          font-size: 30px;
+          box-shadow:
+            0 8px 22px rgba(15, 23, 42, 0.08);
+        }
+
+        .benefit-item h3 {
+          margin: 0 0 6px;
+          font-size: 19px;
+        }
+
+        .benefit-item p {
+          margin: 0;
+          color: #5f6874;
+          font-size: 15px;
+          line-height: 1.55;
+        }
+
+        .form-panel {
+          padding: 58px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: rgba(255, 255, 255, 0.92);
+        }
+
+        .login-card {
+          width: min(620px, 100%);
+          padding: 54px;
+          border: 1px solid #e4ebe7;
+          border-radius: 28px;
+          background: #ffffff;
+          box-shadow:
+            0 22px 60px rgba(15, 23, 42, 0.12);
+        }
+
+        .mobile-brand {
+          display: none;
+        }
+
+        .form-heading {
+          text-align: center;
+          margin-bottom: 38px;
+        }
+
+        .form-heading > span {
+          display: block;
+          margin-bottom: 12px;
+          font-size: 30px;
+          font-weight: 800;
+        }
+
+        .form-logo {
+          width: 360px;
+          max-width: 85%;
+          display: block;
+          margin: 0 auto 18px;
+        }
+
+        .form-heading p {
+          margin: 0;
+          color: #69727d;
+          font-size: 20px;
+        }
+
+        .field-group {
+          margin-bottom: 22px;
+        }
+
+        .field-group label {
+          display: block;
+          margin-bottom: 9px;
+          font-size: 15px;
+          font-weight: 800;
+        }
+
+        .input-wrap {
+          position: relative;
+        }
+
+        .input-icon {
+          position: absolute;
+          left: 17px;
+          top: 50%;
+          transform: translateY(-50%);
+          font-size: 20px;
+          opacity: 0.7;
+          pointer-events: none;
+        }
+
+        .input-wrap input {
+          width: 100%;
+          min-height: 58px;
+          padding: 15px 54px;
+          border: 1px solid #d6dfda;
+          border-radius: 13px;
+          background: #ffffff;
+          color: #111827;
+          font-size: 16px;
+          outline: none;
+          transition: 0.2s ease;
+        }
+
+        .input-wrap input:focus {
+          border-color: #15945a;
+          box-shadow:
+            0 0 0 4px rgba(21, 148, 90, 0.11);
+        }
+
+        .show-password {
+          position: absolute;
+          right: 14px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 36px;
+          height: 36px;
+          display: grid;
+          place-items: center;
+          border: 0;
+          background: transparent;
+          cursor: pointer;
+          font-size: 18px;
+        }
+
+        .form-options {
+          margin: 4px 0 26px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 18px;
+        }
+
+        .remember-option {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          font-size: 14px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .remember-option input {
+          width: 18px;
+          height: 18px;
+          accent-color: #16834f;
+        }
+
+        .forgot-link {
+          border: 0;
+          background: transparent;
+          color: #16834f;
+          font-size: 14px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .login-button {
+          width: 100%;
+          min-height: 58px;
+          border: 0;
+          border-radius: 13px;
+          background: linear-gradient(
+            135deg,
+            #117a46,
+            #1aa55f
+          );
+          color: #ffffff;
+          font-size: 17px;
+          font-weight: 800;
+          cursor: pointer;
+          transition: 0.2s ease;
+          box-shadow:
+            0 12px 28px rgba(17, 122, 70, 0.22);
+        }
+
+        .login-button:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow:
+            0 16px 34px rgba(17, 122, 70, 0.28);
+        }
+
+        .login-button:disabled {
+          opacity: 0.65;
+          cursor: not-allowed;
+        }
+
+        .demo-row {
+          margin-top: 30px;
+          padding-top: 24px;
+          border-top: 1px solid #e5ebe7;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 10px;
+          color: #5f6874;
+          font-size: 15px;
+        }
+
+        .demo-row button {
+          border: 0;
+          background: transparent;
+          color: #16834f;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .security-note {
+          margin-top: 22px;
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          color: #16834f;
+          font-size: 15px;
+          font-weight: 800;
+        }
+
+        @media (max-width: 1100px) {
+          .login-page {
+            padding: 24px;
+          }
+
+          .login-shell {
+            grid-template-columns: 1fr;
+          }
+
+          .commercial-panel {
+            display: none;
+          }
+
+          .form-panel {
+            padding: 34px;
+          }
+
+          .mobile-brand {
+            display: block;
+            text-align: center;
+            margin-bottom: 26px;
+          }
+
+          .mobile-brand img {
+            width: 330px;
+            max-width: 85%;
+          }
+
+          .form-heading .form-logo {
+            display: none;
+          }
+
+          .form-heading > span {
+            font-size: 32px;
+          }
+        }
+
+        @media (max-width: 620px) {
+          .login-page {
+            padding: 14px;
+            align-items: flex-start;
+          }
+
+          .login-shell {
+            min-height: auto;
+            border-radius: 22px;
+          }
+
+          .form-panel {
+            padding: 20px;
+          }
+
+          .login-card {
+            padding: 30px 22px;
+            border-radius: 20px;
+          }
+
+          .mobile-brand img {
+            width: 280px;
+          }
+
+          .form-heading {
+            margin-bottom: 30px;
+          }
+
+          .form-heading > span {
+            font-size: 28px;
+          }
+
+          .form-heading p {
+            font-size: 17px;
+          }
+
+          .form-options {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 14px;
+          }
+
+          .input-wrap input {
+            min-height: 56px;
+          }
+
+          .demo-row {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+        }
+      `}</style>
+    </main>
   );
 }
-
-const pagina = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at 20% 20%, #0f766e 0%, transparent 28%), linear-gradient(135deg, #020617 0%, #052e2b 50%, #111827 100%)",
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  padding: "30px",
-  fontFamily: "Arial, sans-serif",
-  position: "relative",
-  overflow: "hidden",
-};
-
-const blurUno = {
-  position: "absolute",
-  width: "420px",
-  height: "420px",
-  borderRadius: "50%",
-  background: "rgba(16,185,129,0.20)",
-  left: "-120px",
-  top: "-90px",
-  filter: "blur(25px)",
-};
-
-const blurDos = {
-  position: "absolute",
-  width: "360px",
-  height: "360px",
-  borderRadius: "50%",
-  background: "rgba(45,212,191,0.14)",
-  right: "-90px",
-  bottom: "-80px",
-  filter: "blur(25px)",
-};
-
-const modal = {
-  width: "430px",
-  maxWidth: "100%",
-  background:
-    "linear-gradient(180deg, rgba(6,78,59,0.96), rgba(15,23,42,0.96))",
-  border: "1px solid rgba(94,234,212,0.35)",
-  borderRadius: "28px",
-  padding: "38px",
-  color: "#ffffff",
-  boxShadow: "0 25px 70px rgba(0,0,0,0.45)",
-  position: "relative",
-  zIndex: 2,
-};
-
-const logoFila = {
-  display: "flex",
-  alignItems: "center",
-  gap: "14px",
-  justifyContent: "center",
-  marginBottom: "28px",
-};
-
-const logo = {
-  width: "68px",
-  background: "#ffffff",
-  borderRadius: "18px",
-  padding: "8px",
-};
-
-const marca = {
-  margin: 0,
-  fontSize: "42px",
-  fontWeight: "bold",
-  letterSpacing: "1px",
-  color: "#ffffff",
-};
-
-const titulo = {
-  textAlign: "center",
-  margin: "0 0 12px",
-  fontSize: "34px",
-  color: "#ffffff",
-};
-
-const subtitulo = {
-  textAlign: "center",
-  color: "#d1fae5",
-  fontSize: "17px",
-  fontWeight: "bold",
-  marginBottom: "32px",
-};
-
-const campo = {
-  marginBottom: "20px",
-};
-
-const label = {
-  display: "block",
-  marginBottom: "8px",
-  fontSize: "15px",
-  fontWeight: "bold",
-  color: "#e5fdf7",
-};
-
-const input = {
-  width: "100%",
-  padding: "16px",
-  borderRadius: "14px",
-  border: "1px solid rgba(94,234,212,0.35)",
-  background: "rgba(15,23,42,0.65)",
-  color: "#ffffff",
-  fontSize: "16px",
-  boxSizing: "border-box",
-  outline: "none",
-};
-
-const boton = {
-  width: "100%",
-  padding: "16px",
-  background:
-    "linear-gradient(135deg, #2dd4bf, #10b981)",
-  color: "#052e2b",
-  border: "none",
-  borderRadius: "13px",
-  fontSize: "17px",
-  fontWeight: "bold",
-  marginTop: "6px",
-};
-
-const olvido = {
-  textAlign: "center",
-  marginTop: "22px",
-  color: "#5eead4",
-  fontWeight: "bold",
-  fontSize: "14px",
-};
