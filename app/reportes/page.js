@@ -3,667 +3,375 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-export default function Reportes() {
+export default function ReportesPage() {
   const [cargando, setCargando] = useState(true);
-  const [errorGeneral, setErrorGeneral] = useState("");
+  const [error, setError] = useState("");
 
   const [clientes, setClientes] = useState([]);
-  const [ventas, setVentas] = useState([]);
-  const [cobranzas, setCobranzas] = useState([]);
-  const [movimientosCaja, setMovimientosCaja] = useState([]);
+  const [comercial, setComercial] = useState([]);
+  const [cobranza, setCobranza] = useState([]);
+  const [caja, setCaja] = useState([]);
 
-  const [fechaDesde, setFechaDesde] = useState(
-    primerDiaDelMes()
-  );
-  const [fechaHasta, setFechaHasta] = useState(
-    fechaHoy()
-  );
-
-  const [filtroEstado, setFiltroEstado] =
-    useState("Todos");
+  const [fechaDesde, setFechaDesde] = useState(primerDiaMes());
+  const [fechaHasta, setFechaHasta] = useState(fechaActual());
+  const [estadoCredito, setEstadoCredito] = useState("Todos");
 
   useEffect(() => {
-    cargarReportes();
+    cargarDatos();
   }, []);
 
-  function fechaHoy() {
-    return new Date().toISOString().split("T")[0];
+  function fechaActual() {
+    return new Date().toISOString().slice(0, 10);
   }
 
-  function primerDiaDelMes() {
-    const fecha = new Date();
-    return new Date(
-      fecha.getFullYear(),
-      fecha.getMonth(),
-      1
-    )
-      .toISOString()
-      .split("T")[0];
+  function primerDiaMes() {
+    const hoy = new Date();
+    const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    return primerDia.toISOString().slice(0, 10);
   }
 
   function obtenerEmpresaId() {
-    if (typeof window === "undefined") return "";
+    if (typeof window === "undefined") return null;
 
-    const empresaId =
-      localStorage.getItem("empresaId");
+    const empresaId = localStorage.getItem("empresaId");
 
     if (!empresaId) {
       alert("No hay una empresa activa.");
       window.location.href = "/login";
-      return "";
+      return null;
     }
 
     return empresaId;
   }
 
-  async function consultaSegura(tabla, empresaId) {
-    try {
-      const { data, error } = await supabase
-        .from(tabla)
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .limit(5000);
+  async function consultarTabla(tabla, empresaId) {
+    const { data, error: errorConsulta } = await supabase
+      .from(tabla)
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .limit(10000);
 
-      if (error) {
-        console.warn(
-          `No fue posible consultar ${tabla}:`,
-          error.message
-        );
-
-        return [];
-      }
-
-      return Array.isArray(data) ? data : [];
-    } catch (error) {
-      console.warn(
-        `Error inesperado consultando ${tabla}:`,
-        error
-      );
-
-      return [];
+    if (errorConsulta) {
+      throw new Error(`${tabla}: ${errorConsulta.message}`);
     }
+
+    return Array.isArray(data) ? data : [];
   }
 
-  async function cargarReportes() {
+  async function cargarDatos() {
     const empresaId = obtenerEmpresaId();
-
     if (!empresaId) return;
 
     setCargando(true);
-    setErrorGeneral("");
+    setError("");
 
     try {
-      const [
-        datosClientes,
-        datosVentas,
-        datosCobranza,
-        datosCaja,
-      ] = await Promise.all([
-        consultaSegura("clientes", empresaId),
-        consultaSegura(
-          "informacion_comercial",
-          empresaId
-        ),
-        consultaSegura(
-          "informacion_cobranza",
-          empresaId
-        ),
-        consultaSegura("caja", empresaId),
-      ]);
+      const [clientesData, comercialData, cobranzaData, cajaData] =
+        await Promise.all([
+          consultarTabla("clientes", empresaId),
+          consultarTabla("informacion_comercial", empresaId),
+          consultarTabla("informacion_cobranza", empresaId),
+          consultarTabla("caja", empresaId),
+        ]);
 
-      setClientes(datosClientes);
-      setVentas(datosVentas);
-      setCobranzas(datosCobranza);
-      setMovimientosCaja(datosCaja);
-    } catch (error) {
-      console.error(
-        "Error cargando reportes:",
-        error
-      );
-
-      setErrorGeneral(
-        "No fue posible cargar la información de reportes."
+      setClientes(clientesData);
+      setComercial(comercialData);
+      setCobranza(cobranzaData);
+      setCaja(cajaData);
+    } catch (err) {
+      console.error("Error cargando reportes:", err);
+      setError(
+        "No fue posible cargar todos los datos. Revisa las políticas RLS y que el usuario tenga acceso a las tablas."
       );
     } finally {
       setCargando(false);
     }
   }
 
-  function obtenerValor(objeto, campos, defecto = 0) {
-    for (const campo of campos) {
-      const valor = objeto?.[campo];
-
-      if (
-        valor !== undefined &&
-        valor !== null &&
-        valor !== ""
-      ) {
-        return valor;
-      }
-    }
-
-    return defecto;
+  function numero(valor) {
+    const resultado = Number(valor ?? 0);
+    return Number.isFinite(resultado) ? resultado : 0;
   }
 
-  function obtenerNumero(objeto, campos) {
-    const valor = obtenerValor(
-      objeto,
-      campos,
-      0
-    );
-
-    const numero = Number(
-      String(valor).replace(/,/g, "")
-    );
-
-    return Number.isFinite(numero)
-      ? numero
-      : 0;
-  }
-
-  function obtenerFechaRegistro(registro) {
-    const valor = obtenerValor(
-      registro,
-      [
-        "fecha",
-        "fecha_venta",
-        "fecha_pago",
-        "fecha_movimiento",
-        "fecha_registro",
-        "created_at",
-        "updated_at",
-      ],
-      ""
-    );
-
+  function fechaCorta(valor) {
     if (!valor) return "";
-
     return String(valor).slice(0, 10);
   }
 
-  function estaEnRango(registro) {
-    const fecha = obtenerFechaRegistro(registro);
+  function estaEnRango(valorFecha) {
+    const fecha = fechaCorta(valorFecha);
+    if (!fecha) return false;
 
-    if (!fecha) return true;
-
-    if (fechaDesde && fecha < fechaDesde) {
-      return false;
-    }
-
-    if (fechaHasta && fecha > fechaHasta) {
-      return false;
-    }
+    if (fechaDesde && fecha < fechaDesde) return false;
+    if (fechaHasta && fecha > fechaHasta) return false;
 
     return true;
   }
 
-  function coincideEstado(registro) {
-    if (filtroEstado === "Todos") {
-      return true;
-    }
-
-    const estado = String(
-      obtenerValor(
-        registro,
-        [
-          "estado",
-          "status",
-          "estado_pago",
-          "estado_credito",
-          "estado_cuenta",
-        ],
-        ""
-      )
-    )
+  function textoNormalizado(valor) {
+    return String(valor ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase()
       .trim();
-
-    return estado ===
-      filtroEstado.toLowerCase().trim();
   }
 
-  const ventasFiltradas = useMemo(
-    () =>
-      ventas.filter(
-        (item) =>
-          estaEnRango(item) &&
-          coincideEstado(item)
-      ),
-    [ventas, fechaDesde, fechaHasta, filtroEstado]
-  );
+  const clientesPeriodo = useMemo(() => {
+    return clientes.filter((cliente) => estaEnRango(cliente.created_at));
+  }, [clientes, fechaDesde, fechaHasta]);
 
-  const cobranzasFiltradas = useMemo(
-    () =>
-      cobranzas.filter(
-        (item) =>
-          estaEnRango(item) &&
-          coincideEstado(item)
-      ),
-    [
-      cobranzas,
-      fechaDesde,
-      fechaHasta,
-      filtroEstado,
-    ]
-  );
+  const comercialPeriodo = useMemo(() => {
+    return comercial.filter((registro) => {
+      const cumpleFecha = estaEnRango(
+        registro.fecha_inicio || registro.created_at
+      );
 
-  const cajaFiltrada = useMemo(
-    () =>
-      movimientosCaja.filter(
-        (item) =>
-          estaEnRango(item) &&
-          coincideEstado(item)
-      ),
-    [
-      movimientosCaja,
-      fechaDesde,
-      fechaHasta,
-      filtroEstado,
-    ]
-  );
+      const cumpleEstado =
+        estadoCredito === "Todos" ||
+        textoNormalizado(registro.estado) ===
+          textoNormalizado(estadoCredito);
 
-  const clientesFiltrados = useMemo(
-    () => clientes.filter(estaEnRango),
-    [clientes, fechaDesde, fechaHasta]
-  );
+      return cumpleFecha && cumpleEstado;
+    });
+  }, [comercial, fechaDesde, fechaHasta, estadoCredito]);
+
+  const cajaPeriodo = useMemo(() => {
+    return caja.filter((movimiento) => {
+      const procesado =
+        textoNormalizado(movimiento.estado) === "procesado";
+
+      return (
+        procesado &&
+        estaEnRango(movimiento.fecha_pago || movimiento.created_at)
+      );
+    });
+  }, [caja, fechaDesde, fechaHasta]);
+
+  const cobranzaPorCredito = useMemo(() => {
+    const mapa = new Map();
+
+    cobranza.forEach((registro) => {
+      if (registro.informacion_comercial_id) {
+        mapa.set(registro.informacion_comercial_id, registro);
+      }
+    });
+
+    return mapa;
+  }, [cobranza]);
 
   const resumen = useMemo(() => {
-    const ventasTotales =
-      ventasFiltradas.reduce(
-        (total, venta) =>
-          total +
-          obtenerNumero(venta, [
-            "total",
-            "monto_total",
-            "total_venta",
-            "monto",
-            "valor_total",
-          ]),
-        0
-      );
+    const creditosPeriodo = comercialPeriodo.filter((registro) =>
+      textoNormalizado(registro.tipo_producto).includes("credito")
+    );
 
-    const ventasCredito =
-      ventasFiltradas
-        .filter((venta) => {
-          const tipo = String(
-            obtenerValor(
-              venta,
-              [
-                "tipo_venta",
-                "modalidad",
-                "forma_pago",
-                "condicion_venta",
-              ],
-              ""
-            )
-          ).toLowerCase();
+    const ventasPeriodo = comercialPeriodo.filter((registro) => {
+      const tipo = textoNormalizado(registro.tipo_producto);
+      return tipo.includes("venta") && !tipo.includes("credito");
+    });
 
-          return tipo.includes("crédito") ||
-            tipo.includes("credito");
-        })
-        .reduce(
-          (total, venta) =>
-            total +
-            obtenerNumero(venta, [
-              "total",
-              "monto_total",
-              "total_venta",
-              "monto",
-              "valor_total",
-            ]),
-          0
+    const montoCreditos = creditosPeriodo.reduce(
+      (total, registro) => total + numero(registro.monto_total),
+      0
+    );
+
+    const montoVentas = ventasPeriodo.reduce(
+      (total, registro) => total + numero(registro.monto_total),
+      0
+    );
+
+    const carteraPendiente = comercialPeriodo.reduce(
+      (total, registro) => total + numero(registro.saldo_actual),
+      0
+    );
+
+    const carteraVencida = comercialPeriodo.reduce((total, registro) => {
+      const datoCobranza = cobranzaPorCredito.get(registro.id);
+      const diasMora = numero(datoCobranza?.dias_mora);
+
+      return diasMora > 0
+        ? total + numero(registro.saldo_actual)
+        : total;
+    }, 0);
+
+    const cuentasEnMora = comercialPeriodo.filter((registro) => {
+      const datoCobranza = cobranzaPorCredito.get(registro.id);
+      return numero(datoCobranza?.dias_mora) > 0;
+    }).length;
+
+    const cobrado = cajaPeriodo
+      .filter((movimiento) => {
+        const tipo = textoNormalizado(movimiento.tipo);
+        return (
+          tipo.includes("pago") ||
+          tipo.includes("abono") ||
+          tipo.includes("cobro")
         );
+      })
+      .reduce((total, movimiento) => total + numero(movimiento.monto), 0);
 
-    const carteraPendiente =
-      cobranzasFiltradas.reduce(
-        (total, cuenta) =>
-          total +
-          obtenerNumero(cuenta, [
-            "saldo",
-            "saldo_pendiente",
-            "saldo_actual",
-            "monto_pendiente",
-          ]),
-        0
-      );
+    const ingresosCaja = cajaPeriodo
+      .filter((movimiento) => {
+        const tipo = textoNormalizado(movimiento.tipo);
 
-    const carteraVencida =
-      cobranzasFiltradas
-        .filter((cuenta) => {
-          const dias = obtenerNumero(
-            cuenta,
-            [
-              "dias_atraso",
-              "dias_mora",
-              "dias_vencidos",
-            ]
-          );
-
-          const estado = String(
-            obtenerValor(
-              cuenta,
-              [
-                "estado",
-                "status",
-                "estado_cuenta",
-              ],
-              ""
-            )
-          ).toLowerCase();
-
-          return (
-            dias > 0 ||
-            estado.includes("mora") ||
-            estado.includes("venc")
-          );
-        })
-        .reduce(
-          (total, cuenta) =>
-            total +
-            obtenerNumero(cuenta, [
-              "saldo",
-              "saldo_pendiente",
-              "saldo_actual",
-              "monto_pendiente",
-            ]),
-          0
+        return !(
+          tipo.includes("egreso") ||
+          tipo.includes("gasto") ||
+          tipo.includes("retiro") ||
+          tipo.includes("salida")
         );
+      })
+      .reduce((total, movimiento) => total + numero(movimiento.monto), 0);
 
-    const cobradoPeriodo =
-      cajaFiltrada
-        .filter((movimiento) => {
-          const tipo = String(
-            obtenerValor(
-              movimiento,
-              [
-                "tipo",
-                "tipo_movimiento",
-                "categoria",
-                "concepto",
-              ],
-              ""
-            )
-          ).toLowerCase();
-
-          return (
-            tipo.includes("ingreso") ||
-            tipo.includes("pago") ||
-            tipo.includes("abono") ||
-            tipo.includes("cobro")
-          );
-        })
-        .reduce(
-          (total, movimiento) =>
-            total +
-            obtenerNumero(movimiento, [
-              "monto",
-              "valor",
-              "importe",
-              "total",
-            ]),
-          0
-        );
-
-    const ingresosCaja =
-      cajaFiltrada
-        .filter((movimiento) => {
-          const tipo = String(
-            obtenerValor(
-              movimiento,
-              [
-                "tipo",
-                "tipo_movimiento",
-                "naturaleza",
-              ],
-              ""
-            )
-          ).toLowerCase();
-
-          return (
-            tipo.includes("ingreso") ||
-            tipo.includes("entrada") ||
-            tipo === ""
-          );
-        })
-        .reduce(
-          (total, movimiento) =>
-            total +
-            obtenerNumero(movimiento, [
-              "monto",
-              "valor",
-              "importe",
-              "total",
-            ]),
-          0
-        );
-
-    const egresosCaja =
-      cajaFiltrada
-        .filter((movimiento) => {
-          const tipo = String(
-            obtenerValor(
-              movimiento,
-              [
-                "tipo",
-                "tipo_movimiento",
-                "naturaleza",
-              ],
-              ""
-            )
-          ).toLowerCase();
-
-          return (
-            tipo.includes("egreso") ||
-            tipo.includes("salida") ||
-            tipo.includes("gasto")
-          );
-        })
-        .reduce(
-          (total, movimiento) =>
-            total +
-            obtenerNumero(movimiento, [
-              "monto",
-              "valor",
-              "importe",
-              "total",
-            ]),
-          0
-        );
-
-    const creditosActivos =
-      cobranzasFiltradas.filter((cuenta) => {
-        const estado = String(
-          obtenerValor(
-            cuenta,
-            [
-              "estado",
-              "status",
-              "estado_credito",
-              "estado_cuenta",
-            ],
-            ""
-          )
-        ).toLowerCase();
+    const egresosCaja = cajaPeriodo
+      .filter((movimiento) => {
+        const tipo = textoNormalizado(movimiento.tipo);
 
         return (
-          estado.includes("activo") ||
-          estado.includes("vigente") ||
-          estado.includes("al día") ||
-          estado.includes("al dia")
+          tipo.includes("egreso") ||
+          tipo.includes("gasto") ||
+          tipo.includes("retiro") ||
+          tipo.includes("salida")
         );
-      }).length;
+      })
+      .reduce((total, movimiento) => total + numero(movimiento.monto), 0);
+
+    const creditosActivos = comercialPeriodo.filter(
+      (registro) => textoNormalizado(registro.estado) === "activo"
+    ).length;
 
     const porcentajeMora =
       carteraPendiente > 0
-        ? (carteraVencida / carteraPendiente) *
-          100
+        ? (carteraVencida / carteraPendiente) * 100
+        : 0;
+
+    const ticketPromedio =
+      comercialPeriodo.length > 0
+        ? comercialPeriodo.reduce(
+            (total, registro) => total + numero(registro.monto_total),
+            0
+          ) / comercialPeriodo.length
         : 0;
 
     return {
-      ventasTotales,
-      ventasCredito,
+      montoCreditos,
+      montoVentas,
       carteraPendiente,
       carteraVencida,
-      cobradoPeriodo,
+      cuentasEnMora,
+      cobrado,
       ingresosCaja,
       egresosCaja,
       creditosActivos,
-      clientesNuevos: clientesFiltrados.length,
+      clientesNuevos: clientesPeriodo.length,
       porcentajeMora,
+      ticketPromedio,
     };
   }, [
-    ventasFiltradas,
-    cobranzasFiltradas,
-    cajaFiltrada,
-    clientesFiltrados,
+    comercialPeriodo,
+    cajaPeriodo,
+    clientesPeriodo,
+    cobranzaPorCredito,
   ]);
 
   const movimientosRecientes = useMemo(() => {
-    const ventasMapeadas = ventasFiltradas.map(
-      (venta) => ({
-        fecha: obtenerFechaRegistro(venta),
-        tipo: "Venta",
-        descripcion: obtenerValor(
-          venta,
-          [
-            "descripcion",
-            "detalle",
-            "producto",
-            "numero_factura",
-          ],
-          "Venta registrada"
-        ),
-        monto: obtenerNumero(venta, [
-          "total",
-          "monto_total",
-          "total_venta",
-          "monto",
-        ]),
+    const movimientosCredito = comercialPeriodo.map((registro) => ({
+      id: `comercial-${registro.id}`,
+      fecha: fechaCorta(registro.fecha_inicio || registro.created_at),
+      tipo: registro.tipo_producto || "Crédito",
+      detalle:
+        registro.numero_cuenta ||
+        registro.descripcion ||
+        "Operación comercial",
+      responsable: registro.responsable || "Sin asignar",
+      monto: numero(registro.monto_total),
+    }));
+
+    const movimientosCaja = cajaPeriodo.map((registro) => ({
+      id: `caja-${registro.id}`,
+      fecha: fechaCorta(registro.fecha_pago || registro.created_at),
+      tipo: registro.tipo || "Caja",
+      detalle:
+        registro.cliente_nombre ||
+        registro.descripcion ||
+        registro.numero_transaccion ||
+        "Movimiento de caja",
+      responsable: registro.usuario || "Sin asignar",
+      monto: numero(registro.monto),
+    }));
+
+    return [...movimientosCredito, ...movimientosCaja]
+      .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+      .slice(0, 15);
+  }, [comercialPeriodo, cajaPeriodo]);
+
+  const cuentasMora = useMemo(() => {
+    return comercialPeriodo
+      .map((registro) => {
+        const datoCobranza = cobranzaPorCredito.get(registro.id);
+        const diasMora = numero(datoCobranza?.dias_mora);
+
+        return {
+          id: registro.id,
+          cuenta: registro.numero_cuenta || "Sin número",
+          clienteId: registro.cliente_id,
+          saldo: numero(registro.saldo_actual),
+          diasMora,
+          estadoCobranza:
+            datoCobranza?.estado_cobranza || "Sin gestión",
+          responsable:
+            datoCobranza?.responsable_cobro ||
+            registro.responsable ||
+            "Sin asignar",
+        };
       })
-    );
+      .filter((registro) => registro.diasMora > 0)
+      .sort((a, b) => b.diasMora - a.diasMora);
+  }, [comercialPeriodo, cobranzaPorCredito]);
 
-    const cajaMapeada = cajaFiltrada.map(
-      (movimiento) => ({
-        fecha: obtenerFechaRegistro(movimiento),
-        tipo: obtenerValor(
-          movimiento,
-          [
-            "tipo",
-            "tipo_movimiento",
-            "categoria",
-          ],
-          "Caja"
-        ),
-        descripcion: obtenerValor(
-          movimiento,
-          [
-            "descripcion",
-            "detalle",
-            "concepto",
-            "observacion",
-          ],
-          "Movimiento de caja"
-        ),
-        monto: obtenerNumero(movimiento, [
-          "monto",
-          "valor",
-          "importe",
-          "total",
-        ]),
-      })
-    );
-
-    return [
-      ...ventasMapeadas,
-      ...cajaMapeada,
-    ]
-      .sort((a, b) =>
-        String(b.fecha).localeCompare(
-          String(a.fecha)
-        )
-      )
-      .slice(0, 12);
-  }, [ventasFiltradas, cajaFiltrada]);
-
-  function formatoMoneda(valor) {
+  function moneda(valor) {
     return new Intl.NumberFormat("es-PA", {
       style: "currency",
       currency: "USD",
       minimumFractionDigits: 2,
-    }).format(Number(valor || 0));
+    }).format(numero(valor));
   }
 
-  function exportarCSV() {
+  function exportarExcel() {
     const filas = [
       ["REPORTE GENERAL KONAX"],
       ["Desde", fechaDesde],
       ["Hasta", fechaHasta],
       [],
       ["Indicador", "Resultado"],
-      [
-        "Ventas totales",
-        resumen.ventasTotales,
-      ],
-      [
-        "Ventas a crédito",
-        resumen.ventasCredito,
-      ],
-      [
-        "Cobrado en el período",
-        resumen.cobradoPeriodo,
-      ],
-      [
-        "Cartera pendiente",
-        resumen.carteraPendiente,
-      ],
-      [
-        "Cartera vencida",
-        resumen.carteraVencida,
-      ],
-      [
-        "Ingresos de caja",
-        resumen.ingresosCaja,
-      ],
-      [
-        "Egresos de caja",
-        resumen.egresosCaja,
-      ],
-      [
-        "Créditos activos",
-        resumen.creditosActivos,
-      ],
-      [
-        "Clientes nuevos",
-        resumen.clientesNuevos,
-      ],
-      [
-        "Porcentaje de mora",
-        `${resumen.porcentajeMora.toFixed(2)}%`,
-      ],
+      ["Créditos otorgados", resumen.montoCreditos],
+      ["Ventas registradas", resumen.montoVentas],
+      ["Cobrado en el período", resumen.cobrado],
+      ["Cartera pendiente", resumen.carteraPendiente],
+      ["Cartera vencida", resumen.carteraVencida],
+      ["Cuentas en mora", resumen.cuentasEnMora],
+      ["Ingresos de caja", resumen.ingresosCaja],
+      ["Egresos de caja", resumen.egresosCaja],
+      ["Créditos activos", resumen.creditosActivos],
+      ["Clientes nuevos", resumen.clientesNuevos],
+      ["Porcentaje de mora", `${resumen.porcentajeMora.toFixed(2)}%`],
     ];
 
-    const contenido = filas
+    const csv = "\uFEFF" + filas
       .map((fila) =>
         fila
           .map((celda) =>
-            `"${String(celda ?? "").replace(
-              /"/g,
-              '""'
-            )}"`
+            `"${String(celda ?? "").replace(/"/g, '""')}"`
           )
-          .join(",")
+          .join(";")
       )
       .join("\n");
 
-    const archivo = new Blob([contenido], {
+    const blob = new Blob([csv], {
       type: "text/csv;charset=utf-8;",
     });
 
-    const url =
-      URL.createObjectURL(archivo);
-
-    const enlace =
-      document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    const enlace = document.createElement("a");
 
     enlace.href = url;
     enlace.download = `reporte-general-${fechaDesde}-${fechaHasta}.csv`;
@@ -677,447 +385,304 @@ export default function Reportes() {
   }
 
   function limpiarFiltros() {
-    setFechaDesde(primerDiaDelMes());
-    setFechaHasta(fechaHoy());
-    setFiltroEstado("Todos");
-  }
-
-  function volverDashboard() {
-    window.location.href = "/dashboard";
+    setFechaDesde(primerDiaMes());
+    setFechaHasta(fechaActual());
+    setEstadoCredito("Todos");
   }
 
   if (cargando) {
     return (
-      <div style={pantallaCarga}>
-        <div style={spinner}></div>
-        <p>Cargando reportes...</p>
-      </div>
+      <main style={estilos.carga}>
+        <div style={estilos.spinner}></div>
+        <p style={{ margin: 0, fontWeight: 700 }}>
+          Cargando datos reales de Supabase...
+        </p>
+      </main>
     );
   }
 
   return (
-    <main style={pagina}>
-      <header style={encabezado}>
+    <main style={estilos.pagina}>
+      <header style={estilos.encabezado}>
         <div>
-          <span style={etiqueta}>
-            CENTRO DE REPORTES Y ANÁLISIS
-          </span>
-
-          <h1 style={titulo}>
-            Reporte general
-          </h1>
-
-          <p style={subtitulo}>
-            Consulta el comportamiento de ventas,
-            créditos, cobranza, clientes y caja
-            desde un solo lugar.
+          <span style={estilos.etiqueta}>CENTRO DE REPORTES Y ANÁLISIS</span>
+          <h1 style={estilos.titulo}>Reporte general</h1>
+          <p style={estilos.subtitulo}>
+            Información consolidada de créditos, cobranza, caja y clientes.
           </p>
         </div>
 
-        <div style={accionesSuperior}>
+        <div style={estilos.acciones}>
           <button
             type="button"
-            onClick={volverDashboard}
-            style={botonSecundario}
+            style={estilos.botonBlanco}
+            onClick={() => (window.location.href = "/dashboard")}
           >
             ← Volver al dashboard
           </button>
 
           <button
             type="button"
-            onClick={cargarReportes}
-            style={botonActualizar}
+            style={estilos.botonVerde}
+            onClick={cargarDatos}
           >
             Actualizar datos
           </button>
         </div>
       </header>
 
-      {errorGeneral && (
-        <div style={alertaError}>
-          {errorGeneral}
-        </div>
-      )}
+      {error && <div style={estilos.error}>{error}</div>}
 
-      <section style={panelFiltros}>
-        <div style={campoFiltro}>
-          <label style={labelFiltro}>
-            Desde
-          </label>
-
+      <section style={estilos.filtros}>
+        <Campo label="Desde">
           <input
             type="date"
             value={fechaDesde}
-            onChange={(e) =>
-              setFechaDesde(e.target.value)
-            }
-            style={inputFiltro}
+            onChange={(e) => setFechaDesde(e.target.value)}
+            style={estilos.input}
           />
-        </div>
+        </Campo>
 
-        <div style={campoFiltro}>
-          <label style={labelFiltro}>
-            Hasta
-          </label>
-
+        <Campo label="Hasta">
           <input
             type="date"
             value={fechaHasta}
-            onChange={(e) =>
-              setFechaHasta(e.target.value)
-            }
-            style={inputFiltro}
+            onChange={(e) => setFechaHasta(e.target.value)}
+            style={estilos.input}
           />
-        </div>
+        </Campo>
 
-        <div style={campoFiltro}>
-          <label style={labelFiltro}>
-            Estado
-          </label>
-
+        <Campo label="Estado del crédito">
           <select
-            value={filtroEstado}
-            onChange={(e) =>
-              setFiltroEstado(e.target.value)
-            }
-            style={inputFiltro}
+            value={estadoCredito}
+            onChange={(e) => setEstadoCredito(e.target.value)}
+            style={estilos.input}
           >
-            <option value="Todos">
-              Todos
-            </option>
-            <option value="Activo">
-              Activo
-            </option>
-            <option value="Al día">
-              Al día
-            </option>
-            <option value="En mora">
-              En mora
-            </option>
-            <option value="Vencido">
-              Vencido
-            </option>
-            <option value="Pagado">
-              Pagado
-            </option>
+            <option value="Todos">Todos</option>
+            <option value="Activo">Activo</option>
+            <option value="Pagado">Pagado</option>
+            <option value="Cancelado">Cancelado</option>
+            <option value="Suspendido">Suspendido</option>
           </select>
-        </div>
+        </Campo>
 
-        <div style={botonesFiltro}>
+        <div style={estilos.botonesFiltros}>
           <button
             type="button"
+            style={estilos.botonBlanco}
             onClick={limpiarFiltros}
-            style={botonLimpiar}
           >
             Limpiar
           </button>
 
           <button
             type="button"
-            onClick={exportarCSV}
-            style={botonExportar}
+            style={estilos.botonTurquesa}
+            onClick={exportarExcel}
           >
             Exportar Excel
           </button>
 
           <button
             type="button"
+            style={estilos.botonOscuro}
             onClick={descargarPDF}
-            style={botonPDF}
           >
             Descargar PDF
           </button>
         </div>
       </section>
 
-      <section style={gridIndicadores}>
-        <TarjetaIndicador
-          titulo="Ventas totales"
-          valor={formatoMoneda(
-            resumen.ventasTotales
-          )}
-          detalle={`${ventasFiltradas.length} operaciones`}
-          icono="📈"
-        />
-
-        <TarjetaIndicador
-          titulo="Ventas a crédito"
-          valor={formatoMoneda(
-            resumen.ventasCredito
-          )}
-          detalle="Monto financiado"
+      <section style={estilos.tarjetas}>
+        <Tarjeta
           icono="💳"
+          titulo="Créditos otorgados"
+          valor={moneda(resumen.montoCreditos)}
+          detalle={`${comercialPeriodo.length} operaciones en el período`}
         />
 
-        <TarjetaIndicador
-          titulo="Cobrado en el período"
-          valor={formatoMoneda(
-            resumen.cobradoPeriodo
-          )}
-          detalle="Pagos y abonos"
+        <Tarjeta
+          icono="🛒"
+          titulo="Ventas registradas"
+          valor={moneda(resumen.montoVentas)}
+          detalle="Operaciones no clasificadas como crédito"
+        />
+
+        <Tarjeta
           icono="💰"
+          titulo="Cobrado en el período"
+          valor={moneda(resumen.cobrado)}
+          detalle={`${cajaPeriodo.length} movimientos procesados`}
         />
 
-        <TarjetaIndicador
-          titulo="Cartera pendiente"
-          valor={formatoMoneda(
-            resumen.carteraPendiente
-          )}
-          detalle={`${cobranzasFiltradas.length} cuentas`}
+        <Tarjeta
           icono="🧾"
+          titulo="Cartera pendiente"
+          valor={moneda(resumen.carteraPendiente)}
+          detalle="Suma del saldo actual"
         />
 
-        <TarjetaIndicador
-          titulo="Cartera vencida"
-          valor={formatoMoneda(
-            resumen.carteraVencida
-          )}
-          detalle="Saldo en mora"
+        <Tarjeta
           icono="⚠️"
+          titulo="Cartera vencida"
+          valor={moneda(resumen.carteraVencida)}
+          detalle={`${resumen.cuentasEnMora} cuentas con días de mora`}
         />
 
-        <TarjetaIndicador
-          titulo="Ingresos de caja"
-          valor={formatoMoneda(
-            resumen.ingresosCaja
-          )}
-          detalle="Entradas registradas"
+        <Tarjeta
           icono="🏦"
+          titulo="Ingresos de caja"
+          valor={moneda(resumen.ingresosCaja)}
+          detalle="Movimientos procesados de entrada"
         />
 
-        <TarjetaIndicador
-          titulo="Egresos de caja"
-          valor={formatoMoneda(
-            resumen.egresosCaja
-          )}
-          detalle="Salidas registradas"
+        <Tarjeta
           icono="📤"
+          titulo="Egresos de caja"
+          valor={moneda(resumen.egresosCaja)}
+          detalle="Gastos, retiros y salidas"
         />
 
-        <TarjetaIndicador
+        <Tarjeta
+          icono="✅"
           titulo="Créditos activos"
           valor={resumen.creditosActivos}
-          detalle="Operaciones vigentes"
-          icono="✅"
+          detalle="Estado Activo"
         />
 
-        <TarjetaIndicador
+        <Tarjeta
+          icono="👥"
           titulo="Clientes nuevos"
           valor={resumen.clientesNuevos}
-          detalle="En el período"
-          icono="👥"
+          detalle="Registrados dentro del período"
         />
 
-        <TarjetaIndicador
-          titulo="Porcentaje de mora"
-          valor={`${resumen.porcentajeMora.toFixed(
-            1
-          )}%`}
-          detalle="Sobre cartera pendiente"
+        <Tarjeta
           icono="📊"
+          titulo="Porcentaje de mora"
+          valor={`${resumen.porcentajeMora.toFixed(1)}%`}
+          detalle="Cartera vencida sobre cartera pendiente"
         />
       </section>
 
-      <section style={gridResumenes}>
-        <article style={panelResumen}>
-          <div style={cabeceraPanel}>
-            <div>
-              <span style={miniEtiqueta}>
-                VENTAS
-              </span>
-              <h2 style={tituloPanel}>
-                Resumen comercial
-              </h2>
-            </div>
+      <section style={estilos.resumenes}>
+        <Panel titulo="Resumen comercial" etiqueta="CRÉDITOS Y VENTAS">
+          <Fila nombre="Créditos otorgados" valor={moneda(resumen.montoCreditos)} />
+          <Fila nombre="Ventas registradas" valor={moneda(resumen.montoVentas)} />
+          <Fila nombre="Ticket promedio" valor={moneda(resumen.ticketPromedio)} />
+          <Fila nombre="Operaciones" valor={comercialPeriodo.length} />
+        </Panel>
 
-            <span style={iconoPanel}>📈</span>
-          </div>
-
-          <FilaResumen
-            nombre="Ventas totales"
-            valor={formatoMoneda(
-              resumen.ventasTotales
-            )}
-          />
-
-          <FilaResumen
-            nombre="Ventas a crédito"
-            valor={formatoMoneda(
-              resumen.ventasCredito
-            )}
-          />
-
-          <FilaResumen
-            nombre="Operaciones registradas"
-            valor={ventasFiltradas.length}
-          />
-
-          <FilaResumen
-            nombre="Ticket promedio"
-            valor={formatoMoneda(
-              ventasFiltradas.length > 0
-                ? resumen.ventasTotales /
-                    ventasFiltradas.length
-                : 0
-            )}
-          />
-        </article>
-
-        <article style={panelResumen}>
-          <div style={cabeceraPanel}>
-            <div>
-              <span style={miniEtiqueta}>
-                COBRANZA
-              </span>
-              <h2 style={tituloPanel}>
-                Resumen de cartera
-              </h2>
-            </div>
-
-            <span style={iconoPanel}>📞</span>
-          </div>
-
-          <FilaResumen
-            nombre="Cartera pendiente"
-            valor={formatoMoneda(
-              resumen.carteraPendiente
-            )}
-          />
-
-          <FilaResumen
-            nombre="Cartera vencida"
-            valor={formatoMoneda(
-              resumen.carteraVencida
-            )}
-          />
-
-          <FilaResumen
-            nombre="Créditos activos"
-            valor={resumen.creditosActivos}
-          />
-
-          <FilaResumen
+        <Panel titulo="Resumen de cartera" etiqueta="COBRANZA">
+          <Fila nombre="Cartera pendiente" valor={moneda(resumen.carteraPendiente)} />
+          <Fila nombre="Cartera vencida" valor={moneda(resumen.carteraVencida)} />
+          <Fila nombre="Cuentas en mora" valor={resumen.cuentasEnMora} />
+          <Fila
             nombre="Índice de mora"
-            valor={`${resumen.porcentajeMora.toFixed(
-              1
-            )}%`}
+            valor={`${resumen.porcentajeMora.toFixed(1)}%`}
           />
-        </article>
+        </Panel>
 
-        <article style={panelResumen}>
-          <div style={cabeceraPanel}>
-            <div>
-              <span style={miniEtiqueta}>
-                CAJA
-              </span>
-              <h2 style={tituloPanel}>
-                Resumen financiero
-              </h2>
-            </div>
-
-            <span style={iconoPanel}>🏦</span>
-          </div>
-
-          <FilaResumen
-            nombre="Ingresos"
-            valor={formatoMoneda(
-              resumen.ingresosCaja
-            )}
+        <Panel titulo="Resumen de caja" etiqueta="CAJA">
+          <Fila nombre="Ingresos" valor={moneda(resumen.ingresosCaja)} />
+          <Fila nombre="Egresos" valor={moneda(resumen.egresosCaja)} />
+          <Fila
+            nombre="Balance"
+            valor={moneda(resumen.ingresosCaja - resumen.egresosCaja)}
           />
-
-          <FilaResumen
-            nombre="Egresos"
-            valor={formatoMoneda(
-              resumen.egresosCaja
-            )}
-          />
-
-          <FilaResumen
-            nombre="Balance del período"
-            valor={formatoMoneda(
-              resumen.ingresosCaja -
-                resumen.egresosCaja
-            )}
-          />
-
-          <FilaResumen
-            nombre="Movimientos"
-            valor={cajaFiltrada.length}
-          />
-        </article>
+          <Fila nombre="Movimientos" valor={cajaPeriodo.length} />
+        </Panel>
       </section>
 
-      <section style={panelTabla}>
-        <div style={cabeceraTabla}>
+      <section style={estilos.panelTabla}>
+        <div style={estilos.cabeceraPanel}>
           <div>
-            <span style={miniEtiqueta}>
-              ACTIVIDAD RECIENTE
-            </span>
-
-            <h2 style={tituloPanel}>
-              Últimos movimientos
-            </h2>
+            <span style={estilos.miniEtiqueta}>MORA REAL</span>
+            <h2 style={estilos.tituloPanel}>Cuentas con días de atraso</h2>
           </div>
+          <span style={estilos.contador}>{cuentasMora.length} registros</span>
+        </div>
 
-          <span style={contadorTabla}>
+        <div style={estilos.tablaContenedor}>
+          <table style={estilos.tabla}>
+            <thead>
+              <tr>
+                <th style={estilos.th}>Cuenta</th>
+                <th style={estilos.th}>Días de mora</th>
+                <th style={estilos.th}>Estado de cobranza</th>
+                <th style={estilos.th}>Responsable</th>
+                <th style={estilos.thDerecha}>Saldo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cuentasMora.length === 0 ? (
+                <tr>
+                  <td colSpan="5" style={estilos.sinDatos}>
+                    No hay cuentas con días de mora en el período seleccionado.
+                  </td>
+                </tr>
+              ) : (
+                cuentasMora.map((registro) => (
+                  <tr key={registro.id}>
+                    <td style={estilos.td}>{registro.cuenta}</td>
+                    <td style={estilos.td}>
+                      <span style={estilos.badgeMora}>
+                        {registro.diasMora} días
+                      </span>
+                    </td>
+                    <td style={estilos.td}>{registro.estadoCobranza}</td>
+                    <td style={estilos.td}>{registro.responsable}</td>
+                    <td style={estilos.tdDerecha}>{moneda(registro.saldo)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section style={estilos.panelTabla}>
+        <div style={estilos.cabeceraPanel}>
+          <div>
+            <span style={estilos.miniEtiqueta}>ACTIVIDAD</span>
+            <h2 style={estilos.tituloPanel}>Últimos movimientos</h2>
+          </div>
+          <span style={estilos.contador}>
             {movimientosRecientes.length} registros
           </span>
         </div>
 
-        <div style={contenedorTabla}>
-          <table style={tabla}>
+        <div style={estilos.tablaContenedor}>
+          <table style={estilos.tabla}>
             <thead>
               <tr>
-                <th style={th}>Fecha</th>
-                <th style={th}>Tipo</th>
-                <th style={th}>
-                  Descripción
-                </th>
-                <th style={thDerecha}>
-                  Monto
-                </th>
+                <th style={estilos.th}>Fecha</th>
+                <th style={estilos.th}>Tipo</th>
+                <th style={estilos.th}>Detalle</th>
+                <th style={estilos.th}>Responsable</th>
+                <th style={estilos.thDerecha}>Monto</th>
               </tr>
             </thead>
 
             <tbody>
-              {movimientosRecientes.length ===
-              0 ? (
+              {movimientosRecientes.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan="4"
-                    style={sinDatos}
-                  >
-                    No hay movimientos para el
-                    período seleccionado.
+                  <td colSpan="5" style={estilos.sinDatos}>
+                    No hay movimientos dentro del período seleccionado.
                   </td>
                 </tr>
               ) : (
-                movimientosRecientes.map(
-                  (movimiento, index) => (
-                    <tr key={`${movimiento.tipo}-${index}`}>
-                      <td style={td}>
-                        {movimiento.fecha ||
-                          "Sin fecha"}
-                      </td>
-
-                      <td style={td}>
-                        <span style={badgeTipo}>
-                          {movimiento.tipo}
-                        </span>
-                      </td>
-
-                      <td style={td}>
-                        {movimiento.descripcion}
-                      </td>
-
-                      <td style={tdDerecha}>
-                        {formatoMoneda(
-                          movimiento.monto
-                        )}
-                      </td>
-                    </tr>
-                  )
-                )
+                movimientosRecientes.map((registro) => (
+                  <tr key={registro.id}>
+                    <td style={estilos.td}>{registro.fecha || "Sin fecha"}</td>
+                    <td style={estilos.td}>
+                      <span style={estilos.badge}>{registro.tipo}</span>
+                    </td>
+                    <td style={estilos.td}>{registro.detalle}</td>
+                    <td style={estilos.td}>{registro.responsable}</td>
+                    <td style={estilos.tdDerecha}>{moneda(registro.monto)}</td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -1127,419 +692,368 @@ export default function Reportes() {
   );
 }
 
-function TarjetaIndicador({
-  titulo,
-  valor,
-  detalle,
-  icono,
-}) {
+function Campo({ label, children }) {
   return (
-    <article style={tarjetaIndicador}>
-      <div style={iconoIndicador}>{icono}</div>
+    <label style={estilos.campo}>
+      <span style={estilos.label}>{label}</span>
+      {children}
+    </label>
+  );
+}
 
+function Tarjeta({ icono, titulo, valor, detalle }) {
+  return (
+    <article style={estilos.tarjeta}>
+      <div style={estilos.icono}>{icono}</div>
       <div>
-        <p style={tituloIndicador}>
-          {titulo}
-        </p>
-
-        <strong style={valorIndicador}>
-          {valor}
-        </strong>
-
-        <span style={detalleIndicador}>
-          {detalle}
-        </span>
+        <p style={estilos.tituloTarjeta}>{titulo}</p>
+        <strong style={estilos.valorTarjeta}>{valor}</strong>
+        <span style={estilos.detalleTarjeta}>{detalle}</span>
       </div>
     </article>
   );
 }
 
-function FilaResumen({ nombre, valor }) {
+function Panel({ titulo, etiqueta, children }) {
   return (
-    <div style={filaResumen}>
-      <span style={nombreResumen}>
-        {nombre}
-      </span>
+    <article style={estilos.panel}>
+      <span style={estilos.miniEtiqueta}>{etiqueta}</span>
+      <h2 style={estilos.tituloPanel}>{titulo}</h2>
+      <div style={{ marginTop: 14 }}>{children}</div>
+    </article>
+  );
+}
 
-      <strong style={valorResumen}>
-        {valor}
-      </strong>
+function Fila({ nombre, valor }) {
+  return (
+    <div style={estilos.fila}>
+      <span style={estilos.nombreFila}>{nombre}</span>
+      <strong style={estilos.valorFila}>{valor}</strong>
     </div>
   );
 }
 
-const pagina = {
-  minHeight: "100vh",
-  padding: "34px",
-  background: "#f4f7f5",
-  fontFamily: "Arial, sans-serif",
-  color: "#17211c",
+const estilos = {
+  pagina: {
+    minHeight: "100vh",
+    padding: "32px",
+    background: "#f4f7f5",
+    color: "#17211c",
+    fontFamily: "Arial, sans-serif",
+  },
+  carga: {
+    minHeight: "100vh",
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 14,
+    background: "#f4f7f5",
+    color: "#166534",
+    fontFamily: "Arial, sans-serif",
+  },
+  spinner: {
+    width: 42,
+    height: 42,
+    border: "5px solid #dce9e1",
+    borderTopColor: "#16834f",
+    borderRadius: "50%",
+  },
+  encabezado: {
+    maxWidth: 1500,
+    margin: "0 auto 26px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 20,
+    flexWrap: "wrap",
+  },
+  etiqueta: {
+    display: "block",
+    marginBottom: 7,
+    color: "#16834f",
+    fontSize: 12,
+    fontWeight: 900,
+    letterSpacing: 1.4,
+  },
+  titulo: {
+    margin: "0 0 9px",
+    fontSize: "clamp(30px, 4vw, 43px)",
+    lineHeight: 1.08,
+  },
+  subtitulo: {
+    margin: 0,
+    color: "#68736c",
+    fontSize: 16,
+    lineHeight: 1.55,
+  },
+  acciones: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  error: {
+    maxWidth: 1500,
+    margin: "0 auto 20px",
+    padding: "14px 16px",
+    border: "1px solid #fecaca",
+    borderRadius: 12,
+    background: "#fef2f2",
+    color: "#991b1b",
+    fontWeight: 700,
+  },
+  filtros: {
+    maxWidth: 1500,
+    margin: "0 auto 22px",
+    padding: 18,
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+    gap: 13,
+    alignItems: "end",
+    border: "1px solid #dce5df",
+    borderRadius: 17,
+    background: "#fff",
+    boxShadow: "0 8px 25px rgba(15, 23, 42, 0.05)",
+  },
+  campo: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 7,
+  },
+  label: {
+    color: "#506057",
+    fontSize: 13,
+    fontWeight: 800,
+  },
+  input: {
+    width: "100%",
+    minHeight: 43,
+    padding: "9px 11px",
+    boxSizing: "border-box",
+    border: "1px solid #ccd7d0",
+    borderRadius: 10,
+    background: "#fff",
+    color: "#17211c",
+    fontSize: 14,
+  },
+  botonesFiltros: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  botonBlanco: {
+    minHeight: 43,
+    padding: "9px 14px",
+    border: "1px solid #ccd7d0",
+    borderRadius: 10,
+    background: "#fff",
+    color: "#26342b",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  botonVerde: {
+    minHeight: 43,
+    padding: "9px 16px",
+    border: "none",
+    borderRadius: 10,
+    background: "#16834f",
+    color: "#fff",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  botonTurquesa: {
+    minHeight: 43,
+    padding: "9px 14px",
+    border: "none",
+    borderRadius: 10,
+    background: "#0f766e",
+    color: "#fff",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  botonOscuro: {
+    minHeight: 43,
+    padding: "9px 14px",
+    border: "none",
+    borderRadius: 10,
+    background: "#111827",
+    color: "#fff",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  tarjetas: {
+    maxWidth: 1500,
+    margin: "0 auto 22px",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+    gap: 15,
+  },
+  tarjeta: {
+    minHeight: 137,
+    padding: 19,
+    display: "grid",
+    gridTemplateColumns: "50px 1fr",
+    gap: 13,
+    border: "1px solid #dce5df",
+    borderRadius: 17,
+    background: "#fff",
+    boxShadow: "0 8px 24px rgba(15, 23, 42, 0.05)",
+  },
+  icono: {
+    width: 50,
+    height: 50,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 14,
+    background: "#eaf7f0",
+    fontSize: 24,
+  },
+  tituloTarjeta: {
+    margin: "0 0 7px",
+    color: "#68736c",
+    fontSize: 13,
+    fontWeight: 800,
+  },
+  valorTarjeta: {
+    display: "block",
+    marginBottom: 6,
+    fontSize: 24,
+    lineHeight: 1.12,
+  },
+  detalleTarjeta: {
+    display: "block",
+    color: "#7d8881",
+    fontSize: 12,
+    lineHeight: 1.4,
+  },
+  resumenes: {
+    maxWidth: 1500,
+    margin: "0 auto 22px",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))",
+    gap: 16,
+  },
+  panel: {
+    padding: 22,
+    border: "1px solid #dce5df",
+    borderRadius: 17,
+    background: "#fff",
+    boxShadow: "0 8px 25px rgba(15, 23, 42, 0.05)",
+  },
+  miniEtiqueta: {
+    display: "block",
+    marginBottom: 5,
+    color: "#16834f",
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 1.2,
+  },
+  tituloPanel: {
+    margin: 0,
+    fontSize: 21,
+  },
+  fila: {
+    padding: "12px 0",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 15,
+    borderBottom: "1px solid #edf1ee",
+  },
+  nombreFila: {
+    color: "#5e6a62",
+    fontSize: 14,
+  },
+  valorFila: {
+    color: "#17211c",
+    fontSize: 14,
+  },
+  panelTabla: {
+    maxWidth: 1500,
+    margin: "0 auto 22px",
+    padding: 22,
+    border: "1px solid #dce5df",
+    borderRadius: 17,
+    background: "#fff",
+    boxShadow: "0 8px 25px rgba(15, 23, 42, 0.05)",
+  },
+  cabeceraPanel: {
+    marginBottom: 16,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 16,
+    flexWrap: "wrap",
+  },
+  contador: {
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#edf8f1",
+    color: "#16834f",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+  tablaContenedor: {
+    width: "100%",
+    overflowX: "auto",
+  },
+  tabla: {
+    width: "100%",
+    minWidth: 760,
+    borderCollapse: "collapse",
+  },
+  th: {
+    padding: "11px 12px",
+    borderBottom: "1px solid #dce5df",
+    color: "#536058",
+    fontSize: 12,
+    textAlign: "left",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  thDerecha: {
+    padding: "11px 12px",
+    borderBottom: "1px solid #dce5df",
+    color: "#536058",
+    fontSize: 12,
+    textAlign: "right",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  td: {
+    padding: "13px 12px",
+    borderBottom: "1px solid #edf1ee",
+    color: "#435047",
+    fontSize: 14,
+  },
+  tdDerecha: {
+    padding: "13px 12px",
+    borderBottom: "1px solid #edf1ee",
+    color: "#17211c",
+    fontSize: 14,
+    fontWeight: 800,
+    textAlign: "right",
+  },
+  badge: {
+    display: "inline-block",
+    padding: "5px 8px",
+    borderRadius: 999,
+    background: "#edf8f1",
+    color: "#16834f",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+  badgeMora: {
+    display: "inline-block",
+    padding: "5px 8px",
+    borderRadius: 999,
+    background: "#fff1f2",
+    color: "#be123c",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+  sinDatos: {
+    padding: "32px 12px",
+    color: "#7b867f",
+    fontSize: 14,
+    textAlign: "center",
+  },
 };
-
-const pantallaCarga = {
-  minHeight: "100vh",
-  display: "flex",
-  flexDirection: "column",
-  justifyContent: "center",
-  alignItems: "center",
-  gap: "14px",
-  background: "#f4f7f5",
-  fontFamily: "Arial, sans-serif",
-  color: "#166534",
-};
-
-const spinner = {
-  width: "44px",
-  height: "44px",
-  borderRadius: "50%",
-  border: "5px solid #dce9e1",
-  borderTopColor: "#16834f",
-  animation: "spin 1s linear infinite",
-};
-
-const encabezado = {
-  maxWidth: "1500px",
-  margin: "0 auto 28px",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: "24px",
-};
-
-const etiqueta = {
-  display: "inline-block",
-  marginBottom: "8px",
-  color: "#16834f",
-  fontSize: "12px",
-  fontWeight: "900",
-  letterSpacing: "1.5px",
-};
-
-const titulo = {
-  margin: "0 0 10px",
-  fontSize: "42px",
-  lineHeight: 1.08,
-};
-
-const subtitulo = {
-  maxWidth: "760px",
-  margin: 0,
-  color: "#68736c",
-  fontSize: "17px",
-  lineHeight: 1.6,
-};
-
-const accionesSuperior = {
-  display: "flex",
-  gap: "10px",
-  flexWrap: "wrap",
-};
-
-const botonSecundario = {
-  minHeight: "44px",
-  padding: "10px 16px",
-  border: "1px solid #cfd9d3",
-  borderRadius: "10px",
-  background: "#ffffff",
-  color: "#243129",
-  fontWeight: "800",
-  cursor: "pointer",
-};
-
-const botonActualizar = {
-  minHeight: "44px",
-  padding: "10px 18px",
-  border: "none",
-  borderRadius: "10px",
-  background: "#16834f",
-  color: "#ffffff",
-  fontWeight: "800",
-  cursor: "pointer",
-};
-
-const alertaError = {
-  maxWidth: "1500px",
-  margin: "0 auto 20px",
-  padding: "14px 18px",
-  border: "1px solid #fecaca",
-  borderRadius: "12px",
-  background: "#fef2f2",
-  color: "#991b1b",
-  fontWeight: "700",
-};
-
-const panelFiltros = {
-  maxWidth: "1500px",
-  margin: "0 auto 24px",
-  padding: "20px",
-  display: "grid",
-  gridTemplateColumns:
-    "repeat(3, minmax(160px, 1fr)) auto",
-  gap: "14px",
-  alignItems: "end",
-  border: "1px solid #dde5e0",
-  borderRadius: "18px",
-  background: "#ffffff",
-  boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
-};
-
-const campoFiltro = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "7px",
-};
-
-const labelFiltro = {
-  color: "#4b5850",
-  fontSize: "13px",
-  fontWeight: "800",
-};
-
-const inputFiltro = {
-  width: "100%",
-  minHeight: "44px",
-  padding: "10px 12px",
-  border: "1px solid #cfd9d3",
-  borderRadius: "10px",
-  background: "#ffffff",
-  color: "#17211c",
-  fontSize: "14px",
-  outline: "none",
-};
-
-const botonesFiltro = {
-  display: "flex",
-  gap: "8px",
-  flexWrap: "wrap",
-};
-
-const botonLimpiar = {
-  minHeight: "44px",
-  padding: "10px 15px",
-  border: "1px solid #cfd9d3",
-  borderRadius: "10px",
-  background: "#ffffff",
-  color: "#334139",
-  fontWeight: "800",
-  cursor: "pointer",
-};
-
-const botonExportar = {
-  minHeight: "44px",
-  padding: "10px 15px",
-  border: "none",
-  borderRadius: "10px",
-  background: "#0f766e",
-  color: "#ffffff",
-  fontWeight: "800",
-  cursor: "pointer",
-};
-
-const botonPDF = {
-  minHeight: "44px",
-  padding: "10px 15px",
-  border: "none",
-  borderRadius: "10px",
-  background: "#111827",
-  color: "#ffffff",
-  fontWeight: "800",
-  cursor: "pointer",
-};
-
-const gridIndicadores = {
-  maxWidth: "1500px",
-  margin: "0 auto 24px",
-  display: "grid",
-  gridTemplateColumns:
-    "repeat(auto-fit, minmax(230px, 1fr))",
-  gap: "16px",
-};
-
-const tarjetaIndicador = {
-  minHeight: "142px",
-  padding: "20px",
-  display: "grid",
-  gridTemplateColumns: "52px 1fr",
-  gap: "14px",
-  alignItems: "start",
-  border: "1px solid #dde5e0",
-  borderRadius: "18px",
-  background: "#ffffff",
-  boxShadow: "0 10px 26px rgba(15,23,42,0.05)",
-};
-
-const iconoIndicador = {
-  width: "52px",
-  height: "52px",
-  display: "grid",
-  placeItems: "center",
-  borderRadius: "14px",
-  background: "#eaf7f0",
-  fontSize: "25px",
-};
-
-const tituloIndicador = {
-  margin: "0 0 8px",
-  color: "#68736c",
-  fontSize: "13px",
-  fontWeight: "800",
-};
-
-const valorIndicador = {
-  display: "block",
-  marginBottom: "7px",
-  fontSize: "25px",
-  lineHeight: 1.1,
-};
-
-const detalleIndicador = {
-  color: "#7d8881",
-  fontSize: "12px",
-};
-
-const gridResumenes = {
-  maxWidth: "1500px",
-  margin: "0 auto 24px",
-  display: "grid",
-  gridTemplateColumns:
-    "repeat(auto-fit, minmax(310px, 1fr))",
-  gap: "18px",
-};
-
-const panelResumen = {
-  padding: "24px",
-  border: "1px solid #dde5e0",
-  borderRadius: "18px",
-  background: "#ffffff",
-  boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
-};
-
-const cabeceraPanel = {
-  marginBottom: "18px",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: "15px",
-};
-
-const miniEtiqueta = {
-  display: "block",
-  marginBottom: "6px",
-  color: "#16834f",
-  fontSize: "11px",
-  fontWeight: "900",
-  letterSpacing: "1.3px",
-};
-
-const tituloPanel = {
-  margin: 0,
-  fontSize: "22px",
-};
-
-const iconoPanel = {
-  fontSize: "30px",
-};
-
-const filaResumen = {
-  padding: "13px 0",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "16px",
-  borderBottom: "1px solid #eef2ef",
-};
-
-const nombreResumen = {
-  color: "#5f6b63",
-  fontSize: "14px",
-};
-
-const valorResumen = {
-  color: "#17211c",
-  fontSize: "15px",
-};
-
-const panelTabla = {
-  maxWidth: "1500px",
-  margin: "0 auto",
-  padding: "24px",
-  border: "1px solid #dde5e0",
-  borderRadius: "18px",
-  background: "#ffffff",
-  boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
-};
-
-const cabeceraTabla = {
-  marginBottom: "18px",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "20px",
-};
-
-const contadorTabla = {
-  padding: "7px 11px",
-  borderRadius: "999px",
-  background: "#edf8f1",
-  color: "#16834f",
-  fontSize: "12px",
-  fontWeight: "800",
-};
-
-const contenedorTabla = {
-  width: "100%",
-  overflowX: "auto",
-};
-
-const tabla = {
-  width: "100%",
-  borderCollapse: "collapse",
-  minWidth: "720px",
-};
-
-const th = {
-  padding: "12px",
-  textAlign: "left",
-  borderBottom: "1px solid #dfe7e2",
-  color: "#536058",
-  fontSize: "12px",
-  textTransform: "uppercase",
-  letterSpacing: "0.7px",
-};
-
-const thDerecha = {
-  ...th,
-  textAlign: "right",
-};
-
-const td = {
-  padding: "14px 12px",
-  borderBottom: "1px solid #eef2ef",
-  color: "#435047",
-  fontSize: "14px",
-};
-
-const tdDerecha = {
-  ...td,
-  textAlign: "right",
-  color: "#17211c",
-  fontWeight: "800",
-};
-
-const badgeTipo = {
-  display: "inline-block",
-  padding: "6px 9px",
-  borderRadius: "999px",
-  background: "#eef8f2",
-  color: "#16834f",
-  fontSize: "12px",
-  fontWeight: "800",
-};
-
-const sinDatos = {
-  padding: "36px 15px",
-  textAlign: "center",
-  color: "#7b867f",
-  fontSize: "14px",
-};
-
