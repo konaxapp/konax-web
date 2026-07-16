@@ -806,15 +806,18 @@ const s = {
     overflowY: "auto",
   },
   brand: {
-    padding: "4px 10px 22px",
+    minHeight: 88,
+    display: "flex",
+    alignItems: "center",
+    padding: "8px 10px 22px",
     borderBottom: "1px solid rgba(255,255,255,.08)",
   },
   logo: {
-    width: 145,
-    height: 54,
+    width: 170,
+    height: 62,
     objectFit: "contain",
     objectPosition: "left center",
-    filter: "brightness(0) invert(1)",
+    display: "block",
   },
   nav: {
     display: "grid",
