@@ -16,17 +16,13 @@ export default function Dashboard() {
   const [usuarioNombre, setUsuarioNombre] = useState("");
   const [permisosUsuario, setPermisosUsuario] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
 
   useEffect(() => {
     cargarDashboard();
   }, []);
 
   function limpiarSesionYSalir(mensaje = "") {
-    if (mensaje) {
-      alert(mensaje);
-    }
-
+    if (mensaje) alert(mensaje);
     localStorage.clear();
     router.replace("/login");
   }
@@ -265,9 +261,7 @@ export default function Dashboard() {
       return basePlan;
     }
 
-    if (!data) {
-      return basePlan;
-    }
+    if (!data) return basePlan;
 
     const mapaTabla = {
       dashboard: true,
@@ -327,8 +321,6 @@ export default function Dashboard() {
   }
 
   async function cargarPermisosUsuario(empresaId, usuarioId) {
-    if (!usuarioId) return [];
-
     const { data, error } = await supabase
       .from("permisos_usuarios_empresa")
       .select("permiso, activo")
@@ -341,9 +333,7 @@ export default function Dashboard() {
       return [];
     }
 
-    return (data || [])
-      .map((item) => item.permiso)
-      .filter(Boolean);
+    return (data || []).map((item) => item.permiso).filter(Boolean);
   }
 
   function esAdministrador() {
@@ -373,985 +363,774 @@ export default function Dashboard() {
     return tienePermiso(codigoPermiso);
   }
 
+  function abrirModulo(ruta) {
+    router.push(ruta);
+  }
+
   async function cerrarSesion() {
     localStorage.clear();
     router.replace("/login");
   }
 
-  function abrirModulo(ruta) {
-    setMenuMovilAbierto(false);
-    router.push(ruta);
-  }
-
-  const tarjetas = useMemo(
+  const modulosMenu = useMemo(
     () => [
-      {
-        nombre: "Clientes",
-        descripcion: "Consulta y administra la base de clientes.",
-        ruta: "/clientes",
-        activo: puedeVer("clientes"),
-        icono: "👥",
-        grupo: "Clientes y crédito",
-      },
-      {
-        nombre: "Vista Cliente",
-        descripcion: "Revisa el perfil completo y su historial.",
-        ruta: "/vista-cliente",
-        activo: puedeVer("vista_cliente"),
-        icono: "🧾",
-        grupo: "Clientes y crédito",
-      },
-      {
-        nombre: "Créditos",
-        descripcion: "Gestiona ventas financiadas y saldos.",
-        ruta: "/ventas-credito",
-        activo: puedeVer("creditos"),
-        icono: "💳",
-        grupo: "Clientes y crédito",
-      },
-      {
-        nombre: "Caja",
-        descripcion: "Registra ingresos y movimientos diarios.",
-        ruta: "/caja",
-        activo: puedeVer("caja"),
-        icono: "💵",
-        grupo: "Caja y finanzas",
-      },
-      {
-        nombre: "Control Caja",
-        descripcion: "Supervisa aperturas, cierres y diferencias.",
-        ruta: "/control-caja",
-        activo: puedeVer("control_caja"),
-        icono: "🏦",
-        grupo: "Caja y finanzas",
-      },
-      {
-        nombre: "Registrar Abonos",
-        descripcion: "Aplica pagos y actualiza saldos de crédito.",
-        ruta: "/abonos",
-        activo: puedeVer("abonos"),
-        icono: "💰",
-        grupo: "Caja y finanzas",
-      },
-      {
-        nombre: "Cobranza",
-        descripcion: "Consulta cuentas, estados y seguimiento.",
-        ruta: "/cobranza",
-        activo: puedeVer("cobranza"),
-        icono: "📞",
-        grupo: "Cobranza",
-      },
-      {
-        nombre: "Centro de Cobranza",
-        descripcion: "Analiza cartera, mora y recuperación.",
-        ruta: "/dashboard-cobranza",
-        activo: puedeVer("dashboard_cobros"),
-        icono: "📊",
-        grupo: "Cobranza",
-      },
-      {
-        nombre: "Mi cartera de cobro",
-        descripcion: "Gestiona las cuentas asignadas al cobrador.",
-        ruta: "/gestor-cobros",
-        activo: puedeVer("gestor_cobros"),
-        icono: "🧑‍💼",
-        grupo: "Cobranza",
-      },
-      {
-        nombre: "Inventario",
-        descripcion: "Controla productos, existencias y alertas.",
-        ruta: "/inventario",
-        activo: puedeVer("inventario"),
-        icono: "📦",
-        grupo: "Ventas e inventario",
-      },
-      {
-        nombre: "Movimientos Inventario",
-        descripcion: "Registra entradas, salidas y transferencias.",
-        ruta: "/movimientos-inventario",
-        activo: puedeVer("movimientos_inventario"),
-        icono: "🔄",
-        grupo: "Ventas e inventario",
-      },
-      {
-        nombre: "Ventas",
-        descripcion: "Registra y consulta operaciones de venta.",
-        ruta: "/ventas",
-        activo: puedeVer("ventas"),
-        icono: "🛒",
-        grupo: "Ventas e inventario",
-      },
-      {
-        nombre: "Centro de Ventas",
-        descripcion: "Mide desempeño comercial y resultados.",
-        ruta: "/dashboard-ventas",
-        activo: puedeVer("dashboard_ventas"),
-        icono: "📈",
-        grupo: "Ventas e inventario",
-      },
-      {
-        nombre: "Gastos",
-        descripcion: "Controla egresos y categorías de gasto.",
-        ruta: "/gastos",
-        activo: puedeVer("gastos"),
-        icono: "🧮",
-        grupo: "Caja y finanzas",
-      },
-      {
-        nombre: "Suscripciones",
-        descripcion: "Administra clientes y cobros recurrentes.",
-        ruta: "/suscripciones",
-        activo: puedeVer("suscripciones"),
-        icono: "🔁",
-        grupo: "Operación",
-      },
-      {
-        nombre: "Recargos",
-        descripcion: "Configura cargos adicionales y mora.",
-        ruta: "/recargos",
-        activo: puedeVer("recargos"),
-        icono: "⚠️",
-        grupo: "Operación",
-      },
-      {
-        nombre: "Reportes",
-        descripcion: "Consulta indicadores, cartera, caja y ventas.",
-        ruta: "/reportes",
-        activo: puedeVer("reportes"),
-        icono: "📋",
-        grupo: "Análisis",
-        destacado: true,
-      },
+      { nombre: "Clientes", ruta: "/clientes", activo: puedeVer("clientes"), icono: "users" },
+      { nombre: "Vista Cliente", ruta: "/vista-cliente", activo: puedeVer("vista_cliente"), icono: "file" },
+      { nombre: "Créditos", ruta: "/ventas-credito", activo: puedeVer("creditos"), icono: "card" },
+      { nombre: "Caja", ruta: "/caja", activo: puedeVer("caja"), icono: "cash" },
+      { nombre: "Cobranza", ruta: "/cobranza", activo: puedeVer("cobranza"), icono: "phone" },
+      { nombre: "Centro de Cobranza", ruta: "/dashboard-cobranza", activo: puedeVer("dashboard_cobros"), icono: "chart" },
+      { nombre: "Mi cartera de cobro", ruta: "/gestor-cobros", activo: puedeVer("gestor_cobros"), icono: "briefcase" },
+      { nombre: "Registrar Abonos", ruta: "/abonos", activo: puedeVer("abonos"), icono: "payment" },
+      { nombre: "Control Caja", ruta: "/control-caja", activo: puedeVer("control_caja"), icono: "bank" },
+      { nombre: "Inventario", ruta: "/inventario", activo: puedeVer("inventario"), icono: "box" },
+      { nombre: "Movimientos Inventario", ruta: "/movimientos-inventario", activo: puedeVer("movimientos_inventario"), icono: "swap" },
+      { nombre: "Ventas", ruta: "/ventas", activo: puedeVer("ventas"), icono: "cart" },
+      { nombre: "Centro de Ventas", ruta: "/dashboard-ventas", activo: puedeVer("dashboard_ventas"), icono: "trend" },
+      { nombre: "Gastos", ruta: "/gastos", activo: puedeVer("gastos"), icono: "receipt" },
+      { nombre: "Suscripciones", ruta: "/suscripciones", activo: puedeVer("suscripciones"), icono: "repeat" },
+      { nombre: "Recargos", ruta: "/recargos", activo: puedeVer("recargos"), icono: "alert" },
+      { nombre: "Reportes", ruta: "/reportes", activo: puedeVer("reportes"), icono: "report" },
       {
         nombre: "Usuarios y Roles",
-        descripcion: "Administra accesos, roles y permisos.",
         ruta: "/usuarios",
         activo: esAdministrador() && moduloActivo("usuarios"),
-        icono: "🔐",
-        grupo: "Administración",
+        icono: "lock",
       },
       {
         nombre: "Configuración",
-        descripcion: "Gestiona los parámetros de la empresa.",
         ruta: "/admin-configuracion",
         activo: esAdministrador() && moduloActivo("configuracion"),
-        icono: "⚙️",
-        grupo: "Administración",
+        icono: "settings",
       },
     ],
     [modulos, permisosUsuario, usuarioRol]
   );
 
-  const tarjetasActivas = tarjetas.filter((item) => item.activo);
+  const activos = modulosMenu.filter((item) => item.activo);
 
-  const grupos = useMemo(() => {
-    const orden = [
-      "Clientes y crédito",
-      "Cobranza",
-      "Caja y finanzas",
-      "Ventas e inventario",
-      "Análisis",
-      "Operación",
-      "Administración",
-    ];
-
-    return orden
-      .map((nombre) => ({
-        nombre,
-        items: tarjetasActivas.filter((item) => item.grupo === nombre),
-      }))
-      .filter((grupo) => grupo.items.length > 0);
-  }, [tarjetasActivas]);
+  const atajos = [
+    activos.find((item) => item.nombre === "Clientes"),
+    activos.find((item) => item.nombre === "Créditos"),
+    activos.find((item) => item.nombre === "Cobranza"),
+    activos.find((item) => item.nombre === "Caja"),
+    activos.find((item) => item.nombre === "Reportes"),
+  ].filter(Boolean);
 
   if (cargando) {
     return (
-      <div style={styles.loadingPage}>
-        <div style={styles.loadingCard}>
-          <img src="/konax-logo.png" alt="KONAX" style={styles.loadingLogo} />
-          <strong style={styles.loadingTitle}>Cargando KONAX</strong>
-          <p style={styles.loadingText}>
-            Validando empresa, plan y permisos del usuario.
-          </p>
-        </div>
+      <div style={s.loading}>
+        <img src="/konax-logo.png" alt="KONAX" style={s.loadingLogo} />
+        <strong style={s.loadingTitle}>Preparando tu espacio de trabajo</strong>
+        <span style={s.loadingText}>Validando empresa, plan y permisos.</span>
       </div>
     );
   }
 
   return (
-    <div style={styles.layout}>
-      <button
-        type="button"
-        onClick={() => setMenuMovilAbierto(!menuMovilAbierto)}
-        style={styles.mobileMenuButton}
-        aria-label="Abrir menú"
-      >
-        ☰
-      </button>
-
-      {menuMovilAbierto && (
-        <button
-          type="button"
-          aria-label="Cerrar menú"
-          onClick={() => setMenuMovilAbierto(false)}
-          style={styles.mobileOverlay}
-        />
-      )}
-
-      <aside
-        style={{
-          ...styles.sidebar,
-          ...(menuMovilAbierto ? styles.sidebarOpen : {}),
-        }}
-      >
-        <div style={styles.brandBox}>
-          <div style={styles.logoBox}>
-            <img src="/konax-logo.png" alt="KONAX" style={styles.logo} />
-          </div>
-
-          <div>
-            <h2 style={styles.brandTitle}>KONAX</h2>
-            <p style={styles.brandSub}>Gestión empresarial</p>
-          </div>
+    <div style={s.layout}>
+      <aside style={s.sidebar}>
+        <div style={s.brand}>
+          <img src="/konax-logo.png" alt="KONAX" style={s.logo} />
         </div>
 
-        <div style={styles.companyBox}>
-          <span style={styles.companyCaption}>EMPRESA ACTIVA</span>
-          <strong style={styles.companyName}>{empresaNombre}</strong>
-          <div style={styles.companyMetaRow}>
-            <span>{usuarioRol || "Sin rol"}</span>
-            <span style={styles.statusDot}>
-              <span style={styles.statusCircle}></span>
-              {estadoPlan || "Activo"}
-            </span>
-          </div>
-        </div>
-
-        <div style={styles.sidebarLabel}>NAVEGACIÓN</div>
-
-        <nav style={styles.menu}>
-          {tarjetasActivas.map((item) => (
+        <nav style={s.nav}>
+          {activos.map((item) => (
             <button
               key={item.nombre}
               type="button"
               onClick={() => abrirModulo(item.ruta)}
-              style={{
-                ...styles.menuItem,
-                ...(item.destacado ? styles.menuItemFeatured : {}),
-              }}
+              style={s.navItem}
             >
-              <span style={styles.menuIcon}>{item.icono}</span>
-              <span style={styles.menuText}>{item.nombre}</span>
-              <span style={styles.menuArrow}>›</span>
+              <Icon name={item.icono} size={19} />
+              <span>{item.nombre}</span>
             </button>
           ))}
         </nav>
 
-        <div style={styles.sidebarFooter}>
-          <div style={styles.userMiniCard}>
-            <div style={styles.userAvatar}>
-              {String(usuarioNombre || empresaNombre || "K")
-                .charAt(0)
-                .toUpperCase()}
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <strong style={styles.userName}>
-                {usuarioNombre || "Usuario KONAX"}
-              </strong>
-              <span style={styles.userRole}>{usuarioRol || "Sin rol"}</span>
-            </div>
-          </div>
-
-          <button type="button" onClick={cerrarSesion} style={styles.logoutButton}>
-            Cerrar sesión
-          </button>
-        </div>
+        <button type="button" onClick={cerrarSesion} style={s.logout}>
+          <Icon name="logout" size={18} />
+          Cerrar sesión
+        </button>
       </aside>
 
-      <main style={styles.content}>
-        <section style={styles.hero}>
-          <div style={styles.heroGlow}></div>
+      <main style={s.main}>
+        <header style={s.topbar}>
+          <div>
+            <span style={s.eyebrow}>PANEL EMPRESARIAL</span>
+            <h1 style={s.pageTitle}>{empresaNombre}</h1>
+          </div>
 
-          <div style={styles.heroContent}>
+          <div style={s.userBox}>
+            <div style={s.avatar}>
+              {String(usuarioNombre || "U").charAt(0).toUpperCase()}
+            </div>
             <div>
-              <span style={styles.heroBadge}>CENTRO DE OPERACIONES</span>
-              <h1 style={styles.heroTitle}>{empresaNombre}</h1>
-              <p style={styles.heroText}>
-                Administra clientes, créditos, cobros y caja desde una sola
-                plataforma.
-              </p>
+              <strong style={s.userName}>{usuarioNombre || "Usuario"}</strong>
+              <span style={s.userRole}>{usuarioRol || "Sin rol"}</span>
             </div>
+          </div>
+        </header>
 
-            <div style={styles.heroStatusCard}>
-              <span style={styles.heroStatusLabel}>Plan empresarial</span>
-              <strong style={styles.heroPlan}>{planNombre}</strong>
-              <span style={styles.heroStatus}>
-                <span style={styles.statusCircle}></span>
-                {estadoPlan || "Activo"}
-              </span>
+        <section style={s.hero}>
+          <div style={s.heroMain}>
+            <span style={s.heroTag}>CENTRO DE OPERACIONES</span>
+            <h2 style={s.heroTitle}>
+              Todo tu negocio, claro y bajo control.
+            </h2>
+            <p style={s.heroText}>
+              Accede a las funciones principales y mantén organizada la operación
+              diaria de {tipoNegocio || "tu empresa"}.
+            </p>
+
+            <div style={s.heroActions}>
+              {puedeVer("reportes") && (
+                <button
+                  type="button"
+                  onClick={() => abrirModulo("/reportes")}
+                  style={s.primaryButton}
+                >
+                  Ver reportes
+                  <Icon name="arrow" size={17} />
+                </button>
+              )}
+
+              {puedeVer("clientes") && (
+                <button
+                  type="button"
+                  onClick={() => abrirModulo("/clientes")}
+                  style={s.secondaryButton}
+                >
+                  Abrir clientes
+                </button>
+              )}
             </div>
+          </div>
+
+          <div style={s.planPanel}>
+            <span style={s.planLabel}>PLAN ACTUAL</span>
+            <strong style={s.planName}>{planNombre}</strong>
+            <div style={s.planStatus}>
+              <span style={s.greenDot}></span>
+              {estadoPlan || "Activo"}
+            </div>
+            <div style={s.planDivider}></div>
+            <span style={s.planSmall}>{activos.length} funciones habilitadas</span>
           </div>
         </section>
 
-        <section style={styles.metricsGrid}>
-          <MetricCard
-            label="Módulos disponibles"
-            value={tarjetasActivas.length}
-            detail="Funciones activas para este usuario"
-            icon="◫"
-          />
-          <MetricCard
-            label="Plan contratado"
-            value={planNombre}
-            detail="Configuración comercial vigente"
-            icon="◆"
-            compact
-          />
-          <MetricCard
-            label="Tipo de negocio"
-            value={tipoNegocio || "No definido"}
-            detail="Segmento configurado para la empresa"
-            icon="⌂"
-            compact
-          />
-          <MetricCard
-            label="Rol de acceso"
-            value={usuarioRol || "Sin rol"}
-            detail="Nivel de permisos dentro del sistema"
-            icon="●"
-            compact
-          />
-        </section>
-
-        <section style={styles.quickSection}>
-          <div style={styles.sectionHeader}>
+        <section style={s.section}>
+          <div style={s.sectionHeader}>
             <div>
-              <span style={styles.sectionEyebrow}>ACCESOS PRINCIPALES</span>
-              <h2 style={styles.sectionTitle}>Gestiona tu operación</h2>
-              <p style={styles.sectionText}>
-                Ingresa directamente a las funciones habilitadas para tu plan.
-              </p>
+              <span style={s.sectionEyebrow}>ATAJOS</span>
+              <h3 style={s.sectionTitle}>Acciones frecuentes</h3>
             </div>
-
-            <button
-              type="button"
-              onClick={() => abrirModulo("/reportes")}
-              style={styles.reportButton}
-              disabled={!puedeVer("reportes")}
-            >
-              Ver reportes →
-            </button>
+            <span style={s.sectionHint}>Accesos rápidos sin repetir todo el menú</span>
           </div>
 
-          {tarjetasActivas.length === 0 ? (
-            <div style={styles.emptyState}>
-              Este usuario no tiene funciones permitidas. Revise sus permisos.
+          <div style={s.quickGrid}>
+            {atajos.map((item) => (
+              <button
+                key={item.nombre}
+                type="button"
+                onClick={() => abrirModulo(item.ruta)}
+                style={s.quickCard}
+              >
+                <div style={s.quickIcon}>
+                  <Icon name={item.icono} size={22} />
+                </div>
+                <div style={s.quickTextBox}>
+                  <strong style={s.quickTitle}>{item.nombre}</strong>
+                  <span style={s.quickText}>Abrir módulo</span>
+                </div>
+                <Icon name="arrow" size={18} />
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section style={s.bottomGrid}>
+          <article style={s.infoCard}>
+            <div style={s.infoIcon}>
+              <Icon name="shield" size={23} />
             </div>
-          ) : (
-            grupos.map((grupo) => (
-              <div key={grupo.nombre} style={styles.groupBlock}>
-                <div style={styles.groupHeader}>
-                  <h3 style={styles.groupTitle}>{grupo.nombre}</h3>
-                  <span style={styles.groupCount}>
-                    {grupo.items.length}{" "}
-                    {grupo.items.length === 1 ? "módulo" : "módulos"}
-                  </span>
-                </div>
+            <div>
+              <span style={s.infoLabel}>ACCESO ACTUAL</span>
+              <h3 style={s.infoTitle}>{usuarioRol || "Sin rol"}</h3>
+              <p style={s.infoText}>
+                Tus opciones se muestran según el plan contratado y los permisos asignados.
+              </p>
+            </div>
+          </article>
 
-                <div style={styles.moduleGrid}>
-                  {grupo.items.map((item) => (
-                    <button
-                      key={item.nombre}
-                      type="button"
-                      onClick={() => abrirModulo(item.ruta)}
-                      style={{
-                        ...styles.moduleCard,
-                        ...(item.destacado ? styles.moduleCardFeatured : {}),
-                      }}
-                    >
-                      <div
-                        style={{
-                          ...styles.moduleIcon,
-                          ...(item.destacado ? styles.moduleIconFeatured : {}),
-                        }}
-                      >
-                        {item.icono}
-                      </div>
+          <article style={s.infoCard}>
+            <div style={s.infoIcon}>
+              <Icon name="building" size={23} />
+            </div>
+            <div>
+              <span style={s.infoLabel}>TIPO DE NEGOCIO</span>
+              <h3 style={s.infoTitle}>{tipoNegocio || "No definido"}</h3>
+              <p style={s.infoText}>
+                La configuración del sistema está adaptada al perfil de esta empresa.
+              </p>
+            </div>
+          </article>
 
-                      <div style={styles.moduleBody}>
-                        <div style={styles.moduleTopRow}>
-                          <h4 style={styles.moduleTitle}>{item.nombre}</h4>
-                          <span style={styles.moduleArrow}>↗</span>
-                        </div>
-
-                        <p style={styles.moduleDescription}>
-                          {item.descripcion}
-                        </p>
-
-                        <span style={styles.moduleLink}>Abrir módulo</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
+          <article style={s.infoCard}>
+            <div style={s.infoIcon}>
+              <Icon name="grid" size={23} />
+            </div>
+            <div>
+              <span style={s.infoLabel}>FUNCIONES ACTIVAS</span>
+              <h3 style={s.infoTitle}>{activos.length}</h3>
+              <p style={s.infoText}>
+                Módulos disponibles para trabajar desde esta cuenta.
+              </p>
+            </div>
+          </article>
         </section>
       </main>
     </div>
   );
 }
 
-function MetricCard({ label, value, detail, icon, compact = false }) {
-  return (
-    <article style={styles.metricCard}>
-      <div style={styles.metricIcon}>{icon}</div>
+function Icon({ name, size = 20 }) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": "true",
+  };
 
-      <div>
-        <p style={styles.metricLabel}>{label}</p>
-        <strong
-          style={{
-            ...styles.metricValue,
-            ...(compact ? styles.metricValueCompact : {}),
-          }}
-        >
-          {value}
-        </strong>
-        <span style={styles.metricDetail}>{detail}</span>
-      </div>
-    </article>
-  );
+  const paths = {
+    users: (
+      <>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </>
+    ),
+    file: (
+      <>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <path d="M14 2v6h6" />
+        <path d="M8 13h8M8 17h6" />
+      </>
+    ),
+    card: (
+      <>
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <path d="M2 10h20" />
+      </>
+    ),
+    cash: (
+      <>
+        <rect x="2" y="6" width="20" height="12" rx="2" />
+        <circle cx="12" cy="12" r="2" />
+        <path d="M6 10h.01M18 14h.01" />
+      </>
+    ),
+    phone: (
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.63a2 2 0 0 1-.45 2.11L8 9.73a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.85.29 1.73.5 2.63.62A2 2 0 0 1 22 16.92z" />
+    ),
+    chart: (
+      <>
+        <path d="M3 3v18h18" />
+        <path d="M7 16l4-5 4 3 4-7" />
+      </>
+    ),
+    briefcase: (
+      <>
+        <rect x="3" y="7" width="18" height="13" rx="2" />
+        <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        <path d="M3 12h18" />
+      </>
+    ),
+    payment: (
+      <>
+        <rect x="2" y="4" width="20" height="16" rx="2" />
+        <path d="M2 9h20" />
+        <path d="M7 15h4" />
+      </>
+    ),
+    bank: (
+      <>
+        <path d="M3 10h18" />
+        <path d="M5 10v8M9 10v8M15 10v8M19 10v8" />
+        <path d="M2 18h20M12 2l10 5H2z" />
+      </>
+    ),
+    box: (
+      <>
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+        <path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12" />
+      </>
+    ),
+    swap: (
+      <>
+        <path d="M7 7h11l-3-3M17 17H6l3 3" />
+      </>
+    ),
+    cart: (
+      <>
+        <circle cx="9" cy="20" r="1" />
+        <circle cx="19" cy="20" r="1" />
+        <path d="M3 4h2l2.7 11.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 8H6" />
+      </>
+    ),
+    trend: (
+      <>
+        <path d="M3 17l6-6 4 4 8-8" />
+        <path d="M14 7h7v7" />
+      </>
+    ),
+    receipt: (
+      <>
+        <path d="M6 2h12v20l-3-2-3 2-3-2-3 2z" />
+        <path d="M9 7h6M9 11h6M9 15h4" />
+      </>
+    ),
+    repeat: (
+      <>
+        <path d="M17 1l4 4-4 4" />
+        <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+        <path d="M7 23l-4-4 4-4" />
+        <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+      </>
+    ),
+    alert: (
+      <>
+        <path d="M10.3 2.8L1.8 17a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 2.8a2 2 0 0 0-3.4 0z" />
+        <path d="M12 9v4M12 17h.01" />
+      </>
+    ),
+    report: (
+      <>
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+        <path d="M9 7h7M9 11h7M9 15h4" />
+      </>
+    ),
+    lock: (
+      <>
+        <rect x="3" y="11" width="18" height="10" rx="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </>
+    ),
+    settings: (
+      <>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.38.28.7.63.6 1.1V10h1v4h-.09a1.7 1.7 0 0 0-1.51 1z" />
+      </>
+    ),
+    logout: (
+      <>
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+        <path d="M16 17l5-5-5-5M21 12H9" />
+      </>
+    ),
+    arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
+    shield: (
+      <>
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        <path d="M9 12l2 2 4-4" />
+      </>
+    ),
+    building: (
+      <>
+        <path d="M3 21h18M6 21V3h12v18M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2" />
+      </>
+    ),
+    grid: (
+      <>
+        <rect x="3" y="3" width="7" height="7" />
+        <rect x="14" y="3" width="7" height="7" />
+        <rect x="3" y="14" width="7" height="7" />
+        <rect x="14" y="14" width="7" height="7" />
+      </>
+    ),
+  };
+
+  return <svg {...common}>{paths[name] || paths.grid}</svg>;
 }
 
-const styles = {
+const s = {
   layout: {
     minHeight: "100vh",
     display: "flex",
-    background: "#f4f7f5",
-    fontFamily: "Arial, sans-serif",
-    color: "#18221c",
+    background: "#f3f6f4",
+    color: "#142019",
+    fontFamily:
+      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   },
-  loadingPage: {
+  loading: {
     minHeight: "100vh",
-    display: "grid",
-    placeItems: "center",
-    padding: 24,
-    background:
-      "radial-gradient(circle at top, rgba(24,131,79,0.12), transparent 40%), #f4f7f5",
-    fontFamily: "Arial, sans-serif",
-  },
-  loadingCard: {
-    width: "100%",
-    maxWidth: 390,
-    padding: "34px 30px",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    border: "1px solid #dce5df",
-    borderRadius: 24,
-    background: "#ffffff",
-    boxShadow: "0 24px 60px rgba(15,23,42,0.10)",
-    textAlign: "center",
+    justifyContent: "center",
+    gap: 10,
+    background: "#f3f6f4",
+    fontFamily:
+      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   },
   loadingLogo: {
-    width: 185,
-    maxWidth: "100%",
-    marginBottom: 18,
-    objectFit: "contain",
+    width: 210,
+    marginBottom: 10,
   },
   loadingTitle: {
-    color: "#132019",
     fontSize: 22,
   },
   loadingText: {
-    margin: "8px 0 0",
-    color: "#6f7b73",
+    color: "#718078",
     fontSize: 14,
-    lineHeight: 1.55,
   },
   sidebar: {
-    width: 292,
-    minWidth: 292,
+    width: 270,
+    minWidth: 270,
     height: "100vh",
     position: "sticky",
     top: 0,
-    zIndex: 50,
     display: "flex",
     flexDirection: "column",
-    padding: "22px 18px",
+    padding: "22px 16px",
     boxSizing: "border-box",
-    overflowY: "auto",
-    background:
-      "linear-gradient(180deg, #07110d 0%, #0b1f17 52%, #0f5132 100%)",
+    background: "#0a1710",
     color: "#ffffff",
-    boxShadow: "12px 0 36px rgba(5,18,12,0.16)",
+    overflowY: "auto",
   },
-  sidebarOpen: {
-    transform: "translateX(0)",
-  },
-  brandBox: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 20,
-  },
-  logoBox: {
-    width: 58,
-    height: 48,
-    display: "grid",
-    placeItems: "center",
-    padding: 5,
-    boxSizing: "border-box",
-    borderRadius: 14,
-    background: "#ffffff",
-    boxShadow: "0 8px 20px rgba(0,0,0,0.18)",
+  brand: {
+    padding: "4px 10px 22px",
+    borderBottom: "1px solid rgba(255,255,255,.08)",
   },
   logo: {
-    width: "100%",
-    height: "100%",
+    width: 145,
+    height: 54,
     objectFit: "contain",
+    objectPosition: "left center",
+    filter: "brightness(0) invert(1)",
   },
-  brandTitle: {
-    margin: 0,
-    fontSize: 23,
-    letterSpacing: 0.5,
-  },
-  brandSub: {
-    margin: "4px 0 0",
-    color: "#9de4be",
-    fontSize: 12,
-  },
-  companyBox: {
-    marginBottom: 20,
-    padding: 15,
-    border: "1px solid rgba(255,255,255,0.10)",
-    borderRadius: 17,
-    background: "rgba(255,255,255,0.07)",
-    backdropFilter: "blur(8px)",
-  },
-  companyCaption: {
-    display: "block",
-    marginBottom: 6,
-    color: "#8fd9b0",
-    fontSize: 10,
-    fontWeight: 900,
-    letterSpacing: 1.3,
-  },
-  companyName: {
-    display: "block",
-    marginBottom: 10,
-    fontSize: 16,
-    lineHeight: 1.3,
-  },
-  companyMetaRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 8,
-    color: "#d8eee1",
-    fontSize: 12,
-  },
-  statusDot: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-  },
-  statusCircle: {
-    width: 8,
-    height: 8,
-    display: "inline-block",
-    borderRadius: "50%",
-    background: "#46d98d",
-    boxShadow: "0 0 0 4px rgba(70,217,141,0.12)",
-  },
-  sidebarLabel: {
-    margin: "0 6px 10px",
-    color: "#79b796",
-    fontSize: 10,
-    fontWeight: 900,
-    letterSpacing: 1.35,
-  },
-  menu: {
+  nav: {
     display: "grid",
-    gap: 7,
-  },
-  menuItem: {
-    width: "100%",
-    minHeight: 48,
-    display: "grid",
-    gridTemplateColumns: "28px 1fr auto",
-    alignItems: "center",
-    gap: 9,
-    padding: "10px 12px",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 13,
-    background: "rgba(255,255,255,0.055)",
-    color: "#f4fff8",
-    cursor: "pointer",
-    textAlign: "left",
-  },
-  menuItemFeatured: {
-    border: "1px solid rgba(111,230,166,0.42)",
-    background:
-      "linear-gradient(135deg, rgba(35,142,88,0.58), rgba(20,93,59,0.72))",
-  },
-  menuIcon: {
-    fontSize: 18,
-    textAlign: "center",
-  },
-  menuText: {
-    fontSize: 13,
-    fontWeight: 800,
-  },
-  menuArrow: {
-    color: "#7cc69e",
-    fontSize: 21,
-  },
-  sidebarFooter: {
-    marginTop: "auto",
+    gap: 5,
     paddingTop: 18,
   },
-  userMiniCard: {
+  navItem: {
+    width: "100%",
+    minHeight: 44,
+    display: "grid",
+    gridTemplateColumns: "24px 1fr",
+    alignItems: "center",
+    gap: 10,
+    padding: "9px 11px",
+    border: "none",
+    borderRadius: 10,
+    background: "transparent",
+    color: "#dfe8e2",
+    fontSize: 13,
+    fontWeight: 650,
+    textAlign: "left",
+    cursor: "pointer",
+  },
+  logout: {
+    width: "100%",
+    minHeight: 44,
+    marginTop: "auto",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 9,
+    border: "1px solid rgba(255,255,255,.12)",
+    borderRadius: 11,
+    background: "rgba(255,255,255,.05)",
+    color: "#ffffff",
+    fontWeight: 750,
+    cursor: "pointer",
+  },
+  main: {
+    flex: 1,
+    minWidth: 0,
+    padding: "28px 30px 40px",
+  },
+  topbar: {
+    maxWidth: 1440,
+    margin: "0 auto 22px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 20,
+  },
+  eyebrow: {
+    display: "block",
+    marginBottom: 4,
+    color: "#16834f",
+    fontSize: 10,
+    fontWeight: 900,
+    letterSpacing: 1.4,
+  },
+  pageTitle: {
+    margin: 0,
+    fontSize: 29,
+    letterSpacing: -0.4,
+  },
+  userBox: {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    marginBottom: 10,
-    padding: 11,
-    borderRadius: 13,
-    background: "rgba(0,0,0,0.16)",
   },
-  userAvatar: {
-    width: 36,
-    height: 36,
-    minWidth: 36,
+  avatar: {
+    width: 42,
+    height: 42,
     display: "grid",
     placeItems: "center",
-    borderRadius: 11,
-    background: "#e7fff0",
-    color: "#146b41",
+    borderRadius: 13,
+    background: "#173c2a",
+    color: "#ffffff",
     fontWeight: 900,
   },
   userName: {
     display: "block",
-    maxWidth: 160,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-    fontSize: 12,
+    fontSize: 13,
   },
   userRole: {
     display: "block",
     marginTop: 2,
-    color: "#9ccbb1",
+    color: "#7d8a82",
     fontSize: 11,
   },
-  logoutButton: {
-    width: "100%",
-    minHeight: 43,
-    border: "1px solid rgba(255,255,255,0.12)",
-    borderRadius: 12,
-    background: "rgba(255,255,255,0.94)",
-    color: "#14241a",
+  hero: {
+    maxWidth: 1440,
+    margin: "0 auto 22px",
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) 270px",
+    gap: 20,
+    padding: 30,
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #0b1710 0%, #123924 65%, #17673e 100%)",
+    boxShadow: "0 22px 55px rgba(12,48,29,.18)",
+  },
+  heroMain: {
+    alignSelf: "center",
+  },
+  heroTag: {
+    display: "block",
+    marginBottom: 9,
+    color: "#75dca4",
+    fontSize: 10,
+    fontWeight: 900,
+    letterSpacing: 1.5,
+  },
+  heroTitle: {
+    maxWidth: 700,
+    margin: "0 0 12px",
+    color: "#ffffff",
+    fontSize: "clamp(34px,5vw,56px)",
+    lineHeight: 1.02,
+    letterSpacing: -1.4,
+  },
+  heroText: {
+    maxWidth: 680,
+    margin: 0,
+    color: "#d1e5d8",
+    fontSize: 15,
+    lineHeight: 1.6,
+  },
+  heroActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    marginTop: 22,
+  },
+  primaryButton: {
+    minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 9,
+    padding: "10px 16px",
+    border: "none",
+    borderRadius: 11,
+    background: "#ffffff",
+    color: "#123622",
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+  secondaryButton: {
+    minHeight: 44,
+    padding: "10px 16px",
+    border: "1px solid rgba(255,255,255,.18)",
+    borderRadius: 11,
+    background: "rgba(255,255,255,.06)",
+    color: "#ffffff",
     fontWeight: 800,
     cursor: "pointer",
   },
-  content: {
-    flex: 1,
-    minWidth: 0,
-    padding: "28px",
-    boxSizing: "border-box",
+  planPanel: {
+    alignSelf: "stretch",
+    padding: 20,
+    border: "1px solid rgba(255,255,255,.14)",
+    borderRadius: 18,
+    background: "rgba(255,255,255,.08)",
   },
-  hero: {
-    position: "relative",
-    maxWidth: 1480,
-    margin: "0 auto 20px",
-    overflow: "hidden",
-    borderRadius: 27,
-    background:
-      "linear-gradient(135deg, #09110d 0%, #10281d 55%, #146b41 100%)",
-    boxShadow: "0 24px 55px rgba(9,38,24,0.18)",
+  planLabel: {
+    display: "block",
+    marginBottom: 8,
+    color: "#95d8b2",
+    fontSize: 10,
+    fontWeight: 900,
+    letterSpacing: 1.2,
   },
-  heroGlow: {
-    position: "absolute",
-    width: 340,
-    height: 340,
-    right: -80,
-    top: -150,
-    borderRadius: "50%",
-    background: "rgba(109,239,169,0.16)",
-    filter: "blur(4px)",
+  planName: {
+    display: "block",
+    color: "#ffffff",
+    fontSize: 23,
   },
-  heroContent: {
-    position: "relative",
-    zIndex: 1,
-    padding: "34px",
+  planStatus: {
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "center",
-    gap: 24,
-    flexWrap: "wrap",
-  },
-  heroBadge: {
-    display: "inline-block",
-    marginBottom: 10,
-    color: "#7ce1aa",
-    fontSize: 11,
-    fontWeight: 900,
-    letterSpacing: 1.45,
-  },
-  heroTitle: {
-    margin: "0 0 10px",
-    color: "#ffffff",
-    fontSize: "clamp(32px, 5vw, 54px)",
-    lineHeight: 1.02,
-    letterSpacing: -1.1,
-  },
-  heroText: {
-    maxWidth: 650,
-    margin: 0,
-    color: "#d3e8dc",
-    fontSize: 16,
-    lineHeight: 1.55,
-  },
-  heroStatusCard: {
-    minWidth: 220,
-    padding: "18px 20px",
-    border: "1px solid rgba(255,255,255,0.13)",
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.08)",
-    backdropFilter: "blur(8px)",
-  },
-  heroStatusLabel: {
-    display: "block",
-    marginBottom: 7,
-    color: "#9bd8b5",
-    fontSize: 11,
-    fontWeight: 800,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  heroPlan: {
-    display: "block",
-    marginBottom: 10,
-    color: "#ffffff",
-    fontSize: 21,
-  },
-  heroStatus: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 7,
-    color: "#dff8e8",
+    gap: 8,
+    marginTop: 10,
+    color: "#dff4e7",
     fontSize: 12,
-    fontWeight: 800,
+    fontWeight: 750,
   },
-  metricsGrid: {
-    maxWidth: 1480,
+  greenDot: {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    background: "#52dd91",
+  },
+  planDivider: {
+    height: 1,
+    margin: "18px 0",
+    background: "rgba(255,255,255,.12)",
+  },
+  planSmall: {
+    color: "#b9d8c5",
+    fontSize: 12,
+  },
+  section: {
+    maxWidth: 1440,
     margin: "0 auto 22px",
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 14,
-  },
-  metricCard: {
-    minHeight: 126,
-    padding: 18,
-    display: "grid",
-    gridTemplateColumns: "46px 1fr",
-    gap: 13,
-    border: "1px solid #dce5df",
-    borderRadius: 18,
+    padding: 22,
+    border: "1px solid #dfe7e2",
+    borderRadius: 20,
     background: "#ffffff",
-    boxShadow: "0 10px 28px rgba(15,23,42,0.055)",
-  },
-  metricIcon: {
-    width: 46,
-    height: 46,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: 13,
-    background: "#e9f7ef",
-    color: "#16834f",
-    fontSize: 20,
-    fontWeight: 900,
-  },
-  metricLabel: {
-    margin: "1px 0 7px",
-    color: "#6b766f",
-    fontSize: 12,
-    fontWeight: 800,
-  },
-  metricValue: {
-    display: "block",
-    marginBottom: 6,
-    color: "#17211c",
-    fontSize: 29,
-    lineHeight: 1.05,
-  },
-  metricValueCompact: {
-    fontSize: 20,
-  },
-  metricDetail: {
-    display: "block",
-    color: "#89938d",
-    fontSize: 11,
-    lineHeight: 1.4,
-  },
-  quickSection: {
-    maxWidth: 1480,
-    margin: "0 auto",
-    padding: 23,
-    border: "1px solid #dce5df",
-    borderRadius: 22,
-    background: "#ffffff",
-    boxShadow: "0 14px 38px rgba(15,23,42,0.06)",
+    boxShadow: "0 10px 30px rgba(15,23,42,.045)",
   },
   sectionHeader: {
-    marginBottom: 24,
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "flex-end",
+    alignItems: "end",
     gap: 18,
-    flexWrap: "wrap",
+    marginBottom: 16,
   },
   sectionEyebrow: {
     display: "block",
-    marginBottom: 6,
+    marginBottom: 5,
     color: "#16834f",
     fontSize: 10,
     fontWeight: 900,
-    letterSpacing: 1.35,
+    letterSpacing: 1.3,
   },
   sectionTitle: {
-    margin: "0 0 7px",
-    color: "#17211c",
-    fontSize: 28,
-  },
-  sectionText: {
     margin: 0,
-    color: "#728078",
-    fontSize: 14,
+    fontSize: 24,
+    letterSpacing: -0.3,
   },
-  reportButton: {
-    minHeight: 43,
-    padding: "10px 16px",
-    border: "none",
-    borderRadius: 12,
-    background: "#16834f",
-    color: "#ffffff",
-    fontWeight: 800,
-    cursor: "pointer",
+  sectionHint: {
+    color: "#8b9690",
+    fontSize: 12,
   },
-  groupBlock: {
-    marginTop: 23,
-  },
-  groupHeader: {
-    marginBottom: 11,
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
+  quickGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
     gap: 12,
   },
-  groupTitle: {
-    margin: 0,
-    color: "#243128",
-    fontSize: 17,
-  },
-  groupCount: {
-    color: "#839087",
-    fontSize: 11,
-    fontWeight: 700,
-  },
-  moduleGrid: {
+  quickCard: {
+    minHeight: 84,
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(245px, 1fr))",
-    gap: 13,
+    gridTemplateColumns: "42px 1fr auto",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    border: "1px solid #dfe7e2",
+    borderRadius: 15,
+    background: "#fbfdfc",
+    color: "#173122",
+    textAlign: "left",
+    cursor: "pointer",
   },
-  moduleCard: {
-    minHeight: 156,
-    padding: 17,
+  quickIcon: {
+    width: 42,
+    height: 42,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 12,
+    background: "#e8f6ee",
+    color: "#16834f",
+  },
+  quickTextBox: {
+    minWidth: 0,
+  },
+  quickTitle: {
+    display: "block",
+    fontSize: 14,
+  },
+  quickText: {
+    display: "block",
+    marginTop: 4,
+    color: "#849087",
+    fontSize: 11,
+  },
+  bottomGrid: {
+    maxWidth: 1440,
+    margin: "0 auto",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
+    gap: 14,
+  },
+  infoCard: {
+    minHeight: 132,
     display: "grid",
     gridTemplateColumns: "48px 1fr",
-    gap: 13,
-    border: "1px solid #dde6e0",
-    borderRadius: 17,
-    background: "#fbfdfc",
-    cursor: "pointer",
-    textAlign: "left",
+    gap: 14,
+    padding: 20,
+    border: "1px solid #dfe7e2",
+    borderRadius: 18,
+    background: "#ffffff",
   },
-  moduleCardFeatured: {
-    border: "1px solid #9edab8",
-    background:
-      "linear-gradient(135deg, #f1fff7 0%, #e8f8ef 100%)",
-    boxShadow: "0 12px 28px rgba(22,131,79,0.09)",
-  },
-  moduleIcon: {
+  infoIcon: {
     width: 48,
     height: 48,
     display: "grid",
     placeItems: "center",
-    borderRadius: 14,
-    background: "#edf5f0",
-    fontSize: 22,
-  },
-  moduleIconFeatured: {
-    background: "#d7f3e2",
-  },
-  moduleBody: {
-    minWidth: 0,
-  },
-  moduleTopRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-  },
-  moduleTitle: {
-    margin: 0,
-    color: "#17211c",
-    fontSize: 15,
-  },
-  moduleArrow: {
+    borderRadius: 13,
+    background: "#edf6f0",
     color: "#16834f",
-    fontSize: 17,
   },
-  moduleDescription: {
-    margin: "8px 0 12px",
-    color: "#6f7b73",
-    fontSize: 12,
-    lineHeight: 1.45,
-  },
-  moduleLink: {
+  infoLabel: {
+    display: "block",
+    marginBottom: 5,
     color: "#16834f",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 900,
-    textTransform: "uppercase",
-    letterSpacing: 0.7,
+    letterSpacing: 1.1,
   },
-  emptyState: {
-    padding: 24,
-    border: "1px dashed #cbd7cf",
-    borderRadius: 16,
-    color: "#68756d",
-    textAlign: "center",
+  infoTitle: {
+    margin: "0 0 7px",
+    fontSize: 20,
   },
-  mobileMenuButton: {
-    display: "none",
-    position: "fixed",
-    top: 14,
-    left: 14,
-    zIndex: 80,
-    width: 44,
-    height: 44,
-    border: "none",
-    borderRadius: 12,
-    background: "#0d251a",
-    color: "#ffffff",
-    fontSize: 22,
-    cursor: "pointer",
-    boxShadow: "0 8px 22px rgba(0,0,0,0.18)",
-  },
-  mobileOverlay: {
-    position: "fixed",
-    inset: 0,
-    zIndex: 40,
-    border: "none",
-    background: "rgba(0,0,0,0.46)",
+  infoText: {
+    margin: 0,
+    color: "#748078",
+    fontSize: 12,
+    lineHeight: 1.5,
   },
 };
