@@ -654,10 +654,17 @@ export default function CuentasPorCobrar() {
 
   if (!accesoValidado) {
     return (
-      <div style={cargandoPagina}>
-        <div style={cargandoCard}>
-          <strong>Validando acceso...</strong>
-          <p>Verificando usuario, empresa y permisos.</p>
+      <div style={styles.cargandoPagina}>
+        <div style={styles.cargandoCard}>
+          <img
+            src="/konax-logo.png"
+            alt="KONAX"
+            style={styles.cargandoLogo}
+          />
+          <strong style={styles.cargandoTitulo}>Validando acceso</strong>
+          <p style={styles.cargandoTexto}>
+            Verificando usuario, empresa y permisos.
+          </p>
         </div>
       </div>
     );
@@ -683,647 +690,1010 @@ export default function CuentasPorCobrar() {
   );
 
   return (
-    <div style={pagina}>
-      <div style={contenedor}>
-        <div style={hero}>
-          <div style={heroInfo}>
-            <img src="/konax-logo.png" alt="KONAX" style={logo} />
+    <main style={styles.pagina}>
+      <div style={styles.contenedor}>
+        <header style={styles.hero}>
+          <div style={styles.heroPrincipal}>
+            <div style={styles.logoPanel}>
+              <img
+                src="/konax-logo.png"
+                alt="KONAX"
+                style={styles.logo}
+              />
+            </div>
 
             <div>
-              <p style={etiqueta}>Carga Inicial</p>
-
-              <h1 style={titulo}>Cuentas por Cobrar</h1>
-
-              <p style={subtitulo}>
-                Registra clientes existentes, cuentas, saldos,
-                cobranza inicial y documentos.
+              <span style={styles.etiqueta}>GESTIÓN DE CARTERA</span>
+              <h1 style={styles.titulo}>Nueva cuenta por cobrar</h1>
+              <p style={styles.subtitulo}>
+                Registra al cliente, crea la cuenta y configura la gestión
+                inicial de cobranza desde un solo formulario.
               </p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={volverCentroOperaciones}
-            style={botonVolver}
+            style={styles.botonVolver}
           >
-            ← Centro de Operaciones
+            <Icon name="arrowLeft" size={18} />
+            Centro de Operaciones
           </button>
-        </div>
+        </header>
 
-        <div style={resumenGrid}>
+        <section style={styles.resumenGrid}>
           <KPI
             titulo="Cliente"
-            valor={nombre || "Sin seleccionar"}
-            icono="👤"
+            valor={nombre || "Pendiente"}
+            detalle={cedula || "Sin identificación"}
+            icono="user"
           />
 
           <KPI
             titulo="Saldo actual"
             valor={`$${saldoVisual.toFixed(2)}`}
-            icono="💰"
+            detalle={tipoProducto || "Tipo de cuenta sin definir"}
+            icono="wallet"
           />
 
           <KPI
-            titulo="Estado cobranza"
+            titulo="Estado de cobranza"
             valor={estadoCobranza}
-            icono="📞"
+            detalle={`${diasMoraVisual} días de mora`}
+            icono="activity"
+            destacado={estadoCobranza === "Mora"}
           />
-        </div>
+        </section>
 
-        <div style={card}>
-          <SectionTitle
-            icono="👤"
-            titulo="Información del Cliente"
-            texto="Datos personales, contacto y referencias del cliente."
-          />
-
-          <div style={grid}>
-            <Campo label="Cédula / Identificación *">
-              <input
-                value={cedula}
-                onChange={(e) => setCedula(e.target.value)}
-                style={inputStyle}
-                placeholder="Ej. 8-888-888"
+        <section style={styles.formLayout}>
+          <div style={styles.mainColumn}>
+            <article style={styles.card}>
+              <SectionTitle
+                numero="01"
+                icono="user"
+                titulo="Información del cliente"
+                texto="Datos personales, contacto y referencias."
               />
-            </Campo>
 
-            <Campo label="Nombre completo *">
-              <input
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                style={inputStyle}
-                placeholder="Nombre del cliente"
+              <div style={styles.grid}>
+                <Campo label="Cédula / Identificación *">
+                  <input
+                    value={cedula}
+                    onChange={(e) => setCedula(e.target.value)}
+                    style={styles.inputStyle}
+                    placeholder="Ej. 8-888-888"
+                  />
+                </Campo>
+
+                <Campo label="Nombre completo *">
+                  <input
+                    value={nombre}
+                    onChange={(e) => setNombre(e.target.value)}
+                    style={styles.inputStyle}
+                    placeholder="Nombre del cliente"
+                  />
+                </Campo>
+
+                <Campo label="Correo electrónico">
+                  <input
+                    value={correo}
+                    onChange={(e) => setCorreo(e.target.value)}
+                    style={styles.inputStyle}
+                    placeholder="correo@cliente.com"
+                  />
+                </Campo>
+
+                <Campo label="Teléfono principal *">
+                  <input
+                    value={telefono}
+                    onChange={(e) => setTelefono(e.target.value)}
+                    style={styles.inputStyle}
+                    placeholder="Teléfono"
+                  />
+                </Campo>
+
+                <Campo label="Teléfono secundario">
+                  <input
+                    value={telefonoSecundario}
+                    onChange={(e) =>
+                      setTelefonoSecundario(e.target.value)
+                    }
+                    style={styles.inputStyle}
+                    placeholder="Opcional"
+                  />
+                </Campo>
+
+                <Campo label="Estado del cliente">
+                  <select
+                    value={estadoCliente}
+                    onChange={(e) => setEstadoCliente(e.target.value)}
+                    style={styles.selectStyle}
+                  >
+                    <option>Activo</option>
+                    <option>Inactivo</option>
+                  </select>
+                </Campo>
+
+                <Campo label="Nombre de referencia">
+                  <input
+                    value={referenciaNombre}
+                    onChange={(e) =>
+                      setReferenciaNombre(e.target.value)
+                    }
+                    style={styles.inputStyle}
+                    placeholder="Referencia personal"
+                  />
+                </Campo>
+
+                <Campo label="Teléfono de referencia">
+                  <input
+                    value={referenciaTelefono}
+                    onChange={(e) =>
+                      setReferenciaTelefono(e.target.value)
+                    }
+                    style={styles.inputStyle}
+                    placeholder="Teléfono referencia"
+                  />
+                </Campo>
+              </div>
+
+              <Campo label="Dirección completa">
+                <textarea
+                  value={direccion}
+                  onChange={(e) => setDireccion(e.target.value)}
+                  style={styles.textarea}
+                  placeholder="Dirección del cliente..."
+                />
+              </Campo>
+            </article>
+
+            <article style={styles.card}>
+              <SectionTitle
+                numero="02"
+                icono="document"
+                titulo="Información de la cuenta"
+                texto="Monto original, saldo pendiente y fechas."
               />
-            </Campo>
 
-            <Campo label="Correo electrónico">
-              <input
-                value={correo}
-                onChange={(e) => setCorreo(e.target.value)}
-                style={inputStyle}
-                placeholder="correo@cliente.com"
+              <div style={styles.grid}>
+                <Campo label="Número de cuenta">
+                  <input
+                    value={numeroCuenta}
+                    onChange={(e) => setNumeroCuenta(e.target.value)}
+                    style={styles.inputStyle}
+                    placeholder="Opcional, se genera automático"
+                  />
+                </Campo>
+
+                <Campo label="Tipo de cuenta *">
+                  <select
+                    value={tipoProducto}
+                    onChange={(e) => setTipoProducto(e.target.value)}
+                    style={styles.selectStyle}
+                  >
+                    <option value="">Seleccione tipo de cuenta</option>
+                    <option>Crédito</option>
+                    <option>Préstamo</option>
+                    <option>Cuenta por cobrar</option>
+                    <option>Refinanciamiento</option>
+                    <option>Servicio pendiente</option>
+                  </select>
+                </Campo>
+
+                <Campo label="Monto total original *">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={montoTotal}
+                    onChange={(e) => setMontoTotal(e.target.value)}
+                    style={styles.inputStyle}
+                    placeholder="0.00"
+                  />
+                </Campo>
+
+                <Campo label="Saldo actual *">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={saldoActual}
+                    onChange={(e) => setSaldoActual(e.target.value)}
+                    style={styles.inputStyle}
+                    placeholder="0.00"
+                  />
+                </Campo>
+
+                <Campo label="Fecha de inicio">
+                  <input
+                    type="date"
+                    value={fechaInicio}
+                    onChange={(e) => setFechaInicio(e.target.value)}
+                    style={styles.inputStyle}
+                  />
+                </Campo>
+
+                <Campo label="Fecha de vencimiento">
+                  <input
+                    type="date"
+                    value={fechaVencimiento}
+                    onChange={(e) =>
+                      setFechaVencimiento(e.target.value)
+                    }
+                    style={styles.inputStyle}
+                  />
+                </Campo>
+
+                <Campo label="Estado de cuenta">
+                  <select
+                    value={estadoCuenta}
+                    onChange={(e) => setEstadoCuenta(e.target.value)}
+                    style={styles.selectStyle}
+                    disabled={saldoParaEstadoVisual !== "" && saldoVisual <= 0}
+                  >
+                    <option>Activo</option>
+                    <option>Suspendido</option>
+                    <option>Cancelado</option>
+                  </select>
+                </Campo>
+              </div>
+
+              <Campo label="Descripción">
+                <textarea
+                  placeholder="Ej: Cuenta con saldo pendiente, historial previo, condiciones pactadas..."
+                  value={descripcion}
+                  onChange={(e) => setDescripcion(e.target.value)}
+                  style={styles.textarea}
+                />
+              </Campo>
+            </article>
+
+            <article style={styles.card}>
+              <SectionTitle
+                numero="03"
+                icono="phone"
+                titulo="Cobranza inicial"
+                texto="Estado, mora, último pago y responsable."
               />
-            </Campo>
 
-            <Campo label="Teléfono principal *">
-              <input
-                value={telefono}
-                onChange={(e) => setTelefono(e.target.value)}
-                style={inputStyle}
-                placeholder="Teléfono"
-              />
-            </Campo>
+              <div style={styles.grid}>
+                <Campo label="Estado de cobranza automático">
+                  <input
+                    value={estadoCobranza}
+                    readOnly
+                    style={styles.inputAutomatico}
+                  />
+                </Campo>
 
-            <Campo label="Teléfono secundario">
-              <input
-                value={telefonoSecundario}
-                onChange={(e) =>
-                  setTelefonoSecundario(e.target.value)
-                }
-                style={inputStyle}
-                placeholder="Opcional"
-              />
-            </Campo>
+                <Campo label="Días de mora calculados">
+                  <input
+                    value={diasMoraVisual}
+                    readOnly
+                    style={styles.inputAutomatico}
+                  />
+                </Campo>
 
-            <Campo label="Estado del cliente">
-              <select
-                value={estadoCliente}
-                onChange={(e) => setEstadoCliente(e.target.value)}
-                style={selectStyle}
-              >
-                <option>Activo</option>
-                <option>Inactivo</option>
-              </select>
-            </Campo>
+                <Campo label="Fecha último pago">
+                  <input
+                    type="date"
+                    value={fechaUltimoPago}
+                    onChange={(e) =>
+                      setFechaUltimoPago(e.target.value)
+                    }
+                    style={styles.inputStyle}
+                  />
+                </Campo>
 
-            <Campo label="Nombre de referencia">
-              <input
-                value={referenciaNombre}
-                onChange={(e) =>
-                  setReferenciaNombre(e.target.value)
-                }
-                style={inputStyle}
-                placeholder="Referencia personal"
-              />
-            </Campo>
+                <Campo label="Monto último pago">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={montoUltimoPago}
+                    onChange={(e) =>
+                      setMontoUltimoPago(e.target.value)
+                    }
+                    style={styles.inputStyle}
+                    placeholder="0.00"
+                  />
+                </Campo>
 
-            <Campo label="Teléfono de referencia">
-              <input
-                value={referenciaTelefono}
-                onChange={(e) =>
-                  setReferenciaTelefono(e.target.value)
-                }
-                style={inputStyle}
-                placeholder="Teléfono referencia"
-              />
-            </Campo>
+                <Campo label="Responsable de cobro">
+                  <select
+                    value={responsableCobro}
+                    onChange={(e) =>
+                      setResponsableCobro(e.target.value)
+                    }
+                    style={styles.selectStyle}
+                  >
+                    <option value="">Sin asignar</option>
+
+                    {gestores.map((gestor) => (
+                      <option key={gestor.id} value={gestor.nombre}>
+                        {gestor.nombre} - {gestor.rol}
+                      </option>
+                    ))}
+                  </select>
+                </Campo>
+              </div>
+
+              <Campo label="Observación inicial / historial previo">
+                <textarea
+                  placeholder="Observación inicial / historial previo de cobro"
+                  value={observacionCobro}
+                  onChange={(e) =>
+                    setObservacionCobro(e.target.value)
+                  }
+                  style={styles.textarea}
+                />
+              </Campo>
+
+              <Campo label="Documentos del cliente">
+                <label style={styles.fileBox}>
+                  <Icon name="upload" size={22} />
+                  <div>
+                    <strong style={styles.fileTitle}>
+                      Adjuntar documentos
+                    </strong>
+                    <span style={styles.fileText}>
+                      Selecciona uno o varios archivos del cliente.
+                    </span>
+                  </div>
+                  <input
+                    type="file"
+                    multiple
+                    onChange={(e) =>
+                      setDocumentos(Array.from(e.target.files || []))
+                    }
+                    style={styles.fileInput}
+                  />
+                </label>
+
+                {documentos.length > 0 && (
+                  <span style={styles.fileCount}>
+                    {documentos.length} archivo(s) seleccionado(s)
+                  </span>
+                )}
+              </Campo>
+            </article>
           </div>
 
-          <Campo label="Dirección completa">
-            <textarea
-              value={direccion}
-              onChange={(e) => setDireccion(e.target.value)}
-              style={textarea}
-              placeholder="Dirección del cliente..."
-            />
-          </Campo>
-        </div>
+          <aside style={styles.sideColumn}>
+            <div style={styles.sideCard}>
+              <span style={styles.sideEyebrow}>RESUMEN DE REGISTRO</span>
+              <h3 style={styles.sideTitle}>Vista previa</h3>
 
-        <div style={card}>
-          <SectionTitle
-            icono="🧾"
-            titulo="Información de la Cuenta por Cobrar"
-            texto="Registre el monto original, saldo pendiente y fechas de la cuenta por cobrar."
-          />
-
-          <div style={grid}>
-            <Campo label="Número de cuenta">
-              <input
-                value={numeroCuenta}
-                onChange={(e) => setNumeroCuenta(e.target.value)}
-                style={inputStyle}
-                placeholder="Opcional, se genera automático"
+              <ResumenFila
+                label="Cliente"
+                value={nombre || "Pendiente"}
               />
-            </Campo>
-
-            <Campo label="Tipo de cuenta *">
-              <select
-                value={tipoProducto}
-                onChange={(e) => setTipoProducto(e.target.value)}
-                style={selectStyle}
-              >
-                <option value="">Seleccione tipo de cuenta</option>
-                <option>Crédito</option>
-                <option>Préstamo</option>
-                <option>Cuenta por cobrar</option>
-                <option>Refinanciamiento</option>
-                <option>Servicio pendiente</option>
-              </select>
-            </Campo>
-
-            <Campo label="Monto total original *">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={montoTotal}
-                onChange={(e) => setMontoTotal(e.target.value)}
-                style={inputStyle}
-                placeholder="0.00"
+              <ResumenFila
+                label="Identificación"
+                value={cedula || "Pendiente"}
               />
-            </Campo>
-
-            <Campo label="Saldo actual *">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={saldoActual}
-                onChange={(e) => setSaldoActual(e.target.value)}
-                style={inputStyle}
-                placeholder="0.00"
+              <ResumenFila
+                label="Tipo de cuenta"
+                value={tipoProducto || "Pendiente"}
               />
-            </Campo>
-
-            <Campo label="Fecha de inicio">
-              <input
-                type="date"
-                value={fechaInicio}
-                onChange={(e) => setFechaInicio(e.target.value)}
-                style={inputStyle}
+              <ResumenFila
+                label="Monto original"
+                value={`$${Number(montoTotal || 0).toFixed(2)}`}
               />
-            </Campo>
-
-            <Campo label="Fecha de vencimiento">
-              <input
-                type="date"
-                value={fechaVencimiento}
-                onChange={(e) =>
-                  setFechaVencimiento(e.target.value)
-                }
-                style={inputStyle}
+              <ResumenFila
+                label="Saldo actual"
+                value={`$${saldoVisual.toFixed(2)}`}
               />
-            </Campo>
-
-            <Campo label="Estado de cuenta">
-              <select
-                value={estadoCuenta}
-                onChange={(e) => setEstadoCuenta(e.target.value)}
-                style={selectStyle}
-                disabled={saldoParaEstadoVisual !== "" && saldoVisual <= 0}
-              >
-                <option>Activo</option>
-                <option>Suspendido</option>
-                <option>Cancelado</option>
-              </select>
-            </Campo>
-          </div>
-
-          <Campo label="Descripción">
-            <textarea
-              placeholder="Ej: Cuenta con saldo pendiente, historial previo, condiciones pactadas..."
-              value={descripcion}
-              onChange={(e) => setDescripcion(e.target.value)}
-              style={textarea}
-            />
-          </Campo>
-        </div>
-
-        <div style={card}>
-          <SectionTitle
-            icono="📞"
-            titulo="Información de Cobranza Inicial"
-            texto="Estado, días de mora, último pago y responsable de cobro."
-          />
-
-          <div style={grid}>
-            <Campo label="Estado de cobranza automático">
-              <input
+              <ResumenFila
+                label="Estado"
                 value={estadoCobranza}
-                readOnly
-                style={inputAutomatico}
               />
-            </Campo>
-
-            <Campo label="Días de mora calculados">
-              <input
-                value={diasMoraVisual}
-                readOnly
-                style={inputAutomatico}
+              <ResumenFila
+                label="Responsable"
+                value={responsableFinal()}
               />
-            </Campo>
 
-            <Campo label="Fecha último pago">
-              <input
-                type="date"
-                value={fechaUltimoPago}
-                onChange={(e) =>
-                  setFechaUltimoPago(e.target.value)
-                }
-                style={inputStyle}
-              />
-            </Campo>
+              <div style={styles.sideNotice}>
+                <Icon name="shield" size={18} />
+                <span>
+                  El estado y los días de mora se calculan automáticamente.
+                </span>
+              </div>
+            </div>
 
-            <Campo label="Monto último pago">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={montoUltimoPago}
-                onChange={(e) =>
-                  setMontoUltimoPago(e.target.value)
-                }
-                style={inputStyle}
-                placeholder="0.00"
-              />
-            </Campo>
-
-            <Campo label="Responsable de cobro">
-              <select
-                value={responsableCobro}
-                onChange={(e) =>
-                  setResponsableCobro(e.target.value)
-                }
-                style={selectStyle}
+            <div style={styles.stickyActions}>
+              <button
+                type="button"
+                onClick={guardarCuenta}
+                style={styles.botonGuardar}
+                disabled={guardando}
               >
-                <option value="">Sin asignar</option>
+                <Icon name="save" size={18} />
+                {guardando
+                  ? "Guardando..."
+                  : "Guardar cuenta por cobrar"}
+              </button>
 
-                {gestores.map((gestor) => (
-                  <option key={gestor.id} value={gestor.nombre}>
-                    {gestor.nombre} - {gestor.rol}
-                  </option>
-                ))}
-              </select>
-            </Campo>
-          </div>
+              <button
+                type="button"
+                onClick={limpiarFormulario}
+                style={styles.botonLimpiar}
+                disabled={guardando}
+              >
+                Limpiar formulario
+              </button>
 
-          <Campo label="Observación inicial / historial previo">
-            <textarea
-              placeholder="Observación inicial / historial previo de cobro"
-              value={observacionCobro}
-              onChange={(e) =>
-                setObservacionCobro(e.target.value)
-              }
-              style={textarea}
-            />
-          </Campo>
-
-          <Campo label="Documentos del Cliente">
-            <input
-              type="file"
-              multiple
-              onChange={(e) =>
-                setDocumentos(Array.from(e.target.files || []))
-              }
-              style={inputStyle}
-            />
-          </Campo>
-
-          <div style={acciones}>
-            <button
-              onClick={guardarCuenta}
-              style={botonGuardar}
-              disabled={guardando}
-            >
-              {guardando
-                ? "Guardando..."
-                : "Guardar Cuenta por Cobrar"}
-            </button>
-
-            <button
-              onClick={limpiarFormulario}
-              style={botonLimpiar}
-              disabled={guardando}
-            >
-              Limpiar
-            </button>
-
-            <button
-              onClick={volverCentroOperaciones}
-              style={botonSecundario}
-              disabled={guardando}
-            >
-              Salir
-            </button>
-          </div>
-        </div>
+              <button
+                type="button"
+                onClick={volverCentroOperaciones}
+                style={styles.botonSecundario}
+                disabled={guardando}
+              >
+                Salir
+              </button>
+            </div>
+          </aside>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
 
 function Campo({ label, children }) {
   return (
-    <div style={campo}>
-      <label style={labelStyle}>{label}</label>
+    <div style={styles.campo}>
+      <label style={styles.labelStyle}>{label}</label>
       {children}
     </div>
   );
 }
 
-function SectionTitle({ icono, titulo, texto }) {
+function SectionTitle({ numero, icono, titulo, texto }) {
   return (
-    <div style={sectionHeader}>
-      <div style={sectionIcon}>{icono}</div>
+    <div style={styles.sectionHeader}>
+      <div style={styles.sectionIcon}>
+        <Icon name={icono} size={21} />
+      </div>
 
-      <div>
-        <h2 style={tituloSeccion}>{titulo}</h2>
-        <p style={textoSeccion}>{texto}</p>
+      <div style={styles.sectionTitleBox}>
+        <span style={styles.sectionNumber}>PASO {numero}</span>
+        <h2 style={styles.tituloSeccion}>{titulo}</h2>
+        <p style={styles.textoSeccion}>{texto}</p>
       </div>
     </div>
   );
 }
 
-function KPI({ titulo, valor, icono }) {
+function KPI({ titulo, valor, detalle, icono, destacado = false }) {
   return (
-    <div style={resumenCard}>
-      <div style={kpiIcono}>{icono}</div>
-      <p style={resumenLabel}>{titulo}</p>
-      <h3 style={resumenValor}>{valor}</h3>
+    <article
+      style={{
+        ...styles.resumenCard,
+        ...(destacado ? styles.resumenCardDanger : {}),
+      }}
+    >
+      <div
+        style={{
+          ...styles.kpiIcono,
+          ...(destacado ? styles.kpiIconoDanger : {}),
+        }}
+      >
+        <Icon name={icono} size={22} />
+      </div>
+
+      <div>
+        <p style={styles.resumenLabel}>{titulo}</p>
+        <h3 style={styles.resumenValor}>{valor}</h3>
+        <span style={styles.resumenDetalle}>{detalle}</span>
+      </div>
+    </article>
+  );
+}
+
+function ResumenFila({ label, value }) {
+  return (
+    <div style={styles.resumenFila}>
+      <span style={styles.resumenFilaLabel}>{label}</span>
+      <strong style={styles.resumenFilaValue}>{value}</strong>
     </div>
   );
 }
 
-const cargandoPagina = {
-  minHeight: "100vh",
-  background: "#eef2f7",
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  fontFamily: "Arial, sans-serif",
-};
+function Icon({ name, size = 20 }) {
+  const props = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": "true",
+  };
 
-const cargandoCard = {
-  background: "#ffffff",
-  padding: "24px",
-  borderRadius: "16px",
-  boxShadow: "0 4px 18px rgba(0,0,0,0.08)",
-  color: "#111827",
-};
+  const paths = {
+    user: (
+      <>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 21a8 8 0 0 1 16 0" />
+      </>
+    ),
+    wallet: (
+      <>
+        <path d="M4 6h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h13" />
+        <path d="M16 13h5" />
+      </>
+    ),
+    activity: (
+      <>
+        <path d="M3 12h4l2-6 4 12 2-6h6" />
+      </>
+    ),
+    document: (
+      <>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <path d="M14 2v6h6M8 13h8M8 17h6" />
+      </>
+    ),
+    phone: (
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.63a2 2 0 0 1-.45 2.11L8 9.73a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.85.29 1.73.5 2.63.62A2 2 0 0 1 22 16.92z" />
+    ),
+    upload: (
+      <>
+        <path d="M12 3v12M7 8l5-5 5 5" />
+        <path d="M5 21h14" />
+      </>
+    ),
+    shield: (
+      <>
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        <path d="M9 12l2 2 4-4" />
+      </>
+    ),
+    save: (
+      <>
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+        <path d="M17 21v-8H7v8M7 3v5h8" />
+      </>
+    ),
+    arrowLeft: (
+      <>
+        <path d="M19 12H5M11 18l-6-6 6-6" />
+      </>
+    ),
+  };
 
-const pagina = {
-  minHeight: "100vh",
-  background:
-    "linear-gradient(135deg, #ecfdf5 0%, #f3f4f6 45%, #ffffff 100%)",
-  padding: "35px",
-  fontFamily: "Arial, sans-serif",
-};
+  return <svg {...props}>{paths[name] || paths.user}</svg>;
+}
 
-const contenedor = {
-  maxWidth: "1350px",
-  margin: "0 auto",
-};
-
-const hero = {
-  background: "linear-gradient(135deg, #111827, #064e3b)",
-  color: "#ffffff",
-  padding: "28px",
-  borderRadius: "22px",
-  marginBottom: "22px",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "20px",
-  flexWrap: "wrap",
-  boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
-};
-
-const heroInfo = {
-  display: "flex",
-  alignItems: "center",
-  gap: "18px",
-};
-
-const logo = {
-  width: "85px",
-  height: "auto",
-  background: "#ffffff",
-  borderRadius: "16px",
-  padding: "8px",
-};
-
-const etiqueta = {
-  margin: 0,
-  color: "#bbf7d0",
-  fontSize: "14px",
-  fontWeight: "bold",
-};
-
-const titulo = {
-  margin: "4px 0",
-  fontSize: "36px",
-  fontWeight: "bold",
-};
-
-const subtitulo = {
-  color: "#dcfce7",
-  marginTop: "6px",
-  maxWidth: "820px",
-};
-
-const botonVolver = {
-  background: "#ffffff",
-  color: "#111827",
-  border: "none",
-  padding: "12px 18px",
-  borderRadius: "9px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const resumenGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))",
-  gap: "16px",
-  marginBottom: "20px",
-};
-
-const resumenCard = {
-  background: "#ffffff",
-  padding: "20px",
-  borderRadius: "18px",
-  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
-};
-
-const kpiIcono = {
-  fontSize: "26px",
-  marginBottom: "6px",
-};
-
-const resumenLabel = {
-  margin: 0,
-  color: "#6b7280",
-  fontSize: "13px",
-};
-
-const resumenValor = {
-  margin: "8px 0 0",
-  color: "#111827",
-  fontSize: "20px",
-};
-
-const card = {
-  background: "#ffffff",
-  padding: "26px",
-  borderRadius: "20px",
-  marginBottom: "20px",
-  boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
-  border: "1px solid #e5e7eb",
-};
-
-const sectionHeader = {
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  marginBottom: "20px",
-};
-
-const sectionIcon = {
-  width: "42px",
-  height: "42px",
-  borderRadius: "12px",
-  background: "#ecfdf5",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "22px",
-};
-
-const tituloSeccion = {
-  margin: 0,
-  color: "#111827",
-};
-
-const textoSeccion = {
-  margin: "5px 0 0",
-  color: "#6b7280",
-  fontSize: "14px",
-};
-
-const grid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))",
-  gap: "16px",
-};
-
-const campo = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "6px",
-  marginBottom: "16px",
-};
-
-const labelStyle = {
-  color: "#374151",
-  fontSize: "13px",
-  fontWeight: "bold",
-};
-
-const inputStyle = {
-  width: "100%",
-  padding: "12px",
-  borderRadius: "10px",
-  border: "1px solid #d1d5db",
-  fontSize: "14px",
-  boxSizing: "border-box",
-  backgroundColor: "#ffffff",
-  color: "#111827",
-};
-
-const inputAutomatico = {
-  ...inputStyle,
-  backgroundColor: "#ecfdf5",
-  color: "#166534",
-  border: "1px solid #86efac",
-  fontWeight: "bold",
-};
-
-const selectStyle = {
-  ...inputStyle,
-  fontWeight: "600",
-};
-
-const textarea = {
-  ...inputStyle,
-  minHeight: "95px",
-  resize: "vertical",
-};
-
-const acciones = {
-  display: "flex",
-  gap: "12px",
-  flexWrap: "wrap",
-  marginTop: "20px",
-};
-
-const botonGuardar = {
-  background: "#16a34a",
-  color: "#ffffff",
-  border: "none",
-  padding: "14px 26px",
-  borderRadius: "10px",
-  fontWeight: "bold",
-  fontSize: "15px",
-  cursor: "pointer",
-};
-
-const botonLimpiar = {
-  background: "#111827",
-  color: "#ffffff",
-  border: "none",
-  padding: "14px 24px",
-  borderRadius: "10px",
-  fontWeight: "bold",
-  fontSize: "15px",
-  cursor: "pointer",
-};
-
-const botonSecundario = {
-  background: "#6b7280",
-  color: "#ffffff",
-  border: "none",
-  padding: "14px 24px",
-  borderRadius: "10px",
-  fontWeight: "bold",
-  fontSize: "15px",
-  cursor: "pointer",
+const styles = {
+  pagina: {
+    minHeight: "100vh",
+    padding: "32px",
+    background:
+      "radial-gradient(circle at top right, rgba(22,131,79,.10), transparent 32%), #f3f6f4",
+    color: "#152019",
+    fontFamily:
+      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  },
+  contenedor: {
+    maxWidth: 1450,
+    margin: "0 auto",
+  },
+  cargandoPagina: {
+    minHeight: "100vh",
+    display: "grid",
+    placeItems: "center",
+    padding: 24,
+    background: "#f3f6f4",
+    fontFamily:
+      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  },
+  cargandoCard: {
+    width: "100%",
+    maxWidth: 420,
+    padding: "34px 30px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    border: "1px solid #dce5df",
+    borderRadius: 24,
+    background: "#ffffff",
+    boxShadow: "0 24px 60px rgba(15,23,42,.10)",
+    textAlign: "center",
+  },
+  cargandoLogo: {
+    width: 230,
+    maxWidth: "100%",
+    marginBottom: 18,
+    objectFit: "contain",
+  },
+  cargandoTitulo: {
+    fontSize: 22,
+  },
+  cargandoTexto: {
+    margin: "8px 0 0",
+    color: "#6f7b73",
+    fontSize: 14,
+  },
+  hero: {
+    marginBottom: 20,
+    padding: "30px 32px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 24,
+    flexWrap: "wrap",
+    borderRadius: 26,
+    background:
+      "linear-gradient(135deg, #09120d 0%, #123b25 62%, #17673e 100%)",
+    boxShadow: "0 24px 56px rgba(11,48,29,.18)",
+  },
+  heroPrincipal: {
+    display: "flex",
+    alignItems: "center",
+    gap: 24,
+    flex: 1,
+    minWidth: 280,
+  },
+  logoPanel: {
+    width: 220,
+    minWidth: 220,
+    height: 92,
+    padding: 10,
+    display: "grid",
+    placeItems: "center",
+    boxSizing: "border-box",
+    borderRadius: 18,
+    background: "#ffffff",
+    boxShadow: "0 14px 30px rgba(0,0,0,.20)",
+  },
+  logo: {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+  },
+  etiqueta: {
+    display: "block",
+    marginBottom: 8,
+    color: "#79dca6",
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 1.45,
+  },
+  titulo: {
+    margin: "0 0 10px",
+    color: "#ffffff",
+    fontSize: "clamp(32px,4vw,48px)",
+    lineHeight: 1.04,
+    letterSpacing: -1,
+  },
+  subtitulo: {
+    maxWidth: 760,
+    margin: 0,
+    color: "#d2e7da",
+    fontSize: 15,
+    lineHeight: 1.58,
+  },
+  botonVolver: {
+    minHeight: 46,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 9,
+    padding: "11px 16px",
+    border: "1px solid rgba(255,255,255,.18)",
+    borderRadius: 12,
+    background: "rgba(255,255,255,.09)",
+    color: "#ffffff",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  resumenGrid: {
+    marginBottom: 20,
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))",
+    gap: 14,
+  },
+  resumenCard: {
+    minHeight: 118,
+    padding: 18,
+    display: "grid",
+    gridTemplateColumns: "48px 1fr",
+    gap: 14,
+    border: "1px solid #dfe7e2",
+    borderRadius: 18,
+    background: "#ffffff",
+    boxShadow: "0 10px 28px rgba(15,23,42,.05)",
+  },
+  resumenCardDanger: {
+    border: "1px solid #fecaca",
+    background: "#fffafa",
+  },
+  kpiIcono: {
+    width: 48,
+    height: 48,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 13,
+    background: "#eaf7ef",
+    color: "#16834f",
+  },
+  kpiIconoDanger: {
+    background: "#fff1f2",
+    color: "#be123c",
+  },
+  resumenLabel: {
+    margin: "1px 0 6px",
+    color: "#6d7971",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+  resumenValor: {
+    margin: 0,
+    color: "#152019",
+    fontSize: 22,
+    lineHeight: 1.15,
+  },
+  resumenDetalle: {
+    display: "block",
+    marginTop: 6,
+    color: "#8a958e",
+    fontSize: 11,
+  },
+  formLayout: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) 330px",
+    gap: 20,
+    alignItems: "start",
+  },
+  mainColumn: {
+    minWidth: 0,
+  },
+  sideColumn: {
+    position: "sticky",
+    top: 20,
+    display: "grid",
+    gap: 14,
+  },
+  card: {
+    marginBottom: 18,
+    padding: 26,
+    border: "1px solid #dfe7e2",
+    borderRadius: 22,
+    background: "#ffffff",
+    boxShadow: "0 12px 34px rgba(15,23,42,.055)",
+  },
+  sectionHeader: {
+    marginBottom: 22,
+    paddingBottom: 18,
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+    borderBottom: "1px solid #edf1ee",
+  },
+  sectionIcon: {
+    width: 48,
+    height: 48,
+    minWidth: 48,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 14,
+    background: "#eaf7ef",
+    color: "#16834f",
+  },
+  sectionTitleBox: {
+    minWidth: 0,
+  },
+  sectionNumber: {
+    display: "block",
+    marginBottom: 4,
+    color: "#16834f",
+    fontSize: 10,
+    fontWeight: 900,
+    letterSpacing: 1.2,
+  },
+  tituloSeccion: {
+    margin: 0,
+    color: "#162019",
+    fontSize: 23,
+    letterSpacing: -0.3,
+  },
+  textoSeccion: {
+    margin: "5px 0 0",
+    color: "#758078",
+    fontSize: 13,
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(235px,1fr))",
+    gap: "0 16px",
+  },
+  campo: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 7,
+    marginBottom: 16,
+  },
+  labelStyle: {
+    color: "#3f4c44",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+  inputStyle: {
+    width: "100%",
+    minHeight: 46,
+    padding: "11px 13px",
+    boxSizing: "border-box",
+    border: "1px solid #ccd7d0",
+    borderRadius: 11,
+    outline: "none",
+    background: "#ffffff",
+    color: "#18221c",
+    fontSize: 14,
+  },
+  selectStyle: {
+    width: "100%",
+    minHeight: 46,
+    padding: "11px 13px",
+    boxSizing: "border-box",
+    border: "1px solid #ccd7d0",
+    borderRadius: 11,
+    outline: "none",
+    background: "#ffffff",
+    color: "#18221c",
+    fontSize: 14,
+    fontWeight: 650,
+  },
+  inputAutomatico: {
+    width: "100%",
+    minHeight: 46,
+    padding: "11px 13px",
+    boxSizing: "border-box",
+    border: "1px solid #91d5ae",
+    borderRadius: 11,
+    outline: "none",
+    background: "#edf9f2",
+    color: "#14683e",
+    fontSize: 14,
+    fontWeight: 850,
+  },
+  textarea: {
+    width: "100%",
+    minHeight: 105,
+    padding: "12px 13px",
+    boxSizing: "border-box",
+    border: "1px solid #ccd7d0",
+    borderRadius: 11,
+    outline: "none",
+    resize: "vertical",
+    background: "#ffffff",
+    color: "#18221c",
+    fontSize: 14,
+    fontFamily: "inherit",
+  },
+  fileBox: {
+    minHeight: 84,
+    padding: 16,
+    display: "grid",
+    gridTemplateColumns: "40px 1fr",
+    gap: 12,
+    alignItems: "center",
+    border: "1px dashed #9fc9b1",
+    borderRadius: 14,
+    background: "#f5fbf7",
+    color: "#17623c",
+    cursor: "pointer",
+  },
+  fileTitle: {
+    display: "block",
+    fontSize: 13,
+  },
+  fileText: {
+    display: "block",
+    marginTop: 4,
+    color: "#708078",
+    fontSize: 11,
+  },
+  fileInput: {
+    display: "none",
+  },
+  fileCount: {
+    marginTop: 7,
+    color: "#16834f",
+    fontSize: 11,
+    fontWeight: 800,
+  },
+  sideCard: {
+    padding: 22,
+    border: "1px solid #dfe7e2",
+    borderRadius: 20,
+    background: "#ffffff",
+    boxShadow: "0 12px 34px rgba(15,23,42,.055)",
+  },
+  sideEyebrow: {
+    display: "block",
+    marginBottom: 5,
+    color: "#16834f",
+    fontSize: 10,
+    fontWeight: 900,
+    letterSpacing: 1.15,
+  },
+  sideTitle: {
+    margin: "0 0 18px",
+    fontSize: 22,
+  },
+  resumenFila: {
+    padding: "11px 0",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    borderBottom: "1px solid #edf1ee",
+  },
+  resumenFilaLabel: {
+    color: "#77827b",
+    fontSize: 12,
+  },
+  resumenFilaValue: {
+    maxWidth: 160,
+    overflow: "hidden",
+    color: "#1a251e",
+    fontSize: 12,
+    textAlign: "right",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  sideNotice: {
+    marginTop: 18,
+    padding: 13,
+    display: "grid",
+    gridTemplateColumns: "22px 1fr",
+    gap: 9,
+    borderRadius: 13,
+    background: "#edf8f1",
+    color: "#17623c",
+    fontSize: 11,
+    lineHeight: 1.45,
+  },
+  stickyActions: {
+    padding: 16,
+    display: "grid",
+    gap: 9,
+    border: "1px solid #dfe7e2",
+    borderRadius: 18,
+    background: "#ffffff",
+    boxShadow: "0 12px 34px rgba(15,23,42,.055)",
+  },
+  botonGuardar: {
+    minHeight: 48,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 9,
+    border: "none",
+    borderRadius: 12,
+    background: "#16834f",
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+  botonLimpiar: {
+    minHeight: 44,
+    border: "1px solid #ccd7d0",
+    borderRadius: 11,
+    background: "#ffffff",
+    color: "#243129",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  botonSecundario: {
+    minHeight: 44,
+    border: "none",
+    borderRadius: 11,
+    background: "#17211c",
+    color: "#ffffff",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
 };
