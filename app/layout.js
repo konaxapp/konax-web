@@ -1,3 +1,5 @@
+import SubscriptionGuard from "./components/SubscriptionGuard";
+
 export const metadata = {
   title: "Konax",
   description: "Plataforma SaaS de gestión comercial, crédito y cobranza",
@@ -13,7 +15,7 @@ export default function RootLayout({ children }) {
           background: "#f5f7fb",
         }}
       >
-        {children}
+        <SubscriptionGuard>{children}</SubscriptionGuard>
       </body>
     </html>
   );
