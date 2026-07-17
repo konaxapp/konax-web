@@ -17,14 +17,55 @@ export default function Dashboard() {
   const [permisosUsuario, setPermisosUsuario] = useState([]);
   const [cargando, setCargando] = useState(true);
 
+  const [estadoSuscripcion, setEstadoSuscripcion] = useState("");
+  const [fechaInicioPrueba, setFechaInicioPrueba] = useState("");
+  const [fechaFinPrueba, setFechaFinPrueba] = useState("");
+  const [diasRestantes, setDiasRestantes] = useState(null);
+  const [bloqueado, setBloqueado] = useState(false);
+
   useEffect(() => {
     cargarDashboard();
   }, []);
 
-  function limpiarSesionYSalir(mensaje = "") {
+  function salir(mensaje = "") {
     if (mensaje) alert(mensaje);
     localStorage.clear();
     router.replace("/login");
+  }
+
+  function fechaLocal(fecha) {
+    if (!fecha) return null;
+    const [a, m, d] = String(fecha).slice(0, 10).split("-").map(Number);
+    if (!a || !m || !d) return null;
+    return new Date(a, m - 1, d, 0, 0, 0, 0);
+  }
+
+  function formatoFecha(fecha) {
+    if (!fecha) return "-";
+    const [a, m, d] = String(fecha).slice(0, 10).split("-");
+    return a && m && d ? `${d}/${m}/${a}` : fecha;
+  }
+
+  function calcularDias(fechaFin) {
+    const fin = fechaLocal(fechaFin);
+    if (!fin) return null;
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    return Math.max(0, Math.ceil((fin.getTime() - hoy.getTime()) / 86400000));
+  }
+
+  async function marcarVencida(empresaId) {
+    const { error } = await supabase
+      .from("empresas")
+      .update({ estado_suscripcion: "prueba_vencida" })
+      .eq("id", empresaId)
+      .eq("estado_suscripcion", "prueba");
+
+    if (error) {
+      console.error("No se pudo actualizar el estado de la prueba:", error);
+    }
   }
 
   async function cargarDashboard() {
@@ -34,9 +75,7 @@ export default function Dashboard() {
     const usuarioId = localStorage.getItem("usuarioId");
 
     if (!empresaId || !usuarioId) {
-      limpiarSesionYSalir(
-        "La sesión no es válida. Inicie sesión nuevamente."
-      );
+      salir("La sesión no es válida. Inicie sesión nuevamente.");
       return;
     }
 
@@ -53,38 +92,43 @@ export default function Dashboard() {
     }
 
     if (!usuario) {
-      limpiarSesionYSalir("El usuario de la sesión ya no existe.");
+      salir("El usuario de la sesión ya no existe.");
       return;
     }
 
     if (String(usuario.estado || "").toLowerCase().trim() !== "activo") {
-      limpiarSesionYSalir("Este usuario se encuentra inactivo.");
+      salir("Este usuario se encuentra inactivo.");
       return;
     }
 
     if (String(usuario.empresa_id) !== String(empresaId)) {
-      limpiarSesionYSalir(
-        "La empresa activa no corresponde al usuario autenticado."
-      );
+      salir("La empresa activa no corresponde al usuario autenticado.");
       return;
     }
 
     const { data: empresa, error: errorEmpresa } = await supabase
       .from("empresas")
-      .select(
-        `
-          id,
-          nombre,
-          plan_nombre,
-          plan_codigo,
-          estado_plan,
-          estado,
-          estado_pago,
-          fecha_proxima_facturacion,
-          tipo_negocio,
-          categoria_negocio
-        `
-      )
+      .select(`
+        id,
+        nombre,
+        plan_nombre,
+        plan_codigo,
+        estado_plan,
+        estado,
+        estado_pago,
+        fecha_proxima_facturacion,
+        tipo_negocio,
+        categoria_negocio,
+        estado_suscripcion,
+        es_prueba,
+        fecha_aceptacion_piloto,
+        fecha_inicio_prueba,
+        fecha_fin_prueba,
+        dias_prueba,
+        extension_prueba_dias,
+        fecha_eliminacion_programada,
+        estado_datos
+      `)
       .eq("id", empresaId)
       .maybeSingle();
 
@@ -95,7 +139,7 @@ export default function Dashboard() {
     }
 
     if (!empresa) {
-      limpiarSesionYSalir("La empresa de esta sesión ya no existe.");
+      salir("La empresa de esta sesión ya no existe.");
       return;
     }
 
@@ -106,9 +150,33 @@ export default function Dashboard() {
       String(empresa.estado_plan || "").toLowerCase().trim() === "suspendido";
 
     if (empresaSuspendida || planSuspendido) {
-      limpiarSesionYSalir("El servicio de esta empresa está suspendido.");
+      salir("El servicio de esta empresa está suspendido.");
       return;
     }
+
+    let suscripcion = String(
+      empresa.estado_suscripcion || "activo"
+    ).toLowerCase().trim();
+
+    const fin = fechaLocal(empresa.fecha_fin_prueba);
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const vencida =
+      suscripcion === "prueba" &&
+      fin &&
+      fin.getTime() < hoy.getTime();
+
+    if (vencida) {
+      suscripcion = "prueba_vencida";
+      await marcarVencida(empresa.id);
+    }
+
+    const accesoBloqueado = [
+      "prueba_vencida",
+      "pendiente_activacion",
+      "cancelado",
+    ].includes(suscripcion);
 
     localStorage.setItem("empresaId", empresa.id || "");
     localStorage.setItem("empresaNombre", empresa.nombre || "");
@@ -123,6 +191,7 @@ export default function Dashboard() {
     localStorage.setItem("planNombre", empresa.plan_nombre || "");
     localStorage.setItem("estadoPlan", empresa.estado_plan || "");
     localStorage.setItem("estadoEmpresa", empresa.estado || "");
+    localStorage.setItem("estadoSuscripcion", suscripcion);
 
     setEmpresaNombre(empresa.nombre || "Empresa");
     setPlanNombre(empresa.plan_nombre || "Sin plan");
@@ -130,6 +199,23 @@ export default function Dashboard() {
     setTipoNegocio(empresa.tipo_negocio || "");
     setUsuarioRol(usuario.rol || "");
     setUsuarioNombre(usuario.nombre || "");
+
+    setEstadoSuscripcion(suscripcion);
+    setFechaInicioPrueba(empresa.fecha_inicio_prueba || "");
+    setFechaFinPrueba(empresa.fecha_fin_prueba || "");
+    setDiasRestantes(
+      suscripcion === "prueba" && !vencida
+        ? calcularDias(empresa.fecha_fin_prueba)
+        : null
+    );
+    setBloqueado(accesoBloqueado);
+
+    if (accesoBloqueado) {
+      setModulos({});
+      setPermisosUsuario([]);
+      setCargando(false);
+      return;
+    }
 
     const [modulosEmpresa, permisos] = await Promise.all([
       cargarModulosEmpresa(empresaId, empresa.plan_codigo),
@@ -144,85 +230,7 @@ export default function Dashboard() {
   function construirModulosPorPlan(codigoPlan) {
     const codigo = String(codigoPlan || "").toLowerCase().trim();
 
-    if (codigo === "cobros") {
-      return {
-        dashboard: true,
-        clientes: true,
-        vista_cliente: true,
-        creditos: true,
-        cobranza: true,
-        dashboard_cobros: true,
-        gestor_cobros: true,
-        abonos: true,
-        caja: true,
-        control_caja: true,
-        reportes: true,
-        pagos: false,
-        inventario: false,
-        movimientos_inventario: false,
-        ventas: false,
-        dashboard_ventas: false,
-        suscripciones: false,
-        recargos: false,
-        gastos: false,
-        usuarios: true,
-        configuracion: true,
-      };
-    }
-
-    if (codigo === "ventas_gestion") {
-      return {
-        dashboard: true,
-        clientes: true,
-        vista_cliente: true,
-        creditos: true,
-        cobranza: true,
-        dashboard_cobros: true,
-        gestor_cobros: true,
-        abonos: true,
-        caja: true,
-        control_caja: true,
-        reportes: true,
-        inventario: true,
-        movimientos_inventario: true,
-        ventas: true,
-        dashboard_ventas: true,
-        gastos: true,
-        pagos: false,
-        suscripciones: false,
-        recargos: false,
-        usuarios: true,
-        configuracion: true,
-      };
-    }
-
-    if (codigo === "pro") {
-      return {
-        dashboard: true,
-        clientes: true,
-        vista_cliente: true,
-        creditos: true,
-        cobranza: true,
-        dashboard_cobros: true,
-        gestor_cobros: true,
-        abonos: true,
-        caja: true,
-        control_caja: true,
-        reportes: true,
-        inventario: true,
-        movimientos_inventario: true,
-        ventas: true,
-        dashboard_ventas: true,
-        gastos: true,
-        recargos: true,
-        suscripciones: true,
-        pagos: false,
-        usuarios: true,
-        configuracion: true,
-      };
-    }
-
-    return {
+    const base = {
       dashboard: true,
       clientes: false,
       vista_cliente: false,
@@ -245,6 +253,74 @@ export default function Dashboard() {
       usuarios: false,
       configuracion: false,
     };
+
+    if (codigo === "cobros") {
+      return {
+        ...base,
+        clientes: true,
+        vista_cliente: true,
+        creditos: true,
+        cobranza: true,
+        dashboard_cobros: true,
+        gestor_cobros: true,
+        abonos: true,
+        caja: true,
+        control_caja: true,
+        reportes: true,
+        usuarios: true,
+        configuracion: true,
+      };
+    }
+
+    if (codigo === "ventas_gestion") {
+      return {
+        ...base,
+        clientes: true,
+        vista_cliente: true,
+        creditos: true,
+        cobranza: true,
+        dashboard_cobros: true,
+        gestor_cobros: true,
+        abonos: true,
+        caja: true,
+        control_caja: true,
+        reportes: true,
+        inventario: true,
+        movimientos_inventario: true,
+        ventas: true,
+        dashboard_ventas: true,
+        gastos: true,
+        usuarios: true,
+        configuracion: true,
+      };
+    }
+
+    if (codigo === "pro") {
+      return {
+        ...base,
+        clientes: true,
+        vista_cliente: true,
+        creditos: true,
+        cobranza: true,
+        dashboard_cobros: true,
+        gestor_cobros: true,
+        abonos: true,
+        caja: true,
+        control_caja: true,
+        reportes: true,
+        inventario: true,
+        movimientos_inventario: true,
+        ventas: true,
+        dashboard_ventas: true,
+        gastos: true,
+        recargos: true,
+        suscripciones: true,
+        usuarios: true,
+        configuracion: true,
+      };
+    }
+
+    return base;
   }
 
   async function cargarModulosEmpresa(empresaId, planCodigo) {
@@ -287,34 +363,11 @@ export default function Dashboard() {
       configuracion: true,
     };
 
-    const mapaFinal = {
-      ...basePlan,
-      ...mapaTabla,
-      dashboard: true,
-    };
-
+    const mapaFinal = { ...basePlan, ...mapaTabla, dashboard: true };
     const codigo = String(planCodigo || "").toLowerCase().trim();
 
     if (codigo === "cobros") {
-      mapaFinal.clientes = true;
-      mapaFinal.vista_cliente = true;
-      mapaFinal.creditos = true;
-      mapaFinal.cobranza = true;
-      mapaFinal.dashboard_cobros = true;
-      mapaFinal.gestor_cobros = true;
-      mapaFinal.abonos = true;
-      mapaFinal.caja = true;
-      mapaFinal.control_caja = true;
-      mapaFinal.reportes = true;
-      mapaFinal.usuarios = true;
-      mapaFinal.configuracion = true;
-      mapaFinal.inventario = false;
-      mapaFinal.movimientos_inventario = false;
-      mapaFinal.ventas = false;
-      mapaFinal.dashboard_ventas = false;
-      mapaFinal.gastos = false;
-      mapaFinal.recargos = false;
-      mapaFinal.suscripciones = false;
+      Object.assign(mapaFinal, construirModulosPorPlan("cobros"));
     }
 
     return mapaFinal;
@@ -339,83 +392,93 @@ export default function Dashboard() {
   function esAdministrador() {
     const rol = String(usuarioRol || "").toLowerCase().trim();
 
-    return (
-      rol === "administrador" ||
-      rol === "superadmin" ||
-      rol === "admin master" ||
-      rol === "administrador master"
-    );
-  }
-
-  function moduloActivo(codigo) {
-    if (codigo === "dashboard") return true;
-    return Boolean(modulos?.[codigo]);
-  }
-
-  function tienePermiso(codigo) {
-    if (codigo === "dashboard") return true;
-    return permisosUsuario.includes(codigo);
+    return [
+      "administrador",
+      "superadmin",
+      "admin master",
+      "administrador master",
+    ].includes(rol);
   }
 
   function puedeVer(codigoModulo, codigoPermiso = codigoModulo) {
-    if (!moduloActivo(codigoModulo)) return false;
+    if (bloqueado) return false;
+    if (codigoModulo !== "dashboard" && !Boolean(modulos?.[codigoModulo])) {
+      return false;
+    }
     if (esAdministrador()) return true;
-    return tienePermiso(codigoPermiso);
+    return codigoPermiso === "dashboard" || permisosUsuario.includes(codigoPermiso);
   }
 
   function abrirModulo(ruta) {
-    router.push(ruta);
+    if (!bloqueado) router.push(ruta);
   }
 
-  async function cerrarSesion() {
+  function cerrarSesion() {
     localStorage.clear();
     router.replace("/login");
   }
 
+  function contactarKonax() {
+    window.open(
+      "https://wa.me/50760000000?text=Hola%2C%20deseo%20activar%20un%20plan%20de%20KONAX.",
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
   const modulosMenu = useMemo(
     () => [
-      { nombre: "Clientes", ruta: "/clientes", activo: puedeVer("clientes"), icono: "users" },
-      { nombre: "Vista Cliente", ruta: "/vista-cliente", activo: puedeVer("vista_cliente"), icono: "file" },
-      { nombre: "Créditos", ruta: "/ventas-credito", activo: puedeVer("creditos"), icono: "card" },
-      { nombre: "Caja", ruta: "/caja", activo: puedeVer("caja"), icono: "cash" },
-      { nombre: "Cobranza", ruta: "/cobranza", activo: puedeVer("cobranza"), icono: "phone" },
-      { nombre: "Centro de Cobranza", ruta: "/dashboard-cobranza", activo: puedeVer("dashboard_cobros"), icono: "chart" },
-      { nombre: "Mi cartera de cobro", ruta: "/gestor-cobros", activo: puedeVer("gestor_cobros"), icono: "briefcase" },
-      { nombre: "Registrar Abonos", ruta: "/abonos", activo: puedeVer("abonos"), icono: "payment" },
-      { nombre: "Control Caja", ruta: "/control-caja", activo: puedeVer("control_caja"), icono: "bank" },
-      { nombre: "Inventario", ruta: "/inventario", activo: puedeVer("inventario"), icono: "box" },
-      { nombre: "Movimientos Inventario", ruta: "/movimientos-inventario", activo: puedeVer("movimientos_inventario"), icono: "swap" },
-      { nombre: "Ventas", ruta: "/ventas", activo: puedeVer("ventas"), icono: "cart" },
-      { nombre: "Centro de Ventas", ruta: "/dashboard-ventas", activo: puedeVer("dashboard_ventas"), icono: "trend" },
-      { nombre: "Gastos", ruta: "/gastos", activo: puedeVer("gastos"), icono: "receipt" },
-      { nombre: "Suscripciones", ruta: "/suscripciones", activo: puedeVer("suscripciones"), icono: "repeat" },
-      { nombre: "Recargos", ruta: "/recargos", activo: puedeVer("recargos"), icono: "alert" },
-      { nombre: "Reportes", ruta: "/reportes", activo: puedeVer("reportes"), icono: "report" },
-      {
-        nombre: "Usuarios y Roles",
-        ruta: "/usuarios",
-        activo: esAdministrador() && moduloActivo("usuarios"),
-        icono: "lock",
-      },
-      {
-        nombre: "Configuración",
-        ruta: "/admin-configuracion",
-        activo: esAdministrador() && moduloActivo("configuracion"),
-        icono: "settings",
-      },
-    ],
-    [modulos, permisosUsuario, usuarioRol]
+      ["Clientes", "/clientes", "clientes", "👥"],
+      ["Vista Cliente", "/vista-cliente", "vista_cliente", "📄"],
+      ["Créditos", "/ventas-credito", "creditos", "💳"],
+      ["Caja", "/caja", "caja", "💵"],
+      ["Cobranza", "/cobranza", "cobranza", "📞"],
+      ["Centro de Cobranza", "/dashboard-cobranza", "dashboard_cobros", "📊"],
+      ["Mi cartera de cobro", "/gestor-cobros", "gestor_cobros", "💼"],
+      ["Registrar Abonos", "/abonos", "abonos", "🧾"],
+      ["Control Caja", "/control-caja", "control_caja", "🏦"],
+      ["Inventario", "/inventario", "inventario", "📦"],
+      ["Movimientos Inventario", "/movimientos-inventario", "movimientos_inventario", "🔄"],
+      ["Ventas", "/ventas", "ventas", "🛒"],
+      ["Centro de Ventas", "/dashboard-ventas", "dashboard_ventas", "📈"],
+      ["Gastos", "/gastos", "gastos", "🧮"],
+      ["Suscripciones", "/suscripciones", "suscripciones", "🔁"],
+      ["Recargos", "/recargos", "recargos", "⚠️"],
+      ["Reportes", "/reportes", "reportes", "📚"],
+      [
+        "Usuarios y Roles",
+        "/usuarios",
+        "usuarios",
+        "🔐",
+        esAdministrador() && Boolean(modulos?.usuarios),
+      ],
+      [
+        "Configuración",
+        "/admin-configuracion",
+        "configuracion",
+        "⚙️",
+        esAdministrador() && Boolean(modulos?.configuracion),
+      ],
+    ].map(([nombre, ruta, codigo, icono, forzado]) => ({
+      nombre,
+      ruta,
+      icono,
+      activo: typeof forzado === "boolean" ? forzado : puedeVer(codigo),
+    })),
+    [modulos, permisosUsuario, usuarioRol, bloqueado]
   );
 
   const activos = modulosMenu.filter((item) => item.activo);
 
   const atajos = [
-    activos.find((item) => item.nombre === "Clientes"),
-    activos.find((item) => item.nombre === "Créditos"),
-    activos.find((item) => item.nombre === "Cobranza"),
-    activos.find((item) => item.nombre === "Caja"),
-    activos.find((item) => item.nombre === "Reportes"),
-  ].filter(Boolean);
+    "Clientes",
+    "Créditos",
+    "Cobranza",
+    "Caja",
+    "Reportes",
+  ]
+    .map((nombre) => activos.find((item) => item.nombre === nombre))
+    .filter(Boolean);
 
   if (cargando) {
     return (
@@ -426,6 +489,53 @@ export default function Dashboard() {
       </div>
     );
   }
+
+  if (bloqueado) {
+    return (
+      <div style={s.bloqueoPagina}>
+        <div style={s.bloqueoTarjeta}>
+          <img src="/konax-logo.png" alt="KONAX" style={s.bloqueoLogo} />
+          <div style={s.candado}>🔒</div>
+          <span style={s.bloqueoEtiqueta}>PRUEBA FINALIZADA</span>
+          <h1 style={s.bloqueoTitulo}>El acceso operativo está bloqueado</h1>
+          <p style={s.bloqueoTexto}>
+            La prueba de <strong>{empresaNombre}</strong> finalizó el{" "}
+            <strong>{formatoFecha(fechaFinPrueba)}</strong>. Los datos permanecen
+            registrados, pero los módulos estarán bloqueados hasta activar un plan.
+          </p>
+
+          <div style={s.bloqueoResumen}>
+            <div style={s.bloqueoDato}>
+              <span>Plan evaluado</span>
+              <strong>{planNombre || "Sin plan"}</strong>
+            </div>
+            <div style={s.bloqueoDato}>
+              <span>Estado</span>
+              <strong>Prueba vencida</strong>
+            </div>
+          </div>
+
+          <div style={s.bloqueoAcciones}>
+            <button onClick={contactarKonax} style={s.botonVerde}>
+              Contactar a KONAX
+            </button>
+            <button onClick={cerrarSesion} style={s.botonClaro}>
+              Cerrar sesión
+            </button>
+          </div>
+
+          <p style={s.notaWhatsapp}>
+            Cambia <strong>50760000000</strong> por el WhatsApp comercial real.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const pruebaActiva = estadoSuscripcion === "prueba";
+  const pendienteInicio = estadoSuscripcion === "pendiente_inicio_prueba";
+  const alertaCritica =
+    pruebaActiva && diasRestantes !== null && diasRestantes <= 5;
 
   return (
     <div style={s.layout}>
@@ -438,19 +548,17 @@ export default function Dashboard() {
           {activos.map((item) => (
             <button
               key={item.nombre}
-              type="button"
               onClick={() => abrirModulo(item.ruta)}
               style={s.navItem}
             >
-              <Icon name={item.icono} size={19} />
+              <span>{item.icono}</span>
               <span>{item.nombre}</span>
             </button>
           ))}
         </nav>
 
-        <button type="button" onClick={cerrarSesion} style={s.logout}>
-          <Icon name="logout" size={18} />
-          Cerrar sesión
+        <button onClick={cerrarSesion} style={s.logout}>
+          ↪ Cerrar sesión
         </button>
       </aside>
 
@@ -472,12 +580,55 @@ export default function Dashboard() {
           </div>
         </header>
 
+        {pendienteInicio && (
+          <section style={s.avisoPendiente}>
+            <div style={s.avisoIcono}>⏱️</div>
+            <div>
+              <span style={s.avisoEtiqueta}>PROGRAMA PILOTO APROBADO</span>
+              <strong style={s.avisoTitulo}>
+                La prueba todavía no ha comenzado
+              </strong>
+              <p style={s.avisoTexto}>
+                Un asesor de KONAX activará los días cuando la empresa esté lista.
+              </p>
+            </div>
+          </section>
+        )}
+
+        {pruebaActiva && (
+          <section
+            style={{
+              ...s.avisoPrueba,
+              ...(alertaCritica ? s.avisoCritico : {}),
+            }}
+          >
+            <div style={s.avisoIzquierda}>
+              <div style={s.avisoIcono}>⏱️</div>
+              <div>
+                <span style={s.avisoEtiqueta}>PROGRAMA PILOTO ACTIVO</span>
+                <strong style={s.avisoTitulo}>
+                  Estás utilizando KONAX en período de prueba
+                </strong>
+                <p style={s.avisoTexto}>
+                  Inicio: {formatoFecha(fechaInicioPrueba)} · Vencimiento:{" "}
+                  {formatoFecha(fechaFinPrueba)}
+                </p>
+              </div>
+            </div>
+
+            <div style={s.diasCaja}>
+              <strong style={s.diasNumero}>{diasRestantes ?? 0}</strong>
+              <span style={s.diasTexto}>
+                {diasRestantes === 1 ? "día restante" : "días restantes"}
+              </span>
+            </div>
+          </section>
+        )}
+
         <section style={s.hero}>
-          <div style={s.heroMain}>
+          <div>
             <span style={s.heroTag}>CENTRO DE OPERACIONES</span>
-            <h2 style={s.heroTitle}>
-              Todo tu negocio, claro y bajo control.
-            </h2>
+            <h2 style={s.heroTitle}>Todo tu negocio, claro y bajo control.</h2>
             <p style={s.heroText}>
               Accede a las funciones principales y mantén organizada la operación
               diaria de {tipoNegocio || "tu empresa"}.
@@ -485,22 +636,12 @@ export default function Dashboard() {
 
             <div style={s.heroActions}>
               {puedeVer("reportes") && (
-                <button
-                  type="button"
-                  onClick={() => abrirModulo("/reportes")}
-                  style={s.primaryButton}
-                >
-                  Ver reportes
-                  <Icon name="arrow" size={17} />
+                <button onClick={() => abrirModulo("/reportes")} style={s.primaryButton}>
+                  Ver reportes →
                 </button>
               )}
-
               {puedeVer("clientes") && (
-                <button
-                  type="button"
-                  onClick={() => abrirModulo("/clientes")}
-                  style={s.secondaryButton}
-                >
+                <button onClick={() => abrirModulo("/clientes")} style={s.secondaryButton}>
                   Abrir clientes
                 </button>
               )}
@@ -508,11 +649,17 @@ export default function Dashboard() {
           </div>
 
           <div style={s.planPanel}>
-            <span style={s.planLabel}>PLAN ACTUAL</span>
+            <span style={s.planLabel}>
+              {pruebaActiva ? "PLAN EN PRUEBA" : "PLAN ACTUAL"}
+            </span>
             <strong style={s.planName}>{planNombre}</strong>
             <div style={s.planStatus}>
               <span style={s.greenDot}></span>
-              {estadoPlan || "Activo"}
+              {pruebaActiva
+                ? "Prueba activa"
+                : pendienteInicio
+                ? "Pendiente de inicio"
+                : estadoPlan || "Activo"}
             </div>
             <div style={s.planDivider}></div>
             <span style={s.planSmall}>{activos.length} funciones habilitadas</span>
@@ -525,239 +672,50 @@ export default function Dashboard() {
               <span style={s.sectionEyebrow}>ATAJOS</span>
               <h3 style={s.sectionTitle}>Acciones frecuentes</h3>
             </div>
-            <span style={s.sectionHint}>Accesos rápidos sin repetir todo el menú</span>
+            <span style={s.sectionHint}>Accesos rápidos</span>
           </div>
 
           <div style={s.quickGrid}>
             {atajos.map((item) => (
               <button
                 key={item.nombre}
-                type="button"
                 onClick={() => abrirModulo(item.ruta)}
                 style={s.quickCard}
               >
-                <div style={s.quickIcon}>
-                  <Icon name={item.icono} size={22} />
-                </div>
-                <div style={s.quickTextBox}>
+                <span style={s.quickIcon}>{item.icono}</span>
+                <span>
                   <strong style={s.quickTitle}>{item.nombre}</strong>
-                  <span style={s.quickText}>Abrir módulo</span>
-                </div>
-                <Icon name="arrow" size={18} />
+                  <small style={s.quickText}>Abrir módulo</small>
+                </span>
+                <span>→</span>
               </button>
             ))}
           </div>
         </section>
 
         <section style={s.bottomGrid}>
-          <article style={s.infoCard}>
-            <div style={s.infoIcon}>
-              <Icon name="shield" size={23} />
-            </div>
-            <div>
-              <span style={s.infoLabel}>ACCESO ACTUAL</span>
-              <h3 style={s.infoTitle}>{usuarioRol || "Sin rol"}</h3>
-              <p style={s.infoText}>
-                Tus opciones se muestran según el plan contratado y los permisos asignados.
-              </p>
-            </div>
-          </article>
-
-          <article style={s.infoCard}>
-            <div style={s.infoIcon}>
-              <Icon name="building" size={23} />
-            </div>
-            <div>
-              <span style={s.infoLabel}>TIPO DE NEGOCIO</span>
-              <h3 style={s.infoTitle}>{tipoNegocio || "No definido"}</h3>
-              <p style={s.infoText}>
-                La configuración del sistema está adaptada al perfil de esta empresa.
-              </p>
-            </div>
-          </article>
-
-          <article style={s.infoCard}>
-            <div style={s.infoIcon}>
-              <Icon name="grid" size={23} />
-            </div>
-            <div>
-              <span style={s.infoLabel}>FUNCIONES ACTIVAS</span>
-              <h3 style={s.infoTitle}>{activos.length}</h3>
-              <p style={s.infoText}>
-                Módulos disponibles para trabajar desde esta cuenta.
-              </p>
-            </div>
-          </article>
+          <Info titulo="ACCESO ACTUAL" valor={usuarioRol || "Sin rol"} icono="🛡️" />
+          <Info titulo="TIPO DE NEGOCIO" valor={tipoNegocio || "No definido"} icono="🏢" />
+          <Info titulo="FUNCIONES ACTIVAS" valor={String(activos.length)} icono="▦" />
         </section>
       </main>
     </div>
   );
 }
 
-function Icon({ name, size = 20 }) {
-  const common = {
-    width: size,
-    height: size,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.8,
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    "aria-hidden": "true",
-  };
-
-  const paths = {
-    users: (
-      <>
-        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-      </>
-    ),
-    file: (
-      <>
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-        <path d="M14 2v6h6" />
-        <path d="M8 13h8M8 17h6" />
-      </>
-    ),
-    card: (
-      <>
-        <rect x="2" y="5" width="20" height="14" rx="2" />
-        <path d="M2 10h20" />
-      </>
-    ),
-    cash: (
-      <>
-        <rect x="2" y="6" width="20" height="12" rx="2" />
-        <circle cx="12" cy="12" r="2" />
-        <path d="M6 10h.01M18 14h.01" />
-      </>
-    ),
-    phone: (
-      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.63a2 2 0 0 1-.45 2.11L8 9.73a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.85.29 1.73.5 2.63.62A2 2 0 0 1 22 16.92z" />
-    ),
-    chart: (
-      <>
-        <path d="M3 3v18h18" />
-        <path d="M7 16l4-5 4 3 4-7" />
-      </>
-    ),
-    briefcase: (
-      <>
-        <rect x="3" y="7" width="18" height="13" rx="2" />
-        <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-        <path d="M3 12h18" />
-      </>
-    ),
-    payment: (
-      <>
-        <rect x="2" y="4" width="20" height="16" rx="2" />
-        <path d="M2 9h20" />
-        <path d="M7 15h4" />
-      </>
-    ),
-    bank: (
-      <>
-        <path d="M3 10h18" />
-        <path d="M5 10v8M9 10v8M15 10v8M19 10v8" />
-        <path d="M2 18h20M12 2l10 5H2z" />
-      </>
-    ),
-    box: (
-      <>
-        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-        <path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12" />
-      </>
-    ),
-    swap: (
-      <>
-        <path d="M7 7h11l-3-3M17 17H6l3 3" />
-      </>
-    ),
-    cart: (
-      <>
-        <circle cx="9" cy="20" r="1" />
-        <circle cx="19" cy="20" r="1" />
-        <path d="M3 4h2l2.7 11.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 8H6" />
-      </>
-    ),
-    trend: (
-      <>
-        <path d="M3 17l6-6 4 4 8-8" />
-        <path d="M14 7h7v7" />
-      </>
-    ),
-    receipt: (
-      <>
-        <path d="M6 2h12v20l-3-2-3 2-3-2-3 2z" />
-        <path d="M9 7h6M9 11h6M9 15h4" />
-      </>
-    ),
-    repeat: (
-      <>
-        <path d="M17 1l4 4-4 4" />
-        <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-        <path d="M7 23l-4-4 4-4" />
-        <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-      </>
-    ),
-    alert: (
-      <>
-        <path d="M10.3 2.8L1.8 17a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 2.8a2 2 0 0 0-3.4 0z" />
-        <path d="M12 9v4M12 17h.01" />
-      </>
-    ),
-    report: (
-      <>
-        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-        <path d="M9 7h7M9 11h7M9 15h4" />
-      </>
-    ),
-    lock: (
-      <>
-        <rect x="3" y="11" width="18" height="10" rx="2" />
-        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-      </>
-    ),
-    settings: (
-      <>
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.38.28.7.63.6 1.1V10h1v4h-.09a1.7 1.7 0 0 0-1.51 1z" />
-      </>
-    ),
-    logout: (
-      <>
-        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-        <path d="M16 17l5-5-5-5M21 12H9" />
-      </>
-    ),
-    arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
-    shield: (
-      <>
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        <path d="M9 12l2 2 4-4" />
-      </>
-    ),
-    building: (
-      <>
-        <path d="M3 21h18M6 21V3h12v18M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2" />
-      </>
-    ),
-    grid: (
-      <>
-        <rect x="3" y="3" width="7" height="7" />
-        <rect x="14" y="3" width="7" height="7" />
-        <rect x="3" y="14" width="7" height="7" />
-        <rect x="14" y="14" width="7" height="7" />
-      </>
-    ),
-  };
-
-  return <svg {...common}>{paths[name] || paths.grid}</svg>;
+function Info({ titulo, valor, icono }) {
+  return (
+    <article style={s.infoCard}>
+      <div style={s.infoIcon}>{icono}</div>
+      <div>
+        <span style={s.infoLabel}>{titulo}</span>
+        <h3 style={s.infoTitle}>{valor}</h3>
+        <p style={s.infoText}>
+          Información correspondiente a la empresa y al acceso actual.
+        </p>
+      </div>
+    </article>
+  );
 }
 
 const s = {
@@ -766,8 +724,7 @@ const s = {
     display: "flex",
     background: "#f3f6f4",
     color: "#142019",
-    fontFamily:
-      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
   },
   loading: {
     minHeight: "100vh",
@@ -777,20 +734,11 @@ const s = {
     justifyContent: "center",
     gap: 10,
     background: "#f3f6f4",
-    fontFamily:
-      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
   },
-  loadingLogo: {
-    width: 210,
-    marginBottom: 10,
-  },
-  loadingTitle: {
-    fontSize: 22,
-  },
-  loadingText: {
-    color: "#718078",
-    fontSize: 14,
-  },
+  loadingLogo: { width: 210, marginBottom: 10 },
+  loadingTitle: { fontSize: 22 },
+  loadingText: { color: "#718078", fontSize: 14 },
   sidebar: {
     width: 270,
     minWidth: 270,
@@ -812,20 +760,9 @@ const s = {
     padding: "8px 10px 22px",
     borderBottom: "1px solid rgba(255,255,255,.08)",
   },
-  logo: {
-    width: 170,
-    height: 62,
-    objectFit: "contain",
-    objectPosition: "left center",
-    display: "block",
-  },
-  nav: {
-    display: "grid",
-    gap: 5,
-    paddingTop: 18,
-  },
+  logo: { width: 170, height: 62, objectFit: "contain", objectPosition: "left" },
+  nav: { display: "grid", gap: 5, paddingTop: 18 },
   navItem: {
-    width: "100%",
     minHeight: 44,
     display: "grid",
     gridTemplateColumns: "24px 1fr",
@@ -842,32 +779,22 @@ const s = {
     cursor: "pointer",
   },
   logout: {
-    width: "100%",
     minHeight: 44,
     marginTop: "auto",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 9,
     border: "1px solid rgba(255,255,255,.12)",
     borderRadius: 11,
     background: "rgba(255,255,255,.05)",
-    color: "#ffffff",
+    color: "#fff",
     fontWeight: 750,
     cursor: "pointer",
   },
-  main: {
-    flex: 1,
-    minWidth: 0,
-    padding: "28px 30px 40px",
-  },
+  main: { flex: 1, minWidth: 0, padding: "28px 30px 40px" },
   topbar: {
     maxWidth: 1440,
     margin: "0 auto 22px",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 20,
   },
   eyebrow: {
     display: "block",
@@ -877,16 +804,8 @@ const s = {
     fontWeight: 900,
     letterSpacing: 1.4,
   },
-  pageTitle: {
-    margin: 0,
-    fontSize: 29,
-    letterSpacing: -0.4,
-  },
-  userBox: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  },
+  pageTitle: { margin: 0, fontSize: 29 },
+  userBox: { display: "flex", alignItems: "center", gap: 10 },
   avatar: {
     width: 42,
     height: 42,
@@ -894,19 +813,68 @@ const s = {
     placeItems: "center",
     borderRadius: 13,
     background: "#173c2a",
-    color: "#ffffff",
+    color: "#fff",
     fontWeight: 900,
   },
-  userName: {
-    display: "block",
-    fontSize: 13,
+  userName: { display: "block", fontSize: 13 },
+  userRole: { display: "block", color: "#7d8a82", fontSize: 11 },
+  avisoPendiente: {
+    maxWidth: 1440,
+    margin: "0 auto 18px",
+    display: "grid",
+    gridTemplateColumns: "48px 1fr",
+    gap: 14,
+    padding: 17,
+    border: "1px solid #e3c868",
+    borderRadius: 16,
+    background: "#fff9df",
   },
-  userRole: {
-    display: "block",
-    marginTop: 2,
-    color: "#7d8a82",
-    fontSize: 11,
+  avisoPrueba: {
+    maxWidth: 1440,
+    margin: "0 auto 18px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 18,
+    padding: 17,
+    border: "1px solid #9ed5b5",
+    borderRadius: 16,
+    background: "#ecf9f1",
   },
+  avisoCritico: { borderColor: "#efb1aa", background: "#fff0ee" },
+  avisoIzquierda: {
+    display: "grid",
+    gridTemplateColumns: "48px 1fr",
+    alignItems: "center",
+    gap: 14,
+  },
+  avisoIcono: {
+    width: 48,
+    height: 48,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 14,
+    background: "#fff",
+    fontSize: 22,
+  },
+  avisoEtiqueta: {
+    display: "block",
+    color: "#16834f",
+    fontSize: 9,
+    fontWeight: 900,
+    letterSpacing: 1.2,
+  },
+  avisoTitulo: { display: "block", marginTop: 4, fontSize: 15 },
+  avisoTexto: { margin: "4px 0 0", color: "#657169", fontSize: 12 },
+  diasCaja: {
+    minWidth: 110,
+    padding: 11,
+    borderRadius: 13,
+    background: "#fff",
+    textAlign: "center",
+  },
+  diasNumero: { display: "block", color: "#173c2a", fontSize: 28 },
+  diasTexto: { display: "block", color: "#6f7c74", fontSize: 10, fontWeight: 800 },
   hero: {
     maxWidth: 1440,
     margin: "0 auto 22px",
@@ -915,12 +883,8 @@ const s = {
     gap: 20,
     padding: 30,
     borderRadius: 24,
-    background:
-      "linear-gradient(135deg, #0b1710 0%, #123924 65%, #17673e 100%)",
+    background: "linear-gradient(135deg,#0b1710,#123924 65%,#17673e)",
     boxShadow: "0 22px 55px rgba(12,48,29,.18)",
-  },
-  heroMain: {
-    alignSelf: "center",
   },
   heroTag: {
     display: "block",
@@ -933,33 +897,18 @@ const s = {
   heroTitle: {
     maxWidth: 700,
     margin: "0 0 12px",
-    color: "#ffffff",
+    color: "#fff",
     fontSize: "clamp(34px,5vw,56px)",
     lineHeight: 1.02,
-    letterSpacing: -1.4,
   },
-  heroText: {
-    maxWidth: 680,
-    margin: 0,
-    color: "#d1e5d8",
-    fontSize: 15,
-    lineHeight: 1.6,
-  },
-  heroActions: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    marginTop: 22,
-  },
+  heroText: { maxWidth: 680, margin: 0, color: "#d1e5d8", lineHeight: 1.6 },
+  heroActions: { display: "flex", gap: 10, marginTop: 22 },
   primaryButton: {
     minHeight: 44,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 9,
     padding: "10px 16px",
     border: "none",
     borderRadius: 11,
-    background: "#ffffff",
+    background: "#fff",
     color: "#123622",
     fontWeight: 850,
     cursor: "pointer",
@@ -970,30 +919,18 @@ const s = {
     border: "1px solid rgba(255,255,255,.18)",
     borderRadius: 11,
     background: "rgba(255,255,255,.06)",
-    color: "#ffffff",
+    color: "#fff",
     fontWeight: 800,
     cursor: "pointer",
   },
   planPanel: {
-    alignSelf: "stretch",
     padding: 20,
     border: "1px solid rgba(255,255,255,.14)",
     borderRadius: 18,
     background: "rgba(255,255,255,.08)",
   },
-  planLabel: {
-    display: "block",
-    marginBottom: 8,
-    color: "#95d8b2",
-    fontSize: 10,
-    fontWeight: 900,
-    letterSpacing: 1.2,
-  },
-  planName: {
-    display: "block",
-    color: "#ffffff",
-    fontSize: 23,
-  },
+  planLabel: { display: "block", color: "#95d8b2", fontSize: 10, fontWeight: 900 },
+  planName: { display: "block", marginTop: 8, color: "#fff", fontSize: 23 },
   planStatus: {
     display: "flex",
     alignItems: "center",
@@ -1001,56 +938,27 @@ const s = {
     marginTop: 10,
     color: "#dff4e7",
     fontSize: 12,
-    fontWeight: 750,
   },
-  greenDot: {
-    width: 8,
-    height: 8,
-    borderRadius: "50%",
-    background: "#52dd91",
-  },
-  planDivider: {
-    height: 1,
-    margin: "18px 0",
-    background: "rgba(255,255,255,.12)",
-  },
-  planSmall: {
-    color: "#b9d8c5",
-    fontSize: 12,
-  },
+  greenDot: { width: 8, height: 8, borderRadius: "50%", background: "#52dd91" },
+  planDivider: { height: 1, margin: "18px 0", background: "rgba(255,255,255,.12)" },
+  planSmall: { color: "#b9d8c5", fontSize: 12 },
   section: {
     maxWidth: 1440,
     margin: "0 auto 22px",
     padding: 22,
     border: "1px solid #dfe7e2",
     borderRadius: 20,
-    background: "#ffffff",
-    boxShadow: "0 10px 30px rgba(15,23,42,.045)",
+    background: "#fff",
   },
   sectionHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "end",
-    gap: 18,
     marginBottom: 16,
   },
-  sectionEyebrow: {
-    display: "block",
-    marginBottom: 5,
-    color: "#16834f",
-    fontSize: 10,
-    fontWeight: 900,
-    letterSpacing: 1.3,
-  },
-  sectionTitle: {
-    margin: 0,
-    fontSize: 24,
-    letterSpacing: -0.3,
-  },
-  sectionHint: {
-    color: "#8b9690",
-    fontSize: 12,
-  },
+  sectionEyebrow: { color: "#16834f", fontSize: 10, fontWeight: 900 },
+  sectionTitle: { margin: "5px 0 0", fontSize: 24 },
+  sectionHint: { color: "#8b9690", fontSize: 12 },
   quickGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
@@ -1066,7 +974,6 @@ const s = {
     border: "1px solid #dfe7e2",
     borderRadius: 15,
     background: "#fbfdfc",
-    color: "#173122",
     textAlign: "left",
     cursor: "pointer",
   },
@@ -1077,21 +984,9 @@ const s = {
     placeItems: "center",
     borderRadius: 12,
     background: "#e8f6ee",
-    color: "#16834f",
   },
-  quickTextBox: {
-    minWidth: 0,
-  },
-  quickTitle: {
-    display: "block",
-    fontSize: 14,
-  },
-  quickText: {
-    display: "block",
-    marginTop: 4,
-    color: "#849087",
-    fontSize: 11,
-  },
+  quickTitle: { display: "block" },
+  quickText: { display: "block", marginTop: 4, color: "#849087" },
   bottomGrid: {
     maxWidth: 1440,
     margin: "0 auto",
@@ -1107,7 +1002,7 @@ const s = {
     padding: 20,
     border: "1px solid #dfe7e2",
     borderRadius: 18,
-    background: "#ffffff",
+    background: "#fff",
   },
   infoIcon: {
     width: 48,
@@ -1116,24 +1011,75 @@ const s = {
     placeItems: "center",
     borderRadius: 13,
     background: "#edf6f0",
-    color: "#16834f",
   },
-  infoLabel: {
-    display: "block",
-    marginBottom: 5,
-    color: "#16834f",
-    fontSize: 10,
-    fontWeight: 900,
-    letterSpacing: 1.1,
+  infoLabel: { color: "#16834f", fontSize: 10, fontWeight: 900 },
+  infoTitle: { margin: "5px 0 7px" },
+  infoText: { margin: 0, color: "#748078", fontSize: 12 },
+  bloqueoPagina: {
+    minHeight: "100vh",
+    display: "grid",
+    placeItems: "center",
+    padding: 24,
+    background: "radial-gradient(circle at top,#174d30,#07100b 70%)",
+    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
   },
-  infoTitle: {
-    margin: "0 0 7px",
-    fontSize: 20,
+  bloqueoTarjeta: {
+    width: "min(650px,100%)",
+    padding: 34,
+    borderRadius: 24,
+    background: "#fff",
+    textAlign: "center",
+    boxShadow: "0 28px 70px rgba(0,0,0,.28)",
   },
-  infoText: {
-    margin: 0,
-    color: "#748078",
-    fontSize: 12,
-    lineHeight: 1.5,
+  bloqueoLogo: { width: 210, maxWidth: "70%" },
+  candado: {
+    width: 66,
+    height: 66,
+    margin: "20px auto 16px",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 20,
+    background: "#fff0ee",
+    fontSize: 30,
   },
+  bloqueoEtiqueta: { color: "#b42318", fontSize: 10, fontWeight: 900 },
+  bloqueoTitulo: { margin: "8px 0 12px", fontSize: 31 },
+  bloqueoTexto: { color: "#66736b", lineHeight: 1.65 },
+  bloqueoResumen: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2,1fr)",
+    gap: 12,
+    margin: "22px 0",
+  },
+  bloqueoDato: {
+    padding: 15,
+    border: "1px solid #e1e8e3",
+    borderRadius: 14,
+    background: "#f8faf9",
+  },
+  bloqueoAcciones: {
+    display: "flex",
+    justifyContent: "center",
+    gap: 10,
+  },
+  botonVerde: {
+    minHeight: 44,
+    padding: "10px 17px",
+    border: "none",
+    borderRadius: 11,
+    background: "#16834f",
+    color: "#fff",
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+  botonClaro: {
+    minHeight: 44,
+    padding: "10px 17px",
+    border: "1px solid #cfd9d2",
+    borderRadius: 11,
+    background: "#fff",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  notaWhatsapp: { marginTop: 18, color: "#8b958f", fontSize: 10 },
 };
