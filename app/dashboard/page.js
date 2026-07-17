@@ -470,16 +470,6 @@ export default function Dashboard() {
 
   const activos = modulosMenu.filter((item) => item.activo);
 
-  const atajos = [
-    "Clientes",
-    "Créditos",
-    "Cobranza",
-    "Caja",
-    "Reportes",
-  ]
-    .map((nombre) => activos.find((item) => item.nombre === nombre))
-    .filter(Boolean);
-
   if (cargando) {
     return (
       <div style={s.loading}>
@@ -650,33 +640,6 @@ export default function Dashboard() {
             </div>
             <div style={s.planDivider}></div>
             <span style={s.planSmall}>{activos.length} funciones habilitadas</span>
-          </div>
-        </section>
-
-        <section style={s.section}>
-          <div style={s.sectionHeader}>
-            <div>
-              <span style={s.sectionEyebrow}>ATAJOS</span>
-              <h3 style={s.sectionTitle}>Acciones frecuentes</h3>
-            </div>
-            <span style={s.sectionHint}>Accesos rápidos</span>
-          </div>
-
-          <div style={s.quickGrid}>
-            {atajos.map((item) => (
-              <button
-                key={item.nombre}
-                onClick={() => abrirModulo(item.ruta)}
-                style={s.quickCard}
-              >
-                <span style={s.quickIcon}>{item.icono}</span>
-                <span>
-                  <strong style={s.quickTitle}>{item.nombre}</strong>
-                  <small style={s.quickText}>Abrir módulo</small>
-                </span>
-                <span>→</span>
-              </button>
-            ))}
           </div>
         </section>
 
@@ -908,51 +871,6 @@ const s = {
   greenDot: { width: 8, height: 8, borderRadius: "50%", background: "#52dd91" },
   planDivider: { height: 1, margin: "18px 0", background: "rgba(255,255,255,.12)" },
   planSmall: { color: "#b9d8c5", fontSize: 12 },
-  section: {
-    maxWidth: 1440,
-    margin: "0 auto 22px",
-    padding: 22,
-    border: "1px solid #dfe7e2",
-    borderRadius: 20,
-    background: "#fff",
-  },
-  sectionHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "end",
-    marginBottom: 16,
-  },
-  sectionEyebrow: { color: "#16834f", fontSize: 10, fontWeight: 900 },
-  sectionTitle: { margin: "5px 0 0", fontSize: 24 },
-  sectionHint: { color: "#8b9690", fontSize: 12 },
-  quickGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-    gap: 12,
-  },
-  quickCard: {
-    minHeight: 84,
-    display: "grid",
-    gridTemplateColumns: "42px 1fr auto",
-    alignItems: "center",
-    gap: 12,
-    padding: 14,
-    border: "1px solid #dfe7e2",
-    borderRadius: 15,
-    background: "#fbfdfc",
-    textAlign: "left",
-    cursor: "pointer",
-  },
-  quickIcon: {
-    width: 42,
-    height: 42,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: 12,
-    background: "#e8f6ee",
-  },
-  quickTitle: { display: "block" },
-  quickText: { display: "block", marginTop: 4, color: "#849087" },
   bottomGrid: {
     maxWidth: 1440,
     margin: "0 auto",
