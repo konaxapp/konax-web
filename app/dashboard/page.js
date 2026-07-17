@@ -420,7 +420,7 @@ export default function Dashboard() {
 
   function contactarKonax() {
     window.open(
-      "https://wa.me/50760000000?text=Hola%2C%20deseo%20activar%20un%20plan%20de%20KONAX.",
+      "https://wa.me/50760211024?text=Hola%2C%20deseo%20activar%20un%20plan%20de%20KONAX.",
       "_blank",
       "noopener,noreferrer"
     );
@@ -525,7 +525,7 @@ export default function Dashboard() {
           </div>
 
           <p style={s.notaWhatsapp}>
-            Cambia <strong>50760000000</strong> por el WhatsApp comercial real.
+            Cambia <strong>50760211024</strong> por el WhatsApp comercial real.
           </p>
         </div>
       </div>
