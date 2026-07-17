@@ -420,7 +420,7 @@ export default function Dashboard() {
 
   function contactarKonax() {
     window.open(
-      "https://wa.me/50760211024?text=Hola%2C%20deseo%20activar%20un%20plan%20de%20KONAX.",
+      "https://wa.me/50760000000?text=Hola%2C%20deseo%20activar%20un%20plan%20de%20KONAX.",
       "_blank",
       "noopener,noreferrer"
     );
@@ -525,7 +525,7 @@ export default function Dashboard() {
           </div>
 
           <p style={s.notaWhatsapp}>
-            Cambia <strong>50760211024</strong> por el WhatsApp comercial real.
+            Cambia <strong>50760000000</strong> por el WhatsApp comercial real.
           </p>
         </div>
       </div>
@@ -633,19 +633,6 @@ export default function Dashboard() {
               Accede a las funciones principales y mantén organizada la operación
               diaria de {tipoNegocio || "tu empresa"}.
             </p>
-
-            <div style={s.heroActions}>
-              {puedeVer("reportes") && (
-                <button onClick={() => abrirModulo("/reportes")} style={s.primaryButton}>
-                  Ver reportes →
-                </button>
-              )}
-              {puedeVer("clientes") && (
-                <button onClick={() => abrirModulo("/clientes")} style={s.secondaryButton}>
-                  Abrir clientes
-                </button>
-              )}
-            </div>
           </div>
 
           <div style={s.planPanel}>
@@ -902,27 +889,6 @@ const s = {
     lineHeight: 1.02,
   },
   heroText: { maxWidth: 680, margin: 0, color: "#d1e5d8", lineHeight: 1.6 },
-  heroActions: { display: "flex", gap: 10, marginTop: 22 },
-  primaryButton: {
-    minHeight: 44,
-    padding: "10px 16px",
-    border: "none",
-    borderRadius: 11,
-    background: "#fff",
-    color: "#123622",
-    fontWeight: 850,
-    cursor: "pointer",
-  },
-  secondaryButton: {
-    minHeight: 44,
-    padding: "10px 16px",
-    border: "1px solid rgba(255,255,255,.18)",
-    borderRadius: 11,
-    background: "rgba(255,255,255,.06)",
-    color: "#fff",
-    fontWeight: 800,
-    cursor: "pointer",
-  },
   planPanel: {
     padding: 20,
     border: "1px solid rgba(255,255,255,.14)",
