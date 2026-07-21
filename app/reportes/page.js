@@ -7,16 +7,28 @@ export default function ReportesPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
+  const [tipoNegocio, setTipoNegocio] = useState("");
+  const [planCodigo, setPlanCodigo] = useState("");
+  const [empresaNombre, setEmpresaNombre] = useState("");
+
   const [clientes, setClientes] = useState([]);
   const [comercial, setComercial] = useState([]);
   const [cobranza, setCobranza] = useState([]);
   const [caja, setCaja] = useState([]);
+  const [suscripciones, setSuscripciones] = useState([]);
+  const [productos, setProductos] = useState([]);
 
   const [fechaDesde, setFechaDesde] = useState(primerDiaMes());
   const [fechaHasta, setFechaHasta] = useState(fechaActual());
-  const [estadoCredito, setEstadoCredito] = useState("Todos");
+  const [estadoFiltro, setEstadoFiltro] = useState("Todos");
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      setTipoNegocio(localStorage.getItem("tipoNegocio") || "");
+      setPlanCodigo(localStorage.getItem("planCodigo") || "");
+      setEmpresaNombre(localStorage.getItem("empresaNombre") || "");
+    }
+
     cargarDatos();
   }, []);
 
@@ -44,7 +56,7 @@ export default function ReportesPage() {
     return empresaId;
   }
 
-  async function consultarTabla(tabla, empresaId) {
+  async function consultarTabla(tabla, empresaId, opcional = false) {
     const { data, error: errorConsulta } = await supabase
       .from(tabla)
       .select("*")
@@ -52,6 +64,11 @@ export default function ReportesPage() {
       .limit(10000);
 
     if (errorConsulta) {
+      if (opcional) {
+        console.warn(`Tabla opcional ${tabla}:`, errorConsulta.message);
+        return [];
+      }
+
       throw new Error(`${tabla}: ${errorConsulta.message}`);
     }
 
@@ -66,22 +83,32 @@ export default function ReportesPage() {
     setError("");
 
     try {
-      const [clientesData, comercialData, cobranzaData, cajaData] =
-        await Promise.all([
-          consultarTabla("clientes", empresaId),
-          consultarTabla("informacion_comercial", empresaId),
-          consultarTabla("informacion_cobranza", empresaId),
-          consultarTabla("caja", empresaId),
-        ]);
+      const [
+        clientesData,
+        comercialData,
+        cobranzaData,
+        cajaData,
+        suscripcionesData,
+        productosData,
+      ] = await Promise.all([
+        consultarTabla("clientes", empresaId),
+        consultarTabla("informacion_comercial", empresaId, true),
+        consultarTabla("informacion_cobranza", empresaId, true),
+        consultarTabla("caja", empresaId, true),
+        consultarTabla("suscripciones", empresaId, true),
+        consultarTabla("productos", empresaId, true),
+      ]);
 
       setClientes(clientesData);
       setComercial(comercialData);
       setCobranza(cobranzaData);
       setCaja(cajaData);
+      setSuscripciones(suscripcionesData);
+      setProductos(productosData);
     } catch (err) {
       console.error("Error cargando reportes:", err);
       setError(
-        "No fue posible cargar todos los datos. Revisa las políticas RLS y que el usuario tenga acceso a las tablas."
+        "No fue posible cargar todos los datos. Revisa las políticas RLS y el acceso de la empresa."
       );
     } finally {
       setCargando(false);
@@ -116,6 +143,49 @@ export default function ReportesPage() {
       .trim();
   }
 
+  function obtenerFechaSuscripcion(registro) {
+    return fechaCorta(
+      registro.fecha_fin ||
+        registro.fecha_vencimiento ||
+        registro.fecha_proximo_pago ||
+        registro.proxima_fecha_pago ||
+        registro.vencimiento ||
+        registro.created_at
+    );
+  }
+
+  function obtenerFechaInicioSuscripcion(registro) {
+    return fechaCorta(
+      registro.fecha_inicio ||
+        registro.fecha_alta ||
+        registro.created_at
+    );
+  }
+
+  function obtenerNombreCliente(registro) {
+    const cliente = clientes.find(
+      (item) => String(item.id) === String(registro.cliente_id)
+    );
+
+    return (
+      registro.cliente_nombre ||
+      registro.nombre_cliente ||
+      cliente?.nombre ||
+      cliente?.nombre_completo ||
+      "Cliente sin nombre"
+    );
+  }
+
+  const tipoNormalizado = textoNormalizado(tipoNegocio);
+  const esGimnasio =
+    tipoNormalizado.includes("gimnasio") ||
+    tipoNormalizado.includes("fitness") ||
+    tipoNormalizado.includes("gym");
+
+  const esReporteSuscripciones =
+    esGimnasio ||
+    textoNormalizado(planCodigo) === "ventas_gestion";
+
   const clientesPeriodo = useMemo(() => {
     return clientes.filter((cliente) => estaEnRango(cliente.created_at));
   }, [clientes, fechaDesde, fechaHasta]);
@@ -127,25 +197,37 @@ export default function ReportesPage() {
       );
 
       const cumpleEstado =
-        estadoCredito === "Todos" ||
-        textoNormalizado(registro.estado) ===
-          textoNormalizado(estadoCredito);
+        estadoFiltro === "Todos" ||
+        textoNormalizado(registro.estado) === textoNormalizado(estadoFiltro);
 
       return cumpleFecha && cumpleEstado;
     });
-  }, [comercial, fechaDesde, fechaHasta, estadoCredito]);
+  }, [comercial, fechaDesde, fechaHasta, estadoFiltro]);
 
   const cajaPeriodo = useMemo(() => {
     return caja.filter((movimiento) => {
-      const procesado =
-        textoNormalizado(movimiento.estado) === "procesado";
+      const estado = textoNormalizado(movimiento.estado);
+      const procesado = !estado || estado === "procesado" || estado === "pagado";
 
       return (
         procesado &&
-        estaEnRango(movimiento.fecha_pago || movimiento.created_at)
+        estaEnRango(movimiento.fecha_pago || movimiento.fecha || movimiento.created_at)
       );
     });
   }, [caja, fechaDesde, fechaHasta]);
+
+  const suscripcionesPeriodo = useMemo(() => {
+    return suscripciones.filter((registro) => {
+      const fecha = obtenerFechaInicioSuscripcion(registro);
+      const cumpleFecha = fecha ? estaEnRango(fecha) : true;
+
+      const cumpleEstado =
+        estadoFiltro === "Todos" ||
+        textoNormalizado(registro.estado) === textoNormalizado(estadoFiltro);
+
+      return cumpleFecha && cumpleEstado;
+    });
+  }, [suscripciones, fechaDesde, fechaHasta, estadoFiltro]);
 
   const cobranzaPorCredito = useMemo(() => {
     const mapa = new Map();
@@ -159,7 +241,41 @@ export default function ReportesPage() {
     return mapa;
   }, [cobranza]);
 
-  const resumen = useMemo(() => {
+  const resumenCaja = useMemo(() => {
+    const ingresosCaja = cajaPeriodo
+      .filter((movimiento) => {
+        const tipo = textoNormalizado(movimiento.tipo);
+
+        return !(
+          tipo.includes("egreso") ||
+          tipo.includes("gasto") ||
+          tipo.includes("retiro") ||
+          tipo.includes("salida")
+        );
+      })
+      .reduce((total, movimiento) => total + numero(movimiento.monto), 0);
+
+    const egresosCaja = cajaPeriodo
+      .filter((movimiento) => {
+        const tipo = textoNormalizado(movimiento.tipo);
+
+        return (
+          tipo.includes("egreso") ||
+          tipo.includes("gasto") ||
+          tipo.includes("retiro") ||
+          tipo.includes("salida")
+        );
+      })
+      .reduce((total, movimiento) => total + numero(movimiento.monto), 0);
+
+    return {
+      ingresosCaja,
+      egresosCaja,
+      balance: ingresosCaja - egresosCaja,
+    };
+  }, [cajaPeriodo]);
+
+  const resumenGeneral = useMemo(() => {
     const creditosPeriodo = comercialPeriodo.filter((registro) =>
       textoNormalizado(registro.tipo_producto).includes("credito")
     );
@@ -198,47 +314,6 @@ export default function ReportesPage() {
       return numero(datoCobranza?.dias_mora) > 0;
     }).length;
 
-    const cobrado = cajaPeriodo
-      .filter((movimiento) => {
-        const tipo = textoNormalizado(movimiento.tipo);
-        return (
-          tipo.includes("pago") ||
-          tipo.includes("abono") ||
-          tipo.includes("cobro")
-        );
-      })
-      .reduce((total, movimiento) => total + numero(movimiento.monto), 0);
-
-    const ingresosCaja = cajaPeriodo
-      .filter((movimiento) => {
-        const tipo = textoNormalizado(movimiento.tipo);
-
-        return !(
-          tipo.includes("egreso") ||
-          tipo.includes("gasto") ||
-          tipo.includes("retiro") ||
-          tipo.includes("salida")
-        );
-      })
-      .reduce((total, movimiento) => total + numero(movimiento.monto), 0);
-
-    const egresosCaja = cajaPeriodo
-      .filter((movimiento) => {
-        const tipo = textoNormalizado(movimiento.tipo);
-
-        return (
-          tipo.includes("egreso") ||
-          tipo.includes("gasto") ||
-          tipo.includes("retiro") ||
-          tipo.includes("salida")
-        );
-      })
-      .reduce((total, movimiento) => total + numero(movimiento.monto), 0);
-
-    const creditosActivos = comercialPeriodo.filter(
-      (registro) => textoNormalizado(registro.estado) === "activo"
-    ).length;
-
     const porcentajeMora =
       carteraPendiente > 0
         ? (carteraVencida / carteraPendiente) * 100
@@ -258,26 +333,113 @@ export default function ReportesPage() {
       carteraPendiente,
       carteraVencida,
       cuentasEnMora,
-      cobrado,
-      ingresosCaja,
-      egresosCaja,
-      creditosActivos,
-      clientesNuevos: clientesPeriodo.length,
       porcentajeMora,
       ticketPromedio,
+      clientesNuevos: clientesPeriodo.length,
+      ...resumenCaja,
     };
   }, [
     comercialPeriodo,
-    cajaPeriodo,
     clientesPeriodo,
     cobranzaPorCredito,
+    resumenCaja,
+  ]);
+
+  const resumenGimnasio = useMemo(() => {
+    const hoy = fechaActual();
+    const enSieteDias = new Date();
+    enSieteDias.setDate(enSieteDias.getDate() + 7);
+    const limiteProximo = enSieteDias.toISOString().slice(0, 10);
+
+    const activas = suscripciones.filter((registro) => {
+      const estado = textoNormalizado(registro.estado);
+      const vencimiento = obtenerFechaSuscripcion(registro);
+
+      if (estado.includes("cancel") || estado.includes("suspend")) return false;
+      if (vencimiento && vencimiento < hoy) return false;
+
+      return estado.includes("activ") || !estado;
+    });
+
+    const vencidas = suscripciones.filter((registro) => {
+      const estado = textoNormalizado(registro.estado);
+      const vencimiento = obtenerFechaSuscripcion(registro);
+
+      return (
+        estado.includes("venc") ||
+        (vencimiento && vencimiento < hoy)
+      );
+    });
+
+    const proximasVencer = suscripciones.filter((registro) => {
+      const vencimiento = obtenerFechaSuscripcion(registro);
+      return vencimiento && vencimiento >= hoy && vencimiento <= limiteProximo;
+    });
+
+    const renovaciones = suscripcionesPeriodo.filter((registro) => {
+      const texto = textoNormalizado(
+        `${registro.tipo || ""} ${registro.descripcion || ""} ${registro.estado || ""}`
+      );
+      return texto.includes("renov");
+    }).length;
+
+    const ingresosMembresias = cajaPeriodo
+      .filter((movimiento) => {
+        const texto = textoNormalizado(
+          `${movimiento.tipo || ""} ${movimiento.descripcion || ""} ${movimiento.concepto || ""}`
+        );
+
+        return (
+          texto.includes("suscripcion") ||
+          texto.includes("membresia") ||
+          texto.includes("mensualidad") ||
+          texto.includes("renovacion")
+        );
+      })
+      .reduce((total, movimiento) => total + numero(movimiento.monto), 0);
+
+    const ventasProductos = comercialPeriodo
+      .filter((registro) => {
+        const tipo = textoNormalizado(registro.tipo_producto);
+        return tipo.includes("venta") && !tipo.includes("credito");
+      })
+      .reduce((total, registro) => total + numero(registro.monto_total), 0);
+
+    const productosBajoStock = productos.filter((producto) => {
+      const stock = numero(producto.stock_actual ?? producto.stock);
+      const minimo = numero(producto.stock_minimo);
+      return minimo > 0 && stock <= minimo;
+    });
+
+    return {
+      miembrosActivos: activas.length,
+      membresiasVencidas: vencidas.length,
+      proximasVencer: proximasVencer.length,
+      renovaciones,
+      ingresosMembresias,
+      ventasProductos,
+      clientesNuevos: clientesPeriodo.length,
+      productosBajoStock: productosBajoStock.length,
+      suscripcionesActivas: activas,
+      suscripcionesVencidas: vencidas,
+      suscripcionesProximas: proximasVencer,
+      ...resumenCaja,
+    };
+  }, [
+    suscripciones,
+    suscripcionesPeriodo,
+    cajaPeriodo,
+    comercialPeriodo,
+    clientesPeriodo,
+    productos,
+    resumenCaja,
   ]);
 
   const movimientosRecientes = useMemo(() => {
-    const movimientosCredito = comercialPeriodo.map((registro) => ({
+    const movimientosComerciales = comercialPeriodo.map((registro) => ({
       id: `comercial-${registro.id}`,
       fecha: fechaCorta(registro.fecha_inicio || registro.created_at),
-      tipo: registro.tipo_producto || "Crédito",
+      tipo: registro.tipo_producto || "Venta",
       detalle:
         registro.numero_cuenta ||
         registro.descripcion ||
@@ -288,21 +450,46 @@ export default function ReportesPage() {
 
     const movimientosCaja = cajaPeriodo.map((registro) => ({
       id: `caja-${registro.id}`,
-      fecha: fechaCorta(registro.fecha_pago || registro.created_at),
+      fecha: fechaCorta(
+        registro.fecha_pago || registro.fecha || registro.created_at
+      ),
       tipo: registro.tipo || "Caja",
       detalle:
         registro.cliente_nombre ||
         registro.descripcion ||
         registro.numero_transaccion ||
         "Movimiento de caja",
-      responsable: registro.usuario || "Sin asignar",
+      responsable: registro.usuario || registro.responsable || "Sin asignar",
       monto: numero(registro.monto),
     }));
 
-    return [...movimientosCredito, ...movimientosCaja]
+    const movimientosSuscripciones = esReporteSuscripciones
+      ? suscripcionesPeriodo.map((registro) => ({
+          id: `suscripcion-${registro.id}`,
+          fecha: obtenerFechaInicioSuscripcion(registro),
+          tipo: "Membresía",
+          detalle: `${obtenerNombreCliente(registro)} · ${
+            registro.plan_nombre || registro.nombre_plan || "Plan"
+          }`,
+          responsable: registro.responsable || "Sistema",
+          monto: numero(registro.monto || registro.precio || registro.total),
+        }))
+      : [];
+
+    return [
+      ...movimientosComerciales,
+      ...movimientosCaja,
+      ...movimientosSuscripciones,
+    ]
       .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
       .slice(0, 15);
-  }, [comercialPeriodo, cajaPeriodo]);
+  }, [
+    comercialPeriodo,
+    cajaPeriodo,
+    suscripcionesPeriodo,
+    esReporteSuscripciones,
+    clientes,
+  ]);
 
   const cuentasMora = useMemo(() => {
     return comercialPeriodo
@@ -313,7 +500,6 @@ export default function ReportesPage() {
         return {
           id: registro.id,
           cuenta: registro.numero_cuenta || "Sin número",
-          clienteId: registro.cliente_id,
           saldo: numero(registro.saldo_actual),
           diasMora,
           estadoCobranza:
@@ -328,6 +514,43 @@ export default function ReportesPage() {
       .sort((a, b) => b.diasMora - a.diasMora);
   }, [comercialPeriodo, cobranzaPorCredito]);
 
+  const membresiasTabla = useMemo(() => {
+    const hoy = fechaActual();
+
+    return suscripciones
+      .map((registro) => {
+        const vencimiento = obtenerFechaSuscripcion(registro);
+        const diferencia = vencimiento
+          ? Math.ceil(
+              (new Date(`${vencimiento}T00:00:00`).getTime() -
+                new Date(`${hoy}T00:00:00`).getTime()) /
+                86400000
+            )
+          : null;
+
+        let estado = registro.estado || "Activa";
+
+        if (diferencia !== null && diferencia < 0) estado = "Vencida";
+        else if (diferencia !== null && diferencia <= 7) estado = "Por vencer";
+
+        return {
+          id: registro.id,
+          cliente: obtenerNombreCliente(registro),
+          plan: registro.plan_nombre || registro.nombre_plan || "Sin plan",
+          vencimiento: vencimiento || "Sin fecha",
+          dias: diferencia,
+          estado,
+        };
+      })
+      .filter((registro) => {
+        const estado = textoNormalizado(registro.estado);
+        return estado.includes("venc") || estado.includes("por vencer");
+      })
+      .sort((a, b) =>
+        String(a.vencimiento).localeCompare(String(b.vencimiento))
+      );
+  }, [suscripciones, clientes]);
+
   function moneda(valor) {
     return new Intl.NumberFormat("es-PA", {
       style: "currency",
@@ -337,34 +560,52 @@ export default function ReportesPage() {
   }
 
   function exportarExcel() {
-    const filas = [
-      ["REPORTE GENERAL KONAX"],
-      ["Desde", fechaDesde],
-      ["Hasta", fechaHasta],
-      [],
-      ["Indicador", "Resultado"],
-      ["Créditos otorgados", resumen.montoCreditos],
-      ["Ventas registradas", resumen.montoVentas],
-      ["Cobrado en el período", resumen.cobrado],
-      ["Cartera pendiente", resumen.carteraPendiente],
-      ["Cartera vencida", resumen.carteraVencida],
-      ["Cuentas en mora", resumen.cuentasEnMora],
-      ["Ingresos de caja", resumen.ingresosCaja],
-      ["Egresos de caja", resumen.egresosCaja],
-      ["Créditos activos", resumen.creditosActivos],
-      ["Clientes nuevos", resumen.clientesNuevos],
-      ["Porcentaje de mora", `${resumen.porcentajeMora.toFixed(2)}%`],
-    ];
+    const filas = esReporteSuscripciones
+      ? [
+          ["REPORTE KONAX - MEMBRESÍAS Y GESTIÓN"],
+          ["Empresa", empresaNombre || "Empresa"],
+          ["Desde", fechaDesde],
+          ["Hasta", fechaHasta],
+          [],
+          ["Indicador", "Resultado"],
+          ["Miembros activos", resumenGimnasio.miembrosActivos],
+          ["Membresías próximas a vencer", resumenGimnasio.proximasVencer],
+          ["Membresías vencidas", resumenGimnasio.membresiasVencidas],
+          ["Renovaciones", resumenGimnasio.renovaciones],
+          ["Ingresos por membresías", resumenGimnasio.ingresosMembresias],
+          ["Ventas de productos", resumenGimnasio.ventasProductos],
+          ["Ingresos de caja", resumenGimnasio.ingresosCaja],
+          ["Egresos de caja", resumenGimnasio.egresosCaja],
+          ["Balance", resumenGimnasio.balance],
+          ["Clientes nuevos", resumenGimnasio.clientesNuevos],
+          ["Productos con bajo stock", resumenGimnasio.productosBajoStock],
+        ]
+      : [
+          ["REPORTE GENERAL KONAX"],
+          ["Desde", fechaDesde],
+          ["Hasta", fechaHasta],
+          [],
+          ["Indicador", "Resultado"],
+          ["Créditos otorgados", resumenGeneral.montoCreditos],
+          ["Ventas registradas", resumenGeneral.montoVentas],
+          ["Cartera pendiente", resumenGeneral.carteraPendiente],
+          ["Cartera vencida", resumenGeneral.carteraVencida],
+          ["Cuentas en mora", resumenGeneral.cuentasEnMora],
+          ["Ingresos de caja", resumenGeneral.ingresosCaja],
+          ["Egresos de caja", resumenGeneral.egresosCaja],
+          ["Clientes nuevos", resumenGeneral.clientesNuevos],
+          ["Porcentaje de mora", `${resumenGeneral.porcentajeMora.toFixed(2)}%`],
+        ];
 
-    const csv = "\uFEFF" + filas
-      .map((fila) =>
-        fila
-          .map((celda) =>
-            `"${String(celda ?? "").replace(/"/g, '""')}"`
-          )
-          .join(";")
-      )
-      .join("\n");
+    const csv =
+      "\uFEFF" +
+      filas
+        .map((fila) =>
+          fila
+            .map((celda) => `"${String(celda ?? "").replace(/"/g, '""')}"`)
+            .join(";")
+        )
+        .join("\n");
 
     const blob = new Blob([csv], {
       type: "text/csv;charset=utf-8;",
@@ -374,7 +615,7 @@ export default function ReportesPage() {
     const enlace = document.createElement("a");
 
     enlace.href = url;
-    enlace.download = `reporte-general-${fechaDesde}-${fechaHasta}.csv`;
+    enlace.download = `reporte-${fechaDesde}-${fechaHasta}.csv`;
     enlace.click();
 
     URL.revokeObjectURL(url);
@@ -387,7 +628,7 @@ export default function ReportesPage() {
   function limpiarFiltros() {
     setFechaDesde(primerDiaMes());
     setFechaHasta(fechaActual());
-    setEstadoCredito("Todos");
+    setEstadoFiltro("Todos");
   }
 
   if (cargando) {
@@ -406,9 +647,15 @@ export default function ReportesPage() {
       <header style={estilos.encabezado}>
         <div>
           <span style={estilos.etiqueta}>CENTRO DE REPORTES Y ANÁLISIS</span>
-          <h1 style={estilos.titulo}>Reporte general</h1>
+          <h1 style={estilos.titulo}>
+            {esReporteSuscripciones
+              ? "Reporte de membresías y gestión"
+              : "Reporte general"}
+          </h1>
           <p style={estilos.subtitulo}>
-            Información consolidada de créditos, cobranza, caja y clientes.
+            {esReporteSuscripciones
+              ? "Información consolidada de miembros, membresías, caja, ventas e inventario."
+              : "Información consolidada de créditos, cobranza, caja y clientes."}
           </p>
         </div>
 
@@ -452,17 +699,23 @@ export default function ReportesPage() {
           />
         </Campo>
 
-        <Campo label="Estado del crédito">
+        <Campo
+          label={
+            esReporteSuscripciones
+              ? "Estado de la membresía"
+              : "Estado del crédito"
+          }
+        >
           <select
-            value={estadoCredito}
-            onChange={(e) => setEstadoCredito(e.target.value)}
+            value={estadoFiltro}
+            onChange={(e) => setEstadoFiltro(e.target.value)}
             style={estilos.input}
           >
             <option value="Todos">Todos</option>
             <option value="Activo">Activo</option>
-            <option value="Pagado">Pagado</option>
-            <option value="Cancelado">Cancelado</option>
+            <option value="Vencido">Vencido</option>
             <option value="Suspendido">Suspendido</option>
+            <option value="Cancelado">Cancelado</option>
           </select>
         </Campo>
 
@@ -493,153 +746,360 @@ export default function ReportesPage() {
         </div>
       </section>
 
-      <section style={estilos.tarjetas}>
-        <Tarjeta
-          icono="💳"
-          titulo="Créditos otorgados"
-          valor={moneda(resumen.montoCreditos)}
-          detalle={`${comercialPeriodo.length} operaciones en el período`}
-        />
+      {esReporteSuscripciones ? (
+        <>
+          <section style={estilos.tarjetas}>
+            <Tarjeta
+              icono="🏋️"
+              titulo="Miembros activos"
+              valor={resumenGimnasio.miembrosActivos}
+              detalle="Membresías vigentes"
+            />
 
-        <Tarjeta
-          icono="🛒"
-          titulo="Ventas registradas"
-          valor={moneda(resumen.montoVentas)}
-          detalle="Operaciones no clasificadas como crédito"
-        />
+            <Tarjeta
+              icono="📅"
+              titulo="Próximas a vencer"
+              valor={resumenGimnasio.proximasVencer}
+              detalle="Vencen en los próximos 7 días"
+            />
 
-        <Tarjeta
-          icono="💰"
-          titulo="Cobrado en el período"
-          valor={moneda(resumen.cobrado)}
-          detalle={`${cajaPeriodo.length} movimientos procesados`}
-        />
+            <Tarjeta
+              icono="⚠️"
+              titulo="Membresías vencidas"
+              valor={resumenGimnasio.membresiasVencidas}
+              detalle="Requieren seguimiento"
+            />
 
-        <Tarjeta
-          icono="🧾"
-          titulo="Cartera pendiente"
-          valor={moneda(resumen.carteraPendiente)}
-          detalle="Suma del saldo actual"
-        />
+            <Tarjeta
+              icono="🔁"
+              titulo="Renovaciones"
+              valor={resumenGimnasio.renovaciones}
+              detalle="Registradas en el período"
+            />
 
-        <Tarjeta
-          icono="⚠️"
-          titulo="Cartera vencida"
-          valor={moneda(resumen.carteraVencida)}
-          detalle={`${resumen.cuentasEnMora} cuentas con días de mora`}
-        />
+            <Tarjeta
+              icono="💳"
+              titulo="Ingresos por membresías"
+              valor={moneda(resumenGimnasio.ingresosMembresias)}
+              detalle="Mensualidades y renovaciones"
+            />
 
-        <Tarjeta
-          icono="🏦"
-          titulo="Ingresos de caja"
-          valor={moneda(resumen.ingresosCaja)}
-          detalle="Movimientos procesados de entrada"
-        />
+            <Tarjeta
+              icono="🛒"
+              titulo="Ventas de productos"
+              valor={moneda(resumenGimnasio.ventasProductos)}
+              detalle="Bebidas, accesorios y otros"
+            />
 
-        <Tarjeta
-          icono="📤"
-          titulo="Egresos de caja"
-          valor={moneda(resumen.egresosCaja)}
-          detalle="Gastos, retiros y salidas"
-        />
+            <Tarjeta
+              icono="🏦"
+              titulo="Ingresos de caja"
+              valor={moneda(resumenGimnasio.ingresosCaja)}
+              detalle="Movimientos de entrada"
+            />
 
-        <Tarjeta
-          icono="✅"
-          titulo="Créditos activos"
-          valor={resumen.creditosActivos}
-          detalle="Estado Activo"
-        />
+            <Tarjeta
+              icono="📤"
+              titulo="Egresos de caja"
+              valor={moneda(resumenGimnasio.egresosCaja)}
+              detalle="Gastos, retiros y salidas"
+            />
 
-        <Tarjeta
-          icono="👥"
-          titulo="Clientes nuevos"
-          valor={resumen.clientesNuevos}
-          detalle="Registrados dentro del período"
-        />
+            <Tarjeta
+              icono="👥"
+              titulo="Clientes nuevos"
+              valor={resumenGimnasio.clientesNuevos}
+              detalle="Registrados en el período"
+            />
 
-        <Tarjeta
-          icono="📊"
-          titulo="Porcentaje de mora"
-          valor={`${resumen.porcentajeMora.toFixed(1)}%`}
-          detalle="Cartera vencida sobre cartera pendiente"
-        />
-      </section>
+            <Tarjeta
+              icono="📦"
+              titulo="Stock bajo"
+              valor={resumenGimnasio.productosBajoStock}
+              detalle="Productos que requieren reposición"
+            />
+          </section>
 
-      <section style={estilos.resumenes}>
-        <Panel titulo="Resumen comercial" etiqueta="CRÉDITOS Y VENTAS">
-          <Fila nombre="Créditos otorgados" valor={moneda(resumen.montoCreditos)} />
-          <Fila nombre="Ventas registradas" valor={moneda(resumen.montoVentas)} />
-          <Fila nombre="Ticket promedio" valor={moneda(resumen.ticketPromedio)} />
-          <Fila nombre="Operaciones" valor={comercialPeriodo.length} />
-        </Panel>
+          <section style={estilos.resumenes}>
+            <Panel titulo="Resumen de membresías" etiqueta="MEMBRESÍAS">
+              <Fila
+                nombre="Miembros activos"
+                valor={resumenGimnasio.miembrosActivos}
+              />
+              <Fila
+                nombre="Próximas a vencer"
+                valor={resumenGimnasio.proximasVencer}
+              />
+              <Fila
+                nombre="Membresías vencidas"
+                valor={resumenGimnasio.membresiasVencidas}
+              />
+              <Fila
+                nombre="Renovaciones"
+                valor={resumenGimnasio.renovaciones}
+              />
+            </Panel>
 
-        <Panel titulo="Resumen de cartera" etiqueta="COBRANZA">
-          <Fila nombre="Cartera pendiente" valor={moneda(resumen.carteraPendiente)} />
-          <Fila nombre="Cartera vencida" valor={moneda(resumen.carteraVencida)} />
-          <Fila nombre="Cuentas en mora" valor={resumen.cuentasEnMora} />
-          <Fila
-            nombre="Índice de mora"
-            valor={`${resumen.porcentajeMora.toFixed(1)}%`}
-          />
-        </Panel>
+            <Panel titulo="Resumen comercial" etiqueta="VENTAS">
+              <Fila
+                nombre="Ingresos por membresías"
+                valor={moneda(resumenGimnasio.ingresosMembresias)}
+              />
+              <Fila
+                nombre="Ventas de productos"
+                valor={moneda(resumenGimnasio.ventasProductos)}
+              />
+              <Fila
+                nombre="Clientes nuevos"
+                valor={resumenGimnasio.clientesNuevos}
+              />
+              <Fila
+                nombre="Productos con stock bajo"
+                valor={resumenGimnasio.productosBajoStock}
+              />
+            </Panel>
 
-        <Panel titulo="Resumen de caja" etiqueta="CAJA">
-          <Fila nombre="Ingresos" valor={moneda(resumen.ingresosCaja)} />
-          <Fila nombre="Egresos" valor={moneda(resumen.egresosCaja)} />
-          <Fila
-            nombre="Balance"
-            valor={moneda(resumen.ingresosCaja - resumen.egresosCaja)}
-          />
-          <Fila nombre="Movimientos" valor={cajaPeriodo.length} />
-        </Panel>
-      </section>
+            <Panel titulo="Resumen de caja" etiqueta="CAJA">
+              <Fila
+                nombre="Ingresos"
+                valor={moneda(resumenGimnasio.ingresosCaja)}
+              />
+              <Fila
+                nombre="Egresos"
+                valor={moneda(resumenGimnasio.egresosCaja)}
+              />
+              <Fila
+                nombre="Balance"
+                valor={moneda(resumenGimnasio.balance)}
+              />
+              <Fila nombre="Movimientos" valor={cajaPeriodo.length} />
+            </Panel>
+          </section>
 
-      <section style={estilos.panelTabla}>
-        <div style={estilos.cabeceraPanel}>
-          <div>
-            <span style={estilos.miniEtiqueta}>MORA REAL</span>
-            <h2 style={estilos.tituloPanel}>Cuentas con días de atraso</h2>
-          </div>
-          <span style={estilos.contador}>{cuentasMora.length} registros</span>
-        </div>
+          <section style={estilos.panelTabla}>
+            <div style={estilos.cabeceraPanel}>
+              <div>
+                <span style={estilos.miniEtiqueta}>SEGUIMIENTO</span>
+                <h2 style={estilos.tituloPanel}>
+                  Membresías vencidas o próximas a vencer
+                </h2>
+              </div>
+              <span style={estilos.contador}>
+                {membresiasTabla.length} registros
+              </span>
+            </div>
 
-        <div style={estilos.tablaContenedor}>
-          <table style={estilos.tabla}>
-            <thead>
-              <tr>
-                <th style={estilos.th}>Cuenta</th>
-                <th style={estilos.th}>Días de mora</th>
-                <th style={estilos.th}>Estado de cobranza</th>
-                <th style={estilos.th}>Responsable</th>
-                <th style={estilos.thDerecha}>Saldo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cuentasMora.length === 0 ? (
-                <tr>
-                  <td colSpan="5" style={estilos.sinDatos}>
-                    No hay cuentas con días de mora en el período seleccionado.
-                  </td>
-                </tr>
-              ) : (
-                cuentasMora.map((registro) => (
-                  <tr key={registro.id}>
-                    <td style={estilos.td}>{registro.cuenta}</td>
-                    <td style={estilos.td}>
-                      <span style={estilos.badgeMora}>
-                        {registro.diasMora} días
-                      </span>
-                    </td>
-                    <td style={estilos.td}>{registro.estadoCobranza}</td>
-                    <td style={estilos.td}>{registro.responsable}</td>
-                    <td style={estilos.tdDerecha}>{moneda(registro.saldo)}</td>
+            <div style={estilos.tablaContenedor}>
+              <table style={estilos.tabla}>
+                <thead>
+                  <tr>
+                    <th style={estilos.th}>Cliente</th>
+                    <th style={estilos.th}>Plan</th>
+                    <th style={estilos.th}>Vencimiento</th>
+                    <th style={estilos.th}>Estado</th>
+                    <th style={estilos.thDerecha}>Días</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                </thead>
+
+                <tbody>
+                  {membresiasTabla.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" style={estilos.sinDatos}>
+                        No hay membresías vencidas ni próximas a vencer.
+                      </td>
+                    </tr>
+                  ) : (
+                    membresiasTabla.map((registro) => (
+                      <tr key={registro.id}>
+                        <td style={estilos.td}>{registro.cliente}</td>
+                        <td style={estilos.td}>{registro.plan}</td>
+                        <td style={estilos.td}>{registro.vencimiento}</td>
+                        <td style={estilos.td}>
+                          <span
+                            style={
+                              textoNormalizado(registro.estado).includes("vencida")
+                                ? estilos.badgeMora
+                                : estilos.badge
+                            }
+                          >
+                            {registro.estado}
+                          </span>
+                        </td>
+                        <td style={estilos.tdDerecha}>
+                          {registro.dias === null
+                            ? "-"
+                            : registro.dias < 0
+                            ? `${Math.abs(registro.dias)} vencidos`
+                            : `${registro.dias} restantes`}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      ) : (
+        <>
+          <section style={estilos.tarjetas}>
+            <Tarjeta
+              icono="💳"
+              titulo="Créditos otorgados"
+              valor={moneda(resumenGeneral.montoCreditos)}
+              detalle={`${comercialPeriodo.length} operaciones en el período`}
+            />
+            <Tarjeta
+              icono="🛒"
+              titulo="Ventas registradas"
+              valor={moneda(resumenGeneral.montoVentas)}
+              detalle="Operaciones no clasificadas como crédito"
+            />
+            <Tarjeta
+              icono="🧾"
+              titulo="Cartera pendiente"
+              valor={moneda(resumenGeneral.carteraPendiente)}
+              detalle="Suma del saldo actual"
+            />
+            <Tarjeta
+              icono="⚠️"
+              titulo="Cartera vencida"
+              valor={moneda(resumenGeneral.carteraVencida)}
+              detalle={`${resumenGeneral.cuentasEnMora} cuentas con días de mora`}
+            />
+            <Tarjeta
+              icono="🏦"
+              titulo="Ingresos de caja"
+              valor={moneda(resumenGeneral.ingresosCaja)}
+              detalle="Movimientos procesados de entrada"
+            />
+            <Tarjeta
+              icono="📤"
+              titulo="Egresos de caja"
+              valor={moneda(resumenGeneral.egresosCaja)}
+              detalle="Gastos, retiros y salidas"
+            />
+            <Tarjeta
+              icono="👥"
+              titulo="Clientes nuevos"
+              valor={resumenGeneral.clientesNuevos}
+              detalle="Registrados dentro del período"
+            />
+            <Tarjeta
+              icono="📊"
+              titulo="Porcentaje de mora"
+              valor={`${resumenGeneral.porcentajeMora.toFixed(1)}%`}
+              detalle="Cartera vencida sobre cartera pendiente"
+            />
+          </section>
+
+          <section style={estilos.resumenes}>
+            <Panel titulo="Resumen comercial" etiqueta="CRÉDITOS Y VENTAS">
+              <Fila
+                nombre="Créditos otorgados"
+                valor={moneda(resumenGeneral.montoCreditos)}
+              />
+              <Fila
+                nombre="Ventas registradas"
+                valor={moneda(resumenGeneral.montoVentas)}
+              />
+              <Fila
+                nombre="Ticket promedio"
+                valor={moneda(resumenGeneral.ticketPromedio)}
+              />
+              <Fila nombre="Operaciones" valor={comercialPeriodo.length} />
+            </Panel>
+
+            <Panel titulo="Resumen de cartera" etiqueta="COBRANZA">
+              <Fila
+                nombre="Cartera pendiente"
+                valor={moneda(resumenGeneral.carteraPendiente)}
+              />
+              <Fila
+                nombre="Cartera vencida"
+                valor={moneda(resumenGeneral.carteraVencida)}
+              />
+              <Fila
+                nombre="Cuentas en mora"
+                valor={resumenGeneral.cuentasEnMora}
+              />
+              <Fila
+                nombre="Índice de mora"
+                valor={`${resumenGeneral.porcentajeMora.toFixed(1)}%`}
+              />
+            </Panel>
+
+            <Panel titulo="Resumen de caja" etiqueta="CAJA">
+              <Fila
+                nombre="Ingresos"
+                valor={moneda(resumenGeneral.ingresosCaja)}
+              />
+              <Fila
+                nombre="Egresos"
+                valor={moneda(resumenGeneral.egresosCaja)}
+              />
+              <Fila
+                nombre="Balance"
+                valor={moneda(resumenGeneral.balance)}
+              />
+              <Fila nombre="Movimientos" valor={cajaPeriodo.length} />
+            </Panel>
+          </section>
+
+          <section style={estilos.panelTabla}>
+            <div style={estilos.cabeceraPanel}>
+              <div>
+                <span style={estilos.miniEtiqueta}>MORA REAL</span>
+                <h2 style={estilos.tituloPanel}>
+                  Cuentas con días de atraso
+                </h2>
+              </div>
+              <span style={estilos.contador}>
+                {cuentasMora.length} registros
+              </span>
+            </div>
+
+            <div style={estilos.tablaContenedor}>
+              <table style={estilos.tabla}>
+                <thead>
+                  <tr>
+                    <th style={estilos.th}>Cuenta</th>
+                    <th style={estilos.th}>Días de mora</th>
+                    <th style={estilos.th}>Estado de cobranza</th>
+                    <th style={estilos.th}>Responsable</th>
+                    <th style={estilos.thDerecha}>Saldo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cuentasMora.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" style={estilos.sinDatos}>
+                        No hay cuentas con días de mora en el período seleccionado.
+                      </td>
+                    </tr>
+                  ) : (
+                    cuentasMora.map((registro) => (
+                      <tr key={registro.id}>
+                        <td style={estilos.td}>{registro.cuenta}</td>
+                        <td style={estilos.td}>
+                          <span style={estilos.badgeMora}>
+                            {registro.diasMora} días
+                          </span>
+                        </td>
+                        <td style={estilos.td}>{registro.estadoCobranza}</td>
+                        <td style={estilos.td}>{registro.responsable}</td>
+                        <td style={estilos.tdDerecha}>
+                          {moneda(registro.saldo)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
 
       <section style={estilos.panelTabla}>
         <div style={estilos.cabeceraPanel}>
@@ -674,13 +1134,17 @@ export default function ReportesPage() {
               ) : (
                 movimientosRecientes.map((registro) => (
                   <tr key={registro.id}>
-                    <td style={estilos.td}>{registro.fecha || "Sin fecha"}</td>
+                    <td style={estilos.td}>
+                      {registro.fecha || "Sin fecha"}
+                    </td>
                     <td style={estilos.td}>
                       <span style={estilos.badge}>{registro.tipo}</span>
                     </td>
                     <td style={estilos.td}>{registro.detalle}</td>
                     <td style={estilos.td}>{registro.responsable}</td>
-                    <td style={estilos.tdDerecha}>{moneda(registro.monto)}</td>
+                    <td style={estilos.tdDerecha}>
+                      {moneda(registro.monto)}
+                    </td>
                   </tr>
                 ))
               )}
