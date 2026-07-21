@@ -275,23 +275,37 @@ export default function Dashboard() {
     if (codigo === "ventas_gestion") {
       return {
         ...base,
+        dashboard: true,
         clientes: true,
         vista_cliente: true,
-        creditos: true,
-        cobranza: true,
-        dashboard_cobros: true,
-        gestor_cobros: true,
-        abonos: true,
+
+        // Caja y administración
         caja: true,
         control_caja: true,
-        reportes: true,
+        gastos: true,
+
+        // Inventario y ventas
         inventario: true,
         movimientos_inventario: true,
         ventas: true,
         dashboard_ventas: true,
-        gastos: true,
+
+        // Membresías y suscripciones
+        suscripciones: true,
+
+        // Gestión
+        reportes: true,
         usuarios: true,
         configuracion: true,
+
+        // Fuera del plan Ventas y Gestión
+        creditos: false,
+        cobranza: false,
+        dashboard_cobros: false,
+        gestor_cobros: false,
+        abonos: false,
+        pagos: false,
+        recargos: false,
       };
     }
 
@@ -363,12 +377,33 @@ export default function Dashboard() {
       configuracion: true,
     };
 
-    const mapaFinal = { ...basePlan, ...mapaTabla, dashboard: true };
-    const codigo = String(planCodigo || "").toLowerCase().trim();
+    /*
+      El plan es el límite máximo de acceso.
+      La tabla empresa_modulos nunca puede activar módulos
+      que no estén incluidos en el plan contratado.
+    */
+    const mapaFinal = {};
 
-    if (codigo === "cobros") {
-      Object.assign(mapaFinal, construirModulosPorPlan("cobros"));
-    }
+    Object.keys(basePlan).forEach((modulo) => {
+      const permitidoPorPlan = Boolean(basePlan[modulo]);
+
+      if (!permitidoPorPlan) {
+        mapaFinal[modulo] = false;
+        return;
+      }
+
+      const siempreActivo = [
+        "dashboard",
+        "usuarios",
+        "configuracion",
+      ].includes(modulo);
+
+      mapaFinal[modulo] = siempreActivo
+        ? true
+        : Boolean(mapaTabla[modulo]);
+    });
+
+    mapaFinal.dashboard = true;
 
     return mapaFinal;
   }
@@ -420,7 +455,7 @@ export default function Dashboard() {
 
   function contactarKonax() {
     window.open(
-      "https://wa.me/50760000000?text=Hola%2C%20deseo%20activar%20un%20plan%20de%20KONAX.",
+      "https://wa.me/50760211024?text=Hola%2C%20deseo%20activar%20un%20plan%20de%20KONAX.",
       "_blank",
       "noopener,noreferrer"
     );
@@ -515,7 +550,7 @@ export default function Dashboard() {
           </div>
 
           <p style={s.notaWhatsapp}>
-            Cambia <strong>50760000000</strong> por el WhatsApp comercial real.
+            WhatsApp comercial de KONAX: <strong>6021-1024</strong>.
           </p>
         </div>
       </div>
