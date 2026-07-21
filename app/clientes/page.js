@@ -4,10 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-export default function CuentasPorCobrar() {
+export default function ClientesPage() {
   const router = useRouter();
 
   const [accesoValidado, setAccesoValidado] = useState(false);
+  const [modoSoloCliente, setModoSoloCliente] = useState(false);
+  const [tipoNegocio, setTipoNegocio] = useState("");
+  const [planCodigo, setPlanCodigo] = useState("");
   const [gestores, setGestores] = useState([]);
 
   const [cedula, setCedula] = useState("");
@@ -19,6 +22,10 @@ export default function CuentasPorCobrar() {
   const [referenciaNombre, setReferenciaNombre] = useState("");
   const [referenciaTelefono, setReferenciaTelefono] = useState("");
   const [estadoCliente, setEstadoCliente] = useState("Activo");
+  const [tipoCliente, setTipoCliente] = useState("Miembro");
+  const [aceptaWhatsapp, setAceptaWhatsapp] = useState(false);
+  const [aceptaEmail, setAceptaEmail] = useState(false);
+  const [observacionCliente, setObservacionCliente] = useState("");
 
   const [numeroCuenta, setNumeroCuenta] = useState("");
   const [tipoProducto, setTipoProducto] = useState("");
@@ -43,6 +50,8 @@ export default function CuentasPorCobrar() {
   }, []);
 
   useEffect(() => {
+    if (modoSoloCliente) return;
+
     const saldoParaCalcular =
       saldoActual !== ""
         ? saldoActual
@@ -66,7 +75,12 @@ export default function CuentasPorCobrar() {
     ) {
       setEstadoCuenta("Activo");
     }
-  }, [fechaVencimiento, saldoActual, montoTotal]);
+  }, [
+    fechaVencimiento,
+    saldoActual,
+    montoTotal,
+    modoSoloCliente,
+  ]);
 
   function normalizar(texto) {
     return String(texto || "")
@@ -76,22 +90,21 @@ export default function CuentasPorCobrar() {
       .trim();
   }
 
-  function esAdministrador(rol) {
-    const rolNormalizado = normalizar(rol);
+  function normalizarCodigo(valor) {
+    return normalizar(valor).replace(/\s+/g, "_");
+  }
 
-    return (
-      rolNormalizado === "administrador" ||
-      rolNormalizado === "superadmin" ||
-      rolNormalizado === "admin master" ||
-      rolNormalizado === "administrador master"
-    );
+  function esAdministrador(rol) {
+    return [
+      "administrador",
+      "superadmin",
+      "admin master",
+      "administrador master",
+    ].includes(normalizar(rol));
   }
 
   function limpiarSesionYSalir(mensaje = "") {
-    if (mensaje) {
-      alert(mensaje);
-    }
-
+    if (mensaje) alert(mensaje);
     localStorage.clear();
     router.replace("/login");
   }
@@ -103,7 +116,6 @@ export default function CuentasPorCobrar() {
       limpiarSesionYSalir(
         "La sesión no tiene una empresa activa. Inicie sesión nuevamente."
       );
-
       return null;
     }
 
@@ -117,7 +129,6 @@ export default function CuentasPorCobrar() {
       limpiarSesionYSalir(
         "La sesión no tiene un usuario activo. Inicie sesión nuevamente."
       );
-
       return null;
     }
 
@@ -167,7 +178,13 @@ export default function CuentasPorCobrar() {
 
     const { data: empresa, error: errorEmpresa } = await supabase
       .from("empresas")
-      .select("id, estado, estado_plan")
+      .select(`
+        id,
+        estado,
+        estado_plan,
+        plan_codigo,
+        tipo_negocio
+      `)
       .eq("id", empresaId)
       .maybeSingle();
 
@@ -190,6 +207,24 @@ export default function CuentasPorCobrar() {
       );
       return;
     }
+
+    const tipoNegocioNormalizado = normalizar(empresa.tipo_negocio);
+    const planNormalizado = normalizarCodigo(empresa.plan_codigo);
+
+    const esGimnasio =
+      tipoNegocioNormalizado.includes("gimnasio") ||
+      tipoNegocioNormalizado.includes("gym") ||
+      tipoNegocioNormalizado.includes("fitness");
+
+    const soloCliente =
+      esGimnasio || planNormalizado === "ventas_gestion";
+
+    setTipoNegocio(empresa.tipo_negocio || "");
+    setPlanCodigo(empresa.plan_codigo || "");
+    setModoSoloCliente(soloCliente);
+
+    localStorage.setItem("tipoNegocio", empresa.tipo_negocio || "");
+    localStorage.setItem("planCodigo", empresa.plan_codigo || "");
 
     const { data: moduloEmpresa, error: errorModulo } = await supabase
       .from("empresa_modulos")
@@ -218,7 +253,10 @@ export default function CuentasPorCobrar() {
         .maybeSingle();
 
       if (errorPermiso) {
-        alert("Error validando permiso Clientes: " + errorPermiso.message);
+        alert(
+          "Error validando permiso Clientes: " +
+            errorPermiso.message
+        );
         return;
       }
 
@@ -231,7 +269,9 @@ export default function CuentasPorCobrar() {
 
     localStorage.setItem("usuarioRol", usuario.rol || "");
 
-    await cargarGestores(empresaId);
+    if (!soloCliente) {
+      await cargarGestores(empresaId);
+    }
 
     setAccesoValidado(true);
   }
@@ -250,18 +290,16 @@ export default function CuentasPorCobrar() {
       return;
     }
 
-    const gestoresActivos = (data || []).filter((usuario) => {
-      const rol = normalizar(usuario.rol);
-
-      return (
-        rol === "gestor de cobro" ||
-        rol === "gestor de cobros" ||
-        rol === "gestor cobranza" ||
-        rol === "cobrador" ||
-        rol === "supervisor" ||
-        rol === "administrador"
-      );
-    });
+    const gestoresActivos = (data || []).filter((usuario) =>
+      [
+        "gestor de cobro",
+        "gestor de cobros",
+        "gestor cobranza",
+        "cobrador",
+        "supervisor",
+        "administrador",
+      ].includes(normalizar(usuario.rol))
+    );
 
     setGestores(gestoresActivos);
   }
@@ -294,17 +332,16 @@ export default function CuentasPorCobrar() {
       return 0;
     }
 
-    const hoyTexto = obtenerFechaLocalISO();
-    const hoy = new Date(`${hoyTexto}T00:00:00`);
+    const hoy = new Date(`${obtenerFechaLocalISO()}T00:00:00`);
     const vencimiento = new Date(`${fecha}T00:00:00`);
 
     if (Number.isNaN(vencimiento.getTime())) return 0;
 
     const diferencia = hoy.getTime() - vencimiento.getTime();
 
-    if (diferencia <= 0) return 0;
-
-    return Math.floor(diferencia / (1000 * 60 * 60 * 24));
+    return diferencia > 0
+      ? Math.floor(diferencia / 86400000)
+      : 0;
   }
 
   function calcularEstadoCobranzaAutomatico(fecha, saldo) {
@@ -314,27 +351,30 @@ export default function CuentasPorCobrar() {
 
     const saldoNumero = Number(saldo || 0);
 
-    if (saldoNumero <= 0) {
-      return "Cancelado";
-    }
+    if (saldoNumero <= 0) return "Cancelado";
+    if (!fecha) return "Al Día";
 
-    if (!fecha) {
-      return "Al Día";
-    }
-
-    const hoyTexto = obtenerFechaLocalISO();
-    const hoy = new Date(`${hoyTexto}T00:00:00`);
+    const hoy = new Date(`${obtenerFechaLocalISO()}T00:00:00`);
     const vencimiento = new Date(`${fecha}T00:00:00`);
 
-    if (Number.isNaN(vencimiento.getTime())) {
-      return "Al Día";
-    }
+    if (Number.isNaN(vencimiento.getTime())) return "Al Día";
 
     return vencimiento < hoy ? "Mora" : "Al Día";
   }
 
   function responsableFinal() {
     return responsableCobro.trim() || "Sin asignar";
+  }
+
+  function construirObservacionCliente() {
+    const partes = [
+      observacionCliente.trim(),
+      `Tipo de cliente: ${tipoCliente}`,
+      `Promociones por WhatsApp: ${aceptaWhatsapp ? "Sí" : "No"}`,
+      `Promociones por correo: ${aceptaEmail ? "Sí" : "No"}`,
+    ].filter(Boolean);
+
+    return partes.join(" | ");
   }
 
   function limpiarFormulario() {
@@ -347,6 +387,10 @@ export default function CuentasPorCobrar() {
     setReferenciaNombre("");
     setReferenciaTelefono("");
     setEstadoCliente("Activo");
+    setTipoCliente("Miembro");
+    setAceptaWhatsapp(false);
+    setAceptaEmail(false);
+    setObservacionCliente("");
 
     setNumeroCuenta("");
     setTipoProducto("");
@@ -362,7 +406,6 @@ export default function CuentasPorCobrar() {
     setMontoUltimoPago("");
     setResponsableCobro("");
     setObservacionCobro("");
-
     setDocumentos([]);
   }
 
@@ -370,9 +413,7 @@ export default function CuentasPorCobrar() {
     const empresaId = obtenerEmpresaId();
     const usuarioId = obtenerUsuarioId();
 
-    if (!empresaId || !usuarioId) {
-      return null;
-    }
+    if (!empresaId || !usuarioId) return null;
 
     const { data: usuario, error } = await supabase
       .from("usuarios")
@@ -402,10 +443,7 @@ export default function CuentasPorCobrar() {
       return null;
     }
 
-    return {
-      empresaId,
-      usuarioId,
-    };
+    return { empresaId, usuarioId };
   }
 
   async function subirDocumentos(clienteId, empresaId) {
@@ -413,7 +451,6 @@ export default function CuentasPorCobrar() {
 
     for (const archivo of documentos) {
       const nombreLimpio = archivo.name.replace(/\s+/g, "_");
-
       const ruta =
         `empresas/${empresaId}/clientes/${clienteId}/` +
         `${Date.now()}-${nombreLimpio}`;
@@ -422,15 +459,86 @@ export default function CuentasPorCobrar() {
         .from("documentos-clientes")
         .upload(ruta, archivo);
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
     }
   }
 
-  async function guardarCuenta() {
-    const sesion = await validarSesionAntesDeGuardar();
+  async function guardarOActualizarCliente(empresaId) {
+    const observacionFinal = construirObservacionCliente();
 
+    const { data: clienteExistente, error: errorBuscarCliente } =
+      await supabase
+        .from("clientes")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .eq("cedula", cedula.trim())
+        .maybeSingle();
+
+    if (errorBuscarCliente) {
+      throw new Error(
+        "Error buscando cliente: " + errorBuscarCliente.message
+      );
+    }
+
+    if (clienteExistente) {
+      const { data, error } = await supabase
+        .from("clientes")
+        .update({
+          nombre: nombre.trim(),
+          telefono: telefono.trim(),
+          telefono_secundario: telefonoSecundario.trim(),
+          direccion: direccion.trim(),
+          correo: correo.trim(),
+          referencia_nombre: referenciaNombre.trim(),
+          referencia_telefono: referenciaTelefono.trim(),
+          estado: estadoCliente,
+          observacion: observacionFinal,
+        })
+        .eq("empresa_id", empresaId)
+        .eq("id", clienteExistente.id)
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(
+          "Error actualizando cliente: " + error.message
+        );
+      }
+
+      return data;
+    }
+
+    const { data, error } = await supabase
+      .from("clientes")
+      .insert([
+        {
+          empresa_id: empresaId,
+          cedula: cedula.trim(),
+          nombre: nombre.trim(),
+          telefono: telefono.trim(),
+          telefono_secundario: telefonoSecundario.trim(),
+          direccion: direccion.trim(),
+          correo: correo.trim(),
+          referencia_nombre: referenciaNombre.trim(),
+          referencia_telefono: referenciaTelefono.trim(),
+          estado: estadoCliente,
+          observacion: observacionFinal,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error("Error al guardar cliente: " + error.message);
+    }
+
+    return data;
+  }
+
+  async function guardarRegistro() {
+    if (guardando) return;
+
+    const sesion = await validarSesionAntesDeGuardar();
     if (!sesion) return;
 
     const { empresaId } = sesion;
@@ -440,172 +548,129 @@ export default function CuentasPorCobrar() {
       return;
     }
 
-    if (!tipoProducto) {
-      alert("Seleccione el tipo de cuenta.");
-      return;
-    }
-
-    if (!montoTotal && !saldoActual) {
-      alert("Ingrese monto original o saldo actual.");
-      return;
-    }
-
-    const montoTotalNumero = Number(montoTotal || saldoActual || 0);
-
-    const saldoActualNumero =
-      saldoActual !== ""
-        ? Number(saldoActual || 0)
-        : montoTotalNumero;
-
-    if (montoTotalNumero < 0 || saldoActualNumero < 0) {
-      alert("Los montos no pueden ser negativos.");
-      return;
-    }
-
-    if (saldoActualNumero > montoTotalNumero && montoTotalNumero > 0) {
-      alert("El saldo actual no puede superar el monto total original.");
-      return;
-    }
-
-    const montoUltimoPagoNumero = Number(montoUltimoPago || 0);
-
-    if (montoUltimoPagoNumero < 0) {
-      alert("El monto del último pago no puede ser negativo.");
-      return;
-    }
-
-    if (fechaUltimoPago && montoUltimoPagoNumero <= 0) {
+    if (aceptaEmail && !correo.trim()) {
       alert(
-        "Si coloca una fecha de último pago, también debe ingresar el monto pagado."
+        "Ingrese un correo para autorizar promociones por correo electrónico."
       );
       return;
     }
 
-    if (!fechaUltimoPago && montoUltimoPagoNumero > 0) {
+    if (aceptaWhatsapp && !telefono.trim()) {
       alert(
-        "Si ingresa un monto de último pago, también debe colocar la fecha del pago."
+        "Ingrese un teléfono para autorizar promociones por WhatsApp."
       );
       return;
     }
 
-    const estadoCobranzaFinal = calcularEstadoCobranzaAutomatico(
-      fechaVencimiento,
-      saldoActualNumero
-    );
+    if (!modoSoloCliente) {
+      if (!tipoProducto) {
+        alert("Seleccione el tipo de cuenta.");
+        return;
+      }
 
-    const diasMora = calcularDiasMora(
-      fechaVencimiento,
-      saldoActualNumero
-    );
-
-    const estadoCuentaFinal =
-      saldoActualNumero <= 0
-        ? "Cancelado"
-        : estadoCuenta === "Cancelado"
-        ? "Activo"
-        : estadoCuenta;
+      if (!montoTotal && !saldoActual) {
+        alert("Ingrese monto original o saldo actual.");
+        return;
+      }
+    }
 
     setGuardando(true);
 
     try {
-      let clienteCreado = null;
+      const clienteCreado = await guardarOActualizarCliente(empresaId);
+      await subirDocumentos(clienteCreado.id, empresaId);
 
-      const {
-        data: clienteExistente,
-        error: errorBuscarCliente,
-      } = await supabase
-        .from("clientes")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .eq("cedula", cedula.trim())
-        .maybeSingle();
+      if (modoSoloCliente) {
+        alert(
+          "Cliente registrado correctamente. Ahora puede buscarlo en Caja o Suscripciones."
+        );
+        limpiarFormulario();
+        return;
+      }
 
-      if (errorBuscarCliente) {
+      const montoTotalNumero = Number(montoTotal || saldoActual || 0);
+      const saldoActualNumero =
+        saldoActual !== ""
+          ? Number(saldoActual || 0)
+          : montoTotalNumero;
+
+      if (montoTotalNumero < 0 || saldoActualNumero < 0) {
+        throw new Error("Los montos no pueden ser negativos.");
+      }
+
+      if (
+        saldoActualNumero > montoTotalNumero &&
+        montoTotalNumero > 0
+      ) {
         throw new Error(
-          "Error buscando cliente: " + errorBuscarCliente.message
+          "El saldo actual no puede superar el monto total original."
         );
       }
 
-      if (clienteExistente) {
-        clienteCreado = clienteExistente;
+      const montoUltimoPagoNumero = Number(montoUltimoPago || 0);
 
-        const { error: errorActualizarCliente } = await supabase
-          .from("clientes")
-          .update({
-            nombre: nombre.trim(),
-            telefono: telefono.trim(),
-            telefono_secundario: telefonoSecundario.trim(),
-            direccion: direccion.trim(),
-            correo: correo.trim(),
-            referencia_nombre: referenciaNombre.trim(),
-            referencia_telefono: referenciaTelefono.trim(),
-            estado: estadoCliente,
-            observacion: observacionCobro.trim(),
-          })
-          .eq("empresa_id", empresaId)
-          .eq("id", clienteExistente.id);
+      if (montoUltimoPagoNumero < 0) {
+        throw new Error(
+          "El monto del último pago no puede ser negativo."
+        );
+      }
 
-        if (errorActualizarCliente) {
-          throw new Error(
-            "Error actualizando cliente: " +
-              errorActualizarCliente.message
-          );
-        }
-      } else {
-        const { data, error } = await supabase
-          .from("clientes")
+      if (fechaUltimoPago && montoUltimoPagoNumero <= 0) {
+        throw new Error(
+          "Si coloca una fecha de último pago, también debe ingresar el monto pagado."
+        );
+      }
+
+      if (!fechaUltimoPago && montoUltimoPagoNumero > 0) {
+        throw new Error(
+          "Si ingresa un monto de último pago, también debe colocar la fecha del pago."
+        );
+      }
+
+      const estadoCobranzaFinal =
+        calcularEstadoCobranzaAutomatico(
+          fechaVencimiento,
+          saldoActualNumero
+        );
+
+      const diasMora = calcularDiasMora(
+        fechaVencimiento,
+        saldoActualNumero
+      );
+
+      const estadoCuentaFinal =
+        saldoActualNumero <= 0
+          ? "Cancelado"
+          : estadoCuenta === "Cancelado"
+          ? "Activo"
+          : estadoCuenta;
+
+      const cuentaFinal =
+        numeroCuenta.trim() || generarNumeroCuenta();
+
+      const { data: comercialCreado, error: errorComercial } =
+        await supabase
+          .from("informacion_comercial")
           .insert([
             {
               empresa_id: empresaId,
-              cedula: cedula.trim(),
-              nombre: nombre.trim(),
-              telefono: telefono.trim(),
-              telefono_secundario: telefonoSecundario.trim(),
-              direccion: direccion.trim(),
-              correo: correo.trim(),
-              referencia_nombre: referenciaNombre.trim(),
-              referencia_telefono: referenciaTelefono.trim(),
-              estado: estadoCliente,
+              cliente_id: clienteCreado.id,
+              numero_cuenta: cuentaFinal,
+              tipo_producto: tipoProducto,
+              descripcion: descripcion.trim(),
+              modalidad: null,
+              monto_total: montoTotalNumero,
+              saldo_actual: saldoActualNumero,
+              cuota: null,
+              fecha_inicio: fechaInicio || null,
+              fecha_vencimiento: fechaVencimiento || null,
+              responsable: responsableFinal(),
+              estado: estadoCuentaFinal,
               observacion: observacionCobro.trim(),
             },
           ])
           .select()
           .single();
-
-        if (error) {
-          throw new Error("Error al guardar cliente: " + error.message);
-        }
-
-        clienteCreado = data;
-      }
-
-      const cuentaFinal = numeroCuenta.trim() || generarNumeroCuenta();
-
-      const {
-        data: comercialCreado,
-        error: errorComercial,
-      } = await supabase
-        .from("informacion_comercial")
-        .insert([
-          {
-            empresa_id: empresaId,
-            cliente_id: clienteCreado.id,
-            numero_cuenta: cuentaFinal,
-            tipo_producto: tipoProducto,
-            descripcion: descripcion.trim(),
-            modalidad: null,
-            monto_total: montoTotalNumero,
-            saldo_actual: saldoActualNumero,
-            cuota: null,
-            fecha_inicio: fechaInicio || null,
-            fecha_vencimiento: fechaVencimiento || null,
-            responsable: responsableFinal(),
-            estado: estadoCuentaFinal,
-            observacion: observacionCobro.trim(),
-          },
-        ])
-        .select()
-        .single();
 
       if (errorComercial) {
         throw new Error(
@@ -628,25 +693,27 @@ export default function CuentasPorCobrar() {
             responsable_cobro: responsableFinal(),
             observacion_cobro:
               observacionCobro.trim() ||
-              "Cuenta creada desde Cuentas por Cobrar",
+              "Cuenta creada desde Clientes",
           },
         ]);
 
       if (errorCobranza) {
         throw new Error(
-          "Error en cobranza inicial: " + errorCobranza.message
+          "Error en cobranza inicial: " +
+            errorCobranza.message
         );
       }
 
-      await subirDocumentos(clienteCreado.id, empresaId);
-
       alert(
-        `Cuenta por cobrar registrada correctamente. Cuenta: ${cuentaFinal}. Estado: ${estadoCobranzaFinal}. Días de mora: ${diasMora}.`
+        `Cliente y cuenta registrados correctamente. Cuenta: ${cuentaFinal}.`
       );
 
       limpiarFormulario();
     } catch (error) {
-      alert(error.message || "Ocurrió un error guardando la cuenta.");
+      alert(
+        error.message ||
+          "Ocurrió un error guardando el registro."
+      );
     } finally {
       setGuardando(false);
     }
@@ -661,9 +728,11 @@ export default function CuentasPorCobrar() {
             alt="KONAX"
             style={styles.cargandoLogo}
           />
-          <strong style={styles.cargandoTitulo}>Validando acceso</strong>
+          <strong style={styles.cargandoTitulo}>
+            Validando acceso
+          </strong>
           <p style={styles.cargandoTexto}>
-            Verificando usuario, empresa y permisos.
+            Verificando usuario, empresa, plan y permisos.
           </p>
         </div>
       </div>
@@ -703,11 +772,22 @@ export default function CuentasPorCobrar() {
             </div>
 
             <div>
-              <span style={styles.etiqueta}>GESTIÓN DE CARTERA</span>
-              <h1 style={styles.titulo}>Nueva cuenta por cobrar</h1>
+              <span style={styles.etiqueta}>
+                {modoSoloCliente
+                  ? "GESTIÓN DE CLIENTES"
+                  : "GESTIÓN DE CARTERA"}
+              </span>
+
+              <h1 style={styles.titulo}>
+                {modoSoloCliente
+                  ? "Registrar nuevo cliente"
+                  : "Nueva cuenta por cobrar"}
+              </h1>
+
               <p style={styles.subtitulo}>
-                Registra al cliente, crea la cuenta y configura la gestión
-                inicial de cobranza desde un solo formulario.
+                {modoSoloCliente
+                  ? "Registra clientes, miembros, visitas únicas y compradores de contado para utilizarlos después en Caja o Suscripciones."
+                  : "Registra al cliente, crea la cuenta y configura la gestión inicial de cobranza."}
               </p>
             </div>
           </div>
@@ -717,8 +797,7 @@ export default function CuentasPorCobrar() {
             onClick={volverCentroOperaciones}
             style={styles.botonVolver}
           >
-            <Icon name="arrowLeft" size={18} />
-            Centro de Operaciones
+            ← Centro de Operaciones
           </button>
         </header>
 
@@ -727,23 +806,38 @@ export default function CuentasPorCobrar() {
             titulo="Cliente"
             valor={nombre || "Pendiente"}
             detalle={cedula || "Sin identificación"}
-            icono="user"
+            icono="👤"
           />
 
           <KPI
-            titulo="Saldo actual"
-            valor={`$${saldoVisual.toFixed(2)}`}
-            detalle={tipoProducto || "Tipo de cuenta sin definir"}
-            icono="wallet"
+            titulo="Tipo de cliente"
+            valor={tipoCliente}
+            detalle={modoSoloCliente ? tipoNegocio || "Negocio" : tipoProducto || "Sin definir"}
+            icono="🏷️"
           />
 
           <KPI
-            titulo="Estado de cobranza"
-            valor={estadoCobranza}
-            detalle={`${diasMoraVisual} días de mora`}
-            icono="activity"
-            destacado={estadoCobranza === "Mora"}
+            titulo="Contacto promocional"
+            valor={
+              aceptaWhatsapp || aceptaEmail
+                ? "Autorizado"
+                : "No autorizado"
+            }
+            detalle={`WhatsApp: ${
+              aceptaWhatsapp ? "Sí" : "No"
+            } · Correo: ${aceptaEmail ? "Sí" : "No"}`}
+            icono="📣"
           />
+
+          {!modoSoloCliente && (
+            <KPI
+              titulo="Estado de cobranza"
+              valor={estadoCobranza}
+              detalle={`${diasMoraVisual} días de mora`}
+              icono="📊"
+              destacado={estadoCobranza === "Mora"}
+            />
+          )}
         </section>
 
         <section style={styles.formLayout}>
@@ -751,9 +845,8 @@ export default function CuentasPorCobrar() {
             <article style={styles.card}>
               <SectionTitle
                 numero="01"
-                icono="user"
                 titulo="Información del cliente"
-                texto="Datos personales, contacto y referencias."
+                texto="Datos personales, contacto y clasificación comercial."
               />
 
               <div style={styles.grid}>
@@ -775,8 +868,24 @@ export default function CuentasPorCobrar() {
                   />
                 </Campo>
 
+                <Campo label="Tipo de cliente">
+                  <select
+                    value={tipoCliente}
+                    onChange={(e) =>
+                      setTipoCliente(e.target.value)
+                    }
+                    style={styles.selectStyle}
+                  >
+                    <option>Miembro</option>
+                    <option>Visita única</option>
+                    <option>Cliente de contado</option>
+                    <option>Prospecto</option>
+                  </select>
+                </Campo>
+
                 <Campo label="Correo electrónico">
                   <input
+                    type="email"
                     value={correo}
                     onChange={(e) => setCorreo(e.target.value)}
                     style={styles.inputStyle}
@@ -807,7 +916,9 @@ export default function CuentasPorCobrar() {
                 <Campo label="Estado del cliente">
                   <select
                     value={estadoCliente}
-                    onChange={(e) => setEstadoCliente(e.target.value)}
+                    onChange={(e) =>
+                      setEstadoCliente(e.target.value)
+                    }
                     style={styles.selectStyle}
                   >
                     <option>Activo</option>
@@ -822,7 +933,6 @@ export default function CuentasPorCobrar() {
                       setReferenciaNombre(e.target.value)
                     }
                     style={styles.inputStyle}
-                    placeholder="Referencia personal"
                   />
                 </Campo>
 
@@ -833,7 +943,6 @@ export default function CuentasPorCobrar() {
                       setReferenciaTelefono(e.target.value)
                     }
                     style={styles.inputStyle}
-                    placeholder="Teléfono referencia"
                   />
                 </Campo>
               </div>
@@ -843,212 +952,59 @@ export default function CuentasPorCobrar() {
                   value={direccion}
                   onChange={(e) => setDireccion(e.target.value)}
                   style={styles.textarea}
-                  placeholder="Dirección del cliente..."
                 />
               </Campo>
-            </article>
 
-            <article style={styles.card}>
-              <SectionTitle
-                numero="02"
-                icono="document"
-                titulo="Información de la cuenta"
-                texto="Monto original, saldo pendiente y fechas."
-              />
-
-              <div style={styles.grid}>
-                <Campo label="Número de cuenta">
-                  <input
-                    value={numeroCuenta}
-                    onChange={(e) => setNumeroCuenta(e.target.value)}
-                    style={styles.inputStyle}
-                    placeholder="Opcional, se genera automático"
-                  />
-                </Campo>
-
-                <Campo label="Tipo de cuenta *">
-                  <select
-                    value={tipoProducto}
-                    onChange={(e) => setTipoProducto(e.target.value)}
-                    style={styles.selectStyle}
-                  >
-                    <option value="">Seleccione tipo de cuenta</option>
-                    <option>Crédito</option>
-                    <option>Préstamo</option>
-                    <option>Cuenta por cobrar</option>
-                    <option>Refinanciamiento</option>
-                    <option>Servicio pendiente</option>
-                  </select>
-                </Campo>
-
-                <Campo label="Monto total original *">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={montoTotal}
-                    onChange={(e) => setMontoTotal(e.target.value)}
-                    style={styles.inputStyle}
-                    placeholder="0.00"
-                  />
-                </Campo>
-
-                <Campo label="Saldo actual *">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={saldoActual}
-                    onChange={(e) => setSaldoActual(e.target.value)}
-                    style={styles.inputStyle}
-                    placeholder="0.00"
-                  />
-                </Campo>
-
-                <Campo label="Fecha de inicio">
-                  <input
-                    type="date"
-                    value={fechaInicio}
-                    onChange={(e) => setFechaInicio(e.target.value)}
-                    style={styles.inputStyle}
-                  />
-                </Campo>
-
-                <Campo label="Fecha de vencimiento">
-                  <input
-                    type="date"
-                    value={fechaVencimiento}
-                    onChange={(e) =>
-                      setFechaVencimiento(e.target.value)
-                    }
-                    style={styles.inputStyle}
-                  />
-                </Campo>
-
-                <Campo label="Estado de cuenta">
-                  <select
-                    value={estadoCuenta}
-                    onChange={(e) => setEstadoCuenta(e.target.value)}
-                    style={styles.selectStyle}
-                    disabled={saldoParaEstadoVisual !== "" && saldoVisual <= 0}
-                  >
-                    <option>Activo</option>
-                    <option>Suspendido</option>
-                    <option>Cancelado</option>
-                  </select>
-                </Campo>
-              </div>
-
-              <Campo label="Descripción">
+              <Campo label="Observaciones del cliente">
                 <textarea
-                  placeholder="Ej: Cuenta con saldo pendiente, historial previo, condiciones pactadas..."
-                  value={descripcion}
-                  onChange={(e) => setDescripcion(e.target.value)}
-                  style={styles.textarea}
-                />
-              </Campo>
-            </article>
-
-            <article style={styles.card}>
-              <SectionTitle
-                numero="03"
-                icono="phone"
-                titulo="Cobranza inicial"
-                texto="Estado, mora, último pago y responsable."
-              />
-
-              <div style={styles.grid}>
-                <Campo label="Estado de cobranza automático">
-                  <input
-                    value={estadoCobranza}
-                    readOnly
-                    style={styles.inputAutomatico}
-                  />
-                </Campo>
-
-                <Campo label="Días de mora calculados">
-                  <input
-                    value={diasMoraVisual}
-                    readOnly
-                    style={styles.inputAutomatico}
-                  />
-                </Campo>
-
-                <Campo label="Fecha último pago">
-                  <input
-                    type="date"
-                    value={fechaUltimoPago}
-                    onChange={(e) =>
-                      setFechaUltimoPago(e.target.value)
-                    }
-                    style={styles.inputStyle}
-                  />
-                </Campo>
-
-                <Campo label="Monto último pago">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={montoUltimoPago}
-                    onChange={(e) =>
-                      setMontoUltimoPago(e.target.value)
-                    }
-                    style={styles.inputStyle}
-                    placeholder="0.00"
-                  />
-                </Campo>
-
-                <Campo label="Responsable de cobro">
-                  <select
-                    value={responsableCobro}
-                    onChange={(e) =>
-                      setResponsableCobro(e.target.value)
-                    }
-                    style={styles.selectStyle}
-                  >
-                    <option value="">Sin asignar</option>
-
-                    {gestores.map((gestor) => (
-                      <option key={gestor.id} value={gestor.nombre}>
-                        {gestor.nombre} - {gestor.rol}
-                      </option>
-                    ))}
-                  </select>
-                </Campo>
-              </div>
-
-              <Campo label="Observación inicial / historial previo">
-                <textarea
-                  placeholder="Observación inicial / historial previo de cobro"
-                  value={observacionCobro}
+                  value={observacionCliente}
                   onChange={(e) =>
-                    setObservacionCobro(e.target.value)
+                    setObservacionCliente(e.target.value)
                   }
                   style={styles.textarea}
+                  placeholder="Intereses, horario preferido, producto consultado u otra información útil."
                 />
               </Campo>
 
-              <Campo label="Documentos del cliente">
-                <label style={styles.fileBox}>
-                  <Icon name="upload" size={22} />
-                  <div>
-                    <strong style={styles.fileTitle}>
-                      Adjuntar documentos
-                    </strong>
-                    <span style={styles.fileText}>
-                      Selecciona uno o varios archivos del cliente.
-                    </span>
-                  </div>
+              <div style={styles.consentimientoBox}>
+                <span style={styles.consentimientoTitulo}>
+                  Autorización para promociones
+                </span>
+
+                <label style={styles.checkLabel}>
                   <input
-                    type="file"
-                    multiple
+                    type="checkbox"
+                    checked={aceptaWhatsapp}
                     onChange={(e) =>
-                      setDocumentos(Array.from(e.target.files || []))
+                      setAceptaWhatsapp(e.target.checked)
                     }
-                    style={styles.fileInput}
                   />
+                  Acepta recibir promociones y novedades por WhatsApp.
                 </label>
+
+                <label style={styles.checkLabel}>
+                  <input
+                    type="checkbox"
+                    checked={aceptaEmail}
+                    onChange={(e) =>
+                      setAceptaEmail(e.target.checked)
+                    }
+                  />
+                  Acepta recibir promociones y novedades por correo.
+                </label>
+              </div>
+
+              <Campo label="Documentos del cliente">
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) =>
+                    setDocumentos(
+                      Array.from(e.target.files || [])
+                    )
+                  }
+                  style={styles.inputStyle}
+                />
 
                 {documentos.length > 0 && (
                   <span style={styles.fileCount}>
@@ -1057,61 +1013,273 @@ export default function CuentasPorCobrar() {
                 )}
               </Campo>
             </article>
+
+            {!modoSoloCliente && (
+              <>
+                <article style={styles.card}>
+                  <SectionTitle
+                    numero="02"
+                    titulo="Información de la cuenta"
+                    texto="Monto original, saldo pendiente y fechas."
+                  />
+
+                  <div style={styles.grid}>
+                    <Campo label="Número de cuenta">
+                      <input
+                        value={numeroCuenta}
+                        onChange={(e) =>
+                          setNumeroCuenta(e.target.value)
+                        }
+                        style={styles.inputStyle}
+                      />
+                    </Campo>
+
+                    <Campo label="Tipo de cuenta *">
+                      <select
+                        value={tipoProducto}
+                        onChange={(e) =>
+                          setTipoProducto(e.target.value)
+                        }
+                        style={styles.selectStyle}
+                      >
+                        <option value="">
+                          Seleccione tipo de cuenta
+                        </option>
+                        <option>Crédito</option>
+                        <option>Préstamo</option>
+                        <option>Cuenta por cobrar</option>
+                        <option>Refinanciamiento</option>
+                        <option>Servicio pendiente</option>
+                      </select>
+                    </Campo>
+
+                    <Campo label="Monto total original *">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={montoTotal}
+                        onChange={(e) =>
+                          setMontoTotal(e.target.value)
+                        }
+                        style={styles.inputStyle}
+                      />
+                    </Campo>
+
+                    <Campo label="Saldo actual *">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={saldoActual}
+                        onChange={(e) =>
+                          setSaldoActual(e.target.value)
+                        }
+                        style={styles.inputStyle}
+                      />
+                    </Campo>
+
+                    <Campo label="Fecha de inicio">
+                      <input
+                        type="date"
+                        value={fechaInicio}
+                        onChange={(e) =>
+                          setFechaInicio(e.target.value)
+                        }
+                        style={styles.inputStyle}
+                      />
+                    </Campo>
+
+                    <Campo label="Fecha de vencimiento">
+                      <input
+                        type="date"
+                        value={fechaVencimiento}
+                        onChange={(e) =>
+                          setFechaVencimiento(e.target.value)
+                        }
+                        style={styles.inputStyle}
+                      />
+                    </Campo>
+
+                    <Campo label="Estado de cuenta">
+                      <select
+                        value={estadoCuenta}
+                        onChange={(e) =>
+                          setEstadoCuenta(e.target.value)
+                        }
+                        style={styles.selectStyle}
+                        disabled={
+                          saldoParaEstadoVisual !== "" &&
+                          saldoVisual <= 0
+                        }
+                      >
+                        <option>Activo</option>
+                        <option>Suspendido</option>
+                        <option>Cancelado</option>
+                      </select>
+                    </Campo>
+                  </div>
+
+                  <Campo label="Descripción">
+                    <textarea
+                      value={descripcion}
+                      onChange={(e) =>
+                        setDescripcion(e.target.value)
+                      }
+                      style={styles.textarea}
+                    />
+                  </Campo>
+                </article>
+
+                <article style={styles.card}>
+                  <SectionTitle
+                    numero="03"
+                    titulo="Cobranza inicial"
+                    texto="Estado, mora, último pago y responsable."
+                  />
+
+                  <div style={styles.grid}>
+                    <Campo label="Estado de cobranza automático">
+                      <input
+                        value={estadoCobranza}
+                        readOnly
+                        style={styles.inputAutomatico}
+                      />
+                    </Campo>
+
+                    <Campo label="Días de mora calculados">
+                      <input
+                        value={diasMoraVisual}
+                        readOnly
+                        style={styles.inputAutomatico}
+                      />
+                    </Campo>
+
+                    <Campo label="Fecha último pago">
+                      <input
+                        type="date"
+                        value={fechaUltimoPago}
+                        onChange={(e) =>
+                          setFechaUltimoPago(e.target.value)
+                        }
+                        style={styles.inputStyle}
+                      />
+                    </Campo>
+
+                    <Campo label="Monto último pago">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={montoUltimoPago}
+                        onChange={(e) =>
+                          setMontoUltimoPago(e.target.value)
+                        }
+                        style={styles.inputStyle}
+                      />
+                    </Campo>
+
+                    <Campo label="Responsable de cobro">
+                      <select
+                        value={responsableCobro}
+                        onChange={(e) =>
+                          setResponsableCobro(e.target.value)
+                        }
+                        style={styles.selectStyle}
+                      >
+                        <option value="">Sin asignar</option>
+
+                        {gestores.map((gestor) => (
+                          <option
+                            key={gestor.id}
+                            value={gestor.nombre}
+                          >
+                            {gestor.nombre} - {gestor.rol}
+                          </option>
+                        ))}
+                      </select>
+                    </Campo>
+                  </div>
+
+                  <Campo label="Observación inicial / historial previo">
+                    <textarea
+                      value={observacionCobro}
+                      onChange={(e) =>
+                        setObservacionCobro(e.target.value)
+                      }
+                      style={styles.textarea}
+                    />
+                  </Campo>
+                </article>
+              </>
+            )}
           </div>
 
           <aside style={styles.sideColumn}>
             <div style={styles.sideCard}>
-              <span style={styles.sideEyebrow}>RESUMEN DE REGISTRO</span>
+              <span style={styles.sideEyebrow}>
+                RESUMEN DE REGISTRO
+              </span>
+
               <h3 style={styles.sideTitle}>Vista previa</h3>
 
               <ResumenFila
                 label="Cliente"
                 value={nombre || "Pendiente"}
               />
+
               <ResumenFila
                 label="Identificación"
                 value={cedula || "Pendiente"}
               />
+
               <ResumenFila
-                label="Tipo de cuenta"
-                value={tipoProducto || "Pendiente"}
-              />
-              <ResumenFila
-                label="Monto original"
-                value={`$${Number(montoTotal || 0).toFixed(2)}`}
-              />
-              <ResumenFila
-                label="Saldo actual"
-                value={`$${saldoVisual.toFixed(2)}`}
-              />
-              <ResumenFila
-                label="Estado"
-                value={estadoCobranza}
-              />
-              <ResumenFila
-                label="Responsable"
-                value={responsableFinal()}
+                label="Tipo de cliente"
+                value={tipoCliente}
               />
 
-              <div style={styles.sideNotice}>
-                <Icon name="shield" size={18} />
-                <span>
-                  El estado y los días de mora se calculan automáticamente.
-                </span>
-              </div>
+              <ResumenFila
+                label="WhatsApp promocional"
+                value={aceptaWhatsapp ? "Sí" : "No"}
+              />
+
+              <ResumenFila
+                label="Correo promocional"
+                value={aceptaEmail ? "Sí" : "No"}
+              />
+
+              {!modoSoloCliente && (
+                <>
+                  <ResumenFila
+                    label="Tipo de cuenta"
+                    value={tipoProducto || "Pendiente"}
+                  />
+
+                  <ResumenFila
+                    label="Saldo actual"
+                    value={`$${saldoVisual.toFixed(2)}`}
+                  />
+
+                  <ResumenFila
+                    label="Estado"
+                    value={estadoCobranza}
+                  />
+                </>
+              )}
             </div>
 
             <div style={styles.stickyActions}>
               <button
                 type="button"
-                onClick={guardarCuenta}
+                onClick={guardarRegistro}
                 style={styles.botonGuardar}
                 disabled={guardando}
               >
-                <Icon name="save" size={18} />
                 {guardando
                   ? "Guardando..."
-                  : "Guardar cuenta por cobrar"}
+                  : modoSoloCliente
+                  ? "Guardar cliente"
+                  : "Guardar cliente y cuenta"}
               </button>
 
               <button
@@ -1148,15 +1316,16 @@ function Campo({ label, children }) {
   );
 }
 
-function SectionTitle({ numero, icono, titulo, texto }) {
+function SectionTitle({ numero, titulo, texto }) {
   return (
     <div style={styles.sectionHeader}>
-      <div style={styles.sectionIcon}>
-        <Icon name={icono} size={21} />
-      </div>
+      <div style={styles.sectionIcon}>{numero}</div>
 
-      <div style={styles.sectionTitleBox}>
-        <span style={styles.sectionNumber}>PASO {numero}</span>
+      <div>
+        <span style={styles.sectionNumber}>
+          PASO {numero}
+        </span>
+
         <h2 style={styles.tituloSeccion}>{titulo}</h2>
         <p style={styles.textoSeccion}>{texto}</p>
       </div>
@@ -1164,27 +1333,39 @@ function SectionTitle({ numero, icono, titulo, texto }) {
   );
 }
 
-function KPI({ titulo, valor, detalle, icono, destacado = false }) {
+function KPI({
+  titulo,
+  valor,
+  detalle,
+  icono,
+  destacado = false,
+}) {
   return (
     <article
       style={{
         ...styles.resumenCard,
-        ...(destacado ? styles.resumenCardDanger : {}),
+        ...(destacado
+          ? styles.resumenCardDanger
+          : {}),
       }}
     >
       <div
         style={{
           ...styles.kpiIcono,
-          ...(destacado ? styles.kpiIconoDanger : {}),
+          ...(destacado
+            ? styles.kpiIconoDanger
+            : {}),
         }}
       >
-        <Icon name={icono} size={22} />
+        {icono}
       </div>
 
       <div>
         <p style={styles.resumenLabel}>{titulo}</p>
         <h3 style={styles.resumenValor}>{valor}</h3>
-        <span style={styles.resumenDetalle}>{detalle}</span>
+        <span style={styles.resumenDetalle}>
+          {detalle}
+        </span>
       </div>
     </article>
   );
@@ -1193,78 +1374,15 @@ function KPI({ titulo, valor, detalle, icono, destacado = false }) {
 function ResumenFila({ label, value }) {
   return (
     <div style={styles.resumenFila}>
-      <span style={styles.resumenFilaLabel}>{label}</span>
-      <strong style={styles.resumenFilaValue}>{value}</strong>
+      <span style={styles.resumenFilaLabel}>
+        {label}
+      </span>
+
+      <strong style={styles.resumenFilaValue}>
+        {value}
+      </strong>
     </div>
   );
-}
-
-function Icon({ name, size = 20 }) {
-  const props = {
-    width: size,
-    height: size,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.8,
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    "aria-hidden": "true",
-  };
-
-  const paths = {
-    user: (
-      <>
-        <circle cx="12" cy="8" r="4" />
-        <path d="M4 21a8 8 0 0 1 16 0" />
-      </>
-    ),
-    wallet: (
-      <>
-        <path d="M4 6h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h13" />
-        <path d="M16 13h5" />
-      </>
-    ),
-    activity: (
-      <>
-        <path d="M3 12h4l2-6 4 12 2-6h6" />
-      </>
-    ),
-    document: (
-      <>
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-        <path d="M14 2v6h6M8 13h8M8 17h6" />
-      </>
-    ),
-    phone: (
-      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.63a2 2 0 0 1-.45 2.11L8 9.73a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.85.29 1.73.5 2.63.62A2 2 0 0 1 22 16.92z" />
-    ),
-    upload: (
-      <>
-        <path d="M12 3v12M7 8l5-5 5 5" />
-        <path d="M5 21h14" />
-      </>
-    ),
-    shield: (
-      <>
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        <path d="M9 12l2 2 4-4" />
-      </>
-    ),
-    save: (
-      <>
-        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-        <path d="M17 21v-8H7v8M7 3v5h8" />
-      </>
-    ),
-    arrowLeft: (
-      <>
-        <path d="M19 12H5M11 18l-6-6 6-6" />
-      </>
-    ),
-  };
-
-  return <svg {...props}>{paths[name] || paths.user}</svg>;
 }
 
 const styles = {
@@ -1287,8 +1405,6 @@ const styles = {
     placeItems: "center",
     padding: 24,
     background: "#f3f6f4",
-    fontFamily:
-      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   },
   cargandoCard: {
     width: "100%",
@@ -1299,8 +1415,7 @@ const styles = {
     alignItems: "center",
     border: "1px solid #dce5df",
     borderRadius: 24,
-    background: "#ffffff",
-    boxShadow: "0 24px 60px rgba(15,23,42,.10)",
+    background: "#fff",
     textAlign: "center",
   },
   cargandoLogo: {
@@ -1328,7 +1443,6 @@ const styles = {
     borderRadius: 26,
     background:
       "linear-gradient(135deg, #09120d 0%, #123b25 62%, #17673e 100%)",
-    boxShadow: "0 24px 56px rgba(11,48,29,.18)",
   },
   heroPrincipal: {
     display: "flex",
@@ -1346,8 +1460,7 @@ const styles = {
     placeItems: "center",
     boxSizing: "border-box",
     borderRadius: 18,
-    background: "#ffffff",
-    boxShadow: "0 14px 30px rgba(0,0,0,.20)",
+    background: "#fff",
   },
   logo: {
     width: "100%",
@@ -1364,35 +1477,31 @@ const styles = {
   },
   titulo: {
     margin: "0 0 10px",
-    color: "#ffffff",
+    color: "#fff",
     fontSize: "clamp(32px,4vw,48px)",
-    lineHeight: 1.04,
-    letterSpacing: -1,
   },
   subtitulo: {
     maxWidth: 760,
     margin: 0,
     color: "#d2e7da",
     fontSize: 15,
-    lineHeight: 1.58,
+    lineHeight: 1.55,
   },
   botonVolver: {
     minHeight: 46,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 9,
     padding: "11px 16px",
     border: "1px solid rgba(255,255,255,.18)",
     borderRadius: 12,
     background: "rgba(255,255,255,.09)",
-    color: "#ffffff",
+    color: "#fff",
     fontWeight: 800,
     cursor: "pointer",
   },
   resumenGrid: {
     marginBottom: 20,
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))",
+    gridTemplateColumns:
+      "repeat(auto-fit,minmax(250px,1fr))",
     gap: 14,
   },
   resumenCard: {
@@ -1403,8 +1512,7 @@ const styles = {
     gap: 14,
     border: "1px solid #dfe7e2",
     borderRadius: 18,
-    background: "#ffffff",
-    boxShadow: "0 10px 28px rgba(15,23,42,.05)",
+    background: "#fff",
   },
   resumenCardDanger: {
     border: "1px solid #fecaca",
@@ -1431,9 +1539,7 @@ const styles = {
   },
   resumenValor: {
     margin: 0,
-    color: "#152019",
     fontSize: 22,
-    lineHeight: 1.15,
   },
   resumenDetalle: {
     display: "block",
@@ -1443,7 +1549,8 @@ const styles = {
   },
   formLayout: {
     display: "grid",
-    gridTemplateColumns: "minmax(0,1fr) 330px",
+    gridTemplateColumns:
+      "minmax(0,1fr) 330px",
     gap: 20,
     alignItems: "start",
   },
@@ -1461,8 +1568,7 @@ const styles = {
     padding: 26,
     border: "1px solid #dfe7e2",
     borderRadius: 22,
-    background: "#ffffff",
-    boxShadow: "0 12px 34px rgba(15,23,42,.055)",
+    background: "#fff",
   },
   sectionHeader: {
     marginBottom: 22,
@@ -1481,9 +1587,7 @@ const styles = {
     borderRadius: 14,
     background: "#eaf7ef",
     color: "#16834f",
-  },
-  sectionTitleBox: {
-    minWidth: 0,
+    fontWeight: 900,
   },
   sectionNumber: {
     display: "block",
@@ -1491,13 +1595,10 @@ const styles = {
     color: "#16834f",
     fontSize: 10,
     fontWeight: 900,
-    letterSpacing: 1.2,
   },
   tituloSeccion: {
     margin: 0,
-    color: "#162019",
     fontSize: 23,
-    letterSpacing: -0.3,
   },
   textoSeccion: {
     margin: "5px 0 0",
@@ -1506,7 +1607,8 @@ const styles = {
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(235px,1fr))",
+    gridTemplateColumns:
+      "repeat(auto-fit,minmax(235px,1fr))",
     gap: "0 16px",
   },
   campo: {
@@ -1527,9 +1629,7 @@ const styles = {
     boxSizing: "border-box",
     border: "1px solid #ccd7d0",
     borderRadius: 11,
-    outline: "none",
-    background: "#ffffff",
-    color: "#18221c",
+    background: "#fff",
     fontSize: 14,
   },
   selectStyle: {
@@ -1539,11 +1639,8 @@ const styles = {
     boxSizing: "border-box",
     border: "1px solid #ccd7d0",
     borderRadius: 11,
-    outline: "none",
-    background: "#ffffff",
-    color: "#18221c",
+    background: "#fff",
     fontSize: 14,
-    fontWeight: 650,
   },
   inputAutomatico: {
     width: "100%",
@@ -1552,7 +1649,6 @@ const styles = {
     boxSizing: "border-box",
     border: "1px solid #91d5ae",
     borderRadius: 11,
-    outline: "none",
     background: "#edf9f2",
     color: "#14683e",
     fontSize: 14,
@@ -1565,41 +1661,32 @@ const styles = {
     boxSizing: "border-box",
     border: "1px solid #ccd7d0",
     borderRadius: 11,
-    outline: "none",
     resize: "vertical",
-    background: "#ffffff",
-    color: "#18221c",
     fontSize: 14,
     fontFamily: "inherit",
   },
-  fileBox: {
-    minHeight: 84,
+  consentimientoBox: {
+    marginBottom: 18,
     padding: 16,
     display: "grid",
-    gridTemplateColumns: "40px 1fr",
     gap: 12,
-    alignItems: "center",
-    border: "1px dashed #9fc9b1",
+    border: "1px solid #b7d8c4",
     borderRadius: 14,
-    background: "#f5fbf7",
-    color: "#17623c",
-    cursor: "pointer",
+    background: "#f3faf6",
   },
-  fileTitle: {
-    display: "block",
+  consentimientoTitulo: {
+    color: "#17623c",
+    fontSize: 13,
+    fontWeight: 900,
+  },
+  checkLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: 9,
+    color: "#3f4c44",
     fontSize: 13,
   },
-  fileText: {
-    display: "block",
-    marginTop: 4,
-    color: "#708078",
-    fontSize: 11,
-  },
-  fileInput: {
-    display: "none",
-  },
   fileCount: {
-    marginTop: 7,
     color: "#16834f",
     fontSize: 11,
     fontWeight: 800,
@@ -1608,8 +1695,7 @@ const styles = {
     padding: 22,
     border: "1px solid #dfe7e2",
     borderRadius: 20,
-    background: "#ffffff",
-    boxShadow: "0 12px 34px rgba(15,23,42,.055)",
+    background: "#fff",
   },
   sideEyebrow: {
     display: "block",
@@ -1617,7 +1703,6 @@ const styles = {
     color: "#16834f",
     fontSize: 10,
     fontWeight: 900,
-    letterSpacing: 1.15,
   },
   sideTitle: {
     margin: "0 0 18px",
@@ -1637,23 +1722,10 @@ const styles = {
   resumenFilaValue: {
     maxWidth: 160,
     overflow: "hidden",
-    color: "#1a251e",
     fontSize: 12,
     textAlign: "right",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
-  },
-  sideNotice: {
-    marginTop: 18,
-    padding: 13,
-    display: "grid",
-    gridTemplateColumns: "22px 1fr",
-    gap: 9,
-    borderRadius: 13,
-    background: "#edf8f1",
-    color: "#17623c",
-    fontSize: 11,
-    lineHeight: 1.45,
   },
   stickyActions: {
     padding: 16,
@@ -1661,19 +1733,14 @@ const styles = {
     gap: 9,
     border: "1px solid #dfe7e2",
     borderRadius: 18,
-    background: "#ffffff",
-    boxShadow: "0 12px 34px rgba(15,23,42,.055)",
+    background: "#fff",
   },
   botonGuardar: {
     minHeight: 48,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 9,
     border: "none",
     borderRadius: 12,
     background: "#16834f",
-    color: "#ffffff",
+    color: "#fff",
     fontSize: 14,
     fontWeight: 850,
     cursor: "pointer",
@@ -1682,8 +1749,7 @@ const styles = {
     minHeight: 44,
     border: "1px solid #ccd7d0",
     borderRadius: 11,
-    background: "#ffffff",
-    color: "#243129",
+    background: "#fff",
     fontWeight: 800,
     cursor: "pointer",
   },
@@ -1692,7 +1758,7 @@ const styles = {
     border: "none",
     borderRadius: 11,
     background: "#17211c",
-    color: "#ffffff",
+    color: "#fff",
     fontWeight: 800,
     cursor: "pointer",
   },
