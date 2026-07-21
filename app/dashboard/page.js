@@ -278,27 +278,17 @@ export default function Dashboard() {
         dashboard: true,
         clientes: true,
         vista_cliente: true,
-
-        // Caja y administración
         caja: true,
         control_caja: true,
         gastos: true,
-
-        // Inventario y ventas
         inventario: true,
         movimientos_inventario: true,
         ventas: true,
         dashboard_ventas: true,
-
-        // Membresías y suscripciones
         suscripciones: true,
-
-        // Gestión
         reportes: true,
         usuarios: true,
         configuracion: true,
-
-        // Fuera del plan Ventas y Gestión
         creditos: false,
         cobranza: false,
         dashboard_cobros: false,
@@ -377,11 +367,6 @@ export default function Dashboard() {
       configuracion: true,
     };
 
-    /*
-      El plan es el límite máximo de acceso.
-      La tabla empresa_modulos nunca puede activar módulos
-      que no estén incluidos en el plan contratado.
-    */
     const mapaFinal = {};
 
     Object.keys(basePlan).forEach((modulo) => {
@@ -437,11 +422,20 @@ export default function Dashboard() {
 
   function puedeVer(codigoModulo, codigoPermiso = codigoModulo) {
     if (bloqueado) return false;
-    if (codigoModulo !== "dashboard" && !Boolean(modulos?.[codigoModulo])) {
+
+    if (
+      codigoModulo !== "dashboard" &&
+      !Boolean(modulos?.[codigoModulo])
+    ) {
       return false;
     }
+
     if (esAdministrador()) return true;
-    return codigoPermiso === "dashboard" || permisosUsuario.includes(codigoPermiso);
+
+    return (
+      codigoPermiso === "dashboard" ||
+      permisosUsuario.includes(codigoPermiso)
+    );
   }
 
   function abrirModulo(ruta) {
@@ -473,7 +467,12 @@ export default function Dashboard() {
       ["Registrar Abonos", "/abonos", "abonos", "🧾"],
       ["Control Caja", "/control-caja", "control_caja", "🏦"],
       ["Inventario", "/inventario", "inventario", "📦"],
-      ["Movimientos Inventario", "/movimientos-inventario", "movimientos_inventario", "🔄"],
+      [
+        "Movimientos Inventario",
+        "/inventario/movimientos",
+        "movimientos_inventario",
+        "🔄",
+      ],
       ["Ventas", "/ventas", "ventas", "🛒"],
       ["Centro de Ventas", "/dashboard-ventas", "dashboard_ventas", "📈"],
       ["Gastos", "/gastos", "gastos", "🧮"],
@@ -498,7 +497,10 @@ export default function Dashboard() {
       nombre,
       ruta,
       icono,
-      activo: typeof forzado === "boolean" ? forzado : puedeVer(codigo),
+      activo:
+        typeof forzado === "boolean"
+          ? forzado
+          : puedeVer(codigo),
     })),
     [modulos, permisosUsuario, usuarioRol, bloqueado]
   );
@@ -508,9 +510,17 @@ export default function Dashboard() {
   if (cargando) {
     return (
       <div style={s.loading}>
-        <img src="/konax-logo.png" alt="KONAX" style={s.loadingLogo} />
-        <strong style={s.loadingTitle}>Preparando tu espacio de trabajo</strong>
-        <span style={s.loadingText}>Validando empresa, plan y permisos.</span>
+        <img
+          src="/konax-logo.png"
+          alt="KONAX"
+          style={s.loadingLogo}
+        />
+        <strong style={s.loadingTitle}>
+          Preparando tu espacio de trabajo
+        </strong>
+        <span style={s.loadingText}>
+          Validando empresa, plan y permisos.
+        </span>
       </div>
     );
   }
@@ -519,10 +529,18 @@ export default function Dashboard() {
     return (
       <div style={s.bloqueoPagina}>
         <div style={s.bloqueoTarjeta}>
-          <img src="/konax-logo.png" alt="KONAX" style={s.bloqueoLogo} />
+          <img
+            src="/konax-logo.png"
+            alt="KONAX"
+            style={s.bloqueoLogo}
+          />
           <div style={s.candado}>🔒</div>
-          <span style={s.bloqueoEtiqueta}>PRUEBA FINALIZADA</span>
-          <h1 style={s.bloqueoTitulo}>El acceso operativo está bloqueado</h1>
+          <span style={s.bloqueoEtiqueta}>
+            PRUEBA FINALIZADA
+          </span>
+          <h1 style={s.bloqueoTitulo}>
+            El acceso operativo está bloqueado
+          </h1>
           <p style={s.bloqueoTexto}>
             La prueba de <strong>{empresaNombre}</strong> finalizó el{" "}
             <strong>{formatoFecha(fechaFinPrueba)}</strong>. Los datos permanecen
@@ -541,32 +559,47 @@ export default function Dashboard() {
           </div>
 
           <div style={s.bloqueoAcciones}>
-            <button onClick={contactarKonax} style={s.botonVerde}>
+            <button
+              onClick={contactarKonax}
+              style={s.botonVerde}
+            >
               Contactar a KONAX
             </button>
-            <button onClick={cerrarSesion} style={s.botonClaro}>
+            <button
+              onClick={cerrarSesion}
+              style={s.botonClaro}
+            >
               Cerrar sesión
             </button>
           </div>
 
           <p style={s.notaWhatsapp}>
-            WhatsApp comercial de KONAX: <strong>6021-1024</strong>.
+            WhatsApp comercial de KONAX:{" "}
+            <strong>6021-1024</strong>.
           </p>
         </div>
       </div>
     );
   }
 
-  const pruebaActiva = estadoSuscripcion === "prueba";
-  const pendienteInicio = estadoSuscripcion === "pendiente_inicio_prueba";
+  const pruebaActiva =
+    estadoSuscripcion === "prueba";
+  const pendienteInicio =
+    estadoSuscripcion === "pendiente_inicio_prueba";
   const alertaCritica =
-    pruebaActiva && diasRestantes !== null && diasRestantes <= 5;
+    pruebaActiva &&
+    diasRestantes !== null &&
+    diasRestantes <= 5;
 
   return (
     <div style={s.layout}>
       <aside style={s.sidebar}>
         <div style={s.brand}>
-          <img src="/konax-logo.png" alt="KONAX" style={s.logo} />
+          <img
+            src="/konax-logo.png"
+            alt="KONAX"
+            style={s.logo}
+          />
         </div>
 
         <nav style={s.nav}>
@@ -582,7 +615,10 @@ export default function Dashboard() {
           ))}
         </nav>
 
-        <button onClick={cerrarSesion} style={s.logout}>
+        <button
+          onClick={cerrarSesion}
+          style={s.logout}
+        >
           ↪ Cerrar sesión
         </button>
       </aside>
@@ -590,17 +626,27 @@ export default function Dashboard() {
       <main style={s.main}>
         <header style={s.topbar}>
           <div>
-            <span style={s.eyebrow}>PANEL EMPRESARIAL</span>
-            <h1 style={s.pageTitle}>{empresaNombre}</h1>
+            <span style={s.eyebrow}>
+              PANEL EMPRESARIAL
+            </span>
+            <h1 style={s.pageTitle}>
+              {empresaNombre}
+            </h1>
           </div>
 
           <div style={s.userBox}>
             <div style={s.avatar}>
-              {String(usuarioNombre || "U").charAt(0).toUpperCase()}
+              {String(usuarioNombre || "U")
+                .charAt(0)
+                .toUpperCase()}
             </div>
             <div>
-              <strong style={s.userName}>{usuarioNombre || "Usuario"}</strong>
-              <span style={s.userRole}>{usuarioRol || "Sin rol"}</span>
+              <strong style={s.userName}>
+                {usuarioNombre || "Usuario"}
+              </strong>
+              <span style={s.userRole}>
+                {usuarioRol || "Sin rol"}
+              </span>
             </div>
           </div>
         </header>
@@ -609,7 +655,9 @@ export default function Dashboard() {
           <section style={s.avisoPendiente}>
             <div style={s.avisoIcono}>⏱️</div>
             <div>
-              <span style={s.avisoEtiqueta}>PROGRAMA PILOTO APROBADO</span>
+              <span style={s.avisoEtiqueta}>
+                PROGRAMA PILOTO APROBADO
+              </span>
               <strong style={s.avisoTitulo}>
                 La prueba todavía no ha comenzado
               </strong>
@@ -624,13 +672,17 @@ export default function Dashboard() {
           <section
             style={{
               ...s.avisoPrueba,
-              ...(alertaCritica ? s.avisoCritico : {}),
+              ...(alertaCritica
+                ? s.avisoCritico
+                : {}),
             }}
           >
             <div style={s.avisoIzquierda}>
               <div style={s.avisoIcono}>⏱️</div>
               <div>
-                <span style={s.avisoEtiqueta}>PROGRAMA PILOTO ACTIVO</span>
+                <span style={s.avisoEtiqueta}>
+                  PROGRAMA PILOTO ACTIVO
+                </span>
                 <strong style={s.avisoTitulo}>
                   Estás utilizando KONAX en período de prueba
                 </strong>
@@ -642,9 +694,13 @@ export default function Dashboard() {
             </div>
 
             <div style={s.diasCaja}>
-              <strong style={s.diasNumero}>{diasRestantes ?? 0}</strong>
+              <strong style={s.diasNumero}>
+                {diasRestantes ?? 0}
+              </strong>
               <span style={s.diasTexto}>
-                {diasRestantes === 1 ? "día restante" : "días restantes"}
+                {diasRestantes === 1
+                  ? "día restante"
+                  : "días restantes"}
               </span>
             </div>
           </section>
@@ -652,8 +708,12 @@ export default function Dashboard() {
 
         <section style={s.hero}>
           <div>
-            <span style={s.heroTag}>CENTRO DE OPERACIONES</span>
-            <h2 style={s.heroTitle}>Todo tu negocio, claro y bajo control.</h2>
+            <span style={s.heroTag}>
+              CENTRO DE OPERACIONES
+            </span>
+            <h2 style={s.heroTitle}>
+              Todo tu negocio, claro y bajo control.
+            </h2>
             <p style={s.heroText}>
               Accede a las funciones principales y mantén organizada la operación
               diaria de {tipoNegocio || "tu empresa"}.
@@ -662,9 +722,13 @@ export default function Dashboard() {
 
           <div style={s.planPanel}>
             <span style={s.planLabel}>
-              {pruebaActiva ? "PLAN EN PRUEBA" : "PLAN ACTUAL"}
+              {pruebaActiva
+                ? "PLAN EN PRUEBA"
+                : "PLAN ACTUAL"}
             </span>
-            <strong style={s.planName}>{planNombre}</strong>
+            <strong style={s.planName}>
+              {planNombre}
+            </strong>
             <div style={s.planStatus}>
               <span style={s.greenDot}></span>
               {pruebaActiva
@@ -674,14 +738,28 @@ export default function Dashboard() {
                 : estadoPlan || "Activo"}
             </div>
             <div style={s.planDivider}></div>
-            <span style={s.planSmall}>{activos.length} funciones habilitadas</span>
+            <span style={s.planSmall}>
+              {activos.length} funciones habilitadas
+            </span>
           </div>
         </section>
 
         <section style={s.bottomGrid}>
-          <Info titulo="ACCESO ACTUAL" valor={usuarioRol || "Sin rol"} icono="🛡️" />
-          <Info titulo="TIPO DE NEGOCIO" valor={tipoNegocio || "No definido"} icono="🏢" />
-          <Info titulo="FUNCIONES ACTIVAS" valor={String(activos.length)} icono="▦" />
+          <Info
+            titulo="ACCESO ACTUAL"
+            valor={usuarioRol || "Sin rol"}
+            icono="🛡️"
+          />
+          <Info
+            titulo="TIPO DE NEGOCIO"
+            valor={tipoNegocio || "No definido"}
+            icono="🏢"
+          />
+          <Info
+            titulo="FUNCIONES ACTIVAS"
+            valor={String(activos.length)}
+            icono="▦"
+          />
         </section>
       </main>
     </div>
@@ -693,8 +771,12 @@ function Info({ titulo, valor, icono }) {
     <article style={s.infoCard}>
       <div style={s.infoIcon}>{icono}</div>
       <div>
-        <span style={s.infoLabel}>{titulo}</span>
-        <h3 style={s.infoTitle}>{valor}</h3>
+        <span style={s.infoLabel}>
+          {titulo}
+        </span>
+        <h3 style={s.infoTitle}>
+          {valor}
+        </h3>
         <p style={s.infoText}>
           Información correspondiente a la empresa y al acceso actual.
         </p>
@@ -709,7 +791,8 @@ const s = {
     display: "flex",
     background: "#f3f6f4",
     color: "#142019",
-    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
+    fontFamily:
+      'Inter, system-ui, "Segoe UI", sans-serif',
   },
   loading: {
     minHeight: "100vh",
@@ -719,11 +802,20 @@ const s = {
     justifyContent: "center",
     gap: 10,
     background: "#f3f6f4",
-    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
+    fontFamily:
+      'Inter, system-ui, "Segoe UI", sans-serif',
   },
-  loadingLogo: { width: 210, marginBottom: 10 },
-  loadingTitle: { fontSize: 22 },
-  loadingText: { color: "#718078", fontSize: 14 },
+  loadingLogo: {
+    width: 210,
+    marginBottom: 10,
+  },
+  loadingTitle: {
+    fontSize: 22,
+  },
+  loadingText: {
+    color: "#718078",
+    fontSize: 14,
+  },
   sidebar: {
     width: 270,
     minWidth: 270,
@@ -743,10 +835,22 @@ const s = {
     display: "flex",
     alignItems: "center",
     padding: "8px 10px 22px",
-    borderBottom: "1px solid rgba(255,255,255,.08)",
+    borderBottom:
+      "1px solid rgba(255,255,255,.08)",
   },
-  logo: { width: 170, height: 62, objectFit: "contain", objectPosition: "left" },
-  nav: { display: "grid", gap: 5, paddingTop: 18 },
+  logo: {
+    width: 180,
+    maxWidth: "100%",
+    height: "auto",
+    display: "block",
+    objectFit: "contain",
+    objectPosition: "left center",
+  },
+  nav: {
+    display: "grid",
+    gap: 5,
+    paddingTop: 18,
+  },
   navItem: {
     minHeight: 44,
     display: "grid",
@@ -766,14 +870,20 @@ const s = {
   logout: {
     minHeight: 44,
     marginTop: "auto",
-    border: "1px solid rgba(255,255,255,.12)",
+    border:
+      "1px solid rgba(255,255,255,.12)",
     borderRadius: 11,
-    background: "rgba(255,255,255,.05)",
+    background:
+      "rgba(255,255,255,.05)",
     color: "#fff",
     fontWeight: 750,
     cursor: "pointer",
   },
-  main: { flex: 1, minWidth: 0, padding: "28px 30px 40px" },
+  main: {
+    flex: 1,
+    minWidth: 0,
+    padding: "28px 30px 40px",
+  },
   topbar: {
     maxWidth: 1440,
     margin: "0 auto 22px",
@@ -789,8 +899,15 @@ const s = {
     fontWeight: 900,
     letterSpacing: 1.4,
   },
-  pageTitle: { margin: 0, fontSize: 29 },
-  userBox: { display: "flex", alignItems: "center", gap: 10 },
+  pageTitle: {
+    margin: 0,
+    fontSize: 29,
+  },
+  userBox: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
   avatar: {
     width: 42,
     height: 42,
@@ -801,8 +918,15 @@ const s = {
     color: "#fff",
     fontWeight: 900,
   },
-  userName: { display: "block", fontSize: 13 },
-  userRole: { display: "block", color: "#7d8a82", fontSize: 11 },
+  userName: {
+    display: "block",
+    fontSize: 13,
+  },
+  userRole: {
+    display: "block",
+    color: "#7d8a82",
+    fontSize: 11,
+  },
   avisoPendiente: {
     maxWidth: 1440,
     margin: "0 auto 18px",
@@ -826,7 +950,10 @@ const s = {
     borderRadius: 16,
     background: "#ecf9f1",
   },
-  avisoCritico: { borderColor: "#efb1aa", background: "#fff0ee" },
+  avisoCritico: {
+    borderColor: "#efb1aa",
+    background: "#fff0ee",
+  },
   avisoIzquierda: {
     display: "grid",
     gridTemplateColumns: "48px 1fr",
@@ -849,8 +976,16 @@ const s = {
     fontWeight: 900,
     letterSpacing: 1.2,
   },
-  avisoTitulo: { display: "block", marginTop: 4, fontSize: 15 },
-  avisoTexto: { margin: "4px 0 0", color: "#657169", fontSize: 12 },
+  avisoTitulo: {
+    display: "block",
+    marginTop: 4,
+    fontSize: 15,
+  },
+  avisoTexto: {
+    margin: "4px 0 0",
+    color: "#657169",
+    fontSize: 12,
+  },
   diasCaja: {
     minWidth: 110,
     padding: 11,
@@ -858,18 +993,30 @@ const s = {
     background: "#fff",
     textAlign: "center",
   },
-  diasNumero: { display: "block", color: "#173c2a", fontSize: 28 },
-  diasTexto: { display: "block", color: "#6f7c74", fontSize: 10, fontWeight: 800 },
+  diasNumero: {
+    display: "block",
+    color: "#173c2a",
+    fontSize: 28,
+  },
+  diasTexto: {
+    display: "block",
+    color: "#6f7c74",
+    fontSize: 10,
+    fontWeight: 800,
+  },
   hero: {
     maxWidth: 1440,
     margin: "0 auto 22px",
     display: "grid",
-    gridTemplateColumns: "minmax(0,1fr) 270px",
+    gridTemplateColumns:
+      "minmax(0,1fr) 270px",
     gap: 20,
     padding: 30,
     borderRadius: 24,
-    background: "linear-gradient(135deg,#0b1710,#123924 65%,#17673e)",
-    boxShadow: "0 22px 55px rgba(12,48,29,.18)",
+    background:
+      "linear-gradient(135deg,#0b1710,#123924 65%,#17673e)",
+    boxShadow:
+      "0 22px 55px rgba(12,48,29,.18)",
   },
   heroTag: {
     display: "block",
@@ -886,15 +1033,32 @@ const s = {
     fontSize: "clamp(34px,5vw,56px)",
     lineHeight: 1.02,
   },
-  heroText: { maxWidth: 680, margin: 0, color: "#d1e5d8", lineHeight: 1.6 },
+  heroText: {
+    maxWidth: 680,
+    margin: 0,
+    color: "#d1e5d8",
+    lineHeight: 1.6,
+  },
   planPanel: {
     padding: 20,
-    border: "1px solid rgba(255,255,255,.14)",
+    border:
+      "1px solid rgba(255,255,255,.14)",
     borderRadius: 18,
-    background: "rgba(255,255,255,.08)",
+    background:
+      "rgba(255,255,255,.08)",
   },
-  planLabel: { display: "block", color: "#95d8b2", fontSize: 10, fontWeight: 900 },
-  planName: { display: "block", marginTop: 8, color: "#fff", fontSize: 23 },
+  planLabel: {
+    display: "block",
+    color: "#95d8b2",
+    fontSize: 10,
+    fontWeight: 900,
+  },
+  planName: {
+    display: "block",
+    marginTop: 8,
+    color: "#fff",
+    fontSize: 23,
+  },
   planStatus: {
     display: "flex",
     alignItems: "center",
@@ -903,14 +1067,28 @@ const s = {
     color: "#dff4e7",
     fontSize: 12,
   },
-  greenDot: { width: 8, height: 8, borderRadius: "50%", background: "#52dd91" },
-  planDivider: { height: 1, margin: "18px 0", background: "rgba(255,255,255,.12)" },
-  planSmall: { color: "#b9d8c5", fontSize: 12 },
+  greenDot: {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    background: "#52dd91",
+  },
+  planDivider: {
+    height: 1,
+    margin: "18px 0",
+    background:
+      "rgba(255,255,255,.12)",
+  },
+  planSmall: {
+    color: "#b9d8c5",
+    fontSize: 12,
+  },
   bottomGrid: {
     maxWidth: 1440,
     margin: "0 auto",
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
+    gridTemplateColumns:
+      "repeat(auto-fit,minmax(260px,1fr))",
     gap: 14,
   },
   infoCard: {
@@ -931,16 +1109,28 @@ const s = {
     borderRadius: 13,
     background: "#edf6f0",
   },
-  infoLabel: { color: "#16834f", fontSize: 10, fontWeight: 900 },
-  infoTitle: { margin: "5px 0 7px" },
-  infoText: { margin: 0, color: "#748078", fontSize: 12 },
+  infoLabel: {
+    color: "#16834f",
+    fontSize: 10,
+    fontWeight: 900,
+  },
+  infoTitle: {
+    margin: "5px 0 7px",
+  },
+  infoText: {
+    margin: 0,
+    color: "#748078",
+    fontSize: 12,
+  },
   bloqueoPagina: {
     minHeight: "100vh",
     display: "grid",
     placeItems: "center",
     padding: 24,
-    background: "radial-gradient(circle at top,#174d30,#07100b 70%)",
-    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
+    background:
+      "radial-gradient(circle at top,#174d30,#07100b 70%)",
+    fontFamily:
+      'Inter, system-ui, "Segoe UI", sans-serif',
   },
   bloqueoTarjeta: {
     width: "min(650px,100%)",
@@ -948,9 +1138,13 @@ const s = {
     borderRadius: 24,
     background: "#fff",
     textAlign: "center",
-    boxShadow: "0 28px 70px rgba(0,0,0,.28)",
+    boxShadow:
+      "0 28px 70px rgba(0,0,0,.28)",
   },
-  bloqueoLogo: { width: 210, maxWidth: "70%" },
+  bloqueoLogo: {
+    width: 210,
+    maxWidth: "70%",
+  },
   candado: {
     width: 66,
     height: 66,
@@ -961,12 +1155,23 @@ const s = {
     background: "#fff0ee",
     fontSize: 30,
   },
-  bloqueoEtiqueta: { color: "#b42318", fontSize: 10, fontWeight: 900 },
-  bloqueoTitulo: { margin: "8px 0 12px", fontSize: 31 },
-  bloqueoTexto: { color: "#66736b", lineHeight: 1.65 },
+  bloqueoEtiqueta: {
+    color: "#b42318",
+    fontSize: 10,
+    fontWeight: 900,
+  },
+  bloqueoTitulo: {
+    margin: "8px 0 12px",
+    fontSize: 31,
+  },
+  bloqueoTexto: {
+    color: "#66736b",
+    lineHeight: 1.65,
+  },
   bloqueoResumen: {
     display: "grid",
-    gridTemplateColumns: "repeat(2,1fr)",
+    gridTemplateColumns:
+      "repeat(2,1fr)",
     gap: 12,
     margin: "22px 0",
   },
@@ -1000,5 +1205,9 @@ const s = {
     fontWeight: 800,
     cursor: "pointer",
   },
-  notaWhatsapp: { marginTop: 18, color: "#8b958f", fontSize: 10 },
+  notaWhatsapp: {
+    marginTop: 18,
+    color: "#8b958f",
+    fontSize: 10,
+  },
 };
