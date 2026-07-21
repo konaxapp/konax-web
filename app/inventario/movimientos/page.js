@@ -193,7 +193,7 @@ export default function MovimientosInventario() {
     const { data: modulos, error: errorModulos } =
       await supabase
         .from("empresa_modulos")
-        .select("inventario, movimientos_inventario")
+        .select("inventario")
         .eq("empresa_id", empresaId)
         .maybeSingle();
 
@@ -205,12 +205,9 @@ export default function MovimientosInventario() {
       return;
     }
 
-    if (
-      !modulos?.inventario ||
-      !modulos?.movimientos_inventario
-    ) {
+    if (!modulos?.inventario) {
       alert(
-        "Los módulos de inventario no están activos para esta empresa."
+        "El módulo Inventario no está activo para esta empresa."
       );
       router.replace("/dashboard");
       return;
