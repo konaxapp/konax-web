@@ -4,24 +4,62 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
+function normalizar(valor) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_");
+}
+
+function fechaLocal(fecha) {
+  if (!fecha) return null;
+  const [a, m, d] = String(fecha).slice(0, 10).split("-").map(Number);
+  if (!a || !m || !d) return null;
+  return new Date(a, m - 1, d, 0, 0, 0, 0);
+}
+
+function formatoFecha(fecha) {
+  if (!fecha) return "-";
+  const [a, m, d] = String(fecha).slice(0, 10).split("-");
+  return a && m && d ? `${d}/${m}/${a}` : fecha;
+}
+
+function calcularDias(fechaFin) {
+  const fin = fechaLocal(fechaFin);
+  if (!fin) return null;
+
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  return Math.max(
+    0,
+    Math.ceil((fin.getTime() - hoy.getTime()) / 86400000)
+  );
+}
+
 export default function Dashboard() {
   const router = useRouter();
 
   const [modulos, setModulos] = useState({});
+  const [permisosUsuario, setPermisosUsuario] = useState([]);
+
   const [empresaNombre, setEmpresaNombre] = useState("");
   const [planNombre, setPlanNombre] = useState("");
   const [estadoPlan, setEstadoPlan] = useState("");
   const [tipoNegocio, setTipoNegocio] = useState("");
+
   const [usuarioRol, setUsuarioRol] = useState("");
   const [usuarioNombre, setUsuarioNombre] = useState("");
-  const [permisosUsuario, setPermisosUsuario] = useState([]);
-  const [cargando, setCargando] = useState(true);
 
   const [estadoSuscripcion, setEstadoSuscripcion] = useState("");
   const [fechaInicioPrueba, setFechaInicioPrueba] = useState("");
   const [fechaFinPrueba, setFechaFinPrueba] = useState("");
   const [diasRestantes, setDiasRestantes] = useState(null);
+
   const [bloqueado, setBloqueado] = useState(false);
+  const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
     cargarDashboard();
@@ -33,30 +71,16 @@ export default function Dashboard() {
     router.replace("/login");
   }
 
-  function fechaLocal(fecha) {
-    if (!fecha) return null;
-    const [a, m, d] = String(fecha).slice(0, 10).split("-").map(Number);
-    if (!a || !m || !d) return null;
-    return new Date(a, m - 1, d, 0, 0, 0, 0);
+  function esAdministrador(rol = usuarioRol) {
+    return [
+      "administrador",
+      "superadmin",
+      "admin_master",
+      "administrador_master",
+    ].includes(normalizar(rol));
   }
 
-  function formatoFecha(fecha) {
-    if (!fecha) return "-";
-    const [a, m, d] = String(fecha).slice(0, 10).split("-");
-    return a && m && d ? `${d}/${m}/${a}` : fecha;
-  }
-
-  function calcularDias(fechaFin) {
-    const fin = fechaLocal(fechaFin);
-    if (!fin) return null;
-
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-
-    return Math.max(0, Math.ceil((fin.getTime() - hoy.getTime()) / 86400000));
-  }
-
-  async function marcarVencida(empresaId) {
+  async function marcarPruebaVencida(empresaId) {
     const { error } = await supabase
       .from("empresas")
       .update({ estado_suscripcion: "prueba_vencida" })
@@ -64,7 +88,7 @@ export default function Dashboard() {
       .eq("estado_suscripcion", "prueba");
 
     if (error) {
-      console.error("No se pudo actualizar el estado de la prueba:", error);
+      console.error("No se pudo actualizar la prueba:", error);
     }
   }
 
@@ -96,7 +120,7 @@ export default function Dashboard() {
       return;
     }
 
-    if (String(usuario.estado || "").toLowerCase().trim() !== "activo") {
+    if (normalizar(usuario.estado) !== "activo") {
       salir("Este usuario se encuentra inactivo.");
       return;
     }
@@ -115,19 +139,11 @@ export default function Dashboard() {
         plan_codigo,
         estado_plan,
         estado,
-        estado_pago,
-        fecha_proxima_facturacion,
         tipo_negocio,
         categoria_negocio,
         estado_suscripcion,
-        es_prueba,
-        fecha_aceptacion_piloto,
         fecha_inicio_prueba,
-        fecha_fin_prueba,
-        dias_prueba,
-        extension_prueba_dias,
-        fecha_eliminacion_programada,
-        estado_datos
+        fecha_fin_prueba
       `)
       .eq("id", empresaId)
       .maybeSingle();
@@ -143,33 +159,30 @@ export default function Dashboard() {
       return;
     }
 
-    const empresaSuspendida =
-      String(empresa.estado || "").toLowerCase().trim() === "suspendido";
-
-    const planSuspendido =
-      String(empresa.estado_plan || "").toLowerCase().trim() === "suspendido";
-
-    if (empresaSuspendida || planSuspendido) {
+    if (
+      normalizar(empresa.estado) === "suspendido" ||
+      normalizar(empresa.estado_plan) === "suspendido"
+    ) {
       salir("El servicio de esta empresa está suspendido.");
       return;
     }
 
-    let suscripcion = String(
+    let suscripcion = normalizar(
       empresa.estado_suscripcion || "activo"
-    ).toLowerCase().trim();
+    );
 
     const fin = fechaLocal(empresa.fecha_fin_prueba);
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
-    const vencida =
+    const pruebaVencida =
       suscripcion === "prueba" &&
       fin &&
       fin.getTime() < hoy.getTime();
 
-    if (vencida) {
+    if (pruebaVencida) {
       suscripcion = "prueba_vencida";
-      await marcarVencida(empresa.id);
+      await marcarPruebaVencida(empresa.id);
     }
 
     const accesoBloqueado = [
@@ -186,7 +199,10 @@ export default function Dashboard() {
     localStorage.setItem("usuarioRol", usuario.rol || "");
     localStorage.setItem("rolId", usuario.rol_id || "");
     localStorage.setItem("tipoNegocio", empresa.tipo_negocio || "");
-    localStorage.setItem("categoriaNegocio", empresa.categoria_negocio || "");
+    localStorage.setItem(
+      "categoriaNegocio",
+      empresa.categoria_negocio || ""
+    );
     localStorage.setItem("planCodigo", empresa.plan_codigo || "");
     localStorage.setItem("planNombre", empresa.plan_nombre || "");
     localStorage.setItem("estadoPlan", empresa.estado_plan || "");
@@ -204,10 +220,11 @@ export default function Dashboard() {
     setFechaInicioPrueba(empresa.fecha_inicio_prueba || "");
     setFechaFinPrueba(empresa.fecha_fin_prueba || "");
     setDiasRestantes(
-      suscripcion === "prueba" && !vencida
+      suscripcion === "prueba" && !pruebaVencida
         ? calcularDias(empresa.fecha_fin_prueba)
         : null
     );
+
     setBloqueado(accesoBloqueado);
 
     if (accesoBloqueado) {
@@ -228,7 +245,7 @@ export default function Dashboard() {
   }
 
   function construirModulosPorPlan(codigoPlan) {
-    const codigo = String(codigoPlan || "").toLowerCase().trim();
+    const codigo = normalizar(codigoPlan);
 
     const base = {
       dashboard: true,
@@ -275,7 +292,6 @@ export default function Dashboard() {
     if (codigo === "ventas_gestion") {
       return {
         ...base,
-        dashboard: true,
         clientes: true,
         vista_cliente: true,
         caja: true,
@@ -286,16 +302,10 @@ export default function Dashboard() {
         ventas: true,
         dashboard_ventas: true,
         suscripciones: true,
+        recargos: true,
         reportes: true,
         usuarios: true,
         configuracion: true,
-        creditos: false,
-        cobranza: false,
-        dashboard_cobros: false,
-        gestor_cobros: false,
-        abonos: false,
-        pagos: false,
-        recargos: false,
       };
     }
 
@@ -328,7 +338,8 @@ export default function Dashboard() {
   }
 
   async function cargarModulosEmpresa(empresaId, planCodigo) {
-    const basePlan = construirModulosPorPlan(planCodigo);
+    const codigoPlan = normalizar(planCodigo);
+    const basePlan = construirModulosPorPlan(codigoPlan);
 
     const { data, error } = await supabase
       .from("empresa_modulos")
@@ -352,7 +363,9 @@ export default function Dashboard() {
       control_caja: Boolean(data.control_caja),
       cobranza: Boolean(data.cobranza),
       dashboard_cobros: Boolean(data.dashboard_cobros),
-      gestor_cobros: Boolean(data.cobranza || data.dashboard_cobros),
+      gestor_cobros: Boolean(
+        data.cobranza || data.dashboard_cobros
+      ),
       abonos: Boolean(data.caja || data.cobranza),
       pagos: false,
       inventario: Boolean(data.inventario),
@@ -362,7 +375,9 @@ export default function Dashboard() {
       suscripciones: Boolean(data.suscripciones),
       recargos: Boolean(data.recargos),
       gastos: Boolean(data.egresos),
-      reportes: Boolean(data.dashboard_cobros || data.dashboard_ventas),
+      reportes: Boolean(
+        data.dashboard_cobros || data.dashboard_ventas
+      ),
       usuarios: true,
       configuracion: true,
     };
@@ -370,9 +385,7 @@ export default function Dashboard() {
     const mapaFinal = {};
 
     Object.keys(basePlan).forEach((modulo) => {
-      const permitidoPorPlan = Boolean(basePlan[modulo]);
-
-      if (!permitidoPorPlan) {
+      if (!basePlan[modulo]) {
         mapaFinal[modulo] = false;
         return;
       }
@@ -388,6 +401,26 @@ export default function Dashboard() {
         : Boolean(mapaTabla[modulo]);
     });
 
+    /*
+      Compatibilidad:
+      Suscripciones y Recargos pertenecen a ventas_gestion.
+      No quedan bloqueados por registros antiguos de empresa_modulos.
+      El acceso final sigue dependiendo del permiso del usuario.
+    */
+    if (codigoPlan === "ventas_gestion") {
+      mapaFinal.dashboard = true;
+      mapaFinal.clientes = true;
+      mapaFinal.vista_cliente = true;
+      mapaFinal.caja = true;
+      mapaFinal.suscripciones = true;
+      mapaFinal.recargos = true;
+    }
+
+    if (codigoPlan === "pro") {
+      mapaFinal.suscripciones = true;
+      mapaFinal.recargos = true;
+    }
+
     mapaFinal.dashboard = true;
 
     return mapaFinal;
@@ -402,30 +435,26 @@ export default function Dashboard() {
       .eq("activo", true);
 
     if (error) {
-      alert("Error cargando permisos del usuario: " + error.message);
+      alert(
+        "Error cargando permisos del usuario: " + error.message
+      );
       return [];
     }
 
-    return (data || []).map((item) => item.permiso).filter(Boolean);
-  }
-
-  function esAdministrador() {
-    const rol = String(usuarioRol || "").toLowerCase().trim();
-
-    return [
-      "administrador",
-      "superadmin",
-      "admin master",
-      "administrador master",
-    ].includes(rol);
+    return (data || [])
+      .map((item) => normalizar(item.permiso))
+      .filter(Boolean);
   }
 
   function puedeVer(codigoModulo, codigoPermiso = codigoModulo) {
     if (bloqueado) return false;
 
+    const modulo = normalizar(codigoModulo);
+    const permiso = normalizar(codigoPermiso);
+
     if (
-      codigoModulo !== "dashboard" &&
-      !Boolean(modulos?.[codigoModulo])
+      modulo !== "dashboard" &&
+      !Boolean(modulos?.[modulo])
     ) {
       return false;
     }
@@ -433,8 +462,8 @@ export default function Dashboard() {
     if (esAdministrador()) return true;
 
     return (
-      codigoPermiso === "dashboard" ||
-      permisosUsuario.includes(codigoPermiso)
+      permiso === "dashboard" ||
+      permisosUsuario.includes(permiso)
     );
   }
 
@@ -455,15 +484,25 @@ export default function Dashboard() {
     );
   }
 
-  const modulosMenu = useMemo(
-    () => [
+  const modulosMenu = useMemo(() => {
+    const lista = [
       ["Clientes", "/clientes", "clientes", "👥"],
       ["Vista Cliente", "/vista-cliente", "vista_cliente", "📄"],
       ["Créditos", "/ventas-credito", "creditos", "💳"],
       ["Caja", "/caja", "caja", "💵"],
       ["Cobranza", "/cobranza", "cobranza", "📞"],
-      ["Centro de Cobranza", "/dashboard-cobranza", "dashboard_cobros", "📊"],
-      ["Mi cartera de cobro", "/gestor-cobros", "gestor_cobros", "💼"],
+      [
+        "Centro de Cobranza",
+        "/dashboard-cobranza",
+        "dashboard_cobros",
+        "📊",
+      ],
+      [
+        "Mi cartera de cobro",
+        "/gestor-cobros",
+        "gestor_cobros",
+        "💼",
+      ],
       ["Registrar Abonos", "/abonos", "abonos", "🧾"],
       ["Control Caja", "/control-caja", "control_caja", "🏦"],
       ["Inventario", "/inventario", "inventario", "📦"],
@@ -474,9 +513,19 @@ export default function Dashboard() {
         "🔄",
       ],
       ["Ventas", "/ventas", "ventas", "🛒"],
-      ["Centro de Ventas", "/dashboard-ventas", "dashboard_ventas", "📈"],
+      [
+        "Centro de Ventas",
+        "/dashboard-ventas",
+        "dashboard_ventas",
+        "📈",
+      ],
       ["Gastos", "/gastos", "gastos", "🧮"],
-      ["Suscripciones", "/suscripciones", "suscripciones", "🔁"],
+      [
+        "Suscripciones",
+        "/suscripciones",
+        "suscripciones",
+        "🔁",
+      ],
       ["Recargos", "/recargos", "recargos", "⚠️"],
       ["Reportes", "/reportes", "reportes", "📚"],
       [
@@ -493,17 +542,20 @@ export default function Dashboard() {
         "⚙️",
         esAdministrador() && Boolean(modulos?.configuracion),
       ],
-    ].map(([nombre, ruta, codigo, icono, forzado]) => ({
-      nombre,
-      ruta,
-      icono,
-      activo:
-        typeof forzado === "boolean"
-          ? forzado
-          : puedeVer(codigo),
-    })),
-    [modulos, permisosUsuario, usuarioRol, bloqueado]
-  );
+    ];
+
+    return lista.map(
+      ([nombre, ruta, codigo, icono, forzado]) => ({
+        nombre,
+        ruta,
+        icono,
+        activo:
+          typeof forzado === "boolean"
+            ? forzado
+            : puedeVer(codigo),
+      })
+    );
+  }, [modulos, permisosUsuario, usuarioRol, bloqueado]);
 
   const activos = modulosMenu.filter((item) => item.activo);
 
@@ -534,58 +586,43 @@ export default function Dashboard() {
             alt="KONAX"
             style={s.bloqueoLogo}
           />
+
           <div style={s.candado}>🔒</div>
+
           <span style={s.bloqueoEtiqueta}>
             PRUEBA FINALIZADA
           </span>
+
           <h1 style={s.bloqueoTitulo}>
             El acceso operativo está bloqueado
           </h1>
+
           <p style={s.bloqueoTexto}>
-            La prueba de <strong>{empresaNombre}</strong> finalizó el{" "}
-            <strong>{formatoFecha(fechaFinPrueba)}</strong>. Los datos permanecen
-            registrados, pero los módulos estarán bloqueados hasta activar un plan.
+            La prueba de <strong>{empresaNombre}</strong>{" "}
+            finalizó el{" "}
+            <strong>{formatoFecha(fechaFinPrueba)}</strong>.
+            Los datos permanecen registrados, pero los
+            módulos estarán bloqueados hasta activar un plan.
           </p>
 
-          <div style={s.bloqueoResumen}>
-            <div style={s.bloqueoDato}>
-              <span>Plan evaluado</span>
-              <strong>{planNombre || "Sin plan"}</strong>
-            </div>
-            <div style={s.bloqueoDato}>
-              <span>Estado</span>
-              <strong>Prueba vencida</strong>
-            </div>
-          </div>
-
           <div style={s.bloqueoAcciones}>
-            <button
-              onClick={contactarKonax}
-              style={s.botonVerde}
-            >
+            <button onClick={contactarKonax} style={s.botonVerde}>
               Contactar a KONAX
             </button>
-            <button
-              onClick={cerrarSesion}
-              style={s.botonClaro}
-            >
+
+            <button onClick={cerrarSesion} style={s.botonClaro}>
               Cerrar sesión
             </button>
           </div>
-
-          <p style={s.notaWhatsapp}>
-            WhatsApp comercial de KONAX:{" "}
-            <strong>6021-1024</strong>.
-          </p>
         </div>
       </div>
     );
   }
 
-  const pruebaActiva =
-    estadoSuscripcion === "prueba";
+  const pruebaActiva = estadoSuscripcion === "prueba";
   const pendienteInicio =
     estadoSuscripcion === "pendiente_inicio_prueba";
+
   const alertaCritica =
     pruebaActiva &&
     diasRestantes !== null &&
@@ -615,10 +652,7 @@ export default function Dashboard() {
           ))}
         </nav>
 
-        <button
-          onClick={cerrarSesion}
-          style={s.logout}
-        >
+        <button onClick={cerrarSesion} style={s.logout}>
           ↪ Cerrar sesión
         </button>
       </aside>
@@ -626,20 +660,15 @@ export default function Dashboard() {
       <main style={s.main}>
         <header style={s.topbar}>
           <div>
-            <span style={s.eyebrow}>
-              PANEL EMPRESARIAL
-            </span>
-            <h1 style={s.pageTitle}>
-              {empresaNombre}
-            </h1>
+            <span style={s.eyebrow}>PANEL EMPRESARIAL</span>
+            <h1 style={s.pageTitle}>{empresaNombre}</h1>
           </div>
 
           <div style={s.userBox}>
             <div style={s.avatar}>
-              {String(usuarioNombre || "U")
-                .charAt(0)
-                .toUpperCase()}
+              {String(usuarioNombre || "U").charAt(0).toUpperCase()}
             </div>
+
             <div>
               <strong style={s.userName}>
                 {usuarioNombre || "Usuario"}
@@ -662,7 +691,8 @@ export default function Dashboard() {
                 La prueba todavía no ha comenzado
               </strong>
               <p style={s.avisoTexto}>
-                Un asesor de KONAX activará los días cuando la empresa esté lista.
+                Un asesor de KONAX activará los días
+                cuando la empresa esté lista.
               </p>
             </div>
           </section>
@@ -672,9 +702,7 @@ export default function Dashboard() {
           <section
             style={{
               ...s.avisoPrueba,
-              ...(alertaCritica
-                ? s.avisoCritico
-                : {}),
+              ...(alertaCritica ? s.avisoCritico : {}),
             }}
           >
             <div style={s.avisoIzquierda}>
@@ -687,8 +715,8 @@ export default function Dashboard() {
                   Estás utilizando KONAX en período de prueba
                 </strong>
                 <p style={s.avisoTexto}>
-                  Inicio: {formatoFecha(fechaInicioPrueba)} · Vencimiento:{" "}
-                  {formatoFecha(fechaFinPrueba)}
+                  Inicio: {formatoFecha(fechaInicioPrueba)} ·
+                  Vencimiento: {formatoFecha(fechaFinPrueba)}
                 </p>
               </div>
             </div>
@@ -711,24 +739,25 @@ export default function Dashboard() {
             <span style={s.heroTag}>
               CENTRO DE OPERACIONES
             </span>
+
             <h2 style={s.heroTitle}>
               Todo tu negocio, claro y bajo control.
             </h2>
+
             <p style={s.heroText}>
-              Accede a las funciones principales y mantén organizada la operación
-              diaria de {tipoNegocio || "tu empresa"}.
+              Accede a las funciones principales y mantén
+              organizada la operación diaria de{" "}
+              {tipoNegocio || "tu empresa"}.
             </p>
           </div>
 
           <div style={s.planPanel}>
             <span style={s.planLabel}>
-              {pruebaActiva
-                ? "PLAN EN PRUEBA"
-                : "PLAN ACTUAL"}
+              {pruebaActiva ? "PLAN EN PRUEBA" : "PLAN ACTUAL"}
             </span>
-            <strong style={s.planName}>
-              {planNombre}
-            </strong>
+
+            <strong style={s.planName}>{planNombre}</strong>
+
             <div style={s.planStatus}>
               <span style={s.greenDot}></span>
               {pruebaActiva
@@ -737,7 +766,9 @@ export default function Dashboard() {
                 ? "Pendiente de inicio"
                 : estadoPlan || "Activo"}
             </div>
+
             <div style={s.planDivider}></div>
+
             <span style={s.planSmall}>
               {activos.length} funciones habilitadas
             </span>
@@ -771,14 +802,11 @@ function Info({ titulo, valor, icono }) {
     <article style={s.infoCard}>
       <div style={s.infoIcon}>{icono}</div>
       <div>
-        <span style={s.infoLabel}>
-          {titulo}
-        </span>
-        <h3 style={s.infoTitle}>
-          {valor}
-        </h3>
+        <span style={s.infoLabel}>{titulo}</span>
+        <h3 style={s.infoTitle}>{valor}</h3>
         <p style={s.infoText}>
-          Información correspondiente a la empresa y al acceso actual.
+          Información correspondiente a la empresa y al
+          acceso actual.
         </p>
       </div>
     </article>
@@ -791,8 +819,7 @@ const s = {
     display: "flex",
     background: "#f3f6f4",
     color: "#142019",
-    fontFamily:
-      'Inter, system-ui, "Segoe UI", sans-serif',
+    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
   },
   loading: {
     minHeight: "100vh",
@@ -802,20 +829,11 @@ const s = {
     justifyContent: "center",
     gap: 10,
     background: "#f3f6f4",
-    fontFamily:
-      'Inter, system-ui, "Segoe UI", sans-serif',
+    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
   },
-  loadingLogo: {
-    width: 210,
-    marginBottom: 10,
-  },
-  loadingTitle: {
-    fontSize: 22,
-  },
-  loadingText: {
-    color: "#718078",
-    fontSize: 14,
-  },
+  loadingLogo: { width: 210, marginBottom: 10 },
+  loadingTitle: { fontSize: 22 },
+  loadingText: { color: "#718078", fontSize: 14 },
   sidebar: {
     width: 270,
     minWidth: 270,
@@ -835,22 +853,15 @@ const s = {
     display: "flex",
     alignItems: "center",
     padding: "8px 10px 22px",
-    borderBottom:
-      "1px solid rgba(255,255,255,.08)",
+    borderBottom: "1px solid rgba(255,255,255,.08)",
   },
   logo: {
     width: 180,
     maxWidth: "100%",
     height: "auto",
-    display: "block",
     objectFit: "contain",
-    objectPosition: "left center",
   },
-  nav: {
-    display: "grid",
-    gap: 5,
-    paddingTop: 18,
-  },
+  nav: { display: "grid", gap: 5, paddingTop: 18 },
   navItem: {
     minHeight: 44,
     display: "grid",
@@ -870,20 +881,14 @@ const s = {
   logout: {
     minHeight: 44,
     marginTop: "auto",
-    border:
-      "1px solid rgba(255,255,255,.12)",
+    border: "1px solid rgba(255,255,255,.12)",
     borderRadius: 11,
-    background:
-      "rgba(255,255,255,.05)",
+    background: "rgba(255,255,255,.05)",
     color: "#fff",
     fontWeight: 750,
     cursor: "pointer",
   },
-  main: {
-    flex: 1,
-    minWidth: 0,
-    padding: "28px 30px 40px",
-  },
+  main: { flex: 1, minWidth: 0, padding: "28px 30px 40px" },
   topbar: {
     maxWidth: 1440,
     margin: "0 auto 22px",
@@ -899,15 +904,8 @@ const s = {
     fontWeight: 900,
     letterSpacing: 1.4,
   },
-  pageTitle: {
-    margin: 0,
-    fontSize: 29,
-  },
-  userBox: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  },
+  pageTitle: { margin: 0, fontSize: 29 },
+  userBox: { display: "flex", alignItems: "center", gap: 10 },
   avatar: {
     width: 42,
     height: 42,
@@ -918,15 +916,8 @@ const s = {
     color: "#fff",
     fontWeight: 900,
   },
-  userName: {
-    display: "block",
-    fontSize: 13,
-  },
-  userRole: {
-    display: "block",
-    color: "#7d8a82",
-    fontSize: 11,
-  },
+  userName: { display: "block", fontSize: 13 },
+  userRole: { display: "block", color: "#7d8a82", fontSize: 11 },
   avisoPendiente: {
     maxWidth: 1440,
     margin: "0 auto 18px",
@@ -976,16 +967,8 @@ const s = {
     fontWeight: 900,
     letterSpacing: 1.2,
   },
-  avisoTitulo: {
-    display: "block",
-    marginTop: 4,
-    fontSize: 15,
-  },
-  avisoTexto: {
-    margin: "4px 0 0",
-    color: "#657169",
-    fontSize: 12,
-  },
+  avisoTitulo: { display: "block", marginTop: 4, fontSize: 15 },
+  avisoTexto: { margin: "4px 0 0", color: "#657169", fontSize: 12 },
   diasCaja: {
     minWidth: 110,
     padding: 11,
@@ -993,11 +976,7 @@ const s = {
     background: "#fff",
     textAlign: "center",
   },
-  diasNumero: {
-    display: "block",
-    color: "#173c2a",
-    fontSize: 28,
-  },
+  diasNumero: { display: "block", color: "#173c2a", fontSize: 28 },
   diasTexto: {
     display: "block",
     color: "#6f7c74",
@@ -1008,15 +987,13 @@ const s = {
     maxWidth: 1440,
     margin: "0 auto 22px",
     display: "grid",
-    gridTemplateColumns:
-      "minmax(0,1fr) 270px",
+    gridTemplateColumns: "minmax(0,1fr) 270px",
     gap: 20,
     padding: 30,
     borderRadius: 24,
     background:
       "linear-gradient(135deg,#0b1710,#123924 65%,#17673e)",
-    boxShadow:
-      "0 22px 55px rgba(12,48,29,.18)",
+    boxShadow: "0 22px 55px rgba(12,48,29,.18)",
   },
   heroTag: {
     display: "block",
@@ -1041,11 +1018,9 @@ const s = {
   },
   planPanel: {
     padding: 20,
-    border:
-      "1px solid rgba(255,255,255,.14)",
+    border: "1px solid rgba(255,255,255,.14)",
     borderRadius: 18,
-    background:
-      "rgba(255,255,255,.08)",
+    background: "rgba(255,255,255,.08)",
   },
   planLabel: {
     display: "block",
@@ -1076,19 +1051,14 @@ const s = {
   planDivider: {
     height: 1,
     margin: "18px 0",
-    background:
-      "rgba(255,255,255,.12)",
+    background: "rgba(255,255,255,.12)",
   },
-  planSmall: {
-    color: "#b9d8c5",
-    fontSize: 12,
-  },
+  planSmall: { color: "#b9d8c5", fontSize: 12 },
   bottomGrid: {
     maxWidth: 1440,
     margin: "0 auto",
     display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit,minmax(260px,1fr))",
+    gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
     gap: 14,
   },
   infoCard: {
@@ -1109,28 +1079,16 @@ const s = {
     borderRadius: 13,
     background: "#edf6f0",
   },
-  infoLabel: {
-    color: "#16834f",
-    fontSize: 10,
-    fontWeight: 900,
-  },
-  infoTitle: {
-    margin: "5px 0 7px",
-  },
-  infoText: {
-    margin: 0,
-    color: "#748078",
-    fontSize: 12,
-  },
+  infoLabel: { color: "#16834f", fontSize: 10, fontWeight: 900 },
+  infoTitle: { margin: "5px 0 7px" },
+  infoText: { margin: 0, color: "#748078", fontSize: 12 },
   bloqueoPagina: {
     minHeight: "100vh",
     display: "grid",
     placeItems: "center",
     padding: 24,
-    background:
-      "radial-gradient(circle at top,#174d30,#07100b 70%)",
-    fontFamily:
-      'Inter, system-ui, "Segoe UI", sans-serif',
+    background: "radial-gradient(circle at top,#174d30,#07100b 70%)",
+    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
   },
   bloqueoTarjeta: {
     width: "min(650px,100%)",
@@ -1138,13 +1096,9 @@ const s = {
     borderRadius: 24,
     background: "#fff",
     textAlign: "center",
-    boxShadow:
-      "0 28px 70px rgba(0,0,0,.28)",
+    boxShadow: "0 28px 70px rgba(0,0,0,.28)",
   },
-  bloqueoLogo: {
-    width: 210,
-    maxWidth: "70%",
-  },
+  bloqueoLogo: { width: 210, maxWidth: "70%" },
   candado: {
     width: 66,
     height: 66,
@@ -1155,36 +1109,14 @@ const s = {
     background: "#fff0ee",
     fontSize: 30,
   },
-  bloqueoEtiqueta: {
-    color: "#b42318",
-    fontSize: 10,
-    fontWeight: 900,
-  },
-  bloqueoTitulo: {
-    margin: "8px 0 12px",
-    fontSize: 31,
-  },
-  bloqueoTexto: {
-    color: "#66736b",
-    lineHeight: 1.65,
-  },
-  bloqueoResumen: {
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(2,1fr)",
-    gap: 12,
-    margin: "22px 0",
-  },
-  bloqueoDato: {
-    padding: 15,
-    border: "1px solid #e1e8e3",
-    borderRadius: 14,
-    background: "#f8faf9",
-  },
+  bloqueoEtiqueta: { color: "#b42318", fontSize: 10, fontWeight: 900 },
+  bloqueoTitulo: { margin: "8px 0 12px", fontSize: 31 },
+  bloqueoTexto: { color: "#66736b", lineHeight: 1.65 },
   bloqueoAcciones: {
     display: "flex",
     justifyContent: "center",
     gap: 10,
+    marginTop: 22,
   },
   botonVerde: {
     minHeight: 44,
@@ -1204,10 +1136,5 @@ const s = {
     background: "#fff",
     fontWeight: 800,
     cursor: "pointer",
-  },
-  notaWhatsapp: {
-    marginTop: 18,
-    color: "#8b958f",
-    fontSize: 10,
   },
 };
