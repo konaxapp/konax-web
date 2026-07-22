@@ -9,7 +9,11 @@ export default function ClientesPage() {
 
   const [accesoValidado, setAccesoValidado] = useState(false);
   const [modoSoloCliente, setModoSoloCliente] = useState(false);
+  const [esNegocioMembresias, setEsNegocioMembresias] =
+    useState(false);
+
   const [tipoNegocio, setTipoNegocio] = useState("");
+  const [categoriaNegocio, setCategoriaNegocio] = useState("");
   const [planCodigo, setPlanCodigo] = useState("");
   const [gestores, setGestores] = useState([]);
 
@@ -59,10 +63,11 @@ export default function ClientesPage() {
         ? montoTotal
         : "";
 
-    const estadoAutomatico = calcularEstadoCobranzaAutomatico(
-      fechaVencimiento,
-      saldoParaCalcular
-    );
+    const estadoAutomatico =
+      calcularEstadoCobranzaAutomatico(
+        fechaVencimiento,
+        saldoParaCalcular
+      );
 
     setEstadoCobranza(estadoAutomatico);
 
@@ -110,7 +115,8 @@ export default function ClientesPage() {
   }
 
   function obtenerEmpresaId() {
-    const empresaId = localStorage.getItem("empresaId");
+    const empresaId =
+      localStorage.getItem("empresaId");
 
     if (!empresaId) {
       limpiarSesionYSalir(
@@ -123,7 +129,8 @@ export default function ClientesPage() {
   }
 
   function obtenerUsuarioId() {
-    const usuarioId = localStorage.getItem("usuarioId");
+    const usuarioId =
+      localStorage.getItem("usuarioId");
 
     if (!usuarioId) {
       limpiarSesionYSalir(
@@ -138,8 +145,10 @@ export default function ClientesPage() {
   async function validarAcceso() {
     setAccesoValidado(false);
 
-    const empresaId = localStorage.getItem("empresaId");
-    const usuarioId = localStorage.getItem("usuarioId");
+    const empresaId =
+      localStorage.getItem("empresaId");
+    const usuarioId =
+      localStorage.getItem("usuarioId");
 
     if (!empresaId || !usuarioId) {
       limpiarSesionYSalir(
@@ -148,59 +157,85 @@ export default function ClientesPage() {
       return;
     }
 
-    const { data: usuario, error: errorUsuario } = await supabase
+    const {
+      data: usuario,
+      error: errorUsuario,
+    } = await supabase
       .from("usuarios")
       .select("id, empresa_id, rol, estado")
       .eq("id", usuarioId)
       .maybeSingle();
 
     if (errorUsuario) {
-      alert("Error validando usuario: " + errorUsuario.message);
+      alert(
+        "Error validando usuario: " +
+          errorUsuario.message
+      );
       return;
     }
 
     if (!usuario) {
-      limpiarSesionYSalir("El usuario de esta sesión ya no existe.");
+      limpiarSesionYSalir(
+        "El usuario de esta sesión ya no existe."
+      );
       return;
     }
 
-    if (normalizar(usuario.estado) !== "activo") {
-      limpiarSesionYSalir("Este usuario se encuentra inactivo.");
+    if (
+      normalizar(usuario.estado) !== "activo"
+    ) {
+      limpiarSesionYSalir(
+        "Este usuario se encuentra inactivo."
+      );
       return;
     }
 
-    if (String(usuario.empresa_id) !== String(empresaId)) {
+    if (
+      String(usuario.empresa_id) !==
+      String(empresaId)
+    ) {
       limpiarSesionYSalir(
         "La empresa activa no corresponde al usuario autenticado."
       );
       return;
     }
 
-    const { data: empresa, error: errorEmpresa } = await supabase
+    const {
+      data: empresa,
+      error: errorEmpresa,
+    } = await supabase
       .from("empresas")
       .select(`
         id,
         estado,
         estado_plan,
         plan_codigo,
-        tipo_negocio
+        tipo_negocio,
+        categoria_negocio
       `)
       .eq("id", empresaId)
       .maybeSingle();
 
     if (errorEmpresa) {
-      alert("Error validando empresa: " + errorEmpresa.message);
+      alert(
+        "Error validando empresa: " +
+          errorEmpresa.message
+      );
       return;
     }
 
     if (!empresa) {
-      limpiarSesionYSalir("La empresa de esta sesión ya no existe.");
+      limpiarSesionYSalir(
+        "La empresa de esta sesión ya no existe."
+      );
       return;
     }
 
     if (
-      normalizar(empresa.estado) === "suspendido" ||
-      normalizar(empresa.estado_plan) === "suspendido"
+      normalizar(empresa.estado) ===
+        "suspendido" ||
+      normalizar(empresa.estado_plan) ===
+        "suspendido"
     ) {
       limpiarSesionYSalir(
         "El servicio de esta empresa está suspendido."
@@ -208,43 +243,110 @@ export default function ClientesPage() {
       return;
     }
 
-    const tipoNegocioNormalizado = normalizar(empresa.tipo_negocio);
-    const planNormalizado = normalizarCodigo(empresa.plan_codigo);
+    const tipoNegocioNormalizado =
+      normalizar(empresa.tipo_negocio);
 
-    const esGimnasio =
-      tipoNegocioNormalizado.includes("gimnasio") ||
-      tipoNegocioNormalizado.includes("gym") ||
-      tipoNegocioNormalizado.includes("fitness");
+    const categoriaNormalizada =
+      normalizar(empresa.categoria_negocio);
 
+    const planNormalizado =
+      normalizarCodigo(empresa.plan_codigo);
+
+    const negocioDeMembresias =
+      categoriaNormalizada.includes(
+        "suscripciones"
+      ) ||
+      categoriaNormalizada.includes(
+        "membresias"
+      ) ||
+      tipoNegocioNormalizado.includes(
+        "gimnasio"
+      ) ||
+      tipoNegocioNormalizado.includes(
+        "gym"
+      ) ||
+      tipoNegocioNormalizado.includes(
+        "fitness"
+      ) ||
+      tipoNegocioNormalizado.includes(
+        "academia"
+      ) ||
+      tipoNegocioNormalizado.includes(
+        "club"
+      );
+
+    /*
+      En ventas_gestion se registra primero la ficha
+      neutral del cliente. La modalidad de operación
+      se define después en Ventas o Caja.
+    */
     const soloCliente =
-      esGimnasio || planNormalizado === "ventas_gestion";
+      planNormalizado === "ventas_gestion" ||
+      negocioDeMembresias;
 
-    setTipoNegocio(empresa.tipo_negocio || "");
-    setPlanCodigo(empresa.plan_codigo || "");
+    setTipoNegocio(
+      empresa.tipo_negocio || ""
+    );
+
+    setCategoriaNegocio(
+      empresa.categoria_negocio || ""
+    );
+
+    setPlanCodigo(
+      empresa.plan_codigo || ""
+    );
+
     setModoSoloCliente(soloCliente);
 
-    localStorage.setItem("tipoNegocio", empresa.tipo_negocio || "");
-    localStorage.setItem("planCodigo", empresa.plan_codigo || "");
+    setEsNegocioMembresias(
+      negocioDeMembresias
+    );
 
-    const { data: moduloEmpresa, error: errorModulo } = await supabase
+    localStorage.setItem(
+      "tipoNegocio",
+      empresa.tipo_negocio || ""
+    );
+
+    localStorage.setItem(
+      "categoriaNegocio",
+      empresa.categoria_negocio || ""
+    );
+
+    localStorage.setItem(
+      "planCodigo",
+      empresa.plan_codigo || ""
+    );
+
+    const {
+      data: moduloEmpresa,
+      error: errorModulo,
+    } = await supabase
       .from("empresa_modulos")
       .select("clientes")
       .eq("empresa_id", empresaId)
       .maybeSingle();
 
     if (errorModulo) {
-      alert("Error validando módulo Clientes: " + errorModulo.message);
+      alert(
+        "Error validando módulo Clientes: " +
+          errorModulo.message
+      );
       return;
     }
 
     if (!moduloEmpresa?.clientes) {
-      alert("El módulo Clientes no está activo para esta empresa.");
+      alert(
+        "El módulo Clientes no está activo para esta empresa."
+      );
       router.replace("/dashboard");
       return;
     }
 
     if (!esAdministrador(usuario.rol)) {
-      const { data: permiso, error: errorPermiso } = await supabase
+      const {
+        data: permiso,
+        error: errorPermiso,
+      } = await supabase
         .from("permisos_usuarios_empresa")
         .select("activo")
         .eq("empresa_id", empresaId)
@@ -261,13 +363,18 @@ export default function ClientesPage() {
       }
 
       if (!permiso?.activo) {
-        alert("No tienes permiso para acceder al módulo Clientes.");
+        alert(
+          "No tienes permiso para acceder al módulo Clientes."
+        );
         router.replace("/dashboard");
         return;
       }
     }
 
-    localStorage.setItem("usuarioRol", usuario.rol || "");
+    localStorage.setItem(
+      "usuarioRol",
+      usuario.rol || ""
+    );
 
     if (!soloCliente) {
       await cargarGestores(empresaId);
@@ -276,21 +383,32 @@ export default function ClientesPage() {
     setAccesoValidado(true);
   }
 
-  async function cargarGestores(empresaId) {
+  async function cargarGestores(
+    empresaId
+  ) {
     const { data, error } = await supabase
       .from("usuarios")
-      .select("id, nombre, correo, rol, estado")
+      .select(
+        "id, nombre, correo, rol, estado"
+      )
       .eq("empresa_id", empresaId)
       .eq("estado", "Activo")
-      .order("nombre", { ascending: true });
+      .order("nombre", {
+        ascending: true,
+      });
 
     if (error) {
-      alert("Error cargando gestores: " + error.message);
+      alert(
+        "Error cargando gestores: " +
+          error.message
+      );
       setGestores([]);
       return;
     }
 
-    const gestoresActivos = (data || []).filter((usuario) =>
+    const gestoresActivos = (
+      data || []
+    ).filter((usuario) =>
       [
         "gestor de cobro",
         "gestor de cobros",
@@ -315,13 +433,20 @@ export default function ClientesPage() {
   function obtenerFechaLocalISO() {
     const hoy = new Date();
     const year = hoy.getFullYear();
-    const month = String(hoy.getMonth() + 1).padStart(2, "0");
-    const day = String(hoy.getDate()).padStart(2, "0");
+    const month = String(
+      hoy.getMonth() + 1
+    ).padStart(2, "0");
+    const day = String(
+      hoy.getDate()
+    ).padStart(2, "0");
 
     return `${year}-${month}-${day}`;
   }
 
-  function calcularDiasMora(fecha, saldo = "") {
+  function calcularDiasMora(
+    fecha,
+    saldo = ""
+  ) {
     if (
       saldo === "" ||
       saldo === null ||
@@ -332,46 +457,99 @@ export default function ClientesPage() {
       return 0;
     }
 
-    const hoy = new Date(`${obtenerFechaLocalISO()}T00:00:00`);
-    const vencimiento = new Date(`${fecha}T00:00:00`);
+    const hoy = new Date(
+      `${obtenerFechaLocalISO()}T00:00:00`
+    );
 
-    if (Number.isNaN(vencimiento.getTime())) return 0;
+    const vencimiento = new Date(
+      `${fecha}T00:00:00`
+    );
 
-    const diferencia = hoy.getTime() - vencimiento.getTime();
+    if (
+      Number.isNaN(
+        vencimiento.getTime()
+      )
+    ) {
+      return 0;
+    }
+
+    const diferencia =
+      hoy.getTime() -
+      vencimiento.getTime();
 
     return diferencia > 0
-      ? Math.floor(diferencia / 86400000)
+      ? Math.floor(
+          diferencia / 86400000
+        )
       : 0;
   }
 
-  function calcularEstadoCobranzaAutomatico(fecha, saldo) {
-    if (saldo === "" || saldo === null || saldo === undefined) {
+  function calcularEstadoCobranzaAutomatico(
+    fecha,
+    saldo
+  ) {
+    if (
+      saldo === "" ||
+      saldo === null ||
+      saldo === undefined
+    ) {
       return "Sin definir";
     }
 
-    const saldoNumero = Number(saldo || 0);
+    const saldoNumero =
+      Number(saldo || 0);
 
-    if (saldoNumero <= 0) return "Cancelado";
-    if (!fecha) return "Al Día";
+    if (saldoNumero <= 0) {
+      return "Cancelado";
+    }
 
-    const hoy = new Date(`${obtenerFechaLocalISO()}T00:00:00`);
-    const vencimiento = new Date(`${fecha}T00:00:00`);
+    if (!fecha) {
+      return "Al Día";
+    }
 
-    if (Number.isNaN(vencimiento.getTime())) return "Al Día";
+    const hoy = new Date(
+      `${obtenerFechaLocalISO()}T00:00:00`
+    );
 
-    return vencimiento < hoy ? "Mora" : "Al Día";
+    const vencimiento = new Date(
+      `${fecha}T00:00:00`
+    );
+
+    if (
+      Number.isNaN(
+        vencimiento.getTime()
+      )
+    ) {
+      return "Al Día";
+    }
+
+    return vencimiento < hoy
+      ? "Mora"
+      : "Al Día";
   }
 
   function responsableFinal() {
-    return responsableCobro.trim() || "Sin asignar";
+    return (
+      responsableCobro.trim() ||
+      "Sin asignar"
+    );
   }
 
   function construirObservacionCliente() {
     const partes = [
       observacionCliente.trim(),
-      `Tipo de cliente: ${tipoCliente}`,
-      `Promociones por WhatsApp: ${aceptaWhatsapp ? "Sí" : "No"}`,
-      `Promociones por correo: ${aceptaEmail ? "Sí" : "No"}`,
+
+      esNegocioMembresias
+        ? `Tipo de cliente: ${tipoCliente}`
+        : "",
+
+      `Promociones por WhatsApp: ${
+        aceptaWhatsapp ? "Sí" : "No"
+      }`,
+
+      `Promociones por correo: ${
+        aceptaEmail ? "Sí" : "No"
+      }`,
     ].filter(Boolean);
 
     return partes.join(" | ");
@@ -401,7 +579,9 @@ export default function ClientesPage() {
     setFechaVencimiento("");
     setEstadoCuenta("Activo");
 
-    setEstadoCobranza("Sin definir");
+    setEstadoCobranza(
+      "Sin definir"
+    );
     setFechaUltimoPago("");
     setMontoUltimoPago("");
     setResponsableCobro("");
@@ -410,126 +590,188 @@ export default function ClientesPage() {
   }
 
   async function validarSesionAntesDeGuardar() {
-    const empresaId = obtenerEmpresaId();
-    const usuarioId = obtenerUsuarioId();
+    const empresaId =
+      obtenerEmpresaId();
 
-    if (!empresaId || !usuarioId) return null;
+    const usuarioId =
+      obtenerUsuarioId();
 
-    const { data: usuario, error } = await supabase
-      .from("usuarios")
-      .select("id, empresa_id, estado")
-      .eq("id", usuarioId)
-      .maybeSingle();
+    if (!empresaId || !usuarioId) {
+      return null;
+    }
+
+    const { data: usuario, error } =
+      await supabase
+        .from("usuarios")
+        .select(
+          "id, empresa_id, estado"
+        )
+        .eq("id", usuarioId)
+        .maybeSingle();
 
     if (error) {
-      alert("Error validando sesión: " + error.message);
+      alert(
+        "Error validando sesión: " +
+          error.message
+      );
       return null;
     }
 
     if (!usuario) {
-      limpiarSesionYSalir("La sesión ya no es válida.");
+      limpiarSesionYSalir(
+        "La sesión ya no es válida."
+      );
       return null;
     }
 
-    if (normalizar(usuario.estado) !== "activo") {
-      limpiarSesionYSalir("El usuario se encuentra inactivo.");
+    if (
+      normalizar(usuario.estado) !==
+      "activo"
+    ) {
+      limpiarSesionYSalir(
+        "El usuario se encuentra inactivo."
+      );
       return null;
     }
 
-    if (String(usuario.empresa_id) !== String(empresaId)) {
+    if (
+      String(usuario.empresa_id) !==
+      String(empresaId)
+    ) {
       limpiarSesionYSalir(
         "La empresa activa no corresponde al usuario autenticado."
       );
       return null;
     }
 
-    return { empresaId, usuarioId };
+    return {
+      empresaId,
+      usuarioId,
+    };
   }
 
-  async function subirDocumentos(clienteId, empresaId) {
-    if (documentos.length === 0) return;
+  async function subirDocumentos(
+    clienteId,
+    empresaId
+  ) {
+    if (
+      documentos.length === 0
+    ) {
+      return;
+    }
 
     for (const archivo of documentos) {
-      const nombreLimpio = archivo.name.replace(/\s+/g, "_");
+      const nombreLimpio =
+        archivo.name.replace(
+          /\s+/g,
+          "_"
+        );
+
       const ruta =
         `empresas/${empresaId}/clientes/${clienteId}/` +
         `${Date.now()}-${nombreLimpio}`;
 
-      const { error } = await supabase.storage
-        .from("documentos-clientes")
-        .upload(ruta, archivo);
+      const { error } =
+        await supabase.storage
+          .from("documentos-clientes")
+          .upload(ruta, archivo);
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
     }
   }
 
-  async function guardarOActualizarCliente(empresaId) {
-    const observacionFinal = construirObservacionCliente();
+  async function guardarOActualizarCliente(
+    empresaId
+  ) {
+    const observacionFinal =
+      construirObservacionCliente();
 
-    const { data: clienteExistente, error: errorBuscarCliente } =
-      await supabase
-        .from("clientes")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .eq("cedula", cedula.trim())
-        .maybeSingle();
+    const {
+      data: clienteExistente,
+      error: errorBuscarCliente,
+    } = await supabase
+      .from("clientes")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("cedula", cedula.trim())
+      .maybeSingle();
 
     if (errorBuscarCliente) {
       throw new Error(
-        "Error buscando cliente: " + errorBuscarCliente.message
+        "Error buscando cliente: " +
+          errorBuscarCliente.message
       );
     }
 
     if (clienteExistente) {
-      const { data, error } = await supabase
-        .from("clientes")
-        .update({
-          nombre: nombre.trim(),
-          telefono: telefono.trim(),
-          telefono_secundario: telefonoSecundario.trim(),
-          direccion: direccion.trim(),
-          correo: correo.trim(),
-          referencia_nombre: referenciaNombre.trim(),
-          referencia_telefono: referenciaTelefono.trim(),
-          estado: estadoCliente,
-          observacion: observacionFinal,
-        })
-        .eq("empresa_id", empresaId)
-        .eq("id", clienteExistente.id)
-        .select()
-        .single();
+      const { data, error } =
+        await supabase
+          .from("clientes")
+          .update({
+            nombre: nombre.trim(),
+            telefono: telefono.trim(),
+            telefono_secundario:
+              telefonoSecundario.trim(),
+            direccion: direccion.trim(),
+            correo: correo.trim(),
+            referencia_nombre:
+              referenciaNombre.trim(),
+            referencia_telefono:
+              referenciaTelefono.trim(),
+            estado: estadoCliente,
+            observacion:
+              observacionFinal,
+          })
+          .eq("empresa_id", empresaId)
+          .eq(
+            "id",
+            clienteExistente.id
+          )
+          .select()
+          .single();
 
       if (error) {
         throw new Error(
-          "Error actualizando cliente: " + error.message
+          "Error actualizando cliente: " +
+            error.message
         );
       }
 
       return data;
     }
 
-    const { data, error } = await supabase
-      .from("clientes")
-      .insert([
-        {
-          empresa_id: empresaId,
-          cedula: cedula.trim(),
-          nombre: nombre.trim(),
-          telefono: telefono.trim(),
-          telefono_secundario: telefonoSecundario.trim(),
-          direccion: direccion.trim(),
-          correo: correo.trim(),
-          referencia_nombre: referenciaNombre.trim(),
-          referencia_telefono: referenciaTelefono.trim(),
-          estado: estadoCliente,
-          observacion: observacionFinal,
-        },
-      ])
-      .select()
-      .single();
+    const { data, error } =
+      await supabase
+        .from("clientes")
+        .insert([
+          {
+            empresa_id: empresaId,
+            cedula: cedula.trim(),
+            nombre: nombre.trim(),
+            telefono: telefono.trim(),
+            telefono_secundario:
+              telefonoSecundario.trim(),
+            direccion: direccion.trim(),
+            correo: correo.trim(),
+            referencia_nombre:
+              referenciaNombre.trim(),
+            referencia_telefono:
+              referenciaTelefono.trim(),
+            estado: estadoCliente,
+            observacion:
+              observacionFinal,
+          },
+        ])
+        .select()
+        .single();
 
     if (error) {
-      throw new Error("Error al guardar cliente: " + error.message);
+      throw new Error(
+        "Error al guardar cliente: " +
+          error.message
+      );
     }
 
     return data;
@@ -538,24 +780,38 @@ export default function ClientesPage() {
   async function guardarRegistro() {
     if (guardando) return;
 
-    const sesion = await validarSesionAntesDeGuardar();
+    const sesion =
+      await validarSesionAntesDeGuardar();
+
     if (!sesion) return;
 
     const { empresaId } = sesion;
 
-    if (!cedula || !nombre || !telefono) {
-      alert("Complete cédula, nombre y teléfono.");
+    if (
+      !cedula ||
+      !nombre ||
+      !telefono
+    ) {
+      alert(
+        "Complete cédula, nombre y teléfono."
+      );
       return;
     }
 
-    if (aceptaEmail && !correo.trim()) {
+    if (
+      aceptaEmail &&
+      !correo.trim()
+    ) {
       alert(
         "Ingrese un correo para autorizar promociones por correo electrónico."
       );
       return;
     }
 
-    if (aceptaWhatsapp && !telefono.trim()) {
+    if (
+      aceptaWhatsapp &&
+      !telefono.trim()
+    ) {
       alert(
         "Ingrese un teléfono para autorizar promociones por WhatsApp."
       );
@@ -564,12 +820,19 @@ export default function ClientesPage() {
 
     if (!modoSoloCliente) {
       if (!tipoProducto) {
-        alert("Seleccione el tipo de cuenta.");
+        alert(
+          "Seleccione el tipo de cuenta."
+        );
         return;
       }
 
-      if (!montoTotal && !saldoActual) {
-        alert("Ingrese monto original o saldo actual.");
+      if (
+        !montoTotal &&
+        !saldoActual
+      ) {
+        alert(
+          "Ingrese monto original o saldo actual."
+        );
         return;
       }
     }
@@ -577,29 +840,53 @@ export default function ClientesPage() {
     setGuardando(true);
 
     try {
-      const clienteCreado = await guardarOActualizarCliente(empresaId);
-      await subirDocumentos(clienteCreado.id, empresaId);
+      const clienteCreado =
+        await guardarOActualizarCliente(
+          empresaId
+        );
+
+      await subirDocumentos(
+        clienteCreado.id,
+        empresaId
+      );
 
       if (modoSoloCliente) {
         alert(
-          "Cliente registrado correctamente. Ahora puede buscarlo en Caja o Suscripciones."
+          esNegocioMembresias
+            ? "Cliente registrado correctamente. Ahora puede buscarlo en Caja o Suscripciones."
+            : "Cliente registrado correctamente. Ahora puede utilizarlo en Ventas, Caja o Cuentas por Cobrar."
         );
+
         limpiarFormulario();
         return;
       }
 
-      const montoTotalNumero = Number(montoTotal || saldoActual || 0);
+      const montoTotalNumero =
+        Number(
+          montoTotal ||
+            saldoActual ||
+            0
+        );
+
       const saldoActualNumero =
         saldoActual !== ""
-          ? Number(saldoActual || 0)
+          ? Number(
+              saldoActual || 0
+            )
           : montoTotalNumero;
 
-      if (montoTotalNumero < 0 || saldoActualNumero < 0) {
-        throw new Error("Los montos no pueden ser negativos.");
+      if (
+        montoTotalNumero < 0 ||
+        saldoActualNumero < 0
+      ) {
+        throw new Error(
+          "Los montos no pueden ser negativos."
+        );
       }
 
       if (
-        saldoActualNumero > montoTotalNumero &&
+        saldoActualNumero >
+          montoTotalNumero &&
         montoTotalNumero > 0
       ) {
         throw new Error(
@@ -607,21 +894,32 @@ export default function ClientesPage() {
         );
       }
 
-      const montoUltimoPagoNumero = Number(montoUltimoPago || 0);
+      const montoUltimoPagoNumero =
+        Number(
+          montoUltimoPago || 0
+        );
 
-      if (montoUltimoPagoNumero < 0) {
+      if (
+        montoUltimoPagoNumero < 0
+      ) {
         throw new Error(
           "El monto del último pago no puede ser negativo."
         );
       }
 
-      if (fechaUltimoPago && montoUltimoPagoNumero <= 0) {
+      if (
+        fechaUltimoPago &&
+        montoUltimoPagoNumero <= 0
+      ) {
         throw new Error(
           "Si coloca una fecha de último pago, también debe ingresar el monto pagado."
         );
       }
 
-      if (!fechaUltimoPago && montoUltimoPagoNumero > 0) {
+      if (
+        !fechaUltimoPago &&
+        montoUltimoPagoNumero > 0
+      ) {
         throw new Error(
           "Si ingresa un monto de último pago, también debe colocar la fecha del pago."
         );
@@ -633,44 +931,63 @@ export default function ClientesPage() {
           saldoActualNumero
         );
 
-      const diasMora = calcularDiasMora(
-        fechaVencimiento,
-        saldoActualNumero
-      );
+      const diasMora =
+        calcularDiasMora(
+          fechaVencimiento,
+          saldoActualNumero
+        );
 
       const estadoCuentaFinal =
         saldoActualNumero <= 0
           ? "Cancelado"
-          : estadoCuenta === "Cancelado"
+          : estadoCuenta ===
+            "Cancelado"
           ? "Activo"
           : estadoCuenta;
 
       const cuentaFinal =
-        numeroCuenta.trim() || generarNumeroCuenta();
+        numeroCuenta.trim() ||
+        generarNumeroCuenta();
 
-      const { data: comercialCreado, error: errorComercial } =
-        await supabase
-          .from("informacion_comercial")
-          .insert([
-            {
-              empresa_id: empresaId,
-              cliente_id: clienteCreado.id,
-              numero_cuenta: cuentaFinal,
-              tipo_producto: tipoProducto,
-              descripcion: descripcion.trim(),
-              modalidad: null,
-              monto_total: montoTotalNumero,
-              saldo_actual: saldoActualNumero,
-              cuota: null,
-              fecha_inicio: fechaInicio || null,
-              fecha_vencimiento: fechaVencimiento || null,
-              responsable: responsableFinal(),
-              estado: estadoCuentaFinal,
-              observacion: observacionCobro.trim(),
-            },
-          ])
-          .select()
-          .single();
+      const {
+        data: comercialCreado,
+        error: errorComercial,
+      } = await supabase
+        .from(
+          "informacion_comercial"
+        )
+        .insert([
+          {
+            empresa_id: empresaId,
+            cliente_id:
+              clienteCreado.id,
+            numero_cuenta:
+              cuentaFinal,
+            tipo_producto:
+              tipoProducto,
+            descripcion:
+              descripcion.trim(),
+            modalidad: null,
+            monto_total:
+              montoTotalNumero,
+            saldo_actual:
+              saldoActualNumero,
+            cuota: null,
+            fecha_inicio:
+              fechaInicio || null,
+            fecha_vencimiento:
+              fechaVencimiento ||
+              null,
+            responsable:
+              responsableFinal(),
+            estado:
+              estadoCuentaFinal,
+            observacion:
+              observacionCobro.trim(),
+          },
+        ])
+        .select()
+        .single();
 
       if (errorComercial) {
         throw new Error(
@@ -679,18 +996,29 @@ export default function ClientesPage() {
         );
       }
 
-      const { error: errorCobranza } = await supabase
-        .from("informacion_cobranza")
+      const {
+        error: errorCobranza,
+      } = await supabase
+        .from(
+          "informacion_cobranza"
+        )
         .insert([
           {
             empresa_id: empresaId,
-            cliente_id: clienteCreado.id,
-            informacion_comercial_id: comercialCreado.id,
-            estado_cobranza: estadoCobranzaFinal,
+            cliente_id:
+              clienteCreado.id,
+            informacion_comercial_id:
+              comercialCreado.id,
+            estado_cobranza:
+              estadoCobranzaFinal,
             dias_mora: diasMora,
-            fecha_ultimo_pago: fechaUltimoPago || null,
-            monto_ultimo_pago: montoUltimoPagoNumero,
-            responsable_cobro: responsableFinal(),
+            fecha_ultimo_pago:
+              fechaUltimoPago ||
+              null,
+            monto_ultimo_pago:
+              montoUltimoPagoNumero,
+            responsable_cobro:
+              responsableFinal(),
             observacion_cobro:
               observacionCobro.trim() ||
               "Cuenta creada desde Clientes",
@@ -721,18 +1049,40 @@ export default function ClientesPage() {
 
   if (!accesoValidado) {
     return (
-      <div style={styles.cargandoPagina}>
-        <div style={styles.cargandoCard}>
+      <div
+        style={
+          styles.cargandoPagina
+        }
+      >
+        <div
+          style={
+            styles.cargandoCard
+          }
+        >
           <img
             src="/konax-logo.png"
             alt="KONAX"
-            style={styles.cargandoLogo}
+            style={
+              styles.cargandoLogo
+            }
           />
-          <strong style={styles.cargandoTitulo}>
+
+          <strong
+            style={
+              styles.cargandoTitulo
+            }
+          >
             Validando acceso
           </strong>
-          <p style={styles.cargandoTexto}>
-            Verificando usuario, empresa, plan y permisos.
+
+          <p
+            style={
+              styles.cargandoTexto
+            }
+          >
+            Verificando usuario,
+            empresa, plan y
+            permisos.
           </p>
         </div>
       </div>
@@ -753,17 +1103,26 @@ export default function ClientesPage() {
       ? montoTotal
       : "";
 
-  const diasMoraVisual = calcularDiasMora(
-    fechaVencimiento,
-    saldoParaEstadoVisual
-  );
+  const diasMoraVisual =
+    calcularDiasMora(
+      fechaVencimiento,
+      saldoParaEstadoVisual
+    );
 
   return (
     <main style={styles.pagina}>
       <div style={styles.contenedor}>
         <header style={styles.hero}>
-          <div style={styles.heroPrincipal}>
-            <div style={styles.logoPanel}>
+          <div
+            style={
+              styles.heroPrincipal
+            }
+          >
+            <div
+              style={
+                styles.logoPanel
+              }
+            >
               <img
                 src="/konax-logo.png"
                 alt="KONAX"
@@ -772,21 +1131,33 @@ export default function ClientesPage() {
             </div>
 
             <div>
-              <span style={styles.etiqueta}>
+              <span
+                style={
+                  styles.etiqueta
+                }
+              >
                 {modoSoloCliente
                   ? "GESTIÓN DE CLIENTES"
                   : "GESTIÓN DE CARTERA"}
               </span>
 
-              <h1 style={styles.titulo}>
+              <h1
+                style={styles.titulo}
+              >
                 {modoSoloCliente
                   ? "Registrar nuevo cliente"
                   : "Nueva cuenta por cobrar"}
               </h1>
 
-              <p style={styles.subtitulo}>
+              <p
+                style={
+                  styles.subtitulo
+                }
+              >
                 {modoSoloCliente
-                  ? "Registra clientes, miembros, visitas únicas y compradores de contado para utilizarlos después en Caja o Suscripciones."
+                  ? esNegocioMembresias
+                    ? "Registra miembros, visitas únicas y prospectos para utilizarlos después en Caja o Suscripciones."
+                    : "Registra los datos del cliente. La modalidad de venta o pago se seleccionará después en Ventas, Caja o Cuentas por Cobrar."
                   : "Registra al cliente, crea la cuenta y configura la gestión inicial de cobranza."}
               </p>
             </div>
@@ -794,67 +1165,131 @@ export default function ClientesPage() {
 
           <button
             type="button"
-            onClick={volverCentroOperaciones}
-            style={styles.botonVolver}
+            onClick={
+              volverCentroOperaciones
+            }
+            style={
+              styles.botonVolver
+            }
           >
             ← Centro de Operaciones
           </button>
         </header>
 
-        <section style={styles.resumenGrid}>
+        <section
+          style={
+            styles.resumenGrid
+          }
+        >
           <KPI
             titulo="Cliente"
-            valor={nombre || "Pendiente"}
-            detalle={cedula || "Sin identificación"}
+            valor={
+              nombre ||
+              "Pendiente"
+            }
+            detalle={
+              cedula ||
+              "Sin identificación"
+            }
             icono="👤"
           />
 
-          <KPI
-            titulo="Tipo de cliente"
-            valor={tipoCliente}
-            detalle={modoSoloCliente ? tipoNegocio || "Negocio" : tipoProducto || "Sin definir"}
-            icono="🏷️"
-          />
+          {esNegocioMembresias ? (
+            <KPI
+              titulo="Tipo de cliente"
+              valor={tipoCliente}
+              detalle={
+                tipoNegocio ||
+                "Membresías"
+              }
+              icono="🏷️"
+            />
+          ) : (
+            <KPI
+              titulo="Estado del cliente"
+              valor={estadoCliente}
+              detalle={
+                tipoNegocio ||
+                categoriaNegocio ||
+                "Negocio"
+              }
+              icono="🏷️"
+            />
+          )}
 
           <KPI
             titulo="Contacto promocional"
             valor={
-              aceptaWhatsapp || aceptaEmail
+              aceptaWhatsapp ||
+              aceptaEmail
                 ? "Autorizado"
                 : "No autorizado"
             }
             detalle={`WhatsApp: ${
-              aceptaWhatsapp ? "Sí" : "No"
-            } · Correo: ${aceptaEmail ? "Sí" : "No"}`}
+              aceptaWhatsapp
+                ? "Sí"
+                : "No"
+            } · Correo: ${
+              aceptaEmail
+                ? "Sí"
+                : "No"
+            }`}
             icono="📣"
           />
 
           {!modoSoloCliente && (
             <KPI
               titulo="Estado de cobranza"
-              valor={estadoCobranza}
+              valor={
+                estadoCobranza
+              }
               detalle={`${diasMoraVisual} días de mora`}
               icono="📊"
-              destacado={estadoCobranza === "Mora"}
+              destacado={
+                estadoCobranza ===
+                "Mora"
+              }
             />
           )}
         </section>
 
-        <section style={styles.formLayout}>
-          <div style={styles.mainColumn}>
-            <article style={styles.card}>
+        <section
+          style={
+            styles.formLayout
+          }
+        >
+          <div
+            style={
+              styles.mainColumn
+            }
+          >
+            <article
+              style={styles.card}
+            >
               <SectionTitle
                 numero="01"
                 titulo="Información del cliente"
-                texto="Datos personales, contacto y clasificación comercial."
+                texto={
+                  esNegocioMembresias
+                    ? "Datos personales, contacto y clasificación de membresía."
+                    : "Datos personales y de contacto del cliente."
+                }
               />
 
-              <div style={styles.grid}>
+              <div
+                style={styles.grid}
+              >
                 <Campo label="Cédula / Identificación *">
                   <input
                     value={cedula}
-                    onChange={(e) => setCedula(e.target.value)}
-                    style={styles.inputStyle}
+                    onChange={(e) =>
+                      setCedula(
+                        e.target.value
+                      )
+                    }
+                    style={
+                      styles.inputStyle
+                    }
                     placeholder="Ej. 8-888-888"
                   />
                 </Campo>
@@ -862,33 +1297,58 @@ export default function ClientesPage() {
                 <Campo label="Nombre completo *">
                   <input
                     value={nombre}
-                    onChange={(e) => setNombre(e.target.value)}
-                    style={styles.inputStyle}
+                    onChange={(e) =>
+                      setNombre(
+                        e.target.value
+                      )
+                    }
+                    style={
+                      styles.inputStyle
+                    }
                     placeholder="Nombre del cliente"
                   />
                 </Campo>
 
-                <Campo label="Tipo de cliente">
-                  <select
-                    value={tipoCliente}
-                    onChange={(e) =>
-                      setTipoCliente(e.target.value)
-                    }
-                    style={styles.selectStyle}
-                  >
-                    <option>Miembro</option>
-                    <option>Visita única</option>
-                    <option>Cliente de contado</option>
-                    <option>Prospecto</option>
-                  </select>
-                </Campo>
+                {esNegocioMembresias && (
+                  <Campo label="Tipo de cliente">
+                    <select
+                      value={
+                        tipoCliente
+                      }
+                      onChange={(e) =>
+                        setTipoCliente(
+                          e.target.value
+                        )
+                      }
+                      style={
+                        styles.selectStyle
+                      }
+                    >
+                      <option>
+                        Miembro
+                      </option>
+                      <option>
+                        Visita única
+                      </option>
+                      <option>
+                        Prospecto
+                      </option>
+                    </select>
+                  </Campo>
+                )}
 
                 <Campo label="Correo electrónico">
                   <input
                     type="email"
                     value={correo}
-                    onChange={(e) => setCorreo(e.target.value)}
-                    style={styles.inputStyle}
+                    onChange={(e) =>
+                      setCorreo(
+                        e.target.value
+                      )
+                    }
+                    style={
+                      styles.inputStyle
+                    }
                     placeholder="correo@cliente.com"
                   />
                 </Campo>
@@ -896,53 +1356,87 @@ export default function ClientesPage() {
                 <Campo label="Teléfono principal *">
                   <input
                     value={telefono}
-                    onChange={(e) => setTelefono(e.target.value)}
-                    style={styles.inputStyle}
+                    onChange={(e) =>
+                      setTelefono(
+                        e.target.value
+                      )
+                    }
+                    style={
+                      styles.inputStyle
+                    }
                     placeholder="Teléfono"
                   />
                 </Campo>
 
                 <Campo label="Teléfono secundario">
                   <input
-                    value={telefonoSecundario}
-                    onChange={(e) =>
-                      setTelefonoSecundario(e.target.value)
+                    value={
+                      telefonoSecundario
                     }
-                    style={styles.inputStyle}
+                    onChange={(e) =>
+                      setTelefonoSecundario(
+                        e.target.value
+                      )
+                    }
+                    style={
+                      styles.inputStyle
+                    }
                     placeholder="Opcional"
                   />
                 </Campo>
 
                 <Campo label="Estado del cliente">
                   <select
-                    value={estadoCliente}
-                    onChange={(e) =>
-                      setEstadoCliente(e.target.value)
+                    value={
+                      estadoCliente
                     }
-                    style={styles.selectStyle}
+                    onChange={(e) =>
+                      setEstadoCliente(
+                        e.target.value
+                      )
+                    }
+                    style={
+                      styles.selectStyle
+                    }
                   >
-                    <option>Activo</option>
-                    <option>Inactivo</option>
+                    <option>
+                      Activo
+                    </option>
+                    <option>
+                      Inactivo
+                    </option>
                   </select>
                 </Campo>
 
                 <Campo label="Nombre de referencia">
                   <input
-                    value={referenciaNombre}
-                    onChange={(e) =>
-                      setReferenciaNombre(e.target.value)
+                    value={
+                      referenciaNombre
                     }
-                    style={styles.inputStyle}
+                    onChange={(e) =>
+                      setReferenciaNombre(
+                        e.target.value
+                      )
+                    }
+                    style={
+                      styles.inputStyle
+                    }
                   />
                 </Campo>
 
                 <Campo label="Teléfono de referencia">
                   <input
-                    value={referenciaTelefono}
-                    onChange={(e) =>
-                      setReferenciaTelefono(e.target.value)
+                    value={
+                      referenciaTelefono
                     }
-                    style={styles.inputStyle}
+                    onChange={(e) =>
+                      setReferenciaTelefono(
+                        e.target.value
+                      )
+                    }
+                    style={
+                      styles.inputStyle
+                    }
                   />
                 </Campo>
               </div>
@@ -950,47 +1444,89 @@ export default function ClientesPage() {
               <Campo label="Dirección completa">
                 <textarea
                   value={direccion}
-                  onChange={(e) => setDireccion(e.target.value)}
-                  style={styles.textarea}
+                  onChange={(e) =>
+                    setDireccion(
+                      e.target.value
+                    )
+                  }
+                  style={
+                    styles.textarea
+                  }
                 />
               </Campo>
 
               <Campo label="Observaciones del cliente">
                 <textarea
-                  value={observacionCliente}
-                  onChange={(e) =>
-                    setObservacionCliente(e.target.value)
+                  value={
+                    observacionCliente
                   }
-                  style={styles.textarea}
-                  placeholder="Intereses, horario preferido, producto consultado u otra información útil."
+                  onChange={(e) =>
+                    setObservacionCliente(
+                      e.target.value
+                    )
+                  }
+                  style={
+                    styles.textarea
+                  }
+                  placeholder="Agregue información útil sobre el cliente."
                 />
               </Campo>
 
-              <div style={styles.consentimientoBox}>
-                <span style={styles.consentimientoTitulo}>
+              <div
+                style={
+                  styles.consentimientoBox
+                }
+              >
+                <span
+                  style={
+                    styles.consentimientoTitulo
+                  }
+                >
                   Autorización para promociones
                 </span>
 
-                <label style={styles.checkLabel}>
+                <label
+                  style={
+                    styles.checkLabel
+                  }
+                >
                   <input
                     type="checkbox"
-                    checked={aceptaWhatsapp}
+                    checked={
+                      aceptaWhatsapp
+                    }
                     onChange={(e) =>
-                      setAceptaWhatsapp(e.target.checked)
+                      setAceptaWhatsapp(
+                        e.target.checked
+                      )
                     }
                   />
-                  Acepta recibir promociones y novedades por WhatsApp.
+                  Acepta recibir
+                  promociones y
+                  novedades por
+                  WhatsApp.
                 </label>
 
-                <label style={styles.checkLabel}>
+                <label
+                  style={
+                    styles.checkLabel
+                  }
+                >
                   <input
                     type="checkbox"
-                    checked={aceptaEmail}
+                    checked={
+                      aceptaEmail
+                    }
                     onChange={(e) =>
-                      setAceptaEmail(e.target.checked)
+                      setAceptaEmail(
+                        e.target.checked
+                      )
                     }
                   />
-                  Acepta recibir promociones y novedades por correo.
+                  Acepta recibir
+                  promociones y
+                  novedades por
+                  correo.
                 </label>
               </div>
 
@@ -1000,15 +1536,29 @@ export default function ClientesPage() {
                   multiple
                   onChange={(e) =>
                     setDocumentos(
-                      Array.from(e.target.files || [])
+                      Array.from(
+                        e.target.files ||
+                          []
+                      )
                     )
                   }
-                  style={styles.inputStyle}
+                  style={
+                    styles.inputStyle
+                  }
                 />
 
-                {documentos.length > 0 && (
-                  <span style={styles.fileCount}>
-                    {documentos.length} archivo(s) seleccionado(s)
+                {documentos.length >
+                  0 && (
+                  <span
+                    style={
+                      styles.fileCount
+                    }
+                  >
+                    {
+                      documentos.length
+                    }{" "}
+                    archivo(s)
+                    seleccionado(s)
                   </span>
                 )}
               </Campo>
@@ -1016,40 +1566,73 @@ export default function ClientesPage() {
 
             {!modoSoloCliente && (
               <>
-                <article style={styles.card}>
+                <article
+                  style={
+                    styles.card
+                  }
+                >
                   <SectionTitle
                     numero="02"
                     titulo="Información de la cuenta"
                     texto="Monto original, saldo pendiente y fechas."
                   />
 
-                  <div style={styles.grid}>
+                  <div
+                    style={
+                      styles.grid
+                    }
+                  >
                     <Campo label="Número de cuenta">
                       <input
-                        value={numeroCuenta}
-                        onChange={(e) =>
-                          setNumeroCuenta(e.target.value)
+                        value={
+                          numeroCuenta
                         }
-                        style={styles.inputStyle}
+                        onChange={(e) =>
+                          setNumeroCuenta(
+                            e.target.value
+                          )
+                        }
+                        style={
+                          styles.inputStyle
+                        }
                       />
                     </Campo>
 
                     <Campo label="Tipo de cuenta *">
                       <select
-                        value={tipoProducto}
-                        onChange={(e) =>
-                          setTipoProducto(e.target.value)
+                        value={
+                          tipoProducto
                         }
-                        style={styles.selectStyle}
+                        onChange={(e) =>
+                          setTipoProducto(
+                            e.target.value
+                          )
+                        }
+                        style={
+                          styles.selectStyle
+                        }
                       >
                         <option value="">
-                          Seleccione tipo de cuenta
+                          Seleccione tipo
+                          de cuenta
                         </option>
-                        <option>Crédito</option>
-                        <option>Préstamo</option>
-                        <option>Cuenta por cobrar</option>
-                        <option>Refinanciamiento</option>
-                        <option>Servicio pendiente</option>
+                        <option>
+                          Crédito
+                        </option>
+                        <option>
+                          Préstamo
+                        </option>
+                        <option>
+                          Cuenta por
+                          cobrar
+                        </option>
+                        <option>
+                          Refinanciamiento
+                        </option>
+                        <option>
+                          Servicio
+                          pendiente
+                        </option>
                       </select>
                     </Campo>
 
@@ -1058,11 +1641,17 @@ export default function ClientesPage() {
                         type="number"
                         min="0"
                         step="0.01"
-                        value={montoTotal}
-                        onChange={(e) =>
-                          setMontoTotal(e.target.value)
+                        value={
+                          montoTotal
                         }
-                        style={styles.inputStyle}
+                        onChange={(e) =>
+                          setMontoTotal(
+                            e.target.value
+                          )
+                        }
+                        style={
+                          styles.inputStyle
+                        }
                       />
                     </Campo>
 
@@ -1071,98 +1660,157 @@ export default function ClientesPage() {
                         type="number"
                         min="0"
                         step="0.01"
-                        value={saldoActual}
-                        onChange={(e) =>
-                          setSaldoActual(e.target.value)
+                        value={
+                          saldoActual
                         }
-                        style={styles.inputStyle}
+                        onChange={(e) =>
+                          setSaldoActual(
+                            e.target.value
+                          )
+                        }
+                        style={
+                          styles.inputStyle
+                        }
                       />
                     </Campo>
 
                     <Campo label="Fecha de inicio">
                       <input
                         type="date"
-                        value={fechaInicio}
-                        onChange={(e) =>
-                          setFechaInicio(e.target.value)
+                        value={
+                          fechaInicio
                         }
-                        style={styles.inputStyle}
+                        onChange={(e) =>
+                          setFechaInicio(
+                            e.target.value
+                          )
+                        }
+                        style={
+                          styles.inputStyle
+                        }
                       />
                     </Campo>
 
                     <Campo label="Fecha de vencimiento">
                       <input
                         type="date"
-                        value={fechaVencimiento}
-                        onChange={(e) =>
-                          setFechaVencimiento(e.target.value)
+                        value={
+                          fechaVencimiento
                         }
-                        style={styles.inputStyle}
+                        onChange={(e) =>
+                          setFechaVencimiento(
+                            e.target.value
+                          )
+                        }
+                        style={
+                          styles.inputStyle
+                        }
                       />
                     </Campo>
 
                     <Campo label="Estado de cuenta">
                       <select
-                        value={estadoCuenta}
-                        onChange={(e) =>
-                          setEstadoCuenta(e.target.value)
+                        value={
+                          estadoCuenta
                         }
-                        style={styles.selectStyle}
+                        onChange={(e) =>
+                          setEstadoCuenta(
+                            e.target.value
+                          )
+                        }
+                        style={
+                          styles.selectStyle
+                        }
                         disabled={
-                          saldoParaEstadoVisual !== "" &&
+                          saldoParaEstadoVisual !==
+                            "" &&
                           saldoVisual <= 0
                         }
                       >
-                        <option>Activo</option>
-                        <option>Suspendido</option>
-                        <option>Cancelado</option>
+                        <option>
+                          Activo
+                        </option>
+                        <option>
+                          Suspendido
+                        </option>
+                        <option>
+                          Cancelado
+                        </option>
                       </select>
                     </Campo>
                   </div>
 
                   <Campo label="Descripción">
                     <textarea
-                      value={descripcion}
-                      onChange={(e) =>
-                        setDescripcion(e.target.value)
+                      value={
+                        descripcion
                       }
-                      style={styles.textarea}
+                      onChange={(e) =>
+                        setDescripcion(
+                          e.target.value
+                        )
+                      }
+                      style={
+                        styles.textarea
+                      }
                     />
                   </Campo>
                 </article>
 
-                <article style={styles.card}>
+                <article
+                  style={
+                    styles.card
+                  }
+                >
                   <SectionTitle
                     numero="03"
                     titulo="Cobranza inicial"
                     texto="Estado, mora, último pago y responsable."
                   />
 
-                  <div style={styles.grid}>
+                  <div
+                    style={
+                      styles.grid
+                    }
+                  >
                     <Campo label="Estado de cobranza automático">
                       <input
-                        value={estadoCobranza}
+                        value={
+                          estadoCobranza
+                        }
                         readOnly
-                        style={styles.inputAutomatico}
+                        style={
+                          styles.inputAutomatico
+                        }
                       />
                     </Campo>
 
                     <Campo label="Días de mora calculados">
                       <input
-                        value={diasMoraVisual}
+                        value={
+                          diasMoraVisual
+                        }
                         readOnly
-                        style={styles.inputAutomatico}
+                        style={
+                          styles.inputAutomatico
+                        }
                       />
                     </Campo>
 
                     <Campo label="Fecha último pago">
                       <input
                         type="date"
-                        value={fechaUltimoPago}
-                        onChange={(e) =>
-                          setFechaUltimoPago(e.target.value)
+                        value={
+                          fechaUltimoPago
                         }
-                        style={styles.inputStyle}
+                        onChange={(e) =>
+                          setFechaUltimoPago(
+                            e.target.value
+                          )
+                        }
+                        style={
+                          styles.inputStyle
+                        }
                       />
                     </Campo>
 
@@ -1171,43 +1819,75 @@ export default function ClientesPage() {
                         type="number"
                         min="0"
                         step="0.01"
-                        value={montoUltimoPago}
-                        onChange={(e) =>
-                          setMontoUltimoPago(e.target.value)
+                        value={
+                          montoUltimoPago
                         }
-                        style={styles.inputStyle}
+                        onChange={(e) =>
+                          setMontoUltimoPago(
+                            e.target.value
+                          )
+                        }
+                        style={
+                          styles.inputStyle
+                        }
                       />
                     </Campo>
 
                     <Campo label="Responsable de cobro">
                       <select
-                        value={responsableCobro}
-                        onChange={(e) =>
-                          setResponsableCobro(e.target.value)
+                        value={
+                          responsableCobro
                         }
-                        style={styles.selectStyle}
+                        onChange={(e) =>
+                          setResponsableCobro(
+                            e.target.value
+                          )
+                        }
+                        style={
+                          styles.selectStyle
+                        }
                       >
-                        <option value="">Sin asignar</option>
+                        <option value="">
+                          Sin asignar
+                        </option>
 
-                        {gestores.map((gestor) => (
-                          <option
-                            key={gestor.id}
-                            value={gestor.nombre}
-                          >
-                            {gestor.nombre} - {gestor.rol}
-                          </option>
-                        ))}
+                        {gestores.map(
+                          (gestor) => (
+                            <option
+                              key={
+                                gestor.id
+                              }
+                              value={
+                                gestor.nombre
+                              }
+                            >
+                              {
+                                gestor.nombre
+                              }{" "}
+                              -{" "}
+                              {
+                                gestor.rol
+                              }
+                            </option>
+                          )
+                        )}
                       </select>
                     </Campo>
                   </div>
 
                   <Campo label="Observación inicial / historial previo">
                     <textarea
-                      value={observacionCobro}
-                      onChange={(e) =>
-                        setObservacionCobro(e.target.value)
+                      value={
+                        observacionCobro
                       }
-                      style={styles.textarea}
+                      onChange={(e) =>
+                        setObservacionCobro(
+                          e.target.value
+                        )
+                      }
+                      style={
+                        styles.textarea
+                      }
                     />
                   </Campo>
                 </article>
@@ -1215,64 +1895,122 @@ export default function ClientesPage() {
             )}
           </div>
 
-          <aside style={styles.sideColumn}>
-            <div style={styles.sideCard}>
-              <span style={styles.sideEyebrow}>
+          <aside
+            style={
+              styles.sideColumn
+            }
+          >
+            <div
+              style={
+                styles.sideCard
+              }
+            >
+              <span
+                style={
+                  styles.sideEyebrow
+                }
+              >
                 RESUMEN DE REGISTRO
               </span>
 
-              <h3 style={styles.sideTitle}>Vista previa</h3>
+              <h3
+                style={
+                  styles.sideTitle
+                }
+              >
+                Vista previa
+              </h3>
 
               <ResumenFila
                 label="Cliente"
-                value={nombre || "Pendiente"}
+                value={
+                  nombre ||
+                  "Pendiente"
+                }
               />
 
               <ResumenFila
                 label="Identificación"
-                value={cedula || "Pendiente"}
+                value={
+                  cedula ||
+                  "Pendiente"
+                }
               />
 
-              <ResumenFila
-                label="Tipo de cliente"
-                value={tipoCliente}
-              />
+              {esNegocioMembresias ? (
+                <ResumenFila
+                  label="Tipo de cliente"
+                  value={
+                    tipoCliente
+                  }
+                />
+              ) : (
+                <ResumenFila
+                  label="Estado del cliente"
+                  value={
+                    estadoCliente
+                  }
+                />
+              )}
 
               <ResumenFila
                 label="WhatsApp promocional"
-                value={aceptaWhatsapp ? "Sí" : "No"}
+                value={
+                  aceptaWhatsapp
+                    ? "Sí"
+                    : "No"
+                }
               />
 
               <ResumenFila
                 label="Correo promocional"
-                value={aceptaEmail ? "Sí" : "No"}
+                value={
+                  aceptaEmail
+                    ? "Sí"
+                    : "No"
+                }
               />
 
               {!modoSoloCliente && (
                 <>
                   <ResumenFila
                     label="Tipo de cuenta"
-                    value={tipoProducto || "Pendiente"}
+                    value={
+                      tipoProducto ||
+                      "Pendiente"
+                    }
                   />
 
                   <ResumenFila
                     label="Saldo actual"
-                    value={`$${saldoVisual.toFixed(2)}`}
+                    value={`$${saldoVisual.toFixed(
+                      2
+                    )}`}
                   />
 
                   <ResumenFila
                     label="Estado"
-                    value={estadoCobranza}
+                    value={
+                      estadoCobranza
+                    }
                   />
                 </>
               )}
             </div>
 
-            <div style={styles.stickyActions}>
+            <div
+              style={
+                styles.stickyActions
+              }
+            >
               <button
                 type="button"
-                onClick={guardarRegistro}
-                style={styles.botonGuardar}
+                onClick={
+                  guardarRegistro
+                }
+                style={
+                  styles.botonGuardar
+                }
                 disabled={guardando}
               >
                 {guardando
@@ -1284,8 +2022,12 @@ export default function ClientesPage() {
 
               <button
                 type="button"
-                onClick={limpiarFormulario}
-                style={styles.botonLimpiar}
+                onClick={
+                  limpiarFormulario
+                }
+                style={
+                  styles.botonLimpiar
+                }
                 disabled={guardando}
               >
                 Limpiar formulario
@@ -1293,8 +2035,12 @@ export default function ClientesPage() {
 
               <button
                 type="button"
-                onClick={volverCentroOperaciones}
-                style={styles.botonSecundario}
+                onClick={
+                  volverCentroOperaciones
+                }
+                style={
+                  styles.botonSecundario
+                }
                 disabled={guardando}
               >
                 Salir
@@ -1307,27 +2053,68 @@ export default function ClientesPage() {
   );
 }
 
-function Campo({ label, children }) {
+function Campo({
+  label,
+  children,
+}) {
   return (
     <div style={styles.campo}>
-      <label style={styles.labelStyle}>{label}</label>
+      <label
+        style={
+          styles.labelStyle
+        }
+      >
+        {label}
+      </label>
+
       {children}
     </div>
   );
 }
 
-function SectionTitle({ numero, titulo, texto }) {
+function SectionTitle({
+  numero,
+  titulo,
+  texto,
+}) {
   return (
-    <div style={styles.sectionHeader}>
-      <div style={styles.sectionIcon}>{numero}</div>
+    <div
+      style={
+        styles.sectionHeader
+      }
+    >
+      <div
+        style={
+          styles.sectionIcon
+        }
+      >
+        {numero}
+      </div>
 
       <div>
-        <span style={styles.sectionNumber}>
+        <span
+          style={
+            styles.sectionNumber
+          }
+        >
           PASO {numero}
         </span>
 
-        <h2 style={styles.tituloSeccion}>{titulo}</h2>
-        <p style={styles.textoSeccion}>{texto}</p>
+        <h2
+          style={
+            styles.tituloSeccion
+          }
+        >
+          {titulo}
+        </h2>
+
+        <p
+          style={
+            styles.textoSeccion
+          }
+        >
+          {texto}
+        </p>
       </div>
     </div>
   );
@@ -1361,9 +2148,27 @@ function KPI({
       </div>
 
       <div>
-        <p style={styles.resumenLabel}>{titulo}</p>
-        <h3 style={styles.resumenValor}>{valor}</h3>
-        <span style={styles.resumenDetalle}>
+        <p
+          style={
+            styles.resumenLabel
+          }
+        >
+          {titulo}
+        </p>
+
+        <h3
+          style={
+            styles.resumenValor
+          }
+        >
+          {valor}
+        </h3>
+
+        <span
+          style={
+            styles.resumenDetalle
+          }
+        >
           {detalle}
         </span>
       </div>
@@ -1371,14 +2176,29 @@ function KPI({
   );
 }
 
-function ResumenFila({ label, value }) {
+function ResumenFila({
+  label,
+  value,
+}) {
   return (
-    <div style={styles.resumenFila}>
-      <span style={styles.resumenFilaLabel}>
+    <div
+      style={
+        styles.resumenFila
+      }
+    >
+      <span
+        style={
+          styles.resumenFilaLabel
+        }
+      >
         {label}
       </span>
 
-      <strong style={styles.resumenFilaValue}>
+      <strong
+        style={
+          styles.resumenFilaValue
+        }
+      >
         {value}
       </strong>
     </div>
@@ -1395,10 +2215,12 @@ const styles = {
     fontFamily:
       'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   },
+
   contenedor: {
     maxWidth: 1450,
     margin: "0 auto",
   },
+
   cargandoPagina: {
     minHeight: "100vh",
     display: "grid",
@@ -1406,6 +2228,7 @@ const styles = {
     padding: 24,
     background: "#f3f6f4",
   },
+
   cargandoCard: {
     width: "100%",
     maxWidth: 420,
@@ -1418,20 +2241,24 @@ const styles = {
     background: "#fff",
     textAlign: "center",
   },
+
   cargandoLogo: {
     width: 230,
     maxWidth: "100%",
     marginBottom: 18,
     objectFit: "contain",
   },
+
   cargandoTitulo: {
     fontSize: 22,
   },
+
   cargandoTexto: {
     margin: "8px 0 0",
     color: "#6f7b73",
     fontSize: 14,
   },
+
   hero: {
     marginBottom: 20,
     padding: "30px 32px",
@@ -1444,6 +2271,7 @@ const styles = {
     background:
       "linear-gradient(135deg, #09120d 0%, #123b25 62%, #17673e 100%)",
   },
+
   heroPrincipal: {
     display: "flex",
     alignItems: "center",
@@ -1451,6 +2279,7 @@ const styles = {
     flex: 1,
     minWidth: 280,
   },
+
   logoPanel: {
     width: 220,
     minWidth: 220,
@@ -1462,11 +2291,13 @@ const styles = {
     borderRadius: 18,
     background: "#fff",
   },
+
   logo: {
     width: "100%",
     height: "100%",
     objectFit: "contain",
   },
+
   etiqueta: {
     display: "block",
     marginBottom: 8,
@@ -1475,11 +2306,13 @@ const styles = {
     fontWeight: 900,
     letterSpacing: 1.45,
   },
+
   titulo: {
     margin: "0 0 10px",
     color: "#fff",
     fontSize: "clamp(32px,4vw,48px)",
   },
+
   subtitulo: {
     maxWidth: 760,
     margin: 0,
@@ -1487,16 +2320,20 @@ const styles = {
     fontSize: 15,
     lineHeight: 1.55,
   },
+
   botonVolver: {
     minHeight: 46,
     padding: "11px 16px",
-    border: "1px solid rgba(255,255,255,.18)",
+    border:
+      "1px solid rgba(255,255,255,.18)",
     borderRadius: 12,
-    background: "rgba(255,255,255,.09)",
+    background:
+      "rgba(255,255,255,.09)",
     color: "#fff",
     fontWeight: 800,
     cursor: "pointer",
   },
+
   resumenGrid: {
     marginBottom: 20,
     display: "grid",
@@ -1504,6 +2341,7 @@ const styles = {
       "repeat(auto-fit,minmax(250px,1fr))",
     gap: 14,
   },
+
   resumenCard: {
     minHeight: 118,
     padding: 18,
@@ -1514,10 +2352,12 @@ const styles = {
     borderRadius: 18,
     background: "#fff",
   },
+
   resumenCardDanger: {
     border: "1px solid #fecaca",
     background: "#fffafa",
   },
+
   kpiIcono: {
     width: 48,
     height: 48,
@@ -1527,26 +2367,31 @@ const styles = {
     background: "#eaf7ef",
     color: "#16834f",
   },
+
   kpiIconoDanger: {
     background: "#fff1f2",
     color: "#be123c",
   },
+
   resumenLabel: {
     margin: "1px 0 6px",
     color: "#6d7971",
     fontSize: 12,
     fontWeight: 800,
   },
+
   resumenValor: {
     margin: 0,
     fontSize: 22,
   },
+
   resumenDetalle: {
     display: "block",
     marginTop: 6,
     color: "#8a958e",
     fontSize: 11,
   },
+
   formLayout: {
     display: "grid",
     gridTemplateColumns:
@@ -1554,15 +2399,18 @@ const styles = {
     gap: 20,
     alignItems: "start",
   },
+
   mainColumn: {
     minWidth: 0,
   },
+
   sideColumn: {
     position: "sticky",
     top: 20,
     display: "grid",
     gap: 14,
   },
+
   card: {
     marginBottom: 18,
     padding: 26,
@@ -1570,14 +2418,17 @@ const styles = {
     borderRadius: 22,
     background: "#fff",
   },
+
   sectionHeader: {
     marginBottom: 22,
     paddingBottom: 18,
     display: "flex",
     alignItems: "center",
     gap: 14,
-    borderBottom: "1px solid #edf1ee",
+    borderBottom:
+      "1px solid #edf1ee",
   },
+
   sectionIcon: {
     width: 48,
     height: 48,
@@ -1589,6 +2440,7 @@ const styles = {
     color: "#16834f",
     fontWeight: 900,
   },
+
   sectionNumber: {
     display: "block",
     marginBottom: 4,
@@ -1596,32 +2448,38 @@ const styles = {
     fontSize: 10,
     fontWeight: 900,
   },
+
   tituloSeccion: {
     margin: 0,
     fontSize: 23,
   },
+
   textoSeccion: {
     margin: "5px 0 0",
     color: "#758078",
     fontSize: 13,
   },
+
   grid: {
     display: "grid",
     gridTemplateColumns:
       "repeat(auto-fit,minmax(235px,1fr))",
     gap: "0 16px",
   },
+
   campo: {
     display: "flex",
     flexDirection: "column",
     gap: 7,
     marginBottom: 16,
   },
+
   labelStyle: {
     color: "#3f4c44",
     fontSize: 12,
     fontWeight: 800,
   },
+
   inputStyle: {
     width: "100%",
     minHeight: 46,
@@ -1632,6 +2490,7 @@ const styles = {
     background: "#fff",
     fontSize: 14,
   },
+
   selectStyle: {
     width: "100%",
     minHeight: 46,
@@ -1642,6 +2501,7 @@ const styles = {
     background: "#fff",
     fontSize: 14,
   },
+
   inputAutomatico: {
     width: "100%",
     minHeight: 46,
@@ -1654,6 +2514,7 @@ const styles = {
     fontSize: 14,
     fontWeight: 850,
   },
+
   textarea: {
     width: "100%",
     minHeight: 105,
@@ -1665,6 +2526,7 @@ const styles = {
     fontSize: 14,
     fontFamily: "inherit",
   },
+
   consentimientoBox: {
     marginBottom: 18,
     padding: 16,
@@ -1674,11 +2536,13 @@ const styles = {
     borderRadius: 14,
     background: "#f3faf6",
   },
+
   consentimientoTitulo: {
     color: "#17623c",
     fontSize: 13,
     fontWeight: 900,
   },
+
   checkLabel: {
     display: "flex",
     alignItems: "center",
@@ -1686,17 +2550,20 @@ const styles = {
     color: "#3f4c44",
     fontSize: 13,
   },
+
   fileCount: {
     color: "#16834f",
     fontSize: 11,
     fontWeight: 800,
   },
+
   sideCard: {
     padding: 22,
     border: "1px solid #dfe7e2",
     borderRadius: 20,
     background: "#fff",
   },
+
   sideEyebrow: {
     display: "block",
     marginBottom: 5,
@@ -1704,21 +2571,26 @@ const styles = {
     fontSize: 10,
     fontWeight: 900,
   },
+
   sideTitle: {
     margin: "0 0 18px",
     fontSize: 22,
   },
+
   resumenFila: {
     padding: "11px 0",
     display: "flex",
     justifyContent: "space-between",
     gap: 14,
-    borderBottom: "1px solid #edf1ee",
+    borderBottom:
+      "1px solid #edf1ee",
   },
+
   resumenFilaLabel: {
     color: "#77827b",
     fontSize: 12,
   },
+
   resumenFilaValue: {
     maxWidth: 160,
     overflow: "hidden",
@@ -1727,6 +2599,7 @@ const styles = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
+
   stickyActions: {
     padding: 16,
     display: "grid",
@@ -1735,6 +2608,7 @@ const styles = {
     borderRadius: 18,
     background: "#fff",
   },
+
   botonGuardar: {
     minHeight: 48,
     border: "none",
@@ -1745,14 +2619,17 @@ const styles = {
     fontWeight: 850,
     cursor: "pointer",
   },
+
   botonLimpiar: {
     minHeight: 44,
-    border: "1px solid #ccd7d0",
+    border:
+      "1px solid #ccd7d0",
     borderRadius: 11,
     background: "#fff",
     fontWeight: 800,
     cursor: "pointer",
   },
+
   botonSecundario: {
     minHeight: 44,
     border: "none",
