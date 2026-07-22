@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import styles from "./login.module.css";
@@ -13,6 +13,22 @@ export default function Login() {
   const [cargando, setCargando] = useState(false);
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [recordarme, setRecordarme] = useState(true);
+
+  useEffect(() => {
+    const motivo = sessionStorage.getItem(
+      "konaxCierreSesionMotivo"
+    );
+
+    if (motivo === "inactividad") {
+      sessionStorage.removeItem(
+        "konaxCierreSesionMotivo"
+      );
+
+      alert(
+        "La sesión se cerró automáticamente por inactividad."
+      );
+    }
+  }, []);
 
   function fechaHoy() {
     return new Date().toISOString().split("T")[0];
@@ -58,8 +74,19 @@ export default function Login() {
     }
   }
 
-  function limpiarSesionAnterior() {
+  function limpiarSesionLocal() {
     localStorage.clear();
+  }
+
+  async function cerrarSesionSupabase() {
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      console.error(
+        "No se pudo cerrar la sesión de Supabase:",
+        error.message
+      );
+    }
   }
 
   function guardarSesion(usuario, empresa) {
@@ -67,6 +94,7 @@ export default function Login() {
       "empresaId",
       String(usuario.empresa_id || "")
     );
+
     localStorage.setItem(
       "empresaNombre",
       String(empresa.nombre || "")
@@ -76,18 +104,27 @@ export default function Login() {
       "usuarioId",
       String(usuario.id || "")
     );
+
+    localStorage.setItem(
+      "authUserId",
+      String(usuario.auth_user_id || "")
+    );
+
     localStorage.setItem(
       "usuarioNombre",
       String(usuario.nombre || "")
     );
+
     localStorage.setItem(
       "usuarioCorreo",
       String(usuario.correo || "")
     );
+
     localStorage.setItem(
       "usuarioRol",
       String(usuario.rol || "")
     );
+
     localStorage.setItem(
       "rolId",
       String(usuario.rol_id || "")
@@ -127,6 +164,11 @@ export default function Login() {
       "recordarme",
       recordarme ? "true" : "false"
     );
+
+    localStorage.setItem(
+      "konaxUltimaActividad",
+      String(Date.now())
+    );
   }
 
   async function iniciarSesion() {
@@ -143,41 +185,101 @@ export default function Login() {
       const correoLimpio = correo.trim().toLowerCase();
       const passwordLimpio = password.trim();
 
-      const { data: usuario, error: errorUsuario } =
-        await supabase
-          .from("usuarios")
-          .select("*")
-          .eq("correo", correoLimpio)
-          .eq("password", passwordLimpio)
-          .eq("estado", "Activo")
-          .maybeSingle();
+      const {
+        data: datosAuth,
+        error: errorAuth,
+      } = await supabase.auth.signInWithPassword({
+        email: correoLimpio,
+        password: passwordLimpio,
+      });
+
+      if (errorAuth) {
+        alert("Usuario o contraseña incorrectos.");
+        return;
+      }
+
+      const authUser = datosAuth?.user;
+
+      if (!authUser?.id) {
+        await cerrarSesionSupabase();
+
+        alert(
+          "No fue posible validar la cuenta autenticada."
+        );
+        return;
+      }
+
+      const {
+        data: usuario,
+        error: errorUsuario,
+      } = await supabase
+        .from("usuarios")
+        .select(`
+          id,
+          auth_user_id,
+          empresa_id,
+          nombre,
+          correo,
+          rol,
+          rol_id,
+          estado
+        `)
+        .eq("auth_user_id", authUser.id)
+        .maybeSingle();
 
       if (errorUsuario) {
+        await cerrarSesionSupabase();
+
         alert(
-          "Error iniciando sesión: " +
+          "Error cargando el perfil del usuario: " +
             errorUsuario.message
         );
         return;
       }
 
       if (!usuario) {
-        alert("Usuario o contraseña incorrectos.");
+        await cerrarSesionSupabase();
+
+        alert(
+          "La cuenta fue autenticada, pero todavía no está vinculada a un usuario de KONAX."
+        );
+        return;
+      }
+
+      if (
+        String(usuario.estado || "")
+          .toLowerCase()
+          .trim() !== "activo"
+      ) {
+        await cerrarSesionSupabase();
+
+        alert(
+          "Este usuario se encuentra inactivo."
+        );
         return;
       }
 
       if (!usuario.empresa_id) {
-        alert("Este usuario no tiene empresa asignada.");
+        await cerrarSesionSupabase();
+
+        alert(
+          "Este usuario no tiene empresa asignada."
+        );
         return;
       }
 
-      const { data: empresa, error: errorEmpresa } =
-        await supabase
-          .from("empresas")
-          .select("*")
-          .eq("id", usuario.empresa_id)
-          .maybeSingle();
+      const {
+        data: empresa,
+        error: errorEmpresa,
+      } = await supabase
+        .from("empresas")
+        .select("*")
+        .eq("id", usuario.empresa_id)
+        .maybeSingle();
 
       if (errorEmpresa) {
+        await cerrarSesionSupabase();
+
         alert(
           "Error verificando empresa: " +
             errorEmpresa.message
@@ -186,6 +288,8 @@ export default function Login() {
       }
 
       if (!empresa) {
+        await cerrarSesionSupabase();
+
         alert(
           "La empresa asignada al usuario no existe."
         );
@@ -213,6 +317,8 @@ export default function Login() {
           await suspenderEmpresa(empresa);
         }
 
+        await cerrarSesionSupabase();
+
         alert(
           "El servicio de esta empresa está suspendido por facturación pendiente. Contacte a KONAX."
         );
@@ -220,13 +326,15 @@ export default function Login() {
         return;
       }
 
-      limpiarSesionAnterior();
+      limpiarSesionLocal();
       guardarSesion(usuario, empresa);
 
       const empresaSesion =
         localStorage.getItem("empresaId");
+
       const usuarioSesion =
         localStorage.getItem("usuarioId");
+
       const rolSesion =
         localStorage.getItem("usuarioRol");
 
@@ -235,7 +343,8 @@ export default function Login() {
         !usuarioSesion ||
         !rolSesion
       ) {
-        limpiarSesionAnterior();
+        limpiarSesionLocal();
+        await cerrarSesionSupabase();
 
         alert(
           "No fue posible crear correctamente la sesión."
@@ -261,6 +370,8 @@ export default function Login() {
         "Error inesperado en Login:",
         errorGeneral
       );
+
+      await cerrarSesionSupabase();
 
       alert(
         "Ocurrió un error inesperado al iniciar sesión."
@@ -311,7 +422,9 @@ export default function Login() {
           </label>
 
           <div className={styles.inputWrap}>
-            <span className={styles.inputIcon}>✉</span>
+            <span className={styles.inputIcon}>
+              ✉
+            </span>
 
             <input
               id="correo"
@@ -333,12 +446,16 @@ export default function Login() {
           </label>
 
           <div className={styles.inputWrap}>
-            <span className={styles.inputIcon}>🔒</span>
+            <span className={styles.inputIcon}>
+              🔒
+            </span>
 
             <input
               id="password"
               type={
-                mostrarPassword ? "text" : "password"
+                mostrarPassword
+                  ? "text"
+                  : "password"
               }
               placeholder="Ingresa tu contraseña"
               value={password}
