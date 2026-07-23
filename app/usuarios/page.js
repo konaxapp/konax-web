@@ -711,12 +711,6 @@ export default function Usuarios() {
           <h2 style={s.tituloSeccion}>
             Módulos de la empresa
           </h2>
-          <p style={s.textoSuave}>
-            El plan define qué módulos están disponibles. Estos
-            interruptores controlan cuáles estarán activos para toda la
-            empresa.
-          </p>
-
           <div style={s.modulosGrid}>
             {MODULOS.map((modulo) => {
               const permitido = Boolean(
@@ -780,11 +774,6 @@ export default function Usuarios() {
           <div>
             <article style={s.card}>
               <h2 style={s.tituloSeccion}>Crear usuario</h2>
-              <p style={s.avisoExito}>
-                El usuario se creará en Supabase Auth y quedará vinculado
-                automáticamente con esta empresa.
-              </p>
-
               <div style={s.grid}>
                 <Campo label="Nombre">
                   <input
@@ -1128,15 +1117,6 @@ const s = {
   },
   tituloSeccion: { margin: 0, color: "#111827" },
   textoSuave: { marginTop: 6, color: "#6b7280" },
-  avisoExito: {
-    padding: 12,
-    border: "1px solid #86efac",
-    borderRadius: 10,
-    background: "#ecfdf5",
-    color: "#166534",
-    fontSize: 13,
-    lineHeight: 1.5,
-  },
   modulosGrid: {
     marginTop: 16,
     display: "grid",
