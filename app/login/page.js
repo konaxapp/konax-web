@@ -111,6 +111,9 @@ export default function Login() {
   async function cerrarSesionSupabase() {
     const { error } = await supabase.auth.signOut();
 
+    localStorage.removeItem("konaxAccessToken");
+    localStorage.removeItem("konaxRefreshToken");
+
     if (error) {
       console.error(
         "No se pudo cerrar la sesión de Supabase:",
@@ -119,7 +122,7 @@ export default function Login() {
     }
   }
 
-  function guardarSesion(usuario, empresa) {
+  function guardarSesion(usuario, empresa, sesionAuth) {
     localStorage.setItem(
       "empresaId",
       String(usuario.empresa_id || "")
@@ -199,6 +202,14 @@ export default function Login() {
       "konaxUltimaActividad",
       String(Date.now())
     );
+
+    if (sesionAuth?.access_token) {
+      localStorage.setItem("konaxAccessToken", sesionAuth.access_token);
+    }
+
+    if (sesionAuth?.refresh_token) {
+      localStorage.setItem("konaxRefreshToken", sesionAuth.refresh_token);
+    }
   }
 
   async function iniciarSesion() {
@@ -362,7 +373,7 @@ export default function Login() {
         return;
       }
 
-      guardarSesion(usuario, empresa);
+      guardarSesion(usuario, empresa, datosAuth?.session);
 
       const empresaSesion =
         localStorage.getItem("empresaId");
