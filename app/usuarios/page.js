@@ -33,11 +33,9 @@ const MODULOS = [
 
 const PERFILES_ROL = {
   cajero: [
-    "dashboard",
     "clientes",
     "vista_cliente",
     "caja",
-    "inventario",
   ],
   gestor: [
     "dashboard",
@@ -628,9 +626,9 @@ export default function Usuarios() {
 
       await cargarUsuarios(empresaId);
 
-      if (data.usuario) {
-        await seleccionarUsuario(data.usuario);
-      }
+      setSeccionActiva("usuarios");
+      setUsuarioSeleccionado(null);
+      setPermisosUsuario({});
     } catch (error) {
       alert(
         "No se pudo crear el usuario: " +
