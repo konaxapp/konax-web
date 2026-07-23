@@ -467,6 +467,11 @@ export default function Usuarios() {
       (rol) => String(rol.id) === String(rolId)
     );
 
+    if (!empresaId) {
+      alert("No hay una empresa seleccionada.");
+      return;
+    }
+
     if (!nombreLimpio) {
       alert("Ingrese el nombre del usuario.");
       return;
@@ -490,66 +495,23 @@ export default function Usuarios() {
     setGuardando(true);
 
     try {
-      let {
+      const {
         data: { session },
         error: errorSesion,
       } = await supabase.auth.getSession();
 
       if (errorSesion || !session?.access_token) {
-        const accessToken =
-          localStorage.getItem("konaxAccessToken");
-        const refreshToken =
-          localStorage.getItem("konaxRefreshToken");
-
-        if (accessToken && refreshToken) {
-          const {
-            data: sesionRestaurada,
-            error: errorRestaurar,
-          } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-
-          if (!errorRestaurar) {
-            session = sesionRestaurada?.session || null;
-          }
-        }
-      }
-
-      if (!session?.access_token) {
-        const {
-          data: sesionRenovada,
-          error: errorRenovar,
-        } = await supabase.auth.refreshSession();
-
-        if (!errorRenovar) {
-          session = sesionRenovada?.session || null;
-        }
-      }
-
-      if (!session?.access_token) {
         alert(
           "No se pudo validar la sesión segura. Cierre sesión, vuelva a ingresar y pruebe nuevamente."
         );
         return;
       }
 
-      localStorage.setItem(
-        "konaxAccessToken",
-        session.access_token
-      );
-
-      if (session.refresh_token) {
-        localStorage.setItem(
-          "konaxRefreshToken",
-          session.refresh_token
-        );
-      }
-
       const { data, error } = await supabase.functions.invoke(
         "crear-usuario-konax",
         {
           body: {
+            empresa_id: empresaId,
             nombre: nombreLimpio,
             correo: correoLimpio,
             password: passwordLimpio,
