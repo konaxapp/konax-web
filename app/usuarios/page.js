@@ -31,6 +31,33 @@ const MODULOS = [
   icono,
 }));
 
+const PERFILES_ROL = {
+  cajero: [
+    "dashboard",
+    "clientes",
+    "vista_cliente",
+    "caja",
+    "inventario",
+  ],
+  gestor: [
+    "dashboard",
+    "clientes",
+    "vista_cliente",
+    "cobranza",
+    "dashboard_cobros",
+    "gestor_cobros",
+  ],
+  vendedor: [
+    "dashboard",
+    "clientes",
+    "vista_cliente",
+    "caja",
+    "inventario",
+    "ventas",
+  ],
+  administrador: MODULOS.map((modulo) => modulo.codigo),
+};
+
 function normalizar(valor) {
   return String(valor || "")
     .normalize("NFD")
@@ -42,6 +69,7 @@ function normalizar(valor) {
 
 function construirModulosPorPlan(codigoPlan) {
   const codigo = normalizar(codigoPlan);
+
   const base = Object.fromEntries(
     MODULOS.map((modulo) => [modulo.codigo, false])
   );
@@ -139,6 +167,11 @@ export default function Usuarios() {
 
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+
+  const [seccionActiva, setSeccionActiva] = useState("modulos");
+  const [gruposAbiertos, setGruposAbiertos] = useState({
+    Panel: true,
+  });
 
   useEffect(() => {
     inicializar();
@@ -278,6 +311,7 @@ export default function Usuarios() {
 
   async function seleccionarUsuario(usuario) {
     setUsuarioSeleccionado(usuario);
+    setSeccionActiva("permisos");
 
     const { data, error } = await supabase
       .from("permisos_usuarios_empresa")
@@ -366,16 +400,6 @@ export default function Usuarios() {
       if (errorPermisos) {
         console.error(errorPermisos.message);
       }
-
-      if (usuarioSeleccionado) {
-        setPermisosUsuario((previo) => {
-          const siguiente = { ...previo };
-          relacionados.forEach((codigo) => {
-            siguiente[codigo] = false;
-          });
-          return siguiente;
-        });
-      }
     }
   }
 
@@ -421,7 +445,57 @@ export default function Usuarios() {
     }));
   }
 
-  async function cambiarTodosPermisos(activo) {
+  async function aplicarPerfilRol() {
+    if (!usuarioSeleccionado) {
+      alert("Seleccione un usuario.");
+      return;
+    }
+
+    const rolNormalizado = normalizar(usuarioSeleccionado.rol);
+    const perfil =
+      PERFILES_ROL[rolNormalizado] ||
+      PERFILES_ROL.cajero;
+
+    const registros = MODULOS.map((modulo) => {
+      const habilitado =
+        Boolean(modulosPermitidos[modulo.codigo]) &&
+        Boolean(modulosEmpresa[modulo.codigo]);
+
+      return {
+        empresa_id: empresaId,
+        usuario_id: usuarioSeleccionado.id,
+        permiso: modulo.codigo,
+        activo:
+          habilitado &&
+          perfil.includes(modulo.codigo),
+        updated_at: new Date().toISOString(),
+      };
+    });
+
+    const { error } = await supabase
+      .from("permisos_usuarios_empresa")
+      .upsert(registros, {
+        onConflict: "empresa_id,usuario_id,permiso",
+      });
+
+    if (error) {
+      alert("No se pudo aplicar el perfil: " + error.message);
+      return;
+    }
+
+    const mapa = {};
+    registros.forEach((registro) => {
+      mapa[registro.permiso] = registro.activo;
+    });
+
+    setPermisosUsuario(mapa);
+
+    alert(
+      `Permisos de ${usuarioSeleccionado.rol || "usuario"} aplicados correctamente.`
+    );
+  }
+
+  async function desactivarTodosPermisos() {
     if (!usuarioSeleccionado) {
       alert("Seleccione un usuario.");
       return;
@@ -431,10 +505,7 @@ export default function Usuarios() {
       empresa_id: empresaId,
       usuario_id: usuarioSeleccionado.id,
       permiso: modulo.codigo,
-      activo:
-        activo &&
-        Boolean(modulosPermitidos[modulo.codigo]) &&
-        Boolean(modulosEmpresa[modulo.codigo]),
+      activo: false,
       updated_at: new Date().toISOString(),
     }));
 
@@ -451,7 +522,7 @@ export default function Usuarios() {
 
     const mapa = {};
     registros.forEach((registro) => {
-      mapa[registro.permiso] = registro.activo;
+      mapa[registro.permiso] = false;
     });
 
     setPermisosUsuario(mapa);
@@ -570,12 +641,6 @@ export default function Usuarios() {
     }
   }
 
-  async function gestionarUsuario() {
-    alert(
-      "La eliminación también queda bloqueada temporalmente. Debe desactivarse o eliminarse la cuenta correspondiente en Supabase Auth."
-    );
-  }
-
   async function finalizarConfiguracion() {
     const administrador = usuarios.find(
       (usuario) =>
@@ -664,6 +729,13 @@ export default function Usuarios() {
     }, {});
   }, []);
 
+  function alternarGrupo(grupo) {
+    setGruposAbiertos((previo) => ({
+      ...previo,
+      [grupo]: !previo[grupo],
+    }));
+  }
+
   if (cargando) {
     return (
       <div style={s.loading}>
@@ -694,9 +766,11 @@ export default function Usuarios() {
               <span style={s.etiqueta}>
                 ADMINISTRACIÓN DE EMPRESA
               </span>
+
               <h1 style={s.titulo}>
-                Usuarios, roles y módulos
+                Usuarios, roles y permisos
               </h1>
+
               <p style={s.subtitulo}>
                 Empresa: <strong>{empresaNombre}</strong>
                 <br />
@@ -713,73 +787,137 @@ export default function Usuarios() {
           </button>
         </header>
 
-        <section style={s.card}>
-          <h2 style={s.tituloSeccion}>
-            Módulos de la empresa
-          </h2>
-          <div style={s.modulosGrid}>
-            {MODULOS.map((modulo) => {
-              const permitido = Boolean(
-                modulosPermitidos[modulo.codigo]
-              );
-              const activo = Boolean(
-                modulosEmpresa[modulo.codigo]
-              );
-              const obligatorio = [
-                "dashboard",
-                "usuarios",
-                "configuracion",
-              ].includes(modulo.codigo);
+        <nav style={s.pasos}>
+          <button
+            type="button"
+            onClick={() => setSeccionActiva("modulos")}
+            style={
+              seccionActiva === "modulos"
+                ? s.pasoActivo
+                : s.pasoNormal
+            }
+          >
+            1. Módulos de la empresa
+          </button>
 
-              return (
-                <button
-                  key={modulo.codigo}
-                  type="button"
-                  onClick={() => alternarModuloEmpresa(modulo)}
-                  style={
-                    !permitido
-                      ? s.moduloBloqueado
-                      : activo
-                      ? s.moduloActivo
-                      : s.moduloInactivo
-                  }
-                >
-                  <span style={s.moduloIcono}>
-                    {modulo.icono}
-                  </span>
+          <button
+            type="button"
+            onClick={() => setSeccionActiva("usuarios")}
+            style={
+              seccionActiva === "usuarios"
+                ? s.pasoActivo
+                : s.pasoNormal
+            }
+          >
+            2. Usuarios
+          </button>
 
-                  <span style={s.moduloTexto}>
-                    <strong>{modulo.nombre}</strong>
-                    <small>
-                      {!permitido
-                        ? "No incluido en el plan"
-                        : obligatorio
-                        ? "Obligatorio"
-                        : activo
-                        ? "Activo para la empresa"
-                        : "Desactivado para la empresa"}
-                    </small>
-                  </span>
+          <button
+            type="button"
+            onClick={() => setSeccionActiva("permisos")}
+            style={
+              seccionActiva === "permisos"
+                ? s.pasoActivo
+                : s.pasoNormal
+            }
+          >
+            3. Permisos
+          </button>
+        </nav>
 
-                  <span
+        {seccionActiva === "modulos" && (
+          <section style={s.card}>
+            <div style={s.encabezadoSeccion}>
+              <div>
+                <span style={s.numeroPaso}>PASO 1</span>
+                <h2 style={s.tituloSeccion}>
+                  Módulos disponibles para la empresa
+                </h2>
+                <p style={s.textoSuave}>
+                  Aquí defines qué funciones están habilitadas según el plan contratado.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSeccionActiva("usuarios")}
+                style={s.botonSiguiente}
+              >
+                Continuar a usuarios →
+              </button>
+            </div>
+
+            <div style={s.modulosGrid}>
+              {MODULOS.map((modulo) => {
+                const permitido = Boolean(
+                  modulosPermitidos[modulo.codigo]
+                );
+
+                const activo = Boolean(
+                  modulosEmpresa[modulo.codigo]
+                );
+
+                const obligatorio = [
+                  "dashboard",
+                  "usuarios",
+                  "configuracion",
+                ].includes(modulo.codigo);
+
+                return (
+                  <button
+                    key={modulo.codigo}
+                    type="button"
+                    onClick={() => alternarModuloEmpresa(modulo)}
                     style={
-                      activo && permitido
-                        ? s.switchOn
-                        : s.switchOff
+                      !permitido
+                        ? s.moduloBloqueado
+                        : activo
+                        ? s.moduloActivo
+                        : s.moduloInactivo
                     }
                   >
-                    <span style={s.circulo} />
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
+                    <span style={s.moduloIcono}>
+                      {modulo.icono}
+                    </span>
 
-        <section style={s.mainGrid}>
-          <div>
+                    <span style={s.moduloTexto}>
+                      <strong>{modulo.nombre}</strong>
+                      <small>
+                        {!permitido
+                          ? "No incluido en el plan"
+                          : obligatorio
+                          ? "Obligatorio"
+                          : activo
+                          ? "Activo para la empresa"
+                          : "Desactivado"}
+                      </small>
+                    </span>
+
+                    <span
+                      style={
+                        activo && permitido
+                          ? s.switchOn
+                          : s.switchOff
+                      }
+                    >
+                      <span style={s.circulo} />
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {seccionActiva === "usuarios" && (
+          <section style={s.dosColumnas}>
             <article style={s.card}>
+              <span style={s.numeroPaso}>PASO 2</span>
               <h2 style={s.tituloSeccion}>Crear usuario</h2>
+              <p style={s.textoSuave}>
+                Crea el acceso y luego selecciona al usuario para asignarle permisos.
+              </p>
+
               <div style={s.grid}>
                 <Campo label="Nombre">
                   <input
@@ -837,9 +975,14 @@ export default function Usuarios() {
             </article>
 
             <article style={s.card}>
-              <h2 style={s.tituloSeccion}>
-                Usuarios de la empresa
-              </h2>
+              <div style={s.encabezadoSeccion}>
+                <div>
+                  <span style={s.numeroPaso}>USUARIOS REGISTRADOS</span>
+                  <h2 style={s.tituloSeccion}>
+                    Selecciona un usuario
+                  </h2>
+                </div>
+              </div>
 
               <input
                 value={busqueda}
@@ -860,163 +1003,215 @@ export default function Usuarios() {
                         : s.usuarioInactivo
                     }
                   >
-                    <strong>{usuario.nombre}</strong>
-                    <span>{usuario.correo}</span>
-                    <small>{usuario.rol || "Sin rol"}</small>
+                    <div style={s.avatarUsuario}>
+                      {String(usuario.nombre || "?")
+                        .slice(0, 1)
+                        .toUpperCase()}
+                    </div>
+
+                    <span style={s.usuarioDatos}>
+                      <strong>{usuario.nombre}</strong>
+                      <small>{usuario.correo}</small>
+                      <em>{usuario.rol || "Sin rol"}</em>
+                    </span>
+
+                    <span style={s.flecha}>→</span>
                   </button>
                 ))}
               </div>
 
-              <div style={s.tablaBox}>
-                <table style={s.tabla}>
-                  <thead>
-                    <tr>
-                      <th style={s.th}>Nombre</th>
-                      <th style={s.th}>Correo</th>
-                      <th style={s.th}>Rol</th>
-                      <th style={s.th}>Estado</th>
-                      <th style={s.th}>Acción</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {usuarios.map((usuario) => (
-                      <tr key={usuario.id}>
-                        <td style={s.td}>{usuario.nombre}</td>
-                        <td style={s.td}>{usuario.correo}</td>
-                        <td style={s.td}>{usuario.rol}</td>
-                        <td style={s.td}>{usuario.estado}</td>
-                        <td style={s.td}>
-                          <button
-                            type="button"
-                            onClick={gestionarUsuario}
-                            style={s.botonEliminar}
-                          >
-                            Gestionar
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
               <button
                 type="button"
-                onClick={finalizarConfiguracion}
-                disabled={guardando}
-                style={s.botonVerde}
+                onClick={() => setSeccionActiva("permisos")}
+                disabled={!usuarioSeleccionado}
+                style={
+                  usuarioSeleccionado
+                    ? s.botonSiguienteAncho
+                    : s.botonDeshabilitado
+                }
               >
-                {guardando
-                  ? "Guardando..."
-                  : "Finalizar configuración"}
+                Configurar permisos →
               </button>
             </article>
-          </div>
+          </section>
+        )}
 
-          <aside>
-            <article style={s.cardSticky}>
-              <h2 style={s.tituloSeccion}>
-                Permisos del usuario
-              </h2>
+        {seccionActiva === "permisos" && (
+          <section style={s.card}>
+            <span style={s.numeroPaso}>PASO 3</span>
 
-              {!usuarioSeleccionado ? (
+            {!usuarioSeleccionado ? (
+              <div style={s.estadoVacio}>
+                <div style={s.estadoIcono}>👤</div>
+                <h2 style={s.tituloSeccion}>
+                  Selecciona un usuario primero
+                </h2>
                 <p style={s.textoSuave}>
-                  Selecciona un usuario para cambiar sus permisos.
+                  Ve al paso Usuarios y selecciona la persona que deseas configurar.
                 </p>
-              ) : (
-                <>
-                  <p style={s.textoSuave}>
-                    <strong>{usuarioSeleccionado.nombre}</strong> ·{" "}
-                    {usuarioSeleccionado.rol}
-                  </p>
 
-                  <div style={s.accionesPermisos}>
-                    <button
-                      type="button"
-                      onClick={() => cambiarTodosPermisos(true)}
-                      style={s.botonMiniVerde}
-                    >
-                      Activar permitidos
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => cambiarTodosPermisos(false)}
-                      style={s.botonMiniGris}
-                    >
-                      Desactivar todo
-                    </button>
+                <button
+                  type="button"
+                  onClick={() => setSeccionActiva("usuarios")}
+                  style={s.botonSiguiente}
+                >
+                  Ir a usuarios
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={s.usuarioResumen}>
+                  <div style={s.avatarGrande}>
+                    {String(usuarioSeleccionado.nombre || "?")
+                      .slice(0, 1)
+                      .toUpperCase()}
                   </div>
 
+                  <div>
+                    <small style={s.etiquetaOscura}>
+                      USUARIO SELECCIONADO
+                    </small>
+                    <h2 style={s.nombreUsuario}>
+                      {usuarioSeleccionado.nombre}
+                    </h2>
+                    <p style={s.textoSuave}>
+                      {usuarioSeleccionado.correo} ·{" "}
+                      <strong>{usuarioSeleccionado.rol}</strong>
+                    </p>
+                  </div>
+                </div>
+
+                <div style={s.accionesPermisos}>
+                  <button
+                    type="button"
+                    onClick={aplicarPerfilRol}
+                    style={s.botonPerfil}
+                  >
+                    Aplicar permisos de {usuarioSeleccionado.rol}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={desactivarTodosPermisos}
+                    style={s.botonMiniGris}
+                  >
+                    Desactivar todo
+                  </button>
+                </div>
+
+                <div style={s.acordeones}>
                   {Object.entries(grupos).map(
-                    ([grupo, modulos]) => (
-                      <section key={grupo} style={s.grupoCard}>
-                        <h3 style={s.grupoTitulo}>{grupo}</h3>
+                    ([grupo, modulos]) => {
+                      const abierto = Boolean(gruposAbiertos[grupo]);
 
-                        <div style={s.permisosCards}>
-                          {modulos.map((modulo) => {
-                            const permitidoPlan = Boolean(
-                              modulosPermitidos[modulo.codigo]
-                            );
-                            const activoEmpresa = Boolean(
-                              modulosEmpresa[modulo.codigo]
-                            );
-                            const habilitado =
-                              permitidoPlan && activoEmpresa;
-                            const activo = Boolean(
-                              permisosUsuario[modulo.codigo]
-                            );
+                      const activos = modulos.filter(
+                        (modulo) =>
+                          Boolean(permisosUsuario[modulo.codigo])
+                      ).length;
 
-                            return (
-                              <button
-                                key={modulo.codigo}
-                                type="button"
-                                onClick={() =>
-                                  alternarPermiso(modulo)
-                                }
-                                style={
-                                  !habilitado
-                                    ? s.permisoBloqueado
-                                    : activo
-                                    ? s.permisoActivo
-                                    : s.permisoNormal
-                                }
-                              >
-                                <span style={s.permisoTexto}>
-                                  <strong>{modulo.nombre}</strong>
-                                  <small>
-                                    {!permitidoPlan
-                                      ? "No incluido en el plan"
-                                      : !activoEmpresa
-                                      ? "Desactivado para la empresa"
-                                      : activo
-                                      ? "Permitido"
-                                      : "Sin permiso"}
-                                  </small>
-                                </span>
+                      return (
+                        <section key={grupo} style={s.acordeon}>
+                          <button
+                            type="button"
+                            onClick={() => alternarGrupo(grupo)}
+                            style={s.acordeonCabecera}
+                          >
+                            <span>
+                              <strong>{grupo}</strong>
+                              <small>
+                                {activos} permiso(s) activo(s)
+                              </small>
+                            </span>
 
-                                <span
-                                  style={
-                                    activo && habilitado
-                                      ? s.switchOn
-                                      : s.switchOff
-                                  }
-                                >
-                                  <span style={s.circulo} />
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </section>
-                    )
+                            <span style={s.acordeonFlecha}>
+                              {abierto ? "−" : "+"}
+                            </span>
+                          </button>
+
+                          {abierto && (
+                            <div style={s.permisosCards}>
+                              {modulos.map((modulo) => {
+                                const permitidoPlan = Boolean(
+                                  modulosPermitidos[modulo.codigo]
+                                );
+
+                                const activoEmpresa = Boolean(
+                                  modulosEmpresa[modulo.codigo]
+                                );
+
+                                const habilitado =
+                                  permitidoPlan && activoEmpresa;
+
+                                const activo = Boolean(
+                                  permisosUsuario[modulo.codigo]
+                                );
+
+                                return (
+                                  <button
+                                    key={modulo.codigo}
+                                    type="button"
+                                    onClick={() =>
+                                      alternarPermiso(modulo)
+                                    }
+                                    style={
+                                      !habilitado
+                                        ? s.permisoBloqueado
+                                        : activo
+                                        ? s.permisoActivo
+                                        : s.permisoNormal
+                                    }
+                                  >
+                                    <span style={s.permisoIcono}>
+                                      {modulo.icono}
+                                    </span>
+
+                                    <span style={s.permisoTexto}>
+                                      <strong>{modulo.nombre}</strong>
+                                      <small>
+                                        {!permitidoPlan
+                                          ? "No incluido en el plan"
+                                          : !activoEmpresa
+                                          ? "Desactivado para la empresa"
+                                          : activo
+                                          ? "Permitido"
+                                          : "Sin permiso"}
+                                      </small>
+                                    </span>
+
+                                    <span
+                                      style={
+                                        activo && habilitado
+                                          ? s.switchOn
+                                          : s.switchOff
+                                      }
+                                    >
+                                      <span style={s.circulo} />
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </section>
+                      );
+                    }
                   )}
-                </>
-              )}
-            </article>
-          </aside>
-        </section>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={finalizarConfiguracion}
+                  disabled={guardando}
+                  style={s.botonVerde}
+                >
+                  {guardando
+                    ? "Guardando..."
+                    : "Finalizar configuración"}
+                </button>
+              </>
+            )}
+          </section>
+        )}
       </div>
     </main>
   );
@@ -1039,7 +1234,10 @@ const s = {
       "linear-gradient(135deg,#ecfdf5 0%,#f3f4f6 45%,#fff 100%)",
     fontFamily: 'Inter, Arial, system-ui, sans-serif',
   },
-  contenedor: { maxWidth: 1500, margin: "0 auto" },
+  contenedor: {
+    maxWidth: 1450,
+    margin: "0 auto",
+  },
   loading: {
     minHeight: "100vh",
     display: "grid",
@@ -1048,7 +1246,10 @@ const s = {
     gap: 12,
     background: "#f3f6f4",
   },
-  loadingLogo: { width: 230, maxWidth: "75%" },
+  loadingLogo: {
+    width: 230,
+    maxWidth: "75%",
+  },
   hero: {
     marginBottom: 18,
     padding: 26,
@@ -1087,7 +1288,15 @@ const s = {
     fontWeight: 900,
     letterSpacing: 1.25,
   },
-  titulo: { margin: "5px 0", fontSize: 34 },
+  etiquetaOscura: {
+    color: "#15803d",
+    fontWeight: 900,
+    letterSpacing: 1,
+  },
+  titulo: {
+    margin: "5px 0",
+    fontSize: 34,
+  },
   subtitulo: {
     margin: 0,
     color: "#dcfce7",
@@ -1103,28 +1312,69 @@ const s = {
     fontWeight: 800,
     cursor: "pointer",
   },
+  pasos: {
+    marginBottom: 18,
+    padding: 8,
+    display: "grid",
+    gridTemplateColumns: "repeat(3,1fr)",
+    gap: 8,
+    border: "1px solid #d1fae5",
+    borderRadius: 16,
+    background: "#ffffff",
+    boxShadow: "0 8px 24px rgba(15,23,42,.06)",
+  },
+  pasoNormal: {
+    minHeight: 48,
+    border: "none",
+    borderRadius: 11,
+    background: "#f3f4f6",
+    color: "#4b5563",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  pasoActivo: {
+    minHeight: 48,
+    border: "none",
+    borderRadius: 11,
+    background:
+      "linear-gradient(135deg,#15803d,#16a34a)",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
   card: {
     marginBottom: 18,
-    padding: 22,
+    padding: 24,
     border: "1px solid #e5e7eb",
     borderRadius: 20,
     background: "#fff",
-    boxShadow:
-      "0 8px 22px rgba(0,0,0,.07)",
+    boxShadow: "0 8px 22px rgba(0,0,0,.07)",
   },
-  cardSticky: {
-    marginBottom: 18,
-    padding: 22,
-    position: "sticky",
-    top: 18,
-    border: "1px solid #e5e7eb",
-    borderRadius: 20,
-    background: "#fff",
+  encabezadoSeccion: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 16,
+    flexWrap: "wrap",
   },
-  tituloSeccion: { margin: 0, color: "#111827" },
-  textoSuave: { marginTop: 6, color: "#6b7280" },
+  numeroPaso: {
+    display: "inline-block",
+    marginBottom: 6,
+    color: "#15803d",
+    fontSize: 12,
+    fontWeight: 900,
+    letterSpacing: 1.1,
+  },
+  tituloSeccion: {
+    margin: 0,
+    color: "#111827",
+  },
+  textoSuave: {
+    marginTop: 6,
+    color: "#6b7280",
+  },
   modulosGrid: {
-    marginTop: 16,
+    marginTop: 18,
     display: "grid",
     gridTemplateColumns:
       "repeat(auto-fit,minmax(245px,1fr))",
@@ -1167,15 +1417,17 @@ const s = {
     textAlign: "left",
     cursor: "not-allowed",
   },
-  moduloIcono: { fontSize: 21 },
+  moduloIcono: {
+    fontSize: 21,
+  },
   moduloTexto: {
     display: "grid",
     gap: 3,
   },
-  mainGrid: {
+  dosColumnas: {
     display: "grid",
     gridTemplateColumns:
-      "minmax(420px,1fr) minmax(520px,1.2fr)",
+      "minmax(360px,.9fr) minmax(460px,1.1fr)",
     gap: 18,
     alignItems: "start",
   },
@@ -1212,23 +1464,25 @@ const s = {
     padding: "11px 22px",
     border: "none",
     borderRadius: 11,
-    background: "linear-gradient(135deg,#16a34a,#15803d)",
+    background:
+      "linear-gradient(135deg,#16a34a,#15803d)",
     color: "#fff",
     fontWeight: 850,
     cursor: "pointer",
-    boxShadow: "0 8px 18px rgba(22,163,74,.22)",
+    boxShadow:
+      "0 8px 18px rgba(22,163,74,.22)",
   },
   usuariosLista: {
     marginTop: 14,
     display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit,minmax(220px,1fr))",
     gap: 10,
   },
   usuarioActivo: {
     padding: 14,
     display: "grid",
-    gap: 5,
+    gridTemplateColumns: "46px 1fr 24px",
+    alignItems: "center",
+    gap: 12,
     border: "2px solid #16a34a",
     borderRadius: 14,
     background: "#dcfce7",
@@ -1239,7 +1493,9 @@ const s = {
   usuarioInactivo: {
     padding: 14,
     display: "grid",
-    gap: 5,
+    gridTemplateColumns: "46px 1fr 24px",
+    alignItems: "center",
+    gap: 12,
     border: "1px solid #e5e7eb",
     borderRadius: 14,
     background: "#f9fafb",
@@ -1247,92 +1503,159 @@ const s = {
     textAlign: "left",
     cursor: "pointer",
   },
-  tablaBox: {
-    marginTop: 16,
-    marginBottom: 18,
-    overflowX: "auto",
-    border: "1px solid #e5e7eb",
-    borderRadius: 14,
-  },
-  tabla: {
-    width: "100%",
-    minWidth: 720,
-    borderCollapse: "collapse",
-  },
-  th: {
-    padding: 12,
+  avatarUsuario: {
+    width: 44,
+    height: 44,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
     background: "#111827",
     color: "#fff",
-    textAlign: "left",
-    fontSize: 13,
+    fontWeight: 900,
   },
-  td: {
-    padding: 12,
-    borderBottom: "1px solid #f3f4f6",
+  usuarioDatos: {
+    display: "grid",
+    gap: 3,
   },
-  botonEliminar: {
-    padding: "8px 11px",
+  flecha: {
+    fontSize: 22,
+    fontWeight: 900,
+  },
+  botonSiguiente: {
+    minHeight: 44,
+    padding: "10px 17px",
     border: "none",
-    borderRadius: 8,
-    background: "#6b7280",
+    borderRadius: 10,
+    background: "#111827",
     color: "#fff",
     fontWeight: 800,
     cursor: "pointer",
   },
-  botonVerde: {
+  botonSiguienteAncho: {
     width: "100%",
-    minHeight: 48,
+    marginTop: 16,
+    minHeight: 46,
     border: "none",
-    borderRadius: 12,
-    background: "#16a34a",
+    borderRadius: 11,
+    background: "#111827",
     color: "#fff",
-    fontSize: 16,
     fontWeight: 850,
     cursor: "pointer",
   },
+  botonDeshabilitado: {
+    width: "100%",
+    marginTop: 16,
+    minHeight: 46,
+    border: "none",
+    borderRadius: 11,
+    background: "#d1d5db",
+    color: "#6b7280",
+    fontWeight: 850,
+    cursor: "not-allowed",
+  },
+  estadoVacio: {
+    minHeight: 350,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    textAlign: "center",
+  },
+  estadoIcono: {
+    fontSize: 54,
+  },
+  usuarioResumen: {
+    marginTop: 10,
+    padding: 18,
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+    border: "1px solid #bbf7d0",
+    borderRadius: 16,
+    background: "#f0fdf4",
+  },
+  avatarGrande: {
+    width: 64,
+    height: 64,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background: "#111827",
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: 900,
+  },
+  nombreUsuario: {
+    margin: "3px 0",
+  },
   accionesPermisos: {
-    marginBottom: 16,
+    margin: "18px 0",
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
   },
-  botonMiniVerde: {
-    padding: "9px 14px",
+  botonPerfil: {
+    padding: "10px 16px",
     border: "none",
-    borderRadius: 9,
-    background: "#16a34a",
+    borderRadius: 10,
+    background:
+      "linear-gradient(135deg,#15803d,#16a34a)",
     color: "#fff",
-    fontWeight: 800,
+    fontWeight: 850,
     cursor: "pointer",
   },
   botonMiniGris: {
-    padding: "9px 14px",
+    padding: "10px 16px",
     border: "none",
-    borderRadius: 9,
+    borderRadius: 10,
     background: "#6b7280",
     color: "#fff",
     fontWeight: 800,
     cursor: "pointer",
   },
-  grupoCard: {
-    marginBottom: 12,
-    padding: 14,
+  acordeones: {
+    display: "grid",
+    gap: 10,
+  },
+  acordeon: {
     border: "1px solid #e5e7eb",
-    borderRadius: 16,
+    borderRadius: 15,
+    overflow: "hidden",
     background: "#f9fafb",
   },
-  grupoTitulo: {
-    margin: "0 0 10px",
-    fontSize: 15,
+  acordeonCabecera: {
+    width: "100%",
+    padding: 15,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    border: "none",
+    background: "#fff",
+    color: "#111827",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+  acordeonFlecha: {
+    width: 30,
+    height: 30,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background: "#ecfdf5",
+    color: "#15803d",
+    fontSize: 22,
+    fontWeight: 900,
   },
   permisosCards: {
+    padding: 12,
     display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit,minmax(260px,1fr))",
     gap: 8,
   },
   permisoNormal: {
-    padding: 11,
-    display: "flex",
-    justifyContent: "space-between",
+    padding: 12,
+    display: "grid",
+    gridTemplateColumns: "28px 1fr 48px",
     alignItems: "center",
     gap: 10,
     border: "1px solid #e5e7eb",
@@ -1342,9 +1665,9 @@ const s = {
     cursor: "pointer",
   },
   permisoActivo: {
-    padding: 11,
-    display: "flex",
-    justifyContent: "space-between",
+    padding: 12,
+    display: "grid",
+    gridTemplateColumns: "28px 1fr 48px",
     alignItems: "center",
     gap: 10,
     border: "1px solid #86efac",
@@ -1355,9 +1678,9 @@ const s = {
     cursor: "pointer",
   },
   permisoBloqueado: {
-    padding: 11,
-    display: "flex",
-    justifyContent: "space-between",
+    padding: 12,
+    display: "grid",
+    gridTemplateColumns: "28px 1fr 48px",
     alignItems: "center",
     gap: 10,
     border: "1px dashed #9ca3af",
@@ -1366,6 +1689,9 @@ const s = {
     color: "#6b7280",
     textAlign: "left",
     cursor: "not-allowed",
+  },
+  permisoIcono: {
+    fontSize: 20,
   },
   permisoTexto: {
     display: "grid",
@@ -1397,5 +1723,17 @@ const s = {
     display: "block",
     borderRadius: "50%",
     background: "#fff",
+  },
+  botonVerde: {
+    width: "100%",
+    marginTop: 20,
+    minHeight: 50,
+    border: "none",
+    borderRadius: 12,
+    background: "#16a34a",
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: 850,
+    cursor: "pointer",
   },
 };
