@@ -458,9 +458,110 @@ export default function Usuarios() {
   }
 
   async function crearUsuario() {
-    alert(
-      "La creación de usuarios desde esta pantalla queda temporalmente bloqueada hasta conectarla correctamente con Supabase Auth."
+    if (guardando) return;
+
+    const nombreLimpio = nombre.trim();
+    const correoLimpio = correo.trim().toLowerCase();
+    const passwordLimpio = password;
+    const rolSeleccionado = roles.find(
+      (rol) => String(rol.id) === String(rolId)
     );
+
+    if (!nombreLimpio) {
+      alert("Ingrese el nombre del usuario.");
+      return;
+    }
+
+    if (!correoLimpio || !correoLimpio.includes("@")) {
+      alert("Ingrese un correo válido.");
+      return;
+    }
+
+    if (!passwordLimpio || passwordLimpio.length < 8) {
+      alert("La contraseña inicial debe tener mínimo 8 caracteres.");
+      return;
+    }
+
+    if (!rolSeleccionado) {
+      alert("Seleccione un rol válido.");
+      return;
+    }
+
+    setGuardando(true);
+
+    try {
+      const {
+        data: { session },
+        error: errorSesion,
+      } = await supabase.auth.getSession();
+
+      if (errorSesion || !session?.access_token) {
+        alert(
+          "No se encontró una sesión válida en Supabase Auth. Cierre sesión e ingrese nuevamente."
+        );
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke(
+        "crear-usuario-konax",
+        {
+          body: {
+            nombre: nombreLimpio,
+            correo: correoLimpio,
+            password: passwordLimpio,
+            rol: rolSeleccionado.nombre,
+            rol_id: rolSeleccionado.id,
+          },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      if (error) {
+        let detalle = error.message || "No se pudo crear el usuario.";
+
+        try {
+          const contexto = await error.context?.json();
+          if (contexto?.error) detalle = contexto.error;
+        } catch {
+          // Mantener el mensaje original.
+        }
+
+        alert(detalle);
+        return;
+      }
+
+      if (!data?.ok) {
+        alert(data?.error || "No se pudo crear el usuario.");
+        return;
+      }
+
+      alert(data.message || "Usuario creado correctamente.");
+
+      setNombre("");
+      setCorreo("");
+      setPassword("");
+
+      const administrador = roles.find(
+        (rol) => normalizar(rol.nombre) === "administrador"
+      );
+
+      setRolId(administrador?.id || roles[0]?.id || "");
+
+      await cargarUsuarios(empresaId);
+
+      if (data.usuario) {
+        await seleccionarUsuario(data.usuario);
+      }
+    } catch (error) {
+      alert(
+        "No se pudo crear el usuario: " +
+          (error?.message || "Error desconocido.")
+      );
+    } finally {
+      setGuardando(false);
+    }
   }
 
   async function gestionarUsuario() {
@@ -679,9 +780,9 @@ export default function Usuarios() {
           <div>
             <article style={s.card}>
               <h2 style={s.tituloSeccion}>Crear usuario</h2>
-              <p style={s.avisoSeguridad}>
-                Esta función queda temporalmente bloqueada mientras se
-                conecta con Supabase Auth.
+              <p style={s.avisoExito}>
+                El usuario se creará en Supabase Auth y quedará vinculado
+                automáticamente con esta empresa.
               </p>
 
               <div style={s.grid}>
@@ -695,9 +796,12 @@ export default function Usuarios() {
 
                 <Campo label="Correo">
                   <input
+                    type="email"
                     value={correo}
                     onChange={(e) => setCorreo(e.target.value)}
                     style={s.input}
+                    autoComplete="email"
+                    placeholder="usuario@empresa.com"
                   />
                 </Campo>
 
@@ -707,6 +811,8 @@ export default function Usuarios() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     style={s.input}
+                    autoComplete="new-password"
+                    placeholder="Mínimo 8 caracteres"
                   />
                 </Campo>
 
@@ -728,9 +834,10 @@ export default function Usuarios() {
               <button
                 type="button"
                 onClick={crearUsuario}
-                style={s.botonBloqueado}
+                disabled={guardando}
+                style={s.botonCrearUsuario}
               >
-                Crear usuario
+                {guardando ? "Creando usuario..." : "Crear usuario"}
               </button>
             </article>
 
@@ -1021,13 +1128,14 @@ const s = {
   },
   tituloSeccion: { margin: 0, color: "#111827" },
   textoSuave: { marginTop: 6, color: "#6b7280" },
-  avisoSeguridad: {
+  avisoExito: {
     padding: 12,
-    border: "1px solid #f59e0b",
+    border: "1px solid #86efac",
     borderRadius: 10,
-    background: "#fffbeb",
-    color: "#92400e",
+    background: "#ecfdf5",
+    color: "#166534",
     fontSize: 13,
+    lineHeight: 1.5,
   },
   modulosGrid: {
     marginTop: 16,
@@ -1112,16 +1220,17 @@ const s = {
     background: "#fff",
     fontSize: 14,
   },
-  botonBloqueado: {
+  botonCrearUsuario: {
     marginTop: 16,
-    minHeight: 44,
-    padding: "10px 20px",
+    minHeight: 46,
+    padding: "11px 22px",
     border: "none",
-    borderRadius: 10,
-    background: "#9ca3af",
+    borderRadius: 11,
+    background: "linear-gradient(135deg,#16a34a,#15803d)",
     color: "#fff",
-    fontWeight: 800,
+    fontWeight: 850,
     cursor: "pointer",
+    boxShadow: "0 8px 18px rgba(22,163,74,.22)",
   },
   usuariosLista: {
     marginTop: 14,
