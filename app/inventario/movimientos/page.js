@@ -537,9 +537,16 @@ export default function MovimientosInventario() {
           <article style={s.card}>
             <Cabecera
               titulo="Nuevo producto"
-              texto="Registra el producto y su entrada inicial al inventario."
+              texto="Registra primero los datos del artículo y luego la información de compra y entrada inicial."
               numero="01"
             />
+
+            <div style={s.bloqueSeccion}>
+              <h3 style={s.subTitulo}>Datos del producto</h3>
+              <p style={s.ayuda}>
+                Información básica para identificar el artículo en Inventario y Caja.
+              </p>
+            </div>
 
             <div style={s.grid}>
               <Campo label="Código *">
@@ -582,7 +589,19 @@ export default function MovimientosInventario() {
                 />
               </Campo>
 
-              <Campo label="Precio compra">
+            </div>
+
+            <div style={s.separador} />
+
+            <div style={s.bloqueSeccion}>
+              <h3 style={s.subTitulo}>Precios y control de stock</h3>
+              <p style={s.ayuda}>
+                Define los precios y las cantidades iniciales del producto.
+              </p>
+            </div>
+
+            <div style={s.grid}>
+              <Campo label="Precio de compra unitario">
                 <input
                   type="number"
                   value={formProducto.precio_compra}
@@ -593,7 +612,7 @@ export default function MovimientosInventario() {
                 />
               </Campo>
 
-              <Campo label="Precio venta">
+              <Campo label="Precio de venta contado">
                 <input
                   type="number"
                   value={formProducto.precio_venta}
@@ -604,7 +623,7 @@ export default function MovimientosInventario() {
                 />
               </Campo>
 
-              <Campo label="Precio crédito">
+              <Campo label="Precio de venta a crédito">
                 <input
                   type="number"
                   value={formProducto.precio_credito}
@@ -637,7 +656,19 @@ export default function MovimientosInventario() {
                 />
               </Campo>
 
-              <Campo label="Factura / Orden *">
+            </div>
+
+            <div style={s.separador} />
+
+            <div style={s.bloqueSeccion}>
+              <h3 style={s.subTitulo}>Compra y entrada inicial</h3>
+              <p style={s.ayuda}>
+                Relaciona el stock inicial con la factura, orden de compra o consignación.
+              </p>
+            </div>
+
+            <div style={s.grid}>
+              <Campo label="N.° factura u orden *">
                 <input
                   value={formProducto.numero_factura}
                   onChange={(e) =>
@@ -647,7 +678,7 @@ export default function MovimientosInventario() {
                 />
               </Campo>
 
-              <Campo label="Fecha de compra">
+              <Campo label="Fecha de compra o recepción">
                 <input
                   type="date"
                   value={formProducto.fecha_compra}
@@ -658,7 +689,7 @@ export default function MovimientosInventario() {
                 />
               </Campo>
 
-              <Campo label="Condición">
+              <Campo label="Condición de compra">
                 <select
                   value={formProducto.condicion_compra}
                   onChange={(e) =>
@@ -673,7 +704,7 @@ export default function MovimientosInventario() {
                 </select>
               </Campo>
 
-              <Campo label="Total factura">
+              <Campo label="Total de la factura u orden">
                 <input
                   type="number"
                   value={formProducto.total_factura}
@@ -684,7 +715,7 @@ export default function MovimientosInventario() {
                 />
               </Campo>
 
-              <Campo label="Fecha vencimiento">
+              <Campo label="Fecha límite de pago al proveedor">
                 <input
                   type="date"
                   value={formProducto.fecha_vencimiento_pago}
@@ -695,19 +726,30 @@ export default function MovimientosInventario() {
                     )
                   }
                   style={s.input}
+                  disabled={
+                    formProducto.condicion_compra === "Contado" ||
+                    formProducto.condicion_compra === "Consignación"
+                  }
                 />
+                <span style={s.ayudaCampo}>
+                  Solo aplica cuando la compra fue a crédito.
+                </span>
               </Campo>
             </div>
 
             <div style={s.gridInferior}>
-              <Campo label="Descripción">
+              <Campo label="Descripción del producto">
                 <textarea
                   value={formProducto.descripcion}
                   onChange={(e) =>
                     actualizarProducto("descripcion", e.target.value)
                   }
                   style={s.textarea}
+                  placeholder="Ej. Sala de 3 piezas, color gris, tela antimanchas, incluye cojines."
                 />
+                <span style={s.ayudaCampo}>
+                  Coloque características que ayuden a identificar o vender el producto.
+                </span>
               </Campo>
 
               <Campo label="Foto del producto">
@@ -728,7 +770,7 @@ export default function MovimientosInventario() {
               </Campo>
             </div>
 
-            <Campo label="Observación de compra">
+            <Campo label="Observación interna de la compra">
               <textarea
                 value={formProducto.observacion_compra}
                 onChange={(e) =>
@@ -738,7 +780,11 @@ export default function MovimientosInventario() {
                   )
                 }
                 style={s.textarea}
+                placeholder="Ej. Mercancía incompleta, factura pendiente, producto en consignación o acuerdo especial con el proveedor."
               />
+              <span style={s.ayudaCampo}>
+                Esta nota es interna y se refiere a la compra, no a las características del producto.
+              </span>
             </Campo>
 
             <div style={s.acciones}>
@@ -837,7 +883,7 @@ export default function MovimientosInventario() {
                 />
               </Campo>
 
-              <Campo label="Condición">
+              <Campo label="Condición de compra">
                 <select
                   value={condicionCompra}
                   onChange={(e) => setCondicionCompra(e.target.value)}
@@ -908,6 +954,7 @@ export default function MovimientosInventario() {
           </article>
         )}
 
+        {modo === "movimiento" && (
         <article style={s.card}>
           <Cabecera
             titulo="Historial de movimientos"
@@ -973,6 +1020,7 @@ export default function MovimientosInventario() {
             </table>
           </div>
         </article>
+        )}
       </div>
     </main>
   );
@@ -1147,6 +1195,30 @@ const s = {
     background: "#e5f5eb",
     color: "#176b42",
     fontWeight: 900,
+  },
+  bloqueSeccion: {
+    marginBottom: 14,
+  },
+  subTitulo: {
+    margin: 0,
+    color: "#173c2a",
+    fontSize: 18,
+  },
+  ayuda: {
+    margin: "5px 0 0",
+    color: "#6b776f",
+    fontSize: 12,
+    lineHeight: 1.5,
+  },
+  ayudaCampo: {
+    color: "#738078",
+    fontSize: 11,
+    lineHeight: 1.45,
+  },
+  separador: {
+    height: 1,
+    margin: "28px 0",
+    background: "#e2ebe5",
   },
   grid: {
     display: "grid",
