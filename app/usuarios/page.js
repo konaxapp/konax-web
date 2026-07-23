@@ -4,6 +4,115 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
+const MODULOS = [
+  ["dashboard", "Inicio / Resumen", "Panel", "📊"],
+  ["reportes", "Reportes", "Panel", "📚"],
+  ["clientes", "Clientes", "Clientes", "👥"],
+  ["vista_cliente", "Vista Cliente", "Clientes", "📄"],
+  ["creditos", "Créditos", "Cobros", "💳"],
+  ["cobranza", "Cobranza", "Cobros", "📞"],
+  ["dashboard_cobros", "Centro de Cobranza", "Cobros", "📊"],
+  ["gestor_cobros", "Mi cartera de cobro", "Cobros", "💼"],
+  ["caja", "Caja", "Caja", "💵"],
+  ["control_caja", "Control de Caja", "Caja", "🏦"],
+  ["gastos", "Gastos", "Caja", "🧮"],
+  ["recargos", "Recargos", "Caja", "⚠️"],
+  ["inventario", "Inventario", "Ventas", "📦"],
+  ["movimientos_inventario", "Movimientos de inventario", "Ventas", "🔄"],
+  ["ventas", "Ventas", "Ventas", "🛒"],
+  ["dashboard_ventas", "Centro de Ventas", "Ventas", "📈"],
+  ["suscripciones", "Suscripciones", "Ventas", "🔁"],
+  ["usuarios", "Usuarios y Roles", "Administración", "🔐"],
+  ["configuracion", "Configuración", "Administración", "⚙️"],
+].map(([codigo, nombre, grupo, icono]) => ({
+  codigo,
+  nombre,
+  grupo,
+  icono,
+}));
+
+function normalizar(valor) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_");
+}
+
+function construirModulosPorPlan(codigoPlan) {
+  const codigo = normalizar(codigoPlan);
+  const base = Object.fromEntries(
+    MODULOS.map((modulo) => [modulo.codigo, false])
+  );
+
+  base.dashboard = true;
+  base.usuarios = true;
+  base.configuracion = true;
+
+  if (codigo === "cobros") {
+    return {
+      ...base,
+      clientes: true,
+      vista_cliente: true,
+      caja: true,
+      cobranza: true,
+      dashboard_cobros: true,
+      gestor_cobros: true,
+      reportes: true,
+    };
+  }
+
+  if (codigo === "ventas_gestion") {
+    return {
+      ...base,
+      clientes: true,
+      vista_cliente: true,
+      creditos: true,
+      caja: true,
+      control_caja: true,
+      cobranza: true,
+      dashboard_cobros: true,
+      gestor_cobros: true,
+      reportes: true,
+      inventario: true,
+      movimientos_inventario: true,
+      ventas: true,
+      dashboard_ventas: true,
+      gastos: true,
+      recargos: true,
+      suscripciones: true,
+    };
+  }
+
+  if (codigo === "pro") {
+    return Object.fromEntries(
+      MODULOS.map((modulo) => [modulo.codigo, true])
+    );
+  }
+
+  return base;
+}
+
+const COLUMNAS_EMPRESA = {
+  clientes: "clientes",
+  vista_cliente: "vista_cliente",
+  creditos: "venta_credito",
+  caja: "caja",
+  control_caja: "control_caja",
+  cobranza: "cobranza",
+  dashboard_cobros: "dashboard_cobros",
+  gestor_cobros: "cobranza",
+  reportes: "dashboard_cobros",
+  inventario: "inventario",
+  movimientos_inventario: "inventario",
+  ventas: "venta_credito",
+  dashboard_ventas: "dashboard_ventas",
+  suscripciones: "suscripciones",
+  recargos: "recargos",
+  gastos: "egresos",
+};
+
 export default function Usuarios() {
   const router = useRouter();
 
@@ -11,85 +120,23 @@ export default function Usuarios() {
   const [empresaNombre, setEmpresaNombre] = useState("");
   const [planNombre, setPlanNombre] = useState("");
   const [planCodigo, setPlanCodigo] = useState("");
-  const [modulosPlan, setModulosPlan] = useState({});
-  const [adminMasterKonax, setAdminMasterKonax] = useState(false);
+
+  const [modulosPermitidos, setModulosPermitidos] = useState({});
+  const [modulosEmpresa, setModulosEmpresa] = useState({});
+
+  const [roles, setRoles] = useState([]);
+  const [usuarios, setUsuarios] = useState([]);
+  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
+  const [permisosUsuario, setPermisosUsuario] = useState({});
 
   const [nombre, setNombre] = useState("");
   const [correo, setCorreo] = useState("");
   const [password, setPassword] = useState("");
   const [rolId, setRolId] = useState("");
+  const [busqueda, setBusqueda] = useState("");
 
-  const [roles, setRoles] = useState([]);
-  const [usuarios, setUsuarios] = useState([]);
-  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
-  const [busquedaUsuario, setBusquedaUsuario] = useState("");
-  const [permisosUsuario, setPermisosUsuario] = useState({});
-  const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
-
-  const gruposPermisos = [
-    {
-      titulo: "Panel",
-      icono: "📊",
-      permisos: [
-        { codigo: "dashboard", nombre: "Inicio / Resumen" },
-        { codigo: "reportes", nombre: "Reportes" },
-      ],
-    },
-    {
-      titulo: "Clientes",
-      icono: "👥",
-      permisos: [
-        { codigo: "clientes", nombre: "Clientes" },
-        { codigo: "vista_cliente", nombre: "Ficha del cliente" },
-      ],
-    },
-    {
-      titulo: "Créditos y Cobranza",
-      icono: "💳",
-      permisos: [
-        { codigo: "creditos", nombre: "Créditos" },
-        { codigo: "cobranza", nombre: "Administrar cobranza" },
-        { codigo: "gestor_cobros", nombre: "Mi cartera de cobro" },
-        { codigo: "abonos", nombre: "Registrar abonos" },
-      ],
-    },
-    {
-      titulo: "Caja y Finanzas",
-      icono: "💵",
-      permisos: [
-        { codigo: "caja", nombre: "Caja" },
-        { codigo: "control_caja", nombre: "Control de caja" },
-        { codigo: "gastos", nombre: "Gastos" },
-        { codigo: "recargos", nombre: "Recargos opcionales" },
-      ],
-    },
-    {
-      titulo: "Inventario y Ventas",
-      icono: "📦",
-      permisos: [
-        { codigo: "inventario", nombre: "Inventario" },
-        {
-          codigo: "movimientos_inventario",
-          nombre: "Movimientos de inventario",
-        },
-        { codigo: "ventas", nombre: "Ventas" },
-      ],
-    },
-    {
-      titulo: "Administración",
-      icono: "⚙️",
-      permisos: [
-        { codigo: "suscripciones", nombre: "Suscripciones" },
-        { codigo: "usuarios", nombre: "Usuarios" },
-        { codigo: "configuracion", nombre: "Configuración" },
-      ],
-    },
-  ];
-
-  const permisosDisponibles = gruposPermisos.flatMap(
-    (grupo) => grupo.permisos
-  );
+  const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
     inicializar();
@@ -100,50 +147,39 @@ export default function Usuarios() {
       localStorage.getItem("empresaAdminCreadaId") ||
       localStorage.getItem("empresaId");
 
-    const nombreEmpresa =
-      localStorage.getItem("empresaAdminCreadaNombre") ||
-      localStorage.getItem("empresaNombre");
-
-    const rolActual =
-      localStorage.getItem("adminKonaxRol") ||
-      localStorage.getItem("usuarioRol") ||
-      localStorage.getItem("rolUsuario") ||
-      "";
-
-    const correoActual =
-      localStorage.getItem("adminKonaxCorreo") ||
-      localStorage.getItem("usuarioCorreo") ||
-      localStorage.getItem("correoUsuario") ||
-      "";
-
-    const rolNormalizado = String(rolActual).toLowerCase().trim();
-    const correoNormalizado = String(correoActual).toLowerCase().trim();
-
-    const esMaster =
-      ["superadmin", "admin master", "administrador master"].includes(
-        rolNormalizado
-      ) || correoNormalizado.includes("admin");
-
-    setAdminMasterKonax(esMaster);
-
     if (!id) {
       alert("No hay empresa seleccionada.");
-      router.replace("/empresas");
+      router.replace("/login");
       return;
     }
 
     setEmpresaId(id);
-    setEmpresaNombre(nombreEmpresa || "Empresa seleccionada");
-
-    await cargarTodo(id);
-  }
-
-  async function cargarTodo(id) {
     setCargando(true);
 
+    const { data: empresa, error: errorEmpresa } = await supabase
+      .from("empresas")
+      .select("id, nombre, plan_nombre, plan_codigo")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (errorEmpresa || !empresa) {
+      alert(
+        "No fue posible cargar la empresa: " +
+          (errorEmpresa?.message || "Empresa no encontrada.")
+      );
+      setCargando(false);
+      return;
+    }
+
+    const permitidos = construirModulosPorPlan(empresa.plan_codigo);
+
+    setEmpresaNombre(empresa.nombre || "Empresa");
+    setPlanNombre(empresa.plan_nombre || "Sin plan");
+    setPlanCodigo(empresa.plan_codigo || "");
+    setModulosPermitidos(permitidos);
+
     await Promise.all([
-      cargarEmpresa(id),
-      cargarModulosPlan(id),
+      cargarModulosEmpresa(id, permitidos),
       cargarRoles(),
       cargarUsuarios(id),
     ]);
@@ -151,257 +187,53 @@ export default function Usuarios() {
     setCargando(false);
   }
 
-  function construirModulosPorPlan(codigoPlan) {
-    const codigo = String(codigoPlan || "").toLowerCase().trim();
-
-    const base = {
-      dashboard: true,
-      reportes: false,
-      clientes: false,
-      vista_cliente: false,
-      creditos: false,
-      cobranza: false,
-      gestor_cobros: false,
-      abonos: false,
-      caja: false,
-      control_caja: false,
-      gastos: false,
-      recargos: false,
-      inventario: false,
-      movimientos_inventario: false,
-      ventas: false,
-      suscripciones: false,
-      dashboard_ventas: false,
-      usuarios: false,
-      configuracion: false,
-    };
-
-    if (codigo === "cobros") {
-      return {
-        ...base,
-        reportes: true,
-        clientes: true,
-        vista_cliente: true,
-        creditos: true,
-        cobranza: true,
-        gestor_cobros: true,
-        abonos: true,
-        caja: true,
-        control_caja: true,
-        usuarios: true,
-        configuracion: true,
-      };
-    }
-
-    if (codigo === "ventas_gestion") {
-      return {
-        ...base,
-        reportes: true,
-        clientes: true,
-        vista_cliente: true,
-        caja: true,
-        control_caja: true,
-        gastos: true,
-
-        /*
-          Recargos está incluido en el plan, pero es opcional:
-          cada administrador puede activarlo o desactivarlo
-          para cada usuario desde esta pantalla.
-        */
-        recargos: true,
-
-        inventario: true,
-        movimientos_inventario: true,
-        ventas: true,
-        dashboard_ventas: true,
-        suscripciones: true,
-        usuarios: true,
-        configuracion: true,
-
-        creditos: false,
-        cobranza: false,
-        gestor_cobros: false,
-        abonos: false,
-      };
-    }
-
-    if (codigo === "pro") {
-      return {
-        ...base,
-        reportes: true,
-        clientes: true,
-        vista_cliente: true,
-        creditos: true,
-        cobranza: true,
-        gestor_cobros: true,
-        abonos: true,
-        caja: true,
-        control_caja: true,
-        gastos: true,
-        recargos: true,
-        inventario: true,
-        movimientos_inventario: true,
-        ventas: true,
-        suscripciones: true,
-        dashboard_ventas: true,
-        usuarios: true,
-        configuracion: true,
-      };
-    }
-
-    return base;
-  }
-
-  async function cargarEmpresa(id = empresaId) {
-    if (!id) return;
-
+  async function cargarModulosEmpresa(id, permitidos) {
     const { data, error } = await supabase
-      .from("empresas")
-      .select("nombre, plan_nombre, plan_codigo")
-      .eq("id", id)
+      .from("empresa_modulos")
+      .select("*")
+      .eq("empresa_id", id)
       .maybeSingle();
 
     if (error) {
-      alert("Error cargando empresa: " + error.message);
+      alert("Error cargando módulos: " + error.message);
+      setModulosEmpresa(permitidos);
       return;
     }
 
-    if (!data) return;
+    const mapa = {};
 
-    setEmpresaNombre(data.nombre || "Empresa seleccionada");
-    setPlanNombre(data.plan_nombre || "Sin plan");
-    setPlanCodigo(data.plan_codigo || "");
-  }
+    MODULOS.forEach((modulo) => {
+      const permitido = Boolean(permitidos[modulo.codigo]);
 
-  async function cargarModulosPlan(id = empresaId) {
-    if (!id) return;
-
-    const { data: empresa, error: errorEmpresa } = await supabase
-      .from("empresas")
-      .select("plan_codigo, plan_nombre")
-      .eq("id", id)
-      .maybeSingle();
-
-    if (errorEmpresa) {
-      alert(
-        "Error cargando plan de empresa: " +
-          errorEmpresa.message
-      );
-      setModulosPlan(construirModulosPorPlan(""));
-      return;
-    }
-
-    const codigoPlan = String(
-      empresa?.plan_codigo || ""
-    )
-      .toLowerCase()
-      .trim();
-
-    const modulosBase =
-      construirModulosPorPlan(codigoPlan);
-
-    /*
-      Esta tabla es opcional. Si tiene filas, permite
-      activar o desactivar módulos para toda la empresa.
-      Si no existe una fila para un módulo, se conserva
-      lo definido por el plan.
-    */
-    const { data, error } = await supabase
-      .from("modulos_empresa")
-      .select("modulo, activo")
-      .eq("empresa_id", id);
-
-    if (error) {
-      setModulosPlan(modulosBase);
-      return;
-    }
-
-    const mapaTabla = {};
-
-    (data || []).forEach((item) => {
-      mapaTabla[item.modulo] = Boolean(item.activo);
-    });
-
-    const mapaFinal = {};
-
-    Object.keys(modulosBase).forEach((modulo) => {
-      const incluidoEnPlan = Boolean(
-        modulosBase[modulo]
-      );
-
-      if (!incluidoEnPlan) {
-        mapaFinal[modulo] = false;
+      if (!permitido) {
+        mapa[modulo.codigo] = false;
         return;
       }
 
       if (
         ["dashboard", "usuarios", "configuracion"].includes(
-          modulo
+          modulo.codigo
         )
       ) {
-        mapaFinal[modulo] = true;
+        mapa[modulo.codigo] = true;
         return;
       }
 
-      mapaFinal[modulo] =
-        typeof mapaTabla[modulo] === "boolean"
-          ? mapaTabla[modulo]
-          : incluidoEnPlan;
+      if (!data) {
+        mapa[modulo.codigo] = true;
+        return;
+      }
+
+      const columna = COLUMNAS_EMPRESA[modulo.codigo];
+
+      mapa[modulo.codigo] =
+        columna &&
+        Object.prototype.hasOwnProperty.call(data, columna)
+          ? Boolean(data[columna])
+          : true;
     });
 
-    /*
-      Compatibilidad con configuraciones antiguas:
-      Suscripciones y Recargos forman parte de
-      Ventas y Gestión. Recargos sigue siendo opcional
-      por usuario y puede apagarse desde sus permisos.
-    */
-    if (codigoPlan === "ventas_gestion") {
-      mapaFinal.dashboard = true;
-      mapaFinal.reportes = true;
-      mapaFinal.clientes = true;
-      mapaFinal.vista_cliente = true;
-      mapaFinal.caja = true;
-      mapaFinal.control_caja = true;
-      mapaFinal.gastos = true;
-      mapaFinal.recargos = true;
-      mapaFinal.inventario = true;
-      mapaFinal.movimientos_inventario = true;
-      mapaFinal.ventas = true;
-      mapaFinal.dashboard_ventas = true;
-      mapaFinal.suscripciones = true;
-      mapaFinal.usuarios = true;
-      mapaFinal.configuracion = true;
-
-      mapaFinal.creditos = false;
-      mapaFinal.cobranza = false;
-      mapaFinal.gestor_cobros = false;
-      mapaFinal.abonos = false;
-    }
-
-    if (codigoPlan === "cobros") {
-      mapaFinal.dashboard = true;
-      mapaFinal.reportes = true;
-      mapaFinal.clientes = true;
-      mapaFinal.vista_cliente = true;
-      mapaFinal.creditos = true;
-      mapaFinal.cobranza = true;
-      mapaFinal.gestor_cobros = true;
-      mapaFinal.abonos = true;
-      mapaFinal.caja = true;
-      mapaFinal.control_caja = true;
-      mapaFinal.usuarios = true;
-      mapaFinal.configuracion = true;
-
-      mapaFinal.gastos = false;
-      mapaFinal.recargos = false;
-      mapaFinal.inventario = false;
-      mapaFinal.movimientos_inventario = false;
-      mapaFinal.ventas = false;
-      mapaFinal.suscripciones = false;
-      mapaFinal.dashboard_ventas = false;
-    }
-
-    setModulosPlan(mapaFinal);
+    setModulosEmpresa(mapa);
   }
 
   async function cargarRoles() {
@@ -419,10 +251,7 @@ export default function Usuarios() {
     setRoles(lista);
 
     const administrador = lista.find(
-      (rol) =>
-        String(rol.nombre || "")
-          .toLowerCase()
-          .trim() === "administrador"
+      (rol) => normalizar(rol.nombre) === "administrador"
     );
 
     setRolId(administrador?.id || lista[0]?.id || "");
@@ -438,9 +267,7 @@ export default function Usuarios() {
       .order("created_at", { ascending: true });
 
     if (error) {
-      alert(
-        "Error cargando usuarios: " + error.message
-      );
+      alert("Error cargando usuarios: " + error.message);
       return;
     }
 
@@ -449,66 +276,124 @@ export default function Usuarios() {
 
   async function seleccionarUsuario(usuario) {
     setUsuarioSeleccionado(usuario);
-    setBusquedaUsuario(usuario.nombre || "");
-    await cargarPermisosUsuario(usuario.id);
-  }
 
-  async function cargarPermisosUsuario(usuarioId) {
     const { data, error } = await supabase
       .from("permisos_usuarios_empresa")
       .select("permiso, activo")
       .eq("empresa_id", empresaId)
-      .eq("usuario_id", usuarioId);
+      .eq("usuario_id", usuario.id);
 
     if (error) {
+      alert("Error cargando permisos: " + error.message);
+      return;
+    }
+
+    const mapa = {};
+    (data || []).forEach((item) => {
+      mapa[item.permiso] = Boolean(item.activo);
+    });
+
+    setPermisosUsuario(mapa);
+  }
+
+  async function alternarModuloEmpresa(modulo) {
+    const permitido = Boolean(modulosPermitidos[modulo.codigo]);
+
+    if (!permitido) {
+      alert(`"${modulo.nombre}" no está incluido en ${planNombre}.`);
+      return;
+    }
+
+    if (
+      ["dashboard", "usuarios", "configuracion"].includes(
+        modulo.codigo
+      )
+    ) {
+      alert("Este módulo es obligatorio.");
+      return;
+    }
+
+    const columna = COLUMNAS_EMPRESA[modulo.codigo];
+
+    if (!columna) {
       alert(
-        "Error cargando permisos del usuario: " +
-          error.message
+        `El módulo "${modulo.nombre}" no tiene columna asociada en empresa_modulos.`
       );
       return;
     }
 
-    const permisosArmados = {};
+    const nuevoEstado = !Boolean(modulosEmpresa[modulo.codigo]);
 
-    (data || []).forEach((permiso) => {
-      permisosArmados[permiso.permiso] =
-        Boolean(permiso.activo);
+    const { error } = await supabase
+      .from("empresa_modulos")
+      .upsert(
+        {
+          empresa_id: empresaId,
+          [columna]: nuevoEstado,
+        },
+        { onConflict: "empresa_id" }
+      );
+
+    if (error) {
+      alert("Error actualizando módulo: " + error.message);
+      return;
+    }
+
+    const relacionados = Object.entries(COLUMNAS_EMPRESA)
+      .filter(([, columnaRelacionada]) => columnaRelacionada === columna)
+      .map(([codigo]) => codigo);
+
+    setModulosEmpresa((previo) => {
+      const siguiente = { ...previo };
+      relacionados.forEach((codigo) => {
+        siguiente[codigo] = nuevoEstado;
+      });
+      return siguiente;
     });
 
-    setPermisosUsuario(permisosArmados);
+    if (!nuevoEstado) {
+      const { error: errorPermisos } = await supabase
+        .from("permisos_usuarios_empresa")
+        .update({
+          activo: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("empresa_id", empresaId)
+        .in("permiso", relacionados);
+
+      if (errorPermisos) {
+        console.error(errorPermisos.message);
+      }
+
+      if (usuarioSeleccionado) {
+        setPermisosUsuario((previo) => {
+          const siguiente = { ...previo };
+          relacionados.forEach((codigo) => {
+            siguiente[codigo] = false;
+          });
+          return siguiente;
+        });
+      }
+    }
   }
 
-  function esAdminMasterKonax() {
-    return Boolean(adminMasterKonax);
-  }
-
-  function moduloPermitidoPorPlan(codigo) {
-    if (esAdminMasterKonax()) return true;
-    if (codigo === "dashboard") return true;
-    return Boolean(modulosPlan?.[codigo]);
-  }
-
-  function permisoActivo(codigo) {
-    return Boolean(permisosUsuario?.[codigo]);
-  }
-
-  async function alternarPermiso(permiso) {
+  async function alternarPermiso(modulo) {
     if (!usuarioSeleccionado) {
       alert("Seleccione un usuario.");
       return;
     }
 
-    if (!moduloPermitidoPorPlan(permiso.codigo)) {
-      alert(
-        `El módulo "${permiso.nombre}" no está incluido en el plan ${
-          planNombre || "actual"
-        }.`
-      );
+    if (!modulosPermitidos[modulo.codigo]) {
+      alert(`"${modulo.nombre}" no está incluido en el plan.`);
       return;
     }
 
-    const nuevoEstado =
-      !permisoActivo(permiso.codigo);
+    if (!modulosEmpresa[modulo.codigo]) {
+      alert(`"${modulo.nombre}" está desactivado para la empresa.`);
+      return;
+    }
+
+    const nuevoEstado = !Boolean(permisosUsuario[modulo.codigo]);
 
     const { error } = await supabase
       .from("permisos_usuarios_empresa")
@@ -516,27 +401,21 @@ export default function Usuarios() {
         {
           empresa_id: empresaId,
           usuario_id: usuarioSeleccionado.id,
-          permiso: permiso.codigo,
+          permiso: modulo.codigo,
           activo: nuevoEstado,
           updated_at: new Date().toISOString(),
         },
-        {
-          onConflict:
-            "empresa_id,usuario_id,permiso",
-        }
+        { onConflict: "empresa_id,usuario_id,permiso" }
       );
 
     if (error) {
-      alert(
-        "Error actualizando permiso: " +
-          error.message
-      );
+      alert("Error actualizando permiso: " + error.message);
       return;
     }
 
     setPermisosUsuario((previo) => ({
       ...previo,
-      [permiso.codigo]: nuevoEstado,
+      [modulo.codigo]: nuevoEstado,
     }));
   }
 
@@ -546,188 +425,106 @@ export default function Usuarios() {
       return;
     }
 
-    const permitidos = permisosDisponibles.filter(
-      (permiso) =>
-        esAdminMasterKonax() ||
-        moduloPermitidoPorPlan(permiso.codigo)
-    );
-
-    const bloqueados = esAdminMasterKonax()
-      ? []
-      : permisosDisponibles.filter(
-          (permiso) =>
-            !moduloPermitidoPorPlan(
-              permiso.codigo
-            )
-        );
-
-    const registros = [
-      ...permitidos.map((permiso) => ({
-        empresa_id: empresaId,
-        usuario_id: usuarioSeleccionado.id,
-        permiso: permiso.codigo,
-        activo,
-        updated_at: new Date().toISOString(),
-      })),
-      ...bloqueados.map((permiso) => ({
-        empresa_id: empresaId,
-        usuario_id: usuarioSeleccionado.id,
-        permiso: permiso.codigo,
-        activo: false,
-        updated_at: new Date().toISOString(),
-      })),
-    ];
+    const registros = MODULOS.map((modulo) => ({
+      empresa_id: empresaId,
+      usuario_id: usuarioSeleccionado.id,
+      permiso: modulo.codigo,
+      activo:
+        activo &&
+        Boolean(modulosPermitidos[modulo.codigo]) &&
+        Boolean(modulosEmpresa[modulo.codigo]),
+      updated_at: new Date().toISOString(),
+    }));
 
     const { error } = await supabase
       .from("permisos_usuarios_empresa")
       .upsert(registros, {
-        onConflict:
-          "empresa_id,usuario_id,permiso",
+        onConflict: "empresa_id,usuario_id,permiso",
       });
 
     if (error) {
-      alert(
-        "Error actualizando permisos: " +
-          error.message
-      );
+      alert("Error actualizando permisos: " + error.message);
       return;
     }
 
-    const nuevos = {};
-
-    permitidos.forEach((permiso) => {
-      nuevos[permiso.codigo] = activo;
+    const mapa = {};
+    registros.forEach((registro) => {
+      mapa[registro.permiso] = registro.activo;
     });
 
-    bloqueados.forEach((permiso) => {
-      nuevos[permiso.codigo] = false;
-    });
-
-    setPermisosUsuario(nuevos);
-  }
-
-  function limpiarFormulario() {
-    setNombre("");
-    setCorreo("");
-    setPassword("");
-
-    const administrador = roles.find(
-      (rol) =>
-        String(rol.nombre || "")
-          .toLowerCase()
-          .trim() === "administrador"
-    );
-
-    setRolId(administrador?.id || roles[0]?.id || "");
+    setPermisosUsuario(mapa);
   }
 
   async function crearUsuario() {
-    if (!empresaId) {
-      alert("No hay empresa seleccionada.");
-      return;
-    }
+    alert(
+      "La creación de usuarios desde esta pantalla queda temporalmente bloqueada hasta conectarla correctamente con Supabase Auth."
+    );
+  }
 
-    if (
-      !nombre.trim() ||
-      !correo.trim() ||
-      !password.trim() ||
-      !rolId
-    ) {
-      alert(
-        "Complete nombre, correo, contraseña y rol."
-      );
-      return;
-    }
+  async function gestionarUsuario() {
+    alert(
+      "La eliminación también queda bloqueada temporalmente. Debe desactivarse o eliminarse la cuenta correspondiente en Supabase Auth."
+    );
+  }
 
-    const rolSeleccionado = roles.find(
-      (rol) => String(rol.id) === String(rolId)
+  async function finalizarConfiguracion() {
+    const administrador = usuarios.find(
+      (usuario) =>
+        normalizar(usuario.rol) === "administrador" &&
+        normalizar(usuario.estado) === "activo"
     );
 
-    if (!rolSeleccionado) {
-      alert("Seleccione un rol válido.");
+    if (!administrador) {
+      alert("Debe existir al menos un administrador activo.");
       return;
     }
 
     setGuardando(true);
 
     try {
-      const { data, error } = await supabase
-        .from("usuarios")
-        .insert([
-          {
-            empresa_id: empresaId,
-            nombre: nombre.trim(),
-            correo: correo
-              .trim()
-              .toLowerCase(),
-            password: password.trim(),
-            rol_id: rolSeleccionado.id,
-            rol: rolSeleccionado.nombre,
-            estado: "Activo",
-          },
-        ])
-        .select()
-        .single();
+      const payload = {
+        empresa_id: empresaId,
+        clientes: Boolean(modulosEmpresa.clientes),
+        vista_cliente: Boolean(modulosEmpresa.vista_cliente),
+        venta_credito:
+          Boolean(modulosEmpresa.creditos) ||
+          Boolean(modulosEmpresa.ventas),
+        caja: Boolean(modulosEmpresa.caja),
+        control_caja: Boolean(modulosEmpresa.control_caja),
+        cobranza: Boolean(modulosEmpresa.cobranza),
+        dashboard_cobros: Boolean(modulosEmpresa.dashboard_cobros),
+        inventario:
+          Boolean(modulosEmpresa.inventario) ||
+          Boolean(modulosEmpresa.movimientos_inventario),
+        dashboard_ventas: Boolean(modulosEmpresa.dashboard_ventas),
+        suscripciones: Boolean(modulosEmpresa.suscripciones),
+        recargos: Boolean(modulosEmpresa.recargos),
+        egresos: Boolean(modulosEmpresa.gastos),
+      };
 
-      if (error) throw error;
+      const { error: errorModulos } = await supabase
+        .from("empresa_modulos")
+        .upsert(payload, { onConflict: "empresa_id" });
 
-      const esAdministrador =
-        String(rolSeleccionado.nombre || "")
-          .toLowerCase()
-          .trim() === "administrador";
+      if (errorModulos) throw errorModulos;
 
-      const permisosIniciales =
-        permisosDisponibles.map((permiso) => ({
-          empresa_id: empresaId,
-          usuario_id: data.id,
-          permiso: permiso.codigo,
-          activo:
-            esAdministrador &&
-            moduloPermitidoPorPlan(
-              permiso.codigo
-            ),
-          updated_at: new Date().toISOString(),
-        }));
+      const { error: errorEmpresa } = await supabase
+        .from("empresas")
+        .update({ configuracion_completa: true })
+        .eq("id", empresaId);
 
-      const { error: errorPermisos } =
-        await supabase
-          .from("permisos_usuarios_empresa")
-          .upsert(permisosIniciales, {
-            onConflict:
-              "empresa_id,usuario_id,permiso",
-          });
+      if (errorEmpresa) throw errorEmpresa;
 
-      if (errorPermisos) {
-        throw new Error(
-          "Usuario creado, pero hubo un error asignando permisos: " +
-            errorPermisos.message
-        );
-      }
+      localStorage.setItem("empresaId", empresaId);
+      localStorage.setItem("empresaNombre", empresaNombre);
+      localStorage.setItem("planCodigo", planCodigo);
+      localStorage.setItem("planNombre", planNombre);
 
-      await supabase
-        .from("bitacora_konax")
-        .insert([
-          {
-            empresa_id: empresaId,
-            empresa_nombre: empresaNombre,
-            accion: "Usuario creado",
-            descripcion:
-              `Se creó el usuario ${nombre.trim()} con rol ` +
-              `${rolSeleccionado.nombre} para ${empresaNombre}.`,
-            estado_anterior: null,
-            estado_nuevo: "Usuario activo",
-            usuario: "KONAX",
-          },
-        ]);
-
-      alert("Usuario creado correctamente.");
-
-      limpiarFormulario();
-      await cargarUsuarios(empresaId);
-      await seleccionarUsuario(data);
+      alert("Configuración finalizada correctamente.");
+      router.replace("/dashboard");
     } catch (error) {
       alert(
-        "Error creando usuario: " +
+        "No se pudo finalizar la configuración: " +
           (error.message || "Error desconocido")
       );
     } finally {
@@ -735,171 +532,28 @@ export default function Usuarios() {
     }
   }
 
-  async function eliminarUsuario(id) {
-    if (
-      !confirm("¿Deseas eliminar este usuario?")
-    ) {
-      return;
-    }
-
-    await supabase
-      .from("permisos_usuarios_empresa")
-      .delete()
-      .eq("empresa_id", empresaId)
-      .eq("usuario_id", id);
-
-    const { error } = await supabase
-      .from("usuarios")
-      .delete()
-      .eq("id", id)
-      .eq("empresa_id", empresaId);
-
-    if (error) {
-      alert(
-        "Error eliminando usuario: " +
-          error.message
-      );
-      return;
-    }
-
-    if (usuarioSeleccionado?.id === id) {
-      setUsuarioSeleccionado(null);
-      setPermisosUsuario({});
-      setBusquedaUsuario("");
-    }
-
-    await cargarUsuarios(empresaId);
-  }
-
-  async function finalizarConfiguracion() {
-    const { data, error } = await supabase
-      .from("usuarios")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .eq("estado", "Activo")
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      alert(
-        "Error verificando usuarios: " +
-          error.message
-      );
-      return;
-    }
-
-    const administradorEmpresa = (data || []).find(
-      (usuario) =>
-        String(usuario.rol || "")
-          .toLowerCase()
-          .trim() === "administrador"
-    );
-
-    if (!administradorEmpresa) {
-      alert(
-        "Debe crear al menos un administrador activo."
-      );
-      return;
-    }
-
-    const {
-      data: empresaActualizada,
-      error: errorEmpresa,
-    } = await supabase
-      .from("empresas")
-      .update({ configuracion_completa: true })
-      .eq("id", empresaId)
-      .select("*")
-      .maybeSingle();
-
-    if (errorEmpresa) {
-      alert(
-        "Error finalizando configuración: " +
-          errorEmpresa.message
-      );
-      return;
-    }
-
-    localStorage.removeItem("adminKonaxId");
-    localStorage.removeItem("adminKonaxNombre");
-    localStorage.removeItem("adminKonaxCorreo");
-    localStorage.removeItem("adminKonaxRol");
-    localStorage.removeItem("empresaAdminCreadaId");
-    localStorage.removeItem(
-      "empresaAdminCreadaNombre"
-    );
-    localStorage.removeItem(
-      "categoriaNegocioAdmin"
-    );
-    localStorage.removeItem("tipoNegocioAdmin");
-
-    localStorage.setItem(
-      "usuarioId",
-      administradorEmpresa.id
-    );
-    localStorage.setItem(
-      "usuarioNombre",
-      administradorEmpresa.nombre || ""
-    );
-    localStorage.setItem(
-      "usuarioCorreo",
-      administradorEmpresa.correo || ""
-    );
-    localStorage.setItem("empresaId", empresaId);
-    localStorage.setItem(
-      "empresaNombre",
-      empresaActualizada?.nombre ||
-        empresaNombre ||
-        ""
-    );
-    localStorage.setItem(
-      "usuarioRol",
-      "Administrador"
-    );
-    localStorage.setItem(
-      "rolUsuario",
-      "Administrador"
-    );
-    localStorage.setItem(
-      "rolId",
-      administradorEmpresa.rol_id || ""
-    );
-
-    alert("Configuración finalizada.");
-    router.replace("/dashboard");
-  }
-
   const usuariosFiltrados = useMemo(() => {
-    const texto = String(busquedaUsuario || "")
-      .toLowerCase()
-      .trim();
+    const texto = normalizar(busqueda);
 
     if (!texto) return usuarios;
 
-    return usuarios.filter(
-      (usuario) =>
-        String(usuario.nombre || "")
-          .toLowerCase()
-          .includes(texto) ||
-        String(usuario.correo || "")
-          .toLowerCase()
-          .includes(texto) ||
-        String(usuario.rol || "")
-          .toLowerCase()
-          .includes(texto)
+    return usuarios.filter((usuario) =>
+      normalizar(
+        `${usuario.nombre} ${usuario.correo} ${usuario.rol}`
+      ).includes(texto)
     );
-  }, [usuarios, busquedaUsuario]);
+  }, [usuarios, busqueda]);
 
-  const permisosActivos =
-    permisosDisponibles.filter(
-      (permiso) =>
-        permisoActivo(permiso.codigo) &&
-        moduloPermitidoPorPlan(permiso.codigo)
-    ).length;
+  const grupos = useMemo(() => {
+    return MODULOS.reduce((resultado, modulo) => {
+      if (!resultado[modulo.grupo]) {
+        resultado[modulo.grupo] = [];
+      }
 
-  const permisosPermitidosTotal =
-    permisosDisponibles.filter((permiso) =>
-      moduloPermitidoPorPlan(permiso.codigo)
-    ).length;
+      resultado[modulo.grupo].push(modulo);
+      return resultado;
+    }, {});
+  }, []);
 
   if (cargando) {
     return (
@@ -909,12 +563,7 @@ export default function Usuarios() {
           alt="KONAX"
           style={s.loadingLogo}
         />
-        <strong style={s.loadingTitle}>
-          Preparando usuarios y permisos
-        </strong>
-        <span style={s.textoSuave}>
-          Validando empresa, plan y módulos.
-        </span>
+        <strong>Preparando usuarios y módulos</strong>
       </div>
     );
   }
@@ -937,22 +586,13 @@ export default function Usuarios() {
                 ADMINISTRACIÓN DE EMPRESA
               </span>
               <h1 style={s.titulo}>
-                Usuarios y Permisos
+                Usuarios, roles y módulos
               </h1>
               <p style={s.subtitulo}>
                 Empresa: <strong>{empresaNombre}</strong>
                 <br />
-                Plan:{" "}
-                <strong>
-                  {planNombre || planCodigo || "Sin plan"}
-                </strong>
+                Plan: <strong>{planNombre || planCodigo}</strong>
               </p>
-
-              {adminMasterKonax && (
-                <span style={s.modoMaster}>
-                  Modo Administrador KONAX
-                </span>
-              )}
             </div>
           </div>
 
@@ -964,92 +604,118 @@ export default function Usuarios() {
           </button>
         </header>
 
-        <section style={s.resumenGrid}>
-          <KPI
-            titulo="Usuarios"
-            valor={usuarios.length}
-            icono="👥"
-          />
-          <KPI
-            titulo="Roles"
-            valor={roles.length}
-            icono="🔐"
-          />
-          <KPI
-            titulo="Permisos activos"
-            valor={
-              usuarioSeleccionado
-                ? `${permisosActivos}/${permisosPermitidosTotal}`
-                : "-"
-            }
-            icono="✅"
-          />
+        <section style={s.card}>
+          <h2 style={s.tituloSeccion}>
+            Módulos de la empresa
+          </h2>
+          <p style={s.textoSuave}>
+            El plan define qué módulos están disponibles. Estos
+            interruptores controlan cuáles estarán activos para toda la
+            empresa.
+          </p>
+
+          <div style={s.modulosGrid}>
+            {MODULOS.map((modulo) => {
+              const permitido = Boolean(
+                modulosPermitidos[modulo.codigo]
+              );
+              const activo = Boolean(
+                modulosEmpresa[modulo.codigo]
+              );
+              const obligatorio = [
+                "dashboard",
+                "usuarios",
+                "configuracion",
+              ].includes(modulo.codigo);
+
+              return (
+                <button
+                  key={modulo.codigo}
+                  type="button"
+                  onClick={() => alternarModuloEmpresa(modulo)}
+                  style={
+                    !permitido
+                      ? s.moduloBloqueado
+                      : activo
+                      ? s.moduloActivo
+                      : s.moduloInactivo
+                  }
+                >
+                  <span style={s.moduloIcono}>
+                    {modulo.icono}
+                  </span>
+
+                  <span style={s.moduloTexto}>
+                    <strong>{modulo.nombre}</strong>
+                    <small>
+                      {!permitido
+                        ? "No incluido en el plan"
+                        : obligatorio
+                        ? "Obligatorio"
+                        : activo
+                        ? "Activo para la empresa"
+                        : "Desactivado para la empresa"}
+                    </small>
+                  </span>
+
+                  <span
+                    style={
+                      activo && permitido
+                        ? s.switchOn
+                        : s.switchOff
+                    }
+                  >
+                    <span style={s.circulo} />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </section>
 
         <section style={s.mainGrid}>
           <div>
             <article style={s.card}>
-              <h2 style={s.tituloSeccion}>
-                Crear usuario
-              </h2>
-              <p style={s.textoSuave}>
-                Crea usuarios y asígnales un rol inicial.
+              <h2 style={s.tituloSeccion}>Crear usuario</h2>
+              <p style={s.avisoSeguridad}>
+                Esta función queda temporalmente bloqueada mientras se
+                conecta con Supabase Auth.
               </p>
 
               <div style={s.grid}>
                 <Campo label="Nombre">
                   <input
                     value={nombre}
-                    onChange={(e) =>
-                      setNombre(e.target.value)
-                    }
+                    onChange={(e) => setNombre(e.target.value)}
                     style={s.input}
-                    placeholder="Nombre completo"
                   />
                 </Campo>
 
                 <Campo label="Correo">
                   <input
-                    type="email"
                     value={correo}
-                    onChange={(e) =>
-                      setCorreo(e.target.value)
-                    }
+                    onChange={(e) => setCorreo(e.target.value)}
                     style={s.input}
-                    placeholder="usuario@empresa.com"
                   />
                 </Campo>
 
-                <Campo label="Contraseña">
+                <Campo label="Contraseña inicial">
                   <input
+                    type="password"
                     value={password}
-                    onChange={(e) =>
-                      setPassword(e.target.value)
-                    }
+                    onChange={(e) => setPassword(e.target.value)}
                     style={s.input}
-                    placeholder="Contraseña inicial"
                   />
                 </Campo>
 
                 <Campo label="Rol">
                   <select
                     value={rolId}
-                    onChange={(e) =>
-                      setRolId(e.target.value)
-                    }
+                    onChange={(e) => setRolId(e.target.value)}
                     style={s.input}
                   >
-                    {roles.length === 0 && (
-                      <option value="">
-                        No hay roles configurados
-                      </option>
-                    )}
-
                     {roles.map((rol) => (
-                      <option
-                        key={rol.id}
-                        value={rol.id}
-                      >
+                      <option key={rol.id} value={rol.id}>
                         {rol.nombre}
                       </option>
                     ))}
@@ -1057,71 +723,45 @@ export default function Usuarios() {
                 </Campo>
               </div>
 
-              <div style={s.acciones}>
-                <button
-                  onClick={crearUsuario}
-                  style={s.botonAzul}
-                  disabled={guardando}
-                >
-                  {guardando
-                    ? "Guardando..."
-                    : "Crear usuario"}
-                </button>
-
-                <button
-                  onClick={limpiarFormulario}
-                  style={s.botonNegro}
-                >
-                  Limpiar
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={crearUsuario}
+                style={s.botonBloqueado}
+              >
+                Crear usuario
+              </button>
             </article>
 
             <article style={s.card}>
               <h2 style={s.tituloSeccion}>
-                Buscar usuario
+                Usuarios de la empresa
               </h2>
-              <p style={s.textoSuave}>
-                Selecciona un usuario para modificar sus permisos.
-              </p>
 
               <input
-                value={busquedaUsuario}
-                onChange={(e) =>
-                  setBusquedaUsuario(e.target.value)
-                }
-                style={s.input}
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
                 placeholder="Buscar por nombre, correo o rol..."
+                style={s.input}
               />
 
               <div style={s.usuariosLista}>
                 {usuariosFiltrados.map((usuario) => (
                   <button
                     key={usuario.id}
-                    onClick={() =>
-                      seleccionarUsuario(usuario)
-                    }
+                    type="button"
+                    onClick={() => seleccionarUsuario(usuario)}
                     style={
-                      usuarioSeleccionado?.id ===
-                      usuario.id
+                      usuarioSeleccionado?.id === usuario.id
                         ? s.usuarioActivo
                         : s.usuarioInactivo
                     }
                   >
                     <strong>{usuario.nombre}</strong>
                     <span>{usuario.correo}</span>
-                    <small>
-                      {usuario.rol || "Sin rol"}
-                    </small>
+                    <small>{usuario.rol || "Sin rol"}</small>
                   </button>
                 ))}
               </div>
-            </article>
-
-            <article style={s.card}>
-              <h2 style={s.tituloSeccion}>
-                Usuarios de la empresa ({usuarios.length})
-              </h2>
 
               <div style={s.tablaBox}>
                 <table style={s.tabla}>
@@ -1131,221 +771,146 @@ export default function Usuarios() {
                       <th style={s.th}>Correo</th>
                       <th style={s.th}>Rol</th>
                       <th style={s.th}>Estado</th>
-                      <th style={s.th}>Acciones</th>
+                      <th style={s.th}>Acción</th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {usuarios.length === 0 ? (
-                      <tr>
-                        <td
-                          style={s.tdVacio}
-                          colSpan="5"
-                        >
-                          No hay usuarios creados.
+                    {usuarios.map((usuario) => (
+                      <tr key={usuario.id}>
+                        <td style={s.td}>{usuario.nombre}</td>
+                        <td style={s.td}>{usuario.correo}</td>
+                        <td style={s.td}>{usuario.rol}</td>
+                        <td style={s.td}>{usuario.estado}</td>
+                        <td style={s.td}>
+                          <button
+                            type="button"
+                            onClick={gestionarUsuario}
+                            style={s.botonEliminar}
+                          >
+                            Gestionar
+                          </button>
                         </td>
                       </tr>
-                    ) : (
-                      usuarios.map((usuario) => (
-                        <tr key={usuario.id}>
-                          <td style={s.td}>
-                            <strong>
-                              {usuario.nombre}
-                            </strong>
-                          </td>
-                          <td style={s.td}>
-                            {usuario.correo}
-                          </td>
-                          <td style={s.td}>
-                            {usuario.rol || "-"}
-                          </td>
-                          <td style={s.td}>
-                            <span
-                              style={
-                                String(
-                                  usuario.estado || ""
-                                ).toLowerCase() ===
-                                "activo"
-                                  ? s.estadoActivo
-                                  : s.estadoInactivo
-                              }
-                            >
-                              {usuario.estado ||
-                                "Activo"}
-                            </span>
-                          </td>
-                          <td style={s.td}>
-                            <button
-                              onClick={() =>
-                                eliminarUsuario(
-                                  usuario.id
-                                )
-                              }
-                              style={s.botonEliminar}
-                            >
-                              Eliminar
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
+                    ))}
                   </tbody>
                 </table>
               </div>
 
               <button
+                type="button"
                 onClick={finalizarConfiguracion}
+                disabled={guardando}
                 style={s.botonVerde}
               >
-                Finalizar configuración
+                {guardando
+                  ? "Guardando..."
+                  : "Finalizar configuración"}
               </button>
             </article>
           </div>
 
           <aside>
-            {!usuarioSeleccionado ? (
-              <article style={s.cardSticky}>
-                <h2 style={s.tituloSeccion}>
-                  Permisos
-                </h2>
+            <article style={s.cardSticky}>
+              <h2 style={s.tituloSeccion}>
+                Permisos del usuario
+              </h2>
+
+              {!usuarioSeleccionado ? (
                 <p style={s.textoSuave}>
-                  Selecciona un usuario para ver y editar sus permisos.
+                  Selecciona un usuario para cambiar sus permisos.
                 </p>
-              </article>
-            ) : (
-              <article style={s.cardSticky}>
-                <div style={s.permisosHeader}>
-                  <div>
-                    <h2 style={s.tituloSeccion}>
-                      Permisos del usuario
-                    </h2>
-                    <p style={s.textoSuave}>
-                      <strong>
-                        {usuarioSeleccionado.nombre}
-                      </strong>{" "}
-                      ·{" "}
-                      {usuarioSeleccionado.rol || "-"}
-                    </p>
+              ) : (
+                <>
+                  <p style={s.textoSuave}>
+                    <strong>{usuarioSeleccionado.nombre}</strong> ·{" "}
+                    {usuarioSeleccionado.rol}
+                  </p>
+
+                  <div style={s.accionesPermisos}>
+                    <button
+                      type="button"
+                      onClick={() => cambiarTodosPermisos(true)}
+                      style={s.botonMiniVerde}
+                    >
+                      Activar permitidos
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => cambiarTodosPermisos(false)}
+                      style={s.botonMiniGris}
+                    >
+                      Desactivar todo
+                    </button>
                   </div>
 
-                  <span style={s.contadorPermisos}>
-                    {permisosActivos}/
-                    {permisosPermitidosTotal}
-                  </span>
-                </div>
+                  {Object.entries(grupos).map(
+                    ([grupo, modulos]) => (
+                      <section key={grupo} style={s.grupoCard}>
+                        <h3 style={s.grupoTitulo}>{grupo}</h3>
 
-                <div style={s.accionesPermisos}>
-                  <button
-                    onClick={() =>
-                      cambiarTodosPermisos(true)
-                    }
-                    style={s.botonMiniVerde}
-                  >
-                    Activar permitidos
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      cambiarTodosPermisos(false)
-                    }
-                    style={s.botonMiniGris}
-                  >
-                    Desactivar todo
-                  </button>
-                </div>
-
-                <div style={s.gruposGrid}>
-                  {gruposPermisos.map((grupo) => (
-                    <section
-                      key={grupo.titulo}
-                      style={s.grupoCard}
-                    >
-                      <h3 style={s.grupoTitulo}>
-                        {grupo.icono} {grupo.titulo}
-                      </h3>
-
-                      <div style={s.permisosCards}>
-                        {grupo.permisos.map(
-                          (permiso) => {
-                            const activo =
-                              permisoActivo(
-                                permiso.codigo
-                              );
-
-                            const permitido =
-                              moduloPermitidoPorPlan(
-                                permiso.codigo
-                              );
+                        <div style={s.permisosCards}>
+                          {modulos.map((modulo) => {
+                            const permitidoPlan = Boolean(
+                              modulosPermitidos[modulo.codigo]
+                            );
+                            const activoEmpresa = Boolean(
+                              modulosEmpresa[modulo.codigo]
+                            );
+                            const habilitado =
+                              permitidoPlan && activoEmpresa;
+                            const activo = Boolean(
+                              permisosUsuario[modulo.codigo]
+                            );
 
                             return (
                               <button
-                                key={permiso.codigo}
+                                key={modulo.codigo}
                                 type="button"
                                 onClick={() =>
-                                  alternarPermiso(
-                                    permiso
-                                  )
+                                  alternarPermiso(modulo)
                                 }
                                 style={
-                                  !permitido
+                                  !habilitado
                                     ? s.permisoBloqueado
                                     : activo
                                     ? s.permisoActivo
                                     : s.permisoNormal
                                 }
                               >
-                                <div>
-                                  <strong>
-                                    {permiso.nombre}
-                                    {!permitido
-                                      ? " 🔒"
-                                      : ""}
-                                  </strong>
-
-                                  {permiso.codigo ===
-                                    "recargos" &&
-                                    permitido && (
-                                      <small
-                                        style={
-                                          s.textoOpcional
-                                        }
-                                      >
-                                        Opcional por usuario
-                                      </small>
-                                    )}
-
-                                  {!permitido && (
-                                    <small
-                                      style={
-                                        s.textoBloqueado
-                                      }
-                                    >
-                                      No incluido en el plan
-                                    </small>
-                                  )}
-                                </div>
+                                <span style={s.permisoTexto}>
+                                  <strong>{modulo.nombre}</strong>
+                                  <small>
+                                    {!permitidoPlan
+                                      ? "No incluido en el plan"
+                                      : !activoEmpresa
+                                      ? "Desactivado para la empresa"
+                                      : activo
+                                      ? "Permitido"
+                                      : "Sin permiso"}
+                                  </small>
+                                </span>
 
                                 <span
                                   style={
-                                    activo && permitido
+                                    activo && habilitado
                                       ? s.switchOn
                                       : s.switchOff
                                   }
                                 >
-                                  <span
-                                    style={s.circulo}
-                                  />
+                                  <span style={s.circulo} />
                                 </span>
                               </button>
                             );
-                          }
-                        )}
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              </article>
-            )}
+                          })}
+                        </div>
+                      </section>
+                    )
+                  )}
+                </>
+              )}
+            </article>
           </aside>
         </section>
       </div>
@@ -1362,50 +927,24 @@ function Campo({ label, children }) {
   );
 }
 
-function KPI({ titulo, valor, icono }) {
-  return (
-    <article style={s.resumenCard}>
-      <span style={s.kpiIcono}>{icono}</span>
-      <span style={s.resumenLabel}>
-        {titulo}
-      </span>
-      <strong style={s.resumenValor}>
-        {valor}
-      </strong>
-    </article>
-  );
-}
-
 const s = {
   pagina: {
     minHeight: "100vh",
-    padding: "26px",
+    padding: 26,
     background:
       "linear-gradient(135deg,#ecfdf5 0%,#f3f4f6 45%,#fff 100%)",
-    fontFamily:
-      'Inter, Arial, system-ui, sans-serif',
+    fontFamily: 'Inter, Arial, system-ui, sans-serif',
   },
-  contenedor: {
-    maxWidth: 1500,
-    margin: "0 auto",
-  },
+  contenedor: { maxWidth: 1500, margin: "0 auto" },
   loading: {
     minHeight: "100vh",
     display: "grid",
     placeItems: "center",
     alignContent: "center",
-    gap: 10,
+    gap: 12,
     background: "#f3f6f4",
-    fontFamily:
-      'Inter, Arial, system-ui, sans-serif',
   },
-  loadingLogo: {
-    width: 230,
-    maxWidth: "75%",
-  },
-  loadingTitle: {
-    fontSize: 22,
-  },
+  loadingLogo: { width: 230, maxWidth: "75%" },
   hero: {
     marginBottom: 18,
     padding: 26,
@@ -1418,8 +957,6 @@ const s = {
     background:
       "linear-gradient(135deg,#111827,#064e3b)",
     color: "#fff",
-    boxShadow:
-      "0 12px 30px rgba(0,0,0,.16)",
   },
   heroInfo: {
     display: "flex",
@@ -1446,24 +983,11 @@ const s = {
     fontWeight: 900,
     letterSpacing: 1.25,
   },
-  titulo: {
-    margin: "5px 0",
-    fontSize: 34,
-  },
+  titulo: { margin: "5px 0", fontSize: 34 },
   subtitulo: {
     margin: 0,
     color: "#dcfce7",
     lineHeight: 1.5,
-  },
-  modoMaster: {
-    display: "inline-block",
-    marginTop: 9,
-    padding: "7px 10px",
-    borderRadius: 9,
-    background: "#dcfce7",
-    color: "#166534",
-    fontSize: 11,
-    fontWeight: 900,
   },
   botonBlanco: {
     minHeight: 44,
@@ -1474,41 +998,6 @@ const s = {
     color: "#111827",
     fontWeight: 800,
     cursor: "pointer",
-  },
-  resumenGrid: {
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit,minmax(220px,1fr))",
-    gap: 14,
-    marginBottom: 18,
-  },
-  resumenCard: {
-    padding: 18,
-    display: "grid",
-    gap: 6,
-    border: "1px solid #e5e7eb",
-    borderRadius: 18,
-    background: "#fff",
-    boxShadow:
-      "0 5px 16px rgba(0,0,0,.05)",
-  },
-  kpiIcono: {
-    fontSize: 24,
-  },
-  resumenLabel: {
-    color: "#6b7280",
-    fontSize: 13,
-  },
-  resumenValor: {
-    color: "#111827",
-    fontSize: 22,
-  },
-  mainGrid: {
-    display: "grid",
-    gridTemplateColumns:
-      "minmax(420px,1fr) minmax(520px,1.2fr)",
-    gap: 18,
-    alignItems: "start",
   },
   card: {
     marginBottom: 18,
@@ -1527,16 +1016,72 @@ const s = {
     border: "1px solid #e5e7eb",
     borderRadius: 20,
     background: "#fff",
-    boxShadow:
-      "0 8px 22px rgba(0,0,0,.07)",
   },
-  tituloSeccion: {
-    margin: 0,
-    color: "#111827",
+  tituloSeccion: { margin: 0, color: "#111827" },
+  textoSuave: { marginTop: 6, color: "#6b7280" },
+  avisoSeguridad: {
+    padding: 12,
+    border: "1px solid #f59e0b",
+    borderRadius: 10,
+    background: "#fffbeb",
+    color: "#92400e",
+    fontSize: 13,
   },
-  textoSuave: {
-    marginTop: 6,
+  modulosGrid: {
+    marginTop: 16,
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit,minmax(245px,1fr))",
+    gap: 10,
+  },
+  moduloActivo: {
+    padding: 13,
+    display: "grid",
+    gridTemplateColumns: "30px 1fr 50px",
+    alignItems: "center",
+    gap: 10,
+    border: "1px solid #86efac",
+    borderRadius: 14,
+    background: "#ecfdf5",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+  moduloInactivo: {
+    padding: 13,
+    display: "grid",
+    gridTemplateColumns: "30px 1fr 50px",
+    alignItems: "center",
+    gap: 10,
+    border: "1px solid #d1d5db",
+    borderRadius: 14,
+    background: "#fff",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+  moduloBloqueado: {
+    padding: 13,
+    display: "grid",
+    gridTemplateColumns: "30px 1fr 50px",
+    alignItems: "center",
+    gap: 10,
+    border: "1px dashed #9ca3af",
+    borderRadius: 14,
+    background: "#f3f4f6",
     color: "#6b7280",
+    textAlign: "left",
+    cursor: "not-allowed",
+  },
+  moduloIcono: { fontSize: 21 },
+  moduloTexto: {
+    display: "grid",
+    gap: 3,
+  },
+  mainGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(420px,1fr) minmax(520px,1.2fr)",
+    gap: 18,
+    alignItems: "start",
   },
   grid: {
     display: "grid",
@@ -1563,31 +1108,15 @@ const s = {
     border: "1px solid #d1d5db",
     borderRadius: 10,
     background: "#fff",
-    color: "#111827",
     fontSize: 14,
   },
-  acciones: {
-    marginTop: 18,
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-  botonAzul: {
+  botonBloqueado: {
+    marginTop: 16,
     minHeight: 44,
     padding: "10px 20px",
     border: "none",
     borderRadius: 10,
-    background: "#2563eb",
-    color: "#fff",
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  botonNegro: {
-    minHeight: 44,
-    padding: "10px 20px",
-    border: "none",
-    borderRadius: 10,
-    background: "#111827",
+    background: "#9ca3af",
     color: "#fff",
     fontWeight: 800,
     cursor: "pointer",
@@ -1630,7 +1159,7 @@ const s = {
   },
   tabla: {
     width: "100%",
-    minWidth: 760,
+    minWidth: 720,
     borderCollapse: "collapse",
   },
   th: {
@@ -1643,34 +1172,12 @@ const s = {
   td: {
     padding: 12,
     borderBottom: "1px solid #f3f4f6",
-    color: "#111827",
-  },
-  tdVacio: {
-    padding: 26,
-    color: "#6b7280",
-    textAlign: "center",
-  },
-  estadoActivo: {
-    padding: "5px 9px",
-    borderRadius: 999,
-    background: "#dcfce7",
-    color: "#166534",
-    fontSize: 12,
-    fontWeight: 800,
-  },
-  estadoInactivo: {
-    padding: "5px 9px",
-    borderRadius: 999,
-    background: "#fee2e2",
-    color: "#991b1b",
-    fontSize: 12,
-    fontWeight: 800,
   },
   botonEliminar: {
     padding: "8px 11px",
     border: "none",
     borderRadius: 8,
-    background: "#dc2626",
+    background: "#6b7280",
     color: "#fff",
     fontWeight: 800,
     cursor: "pointer",
@@ -1685,20 +1192,6 @@ const s = {
     fontSize: 16,
     fontWeight: 850,
     cursor: "pointer",
-  },
-  permisosHeader: {
-    marginBottom: 14,
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-  },
-  contadorPermisos: {
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "#064e3b",
-    color: "#fff",
-    fontWeight: 800,
   },
   accionesPermisos: {
     marginBottom: 16,
@@ -1724,13 +1217,8 @@ const s = {
     fontWeight: 800,
     cursor: "pointer",
   },
-  gruposGrid: {
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit,minmax(240px,1fr))",
-    gap: 14,
-  },
   grupoCard: {
+    marginBottom: 12,
     padding: 14,
     border: "1px solid #e5e7eb",
     borderRadius: 16,
@@ -1738,7 +1226,6 @@ const s = {
   },
   grupoTitulo: {
     margin: "0 0 10px",
-    color: "#111827",
     fontSize: 15,
   },
   permisosCards: {
@@ -1754,7 +1241,6 @@ const s = {
     border: "1px solid #e5e7eb",
     borderRadius: 12,
     background: "#fff",
-    color: "#111827",
     textAlign: "left",
     cursor: "pointer",
   },
@@ -1781,21 +1267,12 @@ const s = {
     borderRadius: 12,
     background: "#f3f4f6",
     color: "#6b7280",
-    opacity: 0.85,
     textAlign: "left",
     cursor: "not-allowed",
   },
-  textoBloqueado: {
-    display: "block",
-    marginTop: 4,
-    color: "#9ca3af",
-    fontSize: 11,
-  },
-  textoOpcional: {
-    display: "block",
-    marginTop: 4,
-    color: "#16834f",
-    fontSize: 11,
+  permisoTexto: {
+    display: "grid",
+    gap: 3,
   },
   switchOn: {
     minWidth: 44,
