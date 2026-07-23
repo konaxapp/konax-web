@@ -237,7 +237,7 @@ export default function MovimientosInventario() {
         `Factura/Orden: ${formProducto.numero_factura || "-"}`,
         `Fecha: ${formProducto.fecha_compra || "-"}`,
         `Condición: ${formProducto.condicion_compra || "-"}`,
-        `Total: $${numero(formProducto.total_factura).toFixed(2)}`,
+        `Total: $${totalFacturaProducto.toFixed(2)}`,
         `Vencimiento: ${formProducto.fecha_vencimiento_pago || "-"}`,
         formProducto.observacion_compra
           ? `Observación: ${formProducto.observacion_compra}`
@@ -299,6 +299,16 @@ export default function MovimientosInventario() {
 
   const stockActual = numero(productoSeleccionado?.stock_actual);
   const cantidadMovimiento = numero(cantidad);
+
+  const totalFacturaProducto = useMemo(
+    () =>
+      numero(formProducto.precio_compra) *
+      numero(formProducto.stock_inicial),
+    [
+      formProducto.precio_compra,
+      formProducto.stock_inicial,
+    ]
+  );
 
   function esSalida() {
     return ["SALIDA", "AJUSTE_SALIDA"].includes(tipoMovimiento);
@@ -706,13 +716,14 @@ export default function MovimientosInventario() {
 
               <Campo label="Total de la factura u orden">
                 <input
-                  type="number"
-                  value={formProducto.total_factura}
-                  onChange={(e) =>
-                    actualizarProducto("total_factura", e.target.value)
-                  }
-                  style={s.input}
+                  type="text"
+                  value={`$${totalFacturaProducto.toFixed(2)}`}
+                  readOnly
+                  style={s.inputReadOnly}
                 />
+                <span style={s.ayudaCampo}>
+                  Cálculo automático: precio de compra unitario × stock inicial.
+                </span>
               </Campo>
 
               <Campo label="Fecha límite de pago al proveedor">
@@ -1252,6 +1263,17 @@ const s = {
     borderRadius: 12,
     background: "#fff",
     color: "#111827",
+  },
+  inputReadOnly: {
+    width: "100%",
+    minHeight: 46,
+    padding: "11px 13px",
+    boxSizing: "border-box",
+    border: "1px solid #cfe0d5",
+    borderRadius: 12,
+    background: "linear-gradient(180deg,#f3f8f5,#edf5f0)",
+    color: "#17623c",
+    fontWeight: 850,
   },
   textarea: {
     width: "100%",
