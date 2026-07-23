@@ -24,20 +24,40 @@ export default function MovimientosInventario() {
   const [productos, setProductos] = useState([]);
   const [movimientos, setMovimientos] = useState([]);
 
+  const [modo, setModo] = useState("crear_producto");
+
+  const [formProducto, setFormProducto] = useState({
+    codigo: "",
+    nombre: "",
+    descripcion: "",
+    categoria: "",
+    proveedor: "",
+    precio_compra: "",
+    precio_venta: "",
+    precio_credito: "",
+    stock_inicial: "",
+    stock_minimo: "",
+    numero_factura: "",
+    fecha_compra: fechaPanama(),
+    condicion_compra: "Contado",
+    total_factura: "",
+    fecha_vencimiento_pago: "",
+    observacion_compra: "",
+  });
+
+  const [imagen, setImagen] = useState(null);
+
   const [productoId, setProductoId] = useState("");
   const [tipoMovimiento, setTipoMovimiento] = useState("ENTRADA");
   const [cantidad, setCantidad] = useState("");
   const [numeroFactura, setNumeroFactura] = useState("");
-  const [fechaCompra, setFechaCompra] = useState(fechaPanama());
+  const [fechaMovimiento, setFechaMovimiento] = useState(fechaPanama());
   const [condicionCompra, setCondicionCompra] = useState("Contado");
   const [totalFactura, setTotalFactura] = useState("");
   const [fechaVencimientoPago, setFechaVencimientoPago] = useState("");
   const [observacion, setObservacion] = useState("");
 
   const [busqueda, setBusqueda] = useState("");
-  const [fechaDesde, setFechaDesde] = useState(fechaPanama());
-  const [fechaHasta, setFechaHasta] = useState(fechaPanama());
-
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
 
@@ -63,18 +83,17 @@ export default function MovimientosInventario() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
 
-    setCargando(true);
-
-    const nombre =
+    setEmpresaNombre(
       localStorage.getItem("empresaNombre") ||
-      localStorage.getItem("empresaAdminCreadaNombre") ||
-      "Empresa";
+        localStorage.getItem("empresaAdminCreadaNombre") ||
+        "Empresa"
+    );
 
-    setEmpresaNombre(nombre);
+    setCargando(true);
 
     await Promise.all([
       cargarProductos(empresaId),
-      cargarMovimientos(empresaId, fechaDesde, fechaHasta),
+      cargarMovimientos(empresaId),
     ]);
 
     setCargando(false);
@@ -97,29 +116,17 @@ export default function MovimientosInventario() {
     setProductos(data || []);
   }
 
-  async function cargarMovimientos(
-    empresaId = obtenerEmpresaId(),
-    desde = fechaDesde,
-    hasta = fechaHasta
-  ) {
+  /*
+    Se usa created_at porque la tabla movimientos_inventario
+    no tiene la columna fecha_compra.
+  */
+  async function cargarMovimientos(empresaId = obtenerEmpresaId()) {
     if (!empresaId) return;
-
-    if (!desde || !hasta) {
-      alert("Seleccione las fechas de consulta.");
-      return;
-    }
-
-    if (desde > hasta) {
-      alert("La fecha desde no puede ser mayor que la fecha hasta.");
-      return;
-    }
 
     const { data, error } = await supabase
       .from("movimientos_inventario")
       .select("*")
       .eq("empresa_id", empresaId)
-      .gte("fecha_compra", desde)
-      .lte("fecha_compra", hasta)
       .order("created_at", { ascending: false })
       .limit(500);
 
@@ -131,6 +138,157 @@ export default function MovimientosInventario() {
     setMovimientos(data || []);
   }
 
+  function actualizarProducto(campo, valor) {
+    setFormProducto((actual) => ({
+      ...actual,
+      [campo]: valor,
+    }));
+  }
+
+  async function subirImagen(empresaId) {
+    if (!imagen) return null;
+
+    const nombreArchivo =
+      `${empresaId}/${Date.now()}-` +
+      imagen.name.replace(/\s/g, "_");
+
+    const { error } = await supabase.storage
+      .from("inventario")
+      .upload(nombreArchivo, imagen);
+
+    if (error) throw error;
+
+    const { data } = supabase.storage
+      .from("inventario")
+      .getPublicUrl(nombreArchivo);
+
+    return data.publicUrl;
+  }
+
+  async function guardarProductoNuevo() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId || guardando) return;
+
+    if (!formProducto.codigo.trim() || !formProducto.nombre.trim()) {
+      alert("Complete código y nombre del producto.");
+      return;
+    }
+
+    if (!formProducto.numero_factura.trim()) {
+      alert("Ingrese el número de factura u orden de compra.");
+      return;
+    }
+
+    const stockInicial = numero(formProducto.stock_inicial);
+
+    if (stockInicial < 0) {
+      alert("El stock inicial no puede ser negativo.");
+      return;
+    }
+
+    setGuardando(true);
+
+    try {
+      let imagenUrl = null;
+
+      if (imagen) {
+        imagenUrl = await subirImagen(empresaId);
+      }
+
+      const { data: producto, error: errorProducto } = await supabase
+        .from("productos")
+        .insert([
+          {
+            empresa_id: empresaId,
+            codigo: formProducto.codigo.trim(),
+            nombre: formProducto.nombre.trim(),
+            descripcion: formProducto.descripcion.trim(),
+            categoria: formProducto.categoria.trim(),
+            proveedor: formProducto.proveedor.trim(),
+            precio_compra: numero(formProducto.precio_compra),
+            precio_venta: numero(formProducto.precio_venta),
+            precio_credito: numero(formProducto.precio_credito),
+            stock_actual: stockInicial,
+            stock_minimo: numero(formProducto.stock_minimo),
+            imagen_url: imagenUrl,
+          },
+        ])
+        .select()
+        .single();
+
+      if (errorProducto) {
+        throw new Error(
+          "Error guardando producto: " + errorProducto.message
+        );
+      }
+
+      const usuario =
+        localStorage.getItem("usuarioNombre") ||
+        localStorage.getItem("adminKonaxNombre") ||
+        "Sistema";
+
+      /*
+        Los datos de compra se guardan dentro de observacion
+        porque la tabla actual no tiene fecha_compra ni otras
+        columnas comerciales adicionales.
+      */
+      const detalleCompra = [
+        `Stock inicial`,
+        `Factura/Orden: ${formProducto.numero_factura || "-"}`,
+        `Fecha: ${formProducto.fecha_compra || "-"}`,
+        `Condición: ${formProducto.condicion_compra || "-"}`,
+        `Total: $${numero(formProducto.total_factura).toFixed(2)}`,
+        `Vencimiento: ${formProducto.fecha_vencimiento_pago || "-"}`,
+        formProducto.observacion_compra
+          ? `Observación: ${formProducto.observacion_compra}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" | ");
+
+      const { error: errorMovimiento } = await supabase
+        .from("movimientos_inventario")
+        .insert([
+          {
+            empresa_id: empresaId,
+            producto_id: producto.id,
+            tipo_movimiento: "ENTRADA",
+            cantidad: stockInicial,
+            stock_anterior: 0,
+            stock_nuevo: stockInicial,
+            observacion: detalleCompra,
+            usuario,
+          },
+        ]);
+
+      if (errorMovimiento) {
+        await supabase
+          .from("productos")
+          .delete()
+          .eq("empresa_id", empresaId)
+          .eq("id", producto.id);
+
+        throw new Error(
+          "No se pudo registrar la entrada inicial: " +
+            errorMovimiento.message
+        );
+      }
+
+      alert("Producto y entrada inicial registrados correctamente.");
+
+      limpiarProducto();
+
+      await Promise.all([
+        cargarProductos(empresaId),
+        cargarMovimientos(empresaId),
+      ]);
+    } catch (error) {
+      alert(error.message || "No se pudo guardar el producto.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
   const productoSeleccionado = useMemo(
     () =>
       productos.find(
@@ -138,6 +296,9 @@ export default function MovimientosInventario() {
       ) || null,
     [productos, productoId]
   );
+
+  const stockActual = numero(productoSeleccionado?.stock_actual);
+  const cantidadMovimiento = numero(cantidad);
 
   function esSalida() {
     return ["SALIDA", "AJUSTE_SALIDA"].includes(tipoMovimiento);
@@ -147,13 +308,10 @@ export default function MovimientosInventario() {
     return [
       "ENTRADA",
       "AJUSTE_ENTRADA",
-      "NOTA_CREDITO",
       "DEVOLUCION",
+      "NOTA_CREDITO",
     ].includes(tipoMovimiento);
   }
-
-  const stockActual = numero(productoSeleccionado?.stock_actual);
-  const cantidadMovimiento = numero(cantidad);
 
   const stockNuevo = useMemo(() => {
     if (!productoSeleccionado || cantidadMovimiento <= 0) {
@@ -176,52 +334,31 @@ export default function MovimientosInventario() {
     stockActual,
   ]);
 
-  function validar() {
+  async function guardarMovimientoExistente() {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId || guardando) return;
+
     if (!productoSeleccionado?.id) {
       alert("Seleccione un producto.");
-      return false;
+      return;
     }
 
     if (!cantidad || cantidadMovimiento <= 0) {
-      alert("Ingrese una cantidad válida mayor a cero.");
-      return false;
+      alert("Ingrese una cantidad válida.");
+      return;
     }
 
     if (esSalida() && cantidadMovimiento > stockActual) {
-      alert(
-        `Stock insuficiente. Disponible: ${stockActual}.`
-      );
-      return false;
+      alert(`Stock insuficiente. Disponible: ${stockActual}.`);
+      return;
     }
-
-    if (
-      ["ENTRADA", "NOTA_CREDITO"].includes(tipoMovimiento) &&
-      !numeroFactura.trim()
-    ) {
-      alert("Ingrese el número de factura, orden o documento.");
-      return false;
-    }
-
-    return true;
-  }
-
-  async function guardarMovimiento() {
-    const empresaId = obtenerEmpresaId();
-    if (!empresaId || guardando || !validar()) return;
 
     setGuardando(true);
-
-    const usuario =
-      localStorage.getItem("usuarioNombre") ||
-      localStorage.getItem("adminKonaxNombre") ||
-      "Sistema";
 
     try {
       const { error: errorStock } = await supabase
         .from("productos")
-        .update({
-          stock_actual: stockNuevo,
-        })
+        .update({ stock_actual: stockNuevo })
         .eq("empresa_id", empresaId)
         .eq("id", productoSeleccionado.id);
 
@@ -230,6 +367,20 @@ export default function MovimientosInventario() {
           "No se pudo actualizar el stock: " + errorStock.message
         );
       }
+
+      const usuario =
+        localStorage.getItem("usuarioNombre") ||
+        localStorage.getItem("adminKonaxNombre") ||
+        "Sistema";
+
+      const detalleMovimiento = [
+        observacion || tipoMovimiento,
+        `Documento: ${numeroFactura || "-"}`,
+        `Fecha: ${fechaMovimiento || "-"}`,
+        `Condición: ${condicionCompra || "-"}`,
+        `Total: $${numero(totalFactura).toFixed(2)}`,
+        `Vencimiento: ${fechaVencimientoPago || "-"}`,
+      ].join(" | ");
 
       const { error: errorMovimiento } = await supabase
         .from("movimientos_inventario")
@@ -241,15 +392,7 @@ export default function MovimientosInventario() {
             cantidad: cantidadMovimiento,
             stock_anterior: stockActual,
             stock_nuevo: stockNuevo,
-            numero_factura: numeroFactura.trim() || null,
-            fecha_compra: fechaCompra,
-            condicion_compra: condicionCompra,
-            total_factura: numero(totalFactura),
-            fecha_vencimiento_pago:
-              fechaVencimientoPago || null,
-            observacion:
-              observacion.trim() ||
-              `${tipoMovimiento} de inventario`,
+            observacion: detalleMovimiento,
             usuario,
           },
         ]);
@@ -269,11 +412,11 @@ export default function MovimientosInventario() {
 
       alert("Movimiento de inventario registrado correctamente.");
 
-      limpiarFormulario();
+      limpiarMovimiento();
 
       await Promise.all([
         cargarProductos(empresaId),
-        cargarMovimientos(empresaId, fechaDesde, fechaHasta),
+        cargarMovimientos(empresaId),
       ]);
     } catch (error) {
       alert(error.message || "No se pudo guardar el movimiento.");
@@ -282,20 +425,39 @@ export default function MovimientosInventario() {
     }
   }
 
-  function limpiarFormulario() {
+  function limpiarProducto() {
+    setFormProducto({
+      codigo: "",
+      nombre: "",
+      descripcion: "",
+      categoria: "",
+      proveedor: "",
+      precio_compra: "",
+      precio_venta: "",
+      precio_credito: "",
+      stock_inicial: "",
+      stock_minimo: "",
+      numero_factura: "",
+      fecha_compra: fechaPanama(),
+      condicion_compra: "Contado",
+      total_factura: "",
+      fecha_vencimiento_pago: "",
+      observacion_compra: "",
+    });
+
+    setImagen(null);
+  }
+
+  function limpiarMovimiento() {
     setProductoId("");
     setTipoMovimiento("ENTRADA");
     setCantidad("");
     setNumeroFactura("");
-    setFechaCompra(fechaPanama());
+    setFechaMovimiento(fechaPanama());
     setCondicionCompra("Contado");
     setTotalFactura("");
     setFechaVencimientoPago("");
     setObservacion("");
-  }
-
-  function volverInventario() {
-    router.push("/inventario");
   }
 
   const productosFiltrados = useMemo(() => {
@@ -317,33 +479,11 @@ export default function MovimientosInventario() {
     );
   }, [productos, busqueda]);
 
-  const totalEntradas = useMemo(
-    () =>
-      movimientos
-        .filter((item) =>
-          ["ENTRADA", "AJUSTE_ENTRADA", "NOTA_CREDITO", "DEVOLUCION"].includes(
-            item.tipo_movimiento
-          )
-        )
-        .reduce((total, item) => total + numero(item.cantidad), 0),
-    [movimientos]
-  );
-
-  const totalSalidas = useMemo(
-    () =>
-      movimientos
-        .filter((item) =>
-          ["SALIDA", "AJUSTE_SALIDA"].includes(item.tipo_movimiento)
-        )
-        .reduce((total, item) => total + numero(item.cantidad), 0),
-    [movimientos]
-  );
-
   if (cargando) {
     return (
       <div style={s.loading}>
         <img src="/konax-logo.png" alt="KONAX" style={s.loadingLogo} />
-        <strong>Preparando movimientos de inventario</strong>
+        <strong>Preparando inventario</strong>
       </div>
     );
   }
@@ -361,29 +501,272 @@ export default function MovimientosInventario() {
               <span style={s.etiqueta}>CONTROL DE EXISTENCIAS</span>
               <h1 style={s.titulo}>Movimientos de Inventario</h1>
               <p style={s.subtitulo}>
-                Registra entradas, salidas, ajustes, devoluciones y notas de crédito.
+                Crea productos y registra entradas, salidas y ajustes.
               </p>
             </div>
           </div>
 
-          <button onClick={volverInventario} style={s.botonVolver}>
+          <button onClick={() => router.push("/inventario")} style={s.botonVolver}>
             ← Volver a Inventario
           </button>
         </header>
 
-        <section style={s.kpiGrid}>
-          <Kpi titulo="Productos activos" valor={productos.length} icono="📦" />
-          <Kpi titulo="Movimientos consultados" valor={movimientos.length} icono="🔄" />
-          <Kpi titulo="Unidades de entrada" valor={totalEntradas} icono="📥" destacado />
-          <Kpi titulo="Unidades de salida" valor={totalSalidas} icono="📤" />
-        </section>
+        <div style={s.tabs}>
+          <button
+            onClick={() => setModo("crear_producto")}
+            style={{
+              ...s.tab,
+              ...(modo === "crear_producto" ? s.tabActivo : {}),
+            }}
+          >
+            ➕ Crear producto
+          </button>
 
-        <section style={s.mainGrid}>
+          <button
+            onClick={() => setModo("movimiento")}
+            style={{
+              ...s.tab,
+              ...(modo === "movimiento" ? s.tabActivo : {}),
+            }}
+          >
+            🔄 Registrar movimiento
+          </button>
+        </div>
+
+        {modo === "crear_producto" ? (
           <article style={s.card}>
             <Cabecera
-              titulo="Registrar movimiento"
-              texto="Seleccione el producto y la operación que afectará el stock."
+              titulo="Nuevo producto"
+              texto="Registra el producto y su entrada inicial al inventario."
               numero="01"
+            />
+
+            <div style={s.grid}>
+              <Campo label="Código *">
+                <input
+                  value={formProducto.codigo}
+                  onChange={(e) =>
+                    actualizarProducto("codigo", e.target.value)
+                  }
+                  style={s.input}
+                />
+              </Campo>
+
+              <Campo label="Nombre del producto *">
+                <input
+                  value={formProducto.nombre}
+                  onChange={(e) =>
+                    actualizarProducto("nombre", e.target.value)
+                  }
+                  style={s.input}
+                />
+              </Campo>
+
+              <Campo label="Categoría">
+                <input
+                  value={formProducto.categoria}
+                  onChange={(e) =>
+                    actualizarProducto("categoria", e.target.value)
+                  }
+                  style={s.input}
+                />
+              </Campo>
+
+              <Campo label="Proveedor">
+                <input
+                  value={formProducto.proveedor}
+                  onChange={(e) =>
+                    actualizarProducto("proveedor", e.target.value)
+                  }
+                  style={s.input}
+                />
+              </Campo>
+
+              <Campo label="Precio compra">
+                <input
+                  type="number"
+                  value={formProducto.precio_compra}
+                  onChange={(e) =>
+                    actualizarProducto("precio_compra", e.target.value)
+                  }
+                  style={s.input}
+                />
+              </Campo>
+
+              <Campo label="Precio venta">
+                <input
+                  type="number"
+                  value={formProducto.precio_venta}
+                  onChange={(e) =>
+                    actualizarProducto("precio_venta", e.target.value)
+                  }
+                  style={s.input}
+                />
+              </Campo>
+
+              <Campo label="Precio crédito">
+                <input
+                  type="number"
+                  value={formProducto.precio_credito}
+                  onChange={(e) =>
+                    actualizarProducto("precio_credito", e.target.value)
+                  }
+                  style={s.input}
+                />
+              </Campo>
+
+              <Campo label="Stock inicial">
+                <input
+                  type="number"
+                  value={formProducto.stock_inicial}
+                  onChange={(e) =>
+                    actualizarProducto("stock_inicial", e.target.value)
+                  }
+                  style={s.input}
+                />
+              </Campo>
+
+              <Campo label="Stock mínimo">
+                <input
+                  type="number"
+                  value={formProducto.stock_minimo}
+                  onChange={(e) =>
+                    actualizarProducto("stock_minimo", e.target.value)
+                  }
+                  style={s.input}
+                />
+              </Campo>
+
+              <Campo label="Factura / Orden *">
+                <input
+                  value={formProducto.numero_factura}
+                  onChange={(e) =>
+                    actualizarProducto("numero_factura", e.target.value)
+                  }
+                  style={s.input}
+                />
+              </Campo>
+
+              <Campo label="Fecha de compra">
+                <input
+                  type="date"
+                  value={formProducto.fecha_compra}
+                  onChange={(e) =>
+                    actualizarProducto("fecha_compra", e.target.value)
+                  }
+                  style={s.input}
+                />
+              </Campo>
+
+              <Campo label="Condición">
+                <select
+                  value={formProducto.condicion_compra}
+                  onChange={(e) =>
+                    actualizarProducto("condicion_compra", e.target.value)
+                  }
+                  style={s.input}
+                >
+                  <option>Contado</option>
+                  <option>Crédito 30 días</option>
+                  <option>Crédito 60 días</option>
+                  <option>Consignación</option>
+                </select>
+              </Campo>
+
+              <Campo label="Total factura">
+                <input
+                  type="number"
+                  value={formProducto.total_factura}
+                  onChange={(e) =>
+                    actualizarProducto("total_factura", e.target.value)
+                  }
+                  style={s.input}
+                />
+              </Campo>
+
+              <Campo label="Fecha vencimiento">
+                <input
+                  type="date"
+                  value={formProducto.fecha_vencimiento_pago}
+                  onChange={(e) =>
+                    actualizarProducto(
+                      "fecha_vencimiento_pago",
+                      e.target.value
+                    )
+                  }
+                  style={s.input}
+                />
+              </Campo>
+            </div>
+
+            <div style={s.gridInferior}>
+              <Campo label="Descripción">
+                <textarea
+                  value={formProducto.descripcion}
+                  onChange={(e) =>
+                    actualizarProducto("descripcion", e.target.value)
+                  }
+                  style={s.textarea}
+                />
+              </Campo>
+
+              <Campo label="Foto del producto">
+                <div style={s.uploadBox}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) =>
+                      setImagen(e.target.files?.[0] || null)
+                    }
+                  />
+                  <span style={s.textoArchivo}>
+                    {imagen
+                      ? imagen.name
+                      : "Seleccione una imagen"}
+                  </span>
+                </div>
+              </Campo>
+            </div>
+
+            <Campo label="Observación de compra">
+              <textarea
+                value={formProducto.observacion_compra}
+                onChange={(e) =>
+                  actualizarProducto(
+                    "observacion_compra",
+                    e.target.value
+                  )
+                }
+                style={s.textarea}
+              />
+            </Campo>
+
+            <div style={s.acciones}>
+              <button
+                onClick={guardarProductoNuevo}
+                disabled={guardando}
+                style={s.botonPrincipal}
+              >
+                {guardando
+                  ? "Guardando..."
+                  : "Guardar producto y entrada"}
+              </button>
+
+              <button
+                onClick={limpiarProducto}
+                disabled={guardando}
+                style={s.botonSecundario}
+              >
+                Limpiar
+              </button>
+            </div>
+          </article>
+        ) : (
+          <article style={s.card}>
+            <Cabecera
+              titulo="Movimiento de producto existente"
+              texto="Aumenta, disminuye o corrige el stock de un producto."
+              numero="02"
             />
 
             <div style={s.grid}>
@@ -391,7 +774,6 @@ export default function MovimientosInventario() {
                 <input
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
-                  placeholder="Código, nombre, categoría o proveedor"
                   style={s.input}
                 />
               </Campo>
@@ -403,6 +785,7 @@ export default function MovimientosInventario() {
                   style={s.input}
                 >
                   <option value="">Seleccione producto</option>
+
                   {productosFiltrados.map((producto) => (
                     <option key={producto.id} value={producto.id}>
                       {producto.codigo} - {producto.nombre} - Stock{" "}
@@ -418,12 +801,12 @@ export default function MovimientosInventario() {
                   onChange={(e) => setTipoMovimiento(e.target.value)}
                   style={s.input}
                 >
-                  <option value="ENTRADA">Entrada de mercancía</option>
+                  <option value="ENTRADA">Entrada</option>
                   <option value="SALIDA">Salida manual</option>
                   <option value="AJUSTE_ENTRADA">Ajuste positivo</option>
                   <option value="AJUSTE_SALIDA">Ajuste negativo</option>
-                  <option value="DEVOLUCION">Devolución de cliente</option>
-                  <option value="NOTA_CREDITO">Nota de crédito de proveedor</option>
+                  <option value="DEVOLUCION">Devolución</option>
+                  <option value="NOTA_CREDITO">Nota de crédito</option>
                 </select>
               </Campo>
 
@@ -436,37 +819,20 @@ export default function MovimientosInventario() {
                   style={s.input}
                 />
               </Campo>
-            </div>
 
-            <div style={s.stockGrid}>
-              <Dato titulo="Stock actual" valor={stockActual} />
-              <Dato titulo="Cantidad" valor={cantidadMovimiento} />
-              <Dato titulo="Stock resultante" valor={stockNuevo} destacado />
-            </div>
-
-            <div style={s.separador} />
-
-            <Cabecera
-              titulo="Documento y compra"
-              texto="Complete estos datos cuando el movimiento tenga factura, orden o compromiso de pago."
-              numero="02"
-            />
-
-            <div style={s.grid}>
-              <Campo label="N.° factura / orden / documento">
+              <Campo label="Documento">
                 <input
                   value={numeroFactura}
                   onChange={(e) => setNumeroFactura(e.target.value)}
-                  placeholder="Ej. FAC-1025 / OC-001"
                   style={s.input}
                 />
               </Campo>
 
-              <Campo label="Fecha del movimiento">
+              <Campo label="Fecha">
                 <input
                   type="date"
-                  value={fechaCompra}
-                  onChange={(e) => setFechaCompra(e.target.value)}
+                  value={fechaMovimiento}
+                  onChange={(e) => setFechaMovimiento(e.target.value)}
                   style={s.input}
                 />
               </Campo>
@@ -485,47 +851,54 @@ export default function MovimientosInventario() {
                 </select>
               </Campo>
 
-              <Campo label="Total factura / orden">
+              <Campo label="Total">
                 <input
                   type="number"
-                  min="0"
-                  step="0.01"
                   value={totalFactura}
                   onChange={(e) => setTotalFactura(e.target.value)}
                   style={s.input}
                 />
               </Campo>
 
-              <Campo label="Fecha vencimiento del pago">
+              <Campo label="Vencimiento">
                 <input
                   type="date"
                   value={fechaVencimientoPago}
-                  onChange={(e) => setFechaVencimientoPago(e.target.value)}
+                  onChange={(e) =>
+                    setFechaVencimientoPago(e.target.value)
+                  }
                   style={s.input}
                 />
               </Campo>
+            </div>
+
+            <div style={s.stockGrid}>
+              <Dato titulo="Stock actual" valor={stockActual} />
+              <Dato titulo="Cantidad" valor={cantidadMovimiento} />
+              <Dato titulo="Stock resultante" valor={stockNuevo} destacado />
             </div>
 
             <Campo label="Observación">
               <textarea
                 value={observacion}
                 onChange={(e) => setObservacion(e.target.value)}
-                placeholder="Motivo del movimiento, condición de la mercancía o comentario interno..."
                 style={s.textarea}
               />
             </Campo>
 
             <div style={s.acciones}>
               <button
-                onClick={guardarMovimiento}
+                onClick={guardarMovimientoExistente}
                 disabled={guardando}
                 style={s.botonPrincipal}
               >
-                {guardando ? "Guardando..." : "Registrar movimiento"}
+                {guardando
+                  ? "Guardando..."
+                  : "Registrar movimiento"}
               </button>
 
               <button
-                onClick={limpiarFormulario}
+                onClick={limpiarMovimiento}
                 disabled={guardando}
                 style={s.botonSecundario}
               >
@@ -533,60 +906,14 @@ export default function MovimientosInventario() {
               </button>
             </div>
           </article>
-
-          <aside style={s.resumenCard}>
-            <Cabecera
-              titulo="Resumen"
-              texto="Confirme el efecto antes de guardar."
-              numero="✓"
-            />
-
-            <Fila label="Producto" valor={productoSeleccionado?.nombre || "-"} />
-            <Fila label="Código" valor={productoSeleccionado?.codigo || "-"} />
-            <Fila label="Movimiento" valor={tipoMovimiento} />
-            <Fila label="Stock anterior" valor={stockActual} />
-            <Fila label="Cantidad" valor={cantidadMovimiento} />
-
-            <div style={s.totalBox}>
-              <span>Stock después del movimiento</span>
-              <strong>{stockNuevo}</strong>
-            </div>
-          </aside>
-        </section>
+        )}
 
         <article style={s.card}>
           <Cabecera
             titulo="Historial de movimientos"
-            texto="Consulta las entradas y salidas registradas en el periodo."
+            texto="Registro de entradas, salidas y ajustes."
             numero={String(movimientos.length)}
           />
-
-          <div style={s.filtros}>
-            <Campo label="Desde">
-              <input
-                type="date"
-                value={fechaDesde}
-                onChange={(e) => setFechaDesde(e.target.value)}
-                style={s.input}
-              />
-            </Campo>
-
-            <Campo label="Hasta">
-              <input
-                type="date"
-                value={fechaHasta}
-                onChange={(e) => setFechaHasta(e.target.value)}
-                style={s.input}
-              />
-            </Campo>
-
-            <button
-              onClick={() => cargarMovimientos()}
-              style={s.botonFiltrar}
-            >
-              Buscar movimientos
-            </button>
-          </div>
 
           <div style={s.tablaBox}>
             <table style={s.tabla}>
@@ -598,7 +925,6 @@ export default function MovimientosInventario() {
                   <th style={s.th}>Cantidad</th>
                   <th style={s.th}>Stock anterior</th>
                   <th style={s.th}>Stock nuevo</th>
-                  <th style={s.th}>Documento</th>
                   <th style={s.th}>Usuario</th>
                   <th style={s.th}>Observación</th>
                 </tr>
@@ -607,8 +933,8 @@ export default function MovimientosInventario() {
               <tbody>
                 {movimientos.length === 0 ? (
                   <tr>
-                    <td colSpan="9" style={s.tdVacio}>
-                      No hay movimientos en el periodo seleccionado.
+                    <td colSpan="8" style={s.tdVacio}>
+                      No hay movimientos registrados.
                     </td>
                   </tr>
                 ) : (
@@ -623,9 +949,7 @@ export default function MovimientosInventario() {
                       <tr key={movimiento.id}>
                         <td style={s.td}>
                           {String(
-                            movimiento.fecha_compra ||
-                              movimiento.created_at ||
-                              ""
+                            movimiento.created_at || ""
                           ).slice(0, 10)}
                         </td>
                         <td style={s.td}>
@@ -633,9 +957,12 @@ export default function MovimientosInventario() {
                         </td>
                         <td style={s.td}>{movimiento.tipo_movimiento}</td>
                         <td style={s.td}>{numero(movimiento.cantidad)}</td>
-                        <td style={s.td}>{numero(movimiento.stock_anterior)}</td>
-                        <td style={s.td}>{numero(movimiento.stock_nuevo)}</td>
-                        <td style={s.td}>{movimiento.numero_factura || "-"}</td>
+                        <td style={s.td}>
+                          {numero(movimiento.stock_anterior)}
+                        </td>
+                        <td style={s.td}>
+                          {numero(movimiento.stock_nuevo)}
+                        </td>
                         <td style={s.td}>{movimiento.usuario || "-"}</td>
                         <td style={s.td}>{movimiento.observacion || "-"}</td>
                       </tr>
@@ -672,16 +999,6 @@ function Cabecera({ titulo, texto, numero }) {
   );
 }
 
-function Kpi({ titulo, valor, icono, destacado }) {
-  return (
-    <article style={destacado ? s.kpiDestacado : s.kpi}>
-      <span style={s.kpiIcono}>{icono}</span>
-      <span style={s.kpiTitulo}>{titulo}</span>
-      <strong style={s.kpiValor}>{valor}</strong>
-    </article>
-  );
-}
-
 function Dato({ titulo, valor, destacado }) {
   return (
     <div style={destacado ? s.datoDestacado : s.dato}>
@@ -691,26 +1008,17 @@ function Dato({ titulo, valor, destacado }) {
   );
 }
 
-function Fila({ label, valor }) {
-  return (
-    <div style={s.fila}>
-      <span>{label}</span>
-      <strong>{valor}</strong>
-    </div>
-  );
-}
-
 const s = {
   pagina: {
     minHeight: "100vh",
-    padding: "26px",
+    padding: 26,
     background:
       "radial-gradient(circle at 88% 4%,rgba(41,163,98,.17),transparent 26%),linear-gradient(135deg,#f7faf8,#eaf3ed)",
     color: "#142019",
     fontFamily: "Inter,Arial,system-ui,sans-serif",
   },
   contenedor: {
-    maxWidth: "1500px",
+    maxWidth: 1500,
     margin: "0 auto",
   },
   loading: {
@@ -752,7 +1060,6 @@ const s = {
     placeItems: "center",
     borderRadius: 18,
     background: "#fff",
-    boxShadow: "0 10px 25px rgba(0,0,0,.18)",
   },
   logo: {
     width: "100%",
@@ -783,63 +1090,34 @@ const s = {
     fontWeight: 850,
     cursor: "pointer",
   },
-  kpiGrid: {
-    marginBottom: 20,
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit,minmax(190px,1fr))",
-    gap: 14,
+  tabs: {
+    marginBottom: 18,
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
   },
-  kpi: {
-    padding: 19,
-    display: "grid",
-    gap: 7,
-    border: "1px solid #d9e7de",
-    borderRadius: 19,
+  tab: {
+    minHeight: 46,
+    padding: "11px 18px",
+    border: "1px solid #cbd9d0",
+    borderRadius: 13,
     background: "#fff",
-    boxShadow: "0 9px 22px rgba(18,66,42,.07)",
+    color: "#294d38",
+    fontWeight: 850,
+    cursor: "pointer",
   },
-  kpiDestacado: {
-    padding: 19,
-    display: "grid",
-    gap: 7,
-    borderRadius: 19,
-    background: "linear-gradient(135deg,#1c8f58,#125d3a)",
+  tabActivo: {
+    background: "#173c2a",
     color: "#fff",
-    boxShadow: "0 13px 28px rgba(20,102,63,.23)",
-  },
-  kpiIcono: {
-    fontSize: 23,
-  },
-  kpiTitulo: {
-    fontSize: 12,
-    fontWeight: 800,
-  },
-  kpiValor: {
-    fontSize: 25,
-  },
-  mainGrid: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0,1fr) minmax(300px,380px)",
-    gap: 20,
-    alignItems: "start",
+    borderColor: "#173c2a",
   },
   card: {
     marginBottom: 20,
     padding: 24,
     border: "1px solid #dce8e0",
     borderRadius: 23,
-    background: "linear-gradient(180deg,#fff,#fbfdfc)",
-    boxShadow: "0 13px 32px rgba(18,66,42,.08)",
-  },
-  resumenCard: {
-    position: "sticky",
-    top: 18,
-    padding: 23,
-    border: "1px solid #d7e4dc",
-    borderRadius: 23,
     background: "#fff",
-    boxShadow: "0 15px 34px rgba(18,66,42,.1)",
+    boxShadow: "0 13px 32px rgba(18,66,42,.08)",
   },
   cabecera: {
     marginBottom: 18,
@@ -869,12 +1147,18 @@ const s = {
     background: "#e5f5eb",
     color: "#176b42",
     fontWeight: 900,
-    border: "1px solid #c9e4d3",
   },
   grid: {
     display: "grid",
     gridTemplateColumns:
       "repeat(auto-fit,minmax(220px,1fr))",
+    gap: 15,
+  },
+  gridInferior: {
+    marginTop: 16,
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit,minmax(280px,1fr))",
     gap: 15,
   },
   campo: {
@@ -907,6 +1191,19 @@ const s = {
     borderRadius: 12,
     resize: "vertical",
   },
+  uploadBox: {
+    minHeight: 105,
+    padding: 16,
+    display: "grid",
+    gap: 10,
+    border: "1px dashed #9fb7a8",
+    borderRadius: 13,
+    background: "#f7faf8",
+  },
+  textoArchivo: {
+    color: "#68766e",
+    fontSize: 12,
+  },
   stockGrid: {
     marginTop: 18,
     display: "grid",
@@ -921,7 +1218,6 @@ const s = {
     border: "1px solid #d8e5dc",
     borderRadius: 13,
     background: "#f8fbf9",
-    color: "#55665c",
   },
   datoDestacado: {
     padding: 13,
@@ -930,11 +1226,6 @@ const s = {
     borderRadius: 13,
     background: "#173c2a",
     color: "#fff",
-  },
-  separador: {
-    height: 1,
-    margin: "26px 0",
-    background: "#e4ece7",
   },
   acciones: {
     marginTop: 20,
@@ -951,7 +1242,6 @@ const s = {
     color: "#fff",
     fontWeight: 900,
     cursor: "pointer",
-    boxShadow: "0 9px 21px rgba(21,106,65,.22)",
   },
   botonSecundario: {
     minHeight: 48,
@@ -963,47 +1253,6 @@ const s = {
     fontWeight: 850,
     cursor: "pointer",
   },
-  fila: {
-    padding: "10px 0",
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    borderBottom: "1px solid #e9efeb",
-    color: "#617068",
-    fontSize: 12,
-  },
-  totalBox: {
-    marginTop: 18,
-    padding: 18,
-    display: "grid",
-    gap: 5,
-    borderRadius: 17,
-    background: "linear-gradient(135deg,#102f20,#176a42)",
-    color: "#fff",
-    boxShadow: "0 12px 26px rgba(17,79,48,.2)",
-  },
-  filtros: {
-    marginBottom: 18,
-    padding: 15,
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit,minmax(180px,1fr))",
-    gap: 12,
-    alignItems: "end",
-    border: "1px solid #dce7df",
-    borderRadius: 14,
-    background: "#f7faf8",
-  },
-  botonFiltrar: {
-    minHeight: 46,
-    padding: "11px 18px",
-    border: "none",
-    borderRadius: 12,
-    background: "#176d43",
-    color: "#fff",
-    fontWeight: 850,
-    cursor: "pointer",
-  },
   tablaBox: {
     overflowX: "auto",
     border: "1px solid #d8e5dc",
@@ -1011,7 +1260,7 @@ const s = {
   },
   tabla: {
     width: "100%",
-    minWidth: 1100,
+    minWidth: 1050,
     borderCollapse: "collapse",
   },
   th: {
