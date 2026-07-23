@@ -74,8 +74,38 @@ export default function Login() {
     }
   }
 
+  /*
+    Limpia solamente los datos propios de KONAX.
+    No usa localStorage.clear() porque eso borraría
+    la sesión persistente de Supabase Auth.
+  */
   function limpiarSesionLocal() {
-    localStorage.clear();
+    const clavesKonax = [
+      "empresaId",
+      "empresaNombre",
+      "usuarioId",
+      "authUserId",
+      "usuarioNombre",
+      "usuarioCorreo",
+      "usuarioRol",
+      "rolId",
+      "tipoNegocio",
+      "categoriaNegocio",
+      "planCodigo",
+      "planNombre",
+      "estadoPlan",
+      "estadoEmpresa",
+      "recordarme",
+      "konaxUltimaActividad",
+      "empresaAdminCreadaId",
+      "empresaAdminCreadaNombre",
+      "adminKonaxId",
+      "adminKonaxNombre",
+    ];
+
+    clavesKonax.forEach((clave) => {
+      localStorage.removeItem(clave);
+    });
   }
 
   async function cerrarSesionSupabase() {
@@ -184,6 +214,12 @@ export default function Login() {
     try {
       const correoLimpio = correo.trim().toLowerCase();
       const passwordLimpio = password.trim();
+
+      /*
+        Limpiar datos viejos de KONAX antes de autenticar,
+        sin borrar la sesión de Supabase.
+      */
+      limpiarSesionLocal();
 
       const {
         data: datosAuth,
@@ -326,7 +362,6 @@ export default function Login() {
         return;
       }
 
-      limpiarSesionLocal();
       guardarSesion(usuario, empresa);
 
       const empresaSesion =
@@ -337,6 +372,25 @@ export default function Login() {
 
       const rolSesion =
         localStorage.getItem("usuarioRol");
+
+      const {
+        data: sesionActual,
+        error: errorSesion,
+      } = await supabase.auth.getSession();
+
+      if (
+        errorSesion ||
+        !sesionActual?.session?.access_token
+      ) {
+        limpiarSesionLocal();
+        await cerrarSesionSupabase();
+
+        alert(
+          "No fue posible mantener activa la sesión segura."
+        );
+
+        return;
+      }
 
       if (
         !empresaSesion ||
@@ -371,6 +425,7 @@ export default function Login() {
         errorGeneral
       );
 
+      limpiarSesionLocal();
       await cerrarSesionSupabase();
 
       alert(
