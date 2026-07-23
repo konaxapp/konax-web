@@ -153,6 +153,23 @@ export default function Caja() {
     recalcularValorProducto();
   }, [tipoMovimiento, productoSeleccionado, cantidad]);
 
+  useEffect(() => {
+    if (
+      tipoMovimiento === "Cancelación" &&
+      cuentaSeleccionada?.id
+    ) {
+      setMonto(
+        String(
+          Number(cuentaSeleccionada.saldo_actual || 0).toFixed(2)
+        )
+      );
+    }
+  }, [
+    tipoMovimiento,
+    cuentaSeleccionada?.id,
+    cuentaSeleccionada?.saldo_actual,
+  ]);
+
   async function iniciarCaja() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
@@ -244,7 +261,6 @@ export default function Caja() {
     return [
       "Venta Contado",
       "Venta Crédito",
-      "Abono",
       "Venta de producto",
     ].includes(tipoMovimiento);
   }
@@ -254,30 +270,34 @@ export default function Caja() {
   }
 
   function esVentaContado() {
-    return ["Venta Contado", "Venta de producto"].includes(tipoMovimiento);
-  }
-
-  function esAbonoProducto() {
-    return tipoMovimiento === "Abono";
-  }
-
-  function esPagoDeCuenta() {
     return [
-      "Pago Crédito",
-      "Pago Credito",
-      "Cancelación",
+      "Venta Contado",
+      "Venta de producto",
     ].includes(tipoMovimiento);
   }
 
-  function esAbonoExistente() {
-    return esAbonoProducto() && Boolean(cuentaSeleccionada?.id);
+  function esAbono() {
+    return tipoMovimiento === "Abono";
   }
 
-  function esAbonoNuevoConProducto() {
+  function esCuotaCredito() {
+    return [
+      "Cuota Crédito",
+      "Pago Crédito",
+      "Pago Credito",
+    ].includes(tipoMovimiento);
+  }
+
+  function esCancelacion() {
+    return tipoMovimiento === "Cancelación";
+  }
+
+  function esPagoDeCuenta() {
     return (
-      esAbonoProducto() &&
-      !cuentaSeleccionada?.id &&
-      Boolean(productoSeleccionado)
+      esVentaCredito() ||
+      esAbono() ||
+      esCuotaCredito() ||
+      esCancelacion()
     );
   }
 
@@ -370,7 +390,7 @@ export default function Caja() {
         "Venta Contado",
         "Venta Crédito",
         "Abono",
-        "Pago Crédito",
+        "Cuota Crédito",
         "Cancelación",
       ];
     }
@@ -387,7 +407,7 @@ export default function Caja() {
         "Venta Contado",
         "Venta Crédito",
         "Abono",
-        "Pago Crédito",
+        "Cuota Crédito",
       ];
     }
 
@@ -395,7 +415,7 @@ export default function Caja() {
       "Venta Contado",
       "Venta Crédito",
       "Abono",
-      "Pago Crédito",
+      "Cuota Crédito",
       "Servicio Contado",
     ];
   }
@@ -520,7 +540,7 @@ export default function Caja() {
   function precioProducto(producto) {
     if (!producto) return 0;
 
-    if (esVentaCredito() || esAbonoProducto()) {
+    if (esVentaCredito()) {
       return Number(
         producto.precio_credito ||
           producto.precio_venta ||
@@ -559,7 +579,7 @@ export default function Caja() {
 
       setValorProducto(String(total));
 
-      if (!esAbonoProducto()) {
+      if (!esAbono()) {
         setMonto(String(total));
       }
     }
@@ -582,7 +602,7 @@ export default function Caja() {
     setProductoSeleccionado(null);
     setValorProducto("");
 
-    if (!esAbonoProducto()) {
+    if (esVentaContado()) {
       setMonto("");
     }
   }
@@ -596,7 +616,7 @@ export default function Caja() {
 
     setValorProducto(String(total));
 
-    if (!esAbonoProducto()) {
+    if (esVentaContado()) {
       setMonto(String(total));
     }
   }
@@ -823,129 +843,27 @@ export default function Caja() {
     return data;
   }
 
-  async function crearCuentaComercialVentaCredito(
-    empresaId,
-    clienteBase,
-    numeroVenta
-  ) {
-    const totalProducto = Number(valorProducto || 0);
-
-    const saldoInicial = esAbonoProducto()
-      ? Math.max(
-          totalProducto - Number(monto || 0),
-          0
-        )
-      : totalProducto;
-
-    const fechaVencimiento =
-      calcularNuevaFechaVencimiento(fechaPago, "Mensual");
-
-    const { data, error } = await supabase
-      .from("informacion_comercial")
-      .insert([
-        {
-          empresa_id: empresaId,
-          cliente_id: clienteBase.id,
-          numero_cuenta: numeroVenta,
-          tipo_producto:
-            productoSeleccionado?.categoria ||
-            "Producto",
-          descripcion:
-            productoSeleccionado?.nombre ||
-            productoSeleccionado?.descripcion ||
-            concepto ||
-            tipoMovimiento,
-          modalidad: esAbonoProducto()
-            ? "Abono"
-            : "Crédito",
-          monto_total: totalProducto,
-          saldo_actual: saldoInicial,
-          cuota: Number(monto || 0),
-          fecha_inicio: fechaPago,
-          fecha_vencimiento: fechaVencimiento,
-          estado:
-            saldoInicial <= 0
-              ? "Cancelado"
-              : "Activo",
-          vendedor: responsable,
-          responsable,
-          codigo_producto:
-            codigoProducto ||
-            productoSeleccionado?.codigo ||
-            null,
-          producto_id:
-            productoSeleccionado?.id ||
-            null,
-          numero_venta: numeroVenta,
-        },
-      ])
-      .select()
-      .single();
-
-    if (error) {
-      alert("Error creando cuenta comercial: " + error.message);
-      return null;
-    }
-
-    const { error: errorCobranza } =
-      await supabase
-        .from("informacion_cobranza")
-        .insert([
-          {
-            empresa_id: empresaId,
-            cliente_id: clienteBase.id,
-            informacion_comercial_id: data.id,
-            estado_cobranza:
-              saldoInicial <= 0
-                ? "Cancelado"
-                : "Al Día",
-            fecha_ultimo_pago:
-              esAbonoProducto()
-                ? fechaPago
-                : null,
-            monto_ultimo_pago:
-              esAbonoProducto()
-                ? Number(monto || 0)
-                : 0,
-            responsable_cobro: null,
-            observacion_cobro:
-              esAbonoProducto()
-                ? `Abono inicial registrado bajo venta ${numeroVenta}`
-                : `Venta crédito registrada bajo venta ${numeroVenta}`,
-          },
-        ]);
-
-    if (errorCobranza) {
-      alert(
-        "Cuenta creada, pero hubo error creando cobranza: " +
-          errorCobranza.message
-      );
-    }
-
-    return data;
-  }
-
-  async function actualizarSaldoCuenta(
+  async function consultarPagoCuenta(
     empresaId,
     cuentaAplicar = cuentaSeleccionada
   ) {
     if (!cuentaAplicar?.id) {
-      alert("No se encontró la cuenta comercial.");
+      alert("Seleccione una cuenta por cobrar.");
       return null;
     }
 
-    const montoPago = Number(monto || 0);
-
-    const { data: cuentaActual, error } =
-      await supabase
-        .from("informacion_comercial")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .eq("id", cuentaAplicar.id)
-        .maybeSingle();
+    const { data: cuentaActual, error } = await supabase
+      .from("informacion_comercial")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("id", cuentaAplicar.id)
+      .maybeSingle();
 
     if (error || !cuentaActual) {
-      alert("No se pudo consultar la cuenta comercial.");
+      alert(
+        "No se pudo consultar la cuenta por cobrar: " +
+          (error?.message || "Cuenta no encontrada.")
+      );
       return null;
     }
 
@@ -954,7 +872,19 @@ export default function Caja() {
     );
 
     if (saldoAnterior <= 0) {
-      alert("Esta cuenta no tiene saldo pendiente.");
+      alert("Esta cuenta ya está cancelada.");
+      return null;
+    }
+
+    let montoPago = Number(monto || 0);
+
+    if (esCancelacion()) {
+      montoPago = saldoAnterior;
+      setMonto(String(saldoAnterior.toFixed(2)));
+    }
+
+    if (!montoPago || montoPago <= 0) {
+      alert("Ingrese un monto válido mayor a cero.");
       return null;
     }
 
@@ -967,49 +897,161 @@ export default function Caja() {
       return null;
     }
 
-    const saldoFinal = Math.max(
+    if (
+      esCancelacion() &&
+      Math.abs(montoPago - saldoAnterior) > 0.009
+    ) {
+      alert(
+        "Para cancelar la cuenta debe pagarse el saldo completo."
+      );
+      return null;
+    }
+
+    const saldoNuevo = Math.max(
       saldoAnterior - montoPago,
       0
     );
 
-    const { error: errorSaldo } =
-      await supabase
-        .from("informacion_comercial")
-        .update({
-          saldo_actual: saldoFinal,
-          estado:
-            saldoFinal <= 0
-              ? "Cancelado"
-              : "Activo",
-        })
-        .eq("empresa_id", empresaId)
-        .eq("id", cuentaActual.id);
+    return {
+      cuentaActual,
+      saldoAnterior,
+      montoPago,
+      saldoNuevo,
+      estadoNuevo:
+        saldoNuevo <= 0 ? "Cancelado" : "Activo",
+      estadoCobranzaNuevo:
+        saldoNuevo <= 0 ? "Cancelado" : "Al Día",
+    };
+  }
 
-    if (errorSaldo) {
-      alert("Error actualizando saldo: " + errorSaldo.message);
-      return null;
+  async function aplicarPagoCuenta(
+    empresaId,
+    pagoPreparado
+  ) {
+    const {
+      cuentaActual,
+      montoPago,
+      saldoNuevo,
+      estadoNuevo,
+      estadoCobranzaNuevo,
+    } = pagoPreparado;
+
+    const { error: errorCuenta } = await supabase
+      .from("informacion_comercial")
+      .update({
+        saldo_actual: saldoNuevo,
+        estado: estadoNuevo,
+      })
+      .eq("empresa_id", empresaId)
+      .eq("id", cuentaActual.id);
+
+    if (errorCuenta) {
+      throw new Error(
+        "No se pudo actualizar el saldo: " +
+          errorCuenta.message
+      );
     }
 
-    const cuentaLocalActualizada = {
+    const {
+      data: cobranzaActual,
+      error: errorConsultarCobranza,
+    } = await supabase
+      .from("informacion_cobranza")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq(
+        "informacion_comercial_id",
+        cuentaActual.id
+      )
+      .maybeSingle();
+
+    if (errorConsultarCobranza) {
+      throw new Error(
+        "No se pudo consultar la cobranza: " +
+          errorConsultarCobranza.message
+      );
+    }
+
+    if (cobranzaActual?.id) {
+      const { error: errorCobranza } = await supabase
+        .from("informacion_cobranza")
+        .update({
+          fecha_ultimo_pago: fechaPago,
+          monto_ultimo_pago: montoPago,
+          estado_cobranza: estadoCobranzaNuevo,
+          dias_mora: 0,
+          observacion_cobro:
+            `${tipoMovimiento}. Saldo actualizado a ` +
+            `$${saldoNuevo.toFixed(2)}.`,
+        })
+        .eq("empresa_id", empresaId)
+        .eq("id", cobranzaActual.id);
+
+      if (errorCobranza) {
+        throw new Error(
+          "No se pudo actualizar cobranza: " +
+            errorCobranza.message
+        );
+      }
+    } else {
+      const { error: errorCrearCobranza } = await supabase
+        .from("informacion_cobranza")
+        .insert([
+          {
+            empresa_id: empresaId,
+            cliente_id: cuentaActual.cliente_id,
+            informacion_comercial_id: cuentaActual.id,
+            estado_cobranza: estadoCobranzaNuevo,
+            dias_mora: 0,
+            fecha_ultimo_pago: fechaPago,
+            monto_ultimo_pago: montoPago,
+            responsable_cobro: responsable || null,
+            observacion_cobro:
+              `${tipoMovimiento}. Saldo actualizado a ` +
+              `$${saldoNuevo.toFixed(2)}.`,
+          },
+        ]);
+
+      if (errorCrearCobranza) {
+        throw new Error(
+          "No se pudo crear la información de cobranza: " +
+            errorCrearCobranza.message
+        );
+      }
+    }
+
+    const cuentaActualizada = {
       ...cuentaActual,
-      saldo_actual: saldoFinal,
-      estado:
-        saldoFinal <= 0
-          ? "Cancelado"
-          : "Activo",
+      saldo_actual: saldoNuevo,
+      estado: estadoNuevo,
     };
 
-    setCuentaSeleccionada(cuentaLocalActualizada);
-
+    setCuentaSeleccionada(cuentaActualizada);
     setCuentasCliente((actuales) =>
       actuales.map((cuenta) =>
         cuenta.id === cuentaActual.id
-          ? cuentaLocalActualizada
+          ? cuentaActualizada
           : cuenta
       )
     );
 
-    return cuentaLocalActualizada;
+    return cuentaActualizada;
+  }
+
+  async function revertirPagoCuenta(
+    empresaId,
+    pagoPreparado
+  ) {
+    if (!pagoPreparado?.cuentaActual?.id) return;
+
+    await supabase
+      .from("informacion_comercial")
+      .update({
+        saldo_actual: pagoPreparado.saldoAnterior,
+        estado: pagoPreparado.cuentaActual.estado || "Activo",
+      })
+      .eq("empresa_id", empresaId)
+      .eq("id", pagoPreparado.cuentaActual.id);
   }
 
   async function procesarMembresiaDesdeCaja(empresaId) {
@@ -1157,10 +1199,6 @@ export default function Caja() {
 
     if (!empresaId || guardando) return;
 
-    const abonoExistente = esAbonoExistente();
-    const abonoNuevoConProducto =
-      esAbonoNuevoConProducto();
-
     if (!tipoMovimiento) {
       alert("Seleccione el tipo de movimiento.");
       return;
@@ -1176,43 +1214,30 @@ export default function Caja() {
       return;
     }
 
-    if (
-      requiereCliente() &&
-      !clienteSeleccionado
-    ) {
+    if (requiereCliente() && !clienteSeleccionado) {
       alert("Seleccione un cliente.");
       return;
     }
 
-    if (
-      requiereCuentaMembresia() &&
-      !cuentaSeleccionada
-    ) {
-      alert("Seleccione la cuenta de membresía del cliente.");
-      return;
-    }
-
-    if (
-      esPagoDeCuenta() &&
-      !cuentaSeleccionada
-    ) {
-      alert("Seleccione una cuenta para aplicar el pago.");
-      return;
-    }
-
-    if (
-      (esVentaCredito() ||
-        abonoNuevoConProducto ||
-        tipoMovimiento === "Venta de producto") &&
-      !productoSeleccionado
-    ) {
-      alert("Seleccione un producto válido del inventario.");
+    if (esPagoDeCuenta() && !cuentaSeleccionada?.id) {
+      alert(
+        "Seleccione la cuenta por cobrar donde se aplicará el pago."
+      );
       return;
     }
 
     if (
       esVentaConProducto() &&
-      !abonoExistente &&
+      !productoSeleccionado
+    ) {
+      alert(
+        "Seleccione un producto válido del inventario."
+      );
+      return;
+    }
+
+    if (
+      esVentaConProducto() &&
       Number(cantidad || 0) <= 0
     ) {
       alert("Ingrese una cantidad válida.");
@@ -1224,29 +1249,14 @@ export default function Caja() {
       return;
     }
 
-    if (
-      esAbonoProducto() &&
-      !abonoExistente &&
-      Number(monto || 0) >= Number(valorProducto || 0)
-    ) {
-      alert(
-        "El abono debe ser menor que el valor total. Si paga completo use Venta Contado."
-      );
-      return;
-    }
-
     setGuardando(true);
+
+    let movimientoCajaCreado = null;
+    let pagoPreparado = null;
+    let cuentaActualizada = cuentaSeleccionada;
 
     try {
       const numeroTransaccion = generarTransaccion();
-
-      const numeroVenta =
-        esVentaConProducto()
-          ? numeroVentaAbono.trim() ||
-            generarNumeroVenta()
-          : cuentaSeleccionada?.numero_cuenta ||
-            null;
-
       const usuarioRegistro =
         localStorage.getItem("usuarioNombre") ||
         localStorage.getItem("adminKonaxNombre") ||
@@ -1255,66 +1265,87 @@ export default function Caja() {
       let clienteBase = clienteSeleccionado;
 
       if (
-        esVentaConProducto() &&
+        esVentaContado() &&
         (clienteSeleccionado || nombreContado.trim())
       ) {
         clienteBase =
           await asegurarClienteParaVenta(empresaId);
       }
 
-      if (
-        (esVentaCredito() || esAbonoProducto()) &&
-        !clienteBase
-      ) {
+      /*
+        Venta Crédito no crea la cuenta.
+        La cuenta debe existir previamente en Clientes.
+      */
+      if (esVentaCredito() && !clienteBase) {
         alert(
-          "Ingrese o seleccione un cliente para registrar este movimiento."
+          "Seleccione el cliente y la cuenta por cobrar creada previamente."
         );
         return;
       }
 
+      /*
+        Antes de guardar se valida el inventario,
+        pero todavía no se descuenta.
+      */
+      if (esVentaConProducto()) {
+        const stockActual = stockProducto(
+          productoSeleccionado
+        );
+        const cantidadVenta = Number(cantidad || 0);
+
+        if (cantidadVenta <= 0) {
+          alert("La cantidad debe ser mayor a cero.");
+          return;
+        }
+
+        if (stockActual < cantidadVenta) {
+          alert(
+            `Stock insuficiente. Disponible: ${stockActual}.`
+          );
+          return;
+        }
+      }
+
+      if (esPagoDeCuenta()) {
+        pagoPreparado = await consultarPagoCuenta(
+          empresaId,
+          cuentaSeleccionada
+        );
+
+        if (!pagoPreparado) return;
+      }
+
+      const montoFinal = pagoPreparado
+        ? pagoPreparado.montoPago
+        : Number(monto || 0);
+
+      const numeroVenta =
+        cuentaSeleccionada?.numero_cuenta ||
+        numeroVentaAbono.trim() ||
+        (esVentaConProducto()
+          ? generarNumeroVenta()
+          : null);
+
+      const detalleSaldo = pagoPreparado
+        ? ` Saldo anterior: $${pagoPreparado.saldoAnterior.toFixed(
+            2
+          )}. Pago: $${pagoPreparado.montoPago.toFixed(
+            2
+          )}. Saldo nuevo: $${pagoPreparado.saldoNuevo.toFixed(
+            2
+          )}.`
+        : "";
+
       const descripcionFinal =
-        concepto ||
-        productoSeleccionado?.nombre ||
-        productoSeleccionado?.descripcion ||
-        cuentaSeleccionada?.descripcion ||
-        observacion ||
-        tipoMovimiento;
-
-      let cuentaParaMovimiento = cuentaSeleccionada;
-
-      if (
-        esVentaCredito() ||
-        abonoNuevoConProducto
-      ) {
-        cuentaParaMovimiento =
-          await crearCuentaComercialVentaCredito(
-            empresaId,
-            clienteBase,
-            numeroVenta
-          );
-
-        if (!cuentaParaMovimiento) return;
-      }
-
-      if (
-        esPagoDeCuenta() ||
-        abonoExistente
-      ) {
-        cuentaParaMovimiento =
-          await actualizarSaldoCuenta(
-            empresaId,
-            cuentaParaMovimiento
-          );
-
-        if (!cuentaParaMovimiento) return;
-      }
-
-      if (requiereCuentaMembresia()) {
-        cuentaParaMovimiento =
-          await procesarMembresiaDesdeCaja(empresaId);
-
-        if (!cuentaParaMovimiento) return;
-      }
+        `${
+          concepto ||
+          productoSeleccionado?.nombre ||
+          productoSeleccionado?.descripcion ||
+          cuentaSeleccionada?.descripcion ||
+          tipoMovimiento
+        }.${detalleSaldo}${
+          observacion ? ` Observación: ${observacion}` : ""
+        }`;
 
       const clienteNombreFinal =
         clienteBase?.nombre ||
@@ -1340,66 +1371,82 @@ export default function Caja() {
         telefonoContado ||
         null;
 
-      const { error } = await supabase
-        .from("caja")
-        .insert([
-          {
-            empresa_id: empresaId,
-            tipo: tipoMovimiento,
-            descripcion: descripcionFinal,
-            monto: Number(monto),
-            metodo_pago: metodoPago,
-            usuario: usuarioRegistro,
-            numero_transaccion: numeroTransaccion,
-            fecha_pago: fechaPago,
-            caja_estado: "Activa",
-            cliente_id:
-              clienteBase?.id ||
-              clienteSeleccionado?.id ||
-              null,
-            informacion_comercial_id:
-              cuentaParaMovimiento?.id ||
-              null,
-            numero_cuenta:
-              cuentaParaMovimiento?.numero_cuenta ||
-              numeroVenta ||
-              null,
-            estado: "Procesado",
-            cliente_nombre: clienteNombreFinal,
-            cliente_cedula: clienteCedulaFinal,
-            vendedor_responsable: responsable,
-            cliente_direccion: clienteDireccionFinal,
-            cliente_telefono: clienteTelefonoFinal,
-          },
-        ]);
+      const { data: movimientoCreado, error: errorCaja } =
+        await supabase
+          .from("caja")
+          .insert([
+            {
+              empresa_id: empresaId,
+              tipo: tipoMovimiento,
+              descripcion: descripcionFinal,
+              monto: montoFinal,
+              metodo_pago: metodoPago,
+              usuario: usuarioRegistro,
+              numero_transaccion: numeroTransaccion,
+              fecha_pago: fechaPago,
+              caja_estado: "Activa",
+              cliente_id:
+                clienteBase?.id ||
+                clienteSeleccionado?.id ||
+                null,
+              informacion_comercial_id:
+                cuentaSeleccionada?.id || null,
+              numero_cuenta:
+                cuentaSeleccionada?.numero_cuenta ||
+                numeroVenta ||
+                null,
+              estado: "Procesado",
+              cliente_nombre: clienteNombreFinal,
+              cliente_cedula: clienteCedulaFinal,
+              vendedor_responsable: responsable,
+              cliente_direccion: clienteDireccionFinal,
+              cliente_telefono: clienteTelefonoFinal,
+            },
+          ])
+          .select()
+          .single();
 
-      if (error) {
-        alert(
+      if (errorCaja) {
+        throw new Error(
           "No se pudo registrar el movimiento en caja: " +
-            error.message
+            errorCaja.message
         );
-        return;
       }
 
-      const debeDescontarInventario =
-        esVentaContado() ||
-        abonoNuevoConProducto;
+      movimientoCajaCreado = movimientoCreado;
 
-      if (debeDescontarInventario) {
-        const ok =
+      if (pagoPreparado) {
+        cuentaActualizada = await aplicarPagoCuenta(
+          empresaId,
+          pagoPreparado
+        );
+      }
+
+      /*
+        Solo las ventas rebajan inventario.
+        Abono, Cuota Crédito y Cancelación no lo rebajan.
+      */
+      if (esVentaConProducto()) {
+        const inventarioOk =
           await descontarInventario(empresaId);
 
-        if (!ok) return;
+        if (!inventarioOk) {
+          throw new Error(
+            "No se pudo completar el descuento del inventario."
+          );
+        }
       }
 
       alert(
-        tipoMovimiento === "Renovación"
-          ? "Pago registrado y membresía renovada correctamente."
-          : tipoMovimiento === "Membresía"
-          ? "Pago registrado y membresía activada correctamente."
-          : tipoMovimiento === "Venta de producto"
-          ? "Venta registrada y producto descontado del inventario."
-          : "Movimiento registrado correctamente."
+        esCancelacion()
+          ? "Cuenta cancelada y pago registrado correctamente."
+          : esCuotaCredito()
+          ? "Cuota de crédito registrada correctamente."
+          : esAbono()
+          ? "Abono registrado correctamente."
+          : esVentaCredito()
+          ? "Venta a crédito aplicada a la cuenta y producto descontado."
+          : "Venta registrada y producto descontado del inventario."
       );
 
       limpiarFormulario();
@@ -1413,6 +1460,25 @@ export default function Caja() {
         ),
       ]);
     } catch (error) {
+      /*
+        Si falló después de actualizar el saldo,
+        intenta devolver la cuenta al estado anterior.
+      */
+      if (pagoPreparado) {
+        await revertirPagoCuenta(
+          empresaId,
+          pagoPreparado
+        );
+      }
+
+      if (movimientoCajaCreado?.id) {
+        await supabase
+          .from("caja")
+          .delete()
+          .eq("empresa_id", empresaId)
+          .eq("id", movimientoCajaCreado.id);
+      }
+
       alert(
         error.message ||
           "No se pudo completar el movimiento."
@@ -1749,6 +1815,44 @@ export default function Caja() {
                         </select>
                       </Campo>
                     )}
+
+                    {cuentaSeleccionada && (
+                      <div style={estilos.detalleCuentaGrid}>
+                        <div style={estilos.detalleCuentaItem}>
+                          <span>Monto original</span>
+                          <strong>
+                            ${Number(
+                              cuentaSeleccionada.monto_total || 0
+                            ).toFixed(2)}
+                          </strong>
+                        </div>
+
+                        <div style={estilos.detalleCuentaItem}>
+                          <span>Saldo actual</span>
+                          <strong>
+                            ${Number(
+                              cuentaSeleccionada.saldo_actual || 0
+                            ).toFixed(2)}
+                          </strong>
+                        </div>
+
+                        <div style={estilos.detalleCuentaItem}>
+                          <span>Cuota</span>
+                          <strong>
+                            ${Number(
+                              cuentaSeleccionada.cuota || 0
+                            ).toFixed(2)}
+                          </strong>
+                        </div>
+
+                        <div style={estilos.detalleCuentaItem}>
+                          <span>Estado</span>
+                          <strong>
+                            {cuentaSeleccionada.estado || "Activo"}
+                          </strong>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </article>
@@ -1865,10 +1969,15 @@ export default function Caja() {
                     min="0"
                     step="0.01"
                     value={monto}
+                    readOnly={esCancelacion()}
                     onChange={(e) =>
                       setMonto(e.target.value)
                     }
-                    style={estilos.input}
+                    style={
+                      esCancelacion()
+                        ? estilos.inputReadOnly
+                        : estilos.input
+                    }
                   />
                 </Campo>
 
@@ -1969,6 +2078,34 @@ export default function Caja() {
                   valor={
                     cuentaSeleccionada?.numero_cuenta ||
                     "-"
+                  }
+                />
+                <FilaResumen
+                  label="Saldo actual"
+                  valor={
+                    cuentaSeleccionada
+                      ? `$${Number(
+                          cuentaSeleccionada.saldo_actual || 0
+                        ).toFixed(2)}`
+                      : "-"
+                  }
+                />
+                <FilaResumen
+                  label="Saldo después"
+                  valor={
+                    cuentaSeleccionada && esPagoDeCuenta()
+                      ? `$${Math.max(
+                          Number(
+                            cuentaSeleccionada.saldo_actual || 0
+                          ) -
+                            Number(
+                              esCancelacion()
+                                ? cuentaSeleccionada.saldo_actual || 0
+                                : monto || 0
+                            ),
+                          0
+                        ).toFixed(2)}`
+                      : "-"
                   }
                 />
                 <FilaResumen
@@ -2186,14 +2323,14 @@ const estilos = {
   pagina: {
     minHeight: "100vh",
     background:
-      "radial-gradient(circle at top right, rgba(22,131,79,.12), transparent 30%), #eef2f7",
-    padding: "24px",
-    color: "#111827",
+      "radial-gradient(circle at 88% 5%, rgba(41,163,98,.16), transparent 26%), radial-gradient(circle at 8% 12%, rgba(16,87,55,.10), transparent 24%), linear-gradient(135deg,#f7faf8 0%,#edf4f0 48%,#e7f1eb 100%)",
+    padding: "26px",
+    color: "#132019",
     fontFamily: "Inter, Arial, system-ui, sans-serif",
   },
 
   contenedor: {
-    maxWidth: "1500px",
+    maxWidth: "1540px",
     margin: "0 auto",
   },
 
@@ -2216,17 +2353,21 @@ const estilos = {
   },
 
   header: {
-    marginBottom: "20px",
-    padding: "28px",
+    position: "relative",
+    overflow: "hidden",
+    marginBottom: "22px",
+    padding: "30px",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     gap: "20px",
     flexWrap: "wrap",
-    borderRadius: "24px",
+    borderRadius: "28px",
     background:
-      "linear-gradient(135deg, #0a1710, #123924 65%, #17673e)",
+      "linear-gradient(135deg,#102d20 0%,#18583a 58%,#1e7c4d 100%)",
     color: "#ffffff",
+    border: "1px solid rgba(255,255,255,.14)",
+    boxShadow: "0 24px 55px rgba(18,66,42,.22)",
   },
 
   headerIzquierda: {
@@ -2237,13 +2378,15 @@ const estilos = {
   },
 
   logoBox: {
-    width: "190px",
-    height: "78px",
-    padding: "9px",
+    width: "200px",
+    height: "82px",
+    padding: "10px",
     display: "grid",
     placeItems: "center",
-    borderRadius: "16px",
-    background: "#ffffff",
+    borderRadius: "20px",
+    background: "linear-gradient(180deg,#ffffff,#f7fbf8)",
+    border: "1px solid rgba(255,255,255,.7)",
+    boxShadow: "0 12px 30px rgba(0,0,0,.20)",
   },
 
   logo: {
@@ -2276,14 +2419,16 @@ const estilos = {
   },
 
   botonVolver: {
-    minHeight: "44px",
-    padding: "11px 18px",
-    border: "1px solid rgba(255,255,255,.2)",
-    borderRadius: "11px",
-    background: "rgba(255,255,255,.10)",
+    minHeight: "46px",
+    padding: "11px 19px",
+    border: "1px solid rgba(255,255,255,.28)",
+    borderRadius: "14px",
+    background: "rgba(255,255,255,.14)",
     color: "#ffffff",
-    fontWeight: "800",
+    fontWeight: "850",
     cursor: "pointer",
+    boxShadow: "0 8px 20px rgba(0,0,0,.12)",
+    backdropFilter: "blur(10px)",
   },
 
   resumenGrid: {
@@ -2295,22 +2440,26 @@ const estilos = {
   },
 
   resumenCard: {
-    padding: "18px",
+    padding: "20px",
     display: "grid",
     gap: "7px",
-    border: "1px solid #dfe7e2",
-    borderRadius: "17px",
-    background: "#ffffff",
+    border: "1px solid #d9e7de",
+    borderRadius: "20px",
+    background:
+      "linear-gradient(180deg,#ffffff 0%,#f8fbf9 100%)",
+    boxShadow: "0 10px 24px rgba(24,79,49,.08)",
   },
 
   resumenCardDestacado: {
-    padding: "18px",
+    padding: "20px",
     display: "grid",
     gap: "7px",
-    borderRadius: "17px",
+    borderRadius: "20px",
     background:
-      "linear-gradient(135deg, #16834f, #125b39)",
+      "linear-gradient(135deg,#1c8f58 0%,#14663f 72%,#104d32 100%)",
     color: "#ffffff",
+    boxShadow: "0 14px 30px rgba(20,102,63,.24)",
+    border: "1px solid rgba(255,255,255,.18)",
   },
 
   kpiIcono: { fontSize: "24px" },
@@ -2327,19 +2476,23 @@ const estilos = {
 
   card: {
     marginBottom: "20px",
-    padding: "24px",
-    border: "1px solid #e0e7e2",
-    borderRadius: "20px",
-    background: "#ffffff",
+    padding: "25px",
+    border: "1px solid #dce8e0",
+    borderRadius: "24px",
+    background:
+      "linear-gradient(180deg,#ffffff 0%,#fbfdfc 100%)",
+    boxShadow: "0 14px 34px rgba(18,66,42,.08)",
   },
 
   cardSticky: {
     position: "sticky",
     top: "18px",
-    padding: "22px",
-    border: "1px solid #dce5df",
-    borderRadius: "20px",
-    background: "#ffffff",
+    padding: "24px",
+    border: "1px solid #d7e4dc",
+    borderRadius: "24px",
+    background:
+      "linear-gradient(180deg,#ffffff 0%,#f7fbf8 100%)",
+    boxShadow: "0 16px 36px rgba(18,66,42,.11)",
   },
 
   cabeceraSeccion: {
@@ -2364,15 +2517,18 @@ const estilos = {
   },
 
   numeroPaso: {
-    minWidth: "35px",
-    height: "35px",
-    padding: "0 9px",
+    minWidth: "38px",
+    height: "38px",
+    padding: "0 10px",
     display: "grid",
     placeItems: "center",
     borderRadius: "999px",
-    background: "#eaf7ef",
-    color: "#16834f",
+    background:
+      "linear-gradient(135deg,#e7f7ed,#d7efe1)",
+    color: "#176b42",
     fontWeight: "900",
+    border: "1px solid #c8e4d2",
+    boxShadow: "0 6px 14px rgba(23,107,66,.10)",
   },
 
   grid: {
@@ -2403,25 +2559,28 @@ const estilos = {
 
   input: {
     width: "100%",
-    minHeight: "44px",
-    padding: "11px 12px",
+    minHeight: "46px",
+    padding: "11px 13px",
     boxSizing: "border-box",
-    border: "1px solid #cfd8d2",
-    borderRadius: "10px",
+    border: "1px solid #cbdad0",
+    borderRadius: "12px",
     background: "#ffffff",
     color: "#111827",
+    outline: "none",
+    boxShadow: "inset 0 1px 2px rgba(17,24,39,.03)",
   },
 
   inputReadOnly: {
     width: "100%",
-    minHeight: "44px",
-    padding: "11px 12px",
+    minHeight: "46px",
+    padding: "11px 13px",
     boxSizing: "border-box",
-    border: "1px solid #d7ded9",
-    borderRadius: "10px",
-    background: "#f1f5f2",
+    border: "1px solid #cfe0d5",
+    borderRadius: "12px",
+    background:
+      "linear-gradient(180deg,#f3f8f5,#edf5f0)",
     color: "#17623c",
-    fontWeight: "800",
+    fontWeight: "850",
   },
 
   textarea: {
@@ -2473,6 +2632,25 @@ const estilos = {
     margin: "0 0 12px",
   },
 
+  detalleCuentaGrid: {
+    marginTop: "14px",
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit,minmax(140px,1fr))",
+    gap: "10px",
+  },
+
+  detalleCuentaItem: {
+    padding: "12px",
+    display: "grid",
+    gap: "5px",
+    border: "1px solid #cfe2d5",
+    borderRadius: "12px",
+    background: "#ffffff",
+    color: "#4b5f53",
+    fontSize: "12px",
+  },
+
   acciones: {
     marginTop: "18px",
     display: "flex",
@@ -2481,24 +2659,28 @@ const estilos = {
   },
 
   botonPrincipal: {
-    minHeight: "44px",
-    padding: "11px 20px",
+    minHeight: "48px",
+    padding: "12px 22px",
     border: "none",
-    borderRadius: "10px",
-    background: "#16834f",
+    borderRadius: "13px",
+    background:
+      "linear-gradient(135deg,#1d9159,#156a41)",
     color: "#ffffff",
-    fontWeight: "850",
+    fontWeight: "900",
     cursor: "pointer",
+    boxShadow: "0 10px 22px rgba(21,106,65,.22)",
   },
 
   botonLimpiar: {
-    minHeight: "44px",
-    padding: "11px 20px",
-    border: "1px solid #d2dbd5",
-    borderRadius: "10px",
+    minHeight: "48px",
+    padding: "12px 22px",
+    border: "1px solid #cbd9d0",
+    borderRadius: "13px",
     background: "#ffffff",
-    fontWeight: "800",
+    color: "#294d38",
+    fontWeight: "850",
     cursor: "pointer",
+    boxShadow: "0 7px 18px rgba(18,66,42,.07)",
   },
 
   resumenMovimiento: {
@@ -2518,13 +2700,15 @@ const estilos = {
 
   totalBox: {
     marginTop: "18px",
-    padding: "16px",
+    padding: "18px",
     display: "grid",
-    gap: "5px",
-    borderRadius: "14px",
+    gap: "6px",
+    borderRadius: "18px",
     background:
-      "linear-gradient(135deg, #0f2f20, #17623c)",
+      "linear-gradient(135deg,#102f20 0%,#176a42 70%,#1b7d4d 100%)",
     color: "#ffffff",
+    boxShadow: "0 14px 28px rgba(17,79,48,.22)",
+    border: "1px solid rgba(255,255,255,.14)",
   },
 
   filtrosMovimientos: {
@@ -2564,8 +2748,9 @@ const estilos = {
 
   tablaBox: {
     overflowX: "auto",
-    border: "1px solid #e1e7e3",
-    borderRadius: "13px",
+    border: "1px solid #d8e5dc",
+    borderRadius: "16px",
+    boxShadow: "0 8px 20px rgba(18,66,42,.06)",
   },
 
   tabla: {
@@ -2575,11 +2760,14 @@ const estilos = {
   },
 
   th: {
-    padding: "12px",
-    background: "#111827",
+    padding: "13px",
+    background:
+      "linear-gradient(180deg,#183c2a,#102a1d)",
     color: "#ffffff",
     textAlign: "left",
     whiteSpace: "nowrap",
+    fontSize: "12px",
+    letterSpacing: ".2px",
   },
 
   td: {
