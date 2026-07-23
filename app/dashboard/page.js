@@ -89,6 +89,8 @@ function construirModulosPorPlan(codigoPlan) {
       cobranza: true,
       dashboard_cobros: true,
       gestor_cobros: true,
+      inventario: true,
+      movimientos_inventario: true,
       reportes: true,
     };
   }
