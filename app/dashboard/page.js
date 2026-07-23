@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
 function normalizar(valor) {
@@ -181,6 +181,7 @@ function leerModuloEmpresa(data, codigo) {
 
 export default function Dashboard() {
   const router = useRouter();
+  const pathname = usePathname();
 
   const [modulos, setModulos] = useState({});
   const [permisosUsuario, setPermisosUsuario] =
@@ -859,26 +860,52 @@ export default function Dashboard() {
     <div style={s.layout}>
       <aside style={s.sidebar}>
         <div style={s.brand}>
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            style={s.logo}
-          />
+          <div style={s.logoCard}>
+            <img
+              src="/konax-logo.png"
+              alt="KONAX"
+              style={s.logo}
+            />
+          </div>
+
+          <div style={s.brandCaption}>
+            <span style={s.brandEyebrow}>PLATAFORMA EMPRESARIAL</span>
+            <strong style={s.brandTitle}>KONAX</strong>
+          </div>
         </div>
 
         <nav style={s.nav}>
-          {activos.map((item) => (
-            <button
-              key={item.codigo}
-              onClick={() =>
-                abrirModulo(item.ruta)
-              }
-              style={s.navItem}
-            >
-              <span>{item.icono}</span>
-              <span>{item.nombre}</span>
-            </button>
-          ))}
+          {activos.map((item) => {
+            const seleccionado =
+              pathname === item.ruta ||
+              pathname.startsWith(item.ruta + "/");
+
+            return (
+              <button
+                key={item.codigo}
+                onClick={() => abrirModulo(item.ruta)}
+                style={{
+                  ...s.navItem,
+                  ...(seleccionado ? s.navItemActivo : {}),
+                }}
+              >
+                <span
+                  style={{
+                    ...s.navIcon,
+                    ...(seleccionado ? s.navIconActivo : {}),
+                  }}
+                >
+                  {item.icono}
+                </span>
+
+                <span style={s.navTexto}>{item.nombre}</span>
+
+                {seleccionado && (
+                  <span style={s.navIndicador} />
+                )}
+              </button>
+            );
+          })}
         </nav>
 
         <button
@@ -1092,7 +1119,7 @@ const s = {
   layout: {
     minHeight: "100vh",
     display: "flex",
-    background: "#f3f6f4",
+    background: "linear-gradient(135deg,#f7faf8 0%,#eef5f1 100%)",
     color: "#142019",
     fontFamily:
       'Inter, system-ui, "Segoe UI", sans-serif',
@@ -1125,18 +1152,21 @@ const s = {
   },
 
   sidebar: {
-    width: 270,
-    minWidth: 270,
+    width: 292,
+    minWidth: 292,
     height: "100vh",
     position: "sticky",
     top: 0,
     display: "flex",
     flexDirection: "column",
-    padding: "22px 16px",
+    padding: "18px 16px",
     boxSizing: "border-box",
-    background: "#0a1710",
-    color: "#ffffff",
+    background:
+      "linear-gradient(180deg,#eaf7ef 0%,#dcefe4 55%,#cfe7d8 100%)",
+    color: "#173c2a",
     overflowY: "auto",
+    borderRight: "1px solid #c7ddcf",
+    boxShadow: "10px 0 35px rgba(23,60,42,.10)",
   },
 
   brand: {
@@ -1148,34 +1178,94 @@ const s = {
       "1px solid rgba(255,255,255,.08)",
   },
 
+  logoCard: {
+    minHeight: 86,
+    display: "grid",
+    placeItems: "center",
+    padding: "12px 16px",
+    borderRadius: 20,
+    background: "#ffffff",
+    boxShadow: "0 10px 24px rgba(23,60,42,.12)",
+    border: "1px solid rgba(23,60,42,.08)",
+  },
   logo: {
-    width: 180,
+    width: 182,
     maxWidth: "100%",
     height: "auto",
     objectFit: "contain",
   },
+  brandCaption: {
+    display: "grid",
+    gap: 2,
+    padding: "0 8px",
+  },
+  brandEyebrow: {
+    color: "#4d7d63",
+    fontSize: 9,
+    fontWeight: 900,
+    letterSpacing: 1.2,
+  },
+  brandTitle: {
+    color: "#173c2a",
+    fontSize: 15,
+    letterSpacing: 1.4,
+  },
 
   nav: {
     display: "grid",
-    gap: 5,
-    paddingTop: 18,
+    gap: 8,
+    paddingTop: 8,
   },
 
   navItem: {
-    minHeight: 44,
+    position: "relative",
+    minHeight: 50,
     display: "grid",
-    gridTemplateColumns: "24px 1fr",
+    gridTemplateColumns: "34px 1fr 6px",
     alignItems: "center",
     gap: 10,
-    padding: "9px 11px",
-    border: "none",
-    borderRadius: 10,
-    background: "transparent",
-    color: "#dfe8e2",
+    padding: "9px 12px",
+    border: "1px solid transparent",
+    borderRadius: 15,
+    background: "rgba(255,255,255,.52)",
+    color: "#244d37",
     fontSize: 13,
-    fontWeight: 650,
+    fontWeight: 750,
     textAlign: "left",
     cursor: "pointer",
+    boxShadow: "0 3px 10px rgba(23,60,42,.04)",
+  },
+  navItemActivo: {
+    background: "#173c2a",
+    color: "#ffffff",
+    borderColor: "#173c2a",
+    boxShadow: "0 10px 22px rgba(23,60,42,.22)",
+    transform: "translateX(2px)",
+  },
+  navIcon: {
+    width: 32,
+    height: 32,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 10,
+    background: "#ffffff",
+    fontSize: 16,
+    boxShadow: "0 3px 9px rgba(23,60,42,.08)",
+  },
+  navIconActivo: {
+    background: "rgba(255,255,255,.14)",
+    boxShadow: "none",
+  },
+  navTexto: {
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  navIndicador: {
+    width: 5,
+    height: 24,
+    borderRadius: 999,
+    background: "#67d99a",
   },
 
   logout: {
