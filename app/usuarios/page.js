@@ -17,8 +17,8 @@ const MODULOS = [
   ["control_caja", "Control de Caja", "Caja", "🏦"],
   ["gastos", "Gastos", "Caja", "🧮"],
   ["recargos", "Recargos", "Caja", "⚠️"],
-  ["inventario", "Inventario", "Ventas", "📦"],
-  ["movimientos_inventario", "Movimientos de inventario", "Ventas", "🔄"],
+  ["inventario", "Inventario", "Inventario", "📦"],
+  ["movimientos_inventario", "Movimientos de inventario", "Inventario", "🔄"],
   ["ventas", "Ventas", "Ventas", "🛒"],
   ["dashboard_ventas", "Centro de Ventas", "Ventas", "📈"],
   ["suscripciones", "Suscripciones", "Ventas", "🔁"],
@@ -59,6 +59,8 @@ function construirModulosPorPlan(codigoPlan) {
       cobranza: true,
       dashboard_cobros: true,
       gestor_cobros: true,
+      inventario: true,
+      movimientos_inventario: true,
       reportes: true,
     };
   }
