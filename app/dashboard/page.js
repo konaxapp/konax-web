@@ -266,31 +266,13 @@ export default function Dashboard() {
       return;
     }
 
-    /*
-      Comprueba que exista una sesión real de Supabase Auth.
-    */
-    const {
-      data: sesionData,
-      error: errorSesion,
-    } = await supabase.auth.getSession();
-
-    if (
-      errorSesion ||
-      !sesionData?.session?.user
-    ) {
-      await salir(
-        "Su sesión ha finalizado. Inicie sesión nuevamente."
-      );
-      return;
-    }
-
     const {
       data: usuario,
       error: errorUsuario,
     } = await supabase
       .from("usuarios")
       .select(
-        "id, empresa_id, nombre, correo, rol, rol_id, estado, auth_user_id"
+        "id, empresa_id, nombre, correo, rol, rol_id, estado"
       )
       .eq("id", usuarioId)
       .maybeSingle();
@@ -307,17 +289,6 @@ export default function Dashboard() {
     if (!usuario) {
       await salir(
         "El usuario de la sesión ya no existe."
-      );
-      return;
-    }
-
-    if (
-      usuario.auth_user_id &&
-      String(usuario.auth_user_id) !==
-        String(sesionData.session.user.id)
-    ) {
-      await salir(
-        "La sesión autenticada no corresponde al usuario."
       );
       return;
     }
