@@ -1509,9 +1509,9 @@ export default function ClientesPage() {
               <article style={styles.cardBusquedaCliente}>
                 <div style={styles.busquedaClienteHeader}>
                   <div>
-                    <span style={styles.sectionNumber}>CLIENTE EXISTENTE</span>
-                    <h2 style={styles.tituloSeccion}>Buscar antes de crear</h2>
-                    <p style={styles.textoSeccion}>Busque por cédula, nombre o teléfono para evitar duplicados y crear una cuenta adicional.</p>
+                    <span style={styles.sectionNumber}></span>
+                    <h2 style={styles.tituloSeccion}>Buscar / Crear</h2>
+                    <p style={styles.textoSeccion}></p>
                   </div>
                   {clienteSeleccionadoId && (
                     <span style={styles.clienteSeleccionadoBadge}>Cliente cargado: {clienteSeleccionadoNombre || nombre}</span>
@@ -2732,11 +2732,11 @@ const styles = {
   },
 
   resumenCard: {
-    minHeight: 68,
-    padding: "10px 12px",
+    minHeight: 58,
+    padding: "8px 10px",
     display: "grid",
-    gridTemplateColumns: "36px 1fr",
-    gap: 10,
+    gridTemplateColumns: "32px 1fr",
+    gap: 8,
     alignItems: "center",
     border: "1px solid #dfe7e2",
     borderRadius: 18,
@@ -2749,8 +2749,8 @@ const styles = {
   },
 
   kpiIcono: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
     display: "grid",
     placeItems: "center",
     borderRadius: 13,
@@ -2772,19 +2772,20 @@ const styles = {
 
   resumenValor: {
     margin: 0,
-    fontSize: 16,
-    lineHeight: 1.15,
+    fontSize: 14,
+    lineHeight: 1.1,
   },
 
   resumenDetalle: {
     display: "block",
-    marginTop: 3,
+    marginTop: 2,
     color: "#8a958e",
-    fontSize: 10,
-    lineHeight: 1.2,
+    fontSize: 9,
+    lineHeight: 1.1,
   },
 
   formLayout: {
+    marginTop: 0,
     display: "grid",
     gridTemplateColumns:
       "minmax(0,1fr) 330px",
@@ -2798,7 +2799,7 @@ const styles = {
 
   sideColumn: {
     position: "sticky",
-    top: 20,
+    top: 10,
     display: "grid",
     gap: 14,
   },
