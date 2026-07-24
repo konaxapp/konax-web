@@ -2480,7 +2480,7 @@ const estilos = {
     padding: "28px",
     color: "#6b7280",
     textAlign: "center",
-  },,
+  },
   posPagina: { minHeight: "100vh", background: "#f5f7f6", color: "#111827", fontFamily: "Inter, Arial, system-ui, sans-serif" },
   posHeader: { height: "80px", padding: "0 28px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "linear-gradient(90deg,#07131f,#0d1824)", color: "white", borderBottom: "1px solid rgba(255,255,255,.08)", position: "sticky", top: 0, zIndex: 30 },
   posLogo: { width: "142px", height: "52px", objectFit: "contain" },
