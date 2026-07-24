@@ -50,6 +50,11 @@ export default function ClientesPage() {
 
   const [documentos, setDocumentos] = useState([]);
   const [guardando, setGuardando] = useState(false);
+  const [busquedaCliente, setBusquedaCliente] = useState("");
+  const [resultadosCliente, setResultadosCliente] = useState([]);
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
+  const [clienteSeleccionadoId, setClienteSeleccionadoId] = useState("");
+  const [clienteSeleccionadoNombre, setClienteSeleccionadoNombre] = useState("");
 
   useEffect(() => {
     validarAcceso();
@@ -608,6 +613,69 @@ export default function ClientesPage() {
     return partes.join(" | ");
   }
 
+  async function buscarClienteExistente() {
+    const empresaId = obtenerEmpresaId();
+    const termino = busquedaCliente.trim();
+    if (!empresaId || !termino) {
+      alert("Escriba una cédula, nombre o teléfono para buscar.");
+      return;
+    }
+    setBuscandoCliente(true);
+    setResultadosCliente([]);
+    try {
+      const terminoSeguro = termino.replace(/,/g, " ");
+      const { data, error } = await supabase
+        .from("clientes")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .or(`cedula.ilike.%${terminoSeguro}%,nombre.ilike.%${terminoSeguro}%,telefono.ilike.%${terminoSeguro}%,telefono_secundario.ilike.%${terminoSeguro}%`)
+        .order("nombre", { ascending: true })
+        .limit(10);
+      if (error) throw error;
+      setResultadosCliente(data || []);
+      if (!data || data.length === 0) alert("No se encontró ningún cliente con esos datos.");
+    } catch (error) {
+      alert("No se pudo buscar el cliente: " + (error?.message || "Error desconocido"));
+    } finally {
+      setBuscandoCliente(false);
+    }
+  }
+
+  function usarClienteExistente(cliente) {
+    setClienteSeleccionadoId(cliente.id);
+    setClienteSeleccionadoNombre(cliente.nombre || "");
+    setCedula(cliente.cedula || "");
+    setNombre(cliente.nombre || "");
+    setCorreo(cliente.correo || "");
+    setTelefono(cliente.telefono || "");
+    setTelefonoSecundario(cliente.telefono_secundario || "");
+    setDireccion(cliente.direccion || "");
+    setReferenciaNombre(cliente.referencia_nombre || "");
+    setReferenciaTelefono(cliente.referencia_telefono || "");
+    setEstadoCliente(cliente.estado || "Activo");
+    setObservacionCliente(cliente.observacion || "");
+    setResultadosCliente([]);
+    setBusquedaCliente(cliente.cedula || cliente.nombre || cliente.telefono || "");
+    alert(`Cliente cargado: ${cliente.nombre || "Sin nombre"}. Complete la información de la nueva cuenta.`);
+  }
+
+  function crearClienteNuevo() {
+    setClienteSeleccionadoId("");
+    setClienteSeleccionadoNombre("");
+    setBusquedaCliente("");
+    setResultadosCliente([]);
+    setCedula("");
+    setNombre("");
+    setCorreo("");
+    setTelefono("");
+    setTelefonoSecundario("");
+    setDireccion("");
+    setReferenciaNombre("");
+    setReferenciaTelefono("");
+    setEstadoCliente("Activo");
+    setObservacionCliente("");
+  }
+
   function limpiarFormulario() {
     setCedula("");
     setNombre("");
@@ -642,6 +710,10 @@ export default function ClientesPage() {
     setResponsableCobro("");
     setObservacionCobro("");
     setDocumentos([]);
+    setBusquedaCliente("");
+    setResultadosCliente([]);
+    setClienteSeleccionadoId("");
+    setClienteSeleccionadoNombre("");
   }
 
   async function validarSesionAntesDeGuardar() {
@@ -744,6 +816,29 @@ export default function ClientesPage() {
     const observacionFinal =
       construirObservacionCliente();
 
+    if (clienteSeleccionadoId) {
+      const { data, error } = await supabase
+        .from("clientes")
+        .update({
+          cedula: cedulaLimpia,
+          nombre: nombre.trim(),
+          telefono: telefono.trim(),
+          telefono_secundario: telefonoSecundario.trim(),
+          direccion: direccion.trim(),
+          correo: correo.trim(),
+          referencia_nombre: referenciaNombre.trim(),
+          referencia_telefono: referenciaTelefono.trim(),
+          estado: estadoCliente,
+          observacion: observacionFinal,
+        })
+        .eq("empresa_id", empresaId)
+        .eq("id", clienteSeleccionadoId)
+        .select()
+        .single();
+      if (error) throw new Error("No se pudieron actualizar los datos del cliente seleccionado: " + error.message);
+      return { ...data, fueActualizado: true, fueSeleccionado: true };
+    }
+
     const {
       data: clienteExistente,
       error: errorBuscarCliente,
@@ -773,13 +868,13 @@ export default function ClientesPage() {
               clienteExistente.nombre ||
               "Sin nombre"
             }\n\n` +
-            "¿Desea actualizar sus datos con la información del formulario?"
+            "Presione Aceptar para usar este cliente y crearle una cuenta nueva."
         );
 
       if (!confirmarActualizacion) {
         const errorDuplicado =
           new Error(
-            "El cliente no fue duplicado. Búsquelo en el listado para consultar o actualizar su información."
+            "El cliente no fue duplicado. Use la búsqueda superior para cargarlo."
           );
 
         errorDuplicado.name =
@@ -1171,7 +1266,7 @@ export default function ClientesPage() {
 
       alert(
         clienteCreado.fueActualizado
-          ? `El cliente ya existía, sus datos fueron actualizados y se creó la cuenta ${cuentaFinal}.`
+          ? `Cliente existente utilizado correctamente. Se creó la nueva cuenta ${cuentaFinal} sin duplicar al cliente.`
           : `Cliente y cuenta registrados correctamente. Cuenta: ${cuentaFinal}.`
       );
 
@@ -1340,18 +1435,6 @@ export default function ClientesPage() {
             styles.resumenGrid
           }
         >
-          <KPI
-            titulo="Cliente"
-            valor={
-              nombre ||
-              "Pendiente"
-            }
-            detalle={
-              cedula ||
-              "Sin identificación"
-            }
-            icono="👤"
-          />
 
           {esNegocioMembresias ? (
             <KPI
@@ -1422,6 +1505,49 @@ export default function ClientesPage() {
               styles.mainColumn
             }
           >
+            {!modoSoloCliente && (
+              <article style={styles.cardBusquedaCliente}>
+                <div style={styles.busquedaClienteHeader}>
+                  <div>
+                    <span style={styles.sectionNumber}>CLIENTE EXISTENTE</span>
+                    <h2 style={styles.tituloSeccion}>Buscar antes de crear</h2>
+                    <p style={styles.textoSeccion}>Busque por cédula, nombre o teléfono para evitar duplicados y crear una cuenta adicional.</p>
+                  </div>
+                  {clienteSeleccionadoId && (
+                    <span style={styles.clienteSeleccionadoBadge}>Cliente cargado: {clienteSeleccionadoNombre || nombre}</span>
+                  )}
+                </div>
+                <div style={styles.busquedaClienteFila}>
+                  <input
+                    value={busquedaCliente}
+                    onChange={(e) => setBusquedaCliente(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); buscarClienteExistente(); } }}
+                    style={styles.inputStyle}
+                    placeholder="Cédula, nombre o teléfono"
+                  />
+                  <button type="button" onClick={buscarClienteExistente} style={styles.botonBuscarCliente} disabled={buscandoCliente}>
+                    {buscandoCliente ? "Buscando..." : "Buscar cliente"}
+                  </button>
+                  <button type="button" onClick={crearClienteNuevo} style={styles.botonNuevoCliente} disabled={buscandoCliente}>
+                    Crear cliente nuevo
+                  </button>
+                </div>
+                {resultadosCliente.length > 0 && (
+                  <div style={styles.resultadosCliente}>
+                    {resultadosCliente.map((cliente) => (
+                      <div key={cliente.id} style={styles.resultadoClienteFila}>
+                        <div>
+                          <strong>{cliente.nombre || "Sin nombre"}</strong>
+                          <div style={styles.resultadoClienteDetalle}>Cédula: {cliente.cedula || "-"} · Teléfono: {cliente.telefono || "-"}</div>
+                        </div>
+                        <button type="button" onClick={() => usarClienteExistente(cliente)} style={styles.botonUsarCliente}>Usar este cliente</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            )}
+
             <article
               style={styles.card}
             >
@@ -2294,19 +2420,6 @@ export default function ClientesPage() {
               >
                 Limpiar formulario
               </button>
-
-              <button
-                type="button"
-                onClick={
-                  volverCentroOperaciones
-                }
-                style={
-                  styles.botonSecundario
-                }
-                disabled={guardando}
-              >
-                Salir
-              </button>
             </div>
           </aside>
         </section>
@@ -2618,16 +2731,16 @@ const styles = {
     marginBottom: 20,
     display: "grid",
     gridTemplateColumns:
-      "repeat(auto-fit,minmax(250px,1fr))",
+      "repeat(auto-fit,minmax(220px,1fr))",
     gap: 14,
   },
 
   resumenCard: {
-    minHeight: 118,
-    padding: 18,
+    minHeight: 88,
+    padding: 14,
     display: "grid",
-    gridTemplateColumns: "48px 1fr",
-    gap: 14,
+    gridTemplateColumns: "42px 1fr",
+    gap: 12,
     border: "1px solid #dfe7e2",
     borderRadius: 18,
     background: "#fff",
@@ -2639,8 +2752,8 @@ const styles = {
   },
 
   kpiIcono: {
-    width: 48,
-    height: 48,
+    width: 42,
+    height: 42,
     display: "grid",
     placeItems: "center",
     borderRadius: 13,
@@ -2662,7 +2775,7 @@ const styles = {
 
   resumenValor: {
     margin: 0,
-    fontSize: 22,
+    fontSize: 19,
   },
 
   resumenDetalle: {
@@ -2909,6 +3022,17 @@ const styles = {
     fontWeight: 800,
     cursor: "pointer",
   },
+
+  cardBusquedaCliente: { marginBottom: 18, padding: 22, border: "1px solid #a7d7ba", borderRadius: 22, background: "#f4fbf7" },
+  busquedaClienteHeader: { marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" },
+  busquedaClienteFila: { display: "grid", gridTemplateColumns: "minmax(240px,1fr) auto auto", gap: 10, alignItems: "center" },
+  botonBuscarCliente: { minHeight: 46, padding: "11px 16px", border: "none", borderRadius: 11, background: "#16834f", color: "#fff", fontWeight: 850, cursor: "pointer" },
+  botonNuevoCliente: { minHeight: 46, padding: "11px 16px", border: "1px solid #b7c9bd", borderRadius: 11, background: "#fff", color: "#25352b", fontWeight: 800, cursor: "pointer" },
+  clienteSeleccionadoBadge: { padding: "9px 12px", border: "1px solid #8fd2aa", borderRadius: 999, background: "#e4f7eb", color: "#14683e", fontSize: 12, fontWeight: 900 },
+  resultadosCliente: { marginTop: 14, display: "grid", gap: 9 },
+  resultadoClienteFila: { padding: 13, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, border: "1px solid #d6e7dc", borderRadius: 12, background: "#fff" },
+  resultadoClienteDetalle: { marginTop: 4, color: "#748077", fontSize: 12 },
+  botonUsarCliente: { minHeight: 40, padding: "9px 13px", border: "none", borderRadius: 10, background: "#17211c", color: "#fff", fontWeight: 800, cursor: "pointer" },
 
   botonSecundario: {
     minHeight: 44,
