@@ -685,6 +685,7 @@ export default function ClientesPage() {
   async function guardarOActualizarCliente(
     empresaId
   ) {
+    const cedulaLimpia = cedula.trim();
     const observacionFinal =
       construirObservacionCliente();
 
@@ -695,17 +696,47 @@ export default function ClientesPage() {
       .from("clientes")
       .select("*")
       .eq("empresa_id", empresaId)
-      .eq("cedula", cedula.trim())
+      .eq("cedula", cedulaLimpia)
       .maybeSingle();
 
     if (errorBuscarCliente) {
+      console.error(
+        "Error buscando cliente:",
+        errorBuscarCliente
+      );
+
       throw new Error(
-        "Error buscando cliente: " +
-          errorBuscarCliente.message
+        "No se pudo verificar si el cliente ya está registrado."
       );
     }
 
     if (clienteExistente) {
+      const confirmarActualizacion =
+        window.confirm(
+          "Ya existe un cliente registrado con esta cédula.
+
+" +
+            `Cliente encontrado: ${
+              clienteExistente.nombre ||
+              "Sin nombre"
+            }
+
+` +
+            "¿Desea actualizar sus datos con la información del formulario?"
+        );
+
+      if (!confirmarActualizacion) {
+        const errorDuplicado =
+          new Error(
+            "El cliente no fue duplicado. Búsquelo en el listado para consultar o actualizar su información."
+          );
+
+        errorDuplicado.name =
+          "ClienteDuplicado";
+
+        throw errorDuplicado;
+      }
+
       const { data, error } =
         await supabase
           .from("clientes")
@@ -733,13 +764,20 @@ export default function ClientesPage() {
           .single();
 
       if (error) {
+        console.error(
+          "Error actualizando cliente:",
+          error
+        );
+
         throw new Error(
-          "Error actualizando cliente: " +
-            error.message
+          "El cliente ya existe, pero no se pudieron actualizar sus datos."
         );
       }
 
-      return data;
+      return {
+        ...data,
+        fueActualizado: true,
+      };
     }
 
     const { data, error } =
@@ -748,7 +786,7 @@ export default function ClientesPage() {
         .insert([
           {
             empresa_id: empresaId,
-            cedula: cedula.trim(),
+            cedula: cedulaLimpia,
             nombre: nombre.trim(),
             telefono: telefono.trim(),
             telefono_secundario:
@@ -768,13 +806,39 @@ export default function ClientesPage() {
         .single();
 
     if (error) {
+      console.error(
+        "Error guardando cliente:",
+        error
+      );
+
+      const mensajeError =
+        String(
+          error.message || ""
+        ).toLowerCase();
+
+      if (
+        error.code === "23505" ||
+        mensajeError.includes(
+          "clientes_cedula_key"
+        ) ||
+        mensajeError.includes(
+          "duplicate key"
+        )
+      ) {
+        throw new Error(
+          "Ya existe un cliente registrado con esta cédula. Búsquelo en el listado para consultar o actualizar su información."
+        );
+      }
+
       throw new Error(
-        "Error al guardar cliente: " +
-          error.message
+        "No se pudo guardar el cliente. Revise la información e intente nuevamente."
       );
     }
 
-    return data;
+    return {
+      ...data,
+      fueActualizado: false,
+    };
   }
 
   async function guardarRegistro() {
@@ -852,7 +916,9 @@ export default function ClientesPage() {
 
       if (modoSoloCliente) {
         alert(
-          esNegocioMembresias
+          clienteCreado.fueActualizado
+            ? "El cliente ya estaba registrado. Sus datos fueron actualizados correctamente."
+            : esNegocioMembresias
             ? "Cliente registrado correctamente. Ahora puede buscarlo en Caja o Suscripciones."
             : "Cliente registrado correctamente. Ahora puede utilizarlo en Ventas, Caja o Cuentas por Cobrar."
         );
@@ -1033,13 +1099,23 @@ export default function ClientesPage() {
       }
 
       alert(
-        `Cliente y cuenta registrados correctamente. Cuenta: ${cuentaFinal}.`
+        clienteCreado.fueActualizado
+          ? `El cliente ya existía, sus datos fueron actualizados y se creó la cuenta ${cuentaFinal}.`
+          : `Cliente y cuenta registrados correctamente. Cuenta: ${cuentaFinal}.`
       );
 
       limpiarFormulario();
     } catch (error) {
+      if (
+        error?.name ===
+        "ClienteDuplicado"
+      ) {
+        alert(error.message);
+        return;
+      }
+
       alert(
-        error.message ||
+        error?.message ||
           "Ocurrió un error guardando el registro."
       );
     } finally {
