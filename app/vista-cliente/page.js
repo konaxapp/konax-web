@@ -307,16 +307,27 @@ export default function VistaCliente() {
     const tipo = limpiarTexto(pago?.tipo);
     const estado = limpiarTexto(pago?.estado);
 
-    if (estado && estado !== "procesado" && estado !== "activo") {
+    if (
+      estado &&
+      estado !== "procesado" &&
+      estado !== "activo"
+    ) {
       return false;
     }
 
     return [
+      "abono",
+      "cuota crédito",
+      "cuota credito",
       "pago crédito",
       "pago credito",
       "cobro crédito",
       "cobro credito",
       "mensualidad",
+      "renovación",
+      "renovacion",
+      "membresía",
+      "membresia",
       "cancelación",
       "cancelacion",
     ].includes(tipo);
