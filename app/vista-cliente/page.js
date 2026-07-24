@@ -923,6 +923,11 @@ export default function VistaCliente() {
       const { error: errorActualizarCobranza } = await supabase
         .from("informacion_cobranza")
         .update({
+          estado_promesa: "Pendiente",
+          fecha_promesa: fechaPromesa,
+          monto_promesa: monto,
+          monto_cumplido_promesa: 0,
+          fecha_cumplimiento_promesa: null,
           proxima_gestion: fechaPromesa,
           observacion_cobro: textoPromesa,
         })
@@ -944,6 +949,11 @@ export default function VistaCliente() {
             cliente_id: cliente.id,
             informacion_comercial_id: cuenta.id,
             estado_cobranza: obtenerEstadoCalculado(),
+            estado_promesa: "Pendiente",
+            fecha_promesa: fechaPromesa,
+            monto_promesa: monto,
+            monto_cumplido_promesa: 0,
+            fecha_cumplimiento_promesa: null,
             proxima_gestion: fechaPromesa,
             observacion_cobro: textoPromesa,
             responsable_cobro: null,
@@ -1250,9 +1260,26 @@ export default function VistaCliente() {
               />
 
               <KPI
-                label="Próxima gestión"
-                value={formatoFecha(cobranza?.proxima_gestion)}
-                detail={cobranza?.responsable_cobro || "Sin responsable"}
+                label="Promesa de pago"
+                value={
+                  cobranza?.estado_promesa
+                    ? cobranza.estado_promesa
+                    : "Sin promesa"
+                }
+                detail={
+                  cobranza?.fecha_promesa
+                    ? `${formatoFecha(cobranza.fecha_promesa)} · ${formatoDinero(
+                        cobranza.monto_promesa
+                      )}`
+                    : "No hay promesa activa"
+                }
+                color={
+                  limpiarTexto(cobranza?.estado_promesa) === "cumplida"
+                    ? "#22c55e"
+                    : limpiarTexto(cobranza?.estado_promesa) === "vencida"
+                    ? "#ef4444"
+                    : "#eab308"
+                }
               />
             </section>
 
@@ -1340,6 +1367,18 @@ export default function VistaCliente() {
                 <DataRow
                   label="Responsable"
                   value={cobranza?.responsable_cobro || "-"}
+                />
+                <DataRow
+                  label="Estado promesa"
+                  value={cobranza?.estado_promesa || "Sin promesa"}
+                />
+                <DataRow
+                  label="Fecha promesa"
+                  value={formatoFecha(cobranza?.fecha_promesa)}
+                />
+                <DataRow
+                  label="Monto promesa"
+                  value={formatoDinero(cobranza?.monto_promesa)}
                 />
                 <DataRow
                   label="Próxima gestión"
