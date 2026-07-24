@@ -123,13 +123,16 @@ export default function GestorCobros() {
   }
 
   function dinero(valor) {
-    return "$" + Number(valor || 0).toLocaleString();
+    return "$" + Number(valor || 0).toLocaleString("es-PA", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   }
 
   function obtenerManana() {
     const fecha = new Date();
     fecha.setDate(fecha.getDate() + 1);
-    return fecha.toISOString().split("T")[0];
+    return fechaSimple(fecha);
   }
 
   function calcularDias(fechaVencimiento, saldo) {
@@ -385,6 +388,13 @@ export default function GestorCobros() {
 
   const hoy = fechaSimple(new Date());
 
+  const carteraActiva = cartera.filter(
+    (item) => Number(item.saldoReal || 0) > 0
+  );
+  const carteraCancelada = cartera.filter(
+    (item) => Number(item.saldoReal || 0) <= 0
+  );
+
   const carteraFiltrada = cartera.filter((item) => {
     const texto = limpiarTexto(busqueda);
     const coincideBusqueda =
@@ -393,31 +403,34 @@ export default function GestorCobros() {
       limpiarTexto(item.cliente?.cedula).includes(texto) ||
       limpiarTexto(item.cuenta?.numero_cuenta).includes(texto);
 
+    if (filtroCartera === "Todos") return coincideBusqueda && item.saldoReal > 0;
+    if (filtroCartera === "Canceladas") return coincideBusqueda && item.saldoReal <= 0;
     if (filtroCartera === "Al Día") return coincideBusqueda && item.dias <= 0 && item.saldoReal > 0;
     if (filtroCartera === "Mora total") return coincideBusqueda && item.dias > 0;
     if (filtroCartera === "Mora 1-30 días") return coincideBusqueda && item.dias > 0 && item.dias <= 30;
     if (filtroCartera === "Mora 31-90 días") return coincideBusqueda && item.dias > 30 && item.dias <= 90;
     if (filtroCartera === "Mora mayor a 90 días") return coincideBusqueda && item.dias > 90;
     if (filtroCartera === "Mora mayor a 1 año") return coincideBusqueda && item.dias > 365;
-    if (filtroCartera === "Sin teléfono") return coincideBusqueda && !item.cliente?.telefono;
-    if (filtroCartera === "Sin gestionar hoy") return coincideBusqueda && fechaSimple(item.cobranza?.fecha_ultima_gestion) !== hoy;
-    if (filtroCartera === "Promesas pendientes") return coincideBusqueda && item.estadoPromesa === "pendiente";
-    if (filtroCartera === "Promesas vencidas") return coincideBusqueda && item.estadoPromesa === "vencida";
+    if (filtroCartera === "Sin teléfono") return coincideBusqueda && item.saldoReal > 0 && !item.cliente?.telefono;
+    if (filtroCartera === "Sin gestionar hoy") return coincideBusqueda && item.saldoReal > 0 && fechaSimple(item.cobranza?.fecha_ultima_gestion) !== hoy;
+    if (filtroCartera === "Promesas pendientes") return coincideBusqueda && item.saldoReal > 0 && item.estadoPromesa === "pendiente";
+    if (filtroCartera === "Promesas vencidas") return coincideBusqueda && item.saldoReal > 0 && item.estadoPromesa === "vencida";
     if (filtroCartera === "Promesas cumplidas") return coincideBusqueda && item.estadoPromesa === "cumplida";
-    return coincideBusqueda;
+    return coincideBusqueda && item.saldoReal > 0;
   });
 
-  const clientesAsignados = cartera.length;
-  const gestionesDelDia = cartera.filter((item) => fechaSimple(item.cobranza?.fecha_ultima_gestion) === hoy).length;
-  const pendientesGestionHoy = Math.max(clientesAsignados - gestionesDelDia, 0);
-  const promesasPendientes = cartera.filter((item) => item.estadoPromesa === "pendiente").length;
-  const promesasVencidas = cartera.filter((item) => item.estadoPromesa === "vencida").length;
+  const clientesAsignados = carteraActiva.length;
+  const gestionesDelDia = carteraActiva.filter((item) => fechaSimple(item.cobranza?.fecha_ultima_gestion) === hoy).length;
+  const pendientesGestionHoy = carteraActiva.filter((item) => fechaSimple(item.cobranza?.fecha_ultima_gestion) !== hoy).length;
+  const promesasPendientes = carteraActiva.filter((item) => item.estadoPromesa === "pendiente").length;
+  const promesasVencidas = carteraActiva.filter((item) => item.estadoPromesa === "vencida").length;
   const promesasCumplidas = cartera.filter((item) => item.estadoPromesa === "cumplida").length;
-  const clientesSinTelefono = cartera.filter((item) => !item.cliente?.telefono).length;
-  const montoAsignado = cartera.reduce((sum, item) => sum + Number(item.saldoReal || 0), 0);
-  const montoAlDia = cartera.filter((item) => item.dias <= 0 && item.saldoReal > 0).reduce((sum, item) => sum + Number(item.saldoReal || 0), 0);
-  const montoMoraTotal = cartera.filter((item) => item.dias > 0).reduce((sum, item) => sum + Number(item.saldoReal || 0), 0);
-  const montoMoraMayor90 = cartera.filter((item) => item.dias > 90).reduce((sum, item) => sum + Number(item.saldoReal || 0), 0);
+  const clientesSinTelefono = carteraActiva.filter((item) => !item.cliente?.telefono).length;
+  const montoAsignado = carteraActiva.reduce((sum, item) => sum + Number(item.saldoReal || 0), 0);
+  const montoAlDia = carteraActiva.filter((item) => item.dias <= 0).reduce((sum, item) => sum + Number(item.saldoReal || 0), 0);
+  const montoMoraTotal = carteraActiva.filter((item) => item.dias > 0).reduce((sum, item) => sum + Number(item.saldoReal || 0), 0);
+  const montoMoraMayor90 = carteraActiva.filter((item) => item.dias > 90).reduce((sum, item) => sum + Number(item.saldoReal || 0), 0);
+  const cuentasCanceladas = carteraCancelada.length;
   const porcentajeAlDia = montoAsignado > 0 ? Math.round((montoAlDia / montoAsignado) * 100) : 0;
 
   return (
@@ -441,7 +454,7 @@ export default function GestorCobros() {
         </div>
 
         <div style={panelResumen}>
-          <KPI titulo="Clientes" valor={clientesAsignados} icono="👥" />
+          <KPI titulo="Clientes activos" valor={clientesAsignados} icono="👥" />
           <KPI titulo="Saldo asignado" valor={montoAsignado} tipo="dinero" icono="💰" />
           <KPI titulo="Al día" valor={montoAlDia} tipo="dinero" icono="🟢" />
           <KPI titulo="% al día" valor={porcentajeAlDia} tipo="porcentaje" icono="📈" />
@@ -452,6 +465,7 @@ export default function GestorCobros() {
           <KPI titulo="Mora total" valor={montoMoraTotal} tipo="dinero" icono="🔴" />
           <KPI titulo="Mora +90" valor={montoMoraMayor90} tipo="dinero" icono="⏰" />
           <KPI titulo="Sin teléfono" valor={clientesSinTelefono} icono="📵" />
+          <KPI titulo="Cuentas canceladas" valor={cuentasCanceladas} icono="📁" />
         </div>
 
         <div style={card}>
@@ -486,6 +500,7 @@ export default function GestorCobros() {
                 <option>Promesas cumplidas</option>
                 <option>Sin gestionar hoy</option>
                 <option>Sin teléfono</option>
+                <option>Canceladas</option>
               </select>
             </Campo>
           </div>
@@ -494,8 +509,12 @@ export default function GestorCobros() {
         <div style={card}>
           <div style={cardHeader}>
             <div>
-              <h2 style={tituloSeccion}>Clientes asignados</h2>
-              <p style={textoSuave}>El saldo se toma directamente de informacion_comercial.saldo_actual.</p>
+              <h2 style={tituloSeccion}>
+                {filtroCartera === "Canceladas" ? "Cuentas canceladas" : "Clientes asignados"}
+              </h2>
+              <p style={textoSuave}>
+                Las cuentas con saldo $0.00 no se incluyen en la cartera activa ni en pendientes de gestión.
+              </p>
             </div>
             <div style={badgeResultado}>{carteraFiltrada.length} resultados</div>
           </div>
@@ -553,24 +572,28 @@ export default function GestorCobros() {
                       </div>
                     </td>
                     <td style={td}>
-                      <select
-                        style={inputMini}
-                        defaultValue=""
-                        onChange={(e) => {
-                          registrarGestionRealizada(item, e.target.value);
-                          e.target.value = "";
-                        }}
-                      >
-                        <option value="">Seleccionar</option>
-                        <option>Llamada realizada</option>
-                        <option>WhatsApp enviado</option>
-                        <option>No contestó</option>
-                        <option>No localizado</option>
-                        <option>Número apagado</option>
-                        <option>Se conversó con cliente</option>
-                        <option>Se mudó</option>
-                        <option>Seguimiento pendiente</option>
-                      </select>
+                      {item.saldoReal > 0 ? (
+                        <select
+                          style={inputMini}
+                          defaultValue=""
+                          onChange={(e) => {
+                            registrarGestionRealizada(item, e.target.value);
+                            e.target.value = "";
+                          }}
+                        >
+                          <option value="">Seleccionar</option>
+                          <option>Llamada realizada</option>
+                          <option>WhatsApp enviado</option>
+                          <option>No contestó</option>
+                          <option>No localizado</option>
+                          <option>Número apagado</option>
+                          <option>Se conversó con cliente</option>
+                          <option>Se mudó</option>
+                          <option>Seguimiento pendiente</option>
+                        </select>
+                      ) : (
+                        <span style={textoTabla}>No requiere gestión</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -597,9 +620,14 @@ function Campo({ label, children }) {
 }
 
 function KPI({ titulo, valor, tipo, icono, alerta }) {
-  let mostrar = Number(valor || 0).toLocaleString();
-  if (tipo === "dinero") mostrar = "$" + Number(valor || 0).toLocaleString();
-  if (tipo === "porcentaje") mostrar = Number(valor || 0).toLocaleString() + "%";
+  let mostrar = Number(valor || 0).toLocaleString("es-PA");
+  if (tipo === "dinero") {
+    mostrar = "$" + Number(valor || 0).toLocaleString("es-PA", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+  if (tipo === "porcentaje") mostrar = Number(valor || 0).toLocaleString("es-PA") + "%";
 
   return (
     <div style={alerta ? cardKpiAlerta : cardKpi}>
