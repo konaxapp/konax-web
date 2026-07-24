@@ -78,7 +78,7 @@ export default function ClientesPage() {
     } else if (
       estadoAutomatico !== "Sin definir" &&
       estadoCuenta === "Cancelado" &&
-      Number(saldoParaCalcular || 0) > 0
+      convertirMonto(saldoParaCalcular) > 0
     ) {
       setEstadoCuenta("Activo");
     }
@@ -99,6 +99,53 @@ export default function ClientesPage() {
 
   function normalizarCodigo(valor) {
     return normalizar(valor).replace(/\s+/g, "_");
+  }
+
+  function limpiarMonto(valor) {
+    const texto = String(valor ?? "")
+      .replace(/,/g, "")
+      .replace(/[^\d.]/g, "");
+
+    const partes = texto.split(".");
+    const entero = partes.shift() || "";
+    const decimal = partes.join("").slice(0, 2);
+
+    return texto.includes(".")
+      ? `${entero}.${decimal}`
+      : entero;
+  }
+
+  function convertirMonto(valor) {
+    const limpio = String(valor ?? "")
+      .replace(/,/g, "")
+      .trim();
+
+    if (!limpio) {
+      return 0;
+    }
+
+    const numero = Number(limpio);
+
+    return Number.isFinite(numero)
+      ? numero
+      : 0;
+  }
+
+  function formatearMonto(valor) {
+    if (
+      valor === "" ||
+      valor === null ||
+      valor === undefined
+    ) {
+      return "";
+    }
+
+    const numero = convertirMonto(valor);
+
+    return numero.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   }
 
   function esAdministrador(rol) {
@@ -458,7 +505,7 @@ export default function ClientesPage() {
       saldo === null ||
       saldo === undefined ||
       !fecha ||
-      Number(saldo || 0) <= 0
+      convertirMonto(saldo) <= 0
     ) {
       return 0;
     }
@@ -503,7 +550,7 @@ export default function ClientesPage() {
     }
 
     const saldoNumero =
-      Number(saldo || 0);
+      convertirMonto(saldo);
 
     if (saldoNumero <= 0) {
       return "Cancelado";
@@ -932,7 +979,7 @@ export default function ClientesPage() {
       }
 
       const montoTotalNumero =
-        Number(
+        convertirMonto(
           montoTotal ||
             saldoActual ||
             0
@@ -940,14 +987,14 @@ export default function ClientesPage() {
 
       const saldoActualNumero =
         saldoActual !== ""
-          ? Number(
-              saldoActual || 0
+          ? convertirMonto(
+              saldoActual
             )
           : montoTotalNumero;
 
       const cuotaNumero =
         cuota !== ""
-          ? Number(cuota || 0)
+          ? convertirMonto(cuota)
           : 0;
 
       if (
@@ -983,8 +1030,8 @@ export default function ClientesPage() {
       }
 
       const montoUltimoPagoNumero =
-        Number(
-          montoUltimoPago || 0
+        convertirMonto(
+          montoUltimoPago
         );
 
       if (
@@ -1191,9 +1238,9 @@ export default function ClientesPage() {
 
   const saldoVisual =
     saldoActual !== ""
-      ? Number(saldoActual || 0)
+      ? convertirMonto(saldoActual)
       : montoTotal !== ""
-      ? Number(montoTotal || 0)
+      ? convertirMonto(montoTotal)
       : 0;
 
   const saldoParaEstadoVisual =
@@ -1750,57 +1797,83 @@ export default function ClientesPage() {
 
                     <Campo label="Monto total original *">
                       <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={
                           montoTotal
                         }
                         onChange={(e) =>
                           setMontoTotal(
-                            e.target.value
+                            limpiarMonto(
+                              e.target.value
+                            )
+                          )
+                        }
+                        onBlur={() =>
+                          setMontoTotal(
+                            formatearMonto(
+                              montoTotal
+                            )
                           )
                         }
                         style={
                           styles.inputStyle
                         }
+                        placeholder="Ej. 1,200.00"
                       />
                     </Campo>
 
                     <Campo label="Saldo actual *">
                       <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={
                           saldoActual
                         }
                         onChange={(e) =>
                           setSaldoActual(
-                            e.target.value
+                            limpiarMonto(
+                              e.target.value
+                            )
+                          )
+                        }
+                        onBlur={() =>
+                          setSaldoActual(
+                            formatearMonto(
+                              saldoActual
+                            )
                           )
                         }
                         style={
                           styles.inputStyle
                         }
+                        placeholder="Ej. 950.00"
                       />
                     </Campo>
 
                     <Campo label="Cuota *">
                       <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={cuota}
                         onChange={(e) =>
                           setCuota(
-                            e.target.value
+                            limpiarMonto(
+                              e.target.value
+                            )
+                          )
+                        }
+                        onBlur={() =>
+                          setCuota(
+                            formatearMonto(
+                              cuota
+                            )
                           )
                         }
                         style={
                           styles.inputStyle
                         }
-                        placeholder="Ej. 75.00"
+                        placeholder="Ej. 100.00"
                       />
                     </Campo>
 
@@ -1970,20 +2043,29 @@ export default function ClientesPage() {
 
                     <Campo label="Monto último pago">
                       <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={
                           montoUltimoPago
                         }
                         onChange={(e) =>
                           setMontoUltimoPago(
-                            e.target.value
+                            limpiarMonto(
+                              e.target.value
+                            )
+                          )
+                        }
+                        onBlur={() =>
+                          setMontoUltimoPago(
+                            formatearMonto(
+                              montoUltimoPago
+                            )
                           )
                         }
                         style={
                           styles.inputStyle
                         }
+                        placeholder="Ej. 100.00"
                       />
                     </Campo>
 
@@ -2137,8 +2219,12 @@ export default function ClientesPage() {
 
                   <ResumenFila
                     label="Saldo actual"
-                    value={`$${saldoVisual.toFixed(
-                      2
+                    value={`$${saldoVisual.toLocaleString(
+                      "en-US",
+                      {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      }
                     )}`}
                   />
 
@@ -2146,9 +2232,15 @@ export default function ClientesPage() {
                     label="Cuota"
                     value={
                       cuota
-                        ? `$${Number(
-                            cuota || 0
-                          ).toFixed(2)}`
+                        ? `$${convertirMonto(
+                            cuota
+                          ).toLocaleString(
+                            "en-US",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}`
                         : "Pendiente"
                     }
                   />
