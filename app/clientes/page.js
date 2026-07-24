@@ -549,10 +549,17 @@ export default function VistaCliente() {
 
     setCobranza(cobranzaData || null);
 
+    /*
+      Se limpia el historial inmediatamente para evitar que queden visibles
+      movimientos de la cuenta anterior mientras se carga la nueva selección.
+    */
+    setPagos([]);
+
     const { data: pagosData, error: errorPagos } = await supabase
       .from("caja")
       .select("*")
       .eq("empresa_id", empresaId)
+      .eq("informacion_comercial_id", cuentaId)
       .order("created_at", { ascending: false });
 
     if (errorPagos) {
@@ -562,30 +569,14 @@ export default function VistaCliente() {
       const pagosRelacionados = (pagosData || []).filter((pago) => {
         if (!pagoEsValido(pago)) return false;
 
-        const coincideCuentaId =
-          pago.informacion_comercial_id &&
-          String(pago.informacion_comercial_id) === String(cuentaId);
-
-        const cuentaPago = String(
-          pago.numero_cuenta ||
-            pago.cuenta ||
-            pago.codigo_cuenta ||
-            ""
-        ).trim();
-
-        const coincideNumeroCuenta =
-          numeroCuenta &&
-          cuentaPago &&
-          cuentaPago === String(numeroCuenta).trim();
-
         /*
-          El historial se relaciona exclusivamente con la cuenta seleccionada.
-          No se usa cliente_id ni cédula como respaldo porque un mismo cliente
-          puede tener varias cuentas y eso mezclaría pagos entre ellas.
+          Segunda validación de seguridad: el pago debe pertenecer exactamente
+          a la cuenta seleccionada. No se acepta coincidencia por cliente,
+          cédula ni teléfono.
         */
-        return Boolean(
-          coincideCuentaId ||
-          coincideNumeroCuenta
+        return (
+          pago.informacion_comercial_id &&
+          String(pago.informacion_comercial_id) === String(cuentaId)
         );
       });
 
