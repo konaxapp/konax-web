@@ -212,6 +212,43 @@ export default function Caja() {
       .trim();
   }
 
+  function calcularDiasMoraCuenta(fechaVencimiento, saldoActual) {
+    if (!fechaVencimiento || Number(saldoActual || 0) <= 0) {
+      return 0;
+    }
+
+    const hoy = new Date(`${obtenerFechaPanama()}T00:00:00`);
+    const vencimiento = new Date(
+      `${String(fechaVencimiento).slice(0, 10)}T00:00:00`
+    );
+
+    if (Number.isNaN(vencimiento.getTime())) {
+      return 0;
+    }
+
+    const diferencia = hoy.getTime() - vencimiento.getTime();
+
+    return diferencia > 0
+      ? Math.floor(diferencia / 86400000)
+      : 0;
+  }
+
+  function calcularEstadoCobranzaCuenta(
+    fechaVencimiento,
+    saldoActual
+  ) {
+    if (Number(saldoActual || 0) <= 0) {
+      return "Cancelado";
+    }
+
+    return calcularDiasMoraCuenta(
+      fechaVencimiento,
+      saldoActual
+    ) > 0
+      ? "Mora"
+      : "Al Día";
+  }
+
   function generarTransaccion() {
     return `TX-${Date.now()}`;
   }
@@ -919,8 +956,15 @@ export default function Caja() {
       saldoNuevo,
       estadoNuevo:
         saldoNuevo <= 0 ? "Cancelado" : "Activo",
+      diasMoraNuevo: calcularDiasMoraCuenta(
+        cuentaActual.fecha_vencimiento,
+        saldoNuevo
+      ),
       estadoCobranzaNuevo:
-        saldoNuevo <= 0 ? "Cancelado" : "Al Día",
+        calcularEstadoCobranzaCuenta(
+          cuentaActual.fecha_vencimiento,
+          saldoNuevo
+        ),
     };
   }
 
@@ -934,6 +978,7 @@ export default function Caja() {
       saldoNuevo,
       estadoNuevo,
       estadoCobranzaNuevo,
+      diasMoraNuevo,
     } = pagoPreparado;
 
     const { error: errorCuenta } = await supabase
@@ -957,7 +1002,7 @@ export default function Caja() {
       error: errorConsultarCobranza,
     } = await supabase
       .from("informacion_cobranza")
-      .select("id")
+      .select("*")
       .eq("empresa_id", empresaId)
       .eq(
         "informacion_comercial_id",
@@ -972,18 +1017,65 @@ export default function Caja() {
       );
     }
 
+    const estadoPromesaActual = normalizar(
+      cobranzaActual?.estado_promesa
+    );
+
+    const promesaAbierta = [
+      "activa",
+      "pendiente",
+      "vencida",
+    ].includes(estadoPromesaActual);
+
+    const montoPrometido = Number(
+      cobranzaActual?.monto_promesa ||
+        cobranzaActual?.monto_prometido ||
+        0
+    );
+
+    const montoCumplidoAnterior = Number(
+      cobranzaActual?.monto_cumplido_promesa || 0
+    );
+
+    const montoCumplidoNuevo = promesaAbierta
+      ? montoCumplidoAnterior + montoPago
+      : montoCumplidoAnterior;
+
+    const promesaCumplida =
+      promesaAbierta &&
+      montoPrometido > 0 &&
+      montoCumplidoNuevo + 0.009 >= montoPrometido;
+
+    const datosCobranza = {
+      fecha_ultimo_pago: fechaPago,
+      monto_ultimo_pago: montoPago,
+      estado_cobranza: estadoCobranzaNuevo,
+      dias_mora: diasMoraNuevo,
+      observacion_cobro:
+        `${tipoMovimiento}. Saldo actualizado a ` +
+        `$${saldoNuevo.toFixed(2)}.`,
+    };
+
+    if (promesaAbierta) {
+      datosCobranza.monto_cumplido_promesa =
+        montoCumplidoNuevo;
+
+      if (promesaCumplida) {
+        datosCobranza.estado_promesa = "Cumplida";
+        datosCobranza.fecha_cumplimiento_promesa =
+          fechaPago;
+        datosCobranza.proxima_gestion = null;
+        datosCobranza.observacion_cobro =
+          `Promesa de pago cumplida por $${montoPrometido.toFixed(
+            2
+          )}. Saldo actualizado a $${saldoNuevo.toFixed(2)}.`;
+      }
+    }
+
     if (cobranzaActual?.id) {
       const { error: errorCobranza } = await supabase
         .from("informacion_cobranza")
-        .update({
-          fecha_ultimo_pago: fechaPago,
-          monto_ultimo_pago: montoPago,
-          estado_cobranza: estadoCobranzaNuevo,
-          dias_mora: 0,
-          observacion_cobro:
-            `${tipoMovimiento}. Saldo actualizado a ` +
-            `$${saldoNuevo.toFixed(2)}.`,
-        })
+        .update(datosCobranza)
         .eq("empresa_id", empresaId)
         .eq("id", cobranzaActual.id);
 
@@ -1001,14 +1093,8 @@ export default function Caja() {
             empresa_id: empresaId,
             cliente_id: cuentaActual.cliente_id,
             informacion_comercial_id: cuentaActual.id,
-            estado_cobranza: estadoCobranzaNuevo,
-            dias_mora: 0,
-            fecha_ultimo_pago: fechaPago,
-            monto_ultimo_pago: montoPago,
+            ...datosCobranza,
             responsable_cobro: responsable || null,
-            observacion_cobro:
-              `${tipoMovimiento}. Saldo actualizado a ` +
-              `$${saldoNuevo.toFixed(2)}.`,
           },
         ]);
 
@@ -1017,6 +1103,38 @@ export default function Caja() {
           "No se pudo crear la información de cobranza: " +
             errorCrearCobranza.message
         );
+      }
+    }
+
+    if (promesaCumplida) {
+      const { data: promesasBitacora } = await supabase
+        .from("bitacora_cliente")
+        .select("id")
+        .eq("empresa_id", empresaId)
+        .eq("cliente_id", cuentaActual.cliente_id)
+        .eq("informacion_comercial_id", cuentaActual.id)
+        .eq("tipo_gestion", "Promesa de Pago")
+        .order("fecha_gestion", { ascending: false })
+        .limit(1);
+
+      const promesaBitacora = promesasBitacora?.[0];
+
+      if (promesaBitacora?.id) {
+        await supabase
+          .from("bitacora_cliente")
+          .update({
+            resultado_gestion: "Promesa cumplida",
+            descripcion:
+              `Promesa cumplida con pago de $${montoPago.toFixed(
+                2
+              )}.`,
+            observacion:
+              `Promesa cumplida. Saldo restante: $${saldoNuevo.toFixed(
+                2
+              )}.`,
+          })
+          .eq("empresa_id", empresaId)
+          .eq("id", promesaBitacora.id);
       }
     }
 
