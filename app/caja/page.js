@@ -1,8 +1,57 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+
+
+function normalizarClave(valor) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_");
+}
+
+function construirModulosPorPlan(codigoPlan) {
+  const codigo = normalizarClave(codigoPlan);
+  const base = {
+    dashboard: true, clientes: false, vista_cliente: false, creditos: false,
+    cobranza: false, dashboard_cobros: false, gestor_cobros: false, caja: false,
+    control_caja: false, reportes: false, inventario: false,
+    movimientos_inventario: false, ventas: false, dashboard_ventas: false,
+    gastos: false, recargos: false, suscripciones: false, usuarios: true,
+    configuracion: true,
+  };
+  if (codigo === "cobros") {
+    return { ...base, clientes: true, vista_cliente: true, caja: true, cobranza: true, dashboard_cobros: true, gestor_cobros: true, inventario: true, movimientos_inventario: true, reportes: true };
+  }
+  if (codigo === "ventas_gestion") {
+    return { ...base, clientes: true, vista_cliente: true, creditos: true, caja: true, control_caja: true, cobranza: true, dashboard_cobros: true, gestor_cobros: true, reportes: true, inventario: true, movimientos_inventario: true, ventas: true, dashboard_ventas: true, gastos: true, recargos: true, suscripciones: true };
+  }
+  if (codigo === "pro") {
+    return Object.fromEntries(Object.keys(base).map((codigoModulo) => [codigoModulo, true]));
+  }
+  return base;
+}
+
+function leerModuloEmpresa(data, codigo) {
+  if (!data) return true;
+  if (Object.prototype.hasOwnProperty.call(data, codigo)) return Boolean(data[codigo]);
+  const columnasAntiguas = {
+    clientes: "clientes", vista_cliente: "vista_cliente", creditos: "venta_credito",
+    caja: "caja", control_caja: "control_caja", cobranza: "cobranza",
+    dashboard_cobros: "dashboard_cobros", gestor_cobros: "cobranza",
+    reportes: "dashboard_cobros", inventario: "inventario",
+    movimientos_inventario: "inventario", ventas: "venta_credito",
+    dashboard_ventas: "dashboard_ventas", gastos: "egresos", recargos: "recargos",
+    suscripciones: "suscripciones",
+  };
+  const columna = columnasAntiguas[codigo];
+  if (columna && Object.prototype.hasOwnProperty.call(data, columna)) return Boolean(data[columna]);
+  return true;
+}
 
 function obtenerFechaPanama(fecha = new Date()) {
   const fechaObjeto =
@@ -101,6 +150,7 @@ function calcularNuevaFechaVencimiento(fechaBase, periodicidad) {
 
 export default function Caja() {
   const router = useRouter();
+  const pathname = usePathname();
 
   const hoyPanama = obtenerFechaPanama();
 
@@ -146,6 +196,10 @@ export default function Caja() {
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
 
+  const [modulosNavegacion, setModulosNavegacion] = useState({});
+  const [permisosNavegacion, setPermisosNavegacion] = useState([]);
+  const [usuarioRolNavegacion, setUsuarioRolNavegacion] = useState("");
+
   useEffect(() => {
     iniciarCaja();
   }, []);
@@ -171,6 +225,60 @@ export default function Caja() {
     cuentaSeleccionada?.saldo_actual,
   ]);
 
+  function esAdministradorNavegacion(rol = usuarioRolNavegacion) {
+    return ["administrador", "superadmin", "admin_master", "administrador_master"].includes(normalizarClave(rol));
+  }
+
+  async function cargarNavegacionCaja(empresaId) {
+    const usuarioId = localStorage.getItem("usuarioId");
+    const rolLocal = localStorage.getItem("usuarioRol") || "";
+    setUsuarioRolNavegacion(rolLocal);
+
+    const { data: empresa } = await supabase
+      .from("empresas")
+      .select("plan_codigo")
+      .eq("id", empresaId)
+      .maybeSingle();
+
+    const permitidos = construirModulosPorPlan(empresa?.plan_codigo || localStorage.getItem("planCodigo") || "");
+    const { data: configuracion } = await supabase
+      .from("empresa_modulos")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    const resultado = {};
+    Object.keys(permitidos).forEach((codigoModulo) => {
+      if (!permitidos[codigoModulo]) { resultado[codigoModulo] = false; return; }
+      if (["dashboard", "usuarios", "configuracion"].includes(codigoModulo)) { resultado[codigoModulo] = true; return; }
+      resultado[codigoModulo] = configuracion ? leerModuloEmpresa(configuracion, codigoModulo) : true;
+    });
+    setModulosNavegacion(resultado);
+
+    if (usuarioId) {
+      const { data: permisos } = await supabase
+        .from("permisos_usuarios_empresa")
+        .select("permiso, activo")
+        .eq("empresa_id", empresaId)
+        .eq("usuario_id", usuarioId)
+        .eq("activo", true);
+      setPermisosNavegacion((permisos || []).map((item) => normalizarClave(item.permiso)).filter(Boolean));
+    }
+  }
+
+  function puedeVerNavegacion(codigoModulo) {
+    const codigo = normalizarClave(codigoModulo);
+    if (!Boolean(modulosNavegacion?.[codigo])) return false;
+    if (esAdministradorNavegacion()) return true;
+    return codigo === "dashboard" || permisosNavegacion.includes(codigo);
+  }
+
+  async function cerrarSesionCaja() {
+    try { await supabase.auth.signOut(); } catch (error) { console.error(error); }
+    localStorage.clear();
+    router.replace("/login");
+  }
+
   async function iniciarCaja() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
@@ -182,6 +290,7 @@ export default function Caja() {
       cargarVendedores(empresaId),
       cargarProductos(empresaId),
       cargarMovimientos(empresaId, hoyPanama, hoyPanama),
+      cargarNavegacionCaja(empresaId),
     ]);
 
     setCargando(false);
@@ -1731,11 +1840,48 @@ export default function Caja() {
 
     setTipoMovimiento(tipo);
     setMonto(String(precioProducto(productoSeleccionado) * Number(cantidad || 1)));
-    document.getElementById("panel-cliente")?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
   }
+
+  function cambiarTipoOperacion(tipo) {
+    setTipoMovimiento(tipo);
+    setMonto("");
+    setConcepto("");
+    setCodigoProducto("");
+    setProductoSeleccionado(null);
+    setCantidad("1");
+    setValorProducto("");
+    setBuscarCliente("");
+    setResultadosBusqueda([]);
+    setClienteSeleccionado(null);
+    setCuentasCliente([]);
+    setCuentaSeleccionada(null);
+  }
+  const modulosMenuCaja = useMemo(() => {
+    const lista = [
+      ["Clientes", "/clientes", "clientes", "👥"],
+      ["Vista Cliente", "/vista-cliente", "vista_cliente", "📄"],
+      ["Créditos", "/ventas-credito", "creditos", "💳"],
+      ["Caja", "/caja", "caja", "💵"],
+      ["Cobranza", "/cobranza", "cobranza", "📞"],
+      ["Centro de Cobranza", "/dashboard-cobranza", "dashboard_cobros", "📊"],
+      ["Mi cartera de cobro", "/gestor-cobros", "gestor_cobros", "💼"],
+      ["Control Caja", "/control-caja", "control_caja", "🏦"],
+      ["Inventario", "/inventario", "inventario", "📦"],
+      ["Movimientos Inventario", "/inventario/movimientos", "movimientos_inventario", "🔄"],
+      ["Ventas", "/ventas", "ventas", "🛒"],
+      ["Centro de Ventas", "/dashboard-ventas", "dashboard_ventas", "📈"],
+      ["Gastos", "/gastos", "gastos", "🧮"],
+      ["Suscripciones", "/suscripciones", "suscripciones", "🔁"],
+      ["Recargos", "/recargos", "recargos", "⚠️"],
+      ["Reportes", "/reportes", "reportes", "📚"],
+      ["Usuarios y Roles", "/usuarios", "usuarios", "🔐"],
+      ["Configuración", "/admin-configuracion", "configuracion", "⚙️"],
+    ];
+    return lista
+      .map(([nombre, ruta, codigo, icono]) => ({ nombre, ruta, codigo, icono, activo: puedeVerNavegacion(codigo) }))
+      .filter((item) => item.activo);
+  }, [modulosNavegacion, permisosNavegacion, usuarioRolNavegacion]);
+
   if (cargando) {
     return (
       <div style={estilos.loading}>
@@ -1748,6 +1894,10 @@ export default function Caja() {
   const subtotalActual = productoSeleccionado
     ? precioProducto(productoSeleccionado) * Number(cantidad || 1)
     : 0;
+
+  const totalOperacionActual = esVentaConProducto()
+    ? subtotalActual
+    : Number(monto || 0);
 
   return (
     <main style={estilos.posPagina}>
@@ -1765,24 +1915,72 @@ export default function Caja() {
 
       <div style={estilos.posLayout}>
         <aside style={estilos.posSidebar}>
-          {[
-            ["▦", "Panel"], ["♙", "Clientes"], ["🛒", "Ventas"],
-            ["▣", "Caja"], ["□", "Inventario"], ["▤", "Créditos"],
-            ["$", "Cobranza"], ["▥", "Reportes"], ["⚙", "Configuración"],
-          ].map(([icono, texto]) => (
-            <button
-              key={texto}
-              onClick={() => texto === "Panel" && volverDashboard()}
-              style={texto === "Caja" ? estilos.posMenuActivo : estilos.posMenuItem}
-            >
-              <span style={estilos.posMenuIcono}>{icono}</span>{texto}
-            </button>
-          ))}
+          <div style={estilos.posSidebarBrand}>
+            <div style={estilos.posSidebarLogoCard}>
+              <img src="/konax-logo.png" alt="KONAX" style={estilos.posSidebarLogo} />
+            </div>
+            <div style={estilos.posSidebarCaption}>
+              <span style={estilos.posSidebarEyebrow}>PLATAFORMA EMPRESARIAL</span>
+              <strong style={estilos.posSidebarTitle}>KONAX</strong>
+            </div>
+          </div>
+
+          <nav style={estilos.posSidebarNav}>
+            {modulosMenuCaja.map((item) => {
+              const seleccionado = pathname === item.ruta || pathname.startsWith(item.ruta + "/");
+              return (
+                <button
+                  key={item.codigo}
+                  onClick={() => router.push(item.ruta)}
+                  style={{ ...estilos.posMenuItem, ...(seleccionado ? estilos.posMenuActivo : {}) }}
+                >
+                  <span style={{ ...estilos.posMenuIcono, ...(seleccionado ? estilos.posMenuIconoActivo : {}) }}>{item.icono}</span>
+                  <span style={estilos.posMenuTexto}>{item.nombre}</span>
+                  {seleccionado && <span style={estilos.posMenuIndicador} />}
+                </button>
+              );
+            })}
+          </nav>
+
+          <button onClick={cerrarSesionCaja} style={estilos.posLogout}>↪ Cerrar sesión</button>
         </aside>
 
         <section style={estilos.posContenido}>
+          <div style={estilos.posOperacionBar}>
+            <div>
+              <span style={estilos.posOperacionEtiqueta}>TIPO DE OPERACIÓN</span>
+              <h2 style={estilos.posOperacionTitulo}>
+                {esVentaConProducto() ? "Punto de venta" : "Cobro de cuenta"}
+              </h2>
+            </div>
+            <div style={estilos.posOperacionTabs}>
+              {opcionesMovimiento.map((opcion) => (
+                <button
+                  key={opcion}
+                  onClick={() => cambiarTipoOperacion(opcion)}
+                  style={tipoMovimiento === opcion ? estilos.posOperacionTabActivo : estilos.posOperacionTab}
+                >
+                  {opcion}
+                </button>
+              ))}
+            </div>
+            <div style={estilos.posOperacionDatos}>
+              <Campo label="Fecha">
+                <input type="date" value={fechaPago} onChange={(e) => setFechaPago(e.target.value)} style={estilos.posInputCompacto} />
+              </Campo>
+              <Campo label="Responsable">
+                <select value={responsable} onChange={(e) => setResponsable(e.target.value)} style={estilos.posInputCompacto}>
+                  <option value="">Seleccione responsable</option>
+                  {vendedores.map((v) => <option key={v.id} value={v.nombre}>{v.nombre} - {v.rol}</option>)}
+                </select>
+              </Campo>
+            </div>
+          </div>
+
           <div style={estilos.posPrincipalGrid}>
             <div style={estilos.posCatalogo}>
+              {esVentaConProducto() ? (
+                <>
               <div style={estilos.posBuscadorBox}>
                 <span style={estilos.posLupa}>⌕</span>
                 <input
@@ -1848,11 +2046,82 @@ export default function Caja() {
                   ))}
                 </div>
               </div>
+                </>
+              ) : (
+                <div style={estilos.posCobroCuentaBox}>
+                  <div style={estilos.posCobroEncabezado}>
+                    <div>
+                      <span style={estilos.posOperacionEtiqueta}>GESTIÓN DE CARTERA</span>
+                      <h2 style={estilos.posCobroTitulo}>{tipoMovimiento}</h2>
+                      <p style={estilos.posCobroTexto}>Busque al cliente y seleccione la cuenta donde se aplicará el pago.</p>
+                    </div>
+                    <span style={estilos.posCobroIcono}>$</span>
+                  </div>
+
+                  <div style={estilos.posBuscarClienteFila}>
+                    <Campo label="Buscar cliente o cuenta">
+                      <input value={buscarCliente} onChange={(e) => setBuscarCliente(e.target.value)} placeholder="Nombre, cédula, teléfono o número de cuenta" style={estilos.input} />
+                    </Campo>
+                    <button onClick={buscarClientes} style={estilos.posBotonBuscarCliente}>Buscar</button>
+                  </div>
+
+                  {resultadosBusqueda.length > 0 && (
+                    <div style={estilos.resultadosBox}>
+                      {resultadosBusqueda.map((item, index) => (
+                        <button key={`${item.cliente.id}-${index}`} onClick={() => seleccionarResultado(item)} style={estilos.resultadoItem}>
+                          <span><strong>{item.cliente.nombre}</strong><small style={estilos.posResultadoDetalle}>{item.cliente.cedula || "Sin cédula"}</small></span>
+                          <span>{item.cuenta?.numero_cuenta || "Seleccionar"}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {clienteSeleccionado ? (
+                    <div style={estilos.posClienteCuentaSeleccionado}>
+                      <div style={estilos.posClienteCuentaCabecera}>
+                        <span style={estilos.posClienteIcono}>♙</span>
+                        <div><strong>{clienteSeleccionado.nombre}</strong><small>{clienteSeleccionado.cedula || "Sin cédula"}</small></div>
+                      </div>
+
+                      <Campo label="Cuenta por cobrar">
+                        <select value={cuentaSeleccionada?.id || ""} onChange={(e) => setCuentaSeleccionada(cuentasCliente.find((c) => String(c.id) === String(e.target.value)) || null)} style={estilos.input}>
+                          <option value="">Seleccione una cuenta</option>
+                          {cuentasCliente.map((c) => <option key={c.id} value={c.id}>{c.numero_cuenta} - {c.descripcion} - Saldo ${Number(c.saldo_actual || 0).toFixed(2)}</option>)}
+                        </select>
+                      </Campo>
+
+                      {cuentaSeleccionada && (
+                        <div style={estilos.posCuentaResumenGrid}>
+                          <div><span>Cuenta</span><strong>{cuentaSeleccionada.numero_cuenta || "-"}</strong></div>
+                          <div><span>Saldo actual</span><strong>${Number(cuentaSeleccionada.saldo_actual || 0).toFixed(2)}</strong></div>
+                          <div><span>Cuota</span><strong>${Number(cuentaSeleccionada.cuota || 0).toFixed(2)}</strong></div>
+                          <div><span>Estado</span><strong>{cuentaSeleccionada.estado || "Activo"}</strong></div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={estilos.posEstadoVacioCuenta}>Seleccione un cliente para consultar sus cuentas.</div>
+                  )}
+
+                  <div style={estilos.posCobroCampos}>
+                    <Campo label={esCancelacion() ? "Monto de cancelación" : "Monto a registrar"}>
+                      <input type="number" min="0" step="0.01" value={monto} readOnly={esCancelacion()} onChange={(e) => setMonto(e.target.value)} style={esCancelacion() ? estilos.inputReadOnly : estilos.input} />
+                    </Campo>
+                    <Campo label="Método de pago">
+                      <select value={metodoPago} onChange={(e) => setMetodoPago(e.target.value)} style={estilos.input}><option>Efectivo</option><option>Transferencia</option><option>Yappy</option><option>Tarjeta</option><option>Cheque</option><option>Otro</option></select>
+                    </Campo>
+                    <Campo label="Concepto">
+                      <input value={concepto} onChange={(e) => setConcepto(e.target.value)} placeholder={`Ej. ${tipoMovimiento}`} style={estilos.input} />
+                    </Campo>
+                  </div>
+                  <Campo label="Observación"><textarea value={observacion} onChange={(e) => setObservacion(e.target.value)} style={estilos.textarea} /></Campo>
+                </div>
+              )}
             </div>
 
             <aside style={estilos.posVentaPanel}>
               <div style={estilos.posVentaHeader}>
-                <h2 style={estilos.posVentaTitulo}>Venta actual</h2>
+                <h2 style={estilos.posVentaTitulo}>{esVentaConProducto() ? "Venta actual" : "Cobro actual"}</h2>
                 <button onClick={() => seleccionarProducto(null)} style={estilos.posBotonBorrar}>▱</button>
               </div>
 
@@ -1860,33 +2129,42 @@ export default function Caja() {
                 <span>Producto</span><span>Cant.</span><span>Precio</span><span>Total</span>
               </div>
 
-              {productoSeleccionado ? (
-                <div style={estilos.posLineaVenta}>
-                  <div style={estilos.posLineaProducto}>
-                    <div style={estilos.posMiniaturaBox}>
-                      {obtenerImagenProducto(productoSeleccionado) ? (
-                        <img src={obtenerImagenProducto(productoSeleccionado)} alt="" style={estilos.posMiniatura} />
-                      ) : "▣"}
+              {esVentaConProducto() ? (
+                productoSeleccionado ? (
+                  <div style={estilos.posLineaVenta}>
+                    <div style={estilos.posLineaProducto}>
+                      <div style={estilos.posMiniaturaBox}>
+                        {obtenerImagenProducto(productoSeleccionado) ? (
+                          <img src={obtenerImagenProducto(productoSeleccionado)} alt="" style={estilos.posMiniatura} />
+                        ) : "▣"}
+                      </div>
+                      <strong>{productoSeleccionado.nombre}</strong>
                     </div>
-                    <strong>{productoSeleccionado.nombre}</strong>
+                    <div style={estilos.posCantidadControl}>
+                      <button onClick={() => setCantidad(String(Math.max(1, Number(cantidad || 1) - 1)))} style={estilos.posCantidadBtn}>−</button>
+                      <strong>{cantidad}</strong>
+                      <button onClick={() => setCantidad(String(Number(cantidad || 1) + 1))} style={estilos.posCantidadBtnMas}>+</button>
+                    </div>
+                    <span>${precioProducto(productoSeleccionado).toFixed(2)}</span>
+                    <strong>${subtotalActual.toFixed(2)}</strong>
                   </div>
-                  <div style={estilos.posCantidadControl}>
-                    <button onClick={() => setCantidad(String(Math.max(1, Number(cantidad || 1) - 1)))} style={estilos.posCantidadBtn}>−</button>
-                    <strong>{cantidad}</strong>
-                    <button onClick={() => setCantidad(String(Number(cantidad || 1) + 1))} style={estilos.posCantidadBtnMas}>+</button>
-                  </div>
-                  <span>${precioProducto(productoSeleccionado).toFixed(2)}</span>
-                  <strong>${subtotalActual.toFixed(2)}</strong>
-                </div>
+                ) : (
+                  <div style={estilos.posVentaVacia}>Seleccione un producto para iniciar la venta.</div>
+                )
               ) : (
-                <div style={estilos.posVentaVacia}>Seleccione un producto para iniciar la venta.</div>
+                <div style={estilos.posResumenCobroCuenta}>
+                  <div><span>Operación</span><strong>{tipoMovimiento || "-"}</strong></div>
+                  <div><span>Cliente</span><strong>{clienteSeleccionado?.nombre || "Sin seleccionar"}</strong></div>
+                  <div><span>Cuenta</span><strong>{cuentaSeleccionada?.numero_cuenta || "-"}</strong></div>
+                  <div><span>Saldo actual</span><strong>{cuentaSeleccionada ? `$${Number(cuentaSeleccionada.saldo_actual || 0).toFixed(2)}` : "-"}</strong></div>
+                </div>
               )}
 
               <div style={estilos.posTotalesBox}>
-                <div style={estilos.posTotalFila}><span>Subtotal</span><strong>${subtotalActual.toFixed(2)}</strong></div>
+                <div style={estilos.posTotalFila}><span>Subtotal</span><strong>${totalOperacionActual.toFixed(2)}</strong></div>
                 <div style={estilos.posTotalFilaVerde}><span>Descuento</span><strong>-$0.00</strong></div>
                 <div style={estilos.posTotalFila}><span>Impuesto</span><strong>$0.00</strong></div>
-                <div style={estilos.posGranTotal}><span>TOTAL</span><strong>${subtotalActual.toFixed(2)}</strong></div>
+                <div style={estilos.posGranTotal}><span>TOTAL</span><strong>${totalOperacionActual.toFixed(2)}</strong></div>
               </div>
 
               <div style={estilos.posClienteCard}>
@@ -1900,48 +2178,21 @@ export default function Caja() {
               </div>
 
               <div style={estilos.posBotonesCobro}>
-                <button onClick={() => prepararCobro("Venta Contado")} disabled={guardando} style={estilos.posCobrarContado}>▭ COBRAR CONTADO</button>
-                <button onClick={() => prepararCobro("Venta Crédito")} disabled={guardando} style={estilos.posVenderCredito}>▤ VENDER A CRÉDITO</button>
+                {esVentaConProducto() ? (
+                  <>
+                    <button onClick={() => prepararCobro("Venta Contado")} disabled={guardando} style={estilos.posCobrarContado}>▭ COBRAR CONTADO</button>
+                    <button onClick={() => prepararCobro("Venta Crédito")} disabled={guardando} style={estilos.posVenderCredito}>▤ VENDER A CRÉDITO</button>
+                  </>
+                ) : (
+                  <button onClick={guardarMovimiento} disabled={guardando} style={estilos.posRegistrarCobro}>
+                    {guardando ? "PROCESANDO..." : esCancelacion() ? "✓ CANCELAR CUENTA" : `✓ REGISTRAR ${String(tipoMovimiento || "PAGO").toUpperCase()}`}
+                  </button>
+                )}
               </div>
             </aside>
           </div>
 
-          <div id="panel-cliente" style={estilos.posPanelInferior}>
-            <article style={estilos.card}>
-              <CabeceraSeccion titulo="Datos del movimiento" texto="Complete el cliente, cuenta, fecha y responsable antes de cobrar." numero="01" />
-              <div style={estilos.grid}>
-                <Campo label="Fecha"><input type="date" value={fechaPago} onChange={(e) => setFechaPago(e.target.value)} style={estilos.input} /></Campo>
-                <Campo label="Tipo de movimiento"><select value={tipoMovimiento} onChange={(e) => setTipoMovimiento(e.target.value)} style={estilos.input}>{opcionesMovimiento.map((opcion) => <option key={opcion}>{opcion}</option>)}</select></Campo>
-                <Campo label="Método de pago"><select value={metodoPago} onChange={(e) => setMetodoPago(e.target.value)} style={estilos.input}><option>Efectivo</option><option>Transferencia</option><option>Yappy</option><option>Tarjeta</option><option>Cheque</option><option>Otro</option></select></Campo>
-                <Campo label="Responsable"><select value={responsable} onChange={(e) => setResponsable(e.target.value)} style={estilos.input}><option value="">Seleccione responsable</option>{vendedores.map((v) => <option key={v.id} value={v.nombre}>{v.nombre} - {v.rol}</option>)}</select></Campo>
-              </div>
-            </article>
-
-            <article style={estilos.card}>
-              <CabeceraSeccion titulo="Cliente y cuenta" texto="Busque por nombre, cédula, teléfono o número de cuenta." numero="02" />
-              <div style={estilos.toolbar}>
-                <Campo label="Buscar cliente"><input value={buscarCliente} onChange={(e) => setBuscarCliente(e.target.value)} placeholder="Nombre, cédula, teléfono o cuenta..." style={estilos.input} /></Campo>
-                <button onClick={buscarClientes} style={estilos.botonSecundario}>Buscar</button>
-              </div>
-              {resultadosBusqueda.length > 0 && <div style={estilos.resultadosBox}>{resultadosBusqueda.map((item, index) => <button key={`${item.cliente.id}-${index}`} onClick={() => seleccionarResultado(item)} style={estilos.resultadoItem}><strong>{item.cliente.nombre}</strong><span>{item.cuenta?.numero_cuenta || "Seleccionar"}</span></button>)}</div>}
-              {clienteSeleccionado && <div style={estilos.clienteSeleccionado}><h3 style={estilos.clienteNombre}>{clienteSeleccionado.nombre}</h3>{cuentasCliente.length > 0 && <Campo label="Cuenta"><select value={cuentaSeleccionada?.id || ""} onChange={(e) => setCuentaSeleccionada(cuentasCliente.find((c) => String(c.id) === String(e.target.value)) || null)} style={estilos.input}><option value="">Seleccione una cuenta</option>{cuentasCliente.map((c) => <option key={c.id} value={c.id}>{c.numero_cuenta} - {c.descripcion}</option>)}</select></Campo>}</div>}
-            </article>
-
-            <article style={estilos.card}>
-              <CabeceraSeccion titulo="Detalle adicional" texto="Confirme el monto, concepto y observación." numero="03" />
-              <div style={estilos.grid}>
-                <Campo label="Monto"><input type="number" min="0" step="0.01" value={monto} onChange={(e) => setMonto(e.target.value)} style={estilos.input} /></Campo>
-                <Campo label="Concepto"><input value={concepto} onChange={(e) => setConcepto(e.target.value)} style={estilos.input} /></Campo>
-              </div>
-              <Campo label="Observación"><textarea value={observacion} onChange={(e) => setObservacion(e.target.value)} style={estilos.textarea} /></Campo>
-              <div style={estilos.acciones}>
-                <button onClick={guardarMovimiento} disabled={guardando} style={estilos.botonPrincipal}>
-                  {guardando ? "Procesando..." : "Registrar movimiento"}
-                </button>
-                <button onClick={limpiarFormulario} disabled={guardando} style={estilos.botonLimpiar}>Limpiar formulario</button>
-              </div>
-            </article>
-
+          <div style={estilos.posPanelInferior}>
             <article style={estilos.card}>
               <CabeceraSeccion titulo="Movimientos registrados" texto="Consulte los movimientos del día o de un periodo." numero={String(movimientos.length)} />
               <div style={estilos.filtrosMovimientos}>
@@ -1950,7 +2201,7 @@ export default function Caja() {
                 <button onClick={buscarMovimientosPorFecha} style={estilos.botonFiltrar}>Buscar movimientos</button>
                 <button onClick={mostrarMovimientosHoy} style={estilos.botonHoy}>Ver hoy</button>
               </div>
-              <div style={estilos.tablaBox}><table style={estilos.tabla}><thead><tr>{["Fecha","Transacción","Cliente","Cuenta","Tipo","Método","Monto","Responsable","Estado"].map((h) => <th key={h} style={estilos.th}>{h}</th>)}</tr></thead><tbody>{movimientos.map((mov) => <tr key={mov.id}><td style={estilos.td}>{String(mov.fecha_pago || mov.created_at || "").slice(0,10)}</td><td style={estilos.td}>{mov.numero_transaccion || "-"}</td><td style={estilos.td}>{mov.cliente_nombre || "-"}</td><td style={estilos.td}>{mov.numero_cuenta || "-"}</td><td style={estilos.td}>{mov.tipo}</td><td style={estilos.td}>{mov.metodo_pago}</td><td style={estilos.td}><strong>${Number(mov.monto || 0).toFixed(2)}</strong></td><td style={estilos.td}>{mov.vendedor_responsable || "-"}</td><td style={estilos.td}>{mov.estado || "Procesado"}</td></tr>)}</tbody></table></div>
+              <div style={estilos.tablaBox}><table style={estilos.tabla}><thead><tr>{["Fecha","Transacción","Cliente","Cuenta","Tipo","Método","Monto","Responsable","Estado"].map((h) => <th key={h} style={estilos.th}>{h}</th>)}</tr></thead><tbody>{movimientos.length === 0 ? <tr><td colSpan="9" style={estilos.tdVacio}>No hay movimientos en el periodo seleccionado.</td></tr> : movimientos.map((mov) => <tr key={mov.id}><td style={estilos.td}>{String(mov.fecha_pago || mov.created_at || "").slice(0,10)}</td><td style={estilos.td}>{mov.numero_transaccion || "-"}</td><td style={estilos.td}>{mov.cliente_nombre || "-"}</td><td style={estilos.td}>{mov.numero_cuenta || "-"}</td><td style={estilos.td}>{mov.tipo}</td><td style={estilos.td}>{mov.metodo_pago}</td><td style={estilos.td}><strong>${Number(mov.monto || 0).toFixed(2)}</strong></td><td style={estilos.td}>{mov.vendedor_responsable || "-"}</td><td style={estilos.td}>{mov.estado || "Procesado"}</td></tr>)}</tbody></table></div>
             </article>
           </div>
         </section>
@@ -2488,10 +2739,10 @@ const estilos = {
   posSeparador: { opacity: .4 },
   posVolver: { padding: "9px 13px", border: "1px solid rgba(255,255,255,.25)", borderRadius: "10px", background: "transparent", color: "white", cursor: "pointer" },
   posLayout: { display: "grid", gridTemplateColumns: "145px minmax(0,1fr)", minHeight: "calc(100vh - 80px)" },
-  posSidebar: { padding: "22px 8px", background: "linear-gradient(180deg,#07131f,#0b1926)", display: "flex", flexDirection: "column", gap: "12px" },
-  posMenuItem: { width: "100%", minHeight: "60px", border: 0, borderRadius: "8px", background: "transparent", color: "#fff", display: "flex", alignItems: "center", gap: "12px", padding: "0 14px", cursor: "pointer", textAlign: "left" },
-  posMenuActivo: { width: "100%", minHeight: "60px", border: 0, borderRadius: "8px", background: "linear-gradient(135deg,#10974d,#087f40)", color: "#fff", display: "flex", alignItems: "center", gap: "12px", padding: "0 14px", cursor: "pointer", textAlign: "left", boxShadow: "0 8px 20px rgba(8,127,64,.25)" },
-  posMenuIcono: { width: "25px", fontSize: "22px" },
+  posSidebar: { width: "292px", minWidth: "292px", height: "calc(100vh - 80px)", position: "sticky", top: "80px", padding: "18px 16px", boxSizing: "border-box", background: "linear-gradient(180deg,#eaf7ef 0%,#dcefe4 55%,#cfe7d8 100%)", color: "#173c2a", display: "flex", flexDirection: "column", overflowY: "auto", borderRight: "1px solid #c7ddcf", boxShadow: "10px 0 35px rgba(23,60,42,.10)" },
+  posMenuItem: { position: "relative", width: "100%", minHeight: "50px", display: "grid", gridTemplateColumns: "34px 1fr 6px", alignItems: "center", gap: "10px", padding: "9px 12px", border: "1px solid transparent", borderRadius: "15px", background: "rgba(255,255,255,.52)", color: "#244d37", fontSize: "13px", fontWeight: 750, textAlign: "left", cursor: "pointer", boxShadow: "0 3px 10px rgba(23,60,42,.04)" },
+  posMenuActivo: { background: "#173c2a", color: "#ffffff", borderColor: "#173c2a", boxShadow: "0 10px 22px rgba(23,60,42,.22)", transform: "translateX(2px)" },
+  posMenuIcono: { width: "32px", height: "32px", display: "grid", placeItems: "center", borderRadius: "10px", background: "#ffffff", fontSize: "16px", boxShadow: "0 3px 9px rgba(23,60,42,.08)" },
   posContenido: { padding: "16px", overflow: "hidden" },
   posPrincipalGrid: { display: "grid", gridTemplateColumns: "minmax(0,1.08fr) minmax(420px,.92fr)", gap: "16px", alignItems: "start" },
   posCatalogo: { minWidth: 0 },
@@ -2544,6 +2795,42 @@ const estilos = {
   posBotonesCobro: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", padding: "0 16px 16px" },
   posCobrarContado: { minHeight: "88px", border: 0, borderRadius: "12px", background: "linear-gradient(135deg,#159b50,#0a7e3e)", color: "white", fontSize: "18px", fontWeight: 900, cursor: "pointer" },
   posVenderCredito: { minHeight: "88px", border: 0, borderRadius: "12px", background: "linear-gradient(135deg,#182635,#0b1722)", color: "white", fontSize: "18px", fontWeight: 900, cursor: "pointer" },
-  posPanelInferior: { marginTop: "24px" }
+  posPanelInferior: { marginTop: "24px" },
+
+  posOperacionBar: { marginBottom: "16px", padding: "16px 18px", display: "grid", gridTemplateColumns: "minmax(180px,.7fr) minmax(380px,1.6fr) minmax(310px,1fr)", gap: "18px", alignItems: "end", background: "#ffffff", border: "1px solid #e2e8e5", borderRadius: "18px", boxShadow: "0 8px 24px rgba(15,23,42,.05)" },
+  posOperacionEtiqueta: { display: "block", marginBottom: "4px", color: "#11814c", fontSize: "10px", fontWeight: "900", letterSpacing: "1.1px" },
+  posOperacionTitulo: { margin: 0, fontSize: "22px", color: "#0f172a" },
+  posOperacionTabs: { display: "flex", gap: "8px", flexWrap: "wrap" },
+  posOperacionTab: { minHeight: "38px", padding: "8px 13px", border: "1px solid #d8e1dc", borderRadius: "999px", background: "#ffffff", color: "#334155", fontWeight: "800", cursor: "pointer" },
+  posOperacionTabActivo: { minHeight: "38px", padding: "8px 13px", border: "1px solid #13844e", borderRadius: "999px", background: "linear-gradient(135deg,#169b59,#0f7544)", color: "#ffffff", fontWeight: "900", cursor: "pointer", boxShadow: "0 7px 16px rgba(15,117,68,.20)" },
+  posOperacionDatos: { display: "grid", gridTemplateColumns: "1fr 1.35fr", gap: "10px" },
+  posInputCompacto: { width: "100%", minHeight: "40px", padding: "8px 10px", boxSizing: "border-box", border: "1px solid #d4ded8", borderRadius: "10px", background: "#ffffff", color: "#111827" },
+  posCobroCuentaBox: { minHeight: "620px", padding: "22px", border: "1px solid #e0e7e3", borderRadius: "18px", background: "linear-gradient(180deg,#ffffff,#f8fbf9)", boxShadow: "0 10px 28px rgba(15,23,42,.05)" },
+  posCobroEncabezado: { marginBottom: "18px", paddingBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e8eeea" },
+  posCobroTitulo: { margin: "2px 0 5px", fontSize: "28px", color: "#0f172a" },
+  posCobroTexto: { margin: 0, color: "#64748b", fontSize: "13px" },
+  posCobroIcono: { width: "54px", height: "54px", display: "grid", placeItems: "center", borderRadius: "16px", background: "#e6f6ed", color: "#0f8b4f", fontSize: "28px", fontWeight: "900" },
+  posBuscarClienteFila: { display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: "10px", alignItems: "end" },
+  posBotonBuscarCliente: { minHeight: "46px", padding: "10px 22px", border: 0, borderRadius: "12px", background: "#111c28", color: "#ffffff", fontWeight: "900", cursor: "pointer" },
+  posResultadoDetalle: { display: "block", marginTop: "3px", color: "#718096" },
+  posClienteCuentaSeleccionado: { marginTop: "16px", padding: "16px", border: "1px solid #bfe3cf", borderRadius: "16px", background: "#f0faf4" },
+  posClienteCuentaCabecera: { marginBottom: "14px", display: "flex", alignItems: "center", gap: "10px" },
+  posCuentaResumenGrid: { marginTop: "14px", display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: "9px" },
+  posEstadoVacioCuenta: { marginTop: "16px", padding: "34px", textAlign: "center", border: "1px dashed #cdd8d2", borderRadius: "14px", color: "#64748b", background: "#ffffff" },
+  posCobroCampos: { marginTop: "16px", display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: "12px" },
+  posResumenCobroCuenta: { display: "grid", gap: "0", borderBottom: "1px solid #e7ece9" },
+  posRegistrarCobro: { width: "100%", minHeight: "66px", border: 0, borderRadius: "14px", background: "linear-gradient(135deg,#169b59,#0b6b3d)", color: "#ffffff", fontSize: "16px", fontWeight: "950", cursor: "pointer", boxShadow: "0 12px 26px rgba(11,107,61,.24)" },
+
+  posSidebarBrand: { minHeight: "88px", display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px 22px", borderBottom: "1px solid rgba(23,60,42,.10)" },
+  posSidebarLogoCard: { minHeight: "70px", display: "grid", placeItems: "center", padding: "9px 12px", borderRadius: "18px", background: "#ffffff", boxShadow: "0 10px 24px rgba(23,60,42,.12)", border: "1px solid rgba(23,60,42,.08)" },
+  posSidebarLogo: { width: "132px", maxWidth: "100%", height: "auto", objectFit: "contain" },
+  posSidebarCaption: { display: "grid", gap: "2px" },
+  posSidebarEyebrow: { color: "#4d7d63", fontSize: "8px", fontWeight: 900, letterSpacing: "1px" },
+  posSidebarTitle: { color: "#173c2a", fontSize: "14px", letterSpacing: "1.2px" },
+  posSidebarNav: { display: "grid", gap: "8px", paddingTop: "10px" },
+  posMenuIconoActivo: { background: "rgba(255,255,255,.14)", boxShadow: "none" },
+  posMenuTexto: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  posMenuIndicador: { width: "5px", height: "24px", borderRadius: "999px", background: "#67d99a" },
+  posLogout: { minHeight: "44px", marginTop: "auto", border: "1px solid rgba(23,60,42,.15)", borderRadius: "11px", background: "rgba(255,255,255,.55)", color: "#173c2a", fontWeight: 750, cursor: "pointer" },
 
 };
