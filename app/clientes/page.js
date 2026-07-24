@@ -1945,7 +1945,6 @@ export default function ClientesPage() {
                         style={
                           styles.inputStyle
                         }
-                        placeholder="Ej. 1,200.00"
                       />
                     </Campo>
 
@@ -1973,7 +1972,6 @@ export default function ClientesPage() {
                         style={
                           styles.inputStyle
                         }
-                        placeholder="Ej. 950.00"
                       />
                     </Campo>
 
@@ -1999,7 +1997,6 @@ export default function ClientesPage() {
                         style={
                           styles.inputStyle
                         }
-                        placeholder="Ej. 100.00"
                       />
                     </Campo>
 
@@ -2191,7 +2188,6 @@ export default function ClientesPage() {
                         style={
                           styles.inputStyle
                         }
-                        placeholder="Ej. 100.00"
                       />
                     </Campo>
 
@@ -2736,11 +2732,12 @@ const styles = {
   },
 
   resumenCard: {
-    minHeight: 88,
-    padding: 14,
+    minHeight: 68,
+    padding: "10px 12px",
     display: "grid",
-    gridTemplateColumns: "42px 1fr",
-    gap: 12,
+    gridTemplateColumns: "36px 1fr",
+    gap: 10,
+    alignItems: "center",
     border: "1px solid #dfe7e2",
     borderRadius: 18,
     background: "#fff",
@@ -2752,8 +2749,8 @@ const styles = {
   },
 
   kpiIcono: {
-    width: 42,
-    height: 42,
+    width: 36,
+    height: 36,
     display: "grid",
     placeItems: "center",
     borderRadius: 13,
@@ -2767,22 +2764,24 @@ const styles = {
   },
 
   resumenLabel: {
-    margin: "1px 0 6px",
+    margin: "0 0 3px",
     color: "#6d7971",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 800,
   },
 
   resumenValor: {
     margin: 0,
-    fontSize: 19,
+    fontSize: 16,
+    lineHeight: 1.15,
   },
 
   resumenDetalle: {
     display: "block",
-    marginTop: 6,
+    marginTop: 3,
     color: "#8a958e",
-    fontSize: 11,
+    fontSize: 10,
+    lineHeight: 1.2,
   },
 
   formLayout: {
