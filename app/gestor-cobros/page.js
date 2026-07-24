@@ -139,16 +139,34 @@ export default function GestorCobros() {
     return "Mora +1 año";
   }
 
+  function obtenerEstadoPromesa(cobranza) {
+    const estadoGuardado = limpiarTexto(cobranza?.estado_promesa);
+    const fecha = fechaSimple(cobranza?.fecha_promesa);
+    const hoy = fechaSimple(new Date());
+
+    if (["cumplida", "cancelada", "anulada"].includes(estadoGuardado)) {
+      return estadoGuardado;
+    }
+
+    if (!fecha || Number(cobranza?.monto_promesa || 0) <= 0) {
+      return "";
+    }
+
+    if (fecha < hoy) {
+      return "vencida";
+    }
+
+    return estadoGuardado || "pendiente";
+  }
+
   function tienePromesaActiva(cobranza) {
-    return (
-      String(cobranza?.estado_promesa || "").toLowerCase() === "activa" ||
-      Boolean(cobranza?.fecha_promesa) ||
-      Boolean(cobranza?.proxima_gestion)
+    return ["activa", "pendiente", "vencida"].includes(
+      obtenerEstadoPromesa(cobranza)
     );
   }
 
   function fechaPromesa(cobranza) {
-    return fechaSimple(cobranza?.fecha_promesa) || fechaSimple(cobranza?.proxima_gestion) || "";
+    return fechaSimple(cobranza?.fecha_promesa) || "";
   }
 
   function montoPromesa(cobranza) {
@@ -229,9 +247,10 @@ export default function GestorCobros() {
       const saldoReal = Number(cuenta?.saldo_actual || 0);
       const totalPagado = Math.max(montoTotal - saldoReal, 0);
       const dias = calcularDias(cuenta?.fecha_vencimiento, saldoReal);
+      const estadoPromesa = obtenerEstadoPromesa(cobranza);
       const promesaActiva = tienePromesaActiva(cobranza);
       const fechaPromesaValor = fechaPromesa(cobranza);
-      const promesaVencida = promesaActiva && fechaPromesaValor && fechaPromesaValor < hoy;
+      const promesaVencida = estadoPromesa === "vencida";
 
       return {
         cobranza,
@@ -242,6 +261,7 @@ export default function GestorCobros() {
         totalPagado,
         montoTotal,
         promesaActiva,
+        estadoPromesa,
         fechaPromesa: fechaPromesaValor,
         montoPromesa: montoPromesa(cobranza),
         promesaVencida,
@@ -361,16 +381,18 @@ export default function GestorCobros() {
     if (filtroCartera === "Mora mayor a 1 año") return coincideBusqueda && item.dias > 365;
     if (filtroCartera === "Sin teléfono") return coincideBusqueda && !item.cliente?.telefono;
     if (filtroCartera === "Sin gestionar hoy") return coincideBusqueda && fechaSimple(item.cobranza?.fecha_ultima_gestion) !== hoy;
-    if (filtroCartera === "Promesas pendientes") return coincideBusqueda && item.promesaActiva && !item.promesaVencida;
-    if (filtroCartera === "Promesas vencidas") return coincideBusqueda && item.promesaVencida;
+    if (filtroCartera === "Promesas pendientes") return coincideBusqueda && item.estadoPromesa === "pendiente";
+    if (filtroCartera === "Promesas vencidas") return coincideBusqueda && item.estadoPromesa === "vencida";
+    if (filtroCartera === "Promesas cumplidas") return coincideBusqueda && item.estadoPromesa === "cumplida";
     return coincideBusqueda;
   });
 
   const clientesAsignados = cartera.length;
   const gestionesDelDia = cartera.filter((item) => fechaSimple(item.cobranza?.fecha_ultima_gestion) === hoy).length;
   const pendientesGestionHoy = Math.max(clientesAsignados - gestionesDelDia, 0);
-  const promesasPendientes = cartera.filter((item) => item.promesaActiva && !item.promesaVencida).length;
-  const promesasVencidas = cartera.filter((item) => item.promesaVencida).length;
+  const promesasPendientes = cartera.filter((item) => item.estadoPromesa === "pendiente").length;
+  const promesasVencidas = cartera.filter((item) => item.estadoPromesa === "vencida").length;
+  const promesasCumplidas = cartera.filter((item) => item.estadoPromesa === "cumplida").length;
   const clientesSinTelefono = cartera.filter((item) => !item.cliente?.telefono).length;
   const montoAsignado = cartera.reduce((sum, item) => sum + Number(item.saldoReal || 0), 0);
   const montoAlDia = cartera.filter((item) => item.dias <= 0 && item.saldoReal > 0).reduce((sum, item) => sum + Number(item.saldoReal || 0), 0);
@@ -405,6 +427,7 @@ export default function GestorCobros() {
           <KPI titulo="% al día" valor={porcentajeAlDia} tipo="porcentaje" icono="📈" />
           <KPI titulo="Promesas pendientes" valor={promesasPendientes} icono="📌" alerta={promesasPendientes > 0} />
           <KPI titulo="Promesas vencidas" valor={promesasVencidas} icono="⚠️" alerta={promesasVencidas > 0} />
+          <KPI titulo="Promesas cumplidas" valor={promesasCumplidas} icono="✅" />
           <KPI titulo="Pendientes gestión" valor={pendientesGestionHoy} icono="☎️" />
           <KPI titulo="Mora total" valor={montoMoraTotal} tipo="dinero" icono="🔴" />
           <KPI titulo="Mora +90" valor={montoMoraMayor90} tipo="dinero" icono="⏰" />
@@ -440,6 +463,7 @@ export default function GestorCobros() {
                 <option>Mora mayor a 1 año</option>
                 <option>Promesas pendientes</option>
                 <option>Promesas vencidas</option>
+                <option>Promesas cumplidas</option>
                 <option>Sin gestionar hoy</option>
                 <option>Sin teléfono</option>
               </select>
@@ -485,7 +509,13 @@ export default function GestorCobros() {
                     <td style={td}><strong>{dinero(item.saldoReal)}</strong></td>
                     <td style={td}>{dinero(item.totalPagado)}</td>
                     <td style={td}>
-                      {item.promesaActiva ? (
+                      {item.estadoPromesa === "cumplida" ? (
+                        <div style={promesaCumplidaBox}>
+                          <strong>Cumplida</strong>
+                          <span>{item.fechaPromesa || "-"}</span>
+                          <span>{item.montoPromesa > 0 ? dinero(item.montoPromesa) : ""}</span>
+                        </div>
+                      ) : item.promesaActiva ? (
                         <div style={item.promesaVencida ? promesaVencidaBox : promesaBox}>
                           <strong>{item.promesaVencida ? "Vencida" : "Pendiente"}</strong>
                           <span>{item.fechaPromesa || "-"}</span>
@@ -607,3 +637,4 @@ const pillAzul = { background: "#dbeafe", color: "#1e40af", border: "1px solid #
 const pillGris = { background: "#f3f4f6", color: "#374151", border: "1px solid #d1d5db", padding: "7px 10px", borderRadius: "999px", fontWeight: "bold", display: "inline-block" };
 const promesaBox = { display: "grid", gap: "3px", background: "#ecfdf5", color: "#166534", border: "1px solid #bbf7d0", borderRadius: "12px", padding: "9px" };
 const promesaVencidaBox = { ...promesaBox, background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca" };
+const promesaCumplidaBox = { ...promesaBox, background: "#dcfce7", color: "#166534", border: "1px solid #86efac" };
