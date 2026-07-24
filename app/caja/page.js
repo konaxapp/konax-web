@@ -1914,37 +1914,6 @@ export default function Caja() {
       </header>
 
       <div style={estilos.posLayout}>
-        <aside style={estilos.posSidebar}>
-          <div style={estilos.posSidebarBrand}>
-            <div style={estilos.posSidebarLogoCard}>
-              <img src="/konax-logo.png" alt="KONAX" style={estilos.posSidebarLogo} />
-            </div>
-            <div style={estilos.posSidebarCaption}>
-              <span style={estilos.posSidebarEyebrow}>PLATAFORMA EMPRESARIAL</span>
-              <strong style={estilos.posSidebarTitle}>KONAX</strong>
-            </div>
-          </div>
-
-          <nav style={estilos.posSidebarNav}>
-            {modulosMenuCaja.map((item) => {
-              const seleccionado = pathname === item.ruta || pathname.startsWith(item.ruta + "/");
-              return (
-                <button
-                  key={item.codigo}
-                  onClick={() => router.push(item.ruta)}
-                  style={{ ...estilos.posMenuItem, ...(seleccionado ? estilos.posMenuActivo : {}) }}
-                >
-                  <span style={{ ...estilos.posMenuIcono, ...(seleccionado ? estilos.posMenuIconoActivo : {}) }}>{item.icono}</span>
-                  <span style={estilos.posMenuTexto}>{item.nombre}</span>
-                  {seleccionado && <span style={estilos.posMenuIndicador} />}
-                </button>
-              );
-            })}
-          </nav>
-
-          <button onClick={cerrarSesionCaja} style={estilos.posLogout}>↪ Cerrar sesión</button>
-        </aside>
-
         <section style={estilos.posContenido}>
           <div style={estilos.posOperacionBar}>
             <div>
@@ -2738,12 +2707,12 @@ const estilos = {
   posHeaderInfo: { display: "flex", alignItems: "center", gap: "15px", fontSize: "14px", flexWrap: "wrap", justifyContent: "flex-end", color: "rgba(255,255,255,.96)" },
   posSeparador: { opacity: .4 },
   posVolver: { padding: "9px 13px", border: "1px solid rgba(255,255,255,.25)", borderRadius: "10px", background: "transparent", color: "white", cursor: "pointer" },
-  posLayout: { display: "grid", gridTemplateColumns: "248px minmax(0,1fr)", minHeight: "calc(100vh - 80px)", alignItems: "start" },
+  posLayout: { display: "block", minHeight: "calc(100vh - 80px)" },
   posSidebar: { width: "248px", minWidth: "248px", height: "calc(100vh - 80px)", position: "sticky", top: "80px", padding: "18px 14px", boxSizing: "border-box", background: "linear-gradient(180deg,#06131d 0%,#0a1824 55%,#06111a 100%)", color: "#ffffff", display: "flex", flexDirection: "column", overflowY: "auto", borderRight: "1px solid rgba(255,255,255,.05)", boxShadow: "12px 0 28px rgba(4,10,16,.28)" },
   posMenuItem: { position: "relative", width: "100%", minHeight: "50px", display: "grid", gridTemplateColumns: "32px 1fr 6px", alignItems: "center", gap: "10px", padding: "9px 12px", border: "1px solid transparent", borderRadius: "14px", background: "transparent", color: "rgba(255,255,255,.84)", fontSize: "13px", fontWeight: 750, textAlign: "left", cursor: "pointer" },
   posMenuActivo: { background: "linear-gradient(135deg,#14994e,#0a7c3d)", color: "#ffffff", borderColor: "rgba(255,255,255,.06)", boxShadow: "0 10px 24px rgba(10,124,61,.30)", transform: "translateX(2px)" },
   posMenuIcono: { width: "32px", height: "32px", display: "grid", placeItems: "center", borderRadius: "10px", background: "rgba(255,255,255,.08)", fontSize: "16px" },
-  posContenido: { padding: "18px 20px", overflow: "hidden", minWidth: 0 },
+  posContenido: { maxWidth: "1440px", margin: "0 auto", padding: "18px 20px 32px", overflow: "hidden", minWidth: 0 },
   posPrincipalGrid: { display: "grid", gridTemplateColumns: "minmax(0,1.08fr) minmax(420px,.92fr)", gap: "16px", alignItems: "start" },
   posCatalogo: { minWidth: 0 },
   posBuscadorBox: { height: "68px", display: "flex", alignItems: "center", gap: "12px", padding: "0 18px", background: "white", border: "1px solid #dfe5e2", borderRadius: "14px", boxShadow: "0 5px 16px rgba(15,23,42,.04)" },
