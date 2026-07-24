@@ -817,26 +817,31 @@ export default function ClientesPage() {
       construirObservacionCliente();
 
     if (clienteSeleccionadoId) {
-      const { data, error } = await supabase
+      const { data: clienteSeleccionado, error } = await supabase
         .from("clientes")
-        .update({
-          cedula: cedulaLimpia,
-          nombre: nombre.trim(),
-          telefono: telefono.trim(),
-          telefono_secundario: telefonoSecundario.trim(),
-          direccion: direccion.trim(),
-          correo: correo.trim(),
-          referencia_nombre: referenciaNombre.trim(),
-          referencia_telefono: referenciaTelefono.trim(),
-          estado: estadoCliente,
-          observacion: observacionFinal,
-        })
+        .select("*")
         .eq("empresa_id", empresaId)
         .eq("id", clienteSeleccionadoId)
-        .select()
-        .single();
-      if (error) throw new Error("No se pudieron actualizar los datos del cliente seleccionado: " + error.message);
-      return { ...data, fueActualizado: true, fueSeleccionado: true };
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(
+          "No se pudo cargar el cliente seleccionado: " +
+            error.message
+        );
+      }
+
+      if (!clienteSeleccionado) {
+        throw new Error(
+          "El cliente seleccionado ya no está disponible. Búsquelo nuevamente."
+        );
+      }
+
+      return {
+        ...clienteSeleccionado,
+        fueActualizado: false,
+        fueSeleccionado: true,
+      };
     }
 
     const {
@@ -1265,8 +1270,10 @@ export default function ClientesPage() {
       }
 
       alert(
-        clienteCreado.fueActualizado
+        clienteCreado.fueSeleccionado
           ? `Cliente existente utilizado correctamente. Se creó la nueva cuenta ${cuentaFinal} sin duplicar al cliente.`
+          : clienteCreado.fueActualizado
+          ? `Los datos del cliente fueron actualizados y se creó la cuenta ${cuentaFinal}.`
           : `Cliente y cuenta registrados correctamente. Cuenta: ${cuentaFinal}.`
       );
 
