@@ -36,6 +36,8 @@ export default function ClientesPage() {
   const [descripcion, setDescripcion] = useState("");
   const [montoTotal, setMontoTotal] = useState("");
   const [saldoActual, setSaldoActual] = useState("");
+  const [cuota, setCuota] = useState("");
+  const [periodicidad, setPeriodicidad] = useState("Mensual");
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [estadoCuenta, setEstadoCuenta] = useState("Activo");
@@ -426,6 +428,10 @@ export default function ClientesPage() {
     router.push("/dashboard");
   }
 
+  function abrirCargaCartera() {
+    router.push("/clientes/carga-cartera");
+  }
+
   function generarNumeroCuenta() {
     return "KX-" + Date.now();
   }
@@ -575,6 +581,8 @@ export default function ClientesPage() {
     setDescripcion("");
     setMontoTotal("");
     setSaldoActual("");
+    setCuota("");
+    setPeriodicidad("Mensual");
     setFechaInicio("");
     setFechaVencimiento("");
     setEstadoCuenta("Activo");
@@ -937,12 +945,30 @@ export default function ClientesPage() {
             )
           : montoTotalNumero;
 
+      const cuotaNumero =
+        cuota !== ""
+          ? Number(cuota || 0)
+          : 0;
+
       if (
         montoTotalNumero < 0 ||
-        saldoActualNumero < 0
+        saldoActualNumero < 0 ||
+        cuotaNumero < 0
       ) {
         throw new Error(
           "Los montos no pueden ser negativos."
+        );
+      }
+
+      if (cuotaNumero <= 0) {
+        throw new Error(
+          "Ingrese una cuota válida para la cuenta."
+        );
+      }
+
+      if (!periodicidad) {
+        throw new Error(
+          "Seleccione la periodicidad de la cuota."
         );
       }
 
@@ -1029,12 +1055,14 @@ export default function ClientesPage() {
               tipoProducto,
             descripcion:
               descripcion.trim(),
-            modalidad: null,
+            modalidad:
+              periodicidad,
             monto_total:
               montoTotalNumero,
             saldo_actual:
               saldoActualNumero,
-            cuota: null,
+            cuota:
+              cuotaNumero,
             fecha_inicio:
               fechaInicio || null,
             fecha_vencimiento:
@@ -1235,17 +1263,29 @@ export default function ClientesPage() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={
-              volverCentroOperaciones
-            }
-            style={
-              styles.botonVolver
-            }
-          >
-            ← Centro de Operaciones
-          </button>
+          <div style={styles.heroAcciones}>
+            {!modoSoloCliente && (
+              <button
+                type="button"
+                onClick={abrirCargaCartera}
+                style={styles.botonCargaCartera}
+              >
+                ↑ Carga de cartera
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={
+                volverCentroOperaciones
+              }
+              style={
+                styles.botonVolver
+              }
+            >
+              ← Centro de Operaciones
+            </button>
+          </div>
         </header>
 
         <section
@@ -1746,6 +1786,48 @@ export default function ClientesPage() {
                       />
                     </Campo>
 
+                    <Campo label="Cuota *">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={cuota}
+                        onChange={(e) =>
+                          setCuota(
+                            e.target.value
+                          )
+                        }
+                        style={
+                          styles.inputStyle
+                        }
+                        placeholder="Ej. 75.00"
+                      />
+                    </Campo>
+
+                    <Campo label="Periodicidad *">
+                      <select
+                        value={periodicidad}
+                        onChange={(e) =>
+                          setPeriodicidad(
+                            e.target.value
+                          )
+                        }
+                        style={
+                          styles.selectStyle
+                        }
+                      >
+                        <option value="Semanal">
+                          Semanal
+                        </option>
+                        <option value="Quincenal">
+                          Quincenal
+                        </option>
+                        <option value="Mensual">
+                          Mensual
+                        </option>
+                      </select>
+                    </Campo>
+
                     <Campo label="Fecha de inicio">
                       <input
                         type="date"
@@ -2058,6 +2140,22 @@ export default function ClientesPage() {
                     value={`$${saldoVisual.toFixed(
                       2
                     )}`}
+                  />
+
+                  <ResumenFila
+                    label="Cuota"
+                    value={
+                      cuota
+                        ? `$${Number(
+                            cuota || 0
+                          ).toFixed(2)}`
+                        : "Pendiente"
+                    }
+                  />
+
+                  <ResumenFila
+                    label="Periodicidad"
+                    value={periodicidad}
                   />
 
                   <ResumenFila
@@ -2391,6 +2489,24 @@ const styles = {
     color: "#d2e7da",
     fontSize: 15,
     lineHeight: 1.55,
+  },
+
+  heroAcciones: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+
+  botonCargaCartera: {
+    minHeight: 46,
+    padding: "11px 16px",
+    border: "1px solid #79dca6",
+    borderRadius: 12,
+    background: "#ffffff",
+    color: "#14683e",
+    fontWeight: 900,
+    cursor: "pointer",
   },
 
   botonVolver: {
