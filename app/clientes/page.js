@@ -713,15 +713,11 @@ export default function ClientesPage() {
     if (clienteExistente) {
       const confirmarActualizacion =
         window.confirm(
-          "Ya existe un cliente registrado con esta cédula.
-
-" +
+          "Ya existe un cliente registrado con esta cédula.\n\n" +
             `Cliente encontrado: ${
               clienteExistente.nombre ||
               "Sin nombre"
-            }
-
-` +
+            }\n\n` +
             "¿Desea actualizar sus datos con la información del formulario?"
         );
 
