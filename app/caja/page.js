@@ -2392,6 +2392,60 @@ function ResumenCard({
   icono,
   destacado,
 }) {
+  const configuracion = {
+    "Movimientos hoy": {
+      etiqueta: "OPERACIONES",
+      nota: "Registros procesados hoy",
+      tono: "azul",
+    },
+    "Total de hoy": {
+      etiqueta: "INGRESOS DEL DÍA",
+      nota: "Acumulado general de caja",
+      tono: "verde",
+    },
+    "Efectivo hoy": {
+      etiqueta: "EFECTIVO",
+      nota: "Disponible registrado",
+      tono: "esmeralda",
+    },
+    "Pagos digitales": {
+      etiqueta: "PAGOS DIGITALES",
+      nota: "Tarjeta, Yappy y transferencias",
+      tono: "violeta",
+    },
+  }[titulo] || {
+    etiqueta: "RESUMEN",
+    nota: "Información actualizada",
+    tono: "verde",
+  };
+
+  const estilosPorTono = {
+    azul: {
+      fondoIcono: "linear-gradient(135deg,#eaf2ff,#dbeafe)",
+      colorIcono: "#2563eb",
+      borde: "#dbe7f8",
+      acento: "#2563eb",
+    },
+    verde: {
+      fondoIcono: "rgba(255,255,255,.16)",
+      colorIcono: "#ffffff",
+      borde: "rgba(255,255,255,.18)",
+      acento: "#78e6a8",
+    },
+    esmeralda: {
+      fondoIcono: "linear-gradient(135deg,#e8f8ef,#d7f2e3)",
+      colorIcono: "#0f8b4c",
+      borde: "#d6eadf",
+      acento: "#0f8b4c",
+    },
+    violeta: {
+      fondoIcono: "linear-gradient(135deg,#f2edff,#e8e0ff)",
+      colorIcono: "#7c3aed",
+      borde: "#e6def8",
+      acento: "#7c3aed",
+    },
+  }[configuracion.tono];
+
   return (
     <article
       style={
@@ -2400,9 +2454,53 @@ function ResumenCard({
           : estilos.resumenCard
       }
     >
-      <span style={estilos.kpiIcono}>{icono}</span>
-      <span style={estilos.kpiTitulo}>{titulo}</span>
-      <strong style={estilos.kpiValor}>{valor}</strong>
+      <div style={estilos.kpiSuperior}>
+        <span
+          style={{
+            ...estilos.kpiIconoBox,
+            background: estilosPorTono.fondoIcono,
+            color: estilosPorTono.colorIcono,
+            borderColor: estilosPorTono.borde,
+          }}
+        >
+          {icono}
+        </span>
+
+        <span
+          style={{
+            ...estilos.kpiEstado,
+            color: destacado ? "#dcfce7" : estilosPorTono.acento,
+            borderColor: destacado
+              ? "rgba(255,255,255,.22)"
+              : estilosPorTono.borde,
+            background: destacado
+              ? "rgba(255,255,255,.10)"
+              : "#ffffff",
+          }}
+        >
+          ● Actualizado
+        </span>
+      </div>
+
+      <div style={estilos.kpiContenido}>
+        <span
+          style={{
+            ...estilos.kpiEtiqueta,
+            color: destacado ? "#bdf4d2" : estilosPorTono.acento,
+          }}
+        >
+          {configuracion.etiqueta}
+        </span>
+        <strong style={estilos.kpiValor}>{valor}</strong>
+        <span
+          style={{
+            ...estilos.kpiNota,
+            color: destacado ? "#d8f3e3" : "#718078",
+          }}
+        >
+          {configuracion.nota}
+        </span>
+      </div>
     </article>
   );
 }
@@ -2550,39 +2648,97 @@ const estilos = {
   },
 
   resumenGrid: {
-    marginBottom: "20px",
+    marginBottom: "22px",
     display: "grid",
     gridTemplateColumns:
-      "repeat(auto-fit,minmax(180px,1fr))",
-    gap: "14px",
+      "repeat(auto-fit,minmax(230px,1fr))",
+    gap: "16px",
   },
 
   resumenCard: {
-    padding: "20px",
-    display: "grid",
-    gap: "7px",
-    border: "1px solid #d9e7de",
-    borderRadius: "20px",
+    minHeight: "156px",
+    padding: "18px 20px",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    gap: "16px",
+    border: "1px solid #dce8e0",
+    borderRadius: "22px",
     background:
-      "linear-gradient(180deg,#ffffff 0%,#f8fbf9 100%)",
-    boxShadow: "0 10px 24px rgba(24,79,49,.08)",
+      "linear-gradient(145deg,#ffffff 0%,#fbfdfc 58%,#f4f9f6 100%)",
+    boxShadow:
+      "0 14px 32px rgba(18,66,42,.08), inset 0 1px 0 rgba(255,255,255,.9)",
+    position: "relative",
+    overflow: "hidden",
   },
 
   resumenCardDestacado: {
-    padding: "20px",
-    display: "grid",
-    gap: "7px",
-    borderRadius: "20px",
+    minHeight: "156px",
+    padding: "18px 20px",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    gap: "16px",
+    borderRadius: "22px",
     background:
-      "linear-gradient(135deg,#1c8f58 0%,#14663f 72%,#104d32 100%)",
+      "radial-gradient(circle at 88% 12%,rgba(114,230,160,.32),transparent 34%), linear-gradient(135deg,#0f6f42 0%,#128f50 50%,#0b5a36 100%)",
     color: "#ffffff",
-    boxShadow: "0 14px 30px rgba(20,102,63,.24)",
+    boxShadow:
+      "0 18px 38px rgba(13,111,65,.28), inset 0 1px 0 rgba(255,255,255,.16)",
     border: "1px solid rgba(255,255,255,.18)",
+    position: "relative",
+    overflow: "hidden",
   },
 
-  kpiIcono: { fontSize: "24px" },
-  kpiTitulo: { fontSize: "12px", fontWeight: "800" },
-  kpiValor: { fontSize: "25px" },
+  kpiSuperior: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "12px",
+  },
+
+  kpiIconoBox: {
+    width: "46px",
+    height: "46px",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "14px",
+    border: "1px solid",
+    fontSize: "22px",
+    boxShadow: "0 8px 18px rgba(15,23,42,.07)",
+  },
+
+  kpiEstado: {
+    padding: "6px 9px",
+    border: "1px solid",
+    borderRadius: "999px",
+    fontSize: "9px",
+    fontWeight: "900",
+    letterSpacing: ".25px",
+    whiteSpace: "nowrap",
+  },
+
+  kpiContenido: {
+    display: "grid",
+    gap: "4px",
+  },
+
+  kpiEtiqueta: {
+    fontSize: "10px",
+    fontWeight: "950",
+    letterSpacing: "1.05px",
+  },
+
+  kpiValor: {
+    fontSize: "clamp(27px,2.2vw,36px)",
+    lineHeight: 1.05,
+    letterSpacing: "-.8px",
+  },
+
+  kpiNota: {
+    fontSize: "11px",
+    fontWeight: "650",
+  },
 
   mainGrid: {
     display: "grid",
