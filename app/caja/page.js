@@ -1782,51 +1782,64 @@ export default function Caja() {
 
         <section style={estilos.mainGrid}>
           <div>
-            <article style={estilos.card}>
+            <article style={estilos.cardPremium}>
               <CabeceraSeccion
                 titulo="Nuevo movimiento"
                 texto="Seleccione qué está cobrando y complete la información."
                 numero="01"
               />
 
-              <div style={estilos.grid}>
-                <Campo label="Fecha">
-                  <input
-                    type="date"
-                    value={fechaPago}
-                    onChange={(e) =>
-                      setFechaPago(e.target.value)
-                    }
-                    style={estilos.input}
-                  />
-                </Campo>
+              <div style={estilos.heroMovimientoGrid}>
+                <div style={estilos.heroMovimientoCampos}>
+                  <Campo label="Fecha">
+                    <input
+                      type="date"
+                      value={fechaPago}
+                      onChange={(e) =>
+                        setFechaPago(e.target.value)
+                      }
+                      style={estilos.inputPremium}
+                    />
+                  </Campo>
 
-                <Campo label="Tipo de movimiento">
-                  <select
-                    value={tipoMovimiento}
-                    onChange={(e) => {
-                      setTipoMovimiento(e.target.value);
-                      setMonto("");
-                      setValorProducto("");
-                      setCodigoProducto("");
-                      setProductoSeleccionado(null);
-                      setNumeroVentaAbono("");
-                      setClienteSeleccionado(null);
-                      setCuentasCliente([]);
-                      setCuentaSeleccionada(null);
-                    }}
-                    style={estilos.input}
-                  >
-                    {opcionesMovimiento.map((opcion) => (
-                      <option
-                        key={opcion}
-                        value={opcion}
-                      >
-                        {opcion}
-                      </option>
-                    ))}
-                  </select>
-                </Campo>
+                  <Campo label="Tipo de movimiento">
+                    <select
+                      value={tipoMovimiento}
+                      onChange={(e) => {
+                        setTipoMovimiento(e.target.value);
+                        setMonto("");
+                        setValorProducto("");
+                        setCodigoProducto("");
+                        setProductoSeleccionado(null);
+                        setNumeroVentaAbono("");
+                        setClienteSeleccionado(null);
+                        setCuentasCliente([]);
+                        setCuentaSeleccionada(null);
+                      }}
+                      style={estilos.inputPremium}
+                    >
+                      {opcionesMovimiento.map((opcion) => (
+                        <option
+                          key={opcion}
+                          value={opcion}
+                        >
+                          {opcion}
+                        </option>
+                      ))}
+                    </select>
+                  </Campo>
+                </div>
+
+                <div style={estilos.heroMovimientoPanel}>
+                  <div style={estilos.heroMiniCard}>
+                    <span style={estilos.heroMiniLabel}>Operación</span>
+                    <strong style={estilos.heroMiniValue}>{tipoMovimiento || "Sin definir"}</strong>
+                  </div>
+                  <div style={estilos.heroMiniCard}>
+                    <span style={estilos.heroMiniLabel}>Fecha de registro</span>
+                    <strong style={estilos.heroMiniValue}>{fechaPago || "-"}</strong>
+                  </div>
+                </div>
               </div>
             </article>
 
@@ -1977,191 +1990,241 @@ export default function Caja() {
             )}
 
             {esVentaConProducto() && (
-              <article style={estilos.card}>
+              <article style={estilos.cardPremium}>
                 <CabeceraSeccion
                   titulo="Producto e inventario"
                   texto="Seleccione el producto y confirme la cantidad."
                   numero="03"
                 />
 
-                <div style={estilos.grid}>
-                  <Campo label="Código del producto">
-                    <input
-                      value={codigoProducto}
-                      onChange={(e) =>
-                        seleccionarProductoPorCodigo(
-                          e.target.value
-                        )
-                      }
-                      style={estilos.input}
-                    />
-                  </Campo>
+                <div style={estilos.productoPremiumLayout}>
+                  <div style={estilos.productoPremiumForm}>
+                    <div style={estilos.gridCompacto}>
+                      <Campo label="Código del producto">
+                        <input
+                          value={codigoProducto}
+                          onChange={(e) =>
+                            seleccionarProductoPorCodigo(
+                              e.target.value
+                            )
+                          }
+                          style={estilos.inputPremium}
+                        />
+                      </Campo>
 
-                  <Campo label="Seleccionar producto">
-                    <select
-                      value={
-                        productoSeleccionado?.id || ""
-                      }
-                      onChange={(e) => {
-                        const producto =
-                          productos.find(
-                            (item) =>
-                              String(item.id) ===
-                              String(e.target.value)
-                          );
+                      <Campo label="Seleccionar producto">
+                        <select
+                          value={
+                            productoSeleccionado?.id || ""
+                          }
+                          onChange={(e) => {
+                            const producto =
+                              productos.find(
+                                (item) =>
+                                  String(item.id) ===
+                                  String(e.target.value)
+                              );
 
-                        seleccionarProducto(
-                          producto || null
-                        );
-                      }}
-                      style={estilos.input}
-                    >
-                      <option value="">
-                        Seleccione producto
-                      </option>
-
-                      {productos.map((producto) => (
-                        <option
-                          key={producto.id}
-                          value={producto.id}
+                            seleccionarProducto(
+                              producto || null
+                            );
+                          }}
+                          style={estilos.inputPremium}
                         >
-                          {producto.codigo} -{" "}
-                          {producto.nombre} - Stock{" "}
-                          {stockProducto(producto)}
-                        </option>
-                      ))}
-                    </select>
-                  </Campo>
+                          <option value="">
+                            Seleccione producto
+                          </option>
 
-                  <Campo label="Cantidad">
-                    <input
-                      type="number"
-                      min="1"
-                      value={cantidad}
-                      onChange={(e) =>
-                        setCantidad(e.target.value)
-                      }
-                      style={estilos.input}
-                    />
-                  </Campo>
+                          {productos.map((producto) => (
+                            <option
+                              key={producto.id}
+                              value={producto.id}
+                            >
+                              {producto.codigo} - {producto.nombre} - Stock {stockProducto(producto)}
+                            </option>
+                          ))}
+                        </select>
+                      </Campo>
 
-                  <Campo label="Valor total">
-                    <input
-                      value={valorProducto}
-                      readOnly
-                      style={estilos.inputReadOnly}
-                    />
-                  </Campo>
+                      <Campo label="Cantidad">
+                        <input
+                          type="number"
+                          min="1"
+                          value={cantidad}
+                          onChange={(e) =>
+                            setCantidad(e.target.value)
+                          }
+                          style={estilos.inputPremium}
+                        />
+                      </Campo>
+
+                      <Campo label="Valor total">
+                        <input
+                          value={valorProducto}
+                          readOnly
+                          style={estilos.inputReadOnlyPremium}
+                        />
+                      </Campo>
+                    </div>
+                  </div>
+
+                  <div style={estilos.productoPreviewCard}>
+                    <span style={estilos.previewEtiqueta}>Resumen del producto</span>
+                    <strong style={estilos.previewTitulo}>{productoSeleccionado?.nombre || "Seleccione un producto"}</strong>
+                    <p style={estilos.previewTexto}>
+                      {productoSeleccionado
+                        ? `${productoSeleccionado.codigo || "Sin código"} · ${productoSeleccionado.descripcion || "Producto listo para registrar"}`
+                        : "Al elegir un producto podrás visualizar su valor, stock disponible y total de venta en este panel."}
+                    </p>
+
+                    <div style={estilos.previewStats}>
+                      <div style={estilos.previewStatItem}>
+                        <span>Precio</span>
+                        <strong>{`$${Number(precioProducto(productoSeleccionado) || 0).toFixed(2)}`}</strong>
+                      </div>
+                      <div style={estilos.previewStatItem}>
+                        <span>Stock</span>
+                        <strong>{productoSeleccionado ? stockProducto(productoSeleccionado) : "-"}</strong>
+                      </div>
+                      <div style={estilos.previewStatItem}>
+                        <span>Cantidad</span>
+                        <strong>{cantidad || 0}</strong>
+                      </div>
+                      <div style={estilos.previewStatItemDestacado}>
+                        <span>Total</span>
+                        <strong>{`$${Number(valorProducto || 0).toFixed(2)}`}</strong>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </article>
             )}
 
-            <article style={estilos.card}>
+            <article style={estilos.cardPremium}>
               <CabeceraSeccion
                 titulo="Detalle del cobro"
                 texto="Confirme el método, monto y responsable."
                 numero={esVentaConProducto() ? "04" : "03"}
               />
 
-              <div style={estilos.grid}>
-                <Campo label="Método de pago">
-                  <select
-                    value={metodoPago}
-                    onChange={(e) =>
-                      setMetodoPago(e.target.value)
-                    }
-                    style={estilos.input}
-                  >
-                    <option>Efectivo</option>
-                    <option>Transferencia</option>
-                    <option>Yappy</option>
-                    <option>Tarjeta</option>
-                    <option>Cheque</option>
-                    <option>Otro</option>
-                  </select>
-                </Campo>
-
-                <Campo label="Monto">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={monto}
-                    readOnly={esCancelacion()}
-                    onChange={(e) =>
-                      setMonto(e.target.value)
-                    }
-                    style={
-                      esCancelacion()
-                        ? estilos.inputReadOnly
-                        : estilos.input
-                    }
-                  />
-                </Campo>
-
-                <Campo label="Concepto">
-                  <input
-                    value={concepto}
-                    onChange={(e) =>
-                      setConcepto(e.target.value)
-                    }
-                    style={estilos.input}
-                  />
-                </Campo>
-
-                <Campo label="Responsable">
-                  <select
-                    value={responsable}
-                    onChange={(e) =>
-                      setResponsable(e.target.value)
-                    }
-                    style={estilos.input}
-                  >
-                    <option value="">
-                      Seleccione responsable
-                    </option>
-
-                    {vendedores.map((vendedor) => (
-                      <option
-                        key={vendedor.id}
-                        value={vendedor.nombre}
+              <div style={estilos.detalleCobroLayout}>
+                <div>
+                  <div style={estilos.gridCompacto}>
+                    <Campo label="Método de pago">
+                      <select
+                        value={metodoPago}
+                        onChange={(e) =>
+                          setMetodoPago(e.target.value)
+                        }
+                        style={estilos.inputPremium}
                       >
-                        {vendedor.nombre} -{" "}
-                        {vendedor.rol}
-                      </option>
-                    ))}
-                  </select>
-                </Campo>
-              </div>
+                        <option>Efectivo</option>
+                        <option>Transferencia</option>
+                        <option>Yappy</option>
+                        <option>Tarjeta</option>
+                        <option>Cheque</option>
+                        <option>Otro</option>
+                      </select>
+                    </Campo>
 
-              <Campo label="Observación">
-                <textarea
-                  value={observacion}
-                  onChange={(e) =>
-                    setObservacion(e.target.value)
-                  }
-                  style={estilos.textarea}
-                />
-              </Campo>
+                    <Campo label="Monto">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={monto}
+                        readOnly={esCancelacion()}
+                        onChange={(e) =>
+                          setMonto(e.target.value)
+                        }
+                        style={
+                          esCancelacion()
+                            ? estilos.inputReadOnlyPremium
+                            : estilos.inputPremium
+                        }
+                      />
+                    </Campo>
 
-              <div style={estilos.acciones}>
-                <button
-                  style={estilos.botonPrincipal}
-                  onClick={guardarMovimiento}
-                  disabled={guardando}
-                >
-                  {guardando
-                    ? "Procesando..."
-                    : "Registrar movimiento"}
-                </button>
+                    <Campo label="Concepto">
+                      <input
+                        value={concepto}
+                        onChange={(e) =>
+                          setConcepto(e.target.value)
+                        }
+                        style={estilos.inputPremium}
+                      />
+                    </Campo>
 
-                <button
-                  style={estilos.botonLimpiar}
-                  onClick={limpiarFormulario}
-                  disabled={guardando}
-                >
-                  Limpiar formulario
-                </button>
+                    <Campo label="Responsable">
+                      <select
+                        value={responsable}
+                        onChange={(e) =>
+                          setResponsable(e.target.value)
+                        }
+                        style={estilos.inputPremium}
+                      >
+                        <option value="">
+                          Seleccione responsable
+                        </option>
+
+                        {vendedores.map((vendedor) => (
+                          <option
+                            key={vendedor.id}
+                            value={vendedor.nombre}
+                          >
+                            {vendedor.nombre} - {vendedor.rol}
+                          </option>
+                        ))}
+                      </select>
+                    </Campo>
+                  </div>
+
+                  <Campo label="Observación">
+                    <textarea
+                      value={observacion}
+                      onChange={(e) =>
+                        setObservacion(e.target.value)
+                      }
+                      style={estilos.textareaPremium}
+                    />
+                  </Campo>
+                </div>
+
+                <div style={estilos.detalleLateralAcciones}>
+                  <div style={estilos.detalleLateralCard}>
+                    <span style={estilos.previewEtiqueta}>Validación rápida</span>
+                    <strong style={estilos.previewTitulo}>Listo para registrar</strong>
+                    <p style={estilos.previewTexto}>Verifica el método, el responsable y el monto. Desde aquí puedes confirmar o limpiar el formulario sin dejar espacios muertos.</p>
+                    <div style={estilos.detalleBadgeRow}>
+                      <span style={estilos.detalleBadge}>{metodoPago || "Método"}</span>
+                      <span style={estilos.detalleBadge}>{responsable || "Responsable"}</span>
+                    </div>
+                    <div style={estilos.detalleTotalMini}>
+                      <span>Total a registrar</span>
+                      <strong>{`$${Number(monto || 0).toFixed(2)}`}</strong>
+                    </div>
+                  </div>
+
+                  <div style={estilos.accionesVerticales}>
+                    <button
+                      style={estilos.botonPrincipal}
+                      onClick={guardarMovimiento}
+                      disabled={guardando}
+                    >
+                      {guardando
+                        ? "Procesando..."
+                        : "Registrar movimiento"}
+                    </button>
+
+                    <button
+                      style={estilos.botonLimpiar}
+                      onClick={limpiarFormulario}
+                      disabled={guardando}
+                    >
+                      Limpiar formulario
+                    </button>
+                  </div>
+                </div>
               </div>
             </article>
           </div>
@@ -2392,60 +2455,6 @@ function ResumenCard({
   icono,
   destacado,
 }) {
-  const configuracion = {
-    "Movimientos hoy": {
-      etiqueta: "OPERACIONES",
-      nota: "Registros procesados hoy",
-      tono: "azul",
-    },
-    "Total de hoy": {
-      etiqueta: "INGRESOS DEL DÍA",
-      nota: "Acumulado general de caja",
-      tono: "verde",
-    },
-    "Efectivo hoy": {
-      etiqueta: "EFECTIVO",
-      nota: "Disponible registrado",
-      tono: "esmeralda",
-    },
-    "Pagos digitales": {
-      etiqueta: "PAGOS DIGITALES",
-      nota: "Tarjeta, Yappy y transferencias",
-      tono: "violeta",
-    },
-  }[titulo] || {
-    etiqueta: "RESUMEN",
-    nota: "Información actualizada",
-    tono: "verde",
-  };
-
-  const estilosPorTono = {
-    azul: {
-      fondoIcono: "linear-gradient(135deg,#eaf2ff,#dbeafe)",
-      colorIcono: "#2563eb",
-      borde: "#dbe7f8",
-      acento: "#2563eb",
-    },
-    verde: {
-      fondoIcono: "rgba(255,255,255,.16)",
-      colorIcono: "#ffffff",
-      borde: "rgba(255,255,255,.18)",
-      acento: "#78e6a8",
-    },
-    esmeralda: {
-      fondoIcono: "linear-gradient(135deg,#e8f8ef,#d7f2e3)",
-      colorIcono: "#0f8b4c",
-      borde: "#d6eadf",
-      acento: "#0f8b4c",
-    },
-    violeta: {
-      fondoIcono: "linear-gradient(135deg,#f2edff,#e8e0ff)",
-      colorIcono: "#7c3aed",
-      borde: "#e6def8",
-      acento: "#7c3aed",
-    },
-  }[configuracion.tono];
-
   return (
     <article
       style={
@@ -2454,53 +2463,9 @@ function ResumenCard({
           : estilos.resumenCard
       }
     >
-      <div style={estilos.kpiSuperior}>
-        <span
-          style={{
-            ...estilos.kpiIconoBox,
-            background: estilosPorTono.fondoIcono,
-            color: estilosPorTono.colorIcono,
-            borderColor: estilosPorTono.borde,
-          }}
-        >
-          {icono}
-        </span>
-
-        <span
-          style={{
-            ...estilos.kpiEstado,
-            color: destacado ? "#dcfce7" : estilosPorTono.acento,
-            borderColor: destacado
-              ? "rgba(255,255,255,.22)"
-              : estilosPorTono.borde,
-            background: destacado
-              ? "rgba(255,255,255,.10)"
-              : "#ffffff",
-          }}
-        >
-          ● Actualizado
-        </span>
-      </div>
-
-      <div style={estilos.kpiContenido}>
-        <span
-          style={{
-            ...estilos.kpiEtiqueta,
-            color: destacado ? "#bdf4d2" : estilosPorTono.acento,
-          }}
-        >
-          {configuracion.etiqueta}
-        </span>
-        <strong style={estilos.kpiValor}>{valor}</strong>
-        <span
-          style={{
-            ...estilos.kpiNota,
-            color: destacado ? "#d8f3e3" : "#718078",
-          }}
-        >
-          {configuracion.nota}
-        </span>
-      </div>
+      <span style={estilos.kpiIcono}>{icono}</span>
+      <span style={estilos.kpiTitulo}>{titulo}</span>
+      <strong style={estilos.kpiValor}>{valor}</strong>
     </article>
   );
 }
@@ -2648,97 +2613,39 @@ const estilos = {
   },
 
   resumenGrid: {
-    marginBottom: "22px",
+    marginBottom: "20px",
     display: "grid",
     gridTemplateColumns:
-      "repeat(auto-fit,minmax(230px,1fr))",
-    gap: "16px",
+      "repeat(auto-fit,minmax(180px,1fr))",
+    gap: "14px",
   },
 
   resumenCard: {
-    minHeight: "156px",
-    padding: "18px 20px",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-between",
-    gap: "16px",
-    border: "1px solid #dce8e0",
-    borderRadius: "22px",
+    padding: "20px",
+    display: "grid",
+    gap: "7px",
+    border: "1px solid #d9e7de",
+    borderRadius: "20px",
     background:
-      "linear-gradient(145deg,#ffffff 0%,#fbfdfc 58%,#f4f9f6 100%)",
-    boxShadow:
-      "0 14px 32px rgba(18,66,42,.08), inset 0 1px 0 rgba(255,255,255,.9)",
-    position: "relative",
-    overflow: "hidden",
+      "linear-gradient(180deg,#ffffff 0%,#f8fbf9 100%)",
+    boxShadow: "0 10px 24px rgba(24,79,49,.08)",
   },
 
   resumenCardDestacado: {
-    minHeight: "156px",
-    padding: "18px 20px",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-between",
-    gap: "16px",
-    borderRadius: "22px",
+    padding: "20px",
+    display: "grid",
+    gap: "7px",
+    borderRadius: "20px",
     background:
-      "radial-gradient(circle at 88% 12%,rgba(114,230,160,.32),transparent 34%), linear-gradient(135deg,#0f6f42 0%,#128f50 50%,#0b5a36 100%)",
+      "linear-gradient(135deg,#1c8f58 0%,#14663f 72%,#104d32 100%)",
     color: "#ffffff",
-    boxShadow:
-      "0 18px 38px rgba(13,111,65,.28), inset 0 1px 0 rgba(255,255,255,.16)",
+    boxShadow: "0 14px 30px rgba(20,102,63,.24)",
     border: "1px solid rgba(255,255,255,.18)",
-    position: "relative",
-    overflow: "hidden",
   },
 
-  kpiSuperior: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "12px",
-  },
-
-  kpiIconoBox: {
-    width: "46px",
-    height: "46px",
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "14px",
-    border: "1px solid",
-    fontSize: "22px",
-    boxShadow: "0 8px 18px rgba(15,23,42,.07)",
-  },
-
-  kpiEstado: {
-    padding: "6px 9px",
-    border: "1px solid",
-    borderRadius: "999px",
-    fontSize: "9px",
-    fontWeight: "900",
-    letterSpacing: ".25px",
-    whiteSpace: "nowrap",
-  },
-
-  kpiContenido: {
-    display: "grid",
-    gap: "4px",
-  },
-
-  kpiEtiqueta: {
-    fontSize: "10px",
-    fontWeight: "950",
-    letterSpacing: "1.05px",
-  },
-
-  kpiValor: {
-    fontSize: "clamp(27px,2.2vw,36px)",
-    lineHeight: 1.05,
-    letterSpacing: "-.8px",
-  },
-
-  kpiNota: {
-    fontSize: "11px",
-    fontWeight: "650",
-  },
+  kpiIcono: { fontSize: "24px" },
+  kpiTitulo: { fontSize: "12px", fontWeight: "800" },
+  kpiValor: { fontSize: "25px" },
 
   mainGrid: {
     display: "grid",
@@ -2758,6 +2665,17 @@ const estilos = {
     boxShadow: "0 14px 34px rgba(18,66,42,.08)",
   },
 
+  cardPremium: {
+    position: "relative",
+    overflow: "hidden",
+    marginBottom: "20px",
+    padding: "26px",
+    border: "1px solid rgba(200,221,208,.92)",
+    borderRadius: "28px",
+    background: "linear-gradient(180deg,#ffffff 0%,#fcfffd 100%)",
+    boxShadow: "0 18px 42px rgba(15,76,46,.09)",
+  },
+
   cardSticky: {
     position: "sticky",
     top: "18px",
@@ -2770,8 +2688,8 @@ const estilos = {
   },
 
   cabeceraSeccion: {
-    marginBottom: "18px",
-    paddingBottom: "14px",
+    marginBottom: "20px",
+    paddingBottom: "16px",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -2781,28 +2699,30 @@ const estilos = {
 
   tituloSeccion: {
     margin: 0,
-    fontSize: "21px",
+    fontSize: "20px",
+    letterSpacing: "-.3px",
   },
 
   textoSeccion: {
     margin: "5px 0 0",
     color: "#6b7280",
-    fontSize: "12px",
+    fontSize: "13px",
+    maxWidth: "700px",
   },
 
   numeroPaso: {
-    minWidth: "38px",
-    height: "38px",
-    padding: "0 10px",
+    minWidth: "58px",
+    height: "58px",
+    padding: "0 14px",
     display: "grid",
     placeItems: "center",
     borderRadius: "999px",
-    background:
-      "linear-gradient(135deg,#e7f7ed,#d7efe1)",
+    background: "linear-gradient(135deg,#effbf4,#d9f2e3)",
     color: "#176b42",
     fontWeight: "900",
+    fontSize: "28px",
     border: "1px solid #c8e4d2",
-    boxShadow: "0 6px 14px rgba(23,107,66,.10)",
+    boxShadow: "0 8px 18px rgba(23,107,66,.12)",
   },
 
   grid: {
@@ -2810,6 +2730,55 @@ const estilos = {
     gridTemplateColumns:
       "repeat(auto-fit,minmax(220px,1fr))",
     gap: "15px",
+  },
+
+  gridCompacto: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+    gap: "15px",
+  },
+
+  heroMovimientoGrid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1.45fr) minmax(280px,.7fr)",
+    gap: "16px",
+    alignItems: "stretch",
+  },
+
+  heroMovimientoCampos: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
+    gap: "15px",
+  },
+
+  heroMovimientoPanel: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: "12px",
+  },
+
+  heroMiniCard: {
+    padding: "16px",
+    borderRadius: "18px",
+    background: "linear-gradient(180deg,#f6fbf8 0%,#eef7f1 100%)",
+    border: "1px solid #d9e8de",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,.65)",
+  },
+
+  heroMiniLabel: {
+    display: "block",
+    fontSize: "11px",
+    color: "#5e7267",
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: ".7px",
+  },
+
+  heroMiniValue: {
+    display: "block",
+    marginTop: "7px",
+    fontSize: "18px",
+    color: "#133321",
   },
 
   toolbar: {
@@ -2844,6 +2813,20 @@ const estilos = {
     boxShadow: "inset 0 1px 2px rgba(17,24,39,.03)",
   },
 
+  inputPremium: {
+    width: "100%",
+    minHeight: "54px",
+    padding: "14px 16px",
+    boxSizing: "border-box",
+    border: "1px solid #d4e2d8",
+    borderRadius: "16px",
+    background: "linear-gradient(180deg,#ffffff 0%,#fbfdfb 100%)",
+    color: "#132019",
+    outline: "none",
+    fontSize: "15px",
+    boxShadow: "0 8px 18px rgba(18,66,42,.05), inset 0 1px 0 rgba(255,255,255,.75)",
+  },
+
   inputReadOnly: {
     width: "100%",
     minHeight: "46px",
@@ -2857,6 +2840,20 @@ const estilos = {
     fontWeight: "850",
   },
 
+  inputReadOnlyPremium: {
+    width: "100%",
+    minHeight: "54px",
+    padding: "14px 16px",
+    boxSizing: "border-box",
+    border: "1px solid #cfe4d7",
+    borderRadius: "16px",
+    background: "linear-gradient(180deg,#f2fbf5,#ebf7ef)",
+    color: "#17623c",
+    fontSize: "15px",
+    fontWeight: "900",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,.75)",
+  },
+
   textarea: {
     width: "100%",
     minHeight: "100px",
@@ -2865,6 +2862,19 @@ const estilos = {
     boxSizing: "border-box",
     border: "1px solid #cfd8d2",
     borderRadius: "10px",
+  },
+
+  textareaPremium: {
+    width: "100%",
+    minHeight: "128px",
+    marginTop: "15px",
+    padding: "14px 16px",
+    boxSizing: "border-box",
+    border: "1px solid #d4e3d9",
+    borderRadius: "18px",
+    background: "linear-gradient(180deg,#ffffff 0%,#fbfdfb 100%)",
+    color: "#132019",
+    boxShadow: "0 8px 18px rgba(18,66,42,.04)",
   },
 
   botonSecundario: {
@@ -2892,6 +2902,130 @@ const estilos = {
     borderRadius: "12px",
     background: "#ffffff",
     cursor: "pointer",
+  },
+
+  productoPremiumLayout: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1.45fr) minmax(280px,.85fr)",
+    gap: "16px",
+    alignItems: "stretch",
+  },
+
+  productoPremiumForm: {
+    padding: "0",
+  },
+
+  productoPreviewCard: {
+    padding: "18px",
+    borderRadius: "22px",
+    background: "linear-gradient(135deg,#113824 0%,#176b42 100%)",
+    color: "#ffffff",
+    display: "grid",
+    alignContent: "start",
+    gap: "12px",
+    boxShadow: "0 16px 30px rgba(17,56,36,.20)",
+  },
+
+  previewEtiqueta: {
+    display: "inline-flex",
+    alignSelf: "start",
+    padding: "6px 10px",
+    borderRadius: "999px",
+    background: "rgba(255,255,255,.12)",
+    color: "#d8f1e3",
+    fontSize: "11px",
+    fontWeight: "800",
+    letterSpacing: ".7px",
+    textTransform: "uppercase",
+  },
+
+  previewTitulo: {
+    fontSize: "24px",
+    lineHeight: 1.1,
+  },
+
+  previewTexto: {
+    margin: 0,
+    color: "rgba(232,245,238,.88)",
+    lineHeight: 1.5,
+    fontSize: "13px",
+  },
+
+  previewStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2,minmax(0,1fr))",
+    gap: "12px",
+    marginTop: "4px",
+  },
+
+  previewStatItem: {
+    padding: "14px",
+    borderRadius: "16px",
+    background: "rgba(255,255,255,.09)",
+    border: "1px solid rgba(255,255,255,.08)",
+    display: "grid",
+    gap: "6px",
+  },
+
+  previewStatItemDestacado: {
+    padding: "14px",
+    borderRadius: "16px",
+    background: "rgba(255,255,255,.16)",
+    border: "1px solid rgba(255,255,255,.14)",
+    display: "grid",
+    gap: "6px",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,.15)",
+  },
+
+  detalleCobroLayout: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1.35fr) minmax(280px,.82fr)",
+    gap: "18px",
+    alignItems: "start",
+  },
+
+  detalleLateralAcciones: {
+    display: "grid",
+    gap: "14px",
+  },
+
+  detalleLateralCard: {
+    padding: "18px",
+    borderRadius: "22px",
+    background: "linear-gradient(180deg,#f7fcf9 0%,#eef8f1 100%)",
+    border: "1px solid #d6e8dc",
+    boxShadow: "0 12px 24px rgba(18,66,42,.06)",
+  },
+
+  detalleBadgeRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
+    marginTop: "12px",
+  },
+
+  detalleBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    minHeight: "32px",
+    padding: "0 12px",
+    borderRadius: "999px",
+    background: "#ffffff",
+    border: "1px solid #d6e4db",
+    color: "#1b4b31",
+    fontSize: "12px",
+    fontWeight: "800",
+  },
+
+  detalleTotalMini: {
+    marginTop: "16px",
+    padding: "16px",
+    borderRadius: "18px",
+    background: "linear-gradient(135deg,#102f20 0%,#176a42 70%,#1b7d4d 100%)",
+    color: "#ffffff",
+    display: "grid",
+    gap: "6px",
+    boxShadow: "0 12px 24px rgba(17,79,48,.18)",
   },
 
   clienteSeleccionado: {
@@ -2932,27 +3066,35 @@ const estilos = {
     flexWrap: "wrap",
   },
 
+  accionesVerticales: {
+    display: "grid",
+    gap: "12px",
+  },
+
   botonPrincipal: {
-    minHeight: "48px",
-    padding: "12px 22px",
+    minHeight: "52px",
+    width: "100%",
+    padding: "13px 22px",
     border: "none",
-    borderRadius: "13px",
-    background:
-      "linear-gradient(135deg,#1d9159,#156a41)",
+    borderRadius: "15px",
+    background: "linear-gradient(135deg,#24a061 0%,#166c42 100%)",
     color: "#ffffff",
     fontWeight: "900",
+    fontSize: "15px",
     cursor: "pointer",
-    boxShadow: "0 10px 22px rgba(21,106,65,.22)",
+    boxShadow: "0 12px 24px rgba(21,106,65,.24)",
   },
 
   botonLimpiar: {
-    minHeight: "48px",
-    padding: "12px 22px",
-    border: "1px solid #cbd9d0",
-    borderRadius: "13px",
+    minHeight: "52px",
+    width: "100%",
+    padding: "13px 22px",
+    border: "1px solid #d5dfd9",
+    borderRadius: "15px",
     background: "#ffffff",
     color: "#294d38",
     fontWeight: "850",
+    fontSize: "15px",
     cursor: "pointer",
     boxShadow: "0 7px 18px rgba(18,66,42,.07)",
   },
