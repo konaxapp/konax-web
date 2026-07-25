@@ -868,9 +868,12 @@ export default function ClientesPage() {
     if (clienteExistente) {
       const confirmarActualizacion =
         window.confirm(
-          `Ya existe un cliente registrado con esta cédula.\n\nCliente encontrado: ${
-            clienteExistente.nombre || "Sin nombre"
-          }\n\nPresione Aceptar para usar este cliente y crearle una cuenta nueva.`
+          "Ya existe un cliente registrado con esta cédula.\n\n" +
+            `Cliente encontrado: ${
+              clienteExistente.nombre ||
+              "Sin nombre"
+            }\n\n` +
+            "Presione Aceptar para usar este cliente y crearle una cuenta nueva."
         );
 
       if (!confirmarActualizacion) {
