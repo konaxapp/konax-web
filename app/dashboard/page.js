@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import SidebarKonax from "../../components/SidebarKonax";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -75,11 +76,6 @@ function construirModulosPorPlan(codigoPlan) {
     configuracion: true,
   };
 
-  /*
-    KONAX COBROS
-    No incluye Registrar Abonos como módulo separado.
-    Los pagos y abonos se registran desde Caja.
-  */
   if (codigo === "cobros") {
     return {
       ...base,
@@ -89,16 +85,10 @@ function construirModulosPorPlan(codigoPlan) {
       cobranza: true,
       dashboard_cobros: true,
       gestor_cobros: true,
-      inventario: true,
-      movimientos_inventario: true,
       reportes: true,
     };
   }
 
-  /*
-    KONAX VENTAS Y GESTIÓN
-    Incluye las funciones de Cobros más la operación comercial.
-  */
   if (codigo === "ventas_gestion") {
     return {
       ...base,
@@ -136,20 +126,12 @@ function construirModulosPorPlan(codigoPlan) {
 function leerModuloEmpresa(data, codigo) {
   if (!data) return true;
 
-  /*
-    Primero busca una columna individual con el mismo nombre.
-    Esto permite separar los interruptores cuando esas columnas
-    existan en empresa_modulos.
-  */
   if (
     Object.prototype.hasOwnProperty.call(data, codigo)
   ) {
     return Boolean(data[codigo]);
   }
 
-  /*
-    Compatibilidad con las columnas que ya utiliza la tabla.
-  */
   const columnasAntiguas = {
     clientes: "clientes",
     vista_cliente: "vista_cliente",
@@ -183,30 +165,22 @@ function leerModuloEmpresa(data, codigo) {
 
 export default function Dashboard() {
   const router = useRouter();
-  const pathname = usePathname();
 
   const [modulos, setModulos] = useState({});
-  const [permisosUsuario, setPermisosUsuario] =
-    useState([]);
+  const [permisosUsuario, setPermisosUsuario] = useState([]);
 
-  const [empresaNombre, setEmpresaNombre] =
-    useState("");
+  const [empresaNombre, setEmpresaNombre] = useState("");
   const [planNombre, setPlanNombre] = useState("");
   const [estadoPlan, setEstadoPlan] = useState("");
   const [tipoNegocio, setTipoNegocio] = useState("");
 
   const [usuarioRol, setUsuarioRol] = useState("");
-  const [usuarioNombre, setUsuarioNombre] =
-    useState("");
+  const [usuarioNombre, setUsuarioNombre] = useState("");
 
-  const [estadoSuscripcion, setEstadoSuscripcion] =
-    useState("");
-  const [fechaInicioPrueba, setFechaInicioPrueba] =
-    useState("");
-  const [fechaFinPrueba, setFechaFinPrueba] =
-    useState("");
-  const [diasRestantes, setDiasRestantes] =
-    useState(null);
+  const [estadoSuscripcion, setEstadoSuscripcion] = useState("");
+  const [fechaInicioPrueba, setFechaInicioPrueba] = useState("");
+  const [fechaFinPrueba, setFechaFinPrueba] = useState("");
+  const [diasRestantes, setDiasRestantes] = useState(null);
 
   const [bloqueado, setBloqueado] = useState(false);
   const [cargando, setCargando] = useState(true);
@@ -546,10 +520,6 @@ export default function Dashboard() {
           return;
         }
 
-        /*
-          Sin configuración previa, los módulos incluidos
-          en el plan comienzan activos.
-        */
         resultado[codigoModulo] = data
           ? leerModuloEmpresa(
               data,
@@ -599,37 +569,18 @@ export default function Dashboard() {
     const permiso =
       normalizar(codigoPermiso);
 
-    /*
-      La empresa debe tener el módulo activo.
-      Ser administrador no permite saltar el plan
-      ni los interruptores de la empresa.
-    */
     if (!Boolean(modulos?.[modulo])) {
       return false;
     }
 
-    /*
-      El administrador ve todos los módulos activos
-      de su empresa.
-    */
     if (esAdministrador()) {
       return true;
     }
 
-    /*
-      Los demás usuarios necesitan además
-      el permiso individual.
-    */
     return (
       permiso === "dashboard" ||
       permisosUsuario.includes(permiso)
     );
-  }
-
-  function abrirModulo(ruta) {
-    if (!bloqueado) {
-      router.push(ruta);
-    }
   }
 
   async function cerrarSesion() {
@@ -646,6 +597,12 @@ export default function Dashboard() {
 
   const modulosMenu = useMemo(() => {
     const lista = [
+      [
+        "Panel",
+        "/dashboard",
+        "dashboard",
+        "▦",
+      ],
       [
         "Clientes",
         "/clientes",
@@ -668,13 +625,13 @@ export default function Dashboard() {
         "Caja",
         "/caja",
         "caja",
-        "💵",
+        "▣",
       ],
       [
         "Cobranza",
         "/cobranza",
         "cobranza",
-        "📞",
+        "$",
       ],
       [
         "Centro de Cobranza",
@@ -698,7 +655,7 @@ export default function Dashboard() {
         "Inventario",
         "/inventario",
         "inventario",
-        "📦",
+        "□",
       ],
       [
         "Movimientos Inventario",
@@ -740,7 +697,7 @@ export default function Dashboard() {
         "Reportes",
         "/reportes",
         "reportes",
-        "📚",
+        "▥",
       ],
       [
         "Usuarios y Roles",
@@ -752,29 +709,27 @@ export default function Dashboard() {
         "Configuración",
         "/admin-configuracion",
         "configuracion",
-        "⚙️",
+        "⚙",
       ],
     ];
 
-    return lista.map(
-      ([nombre, ruta, codigo, icono]) => ({
-        nombre,
-        ruta,
-        codigo,
-        icono,
-        activo: puedeVer(codigo),
-      })
-    );
+    return lista
+      .map(
+        ([nombre, ruta, codigo, icono]) => ({
+          nombre,
+          ruta,
+          codigo,
+          icono,
+          activo: puedeVer(codigo),
+        })
+      )
+      .filter((item) => item.activo);
   }, [
     modulos,
     permisosUsuario,
     usuarioRol,
     bloqueado,
   ]);
-
-  const activos = modulosMenu.filter(
-    (item) => item.activo
-  );
 
   if (cargando) {
     return (
@@ -860,63 +815,11 @@ export default function Dashboard() {
 
   return (
     <div style={s.layout}>
-      <aside style={s.sidebar}>
-        <div style={s.brand}>
-          <div style={s.logoCard}>
-            <img
-              src="/konax-logo.png"
-              alt="KONAX"
-              style={s.logo}
-            />
-          </div>
-
-          <div style={s.brandCaption}>
-            <span style={s.brandEyebrow}>PLATAFORMA EMPRESARIAL</span>
-            <strong style={s.brandTitle}>KONAX</strong>
-          </div>
-        </div>
-
-        <nav style={s.nav}>
-          {activos.map((item) => {
-            const seleccionado =
-              pathname === item.ruta ||
-              pathname.startsWith(item.ruta + "/");
-
-            return (
-              <button
-                key={item.codigo}
-                onClick={() => abrirModulo(item.ruta)}
-                style={{
-                  ...s.navItem,
-                  ...(seleccionado ? s.navItemActivo : {}),
-                }}
-              >
-                <span
-                  style={{
-                    ...s.navIcon,
-                    ...(seleccionado ? s.navIconActivo : {}),
-                  }}
-                >
-                  {item.icono}
-                </span>
-
-                <span style={s.navTexto}>{item.nombre}</span>
-
-                {seleccionado && (
-                  <span style={s.navIndicador} />
-                )}
-              </button>
-            );
-          })}
-        </nav>
-
-        <button
-          onClick={cerrarSesion}
-          style={s.logout}
-        >
-          ↪ Cerrar sesión
-        </button>
-      </aside>
+      <SidebarKonax
+        items={modulosMenu}
+        onLogout={cerrarSesion}
+        tituloActivo="Panel"
+      />
 
       <main style={s.main}>
         <header style={s.topbar}>
@@ -1060,7 +963,7 @@ export default function Dashboard() {
             <div style={s.planDivider} />
 
             <span style={s.planSmall}>
-              {activos.length} funciones
+              {modulosMenu.length} funciones
               habilitadas
             </span>
           </div>
@@ -1085,7 +988,7 @@ export default function Dashboard() {
 
           <Info
             titulo="FUNCIONES ACTIVAS"
-            valor={String(activos.length)}
+            valor={String(modulosMenu.length)}
             icono="▦"
           />
         </section>
@@ -1120,8 +1023,11 @@ function Info({ titulo, valor, icono }) {
 const s = {
   layout: {
     minHeight: "100vh",
-    display: "flex",
-    background: "linear-gradient(135deg,#f7faf8 0%,#eef5f1 100%)",
+    display: "grid",
+    gridTemplateColumns:
+      "220px minmax(0,1fr)",
+    background:
+      "linear-gradient(135deg,#f7faf8 0%,#eef5f1 100%)",
     color: "#142019",
     fontFamily:
       'Inter, system-ui, "Segoe UI", sans-serif',
@@ -1153,137 +1059,7 @@ const s = {
     fontSize: 14,
   },
 
-  sidebar: {
-    width: 292,
-    minWidth: 292,
-    height: "100vh",
-    position: "sticky",
-    top: 0,
-    display: "flex",
-    flexDirection: "column",
-    padding: "18px 16px",
-    boxSizing: "border-box",
-    background:
-      "linear-gradient(180deg,#eaf7ef 0%,#dcefe4 55%,#cfe7d8 100%)",
-    color: "#173c2a",
-    overflowY: "auto",
-    borderRight: "1px solid #c7ddcf",
-    boxShadow: "10px 0 35px rgba(23,60,42,.10)",
-  },
-
-  brand: {
-    minHeight: 88,
-    display: "flex",
-    alignItems: "center",
-    padding: "8px 10px 22px",
-    borderBottom:
-      "1px solid rgba(255,255,255,.08)",
-  },
-
-  logoCard: {
-    minHeight: 86,
-    display: "grid",
-    placeItems: "center",
-    padding: "12px 16px",
-    borderRadius: 20,
-    background: "#ffffff",
-    boxShadow: "0 10px 24px rgba(23,60,42,.12)",
-    border: "1px solid rgba(23,60,42,.08)",
-  },
-  logo: {
-    width: 182,
-    maxWidth: "100%",
-    height: "auto",
-    objectFit: "contain",
-  },
-  brandCaption: {
-    display: "grid",
-    gap: 2,
-    padding: "0 8px",
-  },
-  brandEyebrow: {
-    color: "#4d7d63",
-    fontSize: 9,
-    fontWeight: 900,
-    letterSpacing: 1.2,
-  },
-  brandTitle: {
-    color: "#173c2a",
-    fontSize: 15,
-    letterSpacing: 1.4,
-  },
-
-  nav: {
-    display: "grid",
-    gap: 8,
-    paddingTop: 8,
-  },
-
-  navItem: {
-    position: "relative",
-    minHeight: 50,
-    display: "grid",
-    gridTemplateColumns: "34px 1fr 6px",
-    alignItems: "center",
-    gap: 10,
-    padding: "9px 12px",
-    border: "1px solid transparent",
-    borderRadius: 15,
-    background: "rgba(255,255,255,.52)",
-    color: "#244d37",
-    fontSize: 13,
-    fontWeight: 750,
-    textAlign: "left",
-    cursor: "pointer",
-    boxShadow: "0 3px 10px rgba(23,60,42,.04)",
-  },
-  navItemActivo: {
-    background: "#173c2a",
-    color: "#ffffff",
-    borderColor: "#173c2a",
-    boxShadow: "0 10px 22px rgba(23,60,42,.22)",
-    transform: "translateX(2px)",
-  },
-  navIcon: {
-    width: 32,
-    height: 32,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: 10,
-    background: "#ffffff",
-    fontSize: 16,
-    boxShadow: "0 3px 9px rgba(23,60,42,.08)",
-  },
-  navIconActivo: {
-    background: "rgba(255,255,255,.14)",
-    boxShadow: "none",
-  },
-  navTexto: {
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-  navIndicador: {
-    width: 5,
-    height: 24,
-    borderRadius: 999,
-    background: "#67d99a",
-  },
-
-  logout: {
-    minHeight: 44,
-    marginTop: "auto",
-    border:
-      "1px solid rgba(255,255,255,.12)",
-    borderRadius: 11,
-    background: "rgba(255,255,255,.05)",
-    color: "#fff",
-    fontWeight: 750,
-    cursor: "pointer",
-  },
-
   main: {
-    flex: 1,
     minWidth: 0,
     padding: "28px 30px 40px",
   },
