@@ -1714,7 +1714,7 @@ export default function Caja() {
       <div style={estilos.shell}>
         <header style={estilos.topbar}>
           <div style={estilos.topbarMarca}>
-            <img src="/konax-logo.png" alt="KONAX" style={estilos.topbarLogo} />
+            <div style={estilos.topbarLogoCard}><img src="/konax-logo.png" alt="KONAX" style={estilos.topbarLogo} /></div>
             <div style={estilos.topbarSeparador} />
             <div>
               <div style={estilos.topbarModulo}>🧾 CAJA Y REGISTRO DE INGRESOS</div>
@@ -1971,7 +1971,7 @@ const estilos={
   loading:{minHeight:"100vh",display:"grid",placeItems:"center",alignContent:"center",gap:"10px",background:"#f4f7f5"},
   loadingLogo:{width:"220px",maxWidth:"75%"},loadingTitulo:{fontSize:"20px"},
   topbar:{minHeight:"92px",padding:"16px 22px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:"18px",flexWrap:"wrap",background:"linear-gradient(120deg,#06331f 0%,#0b4d2d 54%,#0d6c3c 100%)",color:"#fff",boxShadow:"0 10px 28px rgba(11,66,40,.22)"},
-  topbarMarca:{display:"flex",alignItems:"center",gap:"16px",minWidth:0,flexWrap:"wrap",flex:"1 1 720px"},topbarLogo:{width:"190px",height:"58px",objectFit:"contain",display:"block",flexShrink:0,filter:"drop-shadow(0 2px 4px rgba(0,0,0,.18))"},topbarSeparador:{width:"1px",height:"42px",background:"rgba(255,255,255,.22)"},topbarModulo:{fontSize:"13px",fontWeight:900,color:"#79e2a4",whiteSpace:"nowrap",letterSpacing:".3px"},topbarEmpresa:{margin:0,fontSize:"24px",lineHeight:1.05},topbarTexto:{margin:"4px 0 0",fontSize:"12px",color:"#e0f2e7",maxWidth:"420px"},
+  topbarMarca:{display:"flex",alignItems:"center",gap:"16px",minWidth:0,flexWrap:"wrap",flex:"1 1 720px"},topbarLogoCard:{display:"grid",placeItems:"center",padding:"12px 18px",minHeight:"74px",borderRadius:"22px",background:"#ffffff",border:"1px solid rgba(255,255,255,.16)",boxShadow:"0 10px 24px rgba(0,0,0,.18)",flexShrink:0},topbarLogo:{width:"205px",height:"62px",objectFit:"contain",display:"block"},topbarSeparador:{width:"1px",height:"42px",background:"rgba(255,255,255,.22)"},topbarModulo:{fontSize:"13px",fontWeight:900,color:"#79e2a4",whiteSpace:"nowrap",letterSpacing:".3px"},topbarEmpresa:{margin:0,fontSize:"24px",lineHeight:1.05},topbarTexto:{margin:"4px 0 0",fontSize:"12px",color:"#e0f2e7",maxWidth:"420px"},
   botonVolver:{minHeight:"44px",padding:"0 18px",borderRadius:"12px",border:"1px solid #20bc69",background:"rgba(0,0,0,.12)",color:"#fff",fontWeight:800,cursor:"pointer",flexShrink:0},
   contenido:{padding:"18px"},
   kpisGrid:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:"14px",marginBottom:"14px"},
