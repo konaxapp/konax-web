@@ -36,8 +36,6 @@ export default function ClientesPage() {
   const [descripcion, setDescripcion] = useState("");
   const [montoTotal, setMontoTotal] = useState("");
   const [saldoActual, setSaldoActual] = useState("");
-  const [cuota, setCuota] = useState("");
-  const [periodicidad, setPeriodicidad] = useState("Mensual");
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [estadoCuenta, setEstadoCuenta] = useState("Activo");
@@ -50,11 +48,6 @@ export default function ClientesPage() {
 
   const [documentos, setDocumentos] = useState([]);
   const [guardando, setGuardando] = useState(false);
-  const [busquedaCliente, setBusquedaCliente] = useState("");
-  const [resultadosCliente, setResultadosCliente] = useState([]);
-  const [buscandoCliente, setBuscandoCliente] = useState(false);
-  const [clienteSeleccionadoId, setClienteSeleccionadoId] = useState("");
-  const [clienteSeleccionadoNombre, setClienteSeleccionadoNombre] = useState("");
 
   useEffect(() => {
     validarAcceso();
@@ -83,7 +76,7 @@ export default function ClientesPage() {
     } else if (
       estadoAutomatico !== "Sin definir" &&
       estadoCuenta === "Cancelado" &&
-      convertirMonto(saldoParaCalcular) > 0
+      Number(saldoParaCalcular || 0) > 0
     ) {
       setEstadoCuenta("Activo");
     }
@@ -104,53 +97,6 @@ export default function ClientesPage() {
 
   function normalizarCodigo(valor) {
     return normalizar(valor).replace(/\s+/g, "_");
-  }
-
-  function limpiarMonto(valor) {
-    const texto = String(valor ?? "")
-      .replace(/,/g, "")
-      .replace(/[^\d.]/g, "");
-
-    const partes = texto.split(".");
-    const entero = partes.shift() || "";
-    const decimal = partes.join("").slice(0, 2);
-
-    return texto.includes(".")
-      ? `${entero}.${decimal}`
-      : entero;
-  }
-
-  function convertirMonto(valor) {
-    const limpio = String(valor ?? "")
-      .replace(/,/g, "")
-      .trim();
-
-    if (!limpio) {
-      return 0;
-    }
-
-    const numero = Number(limpio);
-
-    return Number.isFinite(numero)
-      ? numero
-      : 0;
-  }
-
-  function formatearMonto(valor) {
-    if (
-      valor === "" ||
-      valor === null ||
-      valor === undefined
-    ) {
-      return "";
-    }
-
-    const numero = convertirMonto(valor);
-
-    return numero.toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
   }
 
   function esAdministrador(rol) {
@@ -480,10 +426,6 @@ export default function ClientesPage() {
     router.push("/dashboard");
   }
 
-  function abrirCargaCartera() {
-    router.push("/clientes/carga-cartera");
-  }
-
   function generarNumeroCuenta() {
     return "KX-" + Date.now();
   }
@@ -510,7 +452,7 @@ export default function ClientesPage() {
       saldo === null ||
       saldo === undefined ||
       !fecha ||
-      convertirMonto(saldo) <= 0
+      Number(saldo || 0) <= 0
     ) {
       return 0;
     }
@@ -555,7 +497,7 @@ export default function ClientesPage() {
     }
 
     const saldoNumero =
-      convertirMonto(saldo);
+      Number(saldo || 0);
 
     if (saldoNumero <= 0) {
       return "Cancelado";
@@ -613,69 +555,6 @@ export default function ClientesPage() {
     return partes.join(" | ");
   }
 
-  async function buscarClienteExistente() {
-    const empresaId = obtenerEmpresaId();
-    const termino = busquedaCliente.trim();
-    if (!empresaId || !termino) {
-      alert("Escriba una cédula, nombre o teléfono para buscar.");
-      return;
-    }
-    setBuscandoCliente(true);
-    setResultadosCliente([]);
-    try {
-      const terminoSeguro = termino.replace(/,/g, " ");
-      const { data, error } = await supabase
-        .from("clientes")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .or(`cedula.ilike.%${terminoSeguro}%,nombre.ilike.%${terminoSeguro}%,telefono.ilike.%${terminoSeguro}%,telefono_secundario.ilike.%${terminoSeguro}%`)
-        .order("nombre", { ascending: true })
-        .limit(10);
-      if (error) throw error;
-      setResultadosCliente(data || []);
-      if (!data || data.length === 0) alert("No se encontró ningún cliente con esos datos.");
-    } catch (error) {
-      alert("No se pudo buscar el cliente: " + (error?.message || "Error desconocido"));
-    } finally {
-      setBuscandoCliente(false);
-    }
-  }
-
-  function usarClienteExistente(cliente) {
-    setClienteSeleccionadoId(cliente.id);
-    setClienteSeleccionadoNombre(cliente.nombre || "");
-    setCedula(cliente.cedula || "");
-    setNombre(cliente.nombre || "");
-    setCorreo(cliente.correo || "");
-    setTelefono(cliente.telefono || "");
-    setTelefonoSecundario(cliente.telefono_secundario || "");
-    setDireccion(cliente.direccion || "");
-    setReferenciaNombre(cliente.referencia_nombre || "");
-    setReferenciaTelefono(cliente.referencia_telefono || "");
-    setEstadoCliente(cliente.estado || "Activo");
-    setObservacionCliente(cliente.observacion || "");
-    setResultadosCliente([]);
-    setBusquedaCliente(cliente.cedula || cliente.nombre || cliente.telefono || "");
-    alert(`Cliente cargado: ${cliente.nombre || "Sin nombre"}. Complete la información de la nueva cuenta.`);
-  }
-
-  function crearClienteNuevo() {
-    setClienteSeleccionadoId("");
-    setClienteSeleccionadoNombre("");
-    setBusquedaCliente("");
-    setResultadosCliente([]);
-    setCedula("");
-    setNombre("");
-    setCorreo("");
-    setTelefono("");
-    setTelefonoSecundario("");
-    setDireccion("");
-    setReferenciaNombre("");
-    setReferenciaTelefono("");
-    setEstadoCliente("Activo");
-    setObservacionCliente("");
-  }
-
   function limpiarFormulario() {
     setCedula("");
     setNombre("");
@@ -696,8 +575,6 @@ export default function ClientesPage() {
     setDescripcion("");
     setMontoTotal("");
     setSaldoActual("");
-    setCuota("");
-    setPeriodicidad("Mensual");
     setFechaInicio("");
     setFechaVencimiento("");
     setEstadoCuenta("Activo");
@@ -710,10 +587,6 @@ export default function ClientesPage() {
     setResponsableCobro("");
     setObservacionCobro("");
     setDocumentos([]);
-    setBusquedaCliente("");
-    setResultadosCliente([]);
-    setClienteSeleccionadoId("");
-    setClienteSeleccionadoNombre("");
   }
 
   async function validarSesionAntesDeGuardar() {
@@ -816,34 +689,6 @@ export default function ClientesPage() {
     const observacionFinal =
       construirObservacionCliente();
 
-    if (clienteSeleccionadoId) {
-      const { data: clienteSeleccionado, error } = await supabase
-        .from("clientes")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .eq("id", clienteSeleccionadoId)
-        .maybeSingle();
-
-      if (error) {
-        throw new Error(
-          "No se pudo cargar el cliente seleccionado: " +
-            error.message
-        );
-      }
-
-      if (!clienteSeleccionado) {
-        throw new Error(
-          "El cliente seleccionado ya no está disponible. Búsquelo nuevamente."
-        );
-      }
-
-      return {
-        ...clienteSeleccionado,
-        fueActualizado: false,
-        fueSeleccionado: true,
-      };
-    }
-
     const {
       data: clienteExistente,
       error: errorBuscarCliente,
@@ -873,13 +718,13 @@ export default function ClientesPage() {
               clienteExistente.nombre ||
               "Sin nombre"
             }\n\n` +
-            "Presione Aceptar para usar este cliente y crearle una cuenta nueva."
+            "¿Desea actualizar sus datos con la información del formulario?"
         );
 
       if (!confirmarActualizacion) {
         const errorDuplicado =
           new Error(
-            "El cliente no fue duplicado. Use la búsqueda superior para cargarlo."
+            "El cliente no fue duplicado. Búsquelo en el listado para consultar o actualizar su información."
           );
 
         errorDuplicado.name =
@@ -1079,7 +924,7 @@ export default function ClientesPage() {
       }
 
       const montoTotalNumero =
-        convertirMonto(
+        Number(
           montoTotal ||
             saldoActual ||
             0
@@ -1087,35 +932,17 @@ export default function ClientesPage() {
 
       const saldoActualNumero =
         saldoActual !== ""
-          ? convertirMonto(
-              saldoActual
+          ? Number(
+              saldoActual || 0
             )
           : montoTotalNumero;
 
-      const cuotaNumero =
-        cuota !== ""
-          ? convertirMonto(cuota)
-          : 0;
-
       if (
         montoTotalNumero < 0 ||
-        saldoActualNumero < 0 ||
-        cuotaNumero < 0
+        saldoActualNumero < 0
       ) {
         throw new Error(
           "Los montos no pueden ser negativos."
-        );
-      }
-
-      if (cuotaNumero <= 0) {
-        throw new Error(
-          "Ingrese una cuota válida para la cuenta."
-        );
-      }
-
-      if (!periodicidad) {
-        throw new Error(
-          "Seleccione la periodicidad de la cuota."
         );
       }
 
@@ -1130,8 +957,8 @@ export default function ClientesPage() {
       }
 
       const montoUltimoPagoNumero =
-        convertirMonto(
-          montoUltimoPago
+        Number(
+          montoUltimoPago || 0
         );
 
       if (
@@ -1202,14 +1029,12 @@ export default function ClientesPage() {
               tipoProducto,
             descripcion:
               descripcion.trim(),
-            modalidad:
-              periodicidad,
+            modalidad: null,
             monto_total:
               montoTotalNumero,
             saldo_actual:
               saldoActualNumero,
-            cuota:
-              cuotaNumero,
+            cuota: null,
             fecha_inicio:
               fechaInicio || null,
             fecha_vencimiento:
@@ -1270,10 +1095,8 @@ export default function ClientesPage() {
       }
 
       alert(
-        clienteCreado.fueSeleccionado
-          ? `Cliente existente utilizado correctamente. Se creó la nueva cuenta ${cuentaFinal} sin duplicar al cliente.`
-          : clienteCreado.fueActualizado
-          ? `Los datos del cliente fueron actualizados y se creó la cuenta ${cuentaFinal}.`
+        clienteCreado.fueActualizado
+          ? `El cliente ya existía, sus datos fueron actualizados y se creó la cuenta ${cuentaFinal}.`
           : `Cliente y cuenta registrados correctamente. Cuenta: ${cuentaFinal}.`
       );
 
@@ -1340,9 +1163,9 @@ export default function ClientesPage() {
 
   const saldoVisual =
     saldoActual !== ""
-      ? convertirMonto(saldoActual)
+      ? Number(saldoActual || 0)
       : montoTotal !== ""
-      ? convertirMonto(montoTotal)
+      ? Number(montoTotal || 0)
       : 0;
 
   const saldoParaEstadoVisual =
@@ -1412,29 +1235,17 @@ export default function ClientesPage() {
             </div>
           </div>
 
-          <div style={styles.heroAcciones}>
-            {!modoSoloCliente && (
-              <button
-                type="button"
-                onClick={abrirCargaCartera}
-                style={styles.botonCargaCartera}
-              >
-                ↑ Carga de cartera
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={
-                volverCentroOperaciones
-              }
-              style={
-                styles.botonVolver
-              }
-            >
-              ← Centro de Operaciones
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={
+              volverCentroOperaciones
+            }
+            style={
+              styles.botonVolver
+            }
+          >
+            ← Centro de Operaciones
+          </button>
         </header>
 
         <section
@@ -1442,6 +1253,18 @@ export default function ClientesPage() {
             styles.resumenGrid
           }
         >
+          <KPI
+            titulo="Cliente"
+            valor={
+              nombre ||
+              "Pendiente"
+            }
+            detalle={
+              cedula ||
+              "Sin identificación"
+            }
+            icono="👤"
+          />
 
           {esNegocioMembresias ? (
             <KPI
@@ -1512,49 +1335,6 @@ export default function ClientesPage() {
               styles.mainColumn
             }
           >
-            {!modoSoloCliente && (
-              <article style={styles.cardBusquedaCliente}>
-                <div style={styles.busquedaClienteHeader}>
-                  <div>
-                    <span style={styles.sectionNumber}></span>
-                    <h2 style={styles.tituloSeccion}>Buscar / Crear</h2>
-                    <p style={styles.textoSeccion}></p>
-                  </div>
-                  {clienteSeleccionadoId && (
-                    <span style={styles.clienteSeleccionadoBadge}>Cliente cargado: {clienteSeleccionadoNombre || nombre}</span>
-                  )}
-                </div>
-                <div style={styles.busquedaClienteFila}>
-                  <input
-                    value={busquedaCliente}
-                    onChange={(e) => setBusquedaCliente(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); buscarClienteExistente(); } }}
-                    style={styles.inputStyle}
-                    placeholder="Cédula, nombre o teléfono"
-                  />
-                  <button type="button" onClick={buscarClienteExistente} style={styles.botonBuscarCliente} disabled={buscandoCliente}>
-                    {buscandoCliente ? "Buscando..." : "Buscar cliente"}
-                  </button>
-                  <button type="button" onClick={crearClienteNuevo} style={styles.botonNuevoCliente} disabled={buscandoCliente}>
-                    Crear cliente nuevo
-                  </button>
-                </div>
-                {resultadosCliente.length > 0 && (
-                  <div style={styles.resultadosCliente}>
-                    {resultadosCliente.map((cliente) => (
-                      <div key={cliente.id} style={styles.resultadoClienteFila}>
-                        <div>
-                          <strong>{cliente.nombre || "Sin nombre"}</strong>
-                          <div style={styles.resultadoClienteDetalle}>Cédula: {cliente.cedula || "-"} · Teléfono: {cliente.telefono || "-"}</div>
-                        </div>
-                        <button type="button" onClick={() => usarClienteExistente(cliente)} style={styles.botonUsarCliente}>Usar este cliente</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </article>
-            )}
-
             <article
               style={styles.card}
             >
@@ -1930,23 +1710,15 @@ export default function ClientesPage() {
 
                     <Campo label="Monto total original *">
                       <input
-                        type="text"
-                        inputMode="decimal"
+                        type="number"
+                        min="0"
+                        step="0.01"
                         value={
                           montoTotal
                         }
                         onChange={(e) =>
                           setMontoTotal(
-                            limpiarMonto(
-                              e.target.value
-                            )
-                          )
-                        }
-                        onBlur={() =>
-                          setMontoTotal(
-                            formatearMonto(
-                              montoTotal
-                            )
+                            e.target.value
                           )
                         }
                         style={
@@ -1957,78 +1729,21 @@ export default function ClientesPage() {
 
                     <Campo label="Saldo actual *">
                       <input
-                        type="text"
-                        inputMode="decimal"
+                        type="number"
+                        min="0"
+                        step="0.01"
                         value={
                           saldoActual
                         }
                         onChange={(e) =>
                           setSaldoActual(
-                            limpiarMonto(
-                              e.target.value
-                            )
-                          )
-                        }
-                        onBlur={() =>
-                          setSaldoActual(
-                            formatearMonto(
-                              saldoActual
-                            )
-                          )
-                        }
-                        style={
-                          styles.inputStyle
-                        }
-                      />
-                    </Campo>
-
-                    <Campo label="Cuota *">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={cuota}
-                        onChange={(e) =>
-                          setCuota(
-                            limpiarMonto(
-                              e.target.value
-                            )
-                          )
-                        }
-                        onBlur={() =>
-                          setCuota(
-                            formatearMonto(
-                              cuota
-                            )
-                          )
-                        }
-                        style={
-                          styles.inputStyle
-                        }
-                      />
-                    </Campo>
-
-                    <Campo label="Periodicidad *">
-                      <select
-                        value={periodicidad}
-                        onChange={(e) =>
-                          setPeriodicidad(
                             e.target.value
                           )
                         }
                         style={
-                          styles.selectStyle
+                          styles.inputStyle
                         }
-                      >
-                        <option value="Semanal">
-                          Semanal
-                        </option>
-                        <option value="Quincenal">
-                          Quincenal
-                        </option>
-                        <option value="Mensual">
-                          Mensual
-                        </option>
-                      </select>
+                      />
                     </Campo>
 
                     <Campo label="Fecha de inicio">
@@ -2173,23 +1888,15 @@ export default function ClientesPage() {
 
                     <Campo label="Monto último pago">
                       <input
-                        type="text"
-                        inputMode="decimal"
+                        type="number"
+                        min="0"
+                        step="0.01"
                         value={
                           montoUltimoPago
                         }
                         onChange={(e) =>
                           setMontoUltimoPago(
-                            limpiarMonto(
-                              e.target.value
-                            )
-                          )
-                        }
-                        onBlur={() =>
-                          setMontoUltimoPago(
-                            formatearMonto(
-                              montoUltimoPago
-                            )
+                            e.target.value
                           )
                         }
                         style={
@@ -2348,35 +2055,9 @@ export default function ClientesPage() {
 
                   <ResumenFila
                     label="Saldo actual"
-                    value={`$${saldoVisual.toLocaleString(
-                      "en-US",
-                      {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      }
+                    value={`$${saldoVisual.toFixed(
+                      2
                     )}`}
-                  />
-
-                  <ResumenFila
-                    label="Cuota"
-                    value={
-                      cuota
-                        ? `$${convertirMonto(
-                            cuota
-                          ).toLocaleString(
-                            "en-US",
-                            {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            }
-                          )}`
-                        : "Pendiente"
-                    }
-                  />
-
-                  <ResumenFila
-                    label="Periodicidad"
-                    value={periodicidad}
                   />
 
                   <ResumenFila
@@ -2422,6 +2103,19 @@ export default function ClientesPage() {
                 disabled={guardando}
               >
                 Limpiar formulario
+              </button>
+
+              <button
+                type="button"
+                onClick={
+                  volverCentroOperaciones
+                }
+                style={
+                  styles.botonSecundario
+                }
+                disabled={guardando}
+              >
+                Salir
               </button>
             </div>
           </aside>
@@ -2699,24 +2393,6 @@ const styles = {
     lineHeight: 1.55,
   },
 
-  heroAcciones: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    alignItems: "center",
-  },
-
-  botonCargaCartera: {
-    minHeight: 46,
-    padding: "11px 16px",
-    border: "1px solid #79dca6",
-    borderRadius: 12,
-    background: "#ffffff",
-    color: "#14683e",
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-
   botonVolver: {
     minHeight: 46,
     padding: "11px 16px",
@@ -2734,17 +2410,16 @@ const styles = {
     marginBottom: 20,
     display: "grid",
     gridTemplateColumns:
-      "repeat(auto-fit,minmax(220px,1fr))",
+      "repeat(auto-fit,minmax(250px,1fr))",
     gap: 14,
   },
 
   resumenCard: {
-    minHeight: 58,
-    padding: "8px 10px",
+    minHeight: 118,
+    padding: 18,
     display: "grid",
-    gridTemplateColumns: "32px 1fr",
-    gap: 8,
-    alignItems: "center",
+    gridTemplateColumns: "48px 1fr",
+    gap: 14,
     border: "1px solid #dfe7e2",
     borderRadius: 18,
     background: "#fff",
@@ -2756,8 +2431,8 @@ const styles = {
   },
 
   kpiIcono: {
-    width: 32,
-    height: 32,
+    width: 48,
+    height: 48,
     display: "grid",
     placeItems: "center",
     borderRadius: 13,
@@ -2771,28 +2446,25 @@ const styles = {
   },
 
   resumenLabel: {
-    margin: "0 0 3px",
+    margin: "1px 0 6px",
     color: "#6d7971",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 800,
   },
 
   resumenValor: {
     margin: 0,
-    fontSize: 14,
-    lineHeight: 1.1,
+    fontSize: 22,
   },
 
   resumenDetalle: {
     display: "block",
-    marginTop: 2,
+    marginTop: 6,
     color: "#8a958e",
-    fontSize: 9,
-    lineHeight: 1.1,
+    fontSize: 11,
   },
 
   formLayout: {
-    marginTop: 0,
     display: "grid",
     gridTemplateColumns:
       "minmax(0,1fr) 330px",
@@ -2806,7 +2478,7 @@ const styles = {
 
   sideColumn: {
     position: "sticky",
-    top: 10,
+    top: 20,
     display: "grid",
     gap: 14,
   },
@@ -3029,17 +2701,6 @@ const styles = {
     fontWeight: 800,
     cursor: "pointer",
   },
-
-  cardBusquedaCliente: { marginBottom: 18, padding: 22, border: "1px solid #a7d7ba", borderRadius: 22, background: "#f4fbf7" },
-  busquedaClienteHeader: { marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" },
-  busquedaClienteFila: { display: "grid", gridTemplateColumns: "minmax(240px,1fr) auto auto", gap: 10, alignItems: "center" },
-  botonBuscarCliente: { minHeight: 46, padding: "11px 16px", border: "none", borderRadius: 11, background: "#16834f", color: "#fff", fontWeight: 850, cursor: "pointer" },
-  botonNuevoCliente: { minHeight: 46, padding: "11px 16px", border: "1px solid #b7c9bd", borderRadius: 11, background: "#fff", color: "#25352b", fontWeight: 800, cursor: "pointer" },
-  clienteSeleccionadoBadge: { padding: "9px 12px", border: "1px solid #8fd2aa", borderRadius: 999, background: "#e4f7eb", color: "#14683e", fontSize: 12, fontWeight: 900 },
-  resultadosCliente: { marginTop: 14, display: "grid", gap: 9 },
-  resultadoClienteFila: { padding: 13, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, border: "1px solid #d6e7dc", borderRadius: 12, background: "#fff" },
-  resultadoClienteDetalle: { marginTop: 4, color: "#748077", fontSize: 12 },
-  botonUsarCliente: { minHeight: 40, padding: "9px 13px", border: "none", borderRadius: 10, background: "#17211c", color: "#fff", fontWeight: 800, cursor: "pointer" },
 
   botonSecundario: {
     minHeight: 44,
