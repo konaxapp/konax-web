@@ -330,12 +330,14 @@ export default function ClientesPage() {
       );
 
     /*
-      En ventas_gestion se registra primero la ficha
-      neutral del cliente. La modalidad de operación
-      se define después en Ventas o Caja.
+      Solo los negocios de membresías registran primero
+      una ficha neutral del cliente.
+
+      Tanto KONAX Cobros como KONAX Ventas y Gestión
+      deben permitir crear la cuenta por cobrar y la
+      cobranza inicial desde Clientes.
     */
     const soloCliente =
-      planNormalizado === "ventas_gestion" ||
       negocioDeMembresias;
 
     setTipoNegocio(
