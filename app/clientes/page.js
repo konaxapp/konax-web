@@ -36,8 +36,6 @@ export default function ClientesPage() {
   const [descripcion, setDescripcion] = useState("");
   const [montoTotal, setMontoTotal] = useState("");
   const [saldoActual, setSaldoActual] = useState("");
-  const [cuota, setCuota] = useState("");
-  const [periodicidad, setPeriodicidad] = useState("Mensual");
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [estadoCuenta, setEstadoCuenta] = useState("Activo");
@@ -78,7 +76,7 @@ export default function ClientesPage() {
     } else if (
       estadoAutomatico !== "Sin definir" &&
       estadoCuenta === "Cancelado" &&
-      convertirMonto(saldoParaCalcular) > 0
+      Number(saldoParaCalcular || 0) > 0
     ) {
       setEstadoCuenta("Activo");
     }
@@ -99,53 +97,6 @@ export default function ClientesPage() {
 
   function normalizarCodigo(valor) {
     return normalizar(valor).replace(/\s+/g, "_");
-  }
-
-  function limpiarMonto(valor) {
-    const texto = String(valor ?? "")
-      .replace(/,/g, "")
-      .replace(/[^\d.]/g, "");
-
-    const partes = texto.split(".");
-    const entero = partes.shift() || "";
-    const decimal = partes.join("").slice(0, 2);
-
-    return texto.includes(".")
-      ? `${entero}.${decimal}`
-      : entero;
-  }
-
-  function convertirMonto(valor) {
-    const limpio = String(valor ?? "")
-      .replace(/,/g, "")
-      .trim();
-
-    if (!limpio) {
-      return 0;
-    }
-
-    const numero = Number(limpio);
-
-    return Number.isFinite(numero)
-      ? numero
-      : 0;
-  }
-
-  function formatearMonto(valor) {
-    if (
-      valor === "" ||
-      valor === null ||
-      valor === undefined
-    ) {
-      return "";
-    }
-
-    const numero = convertirMonto(valor);
-
-    return numero.toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
   }
 
   function esAdministrador(rol) {
@@ -475,10 +426,6 @@ export default function ClientesPage() {
     router.push("/dashboard");
   }
 
-  function abrirCargaCartera() {
-    router.push("/clientes/carga-cartera");
-  }
-
   function generarNumeroCuenta() {
     return "KX-" + Date.now();
   }
@@ -505,7 +452,7 @@ export default function ClientesPage() {
       saldo === null ||
       saldo === undefined ||
       !fecha ||
-      convertirMonto(saldo) <= 0
+      Number(saldo || 0) <= 0
     ) {
       return 0;
     }
@@ -550,7 +497,7 @@ export default function ClientesPage() {
     }
 
     const saldoNumero =
-      convertirMonto(saldo);
+      Number(saldo || 0);
 
     if (saldoNumero <= 0) {
       return "Cancelado";
@@ -628,8 +575,6 @@ export default function ClientesPage() {
     setDescripcion("");
     setMontoTotal("");
     setSaldoActual("");
-    setCuota("");
-    setPeriodicidad("Mensual");
     setFechaInicio("");
     setFechaVencimiento("");
     setEstadoCuenta("Activo");
@@ -768,11 +713,15 @@ export default function ClientesPage() {
     if (clienteExistente) {
       const confirmarActualizacion =
         window.confirm(
-          "Ya existe un cliente registrado con esta cédula.\n\n" +
+          "Ya existe un cliente registrado con esta cédula.
+
+" +
             `Cliente encontrado: ${
               clienteExistente.nombre ||
               "Sin nombre"
-            }\n\n` +
+            }
+
+` +
             "¿Desea actualizar sus datos con la información del formulario?"
         );
 
@@ -979,7 +928,7 @@ export default function ClientesPage() {
       }
 
       const montoTotalNumero =
-        convertirMonto(
+        Number(
           montoTotal ||
             saldoActual ||
             0
@@ -987,35 +936,17 @@ export default function ClientesPage() {
 
       const saldoActualNumero =
         saldoActual !== ""
-          ? convertirMonto(
-              saldoActual
+          ? Number(
+              saldoActual || 0
             )
           : montoTotalNumero;
 
-      const cuotaNumero =
-        cuota !== ""
-          ? convertirMonto(cuota)
-          : 0;
-
       if (
         montoTotalNumero < 0 ||
-        saldoActualNumero < 0 ||
-        cuotaNumero < 0
+        saldoActualNumero < 0
       ) {
         throw new Error(
           "Los montos no pueden ser negativos."
-        );
-      }
-
-      if (cuotaNumero <= 0) {
-        throw new Error(
-          "Ingrese una cuota válida para la cuenta."
-        );
-      }
-
-      if (!periodicidad) {
-        throw new Error(
-          "Seleccione la periodicidad de la cuota."
         );
       }
 
@@ -1030,8 +961,8 @@ export default function ClientesPage() {
       }
 
       const montoUltimoPagoNumero =
-        convertirMonto(
-          montoUltimoPago
+        Number(
+          montoUltimoPago || 0
         );
 
       if (
@@ -1102,14 +1033,12 @@ export default function ClientesPage() {
               tipoProducto,
             descripcion:
               descripcion.trim(),
-            modalidad:
-              periodicidad,
+            modalidad: null,
             monto_total:
               montoTotalNumero,
             saldo_actual:
               saldoActualNumero,
-            cuota:
-              cuotaNumero,
+            cuota: null,
             fecha_inicio:
               fechaInicio || null,
             fecha_vencimiento:
@@ -1238,9 +1167,9 @@ export default function ClientesPage() {
 
   const saldoVisual =
     saldoActual !== ""
-      ? convertirMonto(saldoActual)
+      ? Number(saldoActual || 0)
       : montoTotal !== ""
-      ? convertirMonto(montoTotal)
+      ? Number(montoTotal || 0)
       : 0;
 
   const saldoParaEstadoVisual =
@@ -1310,29 +1239,17 @@ export default function ClientesPage() {
             </div>
           </div>
 
-          <div style={styles.heroAcciones}>
-            {!modoSoloCliente && (
-              <button
-                type="button"
-                onClick={abrirCargaCartera}
-                style={styles.botonCargaCartera}
-              >
-                ↑ Carga de cartera
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={
-                volverCentroOperaciones
-              }
-              style={
-                styles.botonVolver
-              }
-            >
-              ← Centro de Operaciones
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={
+              volverCentroOperaciones
+            }
+            style={
+              styles.botonVolver
+            }
+          >
+            ← Centro de Operaciones
+          </button>
         </header>
 
         <section
@@ -1797,108 +1714,40 @@ export default function ClientesPage() {
 
                     <Campo label="Monto total original *">
                       <input
-                        type="text"
-                        inputMode="decimal"
+                        type="number"
+                        min="0"
+                        step="0.01"
                         value={
                           montoTotal
                         }
                         onChange={(e) =>
                           setMontoTotal(
-                            limpiarMonto(
-                              e.target.value
-                            )
-                          )
-                        }
-                        onBlur={() =>
-                          setMontoTotal(
-                            formatearMonto(
-                              montoTotal
-                            )
+                            e.target.value
                           )
                         }
                         style={
                           styles.inputStyle
                         }
-                        placeholder="Ej. 1,200.00"
                       />
                     </Campo>
 
                     <Campo label="Saldo actual *">
                       <input
-                        type="text"
-                        inputMode="decimal"
+                        type="number"
+                        min="0"
+                        step="0.01"
                         value={
                           saldoActual
                         }
                         onChange={(e) =>
                           setSaldoActual(
-                            limpiarMonto(
-                              e.target.value
-                            )
-                          )
-                        }
-                        onBlur={() =>
-                          setSaldoActual(
-                            formatearMonto(
-                              saldoActual
-                            )
-                          )
-                        }
-                        style={
-                          styles.inputStyle
-                        }
-                        placeholder="Ej. 950.00"
-                      />
-                    </Campo>
-
-                    <Campo label="Cuota *">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={cuota}
-                        onChange={(e) =>
-                          setCuota(
-                            limpiarMonto(
-                              e.target.value
-                            )
-                          )
-                        }
-                        onBlur={() =>
-                          setCuota(
-                            formatearMonto(
-                              cuota
-                            )
-                          )
-                        }
-                        style={
-                          styles.inputStyle
-                        }
-                        placeholder="Ej. 100.00"
-                      />
-                    </Campo>
-
-                    <Campo label="Periodicidad *">
-                      <select
-                        value={periodicidad}
-                        onChange={(e) =>
-                          setPeriodicidad(
                             e.target.value
                           )
                         }
                         style={
-                          styles.selectStyle
+                          styles.inputStyle
                         }
-                      >
-                        <option value="Semanal">
-                          Semanal
-                        </option>
-                        <option value="Quincenal">
-                          Quincenal
-                        </option>
-                        <option value="Mensual">
-                          Mensual
-                        </option>
-                      </select>
+                      />
                     </Campo>
 
                     <Campo label="Fecha de inicio">
@@ -2043,29 +1892,20 @@ export default function ClientesPage() {
 
                     <Campo label="Monto último pago">
                       <input
-                        type="text"
-                        inputMode="decimal"
+                        type="number"
+                        min="0"
+                        step="0.01"
                         value={
                           montoUltimoPago
                         }
                         onChange={(e) =>
                           setMontoUltimoPago(
-                            limpiarMonto(
-                              e.target.value
-                            )
-                          )
-                        }
-                        onBlur={() =>
-                          setMontoUltimoPago(
-                            formatearMonto(
-                              montoUltimoPago
-                            )
+                            e.target.value
                           )
                         }
                         style={
                           styles.inputStyle
                         }
-                        placeholder="Ej. 100.00"
                       />
                     </Campo>
 
@@ -2219,35 +2059,9 @@ export default function ClientesPage() {
 
                   <ResumenFila
                     label="Saldo actual"
-                    value={`$${saldoVisual.toLocaleString(
-                      "en-US",
-                      {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      }
+                    value={`$${saldoVisual.toFixed(
+                      2
                     )}`}
-                  />
-
-                  <ResumenFila
-                    label="Cuota"
-                    value={
-                      cuota
-                        ? `$${convertirMonto(
-                            cuota
-                          ).toLocaleString(
-                            "en-US",
-                            {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            }
-                          )}`
-                        : "Pendiente"
-                    }
-                  />
-
-                  <ResumenFila
-                    label="Periodicidad"
-                    value={periodicidad}
                   />
 
                   <ResumenFila
@@ -2581,24 +2395,6 @@ const styles = {
     color: "#d2e7da",
     fontSize: 15,
     lineHeight: 1.55,
-  },
-
-  heroAcciones: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    alignItems: "center",
-  },
-
-  botonCargaCartera: {
-    minHeight: 46,
-    padding: "11px 16px",
-    border: "1px solid #79dca6",
-    borderRadius: 12,
-    background: "#ffffff",
-    color: "#14683e",
-    fontWeight: 900,
-    cursor: "pointer",
   },
 
   botonVolver: {
