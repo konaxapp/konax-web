@@ -1780,28 +1780,27 @@ export default function Caja() {
           />
         </section>
 
-        <section style={estilos.mainGrid}>
-          <div>
-            <article style={estilos.cardLimpia}>
+        <section style={estilos.mainStack}>
+            <article style={estilos.card}>
               <CabeceraSeccion
                 titulo="Nuevo movimiento"
                 texto="Seleccione qué está cobrando y complete la información."
                 numero="01"
               />
 
-              <div style={estilos.gridDos}>
-                <Campo label="Fecha">
+              <div style={estilos.grid}>
+                <div style={{ gridColumn: "span 6" }}><Campo label="Fecha">
                   <input
                     type="date"
                     value={fechaPago}
                     onChange={(e) =>
                       setFechaPago(e.target.value)
                     }
-                    style={estilos.inputModerno}
+                    style={estilos.input}
                   />
-                </Campo>
+                </Campo></div>
 
-                <Campo label="Tipo de movimiento">
+                <div style={{ gridColumn: "span 6" }}><Campo label="Tipo de movimiento">
                   <select
                     value={tipoMovimiento}
                     onChange={(e) => {
@@ -1815,7 +1814,7 @@ export default function Caja() {
                       setCuentasCliente([]);
                       setCuentaSeleccionada(null);
                     }}
-                    style={estilos.inputModerno}
+                    style={estilos.input}
                   >
                     {opcionesMovimiento.map((opcion) => (
                       <option
@@ -1826,7 +1825,7 @@ export default function Caja() {
                       </option>
                     ))}
                   </select>
-                </Campo>
+                </Campo></div>
               </div>
             </article>
 
@@ -1977,28 +1976,27 @@ export default function Caja() {
             )}
 
             {esVentaConProducto() && (
-              <article style={estilos.cardLimpia}>
+              <article style={estilos.card}>
                 <CabeceraSeccion
                   titulo="Producto e inventario"
                   texto="Seleccione el producto y confirme la cantidad."
                   numero="03"
                 />
 
-                <div style={estilos.gridProducto}>
-                  <Campo label="Código del producto">
+                <div style={estilos.grid}>
+                  <div style={{ gridColumn: "span 3" }}><Campo label="Código del producto">
                     <input
-                      placeholder="Ingrese o escanee el código"
                       value={codigoProducto}
                       onChange={(e) =>
                         seleccionarProductoPorCodigo(
                           e.target.value
                         )
                       }
-                      style={estilos.inputModerno}
+                      style={estilos.input}
                     />
-                  </Campo>
+                  </Campo></div>
 
-                  <Campo label="Seleccionar producto">
+                  <div style={{ gridColumn: "span 5" }}><Campo label="Seleccionar producto">
                     <select
                       value={
                         productoSeleccionado?.id || ""
@@ -2015,7 +2013,7 @@ export default function Caja() {
                           producto || null
                         );
                       }}
-                      style={estilos.inputModerno}
+                      style={estilos.input}
                     >
                       <option value="">
                         Seleccione producto
@@ -2032,9 +2030,9 @@ export default function Caja() {
                         </option>
                       ))}
                     </select>
-                  </Campo>
+                  </Campo></div>
 
-                  <Campo label="Cantidad">
+                  <div style={{ gridColumn: "span 2" }}><Campo label="Cantidad">
                     <input
                       type="number"
                       min="1"
@@ -2042,36 +2040,36 @@ export default function Caja() {
                       onChange={(e) =>
                         setCantidad(e.target.value)
                       }
-                      style={estilos.inputModerno}
+                      style={estilos.input}
                     />
-                  </Campo>
+                  </Campo></div>
 
-                  <Campo label="Valor total">
+                  <div style={{ gridColumn: "span 2" }}><Campo label="Valor total">
                     <input
                       value={valorProducto}
                       readOnly
-                      style={estilos.inputReadOnlyModerno}
+                      style={estilos.inputReadOnly}
                     />
-                  </Campo>
+                  </Campo></div>
                 </div>
               </article>
             )}
 
-            <article style={estilos.cardLimpia}>
+            <article style={estilos.card}>
               <CabeceraSeccion
                 titulo="Detalle del cobro"
                 texto="Confirme el método, monto y responsable."
                 numero={esVentaConProducto() ? "04" : "03"}
               />
 
-              <div style={estilos.gridCobro}>
-                <Campo label="Método de pago">
+              <div style={estilos.grid}>
+                <div style={{ gridColumn: "span 3" }}><Campo label="Método de pago">
                   <select
                     value={metodoPago}
                     onChange={(e) =>
                       setMetodoPago(e.target.value)
                     }
-                    style={estilos.inputModerno}
+                    style={estilos.input}
                   >
                     <option>Efectivo</option>
                     <option>Transferencia</option>
@@ -2080,9 +2078,9 @@ export default function Caja() {
                     <option>Cheque</option>
                     <option>Otro</option>
                   </select>
-                </Campo>
+                </Campo></div>
 
-                <Campo label="Monto">
+                <div style={{ gridColumn: "span 3" }}><Campo label="Monto">
                   <input
                     type="number"
                     min="0"
@@ -2094,30 +2092,29 @@ export default function Caja() {
                     }
                     style={
                       esCancelacion()
-                        ? estilos.inputReadOnlyModerno
-                        : estilos.inputModerno
+                        ? estilos.inputReadOnly
+                        : estilos.input
                     }
                   />
-                </Campo>
+                </Campo></div>
 
-                <Campo label="Concepto">
+                <div style={{ gridColumn: "span 3" }}><Campo label="Concepto">
                   <input
-                    placeholder="Ej. Venta de producto, abono, servicio..."
                     value={concepto}
                     onChange={(e) =>
                       setConcepto(e.target.value)
                     }
-                    style={estilos.inputModerno}
+                    style={estilos.input}
                   />
-                </Campo>
+                </Campo></div>
 
-                <Campo label="Responsable">
+                <div style={{ gridColumn: "span 3" }}><Campo label="Responsable">
                   <select
                     value={responsable}
                     onChange={(e) =>
                       setResponsable(e.target.value)
                     }
-                    style={estilos.inputModerno}
+                    style={estilos.input}
                   >
                     <option value="">
                       Seleccione responsable
@@ -2133,21 +2130,20 @@ export default function Caja() {
                       </option>
                     ))}
                   </select>
-                </Campo>
+                </Campo></div>
               </div>
 
               <Campo label="Observación">
                 <textarea
-                  placeholder="Añada una observación si es necesario..."
                   value={observacion}
                   onChange={(e) =>
                     setObservacion(e.target.value)
                   }
-                  style={estilos.textareaModerna}
+                  style={estilos.textarea}
                 />
               </Campo>
 
-              <div style={estilos.accionesLimpias}>
+              <div style={estilos.acciones}>
                 <button
                   style={estilos.botonPrincipal}
                   onClick={guardarMovimiento}
@@ -2167,86 +2163,6 @@ export default function Caja() {
                 </button>
               </div>
             </article>
-          </div>
-
-          <aside>
-            <article style={estilos.cardSticky}>
-              <CabeceraSeccion
-                titulo="Resumen del movimiento"
-                texto="Revise la información antes de guardar."
-                numero="✓"
-              />
-
-              <div style={estilos.resumenMovimiento}>
-                <FilaResumen
-                  label="Negocio"
-                  valor={empresaNombre}
-                />
-                <FilaResumen
-                  label="Movimiento"
-                  valor={tipoMovimiento || "-"}
-                />
-                <FilaResumen
-                  label="Cliente"
-                  valor={
-                    clienteSeleccionado?.nombre ||
-                    nombreContado ||
-                    "Sin cliente"
-                  }
-                />
-                <FilaResumen
-                  label="Cuenta"
-                  valor={
-                    cuentaSeleccionada?.numero_cuenta ||
-                    "-"
-                  }
-                />
-                <FilaResumen
-                  label="Saldo actual"
-                  valor={
-                    cuentaSeleccionada
-                      ? `$${Number(
-                          cuentaSeleccionada.saldo_actual || 0
-                        ).toFixed(2)}`
-                      : "-"
-                  }
-                />
-                <FilaResumen
-                  label="Saldo después"
-                  valor={
-                    cuentaSeleccionada && esPagoDeCuenta()
-                      ? `$${Math.max(
-                          Number(
-                            cuentaSeleccionada.saldo_actual || 0
-                          ) -
-                            Number(
-                              esCancelacion()
-                                ? cuentaSeleccionada.saldo_actual || 0
-                                : monto || 0
-                            ),
-                          0
-                        ).toFixed(2)}`
-                      : "-"
-                  }
-                />
-                <FilaResumen
-                  label="Método"
-                  valor={metodoPago}
-                />
-                <FilaResumen
-                  label="Responsable"
-                  valor={responsable || "-"}
-                />
-              </div>
-
-              <div style={estilos.totalBox}>
-                <span>Total a registrar</span>
-                <strong>
-                  ${Number(monto || 0).toFixed(2)}
-                </strong>
-              </div>
-            </article>
-          </aside>
         </section>
 
         <article style={estilos.card}>
@@ -2395,6 +2311,13 @@ function ResumenCard({
   icono,
   destacado,
 }) {
+  const subtitulos = {
+    "Movimientos hoy": "Transacciones registradas",
+    "Total de hoy": "Consolidado del día",
+    "Efectivo hoy": "Cobros en efectivo",
+    "Pagos digitales": "Tarjetas y transferencias",
+  };
+
   return (
     <article
       style={
@@ -2406,6 +2329,9 @@ function ResumenCard({
       <span style={estilos.kpiIcono}>{icono}</span>
       <span style={estilos.kpiTitulo}>{titulo}</span>
       <strong style={estilos.kpiValor}>{valor}</strong>
+      <span style={{...estilos.kpiSub, color: destacado ? "rgba(255,255,255,.82)" : estilos.kpiSub.color}}>
+        {subtitulos[titulo] || "Resumen del módulo"}
+      </span>
     </article>
   );
 }
@@ -2476,19 +2402,18 @@ const estilos = {
   header: {
     position: "relative",
     overflow: "hidden",
-    marginBottom: "22px",
-    padding: "30px",
+    marginBottom: "24px",
+    padding: "24px 26px",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     gap: "20px",
     flexWrap: "wrap",
-    borderRadius: "28px",
-    background:
-      "linear-gradient(135deg,#102d20 0%,#18583a 58%,#1e7c4d 100%)",
+    borderRadius: "30px",
+    background: "linear-gradient(120deg,#081811 0%,#0f2e20 35%,#15613c 100%)",
     color: "#ffffff",
-    border: "1px solid rgba(255,255,255,.14)",
-    boxShadow: "0 24px 55px rgba(18,66,42,.22)",
+    border: "1px solid rgba(255,255,255,.10)",
+    boxShadow: "0 24px 60px rgba(9,40,26,.24)",
   },
 
   headerIzquierda: {
@@ -2553,134 +2478,52 @@ const estilos = {
   },
 
   resumenGrid: {
-    marginBottom: "20px",
+    marginBottom: "22px",
     display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit,minmax(180px,1fr))",
-    gap: "14px",
+    gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
+    gap: "16px",
   },
 
   resumenCard: {
-    padding: "20px",
+    padding: "22px",
     display: "grid",
-    gap: "7px",
-    border: "1px solid #d9e7de",
-    borderRadius: "20px",
-    background:
-      "linear-gradient(180deg,#ffffff 0%,#f8fbf9 100%)",
-    boxShadow: "0 10px 24px rgba(24,79,49,.08)",
+    gap: "10px",
+    border: "1px solid #deebe3",
+    borderRadius: "24px",
+    background: "linear-gradient(180deg,#ffffff 0%,#f7fbf9 100%)",
+    boxShadow: "0 14px 30px rgba(24,79,49,.07)",
   },
 
   resumenCardDestacado: {
-    padding: "20px",
+    padding: "22px",
     display: "grid",
-    gap: "7px",
-    borderRadius: "20px",
-    background:
-      "linear-gradient(135deg,#1c8f58 0%,#14663f 72%,#104d32 100%)",
+    gap: "10px",
+    borderRadius: "24px",
+    background: "linear-gradient(135deg,#0f271c 0%,#0d5133 42%,#1aa05f 100%)",
     color: "#ffffff",
-    boxShadow: "0 14px 30px rgba(20,102,63,.24)",
-    border: "1px solid rgba(255,255,255,.18)",
+    boxShadow: "0 18px 34px rgba(20,102,63,.26)",
+    border: "1px solid rgba(255,255,255,.12)",
   },
 
-  kpiIcono: { fontSize: "24px" },
-  kpiTitulo: { fontSize: "12px", fontWeight: "800" },
-  kpiValor: { fontSize: "25px" },
+  kpiIcono: { fontSize: "26px", width: "54px", height: "54px", display: "grid", placeItems: "center", borderRadius: "16px", background: "rgba(24,131,79,.10)" },
+  kpiTitulo: { fontSize: "12px", fontWeight: "900", color: "#55645d", letterSpacing: ".3px", textTransform: "uppercase" },
+  kpiValor: { fontSize: "34px", lineHeight: 1.1 },
+  kpiSub: { fontSize: "13px", color: "#798780" },
 
-  mainGrid: {
+  mainStack: {
     display: "grid",
-    gridTemplateColumns:
-      "minmax(0, 1.2fr) minmax(300px, 360px)",
-    gap: "20px",
-    alignItems: "start",
+    gap: "18px",
   },
 
   card: {
-    marginBottom: "20px",
-    padding: "25px",
-    border: "1px solid #dce8e0",
-    borderRadius: "24px",
-    background:
-      "linear-gradient(180deg,#ffffff 0%,#fbfdfc 100%)",
-    boxShadow: "0 14px 34px rgba(18,66,42,.08)",
-  },
-
-
-  cardLimpia: {
-    marginBottom: "18px",
-    padding: "22px 24px",
-    border: "1px solid #dce8e0",
-    borderRadius: "20px",
-    background: "#ffffff",
-    boxShadow: "0 10px 28px rgba(18,66,42,.07)",
-  },
-
-  gridDos: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2,minmax(0,1fr))",
-    gap: "14px",
-  },
-
-  gridProducto: {
-    display: "grid",
-    gridTemplateColumns: "minmax(180px,.85fr) minmax(280px,1.45fr) minmax(130px,.55fr) minmax(180px,.75fr)",
-    gap: "14px",
-    alignItems: "end",
-  },
-
-  gridCobro: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4,minmax(0,1fr))",
-    gap: "14px",
-    alignItems: "end",
-  },
-
-  inputModerno: {
-    width: "100%",
-    minHeight: "50px",
-    padding: "12px 14px",
-    boxSizing: "border-box",
-    border: "1px solid #d5e1d9",
-    borderRadius: "14px",
-    background: "#ffffff",
-    color: "#111827",
-    outline: "none",
-    fontSize: "14px",
-    boxShadow: "inset 0 1px 2px rgba(17,24,39,.03)",
-  },
-
-  inputReadOnlyModerno: {
-    width: "100%",
-    minHeight: "50px",
-    padding: "12px 14px",
-    boxSizing: "border-box",
-    border: "1px solid #cfe0d5",
-    borderRadius: "14px",
-    background: "#f2f8f4",
-    color: "#17623c",
-    fontSize: "14px",
-    fontWeight: "850",
-  },
-
-  textareaModerna: {
-    width: "100%",
-    minHeight: "110px",
-    marginTop: "14px",
-    padding: "13px 14px",
-    boxSizing: "border-box",
-    border: "1px solid #d5e1d9",
-    borderRadius: "14px",
-    background: "#ffffff",
-    color: "#111827",
-    resize: "vertical",
-  },
-
-  accionesLimpias: {
-    marginTop: "16px",
-    display: "grid",
-    gridTemplateColumns: "minmax(210px,280px) minmax(190px,240px)",
-    gap: "10px",
-    justifyContent: "start",
+    position: "relative",
+    overflow: "hidden",
+    marginBottom: "0",
+    padding: "24px 24px 22px",
+    border: "1px solid #dfe9e3",
+    borderRadius: "28px",
+    background: "linear-gradient(180deg,#ffffff 0%,#fbfdfc 100%)",
+    boxShadow: "0 16px 36px rgba(18,66,42,.08)",
   },
 
   cardSticky: {
@@ -2695,8 +2538,8 @@ const estilos = {
   },
 
   cabeceraSeccion: {
-    marginBottom: "18px",
-    paddingBottom: "14px",
+    marginBottom: "20px",
+    paddingBottom: "16px",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -2706,33 +2549,36 @@ const estilos = {
 
   tituloSeccion: {
     margin: 0,
-    fontSize: "20px",
+    fontSize: "26px",
+    letterSpacing: "-.4px",
   },
 
   textoSeccion: {
-    margin: "5px 0 0",
+    margin: "6px 0 0",
     color: "#6b7280",
-    fontSize: "12px",
+    fontSize: "14px",
+    maxWidth: "780px",
   },
 
   numeroPaso: {
-    minWidth: "42px",
-    height: "42px",
-    padding: "0 11px",
+    minWidth: "54px",
+    height: "54px",
+    padding: "0 14px",
     display: "grid",
     placeItems: "center",
-    borderRadius: "12px",
-    background: "#eaf7ef",
-    color: "#176b42",
+    borderRadius: "18px",
+    background: "linear-gradient(135deg,#1ca15f,#157143)",
+    color: "#ffffff",
     fontWeight: "900",
-    border: "1px solid #cfe7d8",
+    fontSize: "22px",
+    border: "1px solid rgba(255,255,255,.18)",
+    boxShadow: "0 10px 20px rgba(23,107,66,.18)",
   },
 
   grid: {
     display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit,minmax(220px,1fr))",
-    gap: "15px",
+    gridTemplateColumns: "repeat(12,minmax(0,1fr))",
+    gap: "16px",
   },
 
   toolbar: {
@@ -2745,49 +2591,55 @@ const estilos = {
   campo: {
     display: "flex",
     flexDirection: "column",
-    gap: "7px",
+    gap: "8px",
   },
 
   label: {
-    color: "#425048",
+    color: "#31403a",
     fontSize: "12px",
-    fontWeight: "800",
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: ".4px",
   },
 
   input: {
     width: "100%",
-    minHeight: "46px",
-    padding: "11px 13px",
+    minHeight: "54px",
+    padding: "14px 16px",
     boxSizing: "border-box",
-    border: "1px solid #cbdad0",
-    borderRadius: "12px",
-    background: "#ffffff",
+    border: "1px solid #d6e3db",
+    borderRadius: "16px",
+    background: "linear-gradient(180deg,#ffffff,#fbfdfc)",
     color: "#111827",
     outline: "none",
-    boxShadow: "inset 0 1px 2px rgba(17,24,39,.03)",
+    fontSize: "15px",
+    boxShadow: "0 8px 16px rgba(17,24,39,.03), inset 0 1px 0 rgba(255,255,255,.7)",
   },
 
   inputReadOnly: {
     width: "100%",
-    minHeight: "46px",
-    padding: "11px 13px",
+    minHeight: "54px",
+    padding: "14px 16px",
     boxSizing: "border-box",
-    border: "1px solid #cfe0d5",
-    borderRadius: "12px",
-    background:
-      "linear-gradient(180deg,#f3f8f5,#edf5f0)",
+    border: "1px solid #d2e2d8",
+    borderRadius: "16px",
+    background: "linear-gradient(180deg,#f0f8f3,#ebf5ef)",
     color: "#17623c",
-    fontWeight: "850",
+    fontWeight: "900",
+    fontSize: "15px",
   },
 
   textarea: {
     width: "100%",
-    minHeight: "100px",
-    marginTop: "15px",
-    padding: "12px",
+    minHeight: "120px",
+    marginTop: "16px",
+    padding: "16px",
     boxSizing: "border-box",
-    border: "1px solid #cfd8d2",
-    borderRadius: "10px",
+    border: "1px solid #d6e3db",
+    borderRadius: "16px",
+    background: "linear-gradient(180deg,#ffffff,#fbfdfc)",
+    fontSize: "15px",
+    boxShadow: "0 8px 16px rgba(17,24,39,.03)",
   },
 
   botonSecundario: {
@@ -2818,11 +2670,12 @@ const estilos = {
   },
 
   clienteSeleccionado: {
-    marginTop: "15px",
-    padding: "16px",
-    border: "1px solid #b9dfc7",
-    borderRadius: "14px",
-    background: "#f1faf4",
+    marginTop: "16px",
+    padding: "18px",
+    border: "1px solid #cae5d3",
+    borderRadius: "20px",
+    background: "linear-gradient(180deg,#f6fcf8 0%,#f1faf4 100%)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,.6)",
   },
 
   clienteNombre: {
@@ -2830,54 +2683,55 @@ const estilos = {
   },
 
   detalleCuentaGrid: {
-    marginTop: "14px",
+    marginTop: "16px",
     display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit,minmax(140px,1fr))",
-    gap: "10px",
+    gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+    gap: "12px",
   },
 
   detalleCuentaItem: {
-    padding: "12px",
+    padding: "14px",
     display: "grid",
-    gap: "5px",
-    border: "1px solid #cfe2d5",
-    borderRadius: "12px",
+    gap: "6px",
+    border: "1px solid #d7e7dd",
+    borderRadius: "16px",
     background: "#ffffff",
     color: "#4b5f53",
-    fontSize: "12px",
+    fontSize: "13px",
+    boxShadow: "0 6px 14px rgba(18,66,42,.05)",
   },
 
   acciones: {
-    marginTop: "18px",
-    display: "flex",
-    gap: "10px",
-    flexWrap: "wrap",
+    marginTop: "20px",
+    display: "grid",
+    gridTemplateColumns: "minmax(220px,320px) minmax(220px,280px)",
+    gap: "12px",
   },
 
   botonPrincipal: {
-    minHeight: "48px",
-    padding: "12px 22px",
+    minHeight: "56px",
+    padding: "12px 24px",
     border: "none",
-    borderRadius: "13px",
-    background:
-      "linear-gradient(135deg,#1d9159,#156a41)",
+    borderRadius: "18px",
+    background: "linear-gradient(135deg,#19a75f 0%,#12663d 100%)",
     color: "#ffffff",
     fontWeight: "900",
+    fontSize: "15px",
     cursor: "pointer",
-    boxShadow: "0 10px 22px rgba(21,106,65,.22)",
+    boxShadow: "0 14px 28px rgba(21,106,65,.22)",
   },
 
   botonLimpiar: {
-    minHeight: "48px",
-    padding: "12px 22px",
-    border: "1px solid #cbd9d0",
-    borderRadius: "13px",
+    minHeight: "56px",
+    padding: "12px 24px",
+    border: "1px solid #d7e3dc",
+    borderRadius: "18px",
     background: "#ffffff",
     color: "#294d38",
     fontWeight: "850",
+    fontSize: "15px",
     cursor: "pointer",
-    boxShadow: "0 7px 18px rgba(18,66,42,.07)",
+    boxShadow: "0 10px 20px rgba(18,66,42,.05)",
   },
 
   resumenMovimiento: {
@@ -2910,15 +2764,14 @@ const estilos = {
 
   filtrosMovimientos: {
     marginBottom: "18px",
-    padding: "15px",
+    padding: "18px",
     display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit,minmax(180px,1fr))",
+    gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
     gap: "12px",
     alignItems: "end",
-    border: "1px solid #dfe7e2",
-    borderRadius: "14px",
-    background: "#f7faf8",
+    border: "1px solid #e3ebe6",
+    borderRadius: "18px",
+    background: "linear-gradient(180deg,#fafdfb,#f4faf6)",
   },
 
   botonFiltrar: {
@@ -2945,9 +2798,10 @@ const estilos = {
 
   tablaBox: {
     overflowX: "auto",
-    border: "1px solid #d8e5dc",
-    borderRadius: "16px",
-    boxShadow: "0 8px 20px rgba(18,66,42,.06)",
+    border: "1px solid #dfe8e3",
+    borderRadius: "20px",
+    boxShadow: "0 12px 24px rgba(18,66,42,.05)",
+    background: "#ffffff",
   },
 
   tabla: {
@@ -2957,20 +2811,23 @@ const estilos = {
   },
 
   th: {
-    padding: "13px",
-    background:
-      "linear-gradient(180deg,#183c2a,#102a1d)",
-    color: "#ffffff",
+    padding: "15px 14px",
+    background: "linear-gradient(180deg,#f3faf5,#edf6f0)",
+    color: "#193426",
     textAlign: "left",
     whiteSpace: "nowrap",
     fontSize: "12px",
-    letterSpacing: ".2px",
+    fontWeight: "900",
+    letterSpacing: ".3px",
+    textTransform: "uppercase",
+    borderBottom: "1px solid #deebe3",
   },
 
   td: {
-    padding: "11px",
+    padding: "14px",
     borderBottom: "1px solid #edf1ee",
     whiteSpace: "nowrap",
+    fontSize: "14px",
   },
 
   tdVacio: {
