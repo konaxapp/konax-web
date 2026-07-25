@@ -1789,7 +1789,7 @@ export default function Caja() {
               />
 
               <div style={estilos.grid}>
-                <div style={{ gridColumn: "span 6" }}><Campo label="Fecha">
+                <Campo label="Fecha">
                   <input
                     type="date"
                     value={fechaPago}
@@ -1798,9 +1798,9 @@ export default function Caja() {
                     }
                     style={estilos.input}
                   />
-                </Campo></div>
+                </Campo>
 
-                <div style={{ gridColumn: "span 6" }}><Campo label="Tipo de movimiento">
+                <Campo label="Tipo de movimiento">
                   <select
                     value={tipoMovimiento}
                     onChange={(e) => {
@@ -1825,7 +1825,7 @@ export default function Caja() {
                       </option>
                     ))}
                   </select>
-                </Campo></div>
+                </Campo>
               </div>
             </article>
 
@@ -1984,7 +1984,7 @@ export default function Caja() {
                 />
 
                 <div style={estilos.grid}>
-                  <div style={{ gridColumn: "span 3" }}><Campo label="Código del producto">
+                  <Campo label="Código del producto">
                     <input
                       value={codigoProducto}
                       onChange={(e) =>
@@ -1994,9 +1994,9 @@ export default function Caja() {
                       }
                       style={estilos.input}
                     />
-                  </Campo></div>
+                  </Campo>
 
-                  <div style={{ gridColumn: "span 5" }}><Campo label="Seleccionar producto">
+                  <Campo label="Seleccionar producto">
                     <select
                       value={
                         productoSeleccionado?.id || ""
@@ -2030,9 +2030,9 @@ export default function Caja() {
                         </option>
                       ))}
                     </select>
-                  </Campo></div>
+                  </Campo>
 
-                  <div style={{ gridColumn: "span 2" }}><Campo label="Cantidad">
+                  <Campo label="Cantidad">
                     <input
                       type="number"
                       min="1"
@@ -2042,15 +2042,15 @@ export default function Caja() {
                       }
                       style={estilos.input}
                     />
-                  </Campo></div>
+                  </Campo>
 
-                  <div style={{ gridColumn: "span 2" }}><Campo label="Valor total">
+                  <Campo label="Valor total">
                     <input
                       value={valorProducto}
                       readOnly
                       style={estilos.inputReadOnly}
                     />
-                  </Campo></div>
+                  </Campo>
                 </div>
               </article>
             )}
@@ -2063,7 +2063,7 @@ export default function Caja() {
               />
 
               <div style={estilos.grid}>
-                <div style={{ gridColumn: "span 3" }}><Campo label="Método de pago">
+                <Campo label="Método de pago">
                   <select
                     value={metodoPago}
                     onChange={(e) =>
@@ -2078,9 +2078,9 @@ export default function Caja() {
                     <option>Cheque</option>
                     <option>Otro</option>
                   </select>
-                </Campo></div>
+                </Campo>
 
-                <div style={{ gridColumn: "span 3" }}><Campo label="Monto">
+                <Campo label="Monto">
                   <input
                     type="number"
                     min="0"
@@ -2096,9 +2096,9 @@ export default function Caja() {
                         : estilos.input
                     }
                   />
-                </Campo></div>
+                </Campo>
 
-                <div style={{ gridColumn: "span 3" }}><Campo label="Concepto">
+                <Campo label="Concepto">
                   <input
                     value={concepto}
                     onChange={(e) =>
@@ -2106,9 +2106,9 @@ export default function Caja() {
                     }
                     style={estilos.input}
                   />
-                </Campo></div>
+                </Campo>
 
-                <div style={{ gridColumn: "span 3" }}><Campo label="Responsable">
+                <Campo label="Responsable">
                   <select
                     value={responsable}
                     onChange={(e) =>
@@ -2130,7 +2130,7 @@ export default function Caja() {
                       </option>
                     ))}
                   </select>
-                </Campo></div>
+                </Campo>
               </div>
 
               <Campo label="Observación">
@@ -2165,7 +2165,7 @@ export default function Caja() {
             </article>
         </section>
 
-        <article style={estilos.card}>
+        <article style={{...estilos.card, marginTop: "18px"}}>
           <CabeceraSeccion
             titulo="Movimientos registrados"
             texto="Por defecto se muestran únicamente los movimientos del día. Use las fechas para consultar periodos anteriores."
@@ -2311,13 +2311,6 @@ function ResumenCard({
   icono,
   destacado,
 }) {
-  const subtitulos = {
-    "Movimientos hoy": "Transacciones registradas",
-    "Total de hoy": "Consolidado del día",
-    "Efectivo hoy": "Cobros en efectivo",
-    "Pagos digitales": "Tarjetas y transferencias",
-  };
-
   return (
     <article
       style={
@@ -2329,9 +2322,6 @@ function ResumenCard({
       <span style={estilos.kpiIcono}>{icono}</span>
       <span style={estilos.kpiTitulo}>{titulo}</span>
       <strong style={estilos.kpiValor}>{valor}</strong>
-      <span style={{...estilos.kpiSub, color: destacado ? "rgba(255,255,255,.82)" : estilos.kpiSub.color}}>
-        {subtitulos[titulo] || "Resumen del módulo"}
-      </span>
     </article>
   );
 }
@@ -2369,10 +2359,9 @@ function FilaResumen({ label, valor }) {
 const estilos = {
   pagina: {
     minHeight: "100vh",
-    background:
-      "radial-gradient(circle at 88% 5%, rgba(41,163,98,.16), transparent 26%), radial-gradient(circle at 8% 12%, rgba(16,87,55,.10), transparent 24%), linear-gradient(135deg,#f7faf8 0%,#edf4f0 48%,#e7f1eb 100%)",
-    padding: "26px",
-    color: "#132019",
+    background: "linear-gradient(180deg,#f5f8f6 0%,#eef3f0 100%)",
+    padding: "22px",
+    color: "#16231b",
     fontFamily: "Inter, Arial, system-ui, sans-serif",
   },
 
@@ -2402,18 +2391,18 @@ const estilos = {
   header: {
     position: "relative",
     overflow: "hidden",
-    marginBottom: "24px",
-    padding: "24px 26px",
+    marginBottom: "18px",
+    padding: "22px 24px",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: "20px",
+    gap: "18px",
     flexWrap: "wrap",
-    borderRadius: "30px",
-    background: "linear-gradient(120deg,#081811 0%,#0f2e20 35%,#15613c 100%)",
+    borderRadius: "20px",
+    background: "linear-gradient(135deg,#10271b 0%,#175f3b 100%)",
     color: "#ffffff",
     border: "1px solid rgba(255,255,255,.10)",
-    boxShadow: "0 24px 60px rgba(9,40,26,.24)",
+    boxShadow: "0 12px 30px rgba(18,66,42,.16)",
   },
 
   headerIzquierda: {
@@ -2424,15 +2413,15 @@ const estilos = {
   },
 
   logoBox: {
-    width: "200px",
-    height: "82px",
-    padding: "10px",
+    width: "170px",
+    height: "66px",
+    padding: "8px",
     display: "grid",
     placeItems: "center",
-    borderRadius: "20px",
-    background: "linear-gradient(180deg,#ffffff,#f7fbf8)",
-    border: "1px solid rgba(255,255,255,.7)",
-    boxShadow: "0 12px 30px rgba(0,0,0,.20)",
+    borderRadius: "14px",
+    background: "#ffffff",
+    border: "1px solid rgba(255,255,255,.55)",
+    boxShadow: "0 8px 18px rgba(0,0,0,.14)",
   },
 
   logo: {
@@ -2449,8 +2438,9 @@ const estilos = {
   },
 
   nombreNegocio: {
-    margin: "5px 0 2px",
-    fontSize: "clamp(30px, 4vw, 44px)",
+    margin: "4px 0 2px",
+    fontSize: "clamp(26px, 3vw, 36px)",
+    letterSpacing: "-.4px",
   },
 
   tituloModulo: {
@@ -2478,52 +2468,55 @@ const estilos = {
   },
 
   resumenGrid: {
-    marginBottom: "22px",
+    marginBottom: "18px",
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
-    gap: "16px",
+    gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+    gap: "12px",
   },
 
   resumenCard: {
-    padding: "22px",
+    padding: "16px 18px",
     display: "grid",
-    gap: "10px",
-    border: "1px solid #deebe3",
-    borderRadius: "24px",
-    background: "linear-gradient(180deg,#ffffff 0%,#f7fbf9 100%)",
-    boxShadow: "0 14px 30px rgba(24,79,49,.07)",
+    gridTemplateColumns: "42px 1fr",
+    alignItems: "center",
+    columnGap: "12px",
+    rowGap: "2px",
+    border: "1px solid #dce7e1",
+    borderRadius: "16px",
+    background: "#ffffff",
+    boxShadow: "0 8px 20px rgba(24,79,49,.05)",
   },
 
   resumenCardDestacado: {
-    padding: "22px",
+    padding: "16px 18px",
     display: "grid",
-    gap: "10px",
-    borderRadius: "24px",
-    background: "linear-gradient(135deg,#0f271c 0%,#0d5133 42%,#1aa05f 100%)",
+    gridTemplateColumns: "42px 1fr",
+    alignItems: "center",
+    columnGap: "12px",
+    rowGap: "2px",
+    borderRadius: "16px",
+    background: "linear-gradient(135deg,#1c8f58 0%,#14663f 100%)",
     color: "#ffffff",
-    boxShadow: "0 18px 34px rgba(20,102,63,.26)",
+    boxShadow: "0 10px 24px rgba(20,102,63,.20)",
     border: "1px solid rgba(255,255,255,.12)",
   },
 
-  kpiIcono: { fontSize: "26px", width: "54px", height: "54px", display: "grid", placeItems: "center", borderRadius: "16px", background: "rgba(24,131,79,.10)" },
-  kpiTitulo: { fontSize: "12px", fontWeight: "900", color: "#55645d", letterSpacing: ".3px", textTransform: "uppercase" },
-  kpiValor: { fontSize: "34px", lineHeight: 1.1 },
-  kpiSub: { fontSize: "13px", color: "#798780" },
+  kpiIcono: { gridRow: "1 / span 2", fontSize: "22px", width: "42px", height: "42px", display: "grid", placeItems: "center", borderRadius: "12px", background: "rgba(22,131,79,.10)" },
+  kpiTitulo: { fontSize: "11px", fontWeight: "800", color: "#6b776f", textTransform: "uppercase", letterSpacing: ".35px" },
+  kpiValor: { fontSize: "24px", lineHeight: 1.1 },
 
   mainStack: {
     display: "grid",
-    gap: "18px",
+    gap: "14px",
   },
 
   card: {
-    position: "relative",
-    overflow: "hidden",
     marginBottom: "0",
-    padding: "24px 24px 22px",
-    border: "1px solid #dfe9e3",
-    borderRadius: "28px",
-    background: "linear-gradient(180deg,#ffffff 0%,#fbfdfc 100%)",
-    boxShadow: "0 16px 36px rgba(18,66,42,.08)",
+    padding: "20px",
+    border: "1px solid #dfe8e3",
+    borderRadius: "18px",
+    background: "#ffffff",
+    boxShadow: "0 8px 22px rgba(18,66,42,.05)",
   },
 
   cardSticky: {
@@ -2538,8 +2531,8 @@ const estilos = {
   },
 
   cabeceraSeccion: {
-    marginBottom: "20px",
-    paddingBottom: "16px",
+    marginBottom: "16px",
+    paddingBottom: "12px",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -2549,36 +2542,33 @@ const estilos = {
 
   tituloSeccion: {
     margin: 0,
-    fontSize: "26px",
-    letterSpacing: "-.4px",
+    fontSize: "20px",
+    letterSpacing: "-.2px",
   },
 
   textoSeccion: {
-    margin: "6px 0 0",
+    margin: "4px 0 0",
     color: "#6b7280",
-    fontSize: "14px",
-    maxWidth: "780px",
+    fontSize: "12px",
   },
 
   numeroPaso: {
-    minWidth: "54px",
-    height: "54px",
-    padding: "0 14px",
+    minWidth: "36px",
+    height: "36px",
+    padding: "0 10px",
     display: "grid",
     placeItems: "center",
-    borderRadius: "18px",
-    background: "linear-gradient(135deg,#1ca15f,#157143)",
-    color: "#ffffff",
+    borderRadius: "10px",
+    background: "#e9f6ee",
+    color: "#176b42",
     fontWeight: "900",
-    fontSize: "22px",
-    border: "1px solid rgba(255,255,255,.18)",
-    boxShadow: "0 10px 20px rgba(23,107,66,.18)",
+    border: "1px solid #d0e7d8",
   },
 
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(12,minmax(0,1fr))",
-    gap: "16px",
+    gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+    gap: "12px",
   },
 
   toolbar: {
@@ -2591,55 +2581,50 @@ const estilos = {
   campo: {
     display: "flex",
     flexDirection: "column",
-    gap: "8px",
+    gap: "7px",
   },
 
   label: {
-    color: "#31403a",
+    color: "#425048",
     fontSize: "12px",
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: ".4px",
+    fontWeight: "800",
   },
 
   input: {
     width: "100%",
-    minHeight: "54px",
-    padding: "14px 16px",
+    minHeight: "48px",
+    padding: "11px 13px",
     boxSizing: "border-box",
-    border: "1px solid #d6e3db",
-    borderRadius: "16px",
-    background: "linear-gradient(180deg,#ffffff,#fbfdfc)",
+    border: "1px solid #d4dfd8",
+    borderRadius: "12px",
+    background: "#ffffff",
     color: "#111827",
     outline: "none",
-    fontSize: "15px",
-    boxShadow: "0 8px 16px rgba(17,24,39,.03), inset 0 1px 0 rgba(255,255,255,.7)",
+    fontSize: "14px",
+    boxShadow: "inset 0 1px 2px rgba(17,24,39,.025)",
   },
 
   inputReadOnly: {
     width: "100%",
-    minHeight: "54px",
-    padding: "14px 16px",
+    minHeight: "48px",
+    padding: "11px 13px",
     boxSizing: "border-box",
-    border: "1px solid #d2e2d8",
-    borderRadius: "16px",
-    background: "linear-gradient(180deg,#f0f8f3,#ebf5ef)",
+    border: "1px solid #cfe0d5",
+    borderRadius: "12px",
+    background: "#f2f7f4",
     color: "#17623c",
-    fontWeight: "900",
-    fontSize: "15px",
+    fontWeight: "850",
   },
 
   textarea: {
     width: "100%",
-    minHeight: "120px",
-    marginTop: "16px",
-    padding: "16px",
+    minHeight: "92px",
+    marginTop: "12px",
+    padding: "12px 13px",
     boxSizing: "border-box",
-    border: "1px solid #d6e3db",
-    borderRadius: "16px",
-    background: "linear-gradient(180deg,#ffffff,#fbfdfc)",
-    fontSize: "15px",
-    boxShadow: "0 8px 16px rgba(17,24,39,.03)",
+    border: "1px solid #d4dfd8",
+    borderRadius: "12px",
+    background: "#ffffff",
   },
 
   botonSecundario: {
@@ -2670,12 +2655,11 @@ const estilos = {
   },
 
   clienteSeleccionado: {
-    marginTop: "16px",
-    padding: "18px",
-    border: "1px solid #cae5d3",
-    borderRadius: "20px",
-    background: "linear-gradient(180deg,#f6fcf8 0%,#f1faf4 100%)",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,.6)",
+    marginTop: "15px",
+    padding: "16px",
+    border: "1px solid #b9dfc7",
+    borderRadius: "14px",
+    background: "#f1faf4",
   },
 
   clienteNombre: {
@@ -2683,55 +2667,52 @@ const estilos = {
   },
 
   detalleCuentaGrid: {
-    marginTop: "16px",
+    marginTop: "14px",
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
-    gap: "12px",
+    gridTemplateColumns:
+      "repeat(auto-fit,minmax(140px,1fr))",
+    gap: "10px",
   },
 
   detalleCuentaItem: {
-    padding: "14px",
+    padding: "12px",
     display: "grid",
-    gap: "6px",
-    border: "1px solid #d7e7dd",
-    borderRadius: "16px",
+    gap: "5px",
+    border: "1px solid #cfe2d5",
+    borderRadius: "12px",
     background: "#ffffff",
     color: "#4b5f53",
-    fontSize: "13px",
-    boxShadow: "0 6px 14px rgba(18,66,42,.05)",
+    fontSize: "12px",
   },
 
   acciones: {
-    marginTop: "20px",
-    display: "grid",
-    gridTemplateColumns: "minmax(220px,320px) minmax(220px,280px)",
-    gap: "12px",
+    marginTop: "16px",
+    display: "flex",
+    gap: "10px",
+    flexWrap: "wrap",
   },
 
   botonPrincipal: {
-    minHeight: "56px",
-    padding: "12px 24px",
+    minHeight: "48px",
+    padding: "12px 20px",
     border: "none",
-    borderRadius: "18px",
-    background: "linear-gradient(135deg,#19a75f 0%,#12663d 100%)",
+    borderRadius: "12px",
+    background: "linear-gradient(135deg,#1d9159,#156a41)",
     color: "#ffffff",
     fontWeight: "900",
-    fontSize: "15px",
     cursor: "pointer",
-    boxShadow: "0 14px 28px rgba(21,106,65,.22)",
+    boxShadow: "0 8px 18px rgba(21,106,65,.18)",
   },
 
   botonLimpiar: {
-    minHeight: "56px",
-    padding: "12px 24px",
-    border: "1px solid #d7e3dc",
-    borderRadius: "18px",
+    minHeight: "48px",
+    padding: "12px 20px",
+    border: "1px solid #d2ddd6",
+    borderRadius: "12px",
     background: "#ffffff",
     color: "#294d38",
     fontWeight: "850",
-    fontSize: "15px",
     cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(18,66,42,.05)",
   },
 
   resumenMovimiento: {
@@ -2763,15 +2744,15 @@ const estilos = {
   },
 
   filtrosMovimientos: {
-    marginBottom: "18px",
-    padding: "18px",
+    marginBottom: "16px",
+    padding: "14px",
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
-    gap: "12px",
+    gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+    gap: "10px",
     alignItems: "end",
-    border: "1px solid #e3ebe6",
-    borderRadius: "18px",
-    background: "linear-gradient(180deg,#fafdfb,#f4faf6)",
+    border: "1px solid #e1e9e4",
+    borderRadius: "14px",
+    background: "#f8faf9",
   },
 
   botonFiltrar: {
@@ -2798,10 +2779,9 @@ const estilos = {
 
   tablaBox: {
     overflowX: "auto",
-    border: "1px solid #dfe8e3",
-    borderRadius: "20px",
-    boxShadow: "0 12px 24px rgba(18,66,42,.05)",
-    background: "#ffffff",
+    border: "1px solid #dce6e0",
+    borderRadius: "14px",
+    boxShadow: "0 6px 16px rgba(18,66,42,.04)",
   },
 
   tabla: {
@@ -2811,23 +2791,22 @@ const estilos = {
   },
 
   th: {
-    padding: "15px 14px",
-    background: "linear-gradient(180deg,#f3faf5,#edf6f0)",
-    color: "#193426",
+    padding: "12px",
+    background: "#f1f6f3",
+    color: "#284136",
     textAlign: "left",
     whiteSpace: "nowrap",
-    fontSize: "12px",
+    fontSize: "11px",
     fontWeight: "900",
-    letterSpacing: ".3px",
+    letterSpacing: ".25px",
     textTransform: "uppercase",
-    borderBottom: "1px solid #deebe3",
+    borderBottom: "1px solid #dde8e1",
   },
 
   td: {
-    padding: "14px",
+    padding: "11px",
     borderBottom: "1px solid #edf1ee",
     whiteSpace: "nowrap",
-    fontSize: "14px",
   },
 
   tdVacio: {
