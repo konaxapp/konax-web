@@ -1717,7 +1717,7 @@ export default function Caja() {
             <img src="/konax-logo.png" alt="KONAX" style={estilos.topbarLogo} />
             <div style={estilos.topbarSeparador} />
             <div>
-              <div style={estilos.topbarModulo}>▣ CAJA Y REGISTRO DE INGRESOS</div>
+              <div style={estilos.topbarModulo}>🧾 CAJA Y REGISTRO DE INGRESOS</div>
             </div>
             <div style={estilos.topbarSeparador} />
             <div>
@@ -1740,7 +1740,7 @@ export default function Caja() {
           <section style={estilos.panelGrid}>
             <div style={estilos.columnaIzquierda}>
               <article style={estilos.panel}>
-                <TituloPanel icono="▦" titulo="A. Nuevo movimiento" />
+                <TituloPanel icono="🗓️" titulo="A. Nuevo movimiento" />
                 <div style={estilos.nuevoMovimientoGrid}>
                   <Campo label="Fecha">
                     <input type="date" value={fechaPago} onChange={(e)=>setFechaPago(e.target.value)} style={estilos.input} />
@@ -1774,7 +1774,7 @@ export default function Caja() {
 
               {(requiereCliente() || clienteEsOpcional() || esVentaContado()) && (
                 <article style={estilos.panel}>
-                  <TituloPanel icono="♙" titulo="B. Cliente y cuenta" />
+                  <TituloPanel icono="👤" titulo="B. Cliente y cuenta" />
                   <div style={estilos.buscarClienteFila}>
                     <input
                       placeholder="Buscar cliente"
@@ -1836,7 +1836,7 @@ export default function Caja() {
             <div style={estilos.columnaDerecha}>
               {esVentaConProducto() && (
                 <article style={estilos.panel}>
-                  <TituloPanel icono="◇" titulo="C. Producto e inventario" />
+                  <TituloPanel icono="📦" titulo="C. Producto e inventario" />
                   <div style={estilos.productoGrid}>
                     <Campo label="Código del producto">
                       <input value={codigoProducto} onChange={(e)=>seleccionarProductoPorCodigo(e.target.value)} placeholder="Ej. 12345" style={estilos.input} />
@@ -1867,7 +1867,7 @@ export default function Caja() {
               )}
 
               <article style={estilos.panel}>
-                <TituloPanel icono="$" titulo="D. Detalle del cobro" />
+                <TituloPanel icono="💳" titulo="D. Detalle del cobro" />
                 <div style={estilos.cobroGrid}>
                   <Campo label="Método de pago">
                     <select value={metodoPago} onChange={(e)=>setMetodoPago(e.target.value)} style={estilos.input}>
@@ -1900,7 +1900,7 @@ export default function Caja() {
 
           <article style={estilos.panelTabla}>
             <div style={estilos.tablaHeaderRow}>
-              <TituloPanel icono="▤" titulo="Movimientos registrados" />
+              <TituloPanel icono="📋" titulo="Movimientos registrados" />
               <div style={estilos.filtrosInline}>
                 <span>Desde</span>
                 <input type="date" value={fechaDesde} onChange={(e)=>setFechaDesde(e.target.value)} style={estilos.inputCompacto} />
@@ -1970,22 +1970,22 @@ const estilos={
   shell:{minHeight:"100vh"},
   loading:{minHeight:"100vh",display:"grid",placeItems:"center",alignContent:"center",gap:"10px",background:"#f4f7f5"},
   loadingLogo:{width:"220px",maxWidth:"75%"},loadingTitulo:{fontSize:"20px"},
-  topbar:{minHeight:"92px",padding:"18px 28px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:"20px",background:"linear-gradient(120deg,#06331f 0%,#0b4d2d 54%,#0d6c3c 100%)",color:"#fff",boxShadow:"0 10px 28px rgba(11,66,40,.22)"},
-  topbarMarca:{display:"flex",alignItems:"center",gap:"22px",minWidth:0},topbarLogo:{width:"165px",height:"52px",objectFit:"contain"},topbarSeparador:{width:"1px",height:"50px",background:"rgba(255,255,255,.28)"},topbarModulo:{fontSize:"14px",fontWeight:900,color:"#79e2a4",whiteSpace:"nowrap"},topbarEmpresa:{margin:0,fontSize:"28px",lineHeight:1.05},topbarTexto:{margin:"5px 0 0",fontSize:"13px",color:"#e0f2e7"},
-  botonVolver:{minHeight:"46px",padding:"0 20px",borderRadius:"12px",border:"1px solid #20bc69",background:"rgba(0,0,0,.12)",color:"#fff",fontWeight:800,cursor:"pointer"},
+  topbar:{minHeight:"92px",padding:"16px 22px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:"18px",flexWrap:"wrap",background:"linear-gradient(120deg,#06331f 0%,#0b4d2d 54%,#0d6c3c 100%)",color:"#fff",boxShadow:"0 10px 28px rgba(11,66,40,.22)"},
+  topbarMarca:{display:"flex",alignItems:"center",gap:"16px",minWidth:0,flexWrap:"wrap",flex:"1 1 720px"},topbarLogo:{width:"190px",height:"58px",objectFit:"contain",display:"block",flexShrink:0,filter:"drop-shadow(0 2px 4px rgba(0,0,0,.18))"},topbarSeparador:{width:"1px",height:"42px",background:"rgba(255,255,255,.22)"},topbarModulo:{fontSize:"13px",fontWeight:900,color:"#79e2a4",whiteSpace:"nowrap",letterSpacing:".3px"},topbarEmpresa:{margin:0,fontSize:"24px",lineHeight:1.05},topbarTexto:{margin:"4px 0 0",fontSize:"12px",color:"#e0f2e7",maxWidth:"420px"},
+  botonVolver:{minHeight:"44px",padding:"0 18px",borderRadius:"12px",border:"1px solid #20bc69",background:"rgba(0,0,0,.12)",color:"#fff",fontWeight:800,cursor:"pointer",flexShrink:0},
   contenido:{padding:"18px"},
-  kpisGrid:{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:"14px",marginBottom:"14px"},
+  kpisGrid:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:"14px",marginBottom:"14px"},
   kpiCard:{display:"grid",gridTemplateColumns:"64px 1fr",gap:"14px",alignItems:"center",padding:"18px",border:"1px solid #e1e9e4",borderRadius:"16px",background:"#fff",boxShadow:"0 8px 22px rgba(24,79,49,.08)"},
   kpiDestacado:{display:"grid",gridTemplateColumns:"64px 1fr",gap:"14px",alignItems:"center",padding:"18px",border:"1px solid rgba(255,255,255,.18)",borderRadius:"16px",background:"linear-gradient(135deg,#13924e,#06733a)",color:"#fff",boxShadow:"0 12px 26px rgba(9,118,59,.24)"},
   kpiIcono:{width:"56px",height:"56px",display:"grid",placeItems:"center",borderRadius:"50%",background:"#e8f7ed",color:"#0c8b45",fontSize:"26px",fontWeight:900},kpiIconoDigital:{width:"56px",height:"56px",display:"grid",placeItems:"center",borderRadius:"18px",background:"#f0eaff",color:"#6f42d9",fontSize:"26px",fontWeight:900},
   kpiTitulo:{display:"block",fontSize:"13px",fontWeight:800},kpiValor:{display:"block",marginTop:"4px",fontSize:"28px",lineHeight:1.05},kpiDetalle:{display:"block",marginTop:"5px",fontSize:"12px",color:"#6d7771"},kpiDetalleClaro:{display:"block",marginTop:"5px",fontSize:"12px",color:"#e2f4e8"},
-  panelGrid:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px",alignItems:"start"},columnaIzquierda:{display:"grid",gap:"12px"},columnaDerecha:{display:"grid",gap:"12px"},
+  panelGrid:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px",alignItems:"start"},columnaIzquierda:{display:"grid",gap:"12px",minWidth:0},columnaDerecha:{display:"grid",gap:"12px",minWidth:0},
   panel:{padding:"16px",border:"1px solid #dfe7e2",borderRadius:"15px",background:"#fff",boxShadow:"0 7px 18px rgba(18,66,42,.06)"},panelTabla:{marginTop:"12px",padding:"16px",border:"1px solid #dfe7e2",borderRadius:"15px",background:"#fff",boxShadow:"0 7px 18px rgba(18,66,42,.06)"},
-  tituloPanel:{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px"},tituloPanelIcono:{color:"#0a9b4b",fontSize:"22px",fontWeight:900},tituloPanelTexto:{margin:0,fontSize:"18px"},
-  nuevoMovimientoGrid:{display:"grid",gridTemplateColumns:"200px minmax(0,1fr)",gap:"16px",alignItems:"end"},tabsMovimiento:{display:"grid",gridTemplateColumns:"repeat(5,minmax(110px,1fr))",border:"1px solid #d8e1dc",borderRadius:"10px",overflow:"hidden"},tab:{minHeight:"38px",border:"none",borderRight:"1px solid #e1e8e4",background:"#fff",fontWeight:700,cursor:"pointer"},tabActivo:{minHeight:"38px",border:"none",background:"linear-gradient(135deg,#18a45b,#08763d)",color:"#fff",fontWeight:900,cursor:"pointer"},
-  campo:{display:"flex",flexDirection:"column",gap:"6px"},label:{fontSize:"12px",fontWeight:800,color:"#283a31"},input:{width:"100%",minHeight:"40px",padding:"9px 12px",boxSizing:"border-box",border:"1px solid #d7dfda",borderRadius:"8px",background:"#fff",color:"#17211b",outline:"none",fontSize:"13px"},inputReadOnly:{width:"100%",minHeight:"40px",padding:"9px 12px",boxSizing:"border-box",border:"1px solid #d7e5dc",borderRadius:"8px",background:"linear-gradient(180deg,#f4f9f6,#edf5f0)",color:"#163c28",fontWeight:900},
+  tituloPanel:{display:"flex",alignItems:"center",gap:"12px",marginBottom:"14px"},tituloPanelIcono:{width:"34px",height:"34px",display:"grid",placeItems:"center",borderRadius:"10px",background:"linear-gradient(180deg,#eff8f2,#e3f3e8)",border:"1px solid #d5e8dc",fontSize:"18px",boxShadow:"0 4px 10px rgba(10,155,75,.08)"},tituloPanelTexto:{margin:0,fontSize:"18px"},
+  nuevoMovimientoGrid:{display:"grid",gridTemplateColumns:"190px minmax(0,1fr)",gap:"16px",alignItems:"start"},tabsMovimiento:{display:"flex",flexWrap:"wrap",gap:"8px",marginTop:"2px"},tab:{minHeight:"40px",padding:"0 14px",border:"1px solid #dce5df",borderRadius:"10px",background:"#fff",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"},tabActivo:{minHeight:"40px",padding:"0 14px",border:"1px solid #0b8644",borderRadius:"10px",background:"linear-gradient(135deg,#18a45b,#08763d)",color:"#fff",fontWeight:900,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 8px 18px rgba(9,118,59,.18)"},
+  campo:{display:"flex",flexDirection:"column",gap:"6px"},label:{fontSize:"12px",fontWeight:800,color:"#283a31"},input:{width:"100%",minHeight:"42px",padding:"10px 12px",boxSizing:"border-box",border:"1px solid #d7dfda",borderRadius:"10px",background:"#fff",color:"#17211b",outline:"none",fontSize:"13px"},inputReadOnly:{width:"100%",minHeight:"42px",padding:"10px 12px",boxSizing:"border-box",border:"1px solid #d7e5dc",borderRadius:"10px",background:"linear-gradient(180deg,#f4f9f6,#edf5f0)",color:"#163c28",fontWeight:900},
   buscarClienteFila:{display:"grid",gridTemplateColumns:"1fr 44px",gap:0},botonBuscar:{border:"none",borderRadius:"0 8px 8px 0",background:"linear-gradient(135deg,#159552,#08743c)",color:"#fff",fontSize:"22px",cursor:"pointer"},resultadosBox:{display:"grid",gap:"8px",marginTop:"10px"},resultadoItem:{padding:"10px 12px",display:"flex",justifyContent:"space-between",border:"1px solid #dde6e0",borderRadius:"8px",background:"#fff",cursor:"pointer"},
-  clienteCard:{marginTop:"10px",padding:"14px",border:"1px solid #dce5df",borderRadius:"12px",background:"#fff"},clienteDatosFila:{display:"grid",gridTemplateColumns:"64px 1fr minmax(250px,340px)",gap:"14px",alignItems:"center"},avatarCliente:{width:"58px",height:"58px",display:"grid",placeItems:"center",borderRadius:"50%",background:"linear-gradient(180deg,#e9f8ee,#d4efdf)",color:"#098f47",fontSize:"28px"},clienteInfo:{display:"grid",gap:"3px",fontSize:"12px",color:"#4d5952"},clienteNombre:{fontSize:"17px",color:"#17211b"},cuentaSelectorWrap:{display:"grid",gap:"6px"},cuentaStats:{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:"10px",marginTop:"14px"},miniStat:{padding:"13px",display:"grid",gap:"6px",border:"1px solid #e1e7e3",borderRadius:"10px",background:"linear-gradient(180deg,#fff,#fafcfb)",fontSize:"12px"},miniStatResaltado:{padding:"13px",display:"grid",gap:"6px",border:"1px solid #f1e2b9",borderRadius:"10px",background:"linear-gradient(180deg,#fffdf5,#fff7dc)",fontSize:"12px"},estadoActivo:{color:"#0a8d46"},
+  clienteCard:{marginTop:"10px",padding:"14px",border:"1px solid #dce5df",borderRadius:"12px",background:"#fff"},clienteDatosFila:{display:"grid",gridTemplateColumns:"64px minmax(0,1fr) minmax(220px,300px)",gap:"14px",alignItems:"center"},avatarCliente:{width:"58px",height:"58px",display:"grid",placeItems:"center",borderRadius:"50%",background:"linear-gradient(180deg,#e9f8ee,#d4efdf)",color:"#098f47",fontSize:"28px"},clienteInfo:{display:"grid",gap:"3px",fontSize:"12px",color:"#4d5952"},clienteNombre:{fontSize:"17px",color:"#17211b"},cuentaSelectorWrap:{display:"grid",gap:"6px"},cuentaStats:{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:"10px",marginTop:"14px"},miniStat:{padding:"13px",display:"grid",gap:"6px",border:"1px solid #e1e7e3",borderRadius:"10px",background:"linear-gradient(180deg,#fff,#fafcfb)",fontSize:"12px"},miniStatResaltado:{padding:"13px",display:"grid",gap:"6px",border:"1px solid #f1e2b9",borderRadius:"10px",background:"linear-gradient(180deg,#fffdf5,#fff7dc)",fontSize:"12px"},estadoActivo:{color:"#0a8d46"},
   productoGrid:{display:"grid",gridTemplateColumns:"1fr 1.25fr .65fr",gap:"14px"},cobroGrid:{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:"12px"},accionesFila:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px",marginTop:"14px"},botonPrincipal:{minHeight:"42px",border:"none",borderRadius:"8px",background:"linear-gradient(135deg,#159552,#08743c)",color:"#fff",fontWeight:900,cursor:"pointer"},botonLimpiar:{minHeight:"42px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff",color:"#17211b",fontWeight:850,cursor:"pointer"},
   tablaHeaderRow:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"14px",flexWrap:"wrap"},filtrosInline:{display:"flex",alignItems:"center",gap:"8px",fontSize:"12px"},inputCompacto:{minHeight:"36px",padding:"7px 10px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff"},inputBuscarTabla:{minHeight:"36px",minWidth:"280px",padding:"7px 10px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff"},botonBuscarMovimientos:{width:"38px",height:"36px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff",cursor:"pointer"},botonHoy:{minHeight:"36px",padding:"0 16px",border:"1px solid #159552",borderRadius:"8px",background:"#fff",color:"#08743c",fontWeight:850,cursor:"pointer"},
   tablaBox:{overflowX:"auto",border:"1px solid #dfe7e2",borderRadius:"10px"},tabla:{width:"100%",minWidth:"1150px",borderCollapse:"collapse"},th:{padding:"11px",background:"linear-gradient(180deg,#f3faf5,#edf6f0)",color:"#1e3327",textAlign:"left",fontSize:"12px",fontWeight:900,whiteSpace:"nowrap"},td:{padding:"10px 11px",borderBottom:"1px solid #edf1ee",fontSize:"12px",whiteSpace:"nowrap"},tdVacio:{padding:"28px",textAlign:"center",color:"#6b7280"},badgeTipo:{padding:"4px 9px",borderRadius:"999px",background:"#e7f7ed",color:"#0d8244",fontWeight:800},badgeEstado:{color:"#0a8d46",fontWeight:800}
