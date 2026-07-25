@@ -1,57 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
-
-
-function normalizarClave(valor) {
-  return String(valor || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "_");
-}
-
-function construirModulosPorPlan(codigoPlan) {
-  const codigo = normalizarClave(codigoPlan);
-  const base = {
-    dashboard: true, clientes: false, vista_cliente: false, creditos: false,
-    cobranza: false, dashboard_cobros: false, gestor_cobros: false, caja: false,
-    control_caja: false, reportes: false, inventario: false,
-    movimientos_inventario: false, ventas: false, dashboard_ventas: false,
-    gastos: false, recargos: false, suscripciones: false, usuarios: true,
-    configuracion: true,
-  };
-  if (codigo === "cobros") {
-    return { ...base, clientes: true, vista_cliente: true, caja: true, cobranza: true, dashboard_cobros: true, gestor_cobros: true, inventario: true, movimientos_inventario: true, reportes: true };
-  }
-  if (codigo === "ventas_gestion") {
-    return { ...base, clientes: true, vista_cliente: true, creditos: true, caja: true, control_caja: true, cobranza: true, dashboard_cobros: true, gestor_cobros: true, reportes: true, inventario: true, movimientos_inventario: true, ventas: true, dashboard_ventas: true, gastos: true, recargos: true, suscripciones: true };
-  }
-  if (codigo === "pro") {
-    return Object.fromEntries(Object.keys(base).map((codigoModulo) => [codigoModulo, true]));
-  }
-  return base;
-}
-
-function leerModuloEmpresa(data, codigo) {
-  if (!data) return true;
-  if (Object.prototype.hasOwnProperty.call(data, codigo)) return Boolean(data[codigo]);
-  const columnasAntiguas = {
-    clientes: "clientes", vista_cliente: "vista_cliente", creditos: "venta_credito",
-    caja: "caja", control_caja: "control_caja", cobranza: "cobranza",
-    dashboard_cobros: "dashboard_cobros", gestor_cobros: "cobranza",
-    reportes: "dashboard_cobros", inventario: "inventario",
-    movimientos_inventario: "inventario", ventas: "venta_credito",
-    dashboard_ventas: "dashboard_ventas", gastos: "egresos", recargos: "recargos",
-    suscripciones: "suscripciones",
-  };
-  const columna = columnasAntiguas[codigo];
-  if (columna && Object.prototype.hasOwnProperty.call(data, columna)) return Boolean(data[columna]);
-  return true;
-}
 
 function obtenerFechaPanama(fecha = new Date()) {
   const fechaObjeto =
@@ -150,7 +101,6 @@ function calcularNuevaFechaVencimiento(fechaBase, periodicidad) {
 
 export default function Caja() {
   const router = useRouter();
-  const pathname = usePathname();
 
   const hoyPanama = obtenerFechaPanama();
 
@@ -173,7 +123,6 @@ export default function Caja() {
   const [telefonoContado, setTelefonoContado] = useState("");
 
   const [productos, setProductos] = useState([]);
-  const [buscarProductoCaja, setBuscarProductoCaja] = useState("");
   const [codigoProducto, setCodigoProducto] = useState("");
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [cantidad, setCantidad] = useState("1");
@@ -195,10 +144,6 @@ export default function Caja() {
 
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
-
-  const [modulosNavegacion, setModulosNavegacion] = useState({});
-  const [permisosNavegacion, setPermisosNavegacion] = useState([]);
-  const [usuarioRolNavegacion, setUsuarioRolNavegacion] = useState("");
 
   useEffect(() => {
     iniciarCaja();
@@ -225,60 +170,6 @@ export default function Caja() {
     cuentaSeleccionada?.saldo_actual,
   ]);
 
-  function esAdministradorNavegacion(rol = usuarioRolNavegacion) {
-    return ["administrador", "superadmin", "admin_master", "administrador_master"].includes(normalizarClave(rol));
-  }
-
-  async function cargarNavegacionCaja(empresaId) {
-    const usuarioId = localStorage.getItem("usuarioId");
-    const rolLocal = localStorage.getItem("usuarioRol") || "";
-    setUsuarioRolNavegacion(rolLocal);
-
-    const { data: empresa } = await supabase
-      .from("empresas")
-      .select("plan_codigo")
-      .eq("id", empresaId)
-      .maybeSingle();
-
-    const permitidos = construirModulosPorPlan(empresa?.plan_codigo || localStorage.getItem("planCodigo") || "");
-    const { data: configuracion } = await supabase
-      .from("empresa_modulos")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
-
-    const resultado = {};
-    Object.keys(permitidos).forEach((codigoModulo) => {
-      if (!permitidos[codigoModulo]) { resultado[codigoModulo] = false; return; }
-      if (["dashboard", "usuarios", "configuracion"].includes(codigoModulo)) { resultado[codigoModulo] = true; return; }
-      resultado[codigoModulo] = configuracion ? leerModuloEmpresa(configuracion, codigoModulo) : true;
-    });
-    setModulosNavegacion(resultado);
-
-    if (usuarioId) {
-      const { data: permisos } = await supabase
-        .from("permisos_usuarios_empresa")
-        .select("permiso, activo")
-        .eq("empresa_id", empresaId)
-        .eq("usuario_id", usuarioId)
-        .eq("activo", true);
-      setPermisosNavegacion((permisos || []).map((item) => normalizarClave(item.permiso)).filter(Boolean));
-    }
-  }
-
-  function puedeVerNavegacion(codigoModulo) {
-    const codigo = normalizarClave(codigoModulo);
-    if (!Boolean(modulosNavegacion?.[codigo])) return false;
-    if (esAdministradorNavegacion()) return true;
-    return codigo === "dashboard" || permisosNavegacion.includes(codigo);
-  }
-
-  async function cerrarSesionCaja() {
-    try { await supabase.auth.signOut(); } catch (error) { console.error(error); }
-    localStorage.clear();
-    router.replace("/login");
-  }
-
   async function iniciarCaja() {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
@@ -290,7 +181,6 @@ export default function Caja() {
       cargarVendedores(empresaId),
       cargarProductos(empresaId),
       cargarMovimientos(empresaId, hoyPanama, hoyPanama),
-      cargarNavegacionCaja(empresaId),
     ]);
 
     setCargando(false);
@@ -1810,370 +1700,678 @@ export default function Caja() {
     [movimientosHoy]
   );
 
-
-  const productosFiltradosCaja = useMemo(() => {
-    const texto = normalizar(buscarProductoCaja);
-    if (!texto) return productos;
-
-    return productos.filter((producto) =>
-      normalizar(
-        `${producto.nombre || ""} ${producto.codigo || ""} ${producto.descripcion || ""}`
-      ).includes(texto)
-    );
-  }, [productos, buscarProductoCaja]);
-
-  function obtenerImagenProducto(producto) {
-    return (
-      producto?.imagen_url ||
-      producto?.imagen ||
-      producto?.foto_url ||
-      producto?.url_imagen ||
-      ""
-    );
-  }
-
-  function prepararCobro(tipo) {
-    if (!productoSeleccionado) {
-      alert("Seleccione un producto para continuar.");
-      return;
-    }
-
-    setTipoMovimiento(tipo);
-    setMonto(String(precioProducto(productoSeleccionado) * Number(cantidad || 1)));
-  }
-
-  function cambiarTipoOperacion(tipo) {
-    setTipoMovimiento(tipo);
-    setMonto("");
-    setConcepto("");
-    setCodigoProducto("");
-    setProductoSeleccionado(null);
-    setCantidad("1");
-    setValorProducto("");
-    setBuscarCliente("");
-    setResultadosBusqueda([]);
-    setClienteSeleccionado(null);
-    setCuentasCliente([]);
-    setCuentaSeleccionada(null);
-  }
-  const modulosMenuCaja = useMemo(() => {
-    const lista = [
-      ["Clientes", "/clientes", "clientes", "👥"],
-      ["Vista Cliente", "/vista-cliente", "vista_cliente", "📄"],
-      ["Créditos", "/ventas-credito", "creditos", "💳"],
-      ["Caja", "/caja", "caja", "💵"],
-      ["Cobranza", "/cobranza", "cobranza", "📞"],
-      ["Centro de Cobranza", "/dashboard-cobranza", "dashboard_cobros", "📊"],
-      ["Mi cartera de cobro", "/gestor-cobros", "gestor_cobros", "💼"],
-      ["Control Caja", "/control-caja", "control_caja", "🏦"],
-      ["Inventario", "/inventario", "inventario", "📦"],
-      ["Movimientos Inventario", "/inventario/movimientos", "movimientos_inventario", "🔄"],
-      ["Ventas", "/ventas", "ventas", "🛒"],
-      ["Centro de Ventas", "/dashboard-ventas", "dashboard_ventas", "📈"],
-      ["Gastos", "/gastos", "gastos", "🧮"],
-      ["Suscripciones", "/suscripciones", "suscripciones", "🔁"],
-      ["Recargos", "/recargos", "recargos", "⚠️"],
-      ["Reportes", "/reportes", "reportes", "📚"],
-      ["Usuarios y Roles", "/usuarios", "usuarios", "🔐"],
-      ["Configuración", "/admin-configuracion", "configuracion", "⚙️"],
-    ];
-    return lista
-      .map(([nombre, ruta, codigo, icono]) => ({ nombre, ruta, codigo, icono, activo: puedeVerNavegacion(codigo) }))
-      .filter((item) => item.activo);
-  }, [modulosNavegacion, permisosNavegacion, usuarioRolNavegacion]);
-
   if (cargando) {
     return (
       <div style={estilos.loading}>
-        <img src="/konax-logo.png" alt="KONAX" style={estilos.loadingLogo} />
-        <strong style={estilos.loadingTitulo}>Preparando caja</strong>
+        <img
+          src="/konax-logo.png"
+          alt="KONAX"
+          style={estilos.loadingLogo}
+        />
+        <strong style={estilos.loadingTitulo}>
+          Preparando caja
+        </strong>
       </div>
     );
   }
 
-  const subtotalActual = productoSeleccionado
-    ? precioProducto(productoSeleccionado) * Number(cantidad || 1)
-    : 0;
-
-  const totalOperacionActual = esVentaConProducto()
-    ? subtotalActual
-    : Number(monto || 0);
-
   return (
-    <main style={estilos.posPagina}>
-      <header style={estilos.posHeader}>
-        <img src="/konax-logo.png" alt="KONAX" style={estilos.posLogo} />
-        <div style={estilos.posHeaderInfo}>
-          <span>▣ Caja 01</span>
-          <span style={estilos.posSeparador}>|</span>
-          <span>♙ Usuario: {responsable || "Usuario"}</span>
-          <span style={estilos.posSeparador}>|</span>
-          <span>▦ {new Intl.DateTimeFormat("es-PA", { dateStyle: "long", timeZone: "America/Panama" }).format(new Date())}</span>
-          <button onClick={volverDashboard} style={estilos.posVolver}>Centro de Operaciones</button>
-        </div>
-      </header>
+    <main style={estilos.pagina}>
+      <div style={estilos.contenedor}>
+        <header style={estilos.header}>
+          <div style={estilos.headerIzquierda}>
+            <div style={estilos.logoBox}>
+              <img
+                src="/konax-logo.png"
+                alt="KONAX"
+                style={estilos.logo}
+              />
+            </div>
 
-      <div style={estilos.posLayout}>
-        <section style={estilos.posContenido}>
-          <div style={estilos.posOperacionBar}>
             <div>
-              <span style={estilos.posOperacionEtiqueta}>TIPO DE OPERACIÓN</span>
-              <h2 style={estilos.posOperacionTitulo}>
-                {esVentaConProducto() ? "Punto de venta" : "Cobro de cuenta"}
-              </h2>
-            </div>
-            <div style={estilos.posOperacionTabs}>
-              {opcionesMovimiento.map((opcion) => (
-                <button
-                  key={opcion}
-                  onClick={() => cambiarTipoOperacion(opcion)}
-                  style={tipoMovimiento === opcion ? estilos.posOperacionTabActivo : estilos.posOperacionTab}
-                >
-                  {opcion}
-                </button>
-              ))}
-            </div>
-            <div style={estilos.posOperacionDatos}>
-              <Campo label="Fecha">
-                <input type="date" value={fechaPago} onChange={(e) => setFechaPago(e.target.value)} style={estilos.posInputCompacto} />
-              </Campo>
-              <Campo label="Responsable">
-                <select value={responsable} onChange={(e) => setResponsable(e.target.value)} style={estilos.posInputCompacto}>
-                  <option value="">Seleccione responsable</option>
-                  {vendedores.map((v) => <option key={v.id} value={v.nombre}>{v.nombre} - {v.rol}</option>)}
-                </select>
-              </Campo>
+              <span style={estilos.etiqueta}>
+                CAJA Y REGISTRO DE INGRESOS
+              </span>
+
+              <h1 style={estilos.nombreNegocio}>
+                {empresaNombre}
+              </h1>
+
+              <p style={estilos.tituloModulo}>
+                Módulo de Caja
+              </p>
+
+              <p style={estilos.subtitulo}>
+                Registro de pagos, membresías, ventas,
+                servicios e ingresos.
+              </p>
             </div>
           </div>
 
-          <div style={estilos.posPrincipalGrid}>
-            <div style={estilos.posCatalogo}>
-              {esVentaConProducto() ? (
-                <>
-              <div style={estilos.posBuscadorBox}>
-                <span style={estilos.posLupa}>⌕</span>
-                <input
-                  value={buscarProductoCaja}
-                  onChange={(e) => setBuscarProductoCaja(e.target.value)}
-                  placeholder="Buscar producto o escanear código"
-                  style={estilos.posBuscador}
+          <button
+            onClick={volverDashboard}
+            style={estilos.botonVolver}
+          >
+            ← Centro de Operaciones
+          </button>
+        </header>
+
+        <section style={estilos.resumenGrid}>
+          <ResumenCard
+            titulo="Movimientos hoy"
+            valor={movimientosHoy.length}
+            icono="🧾"
+          />
+          <ResumenCard
+            titulo="Total de hoy"
+            valor={`$${totalHoy.toFixed(2)}`}
+            icono="💰"
+            destacado
+          />
+          <ResumenCard
+            titulo="Efectivo hoy"
+            valor={`$${totalEfectivoHoy.toFixed(2)}`}
+            icono="💵"
+          />
+          <ResumenCard
+            titulo="Pagos digitales"
+            valor={`$${totalDigitalHoy.toFixed(2)}`}
+            icono="📲"
+          />
+        </section>
+
+        <section style={estilos.mainGrid}>
+          <div>
+            <article style={estilos.card}>
+              <CabeceraSeccion
+                titulo="Nuevo movimiento"
+                texto="Seleccione qué está cobrando y complete la información."
+                numero="01"
+              />
+
+              <div style={estilos.grid}>
+                <Campo label="Fecha">
+                  <input
+                    type="date"
+                    value={fechaPago}
+                    onChange={(e) =>
+                      setFechaPago(e.target.value)
+                    }
+                    style={estilos.input}
+                  />
+                </Campo>
+
+                <Campo label="Tipo de movimiento">
+                  <select
+                    value={tipoMovimiento}
+                    onChange={(e) => {
+                      setTipoMovimiento(e.target.value);
+                      setMonto("");
+                      setValorProducto("");
+                      setCodigoProducto("");
+                      setProductoSeleccionado(null);
+                      setNumeroVentaAbono("");
+                      setClienteSeleccionado(null);
+                      setCuentasCliente([]);
+                      setCuentaSeleccionada(null);
+                    }}
+                    style={estilos.input}
+                  >
+                    {opcionesMovimiento.map((opcion) => (
+                      <option
+                        key={opcion}
+                        value={opcion}
+                      >
+                        {opcion}
+                      </option>
+                    ))}
+                  </select>
+                </Campo>
+              </div>
+            </article>
+
+            {(requiereCliente() ||
+              clienteEsOpcional()) && (
+              <article style={estilos.card}>
+                <CabeceraSeccion
+                  titulo={
+                    requiereCliente()
+                      ? "Cliente y cuenta"
+                      : "Cliente opcional"
+                  }
+                  texto={
+                    requiereCliente()
+                      ? "Busque y seleccione al cliente relacionado con el pago."
+                      : "Puede asociar el ingreso a un cliente o dejarlo sin cliente."
+                  }
+                  numero="02"
                 />
-                <span style={estilos.posBarcode}>▥</span>
-              </div>
 
-              <div style={estilos.posCategorias}>
-                <button style={estilos.posCategoriaActiva}>Todos</button>
-                <button style={estilos.posCategoria}>Muebles</button>
-                <button style={estilos.posCategoria}>Hogar</button>
-                <button style={estilos.posCategoria}>Farmacia</button>
-                <button style={estilos.posCategoria}>Abarrotes</button>
-                <button style={estilos.posCategoria}>Electro</button>
-              </div>
+                <div style={estilos.toolbar}>
+                  <Campo label="Buscar cliente">
+                    <input
+                      placeholder="Nombre, cédula, teléfono o cuenta..."
+                      value={buscarCliente}
+                      onChange={(e) =>
+                        setBuscarCliente(e.target.value)
+                      }
+                      style={estilos.input}
+                    />
+                  </Campo>
 
-              <div style={estilos.posProductosGrid}>
-                {productosFiltradosCaja.slice(0, 12).map((producto) => {
-                  const seleccionado = productoSeleccionado?.id === producto.id;
-                  const imagen = obtenerImagenProducto(producto);
-                  return (
-                    <button
-                      key={producto.id}
-                      onClick={() => seleccionarProducto(producto)}
-                      style={seleccionado ? estilos.posProductoActivo : estilos.posProductoCard}
-                    >
-                      <div style={estilos.posProductoImagenBox}>
-                        {imagen ? (
-                          <img src={imagen} alt={producto.nombre} style={estilos.posProductoImagen} />
-                        ) : (
-                          <span style={estilos.posProductoSinImagen}>▣</span>
-                        )}
-                      </div>
-                      <strong style={estilos.posProductoNombre}>{producto.nombre}</strong>
-                      <span style={estilos.posProductoPrecio}>${precioProducto(producto).toFixed(2)}</span>
-                      <span style={estilos.posProductoStock}>Stock: {stockProducto(producto)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div style={estilos.posAccionesRapidas}>
-                {[["%", "Descuento"], ["◷", "En espera"], ["↻", "Recuperar"], ["▱", "Eliminar"], ["↩", "Devolución"]].map(([icono, texto]) => (
-                  <button key={texto} style={estilos.posAccionRapida} onClick={() => texto === "Eliminar" && seleccionarProducto(null)}>
-                    <span style={estilos.posAccionIcono}>{icono}</span>
-                    <span>{texto}</span>
+                  <button
+                    style={estilos.botonSecundario}
+                    onClick={buscarClientes}
+                  >
+                    Buscar
                   </button>
-                ))}
-              </div>
-
-              <div style={estilos.posMetodosBox}>
-                <h3 style={estilos.posMetodosTitulo}>Métodos de pago</h3>
-                <div style={estilos.posMetodosGrid}>
-                  {["Efectivo", "Tarjeta", "Transferencia"].map((metodo) => (
-                    <button key={metodo} onClick={() => setMetodoPago(metodo)} style={metodoPago === metodo ? estilos.posMetodoActivo : estilos.posMetodo}>
-                      <span style={estilos.posMetodoIcono}>{metodo === "Efectivo" ? "▭" : metodo === "Tarjeta" ? "▤" : "▥"}</span>
-                      <span><strong>{metodo}</strong><small>${subtotalActual.toFixed(2)}</small></span>
-                    </button>
-                  ))}
                 </div>
-              </div>
-                </>
-              ) : (
-                <div style={estilos.posCobroCuentaBox}>
-                  <div style={estilos.posCobroEncabezado}>
-                    <div>
-                      <span style={estilos.posOperacionEtiqueta}>GESTIÓN DE CARTERA</span>
-                      <h2 style={estilos.posCobroTitulo}>{tipoMovimiento}</h2>
-                      <p style={estilos.posCobroTexto}>Busque al cliente y seleccione la cuenta donde se aplicará el pago.</p>
-                    </div>
-                    <span style={estilos.posCobroIcono}>$</span>
-                  </div>
 
-                  <div style={estilos.posBuscarClienteFila}>
-                    <Campo label="Buscar cliente o cuenta">
-                      <input value={buscarCliente} onChange={(e) => setBuscarCliente(e.target.value)} placeholder="Nombre, cédula, teléfono o número de cuenta" style={estilos.input} />
-                    </Campo>
-                    <button onClick={buscarClientes} style={estilos.posBotonBuscarCliente}>Buscar</button>
-                  </div>
-
-                  {resultadosBusqueda.length > 0 && (
-                    <div style={estilos.resultadosBox}>
-                      {resultadosBusqueda.map((item, index) => (
-                        <button key={`${item.cliente.id}-${index}`} onClick={() => seleccionarResultado(item)} style={estilos.resultadoItem}>
-                          <span><strong>{item.cliente.nombre}</strong><small style={estilos.posResultadoDetalle}>{item.cliente.cedula || "Sin cédula"}</small></span>
-                          <span>{item.cuenta?.numero_cuenta || "Seleccionar"}</span>
+                {resultadosBusqueda.length > 0 && (
+                  <div style={estilos.resultadosBox}>
+                    {resultadosBusqueda.map(
+                      (item, index) => (
+                        <button
+                          key={`${item.cliente.id}-${index}`}
+                          style={estilos.resultadoItem}
+                          onClick={() =>
+                            seleccionarResultado(item)
+                          }
+                        >
+                          <strong>
+                            {item.cliente.nombre}
+                          </strong>
+                          <span>
+                            {item.cuenta?.numero_cuenta ||
+                              "Seleccionar"}
+                          </span>
                         </button>
-                      ))}
-                    </div>
-                  )}
+                      )
+                    )}
+                  </div>
+                )}
 
-                  {clienteSeleccionado ? (
-                    <div style={estilos.posClienteCuentaSeleccionado}>
-                      <div style={estilos.posClienteCuentaCabecera}>
-                        <span style={estilos.posClienteIcono}>♙</span>
-                        <div><strong>{clienteSeleccionado.nombre}</strong><small>{clienteSeleccionado.cedula || "Sin cédula"}</small></div>
-                      </div>
+                {clienteSeleccionado && (
+                  <div style={estilos.clienteSeleccionado}>
+                    <h3 style={estilos.clienteNombre}>
+                      {clienteSeleccionado.nombre}
+                    </h3>
 
-                      <Campo label="Cuenta por cobrar">
-                        <select value={cuentaSeleccionada?.id || ""} onChange={(e) => setCuentaSeleccionada(cuentasCliente.find((c) => String(c.id) === String(e.target.value)) || null)} style={estilos.input}>
-                          <option value="">Seleccione una cuenta</option>
-                          {cuentasCliente.map((c) => <option key={c.id} value={c.id}>{c.numero_cuenta} - {c.descripcion} - Saldo ${Number(c.saldo_actual || 0).toFixed(2)}</option>)}
+                    {cuentasCliente.length > 0 && (
+                      <Campo label="Cuenta o membresía">
+                        <select
+                          value={
+                            cuentaSeleccionada?.id || ""
+                          }
+                          onChange={(e) => {
+                            const cuenta =
+                              cuentasCliente.find(
+                                (item) =>
+                                  String(item.id) ===
+                                  String(e.target.value)
+                              );
+
+                            setCuentaSeleccionada(
+                              cuenta || null
+                            );
+                          }}
+                          style={estilos.input}
+                        >
+                          <option value="">
+                            Seleccione una cuenta
+                          </option>
+
+                          {cuentasCliente.map((cuenta) => (
+                            <option
+                              key={cuenta.id}
+                              value={cuenta.id}
+                            >
+                              {cuenta.numero_cuenta} -{" "}
+                              {cuenta.descripcion}
+                            </option>
+                          ))}
                         </select>
                       </Campo>
+                    )}
 
-                      {cuentaSeleccionada && (
-                        <div style={estilos.posCuentaResumenGrid}>
-                          <div><span>Cuenta</span><strong>{cuentaSeleccionada.numero_cuenta || "-"}</strong></div>
-                          <div><span>Saldo actual</span><strong>${Number(cuentaSeleccionada.saldo_actual || 0).toFixed(2)}</strong></div>
-                          <div><span>Cuota</span><strong>${Number(cuentaSeleccionada.cuota || 0).toFixed(2)}</strong></div>
-                          <div><span>Estado</span><strong>{cuentaSeleccionada.estado || "Activo"}</strong></div>
+                    {cuentaSeleccionada && (
+                      <div style={estilos.detalleCuentaGrid}>
+                        <div style={estilos.detalleCuentaItem}>
+                          <span>Monto original</span>
+                          <strong>
+                            ${Number(
+                              cuentaSeleccionada.monto_total || 0
+                            ).toFixed(2)}
+                          </strong>
                         </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div style={estilos.posEstadoVacioCuenta}>Seleccione un cliente para consultar sus cuentas.</div>
-                  )}
 
-                  <div style={estilos.posCobroCampos}>
-                    <Campo label={esCancelacion() ? "Monto de cancelación" : "Monto a registrar"}>
-                      <input type="number" min="0" step="0.01" value={monto} readOnly={esCancelacion()} onChange={(e) => setMonto(e.target.value)} style={esCancelacion() ? estilos.inputReadOnly : estilos.input} />
-                    </Campo>
-                    <Campo label="Método de pago">
-                      <select value={metodoPago} onChange={(e) => setMetodoPago(e.target.value)} style={estilos.input}><option>Efectivo</option><option>Transferencia</option><option>Yappy</option><option>Tarjeta</option><option>Cheque</option><option>Otro</option></select>
-                    </Campo>
-                    <Campo label="Concepto">
-                      <input value={concepto} onChange={(e) => setConcepto(e.target.value)} placeholder={`Ej. ${tipoMovimiento}`} style={estilos.input} />
-                    </Campo>
-                  </div>
-                  <Campo label="Observación"><textarea value={observacion} onChange={(e) => setObservacion(e.target.value)} style={estilos.textarea} /></Campo>
-                </div>
-              )}
-            </div>
+                        <div style={estilos.detalleCuentaItem}>
+                          <span>Saldo actual</span>
+                          <strong>
+                            ${Number(
+                              cuentaSeleccionada.saldo_actual || 0
+                            ).toFixed(2)}
+                          </strong>
+                        </div>
 
-            <aside style={estilos.posVentaPanel}>
-              <div style={estilos.posVentaHeader}>
-                <h2 style={estilos.posVentaTitulo}>{esVentaConProducto() ? "Venta actual" : "Cobro actual"}</h2>
-                <button onClick={() => seleccionarProducto(null)} style={estilos.posBotonBorrar}>▱</button>
-              </div>
+                        <div style={estilos.detalleCuentaItem}>
+                          <span>Cuota</span>
+                          <strong>
+                            ${Number(
+                              cuentaSeleccionada.cuota || 0
+                            ).toFixed(2)}
+                          </strong>
+                        </div>
 
-              <div style={estilos.posTablaHeader}>
-                <span>Producto</span><span>Cant.</span><span>Precio</span><span>Total</span>
-              </div>
-
-              {esVentaConProducto() ? (
-                productoSeleccionado ? (
-                  <div style={estilos.posLineaVenta}>
-                    <div style={estilos.posLineaProducto}>
-                      <div style={estilos.posMiniaturaBox}>
-                        {obtenerImagenProducto(productoSeleccionado) ? (
-                          <img src={obtenerImagenProducto(productoSeleccionado)} alt="" style={estilos.posMiniatura} />
-                        ) : "▣"}
+                        <div style={estilos.detalleCuentaItem}>
+                          <span>Estado</span>
+                          <strong>
+                            {cuentaSeleccionada.estado || "Activo"}
+                          </strong>
+                        </div>
                       </div>
-                      <strong>{productoSeleccionado.nombre}</strong>
-                    </div>
-                    <div style={estilos.posCantidadControl}>
-                      <button onClick={() => setCantidad(String(Math.max(1, Number(cantidad || 1) - 1)))} style={estilos.posCantidadBtn}>−</button>
-                      <strong>{cantidad}</strong>
-                      <button onClick={() => setCantidad(String(Number(cantidad || 1) + 1))} style={estilos.posCantidadBtnMas}>+</button>
-                    </div>
-                    <span>${precioProducto(productoSeleccionado).toFixed(2)}</span>
-                    <strong>${subtotalActual.toFixed(2)}</strong>
+                    )}
                   </div>
-                ) : (
-                  <div style={estilos.posVentaVacia}>Seleccione un producto para iniciar la venta.</div>
-                )
-              ) : (
-                <div style={estilos.posResumenCobroCuenta}>
-                  <div><span>Operación</span><strong>{tipoMovimiento || "-"}</strong></div>
-                  <div><span>Cliente</span><strong>{clienteSeleccionado?.nombre || "Sin seleccionar"}</strong></div>
-                  <div><span>Cuenta</span><strong>{cuentaSeleccionada?.numero_cuenta || "-"}</strong></div>
-                  <div><span>Saldo actual</span><strong>{cuentaSeleccionada ? `$${Number(cuentaSeleccionada.saldo_actual || 0).toFixed(2)}` : "-"}</strong></div>
-                </div>
-              )}
-
-              <div style={estilos.posTotalesBox}>
-                <div style={estilos.posTotalFila}><span>Subtotal</span><strong>${totalOperacionActual.toFixed(2)}</strong></div>
-                <div style={estilos.posTotalFilaVerde}><span>Descuento</span><strong>-$0.00</strong></div>
-                <div style={estilos.posTotalFila}><span>Impuesto</span><strong>$0.00</strong></div>
-                <div style={estilos.posGranTotal}><span>TOTAL</span><strong>${totalOperacionActual.toFixed(2)}</strong></div>
-              </div>
-
-              <div style={estilos.posClienteCard}>
-                <span style={estilos.posClienteIcono}>♙</span>
-                <div style={estilos.posClienteInfo}>
-                  <strong>{clienteSeleccionado?.nombre || "Cliente no seleccionado"}</strong>
-                  <small>Cédula: {clienteSeleccionado?.cedula || "-"}</small>
-                  <small>Tel.: {obtenerTelefonoCliente(clienteSeleccionado) || "-"}</small>
-                </div>
-                <button onClick={() => document.getElementById("panel-cliente")?.scrollIntoView({ behavior: "smooth" })} style={estilos.posCambiar}>Cambiar</button>
-              </div>
-
-              <div style={estilos.posBotonesCobro}>
-                {esVentaConProducto() ? (
-                  <>
-                    <button onClick={() => prepararCobro("Venta Contado")} disabled={guardando} style={estilos.posCobrarContado}>▭ COBRAR CONTADO</button>
-                    <button onClick={() => prepararCobro("Venta Crédito")} disabled={guardando} style={estilos.posVenderCredito}>▤ VENDER A CRÉDITO</button>
-                  </>
-                ) : (
-                  <button onClick={guardarMovimiento} disabled={guardando} style={estilos.posRegistrarCobro}>
-                    {guardando ? "PROCESANDO..." : esCancelacion() ? "✓ CANCELAR CUENTA" : `✓ REGISTRAR ${String(tipoMovimiento || "PAGO").toUpperCase()}`}
-                  </button>
                 )}
-              </div>
-            </aside>
-          </div>
+              </article>
+            )}
 
-          <div style={estilos.posPanelInferior}>
+            {esVentaConProducto() && (
+              <article style={estilos.card}>
+                <CabeceraSeccion
+                  titulo="Producto e inventario"
+                  texto="Seleccione el producto y confirme la cantidad."
+                  numero="03"
+                />
+
+                <div style={estilos.grid}>
+                  <Campo label="Código del producto">
+                    <input
+                      value={codigoProducto}
+                      onChange={(e) =>
+                        seleccionarProductoPorCodigo(
+                          e.target.value
+                        )
+                      }
+                      style={estilos.input}
+                    />
+                  </Campo>
+
+                  <Campo label="Seleccionar producto">
+                    <select
+                      value={
+                        productoSeleccionado?.id || ""
+                      }
+                      onChange={(e) => {
+                        const producto =
+                          productos.find(
+                            (item) =>
+                              String(item.id) ===
+                              String(e.target.value)
+                          );
+
+                        seleccionarProducto(
+                          producto || null
+                        );
+                      }}
+                      style={estilos.input}
+                    >
+                      <option value="">
+                        Seleccione producto
+                      </option>
+
+                      {productos.map((producto) => (
+                        <option
+                          key={producto.id}
+                          value={producto.id}
+                        >
+                          {producto.codigo} -{" "}
+                          {producto.nombre} - Stock{" "}
+                          {stockProducto(producto)}
+                        </option>
+                      ))}
+                    </select>
+                  </Campo>
+
+                  <Campo label="Cantidad">
+                    <input
+                      type="number"
+                      min="1"
+                      value={cantidad}
+                      onChange={(e) =>
+                        setCantidad(e.target.value)
+                      }
+                      style={estilos.input}
+                    />
+                  </Campo>
+
+                  <Campo label="Valor total">
+                    <input
+                      value={valorProducto}
+                      readOnly
+                      style={estilos.inputReadOnly}
+                    />
+                  </Campo>
+                </div>
+              </article>
+            )}
+
             <article style={estilos.card}>
-              <CabeceraSeccion titulo="Movimientos registrados" texto="Consulte los movimientos del día o de un periodo." numero={String(movimientos.length)} />
-              <div style={estilos.filtrosMovimientos}>
-                <Campo label="Desde"><input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} style={estilos.input} /></Campo>
-                <Campo label="Hasta"><input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} style={estilos.input} /></Campo>
-                <button onClick={buscarMovimientosPorFecha} style={estilos.botonFiltrar}>Buscar movimientos</button>
-                <button onClick={mostrarMovimientosHoy} style={estilos.botonHoy}>Ver hoy</button>
+              <CabeceraSeccion
+                titulo="Detalle del cobro"
+                texto="Confirme el método, monto y responsable."
+                numero={esVentaConProducto() ? "04" : "03"}
+              />
+
+              <div style={estilos.grid}>
+                <Campo label="Método de pago">
+                  <select
+                    value={metodoPago}
+                    onChange={(e) =>
+                      setMetodoPago(e.target.value)
+                    }
+                    style={estilos.input}
+                  >
+                    <option>Efectivo</option>
+                    <option>Transferencia</option>
+                    <option>Yappy</option>
+                    <option>Tarjeta</option>
+                    <option>Cheque</option>
+                    <option>Otro</option>
+                  </select>
+                </Campo>
+
+                <Campo label="Monto">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={monto}
+                    readOnly={esCancelacion()}
+                    onChange={(e) =>
+                      setMonto(e.target.value)
+                    }
+                    style={
+                      esCancelacion()
+                        ? estilos.inputReadOnly
+                        : estilos.input
+                    }
+                  />
+                </Campo>
+
+                <Campo label="Concepto">
+                  <input
+                    value={concepto}
+                    onChange={(e) =>
+                      setConcepto(e.target.value)
+                    }
+                    style={estilos.input}
+                  />
+                </Campo>
+
+                <Campo label="Responsable">
+                  <select
+                    value={responsable}
+                    onChange={(e) =>
+                      setResponsable(e.target.value)
+                    }
+                    style={estilos.input}
+                  >
+                    <option value="">
+                      Seleccione responsable
+                    </option>
+
+                    {vendedores.map((vendedor) => (
+                      <option
+                        key={vendedor.id}
+                        value={vendedor.nombre}
+                      >
+                        {vendedor.nombre} -{" "}
+                        {vendedor.rol}
+                      </option>
+                    ))}
+                  </select>
+                </Campo>
               </div>
-              <div style={estilos.tablaBox}><table style={estilos.tabla}><thead><tr>{["Fecha","Transacción","Cliente","Cuenta","Tipo","Método","Monto","Responsable","Estado"].map((h) => <th key={h} style={estilos.th}>{h}</th>)}</tr></thead><tbody>{movimientos.length === 0 ? <tr><td colSpan="9" style={estilos.tdVacio}>No hay movimientos en el periodo seleccionado.</td></tr> : movimientos.map((mov) => <tr key={mov.id}><td style={estilos.td}>{String(mov.fecha_pago || mov.created_at || "").slice(0,10)}</td><td style={estilos.td}>{mov.numero_transaccion || "-"}</td><td style={estilos.td}>{mov.cliente_nombre || "-"}</td><td style={estilos.td}>{mov.numero_cuenta || "-"}</td><td style={estilos.td}>{mov.tipo}</td><td style={estilos.td}>{mov.metodo_pago}</td><td style={estilos.td}><strong>${Number(mov.monto || 0).toFixed(2)}</strong></td><td style={estilos.td}>{mov.vendedor_responsable || "-"}</td><td style={estilos.td}>{mov.estado || "Procesado"}</td></tr>)}</tbody></table></div>
+
+              <Campo label="Observación">
+                <textarea
+                  value={observacion}
+                  onChange={(e) =>
+                    setObservacion(e.target.value)
+                  }
+                  style={estilos.textarea}
+                />
+              </Campo>
+
+              <div style={estilos.acciones}>
+                <button
+                  style={estilos.botonPrincipal}
+                  onClick={guardarMovimiento}
+                  disabled={guardando}
+                >
+                  {guardando
+                    ? "Procesando..."
+                    : "Registrar movimiento"}
+                </button>
+
+                <button
+                  style={estilos.botonLimpiar}
+                  onClick={limpiarFormulario}
+                  disabled={guardando}
+                >
+                  Limpiar formulario
+                </button>
+              </div>
             </article>
           </div>
+
+          <aside>
+            <article style={estilos.cardSticky}>
+              <CabeceraSeccion
+                titulo="Resumen del movimiento"
+                texto="Revise la información antes de guardar."
+                numero="✓"
+              />
+
+              <div style={estilos.resumenMovimiento}>
+                <FilaResumen
+                  label="Negocio"
+                  valor={empresaNombre}
+                />
+                <FilaResumen
+                  label="Movimiento"
+                  valor={tipoMovimiento || "-"}
+                />
+                <FilaResumen
+                  label="Cliente"
+                  valor={
+                    clienteSeleccionado?.nombre ||
+                    nombreContado ||
+                    "Sin cliente"
+                  }
+                />
+                <FilaResumen
+                  label="Cuenta"
+                  valor={
+                    cuentaSeleccionada?.numero_cuenta ||
+                    "-"
+                  }
+                />
+                <FilaResumen
+                  label="Saldo actual"
+                  valor={
+                    cuentaSeleccionada
+                      ? `$${Number(
+                          cuentaSeleccionada.saldo_actual || 0
+                        ).toFixed(2)}`
+                      : "-"
+                  }
+                />
+                <FilaResumen
+                  label="Saldo después"
+                  valor={
+                    cuentaSeleccionada && esPagoDeCuenta()
+                      ? `$${Math.max(
+                          Number(
+                            cuentaSeleccionada.saldo_actual || 0
+                          ) -
+                            Number(
+                              esCancelacion()
+                                ? cuentaSeleccionada.saldo_actual || 0
+                                : monto || 0
+                            ),
+                          0
+                        ).toFixed(2)}`
+                      : "-"
+                  }
+                />
+                <FilaResumen
+                  label="Método"
+                  valor={metodoPago}
+                />
+                <FilaResumen
+                  label="Responsable"
+                  valor={responsable || "-"}
+                />
+              </div>
+
+              <div style={estilos.totalBox}>
+                <span>Total a registrar</span>
+                <strong>
+                  ${Number(monto || 0).toFixed(2)}
+                </strong>
+              </div>
+            </article>
+          </aside>
         </section>
+
+        <article style={estilos.card}>
+          <CabeceraSeccion
+            titulo="Movimientos registrados"
+            texto="Por defecto se muestran únicamente los movimientos del día. Use las fechas para consultar periodos anteriores."
+            numero={String(movimientos.length)}
+          />
+
+          <div style={estilos.filtrosMovimientos}>
+            <Campo label="Desde">
+              <input
+                type="date"
+                value={fechaDesde}
+                onChange={(e) =>
+                  setFechaDesde(e.target.value)
+                }
+                style={estilos.input}
+              />
+            </Campo>
+
+            <Campo label="Hasta">
+              <input
+                type="date"
+                value={fechaHasta}
+                onChange={(e) =>
+                  setFechaHasta(e.target.value)
+                }
+                style={estilos.input}
+              />
+            </Campo>
+
+            <button
+              onClick={buscarMovimientosPorFecha}
+              style={estilos.botonFiltrar}
+              disabled={filtrandoMovimientos}
+            >
+              {filtrandoMovimientos
+                ? "Buscando..."
+                : "Buscar movimientos"}
+            </button>
+
+            <button
+              onClick={mostrarMovimientosHoy}
+              style={estilos.botonHoy}
+              disabled={filtrandoMovimientos}
+            >
+              Ver hoy
+            </button>
+          </div>
+
+          <div style={estilos.tablaBox}>
+            <table style={estilos.tabla}>
+              <thead>
+                <tr>
+                  <th style={estilos.th}>Fecha</th>
+                  <th style={estilos.th}>Transacción</th>
+                  <th style={estilos.th}>Cliente</th>
+                  <th style={estilos.th}>Cuenta</th>
+                  <th style={estilos.th}>Tipo</th>
+                  <th style={estilos.th}>Método</th>
+                  <th style={estilos.th}>Monto</th>
+                  <th style={estilos.th}>Responsable</th>
+                  <th style={estilos.th}>Estado</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {movimientos.length === 0 ? (
+                  <tr>
+                    <td
+                      style={estilos.tdVacio}
+                      colSpan="9"
+                    >
+                      No hay movimientos en el periodo seleccionado.
+                    </td>
+                  </tr>
+                ) : (
+                  movimientos.map((movimiento) => (
+                    <tr key={movimiento.id}>
+                      <td style={estilos.td}>
+                        {String(
+                          movimiento.fecha_pago ||
+                            movimiento.created_at ||
+                            ""
+                        ).slice(0, 10)}
+                      </td>
+                      <td style={estilos.td}>
+                        {movimiento.numero_transaccion ||
+                          "-"}
+                      </td>
+                      <td style={estilos.td}>
+                        {movimiento.cliente_nombre ||
+                          "-"}
+                      </td>
+                      <td style={estilos.td}>
+                        {movimiento.numero_cuenta ||
+                          "-"}
+                      </td>
+                      <td style={estilos.td}>
+                        {movimiento.tipo}
+                      </td>
+                      <td style={estilos.td}>
+                        {movimiento.metodo_pago}
+                      </td>
+                      <td style={estilos.td}>
+                        <strong>
+                          $
+                          {Number(
+                            movimiento.monto || 0
+                          ).toFixed(2)}
+                        </strong>
+                      </td>
+                      <td style={estilos.td}>
+                        {movimiento.vendedor_responsable ||
+                          "-"}
+                      </td>
+                      <td style={estilos.td}>
+                        {movimiento.estado ||
+                          "Procesado"}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </article>
       </div>
     </main>
   );
@@ -2701,105 +2899,4 @@ const estilos = {
     color: "#6b7280",
     textAlign: "center",
   },
-  posPagina: { minHeight: "100vh", background: "linear-gradient(180deg,#f7faf8 0%,#eef4f1 100%)", color: "#152019", fontFamily: "Inter, Arial, system-ui, sans-serif" },
-  posHeader: { height: "78px", padding: "0 28px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "linear-gradient(90deg,#0b1f17 0%,#123c28 60%,#17653d 100%)", color: "white", borderBottom: "1px solid rgba(255,255,255,.12)", position: "sticky", top: 0, zIndex: 30, boxShadow: "0 8px 24px rgba(10,52,31,.16)" },
-  posLogo: { width: "142px", height: "52px", objectFit: "contain" },
-  posHeaderInfo: { display: "flex", alignItems: "center", gap: "15px", fontSize: "14px", flexWrap: "wrap", justifyContent: "flex-end", color: "rgba(255,255,255,.96)" },
-  posSeparador: { opacity: .4 },
-  posVolver: { padding: "9px 13px", border: "1px solid rgba(255,255,255,.25)", borderRadius: "10px", background: "transparent", color: "white", cursor: "pointer" },
-  posLayout: { display: "block", minHeight: "calc(100vh - 80px)" },
-  posSidebar: { width: "248px", minWidth: "248px", height: "calc(100vh - 80px)", position: "sticky", top: "80px", padding: "18px 14px", boxSizing: "border-box", background: "linear-gradient(180deg,#06131d 0%,#0a1824 55%,#06111a 100%)", color: "#ffffff", display: "flex", flexDirection: "column", overflowY: "auto", borderRight: "1px solid rgba(255,255,255,.05)", boxShadow: "12px 0 28px rgba(4,10,16,.28)" },
-  posMenuItem: { position: "relative", width: "100%", minHeight: "50px", display: "grid", gridTemplateColumns: "32px 1fr 6px", alignItems: "center", gap: "10px", padding: "9px 12px", border: "1px solid transparent", borderRadius: "14px", background: "transparent", color: "rgba(255,255,255,.84)", fontSize: "13px", fontWeight: 750, textAlign: "left", cursor: "pointer" },
-  posMenuActivo: { background: "linear-gradient(135deg,#14994e,#0a7c3d)", color: "#ffffff", borderColor: "rgba(255,255,255,.06)", boxShadow: "0 10px 24px rgba(10,124,61,.30)", transform: "translateX(2px)" },
-  posMenuIcono: { width: "32px", height: "32px", display: "grid", placeItems: "center", borderRadius: "10px", background: "rgba(255,255,255,.08)", fontSize: "16px" },
-  posContenido: { maxWidth: "1500px", margin: "0 auto", padding: "22px 24px 36px", overflow: "hidden", minWidth: 0 },
-  posPrincipalGrid: { display: "grid", gridTemplateColumns: "minmax(0,1.15fr) minmax(430px,.85fr)", gap: "18px", alignItems: "start" },
-  posCatalogo: { minWidth: 0 },
-  posBuscadorBox: { height: "66px", display: "flex", alignItems: "center", gap: "12px", padding: "0 18px", background: "white", border: "1px solid #d8e4dd", borderRadius: "16px", boxShadow: "0 10px 24px rgba(20,78,48,.06)" },
-  posLupa: { fontSize: "32px", lineHeight: 1 },
-  posBuscador: { flex: 1, border: 0, outline: 0, fontSize: "17px", background: "transparent" },
-  posBarcode: { fontSize: "26px" },
-  posCategorias: { display: "flex", gap: "10px", margin: "18px 0", flexWrap: "wrap" },
-  posCategoria: { minHeight: "40px", padding: "0 20px", border: "1px solid #d7ddda", borderRadius: "999px", background: "white", cursor: "pointer", fontWeight: 700 },
-  posCategoriaActiva: { minHeight: "40px", padding: "0 22px", border: 0, borderRadius: "999px", background: "linear-gradient(135deg,#14994e,#0a7c3d)", color: "white", cursor: "pointer", fontWeight: 800 },
-  posProductosGrid: { display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: "12px" },
-  posProductoCard: { minHeight: "250px", padding: "14px", border: "1px solid #dfe5e2", borderRadius: "14px", background: "white", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", cursor: "pointer", boxShadow: "0 5px 16px rgba(15,23,42,.04)" },
-  posProductoActivo: { minHeight: "250px", padding: "14px", border: "2px solid #12934b", borderRadius: "14px", background: "#f5fff8", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", cursor: "pointer", boxShadow: "0 8px 22px rgba(18,147,75,.13)" },
-  posProductoImagenBox: { height: "145px", width: "100%", display: "grid", placeItems: "center", marginBottom: "8px" },
-  posProductoImagen: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" },
-  posProductoSinImagen: { fontSize: "58px", color: "#9aa6a0" },
-  posProductoNombre: { fontSize: "16px", textAlign: "center", marginTop: "4px" },
-  posProductoPrecio: { marginTop: "10px", color: "#108343", fontSize: "18px", fontWeight: 900 },
-  posProductoStock: { marginTop: "8px", color: "#5c6b63", fontSize: "13px" },
-  posAccionesRapidas: { display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: "10px", marginTop: "14px" },
-  posAccionRapida: { minHeight: "96px", border: "1px solid #dfe5e2", borderRadius: "12px", background: "white", display: "grid", placeItems: "center", gap: "3px", cursor: "pointer", fontWeight: 700 },
-  posAccionIcono: { fontSize: "30px", color: "#128647" },
-  posMetodosBox: { marginTop: "14px", padding: "14px 18px", border: "1px solid #dfe5e2", borderRadius: "14px", background: "white" },
-  posMetodosTitulo: { margin: "0 0 10px", fontSize: "18px" },
-  posMetodosGrid: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "8px" },
-  posMetodo: { border: 0, borderRight: "1px solid #e5e7eb", background: "transparent", display: "flex", gap: "12px", alignItems: "center", textAlign: "left", cursor: "pointer" },
-  posMetodoActivo: { border: "1px solid #b7dfc7", borderRadius: "10px", background: "#effaf3", display: "flex", gap: "12px", alignItems: "center", textAlign: "left", cursor: "pointer", padding: "8px" },
-  posMetodoIcono: { fontSize: "30px", color: "#0a8b43" },
-  posVentaPanel: { minHeight: "760px", border: "1px solid #d8e4dd", borderRadius: "18px", background: "linear-gradient(180deg,#ffffff 0%,#fbfdfc 100%)", boxShadow: "0 14px 34px rgba(20,78,48,.09)", overflow: "hidden", position: "sticky", top: "96px" },
-  posVentaHeader: { height: "68px", padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #e5e7eb" },
-  posVentaTitulo: { margin: 0, fontSize: "23px" },
-  posBotonBorrar: { border: 0, background: "transparent", color: "#ef4444", fontSize: "25px", cursor: "pointer" },
-  posTablaHeader: { display: "grid", gridTemplateColumns: "1.7fr .55fr .75fr .75fr", gap: "10px", padding: "14px 20px", borderBottom: "1px solid #e5e7eb", fontWeight: 800, fontSize: "13px" },
-  posLineaVenta: { display: "grid", gridTemplateColumns: "1.7fr .55fr .75fr .75fr", gap: "10px", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #e5e7eb" },
-  posLineaProducto: { display: "flex", alignItems: "center", gap: "10px", minWidth: 0 },
-  posMiniaturaBox: { width: "54px", height: "54px", borderRadius: "8px", background: "#f2f4f3", display: "grid", placeItems: "center", flexShrink: 0 },
-  posMiniatura: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" },
-  posCantidadControl: { display: "flex", alignItems: "center", gap: "8px" },
-  posCantidadBtn: { width: "30px", height: "30px", border: "1px solid #d7ddda", borderRadius: "7px", background: "white", cursor: "pointer" },
-  posCantidadBtnMas: { width: "30px", height: "30px", border: "1px solid #b6dec6", borderRadius: "7px", background: "white", color: "#0a8b43", fontSize: "20px", cursor: "pointer" },
-  posVentaVacia: { padding: "60px 20px", textAlign: "center", color: "#758178" },
-  posTotalesBox: { margin: "16px", padding: "16px", border: "1px solid #e1e6e3", borderRadius: "12px" },
-  posTotalFila: { display: "flex", justifyContent: "space-between", padding: "7px 0" },
-  posTotalFilaVerde: { display: "flex", justifyContent: "space-between", padding: "7px 0", color: "#0a8b43" },
-  posGranTotal: { marginTop: "10px", paddingTop: "14px", borderTop: "1px dashed #cbd5d0", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "25px" },
-  posClienteCard: { margin: "16px", padding: "15px", display: "grid", gridTemplateColumns: "58px 1fr auto", alignItems: "center", gap: "12px", border: "1px solid #e1e6e3", borderRadius: "12px" },
-  posClienteIcono: { width: "52px", height: "52px", borderRadius: "50%", display: "grid", placeItems: "center", background: "#e9f7ee", color: "#0a8b43", fontSize: "28px" },
-  posClienteInfo: { display: "grid", gap: "3px" },
-  posCambiar: { padding: "10px 18px", border: "1px solid #0a8b43", borderRadius: "8px", background: "white", color: "#0a8b43", fontWeight: 800, cursor: "pointer" },
-  posBotonesCobro: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", padding: "0 16px 16px" },
-  posCobrarContado: { minHeight: "78px", border: 0, borderRadius: "14px", background: "linear-gradient(135deg,#20a75f,#128046)", color: "white", fontSize: "18px", fontWeight: 900, cursor: "pointer", boxShadow: "0 12px 24px rgba(18,128,70,.22)" },
-  posVenderCredito: { minHeight: "78px", border: 0, borderRadius: "14px", background: "linear-gradient(135deg,#243746,#13212d)", color: "white", fontSize: "18px", fontWeight: 900, cursor: "pointer", boxShadow: "0 12px 24px rgba(19,33,45,.16)" },
-  posPanelInferior: { marginTop: "24px" },
-
-  posOperacionBar: { marginBottom: "18px", padding: "18px 20px", display: "grid", gridTemplateColumns: "minmax(190px,.7fr) minmax(360px,1.55fr) minmax(300px,1fr)", gap: "18px", alignItems: "end", background: "rgba(255,255,255,.96)", border: "1px solid #dce7e0", borderRadius: "20px", boxShadow: "0 12px 30px rgba(20,78,48,.08)" },
-  posOperacionEtiqueta: { display: "block", marginBottom: "4px", color: "#11814c", fontSize: "10px", fontWeight: "900", letterSpacing: "1.1px" },
-  posOperacionTitulo: { margin: 0, fontSize: "22px", color: "#0f172a" },
-  posOperacionTabs: { display: "flex", gap: "8px", flexWrap: "wrap" },
-  posOperacionTab: { minHeight: "42px", padding: "9px 16px", border: "1px solid #d5e0d9", borderRadius: "12px", background: "#f9fbfa", color: "#334155", fontWeight: "800", cursor: "pointer" },
-  posOperacionTabActivo: { minHeight: "42px", padding: "9px 16px", border: "1px solid #13844e", borderRadius: "12px", background: "linear-gradient(135deg,#20a75f,#128046)", color: "#ffffff", fontWeight: "900", cursor: "pointer", boxShadow: "0 8px 18px rgba(18,128,70,.22)" },
-  posOperacionDatos: { display: "grid", gridTemplateColumns: "1fr 1.35fr", gap: "10px" },
-  posInputCompacto: { width: "100%", minHeight: "40px", padding: "8px 10px", boxSizing: "border-box", border: "1px solid #d4ded8", borderRadius: "10px", background: "#ffffff", color: "#111827" },
-  posCobroCuentaBox: { minHeight: "620px", padding: "22px", border: "1px solid #e0e7e3", borderRadius: "18px", background: "linear-gradient(180deg,#ffffff,#f8fbf9)", boxShadow: "0 10px 28px rgba(15,23,42,.05)" },
-  posCobroEncabezado: { marginBottom: "18px", paddingBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e8eeea" },
-  posCobroTitulo: { margin: "2px 0 5px", fontSize: "28px", color: "#0f172a" },
-  posCobroTexto: { margin: 0, color: "#64748b", fontSize: "13px" },
-  posCobroIcono: { width: "54px", height: "54px", display: "grid", placeItems: "center", borderRadius: "16px", background: "#e6f6ed", color: "#0f8b4f", fontSize: "28px", fontWeight: "900" },
-  posBuscarClienteFila: { display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: "10px", alignItems: "end" },
-  posBotonBuscarCliente: { minHeight: "46px", padding: "10px 22px", border: 0, borderRadius: "12px", background: "#111c28", color: "#ffffff", fontWeight: "900", cursor: "pointer" },
-  posResultadoDetalle: { display: "block", marginTop: "3px", color: "#718096" },
-  posClienteCuentaSeleccionado: { marginTop: "16px", padding: "16px", border: "1px solid #bfe3cf", borderRadius: "16px", background: "#f0faf4" },
-  posClienteCuentaCabecera: { marginBottom: "14px", display: "flex", alignItems: "center", gap: "10px" },
-  posCuentaResumenGrid: { marginTop: "14px", display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: "9px" },
-  posEstadoVacioCuenta: { marginTop: "16px", padding: "34px", textAlign: "center", border: "1px dashed #cdd8d2", borderRadius: "14px", color: "#64748b", background: "#ffffff" },
-  posCobroCampos: { marginTop: "16px", display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: "12px" },
-  posResumenCobroCuenta: { display: "grid", gap: "0", borderBottom: "1px solid #e7ece9" },
-  posRegistrarCobro: { width: "100%", minHeight: "66px", border: 0, borderRadius: "14px", background: "linear-gradient(135deg,#169b59,#0b6b3d)", color: "#ffffff", fontSize: "16px", fontWeight: "950", cursor: "pointer", boxShadow: "0 12px 26px rgba(11,107,61,.24)" },
-
-  posSidebarBrand: { minHeight: "74px", display: "flex", alignItems: "center", gap: "10px", padding: "4px 6px 18px", borderBottom: "1px solid rgba(255,255,255,.08)" },
-  posSidebarLogoCard: { minHeight: "52px", display: "grid", placeItems: "center", padding: "8px 10px", borderRadius: "16px", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)" },
-  posSidebarLogo: { width: "120px", maxWidth: "100%", height: "auto", objectFit: "contain" },
-  posSidebarCaption: { display: "grid", gap: "2px" },
-  posSidebarEyebrow: { color: "#72d9a0", fontSize: "8px", fontWeight: 900, letterSpacing: "1px" },
-  posSidebarTitle: { color: "#ffffff", fontSize: "14px", letterSpacing: "1.2px" },
-  posSidebarNav: { display: "grid", gap: "8px", paddingTop: "10px" },
-  posMenuIconoActivo: { background: "rgba(255,255,255,.16)", boxShadow: "none" },
-  posMenuTexto: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  posMenuIndicador: { width: "5px", height: "24px", borderRadius: "999px", background: "#ffffff" },
-  posLogout: { minHeight: "44px", marginTop: "auto", border: "1px solid rgba(255,255,255,.12)", borderRadius: "11px", background: "rgba(255,255,255,.06)", color: "#ffffff", fontWeight: 750, cursor: "pointer" },
-
 };
