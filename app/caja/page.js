@@ -1703,1115 +1703,290 @@ export default function Caja() {
   if (cargando) {
     return (
       <div style={estilos.loading}>
-        <img
-          src="/konax-logo.png"
-          alt="KONAX"
-          style={estilos.loadingLogo}
-        />
-        <strong style={estilos.loadingTitulo}>
-          Preparando caja
-        </strong>
+        <img src="/konax-logo.png" alt="KONAX" style={estilos.loadingLogo} />
+        <strong style={estilos.loadingTitulo}>Preparando caja</strong>
       </div>
     );
   }
 
   return (
     <main style={estilos.pagina}>
-      <div style={estilos.contenedor}>
-        <header style={estilos.header}>
-          <div style={estilos.headerIzquierda}>
-            <div style={estilos.logoBox}>
-              <img
-                src="/konax-logo.png"
-                alt="KONAX"
-                style={estilos.logo}
-              />
-            </div>
-
+      <div style={estilos.shell}>
+        <header style={estilos.topbar}>
+          <div style={estilos.topbarMarca}>
+            <img src="/konax-logo.png" alt="KONAX" style={estilos.topbarLogo} />
+            <div style={estilos.topbarSeparador} />
             <div>
-              <span style={estilos.etiqueta}>
-                CAJA Y REGISTRO DE INGRESOS
-              </span>
-
-              <h1 style={estilos.nombreNegocio}>
-                {empresaNombre}
-              </h1>
-
-              <p style={estilos.tituloModulo}>
-                Módulo de Caja
-              </p>
-
-              <p style={estilos.subtitulo}>
-                Registro de pagos, membresías, ventas,
-                servicios e ingresos.
-              </p>
+              <div style={estilos.topbarModulo}>▣ CAJA Y REGISTRO DE INGRESOS</div>
+            </div>
+            <div style={estilos.topbarSeparador} />
+            <div>
+              <h1 style={estilos.topbarEmpresa}>{empresaNombre}</h1>
+              <p style={estilos.topbarTexto}>Registro de pagos, membresías, ventas, servicios e ingresos.</p>
             </div>
           </div>
 
-          <button
-            onClick={volverDashboard}
-            style={estilos.botonVolver}
-          >
-            ← Centro de Operaciones
-          </button>
+          <button onClick={volverDashboard} style={estilos.botonVolver}>← Centro de Operaciones</button>
         </header>
 
-        <section style={estilos.resumenGrid}>
-          <ResumenCard
-            titulo="Movimientos hoy"
-            valor={movimientosHoy.length}
-            icono="🧾"
-          />
-          <ResumenCard
-            titulo="Total de hoy"
-            valor={`$${totalHoy.toFixed(2)}`}
-            icono="💰"
-            destacado
-          />
-          <ResumenCard
-            titulo="Efectivo hoy"
-            valor={`$${totalEfectivoHoy.toFixed(2)}`}
-            icono="💵"
-          />
-          <ResumenCard
-            titulo="Pagos digitales"
-            valor={`$${totalDigitalHoy.toFixed(2)}`}
-            icono="📲"
-          />
-        </section>
+        <div style={estilos.contenido}>
+          <section style={estilos.kpisGrid}>
+            <KpiCard titulo="Movimientos hoy" valor={movimientosHoy.length} detalle="Total de transacciones" icono="▤" />
+            <KpiCard titulo="Total de hoy" valor={`$${totalHoy.toFixed(2)}`} detalle="Ingresos registrados" icono="💰" destacado />
+            <KpiCard titulo="Efectivo hoy" valor={`$${totalEfectivoHoy.toFixed(2)}`} detalle="Pago en efectivo" icono="▣" />
+            <KpiCard titulo="Pagos digitales" valor={`$${totalDigitalHoy.toFixed(2)}`} detalle="Tarjetas y otros medios" icono="▤" digital />
+          </section>
 
-        <section style={estilos.mainStack}>
-            <article style={estilos.card}>
-              <CabeceraSeccion
-                titulo="Nuevo movimiento"
-                texto="Seleccione qué está cobrando y complete la información."
-                numero="01"
-              />
+          <section style={estilos.panelGrid}>
+            <div style={estilos.columnaIzquierda}>
+              <article style={estilos.panel}>
+                <TituloPanel icono="▦" titulo="A. Nuevo movimiento" />
+                <div style={estilos.nuevoMovimientoGrid}>
+                  <Campo label="Fecha">
+                    <input type="date" value={fechaPago} onChange={(e)=>setFechaPago(e.target.value)} style={estilos.input} />
+                  </Campo>
+                  <div>
+                    <span style={estilos.label}>Tipo de movimiento</span>
+                    <div style={estilos.tabsMovimiento}>
+                      {opcionesMovimiento.map((opcion)=>(
+                        <button
+                          key={opcion}
+                          onClick={()=>{
+                            setTipoMovimiento(opcion);
+                            setMonto("");
+                            setValorProducto("");
+                            setCodigoProducto("");
+                            setProductoSeleccionado(null);
+                            setNumeroVentaAbono("");
+                            setClienteSeleccionado(null);
+                            setCuentasCliente([]);
+                            setCuentaSeleccionada(null);
+                          }}
+                          style={tipoMovimiento===opcion?estilos.tabActivo:estilos.tab}
+                        >
+                          {opcion}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </article>
 
-              <div style={estilos.grid}>
-                <Campo label="Fecha">
-                  <input
-                    type="date"
-                    value={fechaPago}
-                    onChange={(e) =>
-                      setFechaPago(e.target.value)
-                    }
-                    style={estilos.input}
-                  />
-                </Campo>
-
-                <Campo label="Tipo de movimiento">
-                  <select
-                    value={tipoMovimiento}
-                    onChange={(e) => {
-                      setTipoMovimiento(e.target.value);
-                      setMonto("");
-                      setValorProducto("");
-                      setCodigoProducto("");
-                      setProductoSeleccionado(null);
-                      setNumeroVentaAbono("");
-                      setClienteSeleccionado(null);
-                      setCuentasCliente([]);
-                      setCuentaSeleccionada(null);
-                    }}
-                    style={estilos.input}
-                  >
-                    {opcionesMovimiento.map((opcion) => (
-                      <option
-                        key={opcion}
-                        value={opcion}
-                      >
-                        {opcion}
-                      </option>
-                    ))}
-                  </select>
-                </Campo>
-              </div>
-            </article>
-
-            {(requiereCliente() ||
-              clienteEsOpcional()) && (
-              <article style={estilos.card}>
-                <CabeceraSeccion
-                  titulo={
-                    requiereCliente()
-                      ? "Cliente y cuenta"
-                      : "Cliente opcional"
-                  }
-                  texto={
-                    requiereCliente()
-                      ? "Busque y seleccione al cliente relacionado con el pago."
-                      : "Puede asociar el ingreso a un cliente o dejarlo sin cliente."
-                  }
-                  numero="02"
-                />
-
-                <div style={estilos.toolbar}>
-                  <Campo label="Buscar cliente">
+              {(requiereCliente() || clienteEsOpcional() || esVentaContado()) && (
+                <article style={estilos.panel}>
+                  <TituloPanel icono="♙" titulo="B. Cliente y cuenta" />
+                  <div style={estilos.buscarClienteFila}>
                     <input
-                      placeholder="Nombre, cédula, teléfono o cuenta..."
+                      placeholder="Buscar cliente"
                       value={buscarCliente}
-                      onChange={(e) =>
-                        setBuscarCliente(e.target.value)
-                      }
+                      onChange={(e)=>setBuscarCliente(e.target.value)}
                       style={estilos.input}
                     />
-                  </Campo>
-
-                  <button
-                    style={estilos.botonSecundario}
-                    onClick={buscarClientes}
-                  >
-                    Buscar
-                  </button>
-                </div>
-
-                {resultadosBusqueda.length > 0 && (
-                  <div style={estilos.resultadosBox}>
-                    {resultadosBusqueda.map(
-                      (item, index) => (
-                        <button
-                          key={`${item.cliente.id}-${index}`}
-                          style={estilos.resultadoItem}
-                          onClick={() =>
-                            seleccionarResultado(item)
-                          }
-                        >
-                          <strong>
-                            {item.cliente.nombre}
-                          </strong>
-                          <span>
-                            {item.cuenta?.numero_cuenta ||
-                              "Seleccionar"}
-                          </span>
-                        </button>
-                      )
-                    )}
+                    <button onClick={buscarClientes} style={estilos.botonBuscar}>⌕</button>
                   </div>
-                )}
 
-                {clienteSeleccionado && (
-                  <div style={estilos.clienteSeleccionado}>
-                    <h3 style={estilos.clienteNombre}>
-                      {clienteSeleccionado.nombre}
-                    </h3>
+                  {resultadosBusqueda.length>0 && (
+                    <div style={estilos.resultadosBox}>
+                      {resultadosBusqueda.map((item,index)=>(
+                        <button key={`${item.cliente.id}-${index}`} onClick={()=>seleccionarResultado(item)} style={estilos.resultadoItem}>
+                          <strong>{item.cliente.nombre}</strong>
+                          <span>{item.cuenta?.numero_cuenta || "Seleccionar"}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
-                    {cuentasCliente.length > 0 && (
-                      <Campo label="Cuenta o membresía">
+                  <div style={estilos.clienteCard}>
+                    <div style={estilos.clienteDatosFila}>
+                      <div style={estilos.avatarCliente}>●</div>
+                      <div style={estilos.clienteInfo}>
+                        <strong style={estilos.clienteNombre}>{clienteSeleccionado?.nombre || nombreContado || "Cliente no seleccionado"}</strong>
+                        <span>Cédula: {clienteSeleccionado?.cedula || cedulaContado || "-"}</span>
+                        <span>Tel.: {obtenerTelefonoCliente(clienteSeleccionado) || telefonoContado || "-"}</span>
+                      </div>
+                      <div style={estilos.cuentaSelectorWrap}>
+                        <span style={estilos.label}>Cuenta</span>
                         <select
-                          value={
-                            cuentaSeleccionada?.id || ""
-                          }
-                          onChange={(e) => {
-                            const cuenta =
-                              cuentasCliente.find(
-                                (item) =>
-                                  String(item.id) ===
-                                  String(e.target.value)
-                              );
-
-                            setCuentaSeleccionada(
-                              cuenta || null
-                            );
+                          value={cuentaSeleccionada?.id || ""}
+                          onChange={(e)=>{
+                            const cuenta=cuentasCliente.find((item)=>String(item.id)===String(e.target.value));
+                            setCuentaSeleccionada(cuenta || null);
                           }}
                           style={estilos.input}
                         >
-                          <option value="">
-                            Seleccione una cuenta
-                          </option>
-
-                          {cuentasCliente.map((cuenta) => (
-                            <option
-                              key={cuenta.id}
-                              value={cuenta.id}
-                            >
-                              {cuenta.numero_cuenta} -{" "}
-                              {cuenta.descripcion}
-                            </option>
+                          <option value="">Cuenta principal</option>
+                          {cuentasCliente.map((cuenta)=>(
+                            <option key={cuenta.id} value={cuenta.id}>{cuenta.numero_cuenta} - {cuenta.descripcion}</option>
                           ))}
                         </select>
-                      </Campo>
-                    )}
-
-                    {cuentaSeleccionada && (
-                      <div style={estilos.detalleCuentaGrid}>
-                        <div style={estilos.detalleCuentaItem}>
-                          <span>Monto original</span>
-                          <strong>
-                            ${Number(
-                              cuentaSeleccionada.monto_total || 0
-                            ).toFixed(2)}
-                          </strong>
-                        </div>
-
-                        <div style={estilos.detalleCuentaItem}>
-                          <span>Saldo actual</span>
-                          <strong>
-                            ${Number(
-                              cuentaSeleccionada.saldo_actual || 0
-                            ).toFixed(2)}
-                          </strong>
-                        </div>
-
-                        <div style={estilos.detalleCuentaItem}>
-                          <span>Cuota</span>
-                          <strong>
-                            ${Number(
-                              cuentaSeleccionada.cuota || 0
-                            ).toFixed(2)}
-                          </strong>
-                        </div>
-
-                        <div style={estilos.detalleCuentaItem}>
-                          <span>Estado</span>
-                          <strong>
-                            {cuentaSeleccionada.estado || "Activo"}
-                          </strong>
-                        </div>
                       </div>
-                    )}
+                    </div>
+
+                    <div style={estilos.cuentaStats}>
+                      <MiniStat label="Monto original" value={`$${Number(cuentaSeleccionada?.monto_total || 0).toFixed(2)}`} />
+                      <MiniStat label="Saldo actual" value={`$${Number(cuentaSeleccionada?.saldo_actual || 0).toFixed(2)}`} resaltado />
+                      <MiniStat label="Cuota" value={`$${Number(cuentaSeleccionada?.cuota || 0).toFixed(2)}`} />
+                      <MiniStat label="Estado" value={cuentaSeleccionada?.estado || "Activa"} estado />
+                    </div>
                   </div>
-                )}
-              </article>
-            )}
+                </article>
+              )}
+            </div>
 
-            {esVentaConProducto() && (
-              <article style={estilos.card}>
-                <CabeceraSeccion
-                  titulo="Producto e inventario"
-                  texto="Seleccione el producto y confirme la cantidad."
-                  numero="03"
-                />
+            <div style={estilos.columnaDerecha}>
+              {esVentaConProducto() && (
+                <article style={estilos.panel}>
+                  <TituloPanel icono="◇" titulo="C. Producto e inventario" />
+                  <div style={estilos.productoGrid}>
+                    <Campo label="Código del producto">
+                      <input value={codigoProducto} onChange={(e)=>seleccionarProductoPorCodigo(e.target.value)} placeholder="Ej. 12345" style={estilos.input} />
+                    </Campo>
+                    <Campo label="Seleccionar producto">
+                      <select
+                        value={productoSeleccionado?.id || ""}
+                        onChange={(e)=>{
+                          const producto=productos.find((item)=>String(item.id)===String(e.target.value));
+                          seleccionarProducto(producto || null);
+                        }}
+                        style={estilos.input}
+                      >
+                        <option value="">Seleccione un producto</option>
+                        {productos.map((producto)=>(
+                          <option key={producto.id} value={producto.id}>{producto.codigo} - {producto.nombre} - Stock {stockProducto(producto)}</option>
+                        ))}
+                      </select>
+                    </Campo>
+                    <Campo label="Cantidad">
+                      <input type="number" min="1" value={cantidad} onChange={(e)=>setCantidad(e.target.value)} style={estilos.input} />
+                    </Campo>
+                    <Campo label="Valor total">
+                      <input value={valorProducto} readOnly style={estilos.inputReadOnly} />
+                    </Campo>
+                  </div>
+                </article>
+              )}
 
-                <div style={estilos.grid}>
-                  <Campo label="Código del producto">
-                    <input
-                      value={codigoProducto}
-                      onChange={(e) =>
-                        seleccionarProductoPorCodigo(
-                          e.target.value
-                        )
-                      }
-                      style={estilos.input}
-                    />
-                  </Campo>
-
-                  <Campo label="Seleccionar producto">
-                    <select
-                      value={
-                        productoSeleccionado?.id || ""
-                      }
-                      onChange={(e) => {
-                        const producto =
-                          productos.find(
-                            (item) =>
-                              String(item.id) ===
-                              String(e.target.value)
-                          );
-
-                        seleccionarProducto(
-                          producto || null
-                        );
-                      }}
-                      style={estilos.input}
-                    >
-                      <option value="">
-                        Seleccione producto
-                      </option>
-
-                      {productos.map((producto) => (
-                        <option
-                          key={producto.id}
-                          value={producto.id}
-                        >
-                          {producto.codigo} -{" "}
-                          {producto.nombre} - Stock{" "}
-                          {stockProducto(producto)}
-                        </option>
-                      ))}
+              <article style={estilos.panel}>
+                <TituloPanel icono="$" titulo="D. Detalle del cobro" />
+                <div style={estilos.cobroGrid}>
+                  <Campo label="Método de pago">
+                    <select value={metodoPago} onChange={(e)=>setMetodoPago(e.target.value)} style={estilos.input}>
+                      <option>Efectivo</option><option>Transferencia</option><option>Yappy</option><option>Tarjeta</option><option>Cheque</option><option>Otro</option>
                     </select>
                   </Campo>
-
-                  <Campo label="Cantidad">
-                    <input
-                      type="number"
-                      min="1"
-                      value={cantidad}
-                      onChange={(e) =>
-                        setCantidad(e.target.value)
-                      }
-                      style={estilos.input}
-                    />
+                  <Campo label="Monto">
+                    <input type="number" min="0" step="0.01" value={monto} readOnly={esCancelacion()} onChange={(e)=>setMonto(e.target.value)} style={esCancelacion()?estilos.inputReadOnly:estilos.input} />
                   </Campo>
-
-                  <Campo label="Valor total">
-                    <input
-                      value={valorProducto}
-                      readOnly
-                      style={estilos.inputReadOnly}
-                    />
+                  <Campo label="Concepto">
+                    <input value={concepto} onChange={(e)=>setConcepto(e.target.value)} placeholder="Ej. Pago de producto" style={estilos.input} />
+                  </Campo>
+                  <Campo label="Responsable">
+                    <select value={responsable} onChange={(e)=>setResponsable(e.target.value)} style={estilos.input}>
+                      <option value="">Seleccione responsable</option>
+                      {vendedores.map((vendedor)=><option key={vendedor.id} value={vendedor.nombre}>{vendedor.nombre} - {vendedor.rol}</option>)}
+                    </select>
+                  </Campo>
+                  <Campo label="Observación">
+                    <input value={observacion} onChange={(e)=>setObservacion(e.target.value)} placeholder="Observaciones adicionales (opcional)" style={estilos.input} />
                   </Campo>
                 </div>
+                <div style={estilos.accionesFila}>
+                  <button onClick={guardarMovimiento} disabled={guardando} style={estilos.botonPrincipal}>{guardando?"Procesando...":"▣ Registrar movimiento"}</button>
+                  <button onClick={limpiarFormulario} disabled={guardando} style={estilos.botonLimpiar}>▤ Limpiar formulario</button>
+                </div>
               </article>
-            )}
+            </div>
+          </section>
 
-            <article style={estilos.card}>
-              <CabeceraSeccion
-                titulo="Detalle del cobro"
-                texto="Confirme el método, monto y responsable."
-                numero={esVentaConProducto() ? "04" : "03"}
-              />
-
-              <div style={estilos.grid}>
-                <Campo label="Método de pago">
-                  <select
-                    value={metodoPago}
-                    onChange={(e) =>
-                      setMetodoPago(e.target.value)
-                    }
-                    style={estilos.input}
-                  >
-                    <option>Efectivo</option>
-                    <option>Transferencia</option>
-                    <option>Yappy</option>
-                    <option>Tarjeta</option>
-                    <option>Cheque</option>
-                    <option>Otro</option>
-                  </select>
-                </Campo>
-
-                <Campo label="Monto">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={monto}
-                    readOnly={esCancelacion()}
-                    onChange={(e) =>
-                      setMonto(e.target.value)
-                    }
-                    style={
-                      esCancelacion()
-                        ? estilos.inputReadOnly
-                        : estilos.input
-                    }
-                  />
-                </Campo>
-
-                <Campo label="Concepto">
-                  <input
-                    value={concepto}
-                    onChange={(e) =>
-                      setConcepto(e.target.value)
-                    }
-                    style={estilos.input}
-                  />
-                </Campo>
-
-                <Campo label="Responsable">
-                  <select
-                    value={responsable}
-                    onChange={(e) =>
-                      setResponsable(e.target.value)
-                    }
-                    style={estilos.input}
-                  >
-                    <option value="">
-                      Seleccione responsable
-                    </option>
-
-                    {vendedores.map((vendedor) => (
-                      <option
-                        key={vendedor.id}
-                        value={vendedor.nombre}
-                      >
-                        {vendedor.nombre} -{" "}
-                        {vendedor.rol}
-                      </option>
-                    ))}
-                  </select>
-                </Campo>
+          <article style={estilos.panelTabla}>
+            <div style={estilos.tablaHeaderRow}>
+              <TituloPanel icono="▤" titulo="Movimientos registrados" />
+              <div style={estilos.filtrosInline}>
+                <span>Desde</span>
+                <input type="date" value={fechaDesde} onChange={(e)=>setFechaDesde(e.target.value)} style={estilos.inputCompacto} />
+                <span>Hasta</span>
+                <input type="date" value={fechaHasta} onChange={(e)=>setFechaHasta(e.target.value)} style={estilos.inputCompacto} />
+                <input placeholder="Buscar movimientos" style={estilos.inputBuscarTabla} />
+                <button onClick={buscarMovimientosPorFecha} style={estilos.botonBuscarMovimientos}>{filtrandoMovimientos?"Buscando...":"⌕"}</button>
+                <button onClick={mostrarMovimientosHoy} style={estilos.botonHoy}>▣ Ver hoy</button>
               </div>
+            </div>
 
-              <Campo label="Observación">
-                <textarea
-                  value={observacion}
-                  onChange={(e) =>
-                    setObservacion(e.target.value)
-                  }
-                  style={estilos.textarea}
-                />
-              </Campo>
-
-              <div style={estilos.acciones}>
-                <button
-                  style={estilos.botonPrincipal}
-                  onClick={guardarMovimiento}
-                  disabled={guardando}
-                >
-                  {guardando
-                    ? "Procesando..."
-                    : "Registrar movimiento"}
-                </button>
-
-                <button
-                  style={estilos.botonLimpiar}
-                  onClick={limpiarFormulario}
-                  disabled={guardando}
-                >
-                  Limpiar formulario
-                </button>
-              </div>
-            </article>
-        </section>
-
-        <article style={{...estilos.card, marginTop: "18px"}}>
-          <CabeceraSeccion
-            titulo="Movimientos registrados"
-            texto="Por defecto se muestran únicamente los movimientos del día. Use las fechas para consultar periodos anteriores."
-            numero={String(movimientos.length)}
-          />
-
-          <div style={estilos.filtrosMovimientos}>
-            <Campo label="Desde">
-              <input
-                type="date"
-                value={fechaDesde}
-                onChange={(e) =>
-                  setFechaDesde(e.target.value)
-                }
-                style={estilos.input}
-              />
-            </Campo>
-
-            <Campo label="Hasta">
-              <input
-                type="date"
-                value={fechaHasta}
-                onChange={(e) =>
-                  setFechaHasta(e.target.value)
-                }
-                style={estilos.input}
-              />
-            </Campo>
-
-            <button
-              onClick={buscarMovimientosPorFecha}
-              style={estilos.botonFiltrar}
-              disabled={filtrandoMovimientos}
-            >
-              {filtrandoMovimientos
-                ? "Buscando..."
-                : "Buscar movimientos"}
-            </button>
-
-            <button
-              onClick={mostrarMovimientosHoy}
-              style={estilos.botonHoy}
-              disabled={filtrandoMovimientos}
-            >
-              Ver hoy
-            </button>
-          </div>
-
-          <div style={estilos.tablaBox}>
-            <table style={estilos.tabla}>
-              <thead>
-                <tr>
-                  <th style={estilos.th}>Fecha</th>
-                  <th style={estilos.th}>Transacción</th>
-                  <th style={estilos.th}>Cliente</th>
-                  <th style={estilos.th}>Cuenta</th>
-                  <th style={estilos.th}>Tipo</th>
-                  <th style={estilos.th}>Método</th>
-                  <th style={estilos.th}>Monto</th>
-                  <th style={estilos.th}>Responsable</th>
-                  <th style={estilos.th}>Estado</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {movimientos.length === 0 ? (
-                  <tr>
-                    <td
-                      style={estilos.tdVacio}
-                      colSpan="9"
-                    >
-                      No hay movimientos en el periodo seleccionado.
-                    </td>
-                  </tr>
-                ) : (
-                  movimientos.map((movimiento) => (
+            <div style={estilos.tablaBox}>
+              <table style={estilos.tabla}>
+                <thead><tr>
+                  <th style={estilos.th}>Fecha</th><th style={estilos.th}>Transacción</th><th style={estilos.th}>Cliente</th><th style={estilos.th}>Cuenta</th><th style={estilos.th}>Tipo</th><th style={estilos.th}>Método</th><th style={estilos.th}>Monto</th><th style={estilos.th}>Responsable</th><th style={estilos.th}>Estado</th><th style={estilos.th}>Acciones</th>
+                </tr></thead>
+                <tbody>
+                  {movimientos.length===0?(
+                    <tr><td colSpan="10" style={estilos.tdVacio}>No hay movimientos en el periodo seleccionado.</td></tr>
+                  ):movimientos.map((movimiento)=>(
                     <tr key={movimiento.id}>
-                      <td style={estilos.td}>
-                        {String(
-                          movimiento.fecha_pago ||
-                            movimiento.created_at ||
-                            ""
-                        ).slice(0, 10)}
-                      </td>
-                      <td style={estilos.td}>
-                        {movimiento.numero_transaccion ||
-                          "-"}
-                      </td>
-                      <td style={estilos.td}>
-                        {movimiento.cliente_nombre ||
-                          "-"}
-                      </td>
-                      <td style={estilos.td}>
-                        {movimiento.numero_cuenta ||
-                          "-"}
-                      </td>
-                      <td style={estilos.td}>
-                        {movimiento.tipo}
-                      </td>
-                      <td style={estilos.td}>
-                        {movimiento.metodo_pago}
-                      </td>
-                      <td style={estilos.td}>
-                        <strong>
-                          $
-                          {Number(
-                            movimiento.monto || 0
-                          ).toFixed(2)}
-                        </strong>
-                      </td>
-                      <td style={estilos.td}>
-                        {movimiento.vendedor_responsable ||
-                          "-"}
-                      </td>
-                      <td style={estilos.td}>
-                        {movimiento.estado ||
-                          "Procesado"}
-                      </td>
+                      <td style={estilos.td}>{String(movimiento.fecha_pago || movimiento.created_at || "").slice(0,10)}</td>
+                      <td style={estilos.td}>{movimiento.numero_transaccion || "-"}</td>
+                      <td style={estilos.td}>{movimiento.cliente_nombre || "-"}</td>
+                      <td style={estilos.td}>{movimiento.numero_cuenta || "-"}</td>
+                      <td style={estilos.td}><span style={estilos.badgeTipo}>{movimiento.tipo}</span></td>
+                      <td style={estilos.td}>{movimiento.metodo_pago}</td>
+                      <td style={estilos.td}><strong>${Number(movimiento.monto || 0).toFixed(2)}</strong></td>
+                      <td style={estilos.td}>{movimiento.vendedor_responsable || "-"}</td>
+                      <td style={estilos.td}><span style={estilos.badgeEstado}>● {movimiento.estado || "Procesado"}</span></td>
+                      <td style={estilos.td}>◉ ✎ ⎙</td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </article>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </div>
       </div>
     </main>
   );
 }
 
-function Campo({ label, children }) {
-  return (
-    <label style={estilos.campo}>
-      <span style={estilos.label}>{label}</span>
-      {children}
-    </label>
-  );
+function Campo({label,children}){
+  return <label style={estilos.campo}><span style={estilos.label}>{label}</span>{children}</label>;
 }
 
-function ResumenCard({
-  titulo,
-  valor,
-  icono,
-  destacado,
-}) {
+function TituloPanel({icono,titulo}){
+  return <div style={estilos.tituloPanel}><span style={estilos.tituloPanelIcono}>{icono}</span><h2 style={estilos.tituloPanelTexto}>{titulo}</h2></div>;
+}
+
+function KpiCard({titulo,valor,detalle,icono,destacado,digital}){
   return (
-    <article
-      style={
-        destacado
-          ? estilos.resumenCardDestacado
-          : estilos.resumenCard
-      }
-    >
-      <span style={estilos.kpiIcono}>{icono}</span>
-      <span style={estilos.kpiTitulo}>{titulo}</span>
-      <strong style={estilos.kpiValor}>{valor}</strong>
+    <article style={destacado?estilos.kpiDestacado:estilos.kpiCard}>
+      <div style={digital?estilos.kpiIconoDigital:estilos.kpiIcono}>{icono}</div>
+      <div><span style={estilos.kpiTitulo}>{titulo}</span><strong style={estilos.kpiValor}>{valor}</strong><small style={destacado?estilos.kpiDetalleClaro:estilos.kpiDetalle}>{detalle}</small></div>
     </article>
   );
 }
 
-function CabeceraSeccion({
-  titulo,
-  texto,
-  numero,
-}) {
-  return (
-    <div style={estilos.cabeceraSeccion}>
-      <div>
-        <h2 style={estilos.tituloSeccion}>
-          {titulo}
-        </h2>
-        <p style={estilos.textoSeccion}>{texto}</p>
-      </div>
-
-      <span style={estilos.numeroPaso}>
-        {numero}
-      </span>
-    </div>
-  );
+function MiniStat({label,value,resaltado,estado}){
+  return <div style={resaltado?estilos.miniStatResaltado:estilos.miniStat}><span>{label}</span><strong style={estado?estilos.estadoActivo:undefined}>{estado?`● ${value}`:value}</strong></div>;
 }
 
-function FilaResumen({ label, valor }) {
-  return (
-    <div style={estilos.filaResumen}>
-      <span>{label}</span>
-      <strong>{valor}</strong>
-    </div>
-  );
-}
-
-const estilos = {
-  pagina: {
-    minHeight: "100vh",
-    background: "linear-gradient(180deg,#f5f8f6 0%,#eef3f0 100%)",
-    padding: "22px",
-    color: "#16231b",
-    fontFamily: "Inter, Arial, system-ui, sans-serif",
-  },
-
-  contenedor: {
-    maxWidth: "1540px",
-    margin: "0 auto",
-  },
-
-  loading: {
-    minHeight: "100vh",
-    display: "grid",
-    placeItems: "center",
-    alignContent: "center",
-    gap: "10px",
-    background: "#eef2f7",
-  },
-
-  loadingLogo: {
-    width: "230px",
-    maxWidth: "75%",
-  },
-
-  loadingTitulo: {
-    fontSize: "22px",
-  },
-
-  header: {
-    position: "relative",
-    overflow: "hidden",
-    marginBottom: "18px",
-    padding: "22px 24px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "18px",
-    flexWrap: "wrap",
-    borderRadius: "20px",
-    background: "linear-gradient(135deg,#10271b 0%,#175f3b 100%)",
-    color: "#ffffff",
-    border: "1px solid rgba(255,255,255,.10)",
-    boxShadow: "0 12px 30px rgba(18,66,42,.16)",
-  },
-
-  headerIzquierda: {
-    display: "flex",
-    alignItems: "center",
-    gap: "20px",
-    flexWrap: "wrap",
-  },
-
-  logoBox: {
-    width: "170px",
-    height: "66px",
-    padding: "8px",
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "14px",
-    background: "#ffffff",
-    border: "1px solid rgba(255,255,255,.55)",
-    boxShadow: "0 8px 18px rgba(0,0,0,.14)",
-  },
-
-  logo: {
-    width: "100%",
-    height: "100%",
-    objectFit: "contain",
-  },
-
-  etiqueta: {
-    color: "#82e1ac",
-    fontSize: "11px",
-    fontWeight: "900",
-    letterSpacing: "1.3px",
-  },
-
-  nombreNegocio: {
-    margin: "4px 0 2px",
-    fontSize: "clamp(26px, 3vw, 36px)",
-    letterSpacing: "-.4px",
-  },
-
-  tituloModulo: {
-    margin: "7px 0 0",
-    color: "#b9ddc8",
-    fontWeight: "800",
-  },
-
-  subtitulo: {
-    margin: "5px 0 0",
-    color: "#d6eadf",
-  },
-
-  botonVolver: {
-    minHeight: "46px",
-    padding: "11px 19px",
-    border: "1px solid rgba(255,255,255,.28)",
-    borderRadius: "14px",
-    background: "rgba(255,255,255,.14)",
-    color: "#ffffff",
-    fontWeight: "850",
-    cursor: "pointer",
-    boxShadow: "0 8px 20px rgba(0,0,0,.12)",
-    backdropFilter: "blur(10px)",
-  },
-
-  resumenGrid: {
-    marginBottom: "18px",
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-    gap: "12px",
-  },
-
-  resumenCard: {
-    padding: "16px 18px",
-    display: "grid",
-    gridTemplateColumns: "42px 1fr",
-    alignItems: "center",
-    columnGap: "12px",
-    rowGap: "2px",
-    border: "1px solid #dce7e1",
-    borderRadius: "16px",
-    background: "#ffffff",
-    boxShadow: "0 8px 20px rgba(24,79,49,.05)",
-  },
-
-  resumenCardDestacado: {
-    padding: "16px 18px",
-    display: "grid",
-    gridTemplateColumns: "42px 1fr",
-    alignItems: "center",
-    columnGap: "12px",
-    rowGap: "2px",
-    borderRadius: "16px",
-    background: "linear-gradient(135deg,#1c8f58 0%,#14663f 100%)",
-    color: "#ffffff",
-    boxShadow: "0 10px 24px rgba(20,102,63,.20)",
-    border: "1px solid rgba(255,255,255,.12)",
-  },
-
-  kpiIcono: { gridRow: "1 / span 2", fontSize: "22px", width: "42px", height: "42px", display: "grid", placeItems: "center", borderRadius: "12px", background: "rgba(22,131,79,.10)" },
-  kpiTitulo: { fontSize: "11px", fontWeight: "800", color: "#6b776f", textTransform: "uppercase", letterSpacing: ".35px" },
-  kpiValor: { fontSize: "24px", lineHeight: 1.1 },
-
-  mainStack: {
-    display: "grid",
-    gap: "14px",
-  },
-
-  card: {
-    marginBottom: "0",
-    padding: "20px",
-    border: "1px solid #dfe8e3",
-    borderRadius: "18px",
-    background: "#ffffff",
-    boxShadow: "0 8px 22px rgba(18,66,42,.05)",
-  },
-
-  cardSticky: {
-    position: "sticky",
-    top: "18px",
-    padding: "24px",
-    border: "1px solid #d7e4dc",
-    borderRadius: "24px",
-    background:
-      "linear-gradient(180deg,#ffffff 0%,#f7fbf8 100%)",
-    boxShadow: "0 16px 36px rgba(18,66,42,.11)",
-  },
-
-  cabeceraSeccion: {
-    marginBottom: "16px",
-    paddingBottom: "12px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "12px",
-    borderBottom: "1px solid #edf1ee",
-  },
-
-  tituloSeccion: {
-    margin: 0,
-    fontSize: "20px",
-    letterSpacing: "-.2px",
-  },
-
-  textoSeccion: {
-    margin: "4px 0 0",
-    color: "#6b7280",
-    fontSize: "12px",
-  },
-
-  numeroPaso: {
-    minWidth: "36px",
-    height: "36px",
-    padding: "0 10px",
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "10px",
-    background: "#e9f6ee",
-    color: "#176b42",
-    fontWeight: "900",
-    border: "1px solid #d0e7d8",
-  },
-
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-    gap: "12px",
-  },
-
-  toolbar: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0,1fr) auto",
-    gap: "12px",
-    alignItems: "end",
-  },
-
-  campo: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "7px",
-  },
-
-  label: {
-    color: "#425048",
-    fontSize: "12px",
-    fontWeight: "800",
-  },
-
-  input: {
-    width: "100%",
-    minHeight: "48px",
-    padding: "11px 13px",
-    boxSizing: "border-box",
-    border: "1px solid #d4dfd8",
-    borderRadius: "12px",
-    background: "#ffffff",
-    color: "#111827",
-    outline: "none",
-    fontSize: "14px",
-    boxShadow: "inset 0 1px 2px rgba(17,24,39,.025)",
-  },
-
-  inputReadOnly: {
-    width: "100%",
-    minHeight: "48px",
-    padding: "11px 13px",
-    boxSizing: "border-box",
-    border: "1px solid #cfe0d5",
-    borderRadius: "12px",
-    background: "#f2f7f4",
-    color: "#17623c",
-    fontWeight: "850",
-  },
-
-  textarea: {
-    width: "100%",
-    minHeight: "92px",
-    marginTop: "12px",
-    padding: "12px 13px",
-    boxSizing: "border-box",
-    border: "1px solid #d4dfd8",
-    borderRadius: "12px",
-    background: "#ffffff",
-  },
-
-  botonSecundario: {
-    minHeight: "44px",
-    padding: "11px 18px",
-    border: "none",
-    borderRadius: "10px",
-    background: "#111827",
-    color: "#ffffff",
-    fontWeight: "800",
-    cursor: "pointer",
-  },
-
-  resultadosBox: {
-    marginTop: "14px",
-    display: "grid",
-    gap: "8px",
-  },
-
-  resultadoItem: {
-    padding: "12px",
-    display: "flex",
-    justifyContent: "space-between",
-    border: "1px solid #dfe7e2",
-    borderRadius: "12px",
-    background: "#ffffff",
-    cursor: "pointer",
-  },
-
-  clienteSeleccionado: {
-    marginTop: "15px",
-    padding: "16px",
-    border: "1px solid #b9dfc7",
-    borderRadius: "14px",
-    background: "#f1faf4",
-  },
-
-  clienteNombre: {
-    margin: "0 0 12px",
-  },
-
-  detalleCuentaGrid: {
-    marginTop: "14px",
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit,minmax(140px,1fr))",
-    gap: "10px",
-  },
-
-  detalleCuentaItem: {
-    padding: "12px",
-    display: "grid",
-    gap: "5px",
-    border: "1px solid #cfe2d5",
-    borderRadius: "12px",
-    background: "#ffffff",
-    color: "#4b5f53",
-    fontSize: "12px",
-  },
-
-  acciones: {
-    marginTop: "16px",
-    display: "flex",
-    gap: "10px",
-    flexWrap: "wrap",
-  },
-
-  botonPrincipal: {
-    minHeight: "48px",
-    padding: "12px 20px",
-    border: "none",
-    borderRadius: "12px",
-    background: "linear-gradient(135deg,#1d9159,#156a41)",
-    color: "#ffffff",
-    fontWeight: "900",
-    cursor: "pointer",
-    boxShadow: "0 8px 18px rgba(21,106,65,.18)",
-  },
-
-  botonLimpiar: {
-    minHeight: "48px",
-    padding: "12px 20px",
-    border: "1px solid #d2ddd6",
-    borderRadius: "12px",
-    background: "#ffffff",
-    color: "#294d38",
-    fontWeight: "850",
-    cursor: "pointer",
-  },
-
-  resumenMovimiento: {
-    display: "grid",
-    gap: "10px",
-  },
-
-  filaResumen: {
-    paddingBottom: "9px",
-    display: "flex",
-    justifyContent: "space-between",
-    gap: "12px",
-    borderBottom: "1px solid #edf1ee",
-    color: "#657169",
-    fontSize: "12px",
-  },
-
-  totalBox: {
-    marginTop: "18px",
-    padding: "18px",
-    display: "grid",
-    gap: "6px",
-    borderRadius: "18px",
-    background:
-      "linear-gradient(135deg,#102f20 0%,#176a42 70%,#1b7d4d 100%)",
-    color: "#ffffff",
-    boxShadow: "0 14px 28px rgba(17,79,48,.22)",
-    border: "1px solid rgba(255,255,255,.14)",
-  },
-
-  filtrosMovimientos: {
-    marginBottom: "16px",
-    padding: "14px",
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
-    gap: "10px",
-    alignItems: "end",
-    border: "1px solid #e1e9e4",
-    borderRadius: "14px",
-    background: "#f8faf9",
-  },
-
-  botonFiltrar: {
-    minHeight: "44px",
-    padding: "11px 18px",
-    border: "none",
-    borderRadius: "10px",
-    background: "#16834f",
-    color: "#ffffff",
-    fontWeight: "800",
-    cursor: "pointer",
-  },
-
-  botonHoy: {
-    minHeight: "44px",
-    padding: "11px 18px",
-    border: "1px solid #cfd8d2",
-    borderRadius: "10px",
-    background: "#ffffff",
-    color: "#26342c",
-    fontWeight: "800",
-    cursor: "pointer",
-  },
-
-  tablaBox: {
-    overflowX: "auto",
-    border: "1px solid #dce6e0",
-    borderRadius: "14px",
-    boxShadow: "0 6px 16px rgba(18,66,42,.04)",
-  },
-
-  tabla: {
-    width: "100%",
-    minWidth: "1000px",
-    borderCollapse: "collapse",
-  },
-
-  th: {
-    padding: "12px",
-    background: "#f1f6f3",
-    color: "#284136",
-    textAlign: "left",
-    whiteSpace: "nowrap",
-    fontSize: "11px",
-    fontWeight: "900",
-    letterSpacing: ".25px",
-    textTransform: "uppercase",
-    borderBottom: "1px solid #dde8e1",
-  },
-
-  td: {
-    padding: "11px",
-    borderBottom: "1px solid #edf1ee",
-    whiteSpace: "nowrap",
-  },
-
-  tdVacio: {
-    padding: "28px",
-    color: "#6b7280",
-    textAlign: "center",
-  },
+const estilos={
+  pagina:{minHeight:"100vh",background:"#f4f7f5",color:"#17211b",fontFamily:"Inter,Arial,system-ui,sans-serif"},
+  shell:{minHeight:"100vh"},
+  loading:{minHeight:"100vh",display:"grid",placeItems:"center",alignContent:"center",gap:"10px",background:"#f4f7f5"},
+  loadingLogo:{width:"220px",maxWidth:"75%"},loadingTitulo:{fontSize:"20px"},
+  topbar:{minHeight:"92px",padding:"18px 28px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:"20px",background:"linear-gradient(120deg,#06331f 0%,#0b4d2d 54%,#0d6c3c 100%)",color:"#fff",boxShadow:"0 10px 28px rgba(11,66,40,.22)"},
+  topbarMarca:{display:"flex",alignItems:"center",gap:"22px",minWidth:0},topbarLogo:{width:"165px",height:"52px",objectFit:"contain"},topbarSeparador:{width:"1px",height:"50px",background:"rgba(255,255,255,.28)"},topbarModulo:{fontSize:"14px",fontWeight:900,color:"#79e2a4",whiteSpace:"nowrap"},topbarEmpresa:{margin:0,fontSize:"28px",lineHeight:1.05},topbarTexto:{margin:"5px 0 0",fontSize:"13px",color:"#e0f2e7"},
+  botonVolver:{minHeight:"46px",padding:"0 20px",borderRadius:"12px",border:"1px solid #20bc69",background:"rgba(0,0,0,.12)",color:"#fff",fontWeight:800,cursor:"pointer"},
+  contenido:{padding:"18px"},
+  kpisGrid:{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:"14px",marginBottom:"14px"},
+  kpiCard:{display:"grid",gridTemplateColumns:"64px 1fr",gap:"14px",alignItems:"center",padding:"18px",border:"1px solid #e1e9e4",borderRadius:"16px",background:"#fff",boxShadow:"0 8px 22px rgba(24,79,49,.08)"},
+  kpiDestacado:{display:"grid",gridTemplateColumns:"64px 1fr",gap:"14px",alignItems:"center",padding:"18px",border:"1px solid rgba(255,255,255,.18)",borderRadius:"16px",background:"linear-gradient(135deg,#13924e,#06733a)",color:"#fff",boxShadow:"0 12px 26px rgba(9,118,59,.24)"},
+  kpiIcono:{width:"56px",height:"56px",display:"grid",placeItems:"center",borderRadius:"50%",background:"#e8f7ed",color:"#0c8b45",fontSize:"26px",fontWeight:900},kpiIconoDigital:{width:"56px",height:"56px",display:"grid",placeItems:"center",borderRadius:"18px",background:"#f0eaff",color:"#6f42d9",fontSize:"26px",fontWeight:900},
+  kpiTitulo:{display:"block",fontSize:"13px",fontWeight:800},kpiValor:{display:"block",marginTop:"4px",fontSize:"28px",lineHeight:1.05},kpiDetalle:{display:"block",marginTop:"5px",fontSize:"12px",color:"#6d7771"},kpiDetalleClaro:{display:"block",marginTop:"5px",fontSize:"12px",color:"#e2f4e8"},
+  panelGrid:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px",alignItems:"start"},columnaIzquierda:{display:"grid",gap:"12px"},columnaDerecha:{display:"grid",gap:"12px"},
+  panel:{padding:"16px",border:"1px solid #dfe7e2",borderRadius:"15px",background:"#fff",boxShadow:"0 7px 18px rgba(18,66,42,.06)"},panelTabla:{marginTop:"12px",padding:"16px",border:"1px solid #dfe7e2",borderRadius:"15px",background:"#fff",boxShadow:"0 7px 18px rgba(18,66,42,.06)"},
+  tituloPanel:{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px"},tituloPanelIcono:{color:"#0a9b4b",fontSize:"22px",fontWeight:900},tituloPanelTexto:{margin:0,fontSize:"18px"},
+  nuevoMovimientoGrid:{display:"grid",gridTemplateColumns:"200px minmax(0,1fr)",gap:"16px",alignItems:"end"},tabsMovimiento:{display:"grid",gridTemplateColumns:"repeat(5,minmax(110px,1fr))",border:"1px solid #d8e1dc",borderRadius:"10px",overflow:"hidden"},tab:{minHeight:"38px",border:"none",borderRight:"1px solid #e1e8e4",background:"#fff",fontWeight:700,cursor:"pointer"},tabActivo:{minHeight:"38px",border:"none",background:"linear-gradient(135deg,#18a45b,#08763d)",color:"#fff",fontWeight:900,cursor:"pointer"},
+  campo:{display:"flex",flexDirection:"column",gap:"6px"},label:{fontSize:"12px",fontWeight:800,color:"#283a31"},input:{width:"100%",minHeight:"40px",padding:"9px 12px",boxSizing:"border-box",border:"1px solid #d7dfda",borderRadius:"8px",background:"#fff",color:"#17211b",outline:"none",fontSize:"13px"},inputReadOnly:{width:"100%",minHeight:"40px",padding:"9px 12px",boxSizing:"border-box",border:"1px solid #d7e5dc",borderRadius:"8px",background:"linear-gradient(180deg,#f4f9f6,#edf5f0)",color:"#163c28",fontWeight:900},
+  buscarClienteFila:{display:"grid",gridTemplateColumns:"1fr 44px",gap:0},botonBuscar:{border:"none",borderRadius:"0 8px 8px 0",background:"linear-gradient(135deg,#159552,#08743c)",color:"#fff",fontSize:"22px",cursor:"pointer"},resultadosBox:{display:"grid",gap:"8px",marginTop:"10px"},resultadoItem:{padding:"10px 12px",display:"flex",justifyContent:"space-between",border:"1px solid #dde6e0",borderRadius:"8px",background:"#fff",cursor:"pointer"},
+  clienteCard:{marginTop:"10px",padding:"14px",border:"1px solid #dce5df",borderRadius:"12px",background:"#fff"},clienteDatosFila:{display:"grid",gridTemplateColumns:"64px 1fr minmax(250px,340px)",gap:"14px",alignItems:"center"},avatarCliente:{width:"58px",height:"58px",display:"grid",placeItems:"center",borderRadius:"50%",background:"linear-gradient(180deg,#e9f8ee,#d4efdf)",color:"#098f47",fontSize:"28px"},clienteInfo:{display:"grid",gap:"3px",fontSize:"12px",color:"#4d5952"},clienteNombre:{fontSize:"17px",color:"#17211b"},cuentaSelectorWrap:{display:"grid",gap:"6px"},cuentaStats:{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:"10px",marginTop:"14px"},miniStat:{padding:"13px",display:"grid",gap:"6px",border:"1px solid #e1e7e3",borderRadius:"10px",background:"linear-gradient(180deg,#fff,#fafcfb)",fontSize:"12px"},miniStatResaltado:{padding:"13px",display:"grid",gap:"6px",border:"1px solid #f1e2b9",borderRadius:"10px",background:"linear-gradient(180deg,#fffdf5,#fff7dc)",fontSize:"12px"},estadoActivo:{color:"#0a8d46"},
+  productoGrid:{display:"grid",gridTemplateColumns:"1fr 1.25fr .65fr",gap:"14px"},cobroGrid:{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:"12px"},accionesFila:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px",marginTop:"14px"},botonPrincipal:{minHeight:"42px",border:"none",borderRadius:"8px",background:"linear-gradient(135deg,#159552,#08743c)",color:"#fff",fontWeight:900,cursor:"pointer"},botonLimpiar:{minHeight:"42px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff",color:"#17211b",fontWeight:850,cursor:"pointer"},
+  tablaHeaderRow:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"14px",flexWrap:"wrap"},filtrosInline:{display:"flex",alignItems:"center",gap:"8px",fontSize:"12px"},inputCompacto:{minHeight:"36px",padding:"7px 10px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff"},inputBuscarTabla:{minHeight:"36px",minWidth:"280px",padding:"7px 10px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff"},botonBuscarMovimientos:{width:"38px",height:"36px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff",cursor:"pointer"},botonHoy:{minHeight:"36px",padding:"0 16px",border:"1px solid #159552",borderRadius:"8px",background:"#fff",color:"#08743c",fontWeight:850,cursor:"pointer"},
+  tablaBox:{overflowX:"auto",border:"1px solid #dfe7e2",borderRadius:"10px"},tabla:{width:"100%",minWidth:"1150px",borderCollapse:"collapse"},th:{padding:"11px",background:"linear-gradient(180deg,#f3faf5,#edf6f0)",color:"#1e3327",textAlign:"left",fontSize:"12px",fontWeight:900,whiteSpace:"nowrap"},td:{padding:"10px 11px",borderBottom:"1px solid #edf1ee",fontSize:"12px",whiteSpace:"nowrap"},tdVacio:{padding:"28px",textAlign:"center",color:"#6b7280"},badgeTipo:{padding:"4px 9px",borderRadius:"999px",background:"#e7f7ed",color:"#0d8244",fontWeight:800},badgeEstado:{color:"#0a8d46",fontWeight:800}
 };
