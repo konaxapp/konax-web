@@ -1854,9 +1854,38 @@ export default function Caja() {
                 <article style={estilos.panel}>
                   <TituloPanel icono="📦" titulo="C. Producto e inventario" />
                   <div style={estilos.productoGrid}>
-                    <Campo label="Código del producto">
-                      <input value={codigoProducto} onChange={(e)=>seleccionarProductoPorCodigo(e.target.value)} placeholder="Ej. 12345" style={estilos.input} />
-                    </Campo>
+                    <div style={estilos.codigoProductoBloque}>
+                      <Campo label="Código del producto">
+                        <input value={codigoProducto} onChange={(e)=>seleccionarProductoPorCodigo(e.target.value)} placeholder="Ej. 12345" style={estilos.input} />
+                      </Campo>
+
+                      <div style={estilos.miniaturaProductoCampo}>
+                        <span style={estilos.label}>Imagen del producto</span>
+                        <div style={estilos.miniaturaProductoBox}>
+                          {obtenerImagenProducto(productoSeleccionado) ? (
+                            <img
+                              src={obtenerImagenProducto(productoSeleccionado)}
+                              alt={productoSeleccionado?.nombre || "Producto"}
+                              style={estilos.miniaturaProducto}
+                              onError={(e)=>{
+                                e.currentTarget.style.display="none";
+                                const siguiente=e.currentTarget.nextElementSibling;
+                                if(siguiente) siguiente.style.display="grid";
+                              }}
+                            />
+                          ) : null}
+                          <span
+                            style={{
+                              ...estilos.miniaturaSinImagen,
+                              display: obtenerImagenProducto(productoSeleccionado) ? "none" : "grid",
+                            }}
+                          >
+                            📦
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
                     <Campo label="Seleccionar producto">
                       <select
                         value={productoSeleccionado?.id || ""}
@@ -1872,32 +1901,6 @@ export default function Caja() {
                         ))}
                       </select>
                     </Campo>
-
-                    <div style={estilos.miniaturaProductoCampo}>
-                      <span style={estilos.label}>Imagen</span>
-                      <div style={estilos.miniaturaProductoBox}>
-                        {obtenerImagenProducto(productoSeleccionado) ? (
-                          <img
-                            src={obtenerImagenProducto(productoSeleccionado)}
-                            alt={productoSeleccionado?.nombre || "Producto"}
-                            style={estilos.miniaturaProducto}
-                            onError={(e)=>{
-                              e.currentTarget.style.display="none";
-                              const siguiente=e.currentTarget.nextElementSibling;
-                              if(siguiente) siguiente.style.display="grid";
-                            }}
-                          />
-                        ) : null}
-                        <span
-                          style={{
-                            ...estilos.miniaturaSinImagen,
-                            display: obtenerImagenProducto(productoSeleccionado) ? "none" : "grid",
-                          }}
-                        >
-                          📦
-                        </span>
-                      </div>
-                    </div>
 
                     <Campo label="Cantidad">
                       <input type="number" min="1" value={cantidad} onChange={(e)=>setCantidad(e.target.value)} style={estilos.input} />
@@ -2031,7 +2034,7 @@ const estilos={
   campo:{display:"flex",flexDirection:"column",gap:"6px"},label:{fontSize:"12px",fontWeight:800,color:"#283a31"},input:{width:"100%",minHeight:"42px",padding:"10px 12px",boxSizing:"border-box",border:"1px solid #d7dfda",borderRadius:"10px",background:"#fff",color:"#17211b",outline:"none",fontSize:"13px"},inputReadOnly:{width:"100%",minHeight:"42px",padding:"10px 12px",boxSizing:"border-box",border:"1px solid #d7e5dc",borderRadius:"10px",background:"linear-gradient(180deg,#f4f9f6,#edf5f0)",color:"#163c28",fontWeight:900},inputResponsable:{width:"100%",minHeight:"42px",padding:"9px 10px",boxSizing:"border-box",border:"1px solid #d7e5dc",borderRadius:"10px",background:"linear-gradient(180deg,#f4f9f6,#edf5f0)",color:"#163c28",fontWeight:800,fontSize:"11px",textOverflow:"ellipsis"},
   buscarClienteFila:{display:"grid",gridTemplateColumns:"1fr 44px",gap:0},botonBuscar:{border:"none",borderRadius:"0 8px 8px 0",background:"linear-gradient(135deg,#159552,#08743c)",color:"#fff",fontSize:"22px",cursor:"pointer"},resultadosBox:{display:"grid",gap:"8px",marginTop:"10px"},resultadoItem:{padding:"10px 12px",display:"flex",justifyContent:"space-between",border:"1px solid #dde6e0",borderRadius:"8px",background:"#fff",cursor:"pointer"},
   clienteCard:{marginTop:"10px",padding:"14px",border:"1px solid #dce5df",borderRadius:"12px",background:"#fff"},clienteDatosFila:{display:"grid",gridTemplateColumns:"64px minmax(0,1fr) minmax(220px,300px)",gap:"14px",alignItems:"center"},avatarCliente:{width:"58px",height:"58px",display:"grid",placeItems:"center",borderRadius:"50%",background:"linear-gradient(180deg,#e9f8ee,#d4efdf)",color:"#098f47",fontSize:"28px"},clienteInfo:{display:"grid",gap:"3px",fontSize:"12px",color:"#4d5952"},clienteNombre:{fontSize:"17px",color:"#17211b"},cuentaSelectorWrap:{display:"grid",gap:"6px"},cuentaStats:{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:"10px",marginTop:"14px"},miniStat:{padding:"13px",display:"grid",gap:"6px",border:"1px solid #e1e7e3",borderRadius:"10px",background:"linear-gradient(180deg,#fff,#fafcfb)",fontSize:"12px"},miniStatResaltado:{padding:"13px",display:"grid",gap:"6px",border:"1px solid #f1e2b9",borderRadius:"10px",background:"linear-gradient(180deg,#fffdf5,#fff7dc)",fontSize:"12px"},estadoActivo:{color:"#0a8d46"},
-  productoGrid:{display:"grid",gridTemplateColumns:"minmax(150px,1fr) minmax(220px,1.35fr) 92px minmax(90px,.65fr) minmax(120px,.8fr)",gap:"14px",alignItems:"end"},miniaturaProductoCampo:{display:"flex",flexDirection:"column",gap:"6px",alignItems:"flex-start"},miniaturaProductoBox:{width:"72px",height:"58px",display:"grid",placeItems:"center",overflow:"hidden",border:"1px solid #d7dfda",borderRadius:"10px",background:"#f6f8f7"},miniaturaProducto:{width:"100%",height:"100%",objectFit:"cover",display:"block"},miniaturaSinImagen:{width:"100%",height:"100%",placeItems:"center",fontSize:"24px",color:"#7d8a82"},cobroGrid:{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:"12px"},accionesFila:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px",marginTop:"14px"},botonPrincipal:{minHeight:"42px",border:"none",borderRadius:"8px",background:"linear-gradient(135deg,#159552,#08743c)",color:"#fff",fontWeight:900,cursor:"pointer"},botonLimpiar:{minHeight:"42px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff",color:"#17211b",fontWeight:850,cursor:"pointer"},
+  productoGrid:{display:"grid",gridTemplateColumns:"minmax(150px,.9fr) minmax(210px,1.35fr) minmax(80px,.55fr) minmax(105px,.7fr)",gap:"12px",alignItems:"start"},codigoProductoBloque:{display:"grid",gap:"10px",minWidth:0},miniaturaProductoCampo:{display:"flex",flexDirection:"column",gap:"6px",alignItems:"flex-start"},miniaturaProductoBox:{width:"72px",height:"58px",display:"grid",placeItems:"center",overflow:"hidden",border:"1px solid #d7dfda",borderRadius:"10px",background:"#f6f8f7"},miniaturaProducto:{width:"100%",height:"100%",objectFit:"cover",display:"block"},miniaturaSinImagen:{width:"100%",height:"100%",placeItems:"center",fontSize:"24px",color:"#7d8a82"},cobroGrid:{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:"12px"},accionesFila:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px",marginTop:"14px"},botonPrincipal:{minHeight:"42px",border:"none",borderRadius:"8px",background:"linear-gradient(135deg,#159552,#08743c)",color:"#fff",fontWeight:900,cursor:"pointer"},botonLimpiar:{minHeight:"42px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff",color:"#17211b",fontWeight:850,cursor:"pointer"},
   tablaHeaderRow:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"14px",flexWrap:"wrap"},filtrosInline:{display:"flex",alignItems:"center",gap:"8px",fontSize:"12px"},inputCompacto:{minHeight:"36px",padding:"7px 10px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff"},inputBuscarTabla:{minHeight:"36px",minWidth:"280px",padding:"7px 10px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff"},botonBuscarMovimientos:{width:"38px",height:"36px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff",cursor:"pointer"},botonHoy:{minHeight:"36px",padding:"0 16px",border:"1px solid #159552",borderRadius:"8px",background:"#fff",color:"#08743c",fontWeight:850,cursor:"pointer"},
   tablaBox:{overflowX:"auto",border:"1px solid #dfe7e2",borderRadius:"10px"},tabla:{width:"100%",minWidth:"1150px",borderCollapse:"collapse"},th:{padding:"11px",background:"linear-gradient(180deg,#f3faf5,#edf6f0)",color:"#1e3327",textAlign:"left",fontSize:"12px",fontWeight:900,whiteSpace:"nowrap"},td:{padding:"10px 11px",borderBottom:"1px solid #edf1ee",fontSize:"12px",whiteSpace:"nowrap"},tdResponsable:{maxWidth:"145px",padding:"8px 9px",borderBottom:"1px solid #edf1ee",fontSize:"10.5px",lineHeight:1.25,whiteSpace:"normal",overflowWrap:"anywhere",verticalAlign:"middle"},tdVacio:{padding:"28px",textAlign:"center",color:"#6b7280"},badgeTipo:{padding:"4px 9px",borderRadius:"999px",background:"#e7f7ed",color:"#0d8244",fontWeight:800},badgeEstado:{color:"#0a8d46",fontWeight:800}
 };
