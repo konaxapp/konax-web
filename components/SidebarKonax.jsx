@@ -2,106 +2,97 @@
 
 import { usePathname, useRouter } from "next/navigation";
 
-const modulos = [
-  { icono: "▦", texto: "Panel", ruta: "/dashboard" },
-  { icono: "♙", texto: "Clientes", ruta: "/clientes" },
-  { icono: "🛒", texto: "Ventas", ruta: "/ventas" },
-  { icono: "▣", texto: "Caja", ruta: "/caja" },
-  { icono: "□", texto: "Inventario", ruta: "/inventario" },
-  { icono: "▤", texto: "Créditos", ruta: "/creditos" },
-  { icono: "$", texto: "Cobranza", ruta: "/cobranza" },
-  { icono: "▥", texto: "Reportes", ruta: "/reportes" },
-  { icono: "⚙", texto: "Configuración", ruta: "/configuracion" },
-];
-
 export default function SidebarKonax({
-  modulosVisibles = null,
+  items = [],
+  onLogout,
   tituloActivo = "",
 }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  const modulosMostrados = modulosVisibles
-    ? modulos.filter((modulo) =>
-        modulosVisibles.includes(modulo.texto)
-      )
-    : modulos;
-
-  function estaActivo(modulo) {
+  function estaActivo(item) {
     if (tituloActivo) {
-      return modulo.texto === tituloActivo;
+      return item.nombre === tituloActivo;
     }
 
-    if (modulo.ruta === "/dashboard") {
+    if (item.ruta === "/dashboard") {
       return pathname === "/dashboard";
     }
 
-    return pathname === modulo.ruta ||
-      pathname.startsWith(`${modulo.ruta}/`);
+    return (
+      pathname === item.ruta ||
+      pathname.startsWith(`${item.ruta}/`)
+    );
   }
 
   return (
-    <aside style={estilos.sidebar}>
-      <div style={estilos.logoBox}>
+    <aside style={s.sidebar}>
+      <div style={s.logoBox}>
         <img
           src="/konax-logo.png"
           alt="KONAX"
-          style={estilos.logo}
+          style={s.logo}
         />
       </div>
 
-      <nav style={estilos.menu}>
-        {modulosMostrados.map((modulo) => {
-          const activo = estaActivo(modulo);
+      <nav style={s.menu}>
+        {items.map((item) => {
+          const activo = estaActivo(item);
 
           return (
             <button
-              key={modulo.texto}
+              key={item.codigo || item.ruta}
               type="button"
-              onClick={() => router.push(modulo.ruta)}
-              style={
-                activo
-                  ? estilos.menuActivo
-                  : estilos.menuItem
-              }
+              onClick={() => router.push(item.ruta)}
+              style={activo ? s.menuActivo : s.menuItem}
             >
-              <span style={estilos.menuIcono}>
-                {modulo.icono}
+              <span style={s.menuIcono}>
+                {item.icono}
               </span>
 
-              <span style={estilos.menuTexto}>
-                {modulo.texto}
+              <span style={s.menuTexto}>
+                {item.nombre}
               </span>
             </button>
           );
         })}
       </nav>
+
+      <button
+        type="button"
+        onClick={onLogout}
+        style={s.logout}
+      >
+        ↪ Cerrar sesión
+      </button>
     </aside>
   );
 }
 
-const estilos = {
+const s = {
   sidebar: {
-    width: "190px",
-    minWidth: "190px",
+    width: "220px",
+    minWidth: "220px",
     minHeight: "100vh",
-    padding: "18px 10px",
+    padding: "18px 12px",
     boxSizing: "border-box",
     background:
       "linear-gradient(180deg,#07131f 0%,#0b1926 100%)",
     display: "flex",
     flexDirection: "column",
-    gap: "18px",
     position: "sticky",
     top: 0,
+    alignSelf: "start",
+    overflowY: "auto",
   },
 
   logoBox: {
-    height: "72px",
+    height: "74px",
     padding: "10px",
+    marginBottom: "18px",
     display: "grid",
     placeItems: "center",
-    borderRadius: "14px",
+    borderRadius: "15px",
     background: "#ffffff",
   },
 
@@ -114,17 +105,17 @@ const estilos = {
   menu: {
     display: "flex",
     flexDirection: "column",
-    gap: "10px",
+    gap: "9px",
   },
 
   menuItem: {
     width: "100%",
-    minHeight: "54px",
+    minHeight: "52px",
     padding: "0 14px",
     border: 0,
-    borderRadius: "10px",
+    borderRadius: "11px",
     background: "transparent",
-    color: "#ffffff",
+    color: "#e5edf3",
     display: "flex",
     alignItems: "center",
     gap: "12px",
@@ -136,10 +127,10 @@ const estilos = {
 
   menuActivo: {
     width: "100%",
-    minHeight: "54px",
+    minHeight: "52px",
     padding: "0 14px",
     border: 0,
-    borderRadius: "10px",
+    borderRadius: "11px",
     background:
       "linear-gradient(135deg,#10974d,#087f40)",
     color: "#ffffff",
@@ -151,17 +142,30 @@ const estilos = {
     fontSize: "14px",
     fontWeight: "800",
     boxShadow:
-      "0 8px 20px rgba(8,127,64,.25)",
+      "0 8px 20px rgba(8,127,64,.28)",
   },
 
   menuIcono: {
-    width: "25px",
-    minWidth: "25px",
-    fontSize: "20px",
+    width: "24px",
+    minWidth: "24px",
+    fontSize: "19px",
     textAlign: "center",
   },
 
   menuTexto: {
+    overflow: "hidden",
+    textOverflow: "ellipsis",
     whiteSpace: "nowrap",
+  },
+
+  logout: {
+    minHeight: "46px",
+    marginTop: "auto",
+    border: "1px solid rgba(255,255,255,.12)",
+    borderRadius: "11px",
+    background: "rgba(255,255,255,.06)",
+    color: "#ffffff",
+    fontWeight: "800",
+    cursor: "pointer",
   },
 };
