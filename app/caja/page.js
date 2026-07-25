@@ -1782,64 +1782,51 @@ export default function Caja() {
 
         <section style={estilos.mainGrid}>
           <div>
-            <article style={estilos.cardPremium}>
+            <article style={estilos.cardLimpia}>
               <CabeceraSeccion
                 titulo="Nuevo movimiento"
                 texto="Seleccione qué está cobrando y complete la información."
                 numero="01"
               />
 
-              <div style={estilos.heroMovimientoGrid}>
-                <div style={estilos.heroMovimientoCampos}>
-                  <Campo label="Fecha">
-                    <input
-                      type="date"
-                      value={fechaPago}
-                      onChange={(e) =>
-                        setFechaPago(e.target.value)
-                      }
-                      style={estilos.inputPremium}
-                    />
-                  </Campo>
+              <div style={estilos.gridDos}>
+                <Campo label="Fecha">
+                  <input
+                    type="date"
+                    value={fechaPago}
+                    onChange={(e) =>
+                      setFechaPago(e.target.value)
+                    }
+                    style={estilos.inputModerno}
+                  />
+                </Campo>
 
-                  <Campo label="Tipo de movimiento">
-                    <select
-                      value={tipoMovimiento}
-                      onChange={(e) => {
-                        setTipoMovimiento(e.target.value);
-                        setMonto("");
-                        setValorProducto("");
-                        setCodigoProducto("");
-                        setProductoSeleccionado(null);
-                        setNumeroVentaAbono("");
-                        setClienteSeleccionado(null);
-                        setCuentasCliente([]);
-                        setCuentaSeleccionada(null);
-                      }}
-                      style={estilos.inputPremium}
-                    >
-                      {opcionesMovimiento.map((opcion) => (
-                        <option
-                          key={opcion}
-                          value={opcion}
-                        >
-                          {opcion}
-                        </option>
-                      ))}
-                    </select>
-                  </Campo>
-                </div>
-
-                <div style={estilos.heroMovimientoPanel}>
-                  <div style={estilos.heroMiniCard}>
-                    <span style={estilos.heroMiniLabel}>Operación</span>
-                    <strong style={estilos.heroMiniValue}>{tipoMovimiento || "Sin definir"}</strong>
-                  </div>
-                  <div style={estilos.heroMiniCard}>
-                    <span style={estilos.heroMiniLabel}>Fecha de registro</span>
-                    <strong style={estilos.heroMiniValue}>{fechaPago || "-"}</strong>
-                  </div>
-                </div>
+                <Campo label="Tipo de movimiento">
+                  <select
+                    value={tipoMovimiento}
+                    onChange={(e) => {
+                      setTipoMovimiento(e.target.value);
+                      setMonto("");
+                      setValorProducto("");
+                      setCodigoProducto("");
+                      setProductoSeleccionado(null);
+                      setNumeroVentaAbono("");
+                      setClienteSeleccionado(null);
+                      setCuentasCliente([]);
+                      setCuentaSeleccionada(null);
+                    }}
+                    style={estilos.inputModerno}
+                  >
+                    {opcionesMovimiento.map((opcion) => (
+                      <option
+                        key={opcion}
+                        value={opcion}
+                      >
+                        {opcion}
+                      </option>
+                    ))}
+                  </select>
+                </Campo>
               </div>
             </article>
 
@@ -1990,241 +1977,194 @@ export default function Caja() {
             )}
 
             {esVentaConProducto() && (
-              <article style={estilos.cardPremium}>
+              <article style={estilos.cardLimpia}>
                 <CabeceraSeccion
                   titulo="Producto e inventario"
                   texto="Seleccione el producto y confirme la cantidad."
                   numero="03"
                 />
 
-                <div style={estilos.productoPremiumLayout}>
-                  <div style={estilos.productoPremiumForm}>
-                    <div style={estilos.gridCompacto}>
-                      <Campo label="Código del producto">
-                        <input
-                          value={codigoProducto}
-                          onChange={(e) =>
-                            seleccionarProductoPorCodigo(
-                              e.target.value
-                            )
-                          }
-                          style={estilos.inputPremium}
-                        />
-                      </Campo>
+                <div style={estilos.gridProducto}>
+                  <Campo label="Código del producto">
+                    <input
+                      placeholder="Ingrese o escanee el código"
+                      value={codigoProducto}
+                      onChange={(e) =>
+                        seleccionarProductoPorCodigo(
+                          e.target.value
+                        )
+                      }
+                      style={estilos.inputModerno}
+                    />
+                  </Campo>
 
-                      <Campo label="Seleccionar producto">
-                        <select
-                          value={
-                            productoSeleccionado?.id || ""
-                          }
-                          onChange={(e) => {
-                            const producto =
-                              productos.find(
-                                (item) =>
-                                  String(item.id) ===
-                                  String(e.target.value)
-                              );
+                  <Campo label="Seleccionar producto">
+                    <select
+                      value={
+                        productoSeleccionado?.id || ""
+                      }
+                      onChange={(e) => {
+                        const producto =
+                          productos.find(
+                            (item) =>
+                              String(item.id) ===
+                              String(e.target.value)
+                          );
 
-                            seleccionarProducto(
-                              producto || null
-                            );
-                          }}
-                          style={estilos.inputPremium}
+                        seleccionarProducto(
+                          producto || null
+                        );
+                      }}
+                      style={estilos.inputModerno}
+                    >
+                      <option value="">
+                        Seleccione producto
+                      </option>
+
+                      {productos.map((producto) => (
+                        <option
+                          key={producto.id}
+                          value={producto.id}
                         >
-                          <option value="">
-                            Seleccione producto
-                          </option>
+                          {producto.codigo} -{" "}
+                          {producto.nombre} - Stock{" "}
+                          {stockProducto(producto)}
+                        </option>
+                      ))}
+                    </select>
+                  </Campo>
 
-                          {productos.map((producto) => (
-                            <option
-                              key={producto.id}
-                              value={producto.id}
-                            >
-                              {producto.codigo} - {producto.nombre} - Stock {stockProducto(producto)}
-                            </option>
-                          ))}
-                        </select>
-                      </Campo>
+                  <Campo label="Cantidad">
+                    <input
+                      type="number"
+                      min="1"
+                      value={cantidad}
+                      onChange={(e) =>
+                        setCantidad(e.target.value)
+                      }
+                      style={estilos.inputModerno}
+                    />
+                  </Campo>
 
-                      <Campo label="Cantidad">
-                        <input
-                          type="number"
-                          min="1"
-                          value={cantidad}
-                          onChange={(e) =>
-                            setCantidad(e.target.value)
-                          }
-                          style={estilos.inputPremium}
-                        />
-                      </Campo>
-
-                      <Campo label="Valor total">
-                        <input
-                          value={valorProducto}
-                          readOnly
-                          style={estilos.inputReadOnlyPremium}
-                        />
-                      </Campo>
-                    </div>
-                  </div>
-
-                  <div style={estilos.productoPreviewCard}>
-                    <span style={estilos.previewEtiqueta}>Resumen del producto</span>
-                    <strong style={estilos.previewTitulo}>{productoSeleccionado?.nombre || "Seleccione un producto"}</strong>
-                    <p style={estilos.previewTexto}>
-                      {productoSeleccionado
-                        ? `${productoSeleccionado.codigo || "Sin código"} · ${productoSeleccionado.descripcion || "Producto listo para registrar"}`
-                        : "Al elegir un producto podrás visualizar su valor, stock disponible y total de venta en este panel."}
-                    </p>
-
-                    <div style={estilos.previewStats}>
-                      <div style={estilos.previewStatItem}>
-                        <span>Precio</span>
-                        <strong>{`$${Number(precioProducto(productoSeleccionado) || 0).toFixed(2)}`}</strong>
-                      </div>
-                      <div style={estilos.previewStatItem}>
-                        <span>Stock</span>
-                        <strong>{productoSeleccionado ? stockProducto(productoSeleccionado) : "-"}</strong>
-                      </div>
-                      <div style={estilos.previewStatItem}>
-                        <span>Cantidad</span>
-                        <strong>{cantidad || 0}</strong>
-                      </div>
-                      <div style={estilos.previewStatItemDestacado}>
-                        <span>Total</span>
-                        <strong>{`$${Number(valorProducto || 0).toFixed(2)}`}</strong>
-                      </div>
-                    </div>
-                  </div>
+                  <Campo label="Valor total">
+                    <input
+                      value={valorProducto}
+                      readOnly
+                      style={estilos.inputReadOnlyModerno}
+                    />
+                  </Campo>
                 </div>
               </article>
             )}
 
-            <article style={estilos.cardPremium}>
+            <article style={estilos.cardLimpia}>
               <CabeceraSeccion
                 titulo="Detalle del cobro"
                 texto="Confirme el método, monto y responsable."
                 numero={esVentaConProducto() ? "04" : "03"}
               />
 
-              <div style={estilos.detalleCobroLayout}>
-                <div>
-                  <div style={estilos.gridCompacto}>
-                    <Campo label="Método de pago">
-                      <select
-                        value={metodoPago}
-                        onChange={(e) =>
-                          setMetodoPago(e.target.value)
-                        }
-                        style={estilos.inputPremium}
+              <div style={estilos.gridCobro}>
+                <Campo label="Método de pago">
+                  <select
+                    value={metodoPago}
+                    onChange={(e) =>
+                      setMetodoPago(e.target.value)
+                    }
+                    style={estilos.inputModerno}
+                  >
+                    <option>Efectivo</option>
+                    <option>Transferencia</option>
+                    <option>Yappy</option>
+                    <option>Tarjeta</option>
+                    <option>Cheque</option>
+                    <option>Otro</option>
+                  </select>
+                </Campo>
+
+                <Campo label="Monto">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={monto}
+                    readOnly={esCancelacion()}
+                    onChange={(e) =>
+                      setMonto(e.target.value)
+                    }
+                    style={
+                      esCancelacion()
+                        ? estilos.inputReadOnlyModerno
+                        : estilos.inputModerno
+                    }
+                  />
+                </Campo>
+
+                <Campo label="Concepto">
+                  <input
+                    placeholder="Ej. Venta de producto, abono, servicio..."
+                    value={concepto}
+                    onChange={(e) =>
+                      setConcepto(e.target.value)
+                    }
+                    style={estilos.inputModerno}
+                  />
+                </Campo>
+
+                <Campo label="Responsable">
+                  <select
+                    value={responsable}
+                    onChange={(e) =>
+                      setResponsable(e.target.value)
+                    }
+                    style={estilos.inputModerno}
+                  >
+                    <option value="">
+                      Seleccione responsable
+                    </option>
+
+                    {vendedores.map((vendedor) => (
+                      <option
+                        key={vendedor.id}
+                        value={vendedor.nombre}
                       >
-                        <option>Efectivo</option>
-                        <option>Transferencia</option>
-                        <option>Yappy</option>
-                        <option>Tarjeta</option>
-                        <option>Cheque</option>
-                        <option>Otro</option>
-                      </select>
-                    </Campo>
+                        {vendedor.nombre} -{" "}
+                        {vendedor.rol}
+                      </option>
+                    ))}
+                  </select>
+                </Campo>
+              </div>
 
-                    <Campo label="Monto">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={monto}
-                        readOnly={esCancelacion()}
-                        onChange={(e) =>
-                          setMonto(e.target.value)
-                        }
-                        style={
-                          esCancelacion()
-                            ? estilos.inputReadOnlyPremium
-                            : estilos.inputPremium
-                        }
-                      />
-                    </Campo>
+              <Campo label="Observación">
+                <textarea
+                  placeholder="Añada una observación si es necesario..."
+                  value={observacion}
+                  onChange={(e) =>
+                    setObservacion(e.target.value)
+                  }
+                  style={estilos.textareaModerna}
+                />
+              </Campo>
 
-                    <Campo label="Concepto">
-                      <input
-                        value={concepto}
-                        onChange={(e) =>
-                          setConcepto(e.target.value)
-                        }
-                        style={estilos.inputPremium}
-                      />
-                    </Campo>
+              <div style={estilos.accionesLimpias}>
+                <button
+                  style={estilos.botonPrincipal}
+                  onClick={guardarMovimiento}
+                  disabled={guardando}
+                >
+                  {guardando
+                    ? "Procesando..."
+                    : "Registrar movimiento"}
+                </button>
 
-                    <Campo label="Responsable">
-                      <select
-                        value={responsable}
-                        onChange={(e) =>
-                          setResponsable(e.target.value)
-                        }
-                        style={estilos.inputPremium}
-                      >
-                        <option value="">
-                          Seleccione responsable
-                        </option>
-
-                        {vendedores.map((vendedor) => (
-                          <option
-                            key={vendedor.id}
-                            value={vendedor.nombre}
-                          >
-                            {vendedor.nombre} - {vendedor.rol}
-                          </option>
-                        ))}
-                      </select>
-                    </Campo>
-                  </div>
-
-                  <Campo label="Observación">
-                    <textarea
-                      value={observacion}
-                      onChange={(e) =>
-                        setObservacion(e.target.value)
-                      }
-                      style={estilos.textareaPremium}
-                    />
-                  </Campo>
-                </div>
-
-                <div style={estilos.detalleLateralAcciones}>
-                  <div style={estilos.detalleLateralCard}>
-                    <span style={estilos.previewEtiqueta}>Validación rápida</span>
-                    <strong style={estilos.previewTitulo}>Listo para registrar</strong>
-                    <p style={estilos.previewTexto}>Verifica el método, el responsable y el monto. Desde aquí puedes confirmar o limpiar el formulario sin dejar espacios muertos.</p>
-                    <div style={estilos.detalleBadgeRow}>
-                      <span style={estilos.detalleBadge}>{metodoPago || "Método"}</span>
-                      <span style={estilos.detalleBadge}>{responsable || "Responsable"}</span>
-                    </div>
-                    <div style={estilos.detalleTotalMini}>
-                      <span>Total a registrar</span>
-                      <strong>{`$${Number(monto || 0).toFixed(2)}`}</strong>
-                    </div>
-                  </div>
-
-                  <div style={estilos.accionesVerticales}>
-                    <button
-                      style={estilos.botonPrincipal}
-                      onClick={guardarMovimiento}
-                      disabled={guardando}
-                    >
-                      {guardando
-                        ? "Procesando..."
-                        : "Registrar movimiento"}
-                    </button>
-
-                    <button
-                      style={estilos.botonLimpiar}
-                      onClick={limpiarFormulario}
-                      disabled={guardando}
-                    >
-                      Limpiar formulario
-                    </button>
-                  </div>
-                </div>
+                <button
+                  style={estilos.botonLimpiar}
+                  onClick={limpiarFormulario}
+                  disabled={guardando}
+                >
+                  Limpiar formulario
+                </button>
               </div>
             </article>
           </div>
@@ -2650,7 +2590,7 @@ const estilos = {
   mainGrid: {
     display: "grid",
     gridTemplateColumns:
-      "minmax(0, 1fr) minmax(300px, 390px)",
+      "minmax(0, 1.2fr) minmax(300px, 360px)",
     gap: "20px",
     alignItems: "start",
   },
@@ -2665,15 +2605,82 @@ const estilos = {
     boxShadow: "0 14px 34px rgba(18,66,42,.08)",
   },
 
-  cardPremium: {
-    position: "relative",
-    overflow: "hidden",
-    marginBottom: "20px",
-    padding: "26px",
-    border: "1px solid rgba(200,221,208,.92)",
-    borderRadius: "28px",
-    background: "linear-gradient(180deg,#ffffff 0%,#fcfffd 100%)",
-    boxShadow: "0 18px 42px rgba(15,76,46,.09)",
+
+  cardLimpia: {
+    marginBottom: "18px",
+    padding: "22px 24px",
+    border: "1px solid #dce8e0",
+    borderRadius: "20px",
+    background: "#ffffff",
+    boxShadow: "0 10px 28px rgba(18,66,42,.07)",
+  },
+
+  gridDos: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2,minmax(0,1fr))",
+    gap: "14px",
+  },
+
+  gridProducto: {
+    display: "grid",
+    gridTemplateColumns: "minmax(180px,.85fr) minmax(280px,1.45fr) minmax(130px,.55fr) minmax(180px,.75fr)",
+    gap: "14px",
+    alignItems: "end",
+  },
+
+  gridCobro: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4,minmax(0,1fr))",
+    gap: "14px",
+    alignItems: "end",
+  },
+
+  inputModerno: {
+    width: "100%",
+    minHeight: "50px",
+    padding: "12px 14px",
+    boxSizing: "border-box",
+    border: "1px solid #d5e1d9",
+    borderRadius: "14px",
+    background: "#ffffff",
+    color: "#111827",
+    outline: "none",
+    fontSize: "14px",
+    boxShadow: "inset 0 1px 2px rgba(17,24,39,.03)",
+  },
+
+  inputReadOnlyModerno: {
+    width: "100%",
+    minHeight: "50px",
+    padding: "12px 14px",
+    boxSizing: "border-box",
+    border: "1px solid #cfe0d5",
+    borderRadius: "14px",
+    background: "#f2f8f4",
+    color: "#17623c",
+    fontSize: "14px",
+    fontWeight: "850",
+  },
+
+  textareaModerna: {
+    width: "100%",
+    minHeight: "110px",
+    marginTop: "14px",
+    padding: "13px 14px",
+    boxSizing: "border-box",
+    border: "1px solid #d5e1d9",
+    borderRadius: "14px",
+    background: "#ffffff",
+    color: "#111827",
+    resize: "vertical",
+  },
+
+  accionesLimpias: {
+    marginTop: "16px",
+    display: "grid",
+    gridTemplateColumns: "minmax(210px,280px) minmax(190px,240px)",
+    gap: "10px",
+    justifyContent: "start",
   },
 
   cardSticky: {
@@ -2688,8 +2695,8 @@ const estilos = {
   },
 
   cabeceraSeccion: {
-    marginBottom: "20px",
-    paddingBottom: "16px",
+    marginBottom: "18px",
+    paddingBottom: "14px",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -2700,29 +2707,25 @@ const estilos = {
   tituloSeccion: {
     margin: 0,
     fontSize: "20px",
-    letterSpacing: "-.3px",
   },
 
   textoSeccion: {
     margin: "5px 0 0",
     color: "#6b7280",
-    fontSize: "13px",
-    maxWidth: "700px",
+    fontSize: "12px",
   },
 
   numeroPaso: {
-    minWidth: "58px",
-    height: "58px",
-    padding: "0 14px",
+    minWidth: "42px",
+    height: "42px",
+    padding: "0 11px",
     display: "grid",
     placeItems: "center",
-    borderRadius: "999px",
-    background: "linear-gradient(135deg,#effbf4,#d9f2e3)",
+    borderRadius: "12px",
+    background: "#eaf7ef",
     color: "#176b42",
     fontWeight: "900",
-    fontSize: "28px",
-    border: "1px solid #c8e4d2",
-    boxShadow: "0 8px 18px rgba(23,107,66,.12)",
+    border: "1px solid #cfe7d8",
   },
 
   grid: {
@@ -2730,55 +2733,6 @@ const estilos = {
     gridTemplateColumns:
       "repeat(auto-fit,minmax(220px,1fr))",
     gap: "15px",
-  },
-
-  gridCompacto: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-    gap: "15px",
-  },
-
-  heroMovimientoGrid: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0,1.45fr) minmax(280px,.7fr)",
-    gap: "16px",
-    alignItems: "stretch",
-  },
-
-  heroMovimientoCampos: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
-    gap: "15px",
-  },
-
-  heroMovimientoPanel: {
-    display: "grid",
-    gridTemplateColumns: "1fr",
-    gap: "12px",
-  },
-
-  heroMiniCard: {
-    padding: "16px",
-    borderRadius: "18px",
-    background: "linear-gradient(180deg,#f6fbf8 0%,#eef7f1 100%)",
-    border: "1px solid #d9e8de",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,.65)",
-  },
-
-  heroMiniLabel: {
-    display: "block",
-    fontSize: "11px",
-    color: "#5e7267",
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: ".7px",
-  },
-
-  heroMiniValue: {
-    display: "block",
-    marginTop: "7px",
-    fontSize: "18px",
-    color: "#133321",
   },
 
   toolbar: {
@@ -2813,20 +2767,6 @@ const estilos = {
     boxShadow: "inset 0 1px 2px rgba(17,24,39,.03)",
   },
 
-  inputPremium: {
-    width: "100%",
-    minHeight: "54px",
-    padding: "14px 16px",
-    boxSizing: "border-box",
-    border: "1px solid #d4e2d8",
-    borderRadius: "16px",
-    background: "linear-gradient(180deg,#ffffff 0%,#fbfdfb 100%)",
-    color: "#132019",
-    outline: "none",
-    fontSize: "15px",
-    boxShadow: "0 8px 18px rgba(18,66,42,.05), inset 0 1px 0 rgba(255,255,255,.75)",
-  },
-
   inputReadOnly: {
     width: "100%",
     minHeight: "46px",
@@ -2840,20 +2780,6 @@ const estilos = {
     fontWeight: "850",
   },
 
-  inputReadOnlyPremium: {
-    width: "100%",
-    minHeight: "54px",
-    padding: "14px 16px",
-    boxSizing: "border-box",
-    border: "1px solid #cfe4d7",
-    borderRadius: "16px",
-    background: "linear-gradient(180deg,#f2fbf5,#ebf7ef)",
-    color: "#17623c",
-    fontSize: "15px",
-    fontWeight: "900",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,.75)",
-  },
-
   textarea: {
     width: "100%",
     minHeight: "100px",
@@ -2862,19 +2788,6 @@ const estilos = {
     boxSizing: "border-box",
     border: "1px solid #cfd8d2",
     borderRadius: "10px",
-  },
-
-  textareaPremium: {
-    width: "100%",
-    minHeight: "128px",
-    marginTop: "15px",
-    padding: "14px 16px",
-    boxSizing: "border-box",
-    border: "1px solid #d4e3d9",
-    borderRadius: "18px",
-    background: "linear-gradient(180deg,#ffffff 0%,#fbfdfb 100%)",
-    color: "#132019",
-    boxShadow: "0 8px 18px rgba(18,66,42,.04)",
   },
 
   botonSecundario: {
@@ -2902,130 +2815,6 @@ const estilos = {
     borderRadius: "12px",
     background: "#ffffff",
     cursor: "pointer",
-  },
-
-  productoPremiumLayout: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0,1.45fr) minmax(280px,.85fr)",
-    gap: "16px",
-    alignItems: "stretch",
-  },
-
-  productoPremiumForm: {
-    padding: "0",
-  },
-
-  productoPreviewCard: {
-    padding: "18px",
-    borderRadius: "22px",
-    background: "linear-gradient(135deg,#113824 0%,#176b42 100%)",
-    color: "#ffffff",
-    display: "grid",
-    alignContent: "start",
-    gap: "12px",
-    boxShadow: "0 16px 30px rgba(17,56,36,.20)",
-  },
-
-  previewEtiqueta: {
-    display: "inline-flex",
-    alignSelf: "start",
-    padding: "6px 10px",
-    borderRadius: "999px",
-    background: "rgba(255,255,255,.12)",
-    color: "#d8f1e3",
-    fontSize: "11px",
-    fontWeight: "800",
-    letterSpacing: ".7px",
-    textTransform: "uppercase",
-  },
-
-  previewTitulo: {
-    fontSize: "24px",
-    lineHeight: 1.1,
-  },
-
-  previewTexto: {
-    margin: 0,
-    color: "rgba(232,245,238,.88)",
-    lineHeight: 1.5,
-    fontSize: "13px",
-  },
-
-  previewStats: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2,minmax(0,1fr))",
-    gap: "12px",
-    marginTop: "4px",
-  },
-
-  previewStatItem: {
-    padding: "14px",
-    borderRadius: "16px",
-    background: "rgba(255,255,255,.09)",
-    border: "1px solid rgba(255,255,255,.08)",
-    display: "grid",
-    gap: "6px",
-  },
-
-  previewStatItemDestacado: {
-    padding: "14px",
-    borderRadius: "16px",
-    background: "rgba(255,255,255,.16)",
-    border: "1px solid rgba(255,255,255,.14)",
-    display: "grid",
-    gap: "6px",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,.15)",
-  },
-
-  detalleCobroLayout: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0,1.35fr) minmax(280px,.82fr)",
-    gap: "18px",
-    alignItems: "start",
-  },
-
-  detalleLateralAcciones: {
-    display: "grid",
-    gap: "14px",
-  },
-
-  detalleLateralCard: {
-    padding: "18px",
-    borderRadius: "22px",
-    background: "linear-gradient(180deg,#f7fcf9 0%,#eef8f1 100%)",
-    border: "1px solid #d6e8dc",
-    boxShadow: "0 12px 24px rgba(18,66,42,.06)",
-  },
-
-  detalleBadgeRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "8px",
-    marginTop: "12px",
-  },
-
-  detalleBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    minHeight: "32px",
-    padding: "0 12px",
-    borderRadius: "999px",
-    background: "#ffffff",
-    border: "1px solid #d6e4db",
-    color: "#1b4b31",
-    fontSize: "12px",
-    fontWeight: "800",
-  },
-
-  detalleTotalMini: {
-    marginTop: "16px",
-    padding: "16px",
-    borderRadius: "18px",
-    background: "linear-gradient(135deg,#102f20 0%,#176a42 70%,#1b7d4d 100%)",
-    color: "#ffffff",
-    display: "grid",
-    gap: "6px",
-    boxShadow: "0 12px 24px rgba(17,79,48,.18)",
   },
 
   clienteSeleccionado: {
@@ -3066,35 +2855,27 @@ const estilos = {
     flexWrap: "wrap",
   },
 
-  accionesVerticales: {
-    display: "grid",
-    gap: "12px",
-  },
-
   botonPrincipal: {
-    minHeight: "52px",
-    width: "100%",
-    padding: "13px 22px",
+    minHeight: "48px",
+    padding: "12px 22px",
     border: "none",
-    borderRadius: "15px",
-    background: "linear-gradient(135deg,#24a061 0%,#166c42 100%)",
+    borderRadius: "13px",
+    background:
+      "linear-gradient(135deg,#1d9159,#156a41)",
     color: "#ffffff",
     fontWeight: "900",
-    fontSize: "15px",
     cursor: "pointer",
-    boxShadow: "0 12px 24px rgba(21,106,65,.24)",
+    boxShadow: "0 10px 22px rgba(21,106,65,.22)",
   },
 
   botonLimpiar: {
-    minHeight: "52px",
-    width: "100%",
-    padding: "13px 22px",
-    border: "1px solid #d5dfd9",
-    borderRadius: "15px",
+    minHeight: "48px",
+    padding: "12px 22px",
+    border: "1px solid #cbd9d0",
+    borderRadius: "13px",
     background: "#ffffff",
     color: "#294d38",
     fontWeight: "850",
-    fontSize: "15px",
     cursor: "pointer",
     boxShadow: "0 7px 18px rgba(18,66,42,.07)",
   },
