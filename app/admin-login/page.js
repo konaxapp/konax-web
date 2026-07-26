@@ -3,15 +3,26 @@
 import { useState } from "react";
 import { supabase } from "../../lib/supabase";
 
+function normalizar(valor) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_");
+}
+
 export default function AdminLogin() {
   const [correo, setCorreo] = useState("");
   const [password, setPassword] = useState("");
   const [cargando, setCargando] = useState(false);
+  const [recuperando, setRecuperando] = useState(false);
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [recordarme, setRecordarme] = useState(true);
 
   async function iniciarSesion(e) {
     e.preventDefault();
+
     if (cargando) return;
 
     const correoLimpio = correo.trim().toLowerCase();
@@ -32,70 +43,140 @@ export default function AdminLogin() {
         });
 
       if (authError || !authData?.user) {
-        console.error("Error iniciando sesión en Supabase Auth:", authError);
+        console.error(
+          "Error iniciando sesión en Supabase Auth:",
+          authError
+        );
+
         alert("Correo o contraseña incorrectos.");
         return;
       }
 
       const authUserId = authData.user.id;
 
-      const { data: administrador, error: administradorError } =
-        await supabase
-          .from("administradores_konax")
-          .select("id, nombre, correo, rol, estado, auth_user_id")
-          .eq("auth_user_id", authUserId)
-          .maybeSingle();
+      const {
+        data: administrador,
+        error: administradorError,
+      } = await supabase
+        .from("usuarios")
+        .select(`
+          id,
+          nombre,
+          correo,
+          rol,
+          estado,
+          auth_user_id,
+          empresa_id
+        `)
+        .eq("auth_user_id", authUserId)
+        .maybeSingle();
 
       if (administradorError) {
         console.error(
           "Error verificando administrador KONAX:",
           administradorError
         );
+
         await supabase.auth.signOut();
-        alert("No se pudo validar el acceso administrativo.");
+
+        alert(
+          "No se pudo validar el acceso administrativo."
+        );
+
         return;
       }
 
       if (!administrador) {
         await supabase.auth.signOut();
+
+        alert(
+          "Este usuario no está vinculado a un perfil de KONAX."
+        );
+
+        return;
+      }
+
+      const rolAdministrador = normalizar(
+        administrador.rol
+      );
+
+      const rolesPermitidos = [
+        "superadmin",
+        "admin_master",
+        "administrador_master",
+      ];
+
+      if (
+        !rolesPermitidos.includes(rolAdministrador)
+      ) {
+        await supabase.auth.signOut();
+
         alert(
           "Este usuario no tiene acceso al panel administrativo de KONAX."
         );
+
         return;
       }
 
-      const estadoAdministrador = String(administrador.estado || "")
-        .trim()
-        .toLowerCase();
+      const estadoAdministrador = normalizar(
+        administrador.estado
+      );
 
-      if (estadoAdministrador && estadoAdministrador !== "activo") {
+      if (
+        estadoAdministrador &&
+        estadoAdministrador !== "activo"
+      ) {
         await supabase.auth.signOut();
+
         alert("Este administrador no está activo.");
+
         return;
       }
 
-      localStorage.setItem("adminKonaxId", String(administrador.id || ""));
+      localStorage.setItem(
+        "adminKonaxId",
+        String(administrador.id || "")
+      );
+
       localStorage.setItem(
         "adminKonaxNombre",
         String(administrador.nombre || "")
       );
+
       localStorage.setItem(
         "adminKonaxCorreo",
         String(administrador.correo || "")
       );
+
       localStorage.setItem(
         "adminKonaxRol",
-        String(administrador.rol || "SuperAdmin")
+        String(administrador.rol || "Superadmin")
       );
-      localStorage.setItem("adminKonaxAuthUserId", String(authUserId));
+
+      localStorage.setItem(
+        "adminKonaxAuthUserId",
+        String(authUserId)
+      );
+
       localStorage.setItem(
         "adminKonaxRecordarme",
         recordarme ? "true" : "false"
       );
 
+      localStorage.removeItem(
+        "empresaAdminCreadaId"
+      );
+
+      localStorage.removeItem(
+        "empresaAdminCreadaNombre"
+      );
+
       window.location.href = "/admin";
     } catch (errorGeneral) {
-      console.error("Error inesperado en AdminLogin:", errorGeneral);
+      console.error(
+        "Error inesperado en AdminLogin:",
+        errorGeneral
+      );
 
       try {
         await supabase.auth.signOut();
@@ -106,7 +187,9 @@ export default function AdminLogin() {
         );
       }
 
-      alert("Ocurrió un error inesperado al iniciar sesión.");
+      alert(
+        "Ocurrió un error inesperado al iniciar sesión."
+      );
     } finally {
       setCargando(false);
     }
@@ -118,10 +201,56 @@ export default function AdminLogin() {
     }
   }
 
-  function recuperarPassword() {
-    alert(
-      "Para recuperar la contraseña administrativa, contacte al soporte de KONAX."
-    );
+  async function recuperarPassword() {
+    if (recuperando) return;
+
+    const correoLimpio = correo
+      .trim()
+      .toLowerCase();
+
+    if (
+      !correoLimpio ||
+      !correoLimpio.includes("@")
+    ) {
+      alert(
+        "Escriba primero el correo administrativo que desea recuperar."
+      );
+
+      return;
+    }
+
+    setRecuperando(true);
+
+    try {
+      const redirectTo =
+        `${window.location.origin}/restablecer-password`;
+
+      const { error } =
+        await supabase.auth.resetPasswordForEmail(
+          correoLimpio,
+          { redirectTo }
+        );
+
+      if (error) {
+        alert(
+          "No se pudo enviar el correo de recuperación: " +
+            error.message
+        );
+
+        return;
+      }
+
+      alert(
+        "Se envió un enlace de recuperación al correo indicado. Revise también la carpeta de correo no deseado."
+      );
+    } catch (error) {
+      alert(
+        "No se pudo iniciar la recuperación: " +
+          (error?.message || "Error desconocido.")
+      );
+    } finally {
+      setRecuperando(false);
+    }
   }
 
   function volverInicio() {
@@ -130,7 +259,10 @@ export default function AdminLogin() {
 
   return (
     <main className="login-page">
-      <form onSubmit={iniciarSesion} className="login-card">
+      <form
+        onSubmit={iniciarSesion}
+        className="login-card"
+      >
         <button
           type="button"
           className="close-button"
@@ -142,12 +274,16 @@ export default function AdminLogin() {
 
         <div className="form-heading">
           <span>Administración KONAX</span>
+
           <img
             src="/konax-logo.png"
             alt="KONAX"
             className="form-logo"
           />
-          <p>Ingresa a tu cuenta administrativa</p>
+
+          <p>
+            Ingresa a tu cuenta administrativa
+          </p>
         </div>
 
         <div className="admin-badge">
@@ -155,15 +291,21 @@ export default function AdminLogin() {
         </div>
 
         <div className="field-group">
-          <label htmlFor="correo">Correo electrónico</label>
+          <label htmlFor="correo">
+            Correo electrónico
+          </label>
+
           <div className="input-wrap">
             <span className="input-icon">✉</span>
+
             <input
               id="correo"
               type="email"
               placeholder="correo@konax.net"
               value={correo}
-              onChange={(e) => setCorreo(e.target.value)}
+              onChange={(e) =>
+                setCorreo(e.target.value)
+              }
               onKeyDown={manejarTecla}
               autoComplete="email"
               disabled={cargando}
@@ -172,15 +314,27 @@ export default function AdminLogin() {
         </div>
 
         <div className="field-group">
-          <label htmlFor="password">Contraseña</label>
+          <label htmlFor="password">
+            Contraseña
+          </label>
+
           <div className="input-wrap">
-            <span className="input-icon">🔒</span>
+            <span className="input-icon">
+              🔒
+            </span>
+
             <input
               id="password"
-              type={mostrarPassword ? "text" : "password"}
+              type={
+                mostrarPassword
+                  ? "text"
+                  : "password"
+              }
               placeholder="Ingresa tu contraseña"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) =>
+                setPassword(e.target.value)
+              }
               onKeyDown={manejarTecla}
               autoComplete="current-password"
               disabled={cargando}
@@ -189,7 +343,11 @@ export default function AdminLogin() {
             <button
               type="button"
               className="show-password"
-              onClick={() => setMostrarPassword((valor) => !valor)}
+              onClick={() =>
+                setMostrarPassword(
+                  (valor) => !valor
+                )
+              }
               aria-label={
                 mostrarPassword
                   ? "Ocultar contraseña"
@@ -207,9 +365,12 @@ export default function AdminLogin() {
             <input
               type="checkbox"
               checked={recordarme}
-              onChange={(e) => setRecordarme(e.target.checked)}
+              onChange={(e) =>
+                setRecordarme(e.target.checked)
+              }
               disabled={cargando}
             />
+
             <span>Recordarme</span>
           </label>
 
@@ -217,9 +378,13 @@ export default function AdminLogin() {
             type="button"
             className="forgot-link"
             onClick={recuperarPassword}
-            disabled={cargando}
+            disabled={
+              cargando || recuperando
+            }
           >
-            ¿Olvidaste tu contraseña?
+            {recuperando
+              ? "Enviando enlace..."
+              : "¿Olvidaste tu contraseña?"}
           </button>
         </div>
 
@@ -228,7 +393,9 @@ export default function AdminLogin() {
           disabled={cargando}
           className="login-button"
         >
-          {cargando ? "Ingresando..." : "Iniciar sesión  →"}
+          {cargando
+            ? "Ingresando..."
+            : "Iniciar sesión  →"}
         </button>
       </form>
 
@@ -263,7 +430,12 @@ export default function AdminLogin() {
               rgba(16, 185, 129, 0.16),
               transparent 28%
             ),
-            linear-gradient(135deg, #ffffff 0%, #f3faf6 50%, #ffffff 100%);
+            linear-gradient(
+              135deg,
+              #ffffff 0%,
+              #f3faf6 50%,
+              #ffffff 100%
+            );
           overflow: hidden;
         }
 
@@ -275,7 +447,8 @@ export default function AdminLogin() {
           border: 1px solid #e2e9e5;
           border-radius: 24px;
           background: rgba(255, 255, 255, 0.97);
-          box-shadow: 0 28px 80px rgba(15, 23, 42, 0.14);
+          box-shadow:
+            0 28px 80px rgba(15, 23, 42, 0.14);
           backdrop-filter: blur(8px);
         }
 
@@ -383,7 +556,8 @@ export default function AdminLogin() {
 
         .input-wrap input:focus {
           border-color: #15945a;
-          box-shadow: 0 0 0 4px rgba(21, 148, 90, 0.11);
+          box-shadow:
+            0 0 0 4px rgba(21, 148, 90, 0.11);
         }
 
         .input-wrap input:disabled {
@@ -453,18 +627,25 @@ export default function AdminLogin() {
           min-height: 50px;
           border: 0;
           border-radius: 11px;
-          background: linear-gradient(135deg, #117a46, #1aa55f);
+          background:
+            linear-gradient(
+              135deg,
+              #117a46,
+              #1aa55f
+            );
           color: #ffffff;
           font-size: 16px;
           font-weight: 800;
           cursor: pointer;
           transition: 0.2s ease;
-          box-shadow: 0 12px 28px rgba(17, 122, 70, 0.22);
+          box-shadow:
+            0 12px 28px rgba(17, 122, 70, 0.22);
         }
 
         .login-button:hover:not(:disabled) {
           transform: translateY(-2px);
-          box-shadow: 0 16px 34px rgba(17, 122, 70, 0.28);
+          box-shadow:
+            0 16px 34px rgba(17, 122, 70, 0.28);
         }
 
         .login-button:disabled {
