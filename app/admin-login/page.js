@@ -20,58 +20,25 @@ export default function AdminLogin() {
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [recordarme, setRecordarme] = useState(true);
 
-  async function buscarAdministrador(authUserId) {
-    const {
-      data: administradorDirecto,
-      error: errorAdministradorDirecto,
-    } = await supabase
-      .from("administradores_konax")
-      .select(
-        "id, nombre, correo, rol, estado, auth_user_id"
-      )
-      .eq("auth_user_id", authUserId)
-      .maybeSingle();
+  async function buscarAdministrador() {
+    const { data, error } = await supabase.rpc(
+      "obtener_perfil_admin_actual"
+    );
 
-    if (errorAdministradorDirecto) {
+    if (error) {
       console.error(
-        "Error consultando administradores_konax:",
-        errorAdministradorDirecto
+        "Error obteniendo perfil administrativo:",
+        error
       );
+      return { administrador: null, error };
     }
 
-    if (administradorDirecto) {
-      return {
-        ...administradorDirecto,
-        origen: "administradores_konax",
-      };
-    }
+    const administrador =
+      Array.isArray(data) && data.length > 0
+        ? data[0]
+        : null;
 
-    const {
-      data: usuarioAdmin,
-      error: errorUsuarioAdmin,
-    } = await supabase
-      .from("usuarios")
-      .select(
-        "id, nombre, correo, rol, estado, auth_user_id, empresa_id"
-      )
-      .eq("auth_user_id", authUserId)
-      .maybeSingle();
-
-    if (errorUsuarioAdmin) {
-      console.error(
-        "Error consultando usuarios:",
-        errorUsuarioAdmin
-      );
-    }
-
-    if (usuarioAdmin) {
-      return {
-        ...usuarioAdmin,
-        origen: "usuarios",
-      };
-    }
-
-    return null;
+    return { administrador, error: null };
   }
 
   async function iniciarSesion(e) {
@@ -110,8 +77,20 @@ export default function AdminLogin() {
 
       const authUserId = authData.user.id;
 
-      const administrador =
-        await buscarAdministrador(authUserId);
+      const {
+        administrador,
+        error: errorPerfil,
+      } = await buscarAdministrador();
+
+      if (errorPerfil) {
+        await supabase.auth.signOut();
+
+        alert(
+          "No se pudo validar el perfil administrativo."
+        );
+
+        return;
+      }
 
       if (!administrador) {
         await supabase.auth.signOut();
@@ -183,11 +162,6 @@ export default function AdminLogin() {
       localStorage.setItem(
         "adminKonaxAuthUserId",
         String(authUserId)
-      );
-
-      localStorage.setItem(
-        "adminKonaxOrigen",
-        String(administrador.origen || "")
       );
 
       localStorage.setItem(
