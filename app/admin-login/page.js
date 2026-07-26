@@ -20,6 +20,60 @@ export default function AdminLogin() {
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [recordarme, setRecordarme] = useState(true);
 
+  async function buscarAdministrador(authUserId) {
+    const {
+      data: administradorDirecto,
+      error: errorAdministradorDirecto,
+    } = await supabase
+      .from("administradores_konax")
+      .select(
+        "id, nombre, correo, rol, estado, auth_user_id"
+      )
+      .eq("auth_user_id", authUserId)
+      .maybeSingle();
+
+    if (errorAdministradorDirecto) {
+      console.error(
+        "Error consultando administradores_konax:",
+        errorAdministradorDirecto
+      );
+    }
+
+    if (administradorDirecto) {
+      return {
+        ...administradorDirecto,
+        origen: "administradores_konax",
+      };
+    }
+
+    const {
+      data: usuarioAdmin,
+      error: errorUsuarioAdmin,
+    } = await supabase
+      .from("usuarios")
+      .select(
+        "id, nombre, correo, rol, estado, auth_user_id, empresa_id"
+      )
+      .eq("auth_user_id", authUserId)
+      .maybeSingle();
+
+    if (errorUsuarioAdmin) {
+      console.error(
+        "Error consultando usuarios:",
+        errorUsuarioAdmin
+      );
+    }
+
+    if (usuarioAdmin) {
+      return {
+        ...usuarioAdmin,
+        origen: "usuarios",
+      };
+    }
+
+    return null;
+  }
+
   async function iniciarSesion(e) {
     e.preventDefault();
 
@@ -36,13 +90,15 @@ export default function AdminLogin() {
     setCargando(true);
 
     try {
-      const { data: authData, error: authError } =
-        await supabase.auth.signInWithPassword({
-          email: correoLimpio,
-          password: passwordLimpio,
-        });
+      const {
+        data: authData,
+        error: authError,
+      } = await supabase.auth.signInWithPassword({
+        email: correoLimpio,
+        password: passwordLimpio,
+      });
 
-      if (authError || !authData?.user) {
+      if (authError || !authData?.user?.id) {
         console.error(
           "Error iniciando sesión en Supabase Auth:",
           authError
@@ -54,43 +110,14 @@ export default function AdminLogin() {
 
       const authUserId = authData.user.id;
 
-      const {
-        data: administrador,
-        error: administradorError,
-      } = await supabase
-        .from("usuarios")
-        .select(`
-          id,
-          nombre,
-          correo,
-          rol,
-          estado,
-          auth_user_id,
-          empresa_id
-        `)
-        .eq("auth_user_id", authUserId)
-        .maybeSingle();
-
-      if (administradorError) {
-        console.error(
-          "Error verificando administrador KONAX:",
-          administradorError
-        );
-
-        await supabase.auth.signOut();
-
-        alert(
-          "No se pudo validar el acceso administrativo."
-        );
-
-        return;
-      }
+      const administrador =
+        await buscarAdministrador(authUserId);
 
       if (!administrador) {
         await supabase.auth.signOut();
 
         alert(
-          "Este usuario no está vinculado a un perfil de KONAX."
+          "El acceso fue autenticado, pero no existe un perfil administrativo vinculado a este usuario."
         );
 
         return;
@@ -102,6 +129,7 @@ export default function AdminLogin() {
 
       const rolesPermitidos = [
         "superadmin",
+        "super_admin",
         "admin_master",
         "administrador_master",
       ];
@@ -112,7 +140,7 @@ export default function AdminLogin() {
         await supabase.auth.signOut();
 
         alert(
-          "Este usuario no tiene acceso al panel administrativo de KONAX."
+          `Este usuario aparece con el rol "${administrador.rol || "Sin rol"}" y no tiene acceso al panel administrativo de KONAX.`
         );
 
         return;
@@ -129,7 +157,6 @@ export default function AdminLogin() {
         await supabase.auth.signOut();
 
         alert("Este administrador no está activo.");
-
         return;
       }
 
@@ -159,17 +186,17 @@ export default function AdminLogin() {
       );
 
       localStorage.setItem(
+        "adminKonaxOrigen",
+        String(administrador.origen || "")
+      );
+
+      localStorage.setItem(
         "adminKonaxRecordarme",
         recordarme ? "true" : "false"
       );
 
-      localStorage.removeItem(
-        "empresaAdminCreadaId"
-      );
-
-      localStorage.removeItem(
-        "empresaAdminCreadaNombre"
-      );
+      localStorage.removeItem("empresaAdminCreadaId");
+      localStorage.removeItem("empresaAdminCreadaNombre");
 
       window.location.href = "/admin";
     } catch (errorGeneral) {
@@ -281,9 +308,7 @@ export default function AdminLogin() {
             className="form-logo"
           />
 
-          <p>
-            Ingresa a tu cuenta administrativa
-          </p>
+          <p>Ingresa a tu cuenta administrativa</p>
         </div>
 
         <div className="admin-badge">
@@ -319,9 +344,7 @@ export default function AdminLogin() {
           </label>
 
           <div className="input-wrap">
-            <span className="input-icon">
-              🔒
-            </span>
+            <span className="input-icon">🔒</span>
 
             <input
               id="password"
@@ -378,9 +401,7 @@ export default function AdminLogin() {
             type="button"
             className="forgot-link"
             onClick={recuperarPassword}
-            disabled={
-              cargando || recuperando
-            }
+            disabled={cargando || recuperando}
           >
             {recuperando
               ? "Enviando enlace..."
