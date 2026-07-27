@@ -151,15 +151,22 @@ export default function Usuarios() {
 
     const rolSesion = normalizar(
       localStorage.getItem("usuarioRol") ||
-        localStorage.getItem("adminKonaxRol")
+        localStorage.getItem("adminKonaxRol") ||
+        localStorage.getItem("adminKonaxRole")
     );
 
-    const esSuperadmin = [
-      "superadmin",
-      "super_admin",
-      "admin_master",
-      "administrador_master",
-    ].includes(rolSesion);
+    const tieneSesionAdmin = Boolean(
+      localStorage.getItem("adminKonaxId")
+    );
+
+    const esSuperadmin =
+      tieneSesionAdmin ||
+      [
+        "superadmin",
+        "super_admin",
+        "admin_master",
+        "administrador_master",
+      ].includes(rolSesion);
 
     const id =
       esSuperadmin && empresaConfiguracion
@@ -643,15 +650,22 @@ export default function Usuarios() {
 
       const rolSesion = normalizar(
         localStorage.getItem("usuarioRol") ||
-          localStorage.getItem("adminKonaxRol")
+          localStorage.getItem("adminKonaxRol") ||
+          localStorage.getItem("adminKonaxRole")
       );
 
-      const esSuperadmin = [
-        "superadmin",
-        "super_admin",
-        "admin_master",
-        "administrador_master",
-      ].includes(rolSesion);
+      const tieneSesionAdmin = Boolean(
+        localStorage.getItem("adminKonaxId")
+      );
+
+      const esSuperadmin =
+        tieneSesionAdmin ||
+        [
+          "superadmin",
+          "super_admin",
+          "admin_master",
+          "administrador_master",
+        ].includes(rolSesion);
 
       if (esSuperadmin) {
         localStorage.removeItem("empresaAdminCreadaId");
@@ -744,10 +758,31 @@ export default function Usuarios() {
           </div>
 
           <button
-            onClick={() => router.push("/dashboard")}
+            onClick={() => {
+              const rolSesion = normalizar(
+                localStorage.getItem("usuarioRol") ||
+                  localStorage.getItem("adminKonaxRol") ||
+                  localStorage.getItem("adminKonaxRole")
+              );
+
+              const tieneSesionAdmin = Boolean(
+                localStorage.getItem("adminKonaxId")
+              );
+
+              const esSuperadmin =
+                tieneSesionAdmin ||
+                [
+                  "superadmin",
+                  "super_admin",
+                  "admin_master",
+                  "administrador_master",
+                ].includes(rolSesion);
+
+              router.push(esSuperadmin ? "/admin" : "/dashboard");
+            }}
             style={s.botonBlanco}
           >
-            ← Dashboard
+            ← Volver
           </button>
         </header>
 
