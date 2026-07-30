@@ -624,32 +624,39 @@ export default function Dashboard() {
           </section>
         )}
 
-        <section style={s.hero}>
-          <div style={s.heroContent}>
-            <span style={s.heroTag}>CENTRO DE OPERACIONES</span>
+        <section style={s.heroGrid}>
+          <article style={s.heroMain}>
+            <div style={s.heroAccent} />
 
-            <h2 style={s.heroTitle}>
-              Control total de tu negocio.
-            </h2>
+            <div style={s.heroContent}>
+              <span style={s.heroTag}>RESUMEN GENERAL</span>
 
-            <p style={s.heroText}>
-              Consulta clientes, caja y gestión desde un solo lugar,
-              con acceso organizado según el plan y el rol de cada usuario.
-            </p>
-          </div>
+              <h2 style={s.heroTitle}>
+                Control total de tu negocio
+              </h2>
 
-          <div style={s.planPanel}>
-            <div>
+              <p style={s.heroText}>
+                Consulta la información principal de {empresaNombre},
+                organiza el acceso por funciones y mantén cada área bajo control.
+              </p>
+            </div>
+
+            <div style={s.heroBadge}>
+              <span style={s.heroBadgeLabel}>TIPO DE NEGOCIO</span>
+              <strong style={s.heroBadgeValue}>
+                {tipoNegocio || "No definido"}
+              </strong>
+            </div>
+          </article>
+
+          <article style={s.planPanel}>
+            <div style={s.planTop}>
               <span style={s.planLabel}>
                 {pruebaActiva ? "PLAN EN PRUEBA" : "PLAN ACTUAL"}
               </span>
 
-              <strong style={s.planName}>{planNombre}</strong>
-            </div>
-
-            <div style={s.planStatus}>
-              <span style={s.greenDot} />
-              <span>
+              <span style={s.planStatus}>
+                <span style={s.greenDot} />
                 {pruebaActiva
                   ? "Prueba activa"
                   : pendienteInicio
@@ -658,13 +665,19 @@ export default function Dashboard() {
               </span>
             </div>
 
+            <strong style={s.planName}>{planNombre}</strong>
+
             <div style={s.planDivider} />
 
             <div style={s.planFooter}>
-              <span style={s.planSmall}>Funciones disponibles</span>
-              <strong style={s.planCount}>{modulosMenu.length}</strong>
+              <div>
+                <span style={s.planSmall}>Funciones disponibles</span>
+                <strong style={s.planCount}>{modulosMenu.length}</strong>
+              </div>
+
+              <div style={s.planSeal}>K</div>
             </div>
-          </div>
+          </article>
         </section>
 
         <section style={s.bottomGrid}>
@@ -892,66 +905,110 @@ const s = {
     fontWeight: 800,
   },
 
-  hero: {
+  heroGrid: {
     maxWidth: 1440,
     margin: "0 auto 20px",
     display: "grid",
-    gridTemplateColumns: "minmax(0,1fr) 290px",
-    gap: 24,
-    padding: "30px 32px",
-    border: "1px solid rgba(255,255,255,.08)",
-    borderRadius: 22,
-    background:
-      "linear-gradient(135deg,#0e1d15 0%,#123823 62%,#165c39 100%)",
-    boxShadow: "0 18px 42px rgba(18,56,35,.16)",
+    gridTemplateColumns: "minmax(0,1.7fr) minmax(280px,.75fr)",
+    gap: 16,
   },
 
-  heroContent: {
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
+  heroMain: {
+    minHeight: 240,
+    position: "relative",
+    overflow: "hidden",
+    padding: "34px 34px 30px",
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) auto",
+    alignItems: "end",
+    gap: 24,
+    border: "1px solid #dfe7e2",
+    borderRadius: 22,
+    background: "#ffffff",
+    boxShadow: "0 14px 34px rgba(28,52,39,.07)",
   },
+
+  heroAccent: {
+    position: "absolute",
+    inset: "0 auto 0 0",
+    width: 8,
+    background: "linear-gradient(180deg,#16a34a,#0f766e)",
+  },
+
+  heroContent: { maxWidth: 760 },
 
   heroTag: {
-    display: "block",
-    marginBottom: 10,
-    color: "#78dca5",
-    fontSize: 10,
+    display: "inline-flex",
+    marginBottom: 14,
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#edf8f1",
+    color: "#16834f",
+    fontSize: 9,
     fontWeight: 900,
-    letterSpacing: 1.5,
+    letterSpacing: 1.3,
   },
 
   heroTitle: {
-    maxWidth: 720,
-    margin: "0 0 12px",
-    color: "#fff",
-    fontSize: "clamp(31px,4vw,47px)",
-    lineHeight: 1.04,
-    letterSpacing: "-1.1px",
+    margin: "0 0 13px",
+    color: "#142019",
+    fontSize: "clamp(34px,4vw,52px)",
+    lineHeight: 1.02,
+    letterSpacing: "-1.4px",
   },
 
   heroText: {
-    maxWidth: 640,
+    maxWidth: 660,
     margin: 0,
-    color: "#d3e5da",
+    color: "#6c7971",
     fontSize: 15,
-    lineHeight: 1.65,
+    lineHeight: 1.7,
+  },
+
+  heroBadge: {
+    minWidth: 180,
+    padding: 18,
+    border: "1px solid #d7e7dc",
+    borderRadius: 16,
+    background: "#f6faf7",
+  },
+
+  heroBadgeLabel: {
+    display: "block",
+    color: "#16834f",
+    fontSize: 9,
+    fontWeight: 900,
+    letterSpacing: 1.1,
+  },
+
+  heroBadgeValue: {
+    display: "block",
+    marginTop: 9,
+    color: "#173c2a",
+    fontSize: 20,
   },
 
   planPanel: {
-    padding: 21,
+    minHeight: 240,
+    padding: 24,
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
-    border: "1px solid rgba(255,255,255,.15)",
-    borderRadius: 17,
-    background: "rgba(255,255,255,.075)",
-    backdropFilter: "blur(8px)",
+    border: "1px solid #173c2a",
+    borderRadius: 22,
+    background: "linear-gradient(160deg,#10231a 0%,#173c2a 100%)",
+    boxShadow: "0 14px 34px rgba(17,48,31,.13)",
+  },
+
+  planTop: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
   },
 
   planLabel: {
-    display: "block",
-    color: "#95d8b2",
+    color: "#91d6af",
     fontSize: 9,
     fontWeight: 900,
     letterSpacing: 1.2,
@@ -959,23 +1016,18 @@ const s = {
 
   planName: {
     display: "block",
-    marginTop: 8,
+    marginTop: 26,
     color: "#fff",
-    fontSize: 22,
-    lineHeight: 1.2,
+    fontSize: 27,
+    lineHeight: 1.15,
   },
 
   planStatus: {
-    width: "fit-content",
-    marginTop: 14,
-    padding: "7px 10px",
-    display: "flex",
+    display: "inline-flex",
     alignItems: "center",
-    gap: 8,
-    borderRadius: 999,
-    background: "rgba(255,255,255,.09)",
-    color: "#e3f4e9",
-    fontSize: 11,
+    gap: 7,
+    color: "#dff4e7",
+    fontSize: 10,
     fontWeight: 700,
   },
 
@@ -989,7 +1041,7 @@ const s = {
 
   planDivider: {
     height: 1,
-    margin: "18px 0 14px",
+    margin: "22px 0 18px",
     background: "rgba(255,255,255,.12)",
   },
 
@@ -997,11 +1049,35 @@ const s = {
     display: "flex",
     alignItems: "flex-end",
     justifyContent: "space-between",
-    gap: 15,
+    gap: 18,
   },
 
-  planSmall: { color: "#b9d8c5", fontSize: 11 },
-  planCount: { color: "#fff", fontSize: 25, lineHeight: 1 },
+  planSmall: {
+    display: "block",
+    color: "#b9d8c5",
+    fontSize: 10,
+  },
+
+  planCount: {
+    display: "block",
+    marginTop: 6,
+    color: "#fff",
+    fontSize: 30,
+    lineHeight: 1,
+  },
+
+  planSeal: {
+    width: 52,
+    height: 52,
+    display: "grid",
+    placeItems: "center",
+    border: "1px solid rgba(255,255,255,.14)",
+    borderRadius: 16,
+    background: "rgba(255,255,255,.07)",
+    color: "#7de0a7",
+    fontSize: 24,
+    fontWeight: 900,
+  },
 
   bottomGrid: {
     maxWidth: 1440,
