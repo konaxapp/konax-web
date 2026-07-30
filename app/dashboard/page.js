@@ -16,30 +16,19 @@ function normalizar(valor) {
 
 function fechaLocal(fecha) {
   if (!fecha) return null;
-
-  const [a, m, d] = String(fecha)
-    .slice(0, 10)
-    .split("-")
-    .map(Number);
-
+  const [a, m, d] = String(fecha).slice(0, 10).split("-").map(Number);
   if (!a || !m || !d) return null;
-
   return new Date(a, m - 1, d, 0, 0, 0, 0);
 }
 
 function formatoFecha(fecha) {
   if (!fecha) return "-";
-
-  const [a, m, d] = String(fecha)
-    .slice(0, 10)
-    .split("-");
-
+  const [a, m, d] = String(fecha).slice(0, 10).split("-");
   return a && m && d ? `${d}/${m}/${a}` : fecha;
 }
 
 function calcularDias(fechaFin) {
   const fin = fechaLocal(fechaFin);
-
   if (!fin) return null;
 
   const hoy = new Date();
@@ -113,10 +102,7 @@ function construirModulosPorPlan(codigoPlan) {
 
   if (codigo === "pro") {
     return Object.fromEntries(
-      Object.keys(base).map((codigoModulo) => [
-        codigoModulo,
-        true,
-      ])
+      Object.keys(base).map((codigoModulo) => [codigoModulo, true])
     );
   }
 
@@ -126,9 +112,7 @@ function construirModulosPorPlan(codigoPlan) {
 function leerModuloEmpresa(data, codigo) {
   if (!data) return true;
 
-  if (
-    Object.prototype.hasOwnProperty.call(data, codigo)
-  ) {
+  if (Object.prototype.hasOwnProperty.call(data, codigo)) {
     return Boolean(data[codigo]);
   }
 
@@ -214,83 +198,54 @@ export default function Dashboard() {
   async function marcarPruebaVencida(empresaId) {
     const { error } = await supabase
       .from("empresas")
-      .update({
-        estado_suscripcion: "prueba_vencida",
-      })
+      .update({ estado_suscripcion: "prueba_vencida" })
       .eq("id", empresaId)
       .eq("estado_suscripcion", "prueba");
 
     if (error) {
-      console.error(
-        "No se pudo actualizar la prueba:",
-        error
-      );
+      console.error("No se pudo actualizar la prueba:", error);
     }
   }
 
   async function cargarDashboard() {
     setCargando(true);
 
-    const empresaId =
-      localStorage.getItem("empresaId");
-    const usuarioId =
-      localStorage.getItem("usuarioId");
+    const empresaId = localStorage.getItem("empresaId");
+    const usuarioId = localStorage.getItem("usuarioId");
 
     if (!empresaId || !usuarioId) {
-      await salir(
-        "La sesión no es válida. Inicie sesión nuevamente."
-      );
+      await salir("La sesión no es válida. Inicie sesión nuevamente.");
       return;
     }
 
-    const {
-      data: usuario,
-      error: errorUsuario,
-    } = await supabase
+    const { data: usuario, error: errorUsuario } = await supabase
       .from("usuarios")
-      .select(
-        "id, empresa_id, nombre, correo, rol, rol_id, estado"
-      )
+      .select("id, empresa_id, nombre, correo, rol, rol_id, estado")
       .eq("id", usuarioId)
       .maybeSingle();
 
     if (errorUsuario) {
-      alert(
-        "Error validando usuario: " +
-          errorUsuario.message
-      );
+      alert("Error validando usuario: " + errorUsuario.message);
       setCargando(false);
       return;
     }
 
     if (!usuario) {
-      await salir(
-        "El usuario de la sesión ya no existe."
-      );
+      await salir("El usuario de la sesión ya no existe.");
       return;
     }
 
     if (normalizar(usuario.estado) !== "activo") {
-      await salir(
-        "Este usuario se encuentra inactivo."
-      );
+      await salir("Este usuario se encuentra inactivo.");
       return;
     }
 
-    if (
-      String(usuario.empresa_id) !==
-      String(empresaId)
-    ) {
-      await salir(
-        "La empresa activa no corresponde al usuario autenticado."
-      );
+    if (String(usuario.empresa_id) !== String(empresaId)) {
+      await salir("La empresa activa no corresponde al usuario autenticado.");
       return;
     }
 
-    const {
-      data: empresa,
-      error: errorEmpresa,
-    } = await supabase
+    const { data: empresa, error: errorEmpresa } = await supabase
       .from("empresas")
       .select(`
         id,
@@ -309,18 +264,13 @@ export default function Dashboard() {
       .maybeSingle();
 
     if (errorEmpresa) {
-      alert(
-        "Error cargando empresa: " +
-          errorEmpresa.message
-      );
+      alert("Error cargando empresa: " + errorEmpresa.message);
       setCargando(false);
       return;
     }
 
     if (!empresa) {
-      await salir(
-        "La empresa de esta sesión ya no existe."
-      );
+      await salir("La empresa de esta sesión ya no existe.");
       return;
     }
 
@@ -328,9 +278,7 @@ export default function Dashboard() {
       normalizar(empresa.estado) === "suspendido" ||
       normalizar(empresa.estado_plan) === "suspendido"
     ) {
-      await salir(
-        "El servicio de esta empresa está suspendido."
-      );
+      await salir("El servicio de esta empresa está suspendido.");
       return;
     }
 
@@ -338,10 +286,7 @@ export default function Dashboard() {
       empresa.estado_suscripcion || "activo"
     );
 
-    const fin = fechaLocal(
-      empresa.fecha_fin_prueba
-    );
-
+    const fin = fechaLocal(empresa.fecha_fin_prueba);
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
@@ -361,91 +306,34 @@ export default function Dashboard() {
       "cancelado",
     ].includes(suscripcion);
 
-    localStorage.setItem(
-      "empresaId",
-      empresa.id || ""
-    );
-    localStorage.setItem(
-      "empresaNombre",
-      empresa.nombre || ""
-    );
-    localStorage.setItem(
-      "usuarioId",
-      usuario.id || ""
-    );
-    localStorage.setItem(
-      "usuarioNombre",
-      usuario.nombre || ""
-    );
-    localStorage.setItem(
-      "usuarioCorreo",
-      usuario.correo || ""
-    );
-    localStorage.setItem(
-      "usuarioRol",
-      usuario.rol || ""
-    );
-    localStorage.setItem(
-      "rolId",
-      usuario.rol_id || ""
-    );
-    localStorage.setItem(
-      "tipoNegocio",
-      empresa.tipo_negocio || ""
-    );
-    localStorage.setItem(
-      "categoriaNegocio",
-      empresa.categoria_negocio || ""
-    );
-    localStorage.setItem(
-      "planCodigo",
-      empresa.plan_codigo || ""
-    );
-    localStorage.setItem(
-      "planNombre",
-      empresa.plan_nombre || ""
-    );
-    localStorage.setItem(
-      "estadoPlan",
-      empresa.estado_plan || ""
-    );
-    localStorage.setItem(
-      "estadoEmpresa",
-      empresa.estado || ""
-    );
-    localStorage.setItem(
-      "estadoSuscripcion",
-      suscripcion
-    );
+    localStorage.setItem("empresaId", empresa.id || "");
+    localStorage.setItem("empresaNombre", empresa.nombre || "");
+    localStorage.setItem("usuarioId", usuario.id || "");
+    localStorage.setItem("usuarioNombre", usuario.nombre || "");
+    localStorage.setItem("usuarioCorreo", usuario.correo || "");
+    localStorage.setItem("usuarioRol", usuario.rol || "");
+    localStorage.setItem("rolId", usuario.rol_id || "");
+    localStorage.setItem("tipoNegocio", empresa.tipo_negocio || "");
+    localStorage.setItem("categoriaNegocio", empresa.categoria_negocio || "");
+    localStorage.setItem("planCodigo", empresa.plan_codigo || "");
+    localStorage.setItem("planNombre", empresa.plan_nombre || "");
+    localStorage.setItem("estadoPlan", empresa.estado_plan || "");
+    localStorage.setItem("estadoEmpresa", empresa.estado || "");
+    localStorage.setItem("estadoSuscripcion", suscripcion);
 
-    setEmpresaNombre(
-      empresa.nombre || "Empresa"
-    );
-    setPlanNombre(
-      empresa.plan_nombre || "Sin plan"
-    );
-    setEstadoPlan(
-      empresa.estado_plan || "Activo"
-    );
-    setTipoNegocio(
-      empresa.tipo_negocio || ""
-    );
+    setEmpresaNombre(empresa.nombre || "Empresa");
+    setPlanNombre(empresa.plan_nombre || "Sin plan");
+    setEstadoPlan(empresa.estado_plan || "Activo");
+    setTipoNegocio(empresa.tipo_negocio || "");
     setUsuarioRol(usuario.rol || "");
     setUsuarioNombre(usuario.nombre || "");
 
     setEstadoSuscripcion(suscripcion);
-    setFechaInicioPrueba(
-      empresa.fecha_inicio_prueba || ""
-    );
-    setFechaFinPrueba(
-      empresa.fecha_fin_prueba || ""
-    );
+    setFechaInicioPrueba(empresa.fecha_inicio_prueba || "");
+    setFechaFinPrueba(empresa.fecha_fin_prueba || "");
     setDiasRestantes(
-      suscripcion === "prueba" &&
-        !pruebaVencida
-        ? calcularDias(
-            empresa.fecha_fin_prueba
-          )
+      suscripcion === "prueba" && !pruebaVencida
+        ? calcularDias(empresa.fecha_fin_prueba)
         : null
     );
 
@@ -458,29 +346,18 @@ export default function Dashboard() {
       return;
     }
 
-    const [modulosEmpresa, permisos] =
-      await Promise.all([
-        cargarModulosEmpresa(
-          empresaId,
-          empresa.plan_codigo
-        ),
-        cargarPermisosUsuario(
-          empresaId,
-          usuarioId
-        ),
-      ]);
+    const [modulosEmpresa, permisos] = await Promise.all([
+      cargarModulosEmpresa(empresaId, empresa.plan_codigo),
+      cargarPermisosUsuario(empresaId, usuarioId),
+    ]);
 
     setModulos(modulosEmpresa);
     setPermisosUsuario(permisos);
     setCargando(false);
   }
 
-  async function cargarModulosEmpresa(
-    empresaId,
-    planCodigo
-  ) {
-    const permitidos =
-      construirModulosPorPlan(planCodigo);
+  async function cargarModulosEmpresa(empresaId, planCodigo) {
+    const permitidos = construirModulosPorPlan(planCodigo);
 
     const { data, error } = await supabase
       .from("empresa_modulos")
@@ -489,53 +366,36 @@ export default function Dashboard() {
       .maybeSingle();
 
     if (error) {
-      alert(
-        "Error cargando módulos de empresa: " +
-          error.message
-      );
+      alert("Error cargando módulos de empresa: " + error.message);
       return permitidos;
     }
 
     const resultado = {};
 
-    Object.keys(permitidos).forEach(
-      (codigoModulo) => {
-        const incluidoEnPlan = Boolean(
-          permitidos[codigoModulo]
-        );
+    Object.keys(permitidos).forEach((codigoModulo) => {
+      const incluidoEnPlan = Boolean(permitidos[codigoModulo]);
 
-        if (!incluidoEnPlan) {
-          resultado[codigoModulo] = false;
-          return;
-        }
-
-        if (
-          [
-            "dashboard",
-            "usuarios",
-            "configuracion",
-          ].includes(codigoModulo)
-        ) {
-          resultado[codigoModulo] = true;
-          return;
-        }
-
-        resultado[codigoModulo] = data
-          ? leerModuloEmpresa(
-              data,
-              codigoModulo
-            )
-          : true;
+      if (!incluidoEnPlan) {
+        resultado[codigoModulo] = false;
+        return;
       }
-    );
+
+      if (
+        ["dashboard", "usuarios", "configuracion"].includes(codigoModulo)
+      ) {
+        resultado[codigoModulo] = true;
+        return;
+      }
+
+      resultado[codigoModulo] = data
+        ? leerModuloEmpresa(data, codigoModulo)
+        : true;
+    });
 
     return resultado;
   }
 
-  async function cargarPermisosUsuario(
-    empresaId,
-    usuarioId
-  ) {
+  async function cargarPermisosUsuario(empresaId, usuarioId) {
     const { data, error } = await supabase
       .from("permisos_usuarios_empresa")
       .select("permiso, activo")
@@ -544,30 +404,20 @@ export default function Dashboard() {
       .eq("activo", true);
 
     if (error) {
-      alert(
-        "Error cargando permisos del usuario: " +
-          error.message
-      );
+      alert("Error cargando permisos del usuario: " + error.message);
       return [];
     }
 
     return (data || [])
-      .map((item) =>
-        normalizar(item.permiso)
-      )
+      .map((item) => normalizar(item.permiso))
       .filter(Boolean);
   }
 
-  function puedeVer(
-    codigoModulo,
-    codigoPermiso = codigoModulo
-  ) {
+  function puedeVer(codigoModulo, codigoPermiso = codigoModulo) {
     if (bloqueado) return false;
 
-    const modulo =
-      normalizar(codigoModulo);
-    const permiso =
-      normalizar(codigoPermiso);
+    const modulo = normalizar(codigoModulo);
+    const permiso = normalizar(codigoPermiso);
 
     if (!Boolean(modulos?.[modulo])) {
       return false;
@@ -577,10 +427,7 @@ export default function Dashboard() {
       return true;
     }
 
-    return (
-      permiso === "dashboard" ||
-      permisosUsuario.includes(permiso)
-    );
+    return permiso === "dashboard" || permisosUsuario.includes(permiso);
   }
 
   async function cerrarSesion() {
@@ -597,148 +444,42 @@ export default function Dashboard() {
 
   const modulosMenu = useMemo(() => {
     const lista = [
-      [
-        "Panel",
-        "/dashboard",
-        "dashboard",
-        "▦",
-      ],
-      [
-        "Clientes",
-        "/clientes",
-        "clientes",
-        "👥",
-      ],
-      [
-        "Vista Cliente",
-        "/vista-cliente",
-        "vista_cliente",
-        "📄",
-      ],
-      [
-        "Créditos",
-        "/ventas-credito",
-        "creditos",
-        "💳",
-      ],
-      [
-        "Caja",
-        "/caja",
-        "caja",
-        "▣",
-      ],
-      [
-        "Cobranza",
-        "/cobranza",
-        "cobranza",
-        "$",
-      ],
-      [
-        "Centro de Cobranza",
-        "/dashboard-cobranza",
-        "dashboard_cobros",
-        "📊",
-      ],
-      [
-        "Mi cartera de cobro",
-        "/gestor-cobros",
-        "gestor_cobros",
-        "💼",
-      ],
-      [
-        "Control Caja",
-        "/control-caja",
-        "control_caja",
-        "🏦",
-      ],
-      [
-        "Inventario",
-        "/inventario",
-        "inventario",
-        "□",
-      ],
-      [
-        "Movimientos Inventario",
-        "/inventario/movimientos",
-        "movimientos_inventario",
-        "🔄",
-      ],
-      [
-        "Ventas",
-        "/ventas",
-        "ventas",
-        "🛒",
-      ],
-      [
-        "Centro de Ventas",
-        "/dashboard-ventas",
-        "dashboard_ventas",
-        "📈",
-      ],
-      [
-        "Gastos",
-        "/gastos",
-        "gastos",
-        "🧮",
-      ],
-      [
-        "Suscripciones",
-        "/suscripciones",
-        "suscripciones",
-        "🔁",
-      ],
-      [
-        "Recargos",
-        "/recargos",
-        "recargos",
-        "⚠️",
-      ],
-      [
-        "Reportes",
-        "/reportes",
-        "reportes",
-        "▥",
-      ],
-      [
-        "Usuarios y Roles",
-        "/usuarios",
-        "usuarios",
-        "🔐",
-      ],
-      [
-        "Configuración",
-        "/admin-configuracion",
-        "configuracion",
-        "⚙",
-      ],
+      ["Panel", "/dashboard", "dashboard", "▦"],
+      ["Clientes", "/clientes", "clientes", "👥"],
+      ["Vista Cliente", "/vista-cliente", "vista_cliente", "📄"],
+      ["Créditos", "/ventas-credito", "creditos", "💳"],
+      ["Caja", "/caja", "caja", "▣"],
+      ["Cobranza", "/cobranza", "cobranza", "$"],
+      ["Centro de Cobranza", "/dashboard-cobranza", "dashboard_cobros", "📊"],
+      ["Mi cartera de cobro", "/gestor-cobros", "gestor_cobros", "💼"],
+      ["Control Caja", "/control-caja", "control_caja", "🏦"],
+      ["Inventario", "/inventario", "inventario", "□"],
+      ["Movimientos Inventario", "/inventario/movimientos", "movimientos_inventario", "🔄"],
+      ["Ventas", "/ventas", "ventas", "🛒"],
+      ["Centro de Ventas", "/dashboard-ventas", "dashboard_ventas", "📈"],
+      ["Gastos", "/gastos", "gastos", "🧮"],
+      ["Suscripciones", "/suscripciones", "suscripciones", "🔁"],
+      ["Recargos", "/recargos", "recargos", "⚠️"],
+      ["Reportes", "/reportes", "reportes", "▥"],
+      ["Usuarios y Roles", "/usuarios", "usuarios", "🔐"],
+      ["Configuración", "/admin-configuracion", "configuracion", "⚙"],
     ];
 
     return lista
-      .map(
-        ([nombre, ruta, codigo, icono]) => ({
-          nombre,
-          ruta,
-          codigo,
-          icono,
-          activo: puedeVer(codigo),
-        })
-      )
+      .map(([nombre, ruta, codigo, icono]) => ({
+        nombre,
+        ruta,
+        codigo,
+        icono,
+        activo: puedeVer(codigo),
+      }))
       .filter((item) => item.activo);
-  }, [
-    modulos,
-    permisosUsuario,
-    usuarioRol,
-    bloqueado,
-  ]);
+  }, [modulos, permisosUsuario, usuarioRol, bloqueado]);
 
   if (cargando) {
     return (
       <div style={s.loading}>
-        <img
-          src="/konax-logo.png"
-          alt="KONAX"
-          style={s.loadingLogo}
-        />
+        <img src="/konax-logo.png" alt="KONAX" style={s.loadingLogo} />
         <strong style={s.loadingTitle}>
           Preparando tu espacio de trabajo
         </strong>
@@ -761,38 +502,25 @@ export default function Dashboard() {
 
           <div style={s.candado}>🔒</div>
 
-          <span style={s.bloqueoEtiqueta}>
-            PRUEBA FINALIZADA
-          </span>
+          <span style={s.bloqueoEtiqueta}>PRUEBA FINALIZADA</span>
 
           <h1 style={s.bloqueoTitulo}>
             El acceso operativo está bloqueado
           </h1>
 
           <p style={s.bloqueoTexto}>
-            La prueba de{" "}
-            <strong>{empresaNombre}</strong>{" "}
-            finalizó el{" "}
-            <strong>
-              {formatoFecha(fechaFinPrueba)}
-            </strong>
-            . Los datos permanecen registrados,
-            pero los módulos estarán bloqueados
+            La prueba de <strong>{empresaNombre}</strong> finalizó el{" "}
+            <strong>{formatoFecha(fechaFinPrueba)}</strong>. Los datos
+            permanecen registrados, pero los módulos estarán bloqueados
             hasta activar un plan.
           </p>
 
           <div style={s.bloqueoAcciones}>
-            <button
-              onClick={contactarKonax}
-              style={s.botonVerde}
-            >
+            <button onClick={contactarKonax} style={s.botonVerde}>
               Contactar a KONAX
             </button>
 
-            <button
-              onClick={cerrarSesion}
-              style={s.botonClaro}
-            >
+            <button onClick={cerrarSesion} style={s.botonClaro}>
               Cerrar sesión
             </button>
           </div>
@@ -801,17 +529,21 @@ export default function Dashboard() {
     );
   }
 
-  const pruebaActiva =
-    estadoSuscripcion === "prueba";
-
+  const pruebaActiva = estadoSuscripcion === "prueba";
   const pendienteInicio =
-    estadoSuscripcion ===
-    "pendiente_inicio_prueba";
+    estadoSuscripcion === "pendiente_inicio_prueba";
 
   const alertaCritica =
     pruebaActiva &&
     diasRestantes !== null &&
     diasRestantes <= 5;
+
+  const fechaPanel = new Intl.DateTimeFormat("es-PA", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date());
 
   return (
     <div style={s.layout}>
@@ -824,21 +556,16 @@ export default function Dashboard() {
       <main style={s.main}>
         <header style={s.topbar}>
           <div>
-            <span style={s.eyebrow}>
-              PANEL EMPRESARIAL
+            <span style={s.eyebrow}>PANEL EMPRESARIAL</span>
+            <h1 style={s.pageTitle}>{empresaNombre}</h1>
+            <span style={s.pageSubtitle}>
+              Panel general · {fechaPanel}
             </span>
-            <h1 style={s.pageTitle}>
-              {empresaNombre}
-            </h1>
           </div>
 
           <div style={s.userBox}>
             <div style={s.avatar}>
-              {String(
-                usuarioNombre || "U"
-              )
-                .charAt(0)
-                .toUpperCase()}
+              {String(usuarioNombre || "U").charAt(0).toUpperCase()}
             </div>
 
             <div>
@@ -854,20 +581,14 @@ export default function Dashboard() {
 
         {pendienteInicio && (
           <section style={s.avisoPendiente}>
-            <div style={s.avisoIcono}>
-              ⏱️
-            </div>
-
+            <div style={s.avisoIcono}>⏱️</div>
             <div>
-              <span style={s.avisoEtiqueta}>
-                PROGRAMA PILOTO APROBADO
-              </span>
+              <span style={s.avisoEtiqueta}>PROGRAMA PILOTO APROBADO</span>
               <strong style={s.avisoTitulo}>
                 La prueba todavía no ha comenzado
               </strong>
               <p style={s.avisoTexto}>
-                Un asesor de KONAX activará los
-                días cuando la empresa esté lista.
+                Un asesor de KONAX activará los días cuando la empresa esté lista.
               </p>
             </div>
           </section>
@@ -877,119 +598,95 @@ export default function Dashboard() {
           <section
             style={{
               ...s.avisoPrueba,
-              ...(alertaCritica
-                ? s.avisoCritico
-                : {}),
+              ...(alertaCritica ? s.avisoCritico : {}),
             }}
           >
             <div style={s.avisoIzquierda}>
-              <div style={s.avisoIcono}>
-                ⏱️
-              </div>
-
+              <div style={s.avisoIcono}>⏱️</div>
               <div>
-                <span style={s.avisoEtiqueta}>
-                  PROGRAMA PILOTO ACTIVO
-                </span>
+                <span style={s.avisoEtiqueta}>PROGRAMA PILOTO ACTIVO</span>
                 <strong style={s.avisoTitulo}>
-                  Estás utilizando KONAX en período
-                  de prueba
+                  Estás utilizando KONAX en período de prueba
                 </strong>
                 <p style={s.avisoTexto}>
-                  Inicio:{" "}
-                  {formatoFecha(
-                    fechaInicioPrueba
-                  )}{" "}
-                  · Vencimiento:{" "}
-                  {formatoFecha(
-                    fechaFinPrueba
-                  )}
+                  Inicio: {formatoFecha(fechaInicioPrueba)} · Vencimiento:{" "}
+                  {formatoFecha(fechaFinPrueba)}
                 </p>
               </div>
             </div>
 
             <div style={s.diasCaja}>
-              <strong style={s.diasNumero}>
-                {diasRestantes ?? 0}
-              </strong>
+              <strong style={s.diasNumero}>{diasRestantes ?? 0}</strong>
               <span style={s.diasTexto}>
-                {diasRestantes === 1
-                  ? "día restante"
-                  : "días restantes"}
+                {diasRestantes === 1 ? "día restante" : "días restantes"}
               </span>
             </div>
           </section>
         )}
 
         <section style={s.hero}>
-          <div>
-            <span style={s.heroTag}>
-              CENTRO DE OPERACIONES
-            </span>
+          <div style={s.heroContent}>
+            <span style={s.heroTag}>CENTRO DE OPERACIONES</span>
 
             <h2 style={s.heroTitle}>
-              Todo tu negocio, claro y bajo
-              control.
+              Control total de tu negocio.
             </h2>
 
             <p style={s.heroText}>
-              Accede a las funciones habilitadas
-              para el plan, la empresa y el
-              usuario actual de{" "}
-              {tipoNegocio || "tu empresa"}.
+              Consulta clientes, caja y gestión desde un solo lugar,
+              con acceso organizado según el plan y el rol de cada usuario.
             </p>
           </div>
 
           <div style={s.planPanel}>
-            <span style={s.planLabel}>
-              {pruebaActiva
-                ? "PLAN EN PRUEBA"
-                : "PLAN ACTUAL"}
-            </span>
+            <div>
+              <span style={s.planLabel}>
+                {pruebaActiva ? "PLAN EN PRUEBA" : "PLAN ACTUAL"}
+              </span>
 
-            <strong style={s.planName}>
-              {planNombre}
-            </strong>
+              <strong style={s.planName}>{planNombre}</strong>
+            </div>
 
             <div style={s.planStatus}>
               <span style={s.greenDot} />
-              {pruebaActiva
-                ? "Prueba activa"
-                : pendienteInicio
-                ? "Pendiente de inicio"
-                : estadoPlan || "Activo"}
+              <span>
+                {pruebaActiva
+                  ? "Prueba activa"
+                  : pendienteInicio
+                  ? "Pendiente de inicio"
+                  : estadoPlan || "Activo"}
+              </span>
             </div>
 
             <div style={s.planDivider} />
 
-            <span style={s.planSmall}>
-              {modulosMenu.length} funciones
-              habilitadas
-            </span>
+            <div style={s.planFooter}>
+              <span style={s.planSmall}>Funciones disponibles</span>
+              <strong style={s.planCount}>{modulosMenu.length}</strong>
+            </div>
           </div>
         </section>
 
         <section style={s.bottomGrid}>
           <Info
             titulo="ACCESO ACTUAL"
-            valor={
-              usuarioRol || "Sin rol"
-            }
+            valor={usuarioRol || "Sin rol"}
             icono="🛡️"
+            detalle="Nivel de acceso asignado a este usuario."
           />
 
           <Info
             titulo="TIPO DE NEGOCIO"
-            valor={
-              tipoNegocio || "No definido"
-            }
+            valor={tipoNegocio || "No definido"}
             icono="🏢"
+            detalle="Configuración aplicada a esta empresa."
           />
 
           <Info
             titulo="FUNCIONES ACTIVAS"
             valor={String(modulosMenu.length)}
             icono="▦"
+            detalle="Módulos habilitados para este acceso."
           />
         </section>
       </main>
@@ -997,25 +694,16 @@ export default function Dashboard() {
   );
 }
 
-function Info({ titulo, valor, icono }) {
+function Info({ titulo, valor, icono, detalle }) {
   return (
     <article style={s.infoCard}>
-      <div style={s.infoIcon}>
-        {icono}
+      <div style={s.infoTop}>
+        <div style={s.infoIcon}>{icono}</div>
+        <span style={s.infoLabel}>{titulo}</span>
       </div>
 
-      <div>
-        <span style={s.infoLabel}>
-          {titulo}
-        </span>
-        <h3 style={s.infoTitle}>
-          {valor}
-        </h3>
-        <p style={s.infoText}>
-          Información correspondiente a la empresa
-          y al acceso actual.
-        </p>
-      </div>
+      <h3 style={s.infoTitle}>{valor}</h3>
+      <p style={s.infoText}>{detalle}</p>
     </article>
   );
 }
@@ -1024,13 +712,10 @@ const s = {
   layout: {
     minHeight: "100vh",
     display: "grid",
-    gridTemplateColumns:
-      "220px minmax(0,1fr)",
-    background:
-      "linear-gradient(135deg,#f7faf8 0%,#eef5f1 100%)",
+    gridTemplateColumns: "220px minmax(0,1fr)",
+    background: "#f3f6f4",
     color: "#142019",
-    fontFamily:
-      'Inter, system-ui, "Segoe UI", sans-serif',
+    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
   },
 
   loading: {
@@ -1041,55 +726,63 @@ const s = {
     justifyContent: "center",
     gap: 10,
     background: "#f3f6f4",
-    fontFamily:
-      'Inter, system-ui, "Segoe UI", sans-serif',
+    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
   },
 
-  loadingLogo: {
-    width: 210,
-    marginBottom: 10,
-  },
-
-  loadingTitle: {
-    fontSize: 22,
-  },
-
-  loadingText: {
-    color: "#718078",
-    fontSize: 14,
-  },
+  loadingLogo: { width: 210, marginBottom: 10 },
+  loadingTitle: { fontSize: 22 },
+  loadingText: { color: "#718078", fontSize: 14 },
 
   main: {
     minWidth: 0,
-    padding: "28px 30px 40px",
+    padding: "30px 34px 44px",
+    background: "linear-gradient(180deg,#f8faf9 0%,#f1f5f2 100%)",
   },
 
   topbar: {
     maxWidth: 1440,
-    margin: "0 auto 22px",
+    margin: "0 auto 24px",
+    paddingBottom: 18,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 20,
+    borderBottom: "1px solid #dfe7e2",
   },
 
   eyebrow: {
     display: "block",
-    marginBottom: 4,
+    marginBottom: 5,
     color: "#16834f",
     fontSize: 10,
     fontWeight: 900,
-    letterSpacing: 1.4,
+    letterSpacing: 1.5,
   },
 
   pageTitle: {
     margin: 0,
-    fontSize: 29,
+    fontSize: "clamp(25px,3vw,34px)",
+    lineHeight: 1.1,
+    letterSpacing: "-0.6px",
+  },
+
+  pageSubtitle: {
+    display: "block",
+    marginTop: 7,
+    color: "#7a867f",
+    fontSize: 12,
+    textTransform: "capitalize",
   },
 
   userBox: {
+    minWidth: 180,
+    padding: "9px 12px",
     display: "flex",
     alignItems: "center",
-    gap: 10,
+    gap: 11,
+    border: "1px solid #dfe7e2",
+    borderRadius: 14,
+    background: "#fff",
   },
 
   avatar: {
@@ -1097,19 +790,16 @@ const s = {
     height: 42,
     display: "grid",
     placeItems: "center",
-    borderRadius: 13,
+    borderRadius: 12,
     background: "#173c2a",
     color: "#fff",
     fontWeight: 900,
   },
 
-  userName: {
-    display: "block",
-    fontSize: 13,
-  },
-
+  userName: { display: "block", fontSize: 13 },
   userRole: {
     display: "block",
+    marginTop: 2,
     color: "#7d8a82",
     fontSize: 11,
   },
@@ -1204,73 +894,89 @@ const s = {
 
   hero: {
     maxWidth: 1440,
-    margin: "0 auto 22px",
+    margin: "0 auto 20px",
     display: "grid",
-    gridTemplateColumns:
-      "minmax(0,1fr) 270px",
-    gap: 20,
-    padding: 30,
-    borderRadius: 24,
+    gridTemplateColumns: "minmax(0,1fr) 290px",
+    gap: 24,
+    padding: "30px 32px",
+    border: "1px solid rgba(255,255,255,.08)",
+    borderRadius: 22,
     background:
-      "linear-gradient(135deg,#0b1710,#123924 65%,#17673e)",
-    boxShadow:
-      "0 22px 55px rgba(12,48,29,.18)",
+      "linear-gradient(135deg,#0e1d15 0%,#123823 62%,#165c39 100%)",
+    boxShadow: "0 18px 42px rgba(18,56,35,.16)",
+  },
+
+  heroContent: {
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
   },
 
   heroTag: {
     display: "block",
-    marginBottom: 9,
-    color: "#75dca4",
+    marginBottom: 10,
+    color: "#78dca5",
     fontSize: 10,
     fontWeight: 900,
     letterSpacing: 1.5,
   },
 
   heroTitle: {
-    maxWidth: 700,
+    maxWidth: 720,
     margin: "0 0 12px",
     color: "#fff",
-    fontSize: "clamp(34px,5vw,56px)",
-    lineHeight: 1.02,
+    fontSize: "clamp(31px,4vw,47px)",
+    lineHeight: 1.04,
+    letterSpacing: "-1.1px",
   },
 
   heroText: {
-    maxWidth: 680,
+    maxWidth: 640,
     margin: 0,
-    color: "#d1e5d8",
-    lineHeight: 1.6,
+    color: "#d3e5da",
+    fontSize: 15,
+    lineHeight: 1.65,
   },
 
   planPanel: {
-    padding: 20,
-    border:
-      "1px solid rgba(255,255,255,.14)",
-    borderRadius: 18,
-    background:
-      "rgba(255,255,255,.08)",
+    padding: 21,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    border: "1px solid rgba(255,255,255,.15)",
+    borderRadius: 17,
+    background: "rgba(255,255,255,.075)",
+    backdropFilter: "blur(8px)",
   },
 
   planLabel: {
     display: "block",
     color: "#95d8b2",
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: 900,
+    letterSpacing: 1.2,
   },
 
   planName: {
     display: "block",
     marginTop: 8,
     color: "#fff",
-    fontSize: 23,
+    fontSize: 22,
+    lineHeight: 1.2,
   },
 
   planStatus: {
+    width: "fit-content",
+    marginTop: 14,
+    padding: "7px 10px",
     display: "flex",
     alignItems: "center",
     gap: 8,
-    marginTop: 10,
-    color: "#dff4e7",
-    fontSize: 12,
+    borderRadius: 999,
+    background: "rgba(255,255,255,.09)",
+    color: "#e3f4e9",
+    fontSize: 11,
+    fontWeight: 700,
   },
 
   greenDot: {
@@ -1278,63 +984,76 @@ const s = {
     height: 8,
     borderRadius: "50%",
     background: "#52dd91",
+    boxShadow: "0 0 0 4px rgba(82,221,145,.12)",
   },
 
   planDivider: {
     height: 1,
-    margin: "18px 0",
-    background:
-      "rgba(255,255,255,.12)",
+    margin: "18px 0 14px",
+    background: "rgba(255,255,255,.12)",
   },
 
-  planSmall: {
-    color: "#b9d8c5",
-    fontSize: 12,
+  planFooter: {
+    display: "flex",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: 15,
   },
+
+  planSmall: { color: "#b9d8c5", fontSize: 11 },
+  planCount: { color: "#fff", fontSize: 25, lineHeight: 1 },
 
   bottomGrid: {
     maxWidth: 1440,
     margin: "0 auto",
     display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit,minmax(260px,1fr))",
+    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
     gap: 14,
   },
 
   infoCard: {
-    minHeight: 132,
-    display: "grid",
-    gridTemplateColumns: "48px 1fr",
-    gap: 14,
+    minHeight: 138,
     padding: 20,
     border: "1px solid #dfe7e2",
-    borderRadius: 18,
+    borderRadius: 17,
     background: "#fff",
+    boxShadow: "0 8px 20px rgba(31,52,40,.045)",
+  },
+
+  infoTop: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
   },
 
   infoIcon: {
-    width: 48,
-    height: 48,
+    width: 42,
+    height: 42,
     display: "grid",
     placeItems: "center",
-    borderRadius: 13,
+    borderRadius: 12,
     background: "#edf6f0",
+    fontSize: 18,
   },
 
   infoLabel: {
     color: "#16834f",
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: 900,
+    letterSpacing: 1,
   },
 
   infoTitle: {
-    margin: "5px 0 7px",
+    margin: "16px 0 7px",
+    fontSize: 21,
+    lineHeight: 1.15,
   },
 
   infoText: {
     margin: 0,
     color: "#748078",
     fontSize: 12,
+    lineHeight: 1.5,
   },
 
   bloqueoPagina: {
@@ -1342,10 +1061,8 @@ const s = {
     display: "grid",
     placeItems: "center",
     padding: 24,
-    background:
-      "radial-gradient(circle at top,#174d30,#07100b 70%)",
-    fontFamily:
-      'Inter, system-ui, "Segoe UI", sans-serif',
+    background: "radial-gradient(circle at top,#174d30,#07100b 70%)",
+    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
   },
 
   bloqueoTarjeta: {
@@ -1354,14 +1071,10 @@ const s = {
     borderRadius: 24,
     background: "#fff",
     textAlign: "center",
-    boxShadow:
-      "0 28px 70px rgba(0,0,0,.28)",
+    boxShadow: "0 28px 70px rgba(0,0,0,.28)",
   },
 
-  bloqueoLogo: {
-    width: 210,
-    maxWidth: "70%",
-  },
+  bloqueoLogo: { width: 210, maxWidth: "70%" },
 
   candado: {
     width: 66,
