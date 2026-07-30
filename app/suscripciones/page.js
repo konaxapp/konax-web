@@ -12,12 +12,17 @@ const FORMULARIO_INICIAL = {
   cliente: "",
   telefono: "",
   correo: "",
+  planId: "",
   plan: "",
   descripcion: "",
   precio: "",
   vendedor: "",
   fechaInicio: "",
   periodicidad: "Mensual",
+  duracionCantidad: "1",
+  duracionUnidad: "Meses",
+  diasAviso: String(DIAS_PROXIMO_VENCER),
+  diasGracia: String(DIAS_GRACIA),
   formaPago: "Efectivo",
   estado: "Activo",
 };
@@ -29,11 +34,31 @@ const PAGO_INICIAL = {
   observacion: "",
 };
 
+const PLAN_INICIAL = {
+  nombre: "",
+  descripcion: "",
+  precio: "",
+  periodicidad: "Mensual",
+  duracionCantidad: "1",
+  duracionUnidad: "Meses",
+  diasAviso: String(DIAS_PROXIMO_VENCER),
+  diasGracia: String(DIAS_GRACIA),
+  limiteAccesos: "",
+  activo: true,
+};
+
 export default function Suscripciones() {
   const router = useRouter();
 
   const [suscripciones, setSuscripciones] = useState([]);
   const [pagos, setPagos] = useState([]);
+  const [planes, setPlanes] = useState([]);
+  const [planFormulario, setPlanFormulario] =
+    useState(PLAN_INICIAL);
+  const [planEditandoId, setPlanEditandoId] =
+    useState(null);
+  const [mostrarPlanes, setMostrarPlanes] =
+    useState(true);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
@@ -60,6 +85,7 @@ export default function Suscripciones() {
     }
 
     await Promise.all([
+      cargarPlanes(empresaId),
       cargarSuscripciones(empresaId),
       cargarPagos(empresaId),
     ]);
@@ -88,7 +114,17 @@ export default function Suscripciones() {
   }
 
   function fechaHoy() {
-    return new Date().toISOString().split("T")[0];
+    const hoy = new Date();
+
+    const anio = hoy.getFullYear();
+    const mes = String(
+      hoy.getMonth() + 1
+    ).padStart(2, "0");
+    const dia = String(
+      hoy.getDate()
+    ).padStart(2, "0");
+
+    return `${anio}-${mes}-${dia}`;
   }
 
   function fechaLocal(fechaTexto) {
@@ -176,10 +212,46 @@ export default function Suscripciones() {
     }
   }
 
+  function calcularVencimientoPorDuracion(
+    fechaBase,
+    cantidad,
+    unidad
+  ) {
+    const numero = Math.max(
+      1,
+      Number(cantidad || 1)
+    );
+
+    switch (unidad) {
+      case "Días":
+        return sumarDiasFecha(
+          fechaBase,
+          numero
+        );
+      case "Semanas":
+        return sumarDiasFecha(
+          fechaBase,
+          numero * 7
+        );
+      case "Años":
+        return sumarMesesFecha(
+          fechaBase,
+          numero * 12
+        );
+      case "Meses":
+      default:
+        return sumarMesesFecha(
+          fechaBase,
+          numero
+        );
+    }
+  }
+
   function calcularVencimiento() {
-    return calcularVencimientoDesde(
+    return calcularVencimientoPorDuracion(
       formulario.fechaInicio,
-      formulario.periodicidad
+      formulario.duracionCantidad,
+      formulario.duracionUnidad
     );
   }
 
@@ -211,11 +283,31 @@ export default function Suscripciones() {
       return "Suspendido";
     }
 
+    if (estadoGuardado === "pendiente") {
+      return "Pendiente";
+    }
+
+    const diasAviso = Math.max(
+      0,
+      Number(
+        item.dias_aviso ??
+          DIAS_PROXIMO_VENCER
+      )
+    );
+
+    const diasGracia = Math.max(
+      0,
+      Number(
+        item.dias_gracia ??
+          DIAS_GRACIA
+      )
+    );
+
     const dias = calcularDiasParaVencer(
       item.fecha_vencimiento
     );
 
-    if (dias < -DIAS_GRACIA) {
+    if (dias < -diasGracia) {
       return "Suspendido";
     }
 
@@ -223,7 +315,7 @@ export default function Suscripciones() {
       return "Vencida";
     }
 
-    if (dias <= DIAS_PROXIMO_VENCER) {
+    if (dias <= diasAviso) {
       return "Próxima a vencer";
     }
 
@@ -244,6 +336,377 @@ export default function Suscripciones() {
 
   function limpiarFormulario() {
     setFormulario(FORMULARIO_INICIAL);
+  }
+
+  function configuracionPeriodicidad(
+    periodicidad
+  ) {
+    const configuraciones = {
+      Diaria: {
+        cantidad: "1",
+        unidad: "Días",
+      },
+      Semanal: {
+        cantidad: "1",
+        unidad: "Semanas",
+      },
+      Quincenal: {
+        cantidad: "15",
+        unidad: "Días",
+      },
+      Mensual: {
+        cantidad: "1",
+        unidad: "Meses",
+      },
+      Trimestral: {
+        cantidad: "3",
+        unidad: "Meses",
+      },
+      Semestral: {
+        cantidad: "6",
+        unidad: "Meses",
+      },
+      Anual: {
+        cantidad: "1",
+        unidad: "Años",
+      },
+    };
+
+    return (
+      configuraciones[periodicidad] ||
+      configuraciones.Mensual
+    );
+  }
+
+  function cambiarPeriodicidadPlan(
+    periodicidad
+  ) {
+    const configuracion =
+      configuracionPeriodicidad(
+        periodicidad
+      );
+
+    setPlanFormulario((actual) => ({
+      ...actual,
+      periodicidad,
+      duracionCantidad:
+        configuracion.cantidad,
+      duracionUnidad:
+        configuracion.unidad,
+    }));
+  }
+
+  function limpiarPlanFormulario() {
+    setPlanFormulario(PLAN_INICIAL);
+    setPlanEditandoId(null);
+  }
+
+  function seleccionarPlan(planId) {
+    const plan = planes.find(
+      (item) =>
+        String(item.id) ===
+        String(planId)
+    );
+
+    if (!plan) {
+      setFormulario((actual) => ({
+        ...actual,
+        planId: "",
+        plan: "",
+        descripcion: "",
+        precio: "",
+        periodicidad: "Mensual",
+        duracionCantidad: "1",
+        duracionUnidad: "Meses",
+        diasAviso: String(
+          DIAS_PROXIMO_VENCER
+        ),
+        diasGracia: String(
+          DIAS_GRACIA
+        ),
+      }));
+      return;
+    }
+
+    setFormulario((actual) => ({
+      ...actual,
+      planId: plan.id,
+      plan: plan.nombre || "",
+      descripcion:
+        plan.descripcion || "",
+      precio: String(
+        Number(plan.precio || 0).toFixed(2)
+      ),
+      periodicidad:
+        plan.periodicidad || "Mensual",
+      duracionCantidad: String(
+        plan.duracion_cantidad || 1
+      ),
+      duracionUnidad:
+        plan.duracion_unidad ||
+        "Meses",
+      diasAviso: String(
+        plan.dias_aviso ??
+          DIAS_PROXIMO_VENCER
+      ),
+      diasGracia: String(
+        plan.dias_gracia ??
+          DIAS_GRACIA
+      ),
+    }));
+  }
+
+  function editarPlan(plan) {
+    setPlanEditandoId(plan.id);
+
+    setPlanFormulario({
+      nombre: plan.nombre || "",
+      descripcion:
+        plan.descripcion || "",
+      precio: String(
+        Number(plan.precio || 0)
+      ),
+      periodicidad:
+        plan.periodicidad || "Mensual",
+      duracionCantidad: String(
+        plan.duracion_cantidad || 1
+      ),
+      duracionUnidad:
+        plan.duracion_unidad ||
+        "Meses",
+      diasAviso: String(
+        plan.dias_aviso ??
+          DIAS_PROXIMO_VENCER
+      ),
+      diasGracia: String(
+        plan.dias_gracia ??
+          DIAS_GRACIA
+      ),
+      limiteAccesos:
+        plan.limite_accesos === null ||
+        plan.limite_accesos === undefined
+          ? ""
+          : String(
+              plan.limite_accesos
+            ),
+      activo:
+        plan.activo !== false,
+    });
+
+    setMostrarPlanes(true);
+
+    setTimeout(() => {
+      document
+        .getElementById(
+          "formulario-plan-membresia"
+        )
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+    }, 100);
+  }
+
+  async function guardarPlanMembresia() {
+    const empresaId =
+      obtenerEmpresaId();
+
+    if (!empresaId || guardando) return;
+
+    const nombre =
+      planFormulario.nombre.trim();
+    const precio = Number(
+      planFormulario.precio
+    );
+    const duracionCantidad = Number(
+      planFormulario.duracionCantidad
+    );
+    const diasAviso = Number(
+      planFormulario.diasAviso || 0
+    );
+    const diasGracia = Number(
+      planFormulario.diasGracia || 0
+    );
+
+    const limiteAccesos =
+      planFormulario.limiteAccesos === ""
+        ? null
+        : Number(
+            planFormulario.limiteAccesos
+          );
+
+    if (!nombre) {
+      alert(
+        "Escriba el nombre del plan."
+      );
+      return;
+    }
+
+    if (
+      !Number.isFinite(precio) ||
+      precio <= 0
+    ) {
+      alert(
+        "El precio del plan debe ser mayor que cero."
+      );
+      return;
+    }
+
+    if (
+      !Number.isInteger(
+        duracionCantidad
+      ) ||
+      duracionCantidad <= 0
+    ) {
+      alert(
+        "La duración debe ser un número entero mayor que cero."
+      );
+      return;
+    }
+
+    if (
+      !Number.isInteger(diasAviso) ||
+      diasAviso < 0 ||
+      !Number.isInteger(diasGracia) ||
+      diasGracia < 0
+    ) {
+      alert(
+        "Revise los días de aviso y los días de gracia."
+      );
+      return;
+    }
+
+    if (
+      limiteAccesos !== null &&
+      (!Number.isInteger(
+        limiteAccesos
+      ) ||
+        limiteAccesos <= 0)
+    ) {
+      alert(
+        "El límite de accesos debe estar vacío o ser mayor que cero."
+      );
+      return;
+    }
+
+    const payload = {
+      empresa_id: empresaId,
+      nombre,
+      descripcion:
+        planFormulario.descripcion.trim() ||
+        null,
+      precio,
+      periodicidad:
+        planFormulario.periodicidad,
+      duracion_cantidad:
+        duracionCantidad,
+      duracion_unidad:
+        planFormulario.duracionUnidad,
+      dias_aviso: diasAviso,
+      dias_gracia: diasGracia,
+      limite_accesos:
+        limiteAccesos,
+      activo:
+        planFormulario.activo,
+    };
+
+    setGuardando(true);
+
+    try {
+      if (planEditandoId) {
+        const { error } = await supabase
+          .from("planes_membresia")
+          .update(payload)
+          .eq("id", planEditandoId)
+          .eq("empresa_id", empresaId);
+
+        if (error) throw error;
+
+        alert(
+          "Plan actualizado correctamente."
+        );
+      } else {
+        const { error } = await supabase
+          .from("planes_membresia")
+          .insert([payload]);
+
+        if (error) throw error;
+
+        alert(
+          "Plan creado correctamente."
+        );
+      }
+
+      limpiarPlanFormulario();
+      await cargarPlanes(empresaId);
+    } catch (error) {
+      const mensaje =
+        error.code === "23505"
+          ? "Ya existe un plan con ese nombre."
+          : error.message;
+
+      alert(
+        "No se pudo guardar el plan: " +
+          mensaje
+      );
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function cambiarEstadoPlan(
+    plan
+  ) {
+    const empresaId =
+      obtenerEmpresaId();
+
+    if (!empresaId || guardando) return;
+
+    const nuevoEstado =
+      !Boolean(plan.activo);
+
+    const accion = nuevoEstado
+      ? "activar"
+      : "desactivar";
+
+    if (
+      !confirm(
+        `¿Desea ${accion} el plan ${plan.nombre}?`
+      )
+    ) {
+      return;
+    }
+
+    setGuardando(true);
+
+    try {
+      const { error } = await supabase
+        .from("planes_membresia")
+        .update({
+          activo: nuevoEstado,
+        })
+        .eq("id", plan.id)
+        .eq("empresa_id", empresaId);
+
+      if (error) throw error;
+
+      if (
+        !nuevoEstado &&
+        String(formulario.planId) ===
+          String(plan.id)
+      ) {
+        limpiarFormulario();
+      }
+
+      await cargarPlanes(empresaId);
+    } catch (error) {
+      alert(
+        "No se pudo cambiar el estado del plan: " +
+          error.message
+      );
+    } finally {
+      setGuardando(false);
+    }
   }
 
   function limpiarTelefono(telefono) {
@@ -374,6 +837,14 @@ Responde este mensaje y te ayudamos a reactivarla.`;
     }, 100);
   }
 
+  const planesActivos = useMemo(
+    () =>
+      planes.filter(
+        (plan) => plan.activo !== false
+      ),
+    [planes]
+  );
+
   const membresiasFiltradas = useMemo(() => {
     const texto = busquedaMembresia
       .toLowerCase()
@@ -501,6 +972,33 @@ Responde este mensaje y te ayudamos a reactivarla.`;
           )
       );
   }, [suscripciones]);
+
+  async function cargarPlanes(
+    empresaId = obtenerEmpresaId()
+  ) {
+    if (!empresaId) return;
+
+    const { data, error } = await supabase
+      .from("planes_membresia")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .order("activo", {
+        ascending: false,
+      })
+      .order("nombre", {
+        ascending: true,
+      });
+
+    if (error) {
+      alert(
+        "Error cargando planes de membresía: " +
+          error.message
+      );
+      return;
+    }
+
+    setPlanes(data || []);
+  }
 
   async function cargarSuscripciones(
     empresaId = obtenerEmpresaId()
@@ -791,8 +1289,7 @@ Responde este mensaje y te ayudamos a reactivarla.`;
     const camposObligatorios = [
       formulario.cedula,
       formulario.cliente,
-      formulario.plan,
-      formulario.precio,
+      formulario.planId,
       formulario.fechaInicio,
     ];
 
@@ -802,16 +1299,32 @@ Responde este mensaje y te ayudamos a reactivarla.`;
       )
     ) {
       alert(
-        "Complete cédula, cliente, plan, precio y fecha de inicio."
+        "Complete cédula, cliente, plan y fecha de inicio."
       );
       return;
     }
 
-    const precio = Number(formulario.precio);
+    const planSeleccionado = planes.find(
+      (plan) =>
+        String(plan.id) ===
+          String(formulario.planId) &&
+        plan.activo !== false
+    );
+
+    if (!planSeleccionado) {
+      alert(
+        "Seleccione un plan activo del catálogo."
+      );
+      return;
+    }
+
+    const precio = Number(
+      planSeleccionado.precio
+    );
 
     if (!Number.isFinite(precio) || precio <= 0) {
       alert(
-        "El precio de la membresía debe ser mayor que cero."
+        "El plan seleccionado no tiene un precio válido."
       );
       return;
     }
@@ -844,6 +1357,8 @@ Responde este mensaje y te ayudamos a reactivarla.`;
           {
             empresa_id: empresaId,
             cliente_id: clienteCreado.id,
+            plan_membresia_id:
+              planSeleccionado.id,
             numero_cuenta: numeroCuenta,
             tipo_producto: "Membresía",
             tipo_cuenta: "Suscripción",
@@ -884,6 +1399,8 @@ Responde este mensaje y te ayudamos a reactivarla.`;
               cliente_id: clienteCreado.id,
               informacion_comercial_id:
                 comercialCreado.id,
+              plan_membresia_id:
+                planSeleccionado.id,
               cliente: formulario.cliente.trim(),
               cedula: formulario.cedula.trim(),
               telefono:
@@ -903,6 +1420,17 @@ Responde este mensaje y te ayudamos a reactivarla.`;
                 fechaVencimiento,
               periodicidad:
                 formulario.periodicidad,
+              duracion_cantidad: Number(
+                formulario.duracionCantidad
+              ),
+              duracion_unidad:
+                formulario.duracionUnidad,
+              dias_aviso: Number(
+                formulario.diasAviso
+              ),
+              dias_gracia: Number(
+                formulario.diasGracia
+              ),
               estado: formulario.estado,
             },
           ]);
@@ -980,10 +1508,17 @@ Responde este mensaje y te ayudamos a reactivarla.`;
           : item.fecha_vencimiento;
 
       const nuevaFecha =
-        calcularVencimientoDesde(
-          fechaBase,
-          item.periodicidad
-        );
+        item.duracion_cantidad &&
+        item.duracion_unidad
+          ? calcularVencimientoPorDuracion(
+              fechaBase,
+              item.duracion_cantidad,
+              item.duracion_unidad
+            )
+          : calcularVencimientoDesde(
+              fechaBase,
+              item.periodicidad
+            );
 
       const { error: errorCaja } =
         await supabase.from("caja").insert([
@@ -1254,12 +1789,16 @@ Responde este mensaje y te ayudamos a reactivarla.`;
         </div>
 
         <div style={reglasBox}>
-          <strong>Reglas automáticas activas:</strong>
+          <strong>
+            Catálogo de planes activo:
+          </strong>
           <span>
-            Próxima a vencer: {DIAS_PROXIMO_VENCER} días antes
+            Cada plan define precio, duración,
+            aviso y días de gracia.
           </span>
           <span>
-            Suspensión automática: después de {DIAS_GRACIA} días de gracia
+            Planes disponibles:{" "}
+            {planesActivos.length}
           </span>
           {sincronizando && (
             <span style={{ color: "#166534" }}>
@@ -1469,6 +2008,419 @@ Responde este mensaje y te ayudamos a reactivarla.`;
           </div>
         </div>
 
+        <div style={card} id="catalogo-planes">
+          <CabeceraSeccion
+            titulo="Planes de membresía"
+            texto="Define una sola vez el precio, duración y reglas de cada plan."
+            cantidad={planes.length}
+          />
+
+          <div style={planCabeceraAcciones}>
+            <div>
+              <strong style={planAyudaTitulo}>
+                Catálogo centralizado
+              </strong>
+              <p style={planAyudaTexto}>
+                Los planes activos aparecerán al crear una membresía.
+                Desactivar un plan no elimina las membresías existentes.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setMostrarPlanes(
+                  (actual) => !actual
+                )
+              }
+              style={botonSecundario}
+            >
+              {mostrarPlanes
+                ? "Ocultar administración"
+                : "Administrar planes"}
+            </button>
+          </div>
+
+          {mostrarPlanes && (
+            <>
+              <div
+                id="formulario-plan-membresia"
+                style={planFormularioBox}
+              >
+                <div style={planFormularioTituloBox}>
+                  <div>
+                    <span style={planFormularioEtiqueta}>
+                      {planEditandoId
+                        ? "EDITANDO PLAN"
+                        : "NUEVO PLAN"}
+                    </span>
+                    <h3 style={planFormularioTitulo}>
+                      {planEditandoId
+                        ? "Actualizar plan de membresía"
+                        : "Crear plan de membresía"}
+                    </h3>
+                  </div>
+
+                  {planEditandoId && (
+                    <button
+                      type="button"
+                      onClick={limpiarPlanFormulario}
+                      style={botonSecundarioMini}
+                    >
+                      Cancelar edición
+                    </button>
+                  )}
+                </div>
+
+                <div style={grid}>
+                  <Campo etiqueta="Nombre del plan *">
+                    <input
+                      placeholder="Ej. Plan mensual"
+                      value={planFormulario.nombre}
+                      onChange={(e) =>
+                        setPlanFormulario({
+                          ...planFormulario,
+                          nombre: e.target.value,
+                        })
+                      }
+                      style={input}
+                    />
+                  </Campo>
+
+                  <Campo etiqueta="Precio recurrente *">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={planFormulario.precio}
+                      onChange={(e) =>
+                        setPlanFormulario({
+                          ...planFormulario,
+                          precio: e.target.value,
+                        })
+                      }
+                      style={input}
+                    />
+                  </Campo>
+
+                  <Campo etiqueta="Periodicidad">
+                    <select
+                      value={
+                        planFormulario.periodicidad
+                      }
+                      onChange={(e) =>
+                        cambiarPeriodicidadPlan(
+                          e.target.value
+                        )
+                      }
+                      style={input}
+                    >
+                      <option>Diaria</option>
+                      <option>Semanal</option>
+                      <option>Quincenal</option>
+                      <option>Mensual</option>
+                      <option>Trimestral</option>
+                      <option>Semestral</option>
+                      <option>Anual</option>
+                    </select>
+                  </Campo>
+
+                  <Campo etiqueta="Duración">
+                    <div style={duracionGrid}>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={
+                          planFormulario.duracionCantidad
+                        }
+                        onChange={(e) =>
+                          setPlanFormulario({
+                            ...planFormulario,
+                            duracionCantidad:
+                              e.target.value,
+                          })
+                        }
+                        style={input}
+                      />
+
+                      <select
+                        value={
+                          planFormulario.duracionUnidad
+                        }
+                        onChange={(e) =>
+                          setPlanFormulario({
+                            ...planFormulario,
+                            duracionUnidad:
+                              e.target.value,
+                          })
+                        }
+                        style={input}
+                      >
+                        <option>Días</option>
+                        <option>Semanas</option>
+                        <option>Meses</option>
+                        <option>Años</option>
+                      </select>
+                    </div>
+                  </Campo>
+
+                  <Campo etiqueta="Avisar antes de vencer">
+                    <div style={campoConSufijo}>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={
+                          planFormulario.diasAviso
+                        }
+                        onChange={(e) =>
+                          setPlanFormulario({
+                            ...planFormulario,
+                            diasAviso:
+                              e.target.value,
+                          })
+                        }
+                        style={input}
+                      />
+                      <span style={sufijoCampo}>
+                        días
+                      </span>
+                    </div>
+                  </Campo>
+
+                  <Campo etiqueta="Días de gracia">
+                    <div style={campoConSufijo}>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={
+                          planFormulario.diasGracia
+                        }
+                        onChange={(e) =>
+                          setPlanFormulario({
+                            ...planFormulario,
+                            diasGracia:
+                              e.target.value,
+                          })
+                        }
+                        style={input}
+                      />
+                      <span style={sufijoCampo}>
+                        días
+                      </span>
+                    </div>
+                  </Campo>
+
+                  <Campo etiqueta="Límite de accesos">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      placeholder="Vacío = ilimitado"
+                      value={
+                        planFormulario.limiteAccesos
+                      }
+                      onChange={(e) =>
+                        setPlanFormulario({
+                          ...planFormulario,
+                          limiteAccesos:
+                            e.target.value,
+                        })
+                      }
+                      style={input}
+                    />
+                  </Campo>
+
+                  <Campo etiqueta="Estado">
+                    <select
+                      value={
+                        planFormulario.activo
+                          ? "Activo"
+                          : "Inactivo"
+                      }
+                      onChange={(e) =>
+                        setPlanFormulario({
+                          ...planFormulario,
+                          activo:
+                            e.target.value ===
+                            "Activo",
+                        })
+                      }
+                      style={input}
+                    >
+                      <option>Activo</option>
+                      <option>Inactivo</option>
+                    </select>
+                  </Campo>
+                </div>
+
+                <textarea
+                  placeholder="Descripción y beneficios incluidos en el plan"
+                  value={
+                    planFormulario.descripcion
+                  }
+                  onChange={(e) =>
+                    setPlanFormulario({
+                      ...planFormulario,
+                      descripcion: e.target.value,
+                    })
+                  }
+                  style={textarea}
+                />
+
+                <div style={accionesPlan}>
+                  <button
+                    type="button"
+                    onClick={guardarPlanMembresia}
+                    disabled={guardando}
+                    style={{
+                      ...boton,
+                      opacity: guardando
+                        ? 0.65
+                        : 1,
+                    }}
+                  >
+                    {guardando
+                      ? "Guardando..."
+                      : planEditandoId
+                      ? "Guardar cambios"
+                      : "Crear plan"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={limpiarPlanFormulario}
+                    disabled={guardando}
+                    style={botonCancelar}
+                  >
+                    Limpiar
+                  </button>
+                </div>
+              </div>
+
+              <div style={tablaContenedor}>
+                <table
+                  style={{
+                    ...tabla,
+                    minWidth: "980px",
+                  }}
+                >
+                  <thead>
+                    <tr>
+                      <th style={th}>Plan</th>
+                      <th style={th}>Precio</th>
+                      <th style={th}>Duración</th>
+                      <th style={th}>Aviso</th>
+                      <th style={th}>Gracia</th>
+                      <th style={th}>Accesos</th>
+                      <th style={th}>Estado</th>
+                      <th style={th}>Acciones</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {planes.length === 0 ? (
+                      <tr>
+                        <td style={tdVacio} colSpan="8">
+                          No hay planes creados. Crea el primer plan para poder registrar membresías.
+                        </td>
+                      </tr>
+                    ) : (
+                      planes.map((plan) => (
+                        <tr key={plan.id}>
+                          <td style={td}>
+                            <strong>
+                              {plan.nombre}
+                            </strong>
+                            <p style={descripcionPlanTabla}>
+                              {plan.descripcion ||
+                                "Sin descripción"}
+                            </p>
+                          </td>
+                          <td style={td}>
+                            B/.{" "}
+                            {Number(
+                              plan.precio || 0
+                            ).toFixed(2)}
+                          </td>
+                          <td style={td}>
+                            {plan.duracion_cantidad}{" "}
+                            {String(
+                              plan.duracion_unidad ||
+                                "Meses"
+                            ).toLowerCase()}
+                            <p style={descripcionPlanTabla}>
+                              {plan.periodicidad}
+                            </p>
+                          </td>
+                          <td style={td}>
+                            {plan.dias_aviso ?? 0} días
+                          </td>
+                          <td style={td}>
+                            {plan.dias_gracia ?? 0} días
+                          </td>
+                          <td style={td}>
+                            {plan.limite_accesos
+                              ? plan.limite_accesos
+                              : "Ilimitado"}
+                          </td>
+                          <td style={td}>
+                            <span
+                              style={
+                                plan.activo !== false
+                                  ? estadoVerde
+                                  : estadoRojo
+                              }
+                            >
+                              {plan.activo !== false
+                                ? "Activo"
+                                : "Inactivo"}
+                            </span>
+                          </td>
+                          <td style={td}>
+                            <div style={accionesFlex}>
+                              <button
+                                type="button"
+                                style={botonAzul}
+                                onClick={() =>
+                                  editarPlan(plan)
+                                }
+                              >
+                                Editar
+                              </button>
+
+                              <button
+                                type="button"
+                                style={
+                                  plan.activo !== false
+                                    ? botonNaranja
+                                    : botonPequeno
+                                }
+                                onClick={() =>
+                                  cambiarEstadoPlan(
+                                    plan
+                                  )
+                                }
+                              >
+                                {plan.activo !== false
+                                  ? "Desactivar"
+                                  : "Activar"}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+
         <div style={card}>
           <CabeceraSeccion
             titulo="Crear membresía"
@@ -1540,56 +2492,77 @@ Responde este mensaje y te ayudamos a reactivarla.`;
             </Campo>
 
             <Campo etiqueta="Plan / Membresía *">
-              <input
-                placeholder="Ej. Plan mensual"
-                value={formulario.plan}
+              <select
+                value={formulario.planId}
                 onChange={(e) =>
-                  setFormulario({
-                    ...formulario,
-                    plan: e.target.value,
-                  })
+                  seleccionarPlan(
+                    e.target.value
+                  )
                 }
                 style={input}
-              />
+                disabled={
+                  planesActivos.length === 0
+                }
+              >
+                <option value="">
+                  {planesActivos.length === 0
+                    ? "Primero crea un plan"
+                    : "Seleccione un plan"}
+                </option>
+
+                {planesActivos.map((plan) => (
+                  <option
+                    key={plan.id}
+                    value={plan.id}
+                  >
+                    {plan.nombre} · B/.{" "}
+                    {Number(
+                      plan.precio || 0
+                    ).toFixed(2)}
+                  </option>
+                ))}
+              </select>
             </Campo>
 
-            <Campo etiqueta="Precio *">
+            <Campo etiqueta="Precio recurrente">
               <input
-                placeholder="0.00"
-                type="number"
-                min="0"
-                step="0.01"
-                value={formulario.precio}
-                onChange={(e) =>
-                  setFormulario({
-                    ...formulario,
-                    precio: e.target.value,
-                  })
+                value={
+                  formulario.precio
+                    ? `B/. ${formulario.precio}`
+                    : ""
                 }
-                style={input}
+                placeholder="Se completa con el plan"
+                readOnly
+                style={inputLectura}
               />
             </Campo>
 
             <Campo etiqueta="Periodicidad">
-              <select
-                value={formulario.periodicidad}
-                onChange={(e) =>
-                  setFormulario({
-                    ...formulario,
-                    periodicidad:
-                      e.target.value,
-                  })
+              <input
+                value={
+                  formulario.planId
+                    ? formulario.periodicidad
+                    : ""
                 }
-                style={input}
-              >
-                <option>Diaria</option>
-                <option>Semanal</option>
-                <option>Quincenal</option>
-                <option>Mensual</option>
-                <option>Trimestral</option>
-                <option>Semestral</option>
-                <option>Anual</option>
-              </select>
+                placeholder="Se completa con el plan"
+                readOnly
+                style={inputLectura}
+              />
+            </Campo>
+
+            <Campo etiqueta="Duración del período">
+              <input
+                value={
+                  formulario.planId
+                    ? `${formulario.duracionCantidad} ${String(
+                        formulario.duracionUnidad
+                      ).toLowerCase()}`
+                    : ""
+                }
+                placeholder="Se completa con el plan"
+                readOnly
+                style={inputLectura}
+              />
             </Campo>
 
             <Campo etiqueta="Forma de pago">
@@ -1681,13 +2654,22 @@ Responde este mensaje y te ayudamos a reactivarla.`;
 
           <button
             onClick={crearSuscripcion}
-            disabled={guardando}
+            disabled={
+              guardando ||
+              planesActivos.length === 0
+            }
             style={{
               ...boton,
-              opacity: guardando ? 0.65 : 1,
+              opacity:
+                guardando ||
+                planesActivos.length === 0
+                  ? 0.65
+                  : 1,
             }}
           >
-            {guardando
+            {planesActivos.length === 0
+              ? "Primero crea un plan"
+              : guardando
               ? "Guardando..."
               : "Crear membresía"}
           </button>
@@ -2654,6 +3636,96 @@ const estadoRojo = {
   ...estadoBase,
   background: "#fee2e2",
   color: "#991b1b",
+};
+
+const planCabeceraAcciones = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "14px",
+  flexWrap: "wrap",
+  marginBottom: "18px",
+};
+
+const planAyudaTitulo = {
+  display: "block",
+  color: "#172019",
+  fontSize: "14px",
+};
+
+const planAyudaTexto = {
+  maxWidth: "720px",
+  margin: "5px 0 0",
+  color: "#6b7280",
+  fontSize: "12px",
+  lineHeight: 1.5,
+};
+
+const planFormularioBox = {
+  marginBottom: "18px",
+  padding: "18px",
+  border: "1px solid #dce5df",
+  borderRadius: "15px",
+  background: "#f7faf8",
+};
+
+const planFormularioTituloBox = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  flexWrap: "wrap",
+  marginBottom: "16px",
+};
+
+const planFormularioEtiqueta = {
+  display: "block",
+  color: "#16834f",
+  fontSize: "9px",
+  fontWeight: "900",
+  letterSpacing: "1.1px",
+};
+
+const planFormularioTitulo = {
+  margin: "4px 0 0",
+  color: "#172019",
+  fontSize: "19px",
+};
+
+const duracionGrid = {
+  display: "grid",
+  gridTemplateColumns: "90px minmax(0,1fr)",
+  gap: "8px",
+};
+
+const campoConSufijo = {
+  position: "relative",
+};
+
+const sufijoCampo = {
+  position: "absolute",
+  top: "50%",
+  right: "12px",
+  transform: "translateY(-50%)",
+  color: "#7b867f",
+  fontSize: "12px",
+  pointerEvents: "none",
+};
+
+const accionesPlan = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  flexWrap: "wrap",
+};
+
+const descripcionPlanTabla = {
+  maxWidth: "260px",
+  margin: "4px 0 0",
+  color: "#7a857e",
+  fontSize: "11px",
+  whiteSpace: "normal",
+  lineHeight: 1.4,
 };
 
 const modalOverlay = {
