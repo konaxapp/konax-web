@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
@@ -36,6 +36,30 @@ function claseEstado(estado) {
   return mapa[estado] || "estado";
 }
 
+function mostrarMontoDesdeCentavos(digitos) {
+  const limpio = String(digitos || "").replace(/\D/g, "");
+
+  if (!limpio) return "";
+
+  return (Number(limpio) / 100).toFixed(2);
+}
+
+function agregarDigitoCentavos(digitosActuales, digito) {
+  const limpio = String(digito || "").replace(/\D/g, "");
+
+  if (!limpio) return String(digitosActuales || "");
+
+  return (
+    String(digitosActuales || "") + limpio
+  )
+    .replace(/^0+(?=\d)/, "")
+    .slice(0, 10);
+}
+
+function borrarDigitoCentavos(digitosActuales) {
+  return String(digitosActuales || "").slice(0, -1);
+}
+
 export default function PedidosLavanderia() {
   const router = useRouter();
 
@@ -49,6 +73,8 @@ export default function PedidosLavanderia() {
   const [pagosEditados, setPagosEditados] = useState({});
   const [guardandoId, setGuardandoId] = useState("");
 
+  const borrarIntervaloRef = useRef(null);
+
   useEffect(() => {
     const empresa = localStorage.getItem("empresaId");
     const usuario = localStorage.getItem("usuarioId");
@@ -61,7 +87,74 @@ export default function PedidosLavanderia() {
 
     setEmpresaId(empresa);
     cargarPedidos(empresa);
+
+    return () => detenerBorradoContinuo();
   }, [router]);
+
+  function detenerBorradoContinuo() {
+    if (borrarIntervaloRef.current) {
+      clearInterval(borrarIntervaloRef.current);
+      borrarIntervaloRef.current = null;
+    }
+  }
+
+  function iniciarBorradoContinuo(pedidoId) {
+    detenerBorradoContinuo();
+    borrarMontoPedido(pedidoId);
+
+    borrarIntervaloRef.current = setInterval(() => {
+      borrarMontoPedido(pedidoId);
+    }, 90);
+  }
+
+  function borrarMontoPedido(pedidoId) {
+    setPagosEditados((actuales) => {
+      const actual = actuales[pedidoId] || {
+        montoCentavos: "",
+        metodo: "Efectivo",
+      };
+
+      const nuevosCentavos = borrarDigitoCentavos(
+        actual.montoCentavos
+      );
+
+      return {
+        ...actuales,
+        [pedidoId]: {
+          ...actual,
+          montoCentavos: nuevosCentavos,
+          monto: nuevosCentavos
+            ? (Number(nuevosCentavos) / 100).toFixed(2)
+            : "",
+        },
+      };
+    });
+  }
+
+  function agregarMontoPedido(pedidoId, digito) {
+    setPagosEditados((actuales) => {
+      const actual = actuales[pedidoId] || {
+        montoCentavos: "",
+        metodo: "Efectivo",
+      };
+
+      const nuevosCentavos = agregarDigitoCentavos(
+        actual.montoCentavos,
+        digito
+      );
+
+      return {
+        ...actuales,
+        [pedidoId]: {
+          ...actual,
+          montoCentavos: nuevosCentavos,
+          monto: nuevosCentavos
+            ? (Number(nuevosCentavos) / 100).toFixed(2)
+            : "",
+        },
+      };
+    });
+  }
 
   async function cargarPedidos(idEmpresa = empresaId) {
     if (!idEmpresa) return;
@@ -104,6 +197,7 @@ export default function PedidosLavanderia() {
       if (listaPedidos.length === 0) {
         setPedidos([]);
         setEstadosEditados({});
+        setPagosEditados({});
         return;
       }
 
@@ -135,17 +229,11 @@ export default function PedidosLavanderia() {
       ]);
 
       if (errorClientes) {
-        console.error(
-          "Error cargando clientes:",
-          errorClientes
-        );
+        console.error("Error cargando clientes:", errorClientes);
       }
 
       if (errorDetalles) {
-        console.error(
-          "Error cargando detalles:",
-          errorDetalles
-        );
+        console.error("Error cargando detalles:", errorDetalles);
       }
 
       const clientesPorId = Object.fromEntries(
@@ -186,6 +274,7 @@ export default function PedidosLavanderia() {
           pedido.id,
           {
             monto: "",
+            montoCentavos: "",
             metodo: pedido.metodo_pago || "Efectivo",
           },
         ])
@@ -212,15 +301,16 @@ export default function PedidosLavanderia() {
     }));
   }
 
-  function actualizarPago(pedidoId, campo, valor) {
+  function actualizarMetodoPago(pedidoId, metodo) {
     setPagosEditados((actuales) => ({
       ...actuales,
       [pedidoId]: {
         ...(actuales[pedidoId] || {
           monto: "",
+          montoCentavos: "",
           metodo: "Efectivo",
         }),
-        [campo]: valor,
+        metodo,
       },
     }));
   }
@@ -362,6 +452,7 @@ export default function PedidosLavanderia() {
       ...actuales,
       [pedido.id]: {
         monto: "",
+        montoCentavos: "",
         metodo: nuevoMetodoPago || "Efectivo",
       },
     }));
@@ -542,6 +633,7 @@ export default function PedidosLavanderia() {
             const pagoEditado =
               pagosEditados[pedido.id] || {
                 monto: "",
+                montoCentavos: "",
                 metodo: pedido.metodo_pago || "Efectivo",
               };
 
@@ -650,25 +742,71 @@ export default function PedidosLavanderia() {
                     <div className="cobro-grid">
                       <label>
                         Monto recibido
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          max={saldoPendiente}
-                          value={pagoEditado.monto}
-                          onChange={(e) =>
-                            actualizarPago(
-                              pedido.id,
-                              "monto",
-                              e.target.value
-                            )
-                          }
-                          placeholder="0.00"
-                          disabled={
-                            guardandoId ===
-                            pedido.id
-                          }
-                        />
+
+                        <div className="monto-con-borrar">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={mostrarMontoDesdeCentavos(
+                              pagoEditado.montoCentavos
+                            )}
+                            onBeforeInput={(e) => {
+                              const dato =
+                                e.nativeEvent?.data || "";
+
+                              if (/^\d+$/.test(dato)) {
+                                e.preventDefault();
+                                agregarMontoPedido(
+                                  pedido.id,
+                                  dato
+                                );
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (
+                                e.key === "Backspace" ||
+                                e.key === "Delete"
+                              ) {
+                                e.preventDefault();
+                                borrarMontoPedido(
+                                  pedido.id
+                                );
+                              }
+                            }}
+                            onChange={() => {}}
+                            placeholder="0.00"
+                            disabled={
+                              guardandoId ===
+                              pedido.id
+                            }
+                          />
+
+                          <button
+                            type="button"
+                            className="borrar-monto"
+                            onPointerDown={() =>
+                              iniciarBorradoContinuo(
+                                pedido.id
+                              )
+                            }
+                            onPointerUp={
+                              detenerBorradoContinuo
+                            }
+                            onPointerLeave={
+                              detenerBorradoContinuo
+                            }
+                            onPointerCancel={
+                              detenerBorradoContinuo
+                            }
+                            disabled={
+                              guardandoId ===
+                              pedido.id
+                            }
+                            aria-label="Mantener presionado para borrar"
+                          >
+                            ⌫
+                          </button>
+                        </div>
                       </label>
 
                       <label>
@@ -676,9 +814,8 @@ export default function PedidosLavanderia() {
                         <select
                           value={pagoEditado.metodo}
                           onChange={(e) =>
-                            actualizarPago(
+                            actualizarMetodoPago(
                               pedido.id,
-                              "metodo",
                               e.target.value
                             )
                           }
@@ -881,13 +1018,6 @@ export default function PedidosLavanderia() {
           outline: none;
         }
 
-        .controles input:focus {
-          border-color: #16834f;
-          box-shadow:
-            0 0 0 3px
-            rgba(22, 131, 79, 0.1);
-        }
-
         .filtros {
           margin-top: 10px;
           display: flex;
@@ -963,11 +1093,6 @@ export default function PedidosLavanderia() {
           border-radius: 999px;
           font-size: 11px;
           font-weight: 900;
-        }
-
-        .recibido {
-          background: #fef9c3;
-          color: #854d0e;
         }
 
         .proceso {
@@ -1079,6 +1204,23 @@ export default function PedidosLavanderia() {
           font-size: 15px;
         }
 
+        .monto-con-borrar {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 48px;
+          gap: 8px;
+        }
+
+        .borrar-monto {
+          border: none;
+          border-radius: 10px;
+          background: #fee2e2;
+          color: #b42318;
+          font-size: 20px;
+          font-weight: 900;
+          cursor: pointer;
+          touch-action: none;
+        }
+
         .acciones {
           margin-top: 14px;
           padding-top: 13px;
@@ -1164,7 +1306,7 @@ export default function PedidosLavanderia() {
 
           .resumen {
             grid-template-columns:
-              repeat(4, minmax(0, 1fr));
+              repeat(3, minmax(0, 1fr));
           }
 
           .datos {
