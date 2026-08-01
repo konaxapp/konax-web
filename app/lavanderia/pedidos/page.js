@@ -47,6 +47,7 @@ function nuevaPrenda() {
     servicio: "",
     cantidad: 1,
     precioUnitario: "",
+    precioCentavos: "",
     observacion: "",
   };
 }
@@ -56,12 +57,37 @@ function numeroSeguro(valor) {
   return Number.isFinite(numero) ? numero : 0;
 }
 
-function formatearMontoCentavos(valor) {
-  const digitos = String(valor || "").replace(/\D/g, "");
+function mostrarMontoDesdeCentavos(digitos) {
+  const limpio = String(digitos || "").replace(/\D/g, "");
 
-  if (!digitos) return "";
+  if (!limpio) return "";
 
-  return (Number(digitos) / 100).toFixed(2);
+  return (Number(limpio) / 100).toFixed(2);
+}
+
+function leerEntradaCentavos(digitosActuales, evento) {
+  const inputType = evento?.nativeEvent?.inputType || "";
+  const dato = evento?.nativeEvent?.data;
+
+  if (inputType.startsWith("delete")) {
+    return String(digitosActuales || "").slice(0, -1);
+  }
+
+  if (dato && /\d/.test(dato)) {
+    return (
+      String(digitosActuales || "") +
+      String(dato).replace(/\D/g, "")
+    )
+      .replace(/^0+(?=\d)/, "")
+      .slice(0, 10);
+  }
+
+  const valorPegado = String(evento?.target?.value || "")
+    .replace(/\D/g, "")
+    .replace(/^0+(?=\d)/, "")
+    .slice(0, 10);
+
+  return valorPegado;
 }
 
 
@@ -148,6 +174,8 @@ export default function NuevoPedidoLavanderia() {
   const [estadoPago, setEstadoPago] =
     useState("Pendiente");
   const [montoPagado, setMontoPagado] =
+    useState("");
+  const [montoPagadoCentavos, setMontoPagadoCentavos] =
     useState("");
   const [metodoPago, setMetodoPago] =
     useState("");
@@ -293,6 +321,29 @@ export default function NuevoPedidoLavanderia() {
             }
           : prenda
       )
+    );
+  }
+
+  function actualizarPrecioPrenda(idTemporal, evento) {
+    setPrendas((actuales) =>
+      actuales.map((prenda) => {
+        if (prenda.idTemporal !== idTemporal) {
+          return prenda;
+        }
+
+        const nuevosCentavos = leerEntradaCentavos(
+          prenda.precioCentavos,
+          evento
+        );
+
+        return {
+          ...prenda,
+          precioCentavos: nuevosCentavos,
+          precioUnitario: nuevosCentavos
+            ? Number(nuevosCentavos) / 100
+            : "",
+        };
+      })
     );
   }
 
@@ -545,6 +596,7 @@ export default function NuevoPedidoLavanderia() {
 
     setEstadoPago("Pendiente");
     setMontoPagado("");
+    setMontoPagadoCentavos("");
     setMetodoPago("");
 
     setComprobante(null);
@@ -1216,16 +1268,13 @@ export default function NuevoPedidoLavanderia() {
                     <input
                       type="text"
                       inputMode="numeric"
-                      value={
-                        prenda.precioUnitario
-                      }
+                      value={mostrarMontoDesdeCentavos(
+                        prenda.precioCentavos
+                      )}
                       onChange={(e) =>
-                        actualizarPrenda(
+                        actualizarPrecioPrenda(
                           prenda.idTemporal,
-                          "precioUnitario",
-                          formatearMontoCentavos(
-                            e.target.value
-                          )
+                          e
                         )
                       }
                       placeholder="0.00"
@@ -1363,6 +1412,11 @@ export default function NuevoPedidoLavanderia() {
                     setMontoPagado(
                       total.toFixed(2)
                     );
+                    setMontoPagadoCentavos(
+                      String(
+                        Math.round(total * 100)
+                      )
+                    );
                   }
 
                   if (
@@ -1370,6 +1424,7 @@ export default function NuevoPedidoLavanderia() {
                     "Pendiente"
                   ) {
                     setMontoPagado("");
+                    setMontoPagadoCentavos("");
                     setMetodoPago("");
                   }
                 }}
@@ -1391,14 +1446,29 @@ export default function NuevoPedidoLavanderia() {
               <input
                 type="text"
                 inputMode="numeric"
-                value={montoPagado}
-                onChange={(e) =>
+                value={mostrarMontoDesdeCentavos(
+                  montoPagadoCentavos
+                )}
+                onChange={(e) => {
+                  const nuevosCentavos =
+                    leerEntradaCentavos(
+                      montoPagadoCentavos,
+                      e
+                    );
+
+                  setMontoPagadoCentavos(
+                    nuevosCentavos
+                  );
+
                   setMontoPagado(
-                    formatearMontoCentavos(
-                      e.target.value
-                    )
-                  )
-                }
+                    nuevosCentavos
+                      ? (
+                          Number(nuevosCentavos) /
+                          100
+                        ).toFixed(2)
+                      : ""
+                  );
+                }}
                 placeholder="0.00"
               />
             </div>
