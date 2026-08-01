@@ -4,15 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const SERVICIOS = [
-  "Lavado",
-  "Lavado y secado",
-  "Lavado y planchado",
-  "Planchado",
-  "Servicio express",
-  "Otro",
-];
-
 const TIPOS_PRENDA = [
   "Camisa",
   "Pantalón",
@@ -26,6 +17,15 @@ const TIPOS_PRENDA = [
   "Otro",
 ];
 
+const SERVICIOS = [
+  "Lavado",
+  "Lavado y secado",
+  "Lavado y planchado",
+  "Planchado",
+  "Servicio express",
+  "Otro",
+];
+
 const METODOS_PAGO = [
   "Efectivo",
   "Yappy",
@@ -34,9 +34,13 @@ const METODOS_PAGO = [
   "Otro",
 ];
 
+function crearIdTemporal() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 function nuevaPrenda() {
   return {
-    idTemporal: crypto.randomUUID(),
+    idTemporal: crearIdTemporal(),
     tipo: "",
     servicio: "",
     cantidad: 1,
@@ -45,9 +49,15 @@ function nuevaPrenda() {
   };
 }
 
-function convertirNumero(valor) {
+function numeroSeguro(valor) {
   const numero = Number(valor);
   return Number.isFinite(numero) ? numero : 0;
+}
+
+function limpiarTextoBusqueda(valor) {
+  return String(valor || "")
+    .replace(/[%(),]/g, " ")
+    .trim();
 }
 
 export default function NuevoPedidoLavanderia() {
@@ -80,7 +90,7 @@ export default function NuevoPedidoLavanderia() {
     const usuario = localStorage.getItem("usuarioId");
 
     if (!empresa || !usuario) {
-      alert("La sesión no es válida.");
+      alert("La sesión no es válida. Inicie sesión nuevamente.");
       router.replace("/login");
       return;
     }
@@ -93,8 +103,8 @@ export default function NuevoPedidoLavanderia() {
     return prendas.reduce((acumulado, prenda) => {
       return (
         acumulado +
-        convertirNumero(prenda.cantidad) *
-          convertirNumero(prenda.precioUnitario)
+        numeroSeguro(prenda.cantidad) *
+          numeroSeguro(prenda.precioUnitario)
       );
     }, 0);
   }, [prendas]);
@@ -104,21 +114,23 @@ export default function NuevoPedidoLavanderia() {
   const pagado =
     estadoPago === "Pagado"
       ? total
-      : Math.min(convertirNumero(montoPagado), total);
+      : estadoPago === "Abono"
+      ? Math.min(numeroSeguro(montoPagado), total)
+      : 0;
 
   const saldoPendiente = Math.max(total - pagado, 0);
 
   async function buscarClientes(valor) {
     setBusquedaCliente(valor);
 
-    if (!empresaId || valor.trim().length < 2) {
+    const texto = limpiarTextoBusqueda(valor);
+
+    if (!empresaId || texto.length < 2) {
       setResultadosClientes([]);
       return;
     }
 
     setBuscandoCliente(true);
-
-    const texto = valor.trim();
 
     const { data, error } = await supabase
       .from("clientes")
@@ -170,21 +182,17 @@ export default function NuevoPedidoLavanderia() {
   }
 
   function eliminarPrenda(idTemporal) {
-    setPrendas((actuales) => {
-      if (actuales.length === 1) {
-        return actuales;
-      }
-
-      return actuales.filter(
-        (prenda) => prenda.idTemporal !== idTemporal
-      );
-    });
+    setPrendas((actuales) =>
+      actuales.length === 1
+        ? actuales
+        : actuales.filter(
+            (prenda) => prenda.idTemporal !== idTemporal
+          )
+    );
   }
 
   async function obtenerOCrearCliente() {
-    if (clienteId) {
-      return clienteId;
-    }
+    if (clienteId) return clienteId;
 
     const nombreLimpio = nombreCliente.trim();
     const telefonoLimpio = telefonoCliente.trim();
@@ -195,12 +203,20 @@ export default function NuevoPedidoLavanderia() {
       );
     }
 
-    const { data: clienteExistente } = await supabase
-      .from("clientes")
-      .select("id")
-      .eq("empresa_id", empresaId)
-      .eq("telefono", telefonoLimpio)
-      .maybeSingle();
+    const { data: clienteExistente, error: errorBusqueda } =
+      await supabase
+        .from("clientes")
+        .select("id")
+        .eq("empresa_id", empresaId)
+        .eq("telefono", telefonoLimpio)
+        .maybeSingle();
+
+    if (errorBusqueda) {
+      throw new Error(
+        "No se pudo validar el cliente: " +
+          errorBusqueda.message
+      );
+    }
 
     if (clienteExistente?.id) {
       return clienteExistente.id;
@@ -215,6 +231,8 @@ export default function NuevoPedidoLavanderia() {
           telefono: telefonoLimpio,
           direccion: direccionCliente.trim() || null,
           estado: "Activo",
+          modalidad: "Lavandería",
+          observacion: "Cliente registrado desde Nuevo pedido",
         },
       ])
       .select("id")
@@ -249,8 +267,8 @@ export default function NuevoPedidoLavanderia() {
       (prenda) =>
         prenda.tipo &&
         prenda.servicio &&
-        convertirNumero(prenda.cantidad) > 0 &&
-        convertirNumero(prenda.precioUnitario) >= 0
+        numeroSeguro(prenda.cantidad) > 0 &&
+        numeroSeguro(prenda.precioUnitario) > 0
     );
 
     if (!prendasValidas) {
@@ -262,6 +280,16 @@ export default function NuevoPedidoLavanderia() {
 
     if (total <= 0) {
       alert("El total del pedido debe ser mayor que cero.");
+      return false;
+    }
+
+    if (
+      estadoPago === "Abono" &&
+      (pagado <= 0 || pagado >= total)
+    ) {
+      alert(
+        "El abono debe ser mayor que cero y menor que el total."
+      );
       return false;
     }
 
@@ -279,15 +307,12 @@ export default function NuevoPedidoLavanderia() {
   async function guardarPedido(evento) {
     evento.preventDefault();
 
-    if (guardando || !validarFormulario()) {
-      return;
-    }
+    if (guardando || !validarFormulario()) return;
 
     setGuardando(true);
 
     try {
       const clienteFinalId = await obtenerOCrearCliente();
-
       const numeroPedido = `LAV-${Date.now()}`;
 
       const { data: pedido, error: errorPedido } =
@@ -331,13 +356,13 @@ export default function NuevoPedidoLavanderia() {
         pedido_id: pedido.id,
         tipo_prenda: prenda.tipo,
         servicio: prenda.servicio,
-        cantidad: convertirNumero(prenda.cantidad),
-        precio_unitario: convertirNumero(
+        cantidad: numeroSeguro(prenda.cantidad),
+        precio_unitario: numeroSeguro(
           prenda.precioUnitario
         ),
         subtotal:
-          convertirNumero(prenda.cantidad) *
-          convertirNumero(prenda.precioUnitario),
+          numeroSeguro(prenda.cantidad) *
+          numeroSeguro(prenda.precioUnitario),
         observacion: prenda.observacion.trim() || null,
       }));
 
@@ -357,37 +382,13 @@ export default function NuevoPedidoLavanderia() {
         );
       }
 
-      if (pagado > 0) {
-        const { error: errorCaja } = await supabase
-          .from("caja_movimientos")
-          .insert([
-            {
-              empresa_id: empresaId,
-              tipo: "Ingreso",
-              concepto: `Pago pedido ${pedido.numero_pedido}`,
-              monto: pagado,
-              metodo_pago: metodoPago,
-              referencia: pedido.numero_pedido,
-              fecha: new Date().toISOString(),
-              usuario_id: usuarioId,
-            },
-          ]);
-
-        if (errorCaja) {
-          console.error(
-            "El pedido se guardó, pero falló caja:",
-            errorCaja
-          );
-        }
-      }
-
       alert(
         `Pedido ${pedido.numero_pedido} creado correctamente.`
       );
 
       router.push("/lavanderia/pedidos");
     } catch (error) {
-      console.error(error);
+      console.error("Error guardando pedido:", error);
       alert(error.message || "No se pudo guardar el pedido.");
     } finally {
       setGuardando(false);
@@ -401,6 +402,7 @@ export default function NuevoPedidoLavanderia() {
           type="button"
           className="volver"
           onClick={() => router.push("/dashboard")}
+          aria-label="Volver al panel"
         >
           ←
         </button>
@@ -413,16 +415,13 @@ export default function NuevoPedidoLavanderia() {
 
       <form onSubmit={guardarPedido} className="formulario">
         <section className="tarjeta">
-          <div className="titulo-seccion">
-            <span className="numero">1</span>
-            <div>
-              <h2>Cliente</h2>
-              <p>Busca un cliente o registra uno nuevo.</p>
-            </div>
-          </div>
+          <TituloSeccion
+            numero="1"
+            titulo="Cliente"
+            texto="Busca un cliente o registra uno nuevo."
+          />
 
           <label>Buscar por nombre o teléfono</label>
-
           <input
             type="text"
             value={busquedaCliente}
@@ -495,13 +494,11 @@ export default function NuevoPedidoLavanderia() {
         </section>
 
         <section className="tarjeta">
-          <div className="titulo-seccion">
-            <span className="numero">2</span>
-            <div>
-              <h2>Prendas y servicios</h2>
-              <p>Agrega lo que recibiste.</p>
-            </div>
-          </div>
+          <TituloSeccion
+            numero="2"
+            titulo="Prendas y servicios"
+            texto="Agrega las prendas recibidas."
+          />
 
           {prendas.map((prenda, indice) => (
             <div
@@ -538,7 +535,6 @@ export default function NuevoPedidoLavanderia() {
                     }
                   >
                     <option value="">Seleccionar</option>
-
                     {TIPOS_PRENDA.map((tipo) => (
                       <option key={tipo} value={tipo}>
                         {tipo}
@@ -560,12 +556,8 @@ export default function NuevoPedidoLavanderia() {
                     }
                   >
                     <option value="">Seleccionar</option>
-
                     {SERVICIOS.map((servicio) => (
-                      <option
-                        key={servicio}
-                        value={servicio}
-                      >
+                      <option key={servicio} value={servicio}>
                         {servicio}
                       </option>
                     ))}
@@ -593,7 +585,7 @@ export default function NuevoPedidoLavanderia() {
                   <label>Precio unitario</label>
                   <input
                     type="number"
-                    min="0"
+                    min="0.01"
                     step="0.01"
                     value={prenda.precioUnitario}
                     onChange={(e) =>
@@ -626,10 +618,8 @@ export default function NuevoPedidoLavanderia() {
                 <strong>
                   B/.{" "}
                   {(
-                    convertirNumero(prenda.cantidad) *
-                    convertirNumero(
-                      prenda.precioUnitario
-                    )
+                    numeroSeguro(prenda.cantidad) *
+                    numeroSeguro(prenda.precioUnitario)
                   ).toFixed(2)}
                 </strong>
               </div>
@@ -646,13 +636,11 @@ export default function NuevoPedidoLavanderia() {
         </section>
 
         <section className="tarjeta">
-          <div className="titulo-seccion">
-            <span className="numero">3</span>
-            <div>
-              <h2>Entrega</h2>
-              <p>Define la fecha y prioridad.</p>
-            </div>
-          </div>
+          <TituloSeccion
+            numero="3"
+            titulo="Entrega"
+            texto="Define la fecha y prioridad."
+          />
 
           <div className="grid">
             <div>
@@ -692,13 +680,11 @@ export default function NuevoPedidoLavanderia() {
         </section>
 
         <section className="tarjeta">
-          <div className="titulo-seccion">
-            <span className="numero">4</span>
-            <div>
-              <h2>Pago</h2>
-              <p>Registra cómo queda el pedido.</p>
-            </div>
-          </div>
+          <TituloSeccion
+            numero="4"
+            titulo="Pago"
+            texto="Registra el estado del pago."
+          />
 
           <div className="opciones-pago">
             {["Pagado", "Abono", "Pendiente"].map(
@@ -710,9 +696,7 @@ export default function NuevoPedidoLavanderia() {
                     setEstadoPago(opcion);
 
                     if (opcion === "Pagado") {
-                      setMontoPagado(
-                        total.toFixed(2)
-                      );
+                      setMontoPagado(total.toFixed(2));
                     }
 
                     if (opcion === "Pendiente") {
@@ -737,8 +721,8 @@ export default function NuevoPedidoLavanderia() {
               <label>Monto abonado</label>
               <input
                 type="number"
-                min="0"
-                max={total}
+                min="0.01"
+                max={Math.max(total - 0.01, 0)}
                 step="0.01"
                 value={montoPagado}
                 onChange={(e) =>
@@ -758,10 +742,7 @@ export default function NuevoPedidoLavanderia() {
                   setMetodoPago(e.target.value)
                 }
               >
-                <option value="">
-                  Seleccione un método
-                </option>
-
+                <option value="">Seleccione un método</option>
                 {METODOS_PAGO.map((metodo) => (
                   <option key={metodo} value={metodo}>
                     {metodo}
@@ -776,12 +757,10 @@ export default function NuevoPedidoLavanderia() {
               <span>Total</span>
               <strong>B/. {total.toFixed(2)}</strong>
             </div>
-
             <div>
               <span>Pagado</span>
               <strong>B/. {pagado.toFixed(2)}</strong>
             </div>
-
             <div>
               <span>Saldo pendiente</span>
               <strong>
@@ -809,7 +788,7 @@ export default function NuevoPedidoLavanderia() {
 
         .pagina {
           min-height: 100vh;
-          padding: 18px 14px 40px;
+          padding: 12px 10px 30px;
           background: #f2f6f3;
           color: #142019;
           font-family: Inter, Arial, sans-serif;
@@ -817,7 +796,7 @@ export default function NuevoPedidoLavanderia() {
 
         .encabezado {
           width: min(760px, 100%);
-          margin: 0 auto 16px;
+          margin: 0 auto 14px;
           display: flex;
           align-items: center;
           gap: 12px;
@@ -825,7 +804,7 @@ export default function NuevoPedidoLavanderia() {
 
         .encabezado h1 {
           margin: 3px 0 0;
-          font-size: 27px;
+          font-size: 25px;
         }
 
         .etiqueta {
@@ -838,6 +817,7 @@ export default function NuevoPedidoLavanderia() {
         .volver {
           width: 44px;
           height: 44px;
+          flex: 0 0 44px;
           border: 1px solid #dce6df;
           border-radius: 12px;
           background: white;
@@ -849,38 +829,39 @@ export default function NuevoPedidoLavanderia() {
           width: min(760px, 100%);
           margin: 0 auto;
           display: grid;
-          gap: 14px;
+          gap: 12px;
         }
 
         .tarjeta {
-          padding: 18px;
+          padding: 15px 13px;
           border: 1px solid #dde7e0;
           border-radius: 17px;
           background: white;
           box-shadow: 0 8px 22px rgba(21, 45, 31, 0.05);
         }
 
-        .titulo-seccion {
+        :global(.titulo-seccion) {
           margin-bottom: 17px;
           display: flex;
           align-items: center;
           gap: 11px;
         }
 
-        .titulo-seccion h2 {
+        :global(.titulo-seccion h2) {
           margin: 0;
           font-size: 18px;
         }
 
-        .titulo-seccion p {
+        :global(.titulo-seccion p) {
           margin: 3px 0 0;
           color: #718078;
           font-size: 12px;
         }
 
-        .numero {
+        :global(.numero) {
           width: 35px;
           height: 35px;
+          flex: 0 0 35px;
           display: grid;
           place-items: center;
           border-radius: 11px;
@@ -900,7 +881,7 @@ export default function NuevoPedidoLavanderia() {
         select,
         textarea {
           width: 100%;
-          min-height: 47px;
+          min-height: 48px;
           padding: 11px 12px;
           border: 1px solid #d5dfd8;
           border-radius: 10px;
@@ -923,11 +904,8 @@ export default function NuevoPedidoLavanderia() {
 
         .grid {
           display: grid;
-          grid-template-columns: repeat(
-            2,
-            minmax(0, 1fr)
-          );
-          gap: 12px;
+          grid-template-columns: 1fr;
+          gap: 0;
         }
 
         .resultados {
@@ -941,9 +919,11 @@ export default function NuevoPedidoLavanderia() {
         }
 
         .resultado {
+          min-height: 46px;
           padding: 10px;
           display: flex;
           justify-content: space-between;
+          align-items: center;
           gap: 10px;
           border: 0;
           border-radius: 8px;
@@ -989,6 +969,7 @@ export default function NuevoPedidoLavanderia() {
         .boton-agregar,
         .boton-secundario {
           width: 100%;
+          min-height: 46px;
           margin-top: 12px;
           padding: 12px;
           border: 1px solid #a9cfb8;
@@ -1001,12 +982,12 @@ export default function NuevoPedidoLavanderia() {
 
         .opciones-pago {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
+          grid-template-columns: 1fr;
           gap: 7px;
         }
 
         .opcion {
-          min-height: 43px;
+          min-height: 45px;
           border: 1px solid #d5dfd8;
           border-radius: 10px;
           background: white;
@@ -1042,20 +1023,18 @@ export default function NuevoPedidoLavanderia() {
         }
 
         .guardar {
-          min-height: 55px;
+          position: sticky;
+          bottom: 10px;
+          z-index: 10;
+          min-height: 56px;
           border: 0;
           border-radius: 13px;
-          background: linear-gradient(
-            135deg,
-            #117a46,
-            #1aa55f
-          );
+          background: linear-gradient(135deg, #117a46, #1aa55f);
           color: white;
           font-size: 17px;
           font-weight: 900;
           cursor: pointer;
-          box-shadow: 0 13px 28px
-            rgba(17, 122, 70, 0.22);
+          box-shadow: 0 13px 28px rgba(17, 122, 70, 0.25);
         }
 
         .guardar:disabled {
@@ -1063,25 +1042,41 @@ export default function NuevoPedidoLavanderia() {
           cursor: not-allowed;
         }
 
-        @media (max-width: 600px) {
+        @media (min-width: 640px) {
           .pagina {
-            padding: 12px 10px 30px;
+            padding: 18px 14px 40px;
           }
 
           .tarjeta {
-            padding: 15px 13px;
+            padding: 18px;
           }
 
           .grid {
-            grid-template-columns: 1fr;
-            gap: 0;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
           }
 
           .opciones-pago {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(3, 1fr);
+          }
+
+          .guardar {
+            position: static;
           }
         }
       `}</style>
     </main>
+  );
+}
+
+function TituloSeccion({ numero, titulo, texto }) {
+  return (
+    <div className="titulo-seccion">
+      <span className="numero">{numero}</span>
+      <div>
+        <h2>{titulo}</h2>
+        <p>{texto}</p>
+      </div>
+    </div>
   );
 }
