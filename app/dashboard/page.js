@@ -1031,9 +1031,14 @@ export default function Dashboard() {
                 }
                 style={s.mobileMenuButton}
               >
-                {menuMovilAbierto
-                  ? "Cerrar"
-                  : "Menú"}
+                <span style={s.hamburgerIcon}>
+                  {menuMovilAbierto ? "×" : "☰"}
+                </span>
+                <span>
+                  {menuMovilAbierto
+                    ? "Cerrar"
+                    : "Menú"}
+                </span>
               </button>
             </div>
 
@@ -1226,8 +1231,15 @@ export default function Dashboard() {
 
         {esLavanderia ? (
           <>
-            <section style={s.bienvenidaLavanderia}>
-              <div>
+            <section
+              style={{
+                ...s.bienvenidaLavanderia,
+                ...(esMovil
+                  ? s.bienvenidaLavanderiaMobile
+                  : {}),
+              }}
+            >
+              <div style={s.bienvenidaTexto}>
                 <span style={s.heroTag}>
                   OPERACIÓN DE HOY
                 </span>
@@ -1241,6 +1253,17 @@ export default function Dashboard() {
                   estados, revisa caja e historial
                   desde el teléfono.
                 </p>
+              </div>
+
+              <div
+                style={{
+                  ...s.ilustracionLavanderia,
+                  ...(esMovil
+                    ? s.ilustracionLavanderiaMobile
+                    : {}),
+                }}
+              >
+                <IlustracionLavanderia />
               </div>
             </section>
 
@@ -1430,6 +1453,72 @@ export default function Dashboard() {
     </div>
   );
 }
+
+
+function IlustracionLavanderia() {
+  return (
+    <svg
+      viewBox="0 0 360 230"
+      width="100%"
+      height="100%"
+      role="img"
+      aria-label="Lavadora y canasta de ropa"
+    >
+      <defs>
+        <linearGradient id="washerBody" x1="0" x2="1">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="100%" stopColor="#e8efea" />
+        </linearGradient>
+
+        <linearGradient id="basket" x1="0" x2="1">
+          <stop offset="0%" stopColor="#2e9d5b" />
+          <stop offset="100%" stopColor="#14703f" />
+        </linearGradient>
+
+        <radialGradient id="door" cx="50%" cy="45%">
+          <stop offset="0%" stopColor="#6f8997" />
+          <stop offset="65%" stopColor="#22313a" />
+          <stop offset="100%" stopColor="#111a20" />
+        </radialGradient>
+
+        <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#173c2a" floodOpacity=".18" />
+        </filter>
+      </defs>
+
+      <g filter="url(#softShadow)">
+        <rect x="205" y="32" width="122" height="166" rx="12" fill="url(#washerBody)" stroke="#cfd9d2" strokeWidth="3" />
+        <rect x="215" y="43" width="102" height="28" rx="5" fill="#f7faf8" stroke="#d6dfd9" />
+        <circle cx="228" cy="57" r="5" fill="#8aa299" />
+        <circle cx="247" cy="57" r="5" fill="#8aa299" />
+        <rect x="273" y="51" width="30" height="11" rx="3" fill="#173c2a" />
+        <circle cx="266" cy="128" r="48" fill="#e8efeb" stroke="#cad6cf" strokeWidth="5" />
+        <circle cx="266" cy="128" r="38" fill="url(#door)" />
+        <ellipse cx="255" cy="115" rx="15" ry="10" fill="rgba(255,255,255,.18)" />
+
+        <g transform="translate(72 120)">
+          <path d="M0 20 L112 20 L98 92 L14 92 Z" fill="url(#basket)" stroke="#0f5f35" strokeWidth="3" />
+          <rect x="-6" y="14" width="124" height="16" rx="8" fill="#1a7e47" />
+          <g stroke="#b9e7ca" strokeWidth="4" opacity=".65">
+            <line x1="21" y1="39" x2="19" y2="73" />
+            <line x1="43" y1="39" x2="42" y2="76" />
+            <line x1="66" y1="39" x2="66" y2="76" />
+            <line x1="89" y1="39" x2="91" y2="73" />
+          </g>
+          <path d="M20 11 Q39 -8 61 11" fill="none" stroke="#f4f7f5" strokeWidth="14" strokeLinecap="round" />
+          <path d="M49 10 Q70 -13 94 8" fill="none" stroke="#2f8b55" strokeWidth="14" strokeLinecap="round" />
+          <path d="M69 12 Q86 -4 105 10" fill="none" stroke="#d7efe0" strokeWidth="13" strokeLinecap="round" />
+        </g>
+
+        <g transform="translate(286 0)">
+          <rect x="0" y="36" width="24" height="29" rx="3" fill="#f7faf8" stroke="#cfd9d2" />
+          <path d="M12 36 C8 23 2 18 4 11 C13 13 17 19 16 29 C18 18 25 13 31 13 C31 23 26 31 16 36 Z" fill="#2f9156" />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
 
 function Info({
   titulo,
@@ -1662,15 +1751,26 @@ const s = {
     maxWidth: 1440,
     margin: "0 auto 16px",
     padding: 24,
-    display: "flex",
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) minmax(220px,360px)",
     alignItems: "center",
-    justifyContent: "space-between",
     gap: 18,
-    flexWrap: "wrap",
     borderRadius: 20,
     background:
       "linear-gradient(135deg,#ffffff,#edf8f1)",
     border: "1px solid #cfe7d8",
+    overflow: "hidden",
+  },
+
+  bienvenidaTexto: {
+    minWidth: 0,
+  },
+
+  ilustracionLavanderia: {
+    width: "100%",
+    minHeight: 190,
+    display: "grid",
+    placeItems: "center",
   },
 
   tituloLavanderia: {
@@ -2007,9 +2107,9 @@ const s = {
   },
 
   mobileMenuButton: {
-    minWidth: 92,
+    minWidth: 104,
     minHeight: 42,
-    padding: "9px 16px",
+    padding: "9px 14px",
     border: "none",
     borderRadius: 11,
     background: "#173c2a",
@@ -2018,6 +2118,16 @@ const s = {
     cursor: "pointer",
     whiteSpace: "nowrap",
     justifySelf: "end",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+
+  hamburgerIcon: {
+    fontSize: 21,
+    lineHeight: 1,
+    fontWeight: 900,
   },
 
   mobileMenu: {
@@ -2115,6 +2225,15 @@ const s = {
   accesosGridMobile: {
     gridTemplateColumns:
       "repeat(2,minmax(0,1fr))",
+  },
+
+  bienvenidaLavanderiaMobile: {
+    gridTemplateColumns: "1fr",
+    padding: 20,
+  },
+
+  ilustracionLavanderiaMobile: {
+    minHeight: 170,
   },
 
   heroGridMobile: {
