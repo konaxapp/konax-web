@@ -142,7 +142,9 @@ export default function HistorialLavanderia() {
   const pedidosFiltrados = useMemo(() => {
     const texto = busqueda.trim().toLowerCase();
 
-    if (!texto) return pedidos;
+    if (texto.length < 2) {
+      return [];
+    }
 
     return pedidos.filter((pedido) => {
       return (
@@ -211,21 +213,41 @@ export default function HistorialLavanderia() {
       </section>
 
       <section className="buscador">
-        <input
-          type="search"
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar pedido, cliente, teléfono o método"
-        />
+        <div className="buscador-linea">
+          <input
+            type="search"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar pedido, cliente o teléfono"
+          />
+
+          {busqueda && (
+            <button
+              type="button"
+              onClick={() => setBusqueda("")}
+              aria-label="Limpiar búsqueda"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        <small>
+          Escribe al menos 2 caracteres para buscar en el historial.
+        </small>
       </section>
 
       {cargando ? (
         <section className="vacio">
           Cargando historial...
         </section>
+      ) : busqueda.trim().length < 2 ? (
+        <section className="vacio">
+          Busca por número de pedido, cliente o teléfono.
+        </section>
       ) : pedidosFiltrados.length === 0 ? (
         <section className="vacio">
-          No hay pedidos entregados para mostrar.
+          No se encontraron pedidos entregados con esa búsqueda.
         </section>
       ) : (
         <section className="lista">
@@ -406,6 +428,13 @@ export default function HistorialLavanderia() {
           background: white;
         }
 
+        .buscador-linea {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 8px;
+          align-items: center;
+        }
+
         .buscador input {
           width: 100%;
           min-height: 48px;
@@ -421,6 +450,24 @@ export default function HistorialLavanderia() {
           box-shadow:
             0 0 0 3px
             rgba(22, 131, 79, 0.1);
+        }
+
+        .buscador button {
+          width: 46px;
+          height: 46px;
+          border: 1px solid #d5dfd8;
+          border-radius: 10px;
+          background: #f5f8f6;
+          color: #173c2a;
+          font-size: 24px;
+          cursor: pointer;
+        }
+
+        .buscador small {
+          display: block;
+          margin-top: 7px;
+          color: #748078;
+          font-size: 11px;
         }
 
         .lista {
@@ -526,4 +573,3 @@ export default function HistorialLavanderia() {
     </main>
   );
 }
-
