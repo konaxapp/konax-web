@@ -1237,18 +1237,6 @@ export default function Dashboard() {
                   desde el teléfono.
                 </p>
               </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  router.push(
-                    "/lavanderia/nuevo-pedido"
-                  )
-                }
-                style={s.botonPedidoPrincipal}
-              >
-                + Nuevo pedido
-              </button>
             </section>
 
             <section
