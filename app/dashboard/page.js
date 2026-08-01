@@ -96,7 +96,7 @@ function construirModulosPorPlan(codigoPlan) {
       dashboard: true,
       nuevo_pedido: true,
       pedidos_lavanderia: true,
-      clientes: true,
+      clientes: true, // Se usa internamente, pero no aparece en el menú.
       caja: true,
       historial_lavanderia: true,
       usuarios: true,
@@ -709,16 +709,10 @@ export default function Dashboard() {
         "🧺",
       ],
       [
-        "Clientes",
-        "/clientes",
-        "clientes",
-        "👥",
-      ],
-      [
-        "Caja básica",
-        "/caja",
+        "Resumen de caja",
+        "/lavanderia/caja",
         "caja",
-        "▣",
+        "💵",
       ],
       [
         "Historial",
@@ -852,9 +846,16 @@ export default function Dashboard() {
       ],
     ];
 
-    const lista = esLavanderia
+    const listaBase = esLavanderia
       ? listaLavanderia
       : listaGeneral;
+
+    const lista =
+      esLavanderia && !esAdministrador()
+        ? listaBase.filter(
+            ([, , codigo]) => codigo !== "usuarios"
+          )
+        : listaBase;
 
     return lista
       .map(
@@ -886,7 +887,6 @@ export default function Dashboard() {
       [
         "nuevo_pedido",
         "pedidos_lavanderia",
-        "clientes",
         "caja",
         "historial_lavanderia",
       ].includes(item.codigo)
@@ -1233,8 +1233,8 @@ export default function Dashboard() {
 
                 <p style={s.heroText}>
                   Registra pedidos, consulta
-                  estados y administra la
-                  lavandería desde el teléfono.
+                  estados, revisa caja e historial
+                  desde el teléfono.
                 </p>
               </div>
 
