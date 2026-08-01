@@ -33,15 +33,17 @@ export default function Empresas() {
       "Servicio por Membresía",
     ],
     Comercio: [
-  "Ferretería",
-  "Farmacia",
-  "Tienda",
-  "Mercado",
-  "Repuestos",
-  "Boutique",
-  "Mueblería",
-],
+      "Ferretería",
+      "Farmacia",
+      "Tienda",
+      "Mercado",
+      "Repuestos",
+      "Boutique",
+      "Mueblería",
+    ],
     Servicios: [
+      "Lavandería",
+      "Lavaauto",
       "Seguridad",
       "Limpieza",
       "Jardinería",
@@ -216,7 +218,7 @@ export default function Empresas() {
             <Campo label="Nombre de la Empresa">
               <input
                 type="text"
-                placeholder="Ej. Mueblería Los Toros"
+                placeholder="Ej. Lavandería El Sol"
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 style={inputStyle}
