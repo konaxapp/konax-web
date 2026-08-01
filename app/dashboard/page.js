@@ -697,30 +697,6 @@ export default function Dashboard() {
         "▦",
       ],
       [
-        "Nuevo pedido",
-        "/lavanderia/nuevo-pedido",
-        "nuevo_pedido",
-        "➕",
-      ],
-      [
-        "Pedidos",
-        "/lavanderia/pedidos",
-        "pedidos_lavanderia",
-        "🧺",
-      ],
-      [
-        "Resumen de caja",
-        "/lavanderia/caja",
-        "caja",
-        "💵",
-      ],
-      [
-        "Historial",
-        "/lavanderia/historial",
-        "historial_lavanderia",
-        "🕘",
-      ],
-      [
         "Usuarios y Roles",
         "/usuarios",
         "usuarios",
@@ -883,15 +859,44 @@ export default function Dashboard() {
       );
     }
 
-    return modulosMenu.filter((item) =>
-      [
-        "nuevo_pedido",
-        "pedidos_lavanderia",
-        "caja",
-        "historial_lavanderia",
-      ].includes(item.codigo)
+    const accesosLavanderia = [
+      {
+        nombre: "Nuevo pedido",
+        ruta: "/lavanderia/nuevo-pedido",
+        codigo: "nuevo_pedido",
+        icono: "➕",
+      },
+      {
+        nombre: "Pedidos",
+        ruta: "/lavanderia/pedidos",
+        codigo: "pedidos_lavanderia",
+        icono: "🧺",
+      },
+      {
+        nombre: "Resumen de caja",
+        ruta: "/lavanderia/caja",
+        codigo: "caja",
+        icono: "💵",
+      },
+      {
+        nombre: "Historial",
+        ruta: "/lavanderia/historial",
+        codigo: "historial_lavanderia",
+        icono: "🕘",
+      },
+    ];
+
+    return accesosLavanderia.filter((item) =>
+      puedeVer(item.codigo)
     );
-  }, [modulosMenu, esLavanderia]);
+  }, [
+    esLavanderia,
+    modulosMenu,
+    modulos,
+    permisosUsuario,
+    usuarioRol,
+    bloqueado,
+  ]);
 
   if (cargando) {
     return (
