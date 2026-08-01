@@ -783,7 +783,7 @@ export default function NuevoPedidoLavanderia() {
             className="whatsapp"
             onClick={enviarWhatsApp}
           >
-            Enviar comprobante por WhatsApp
+            Abrir comprobante en WhatsApp
           </button>
 
           <div className="acciones-comprobante">
