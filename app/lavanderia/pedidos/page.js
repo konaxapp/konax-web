@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
 const ESTADOS = [
-  "Todos",
-  "Recibido",
   "En proceso",
   "Listo para retirar",
   "Entregado",
@@ -30,7 +28,6 @@ function formatoFecha(valor) {
 
 function claseEstado(estado) {
   const mapa = {
-    Recibido: "estado recibido",
     "En proceso": "estado proceso",
     "Listo para retirar": "estado listo",
     Entregado: "estado entregado",
@@ -46,7 +43,7 @@ export default function PedidosLavanderia() {
   const [pedidos, setPedidos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState("Todos");
+  const [filtroEstado, setFiltroEstado] = useState("En proceso");
 
   const [estadosEditados, setEstadosEditados] = useState({});
   const [guardandoId, setGuardandoId] = useState("");
@@ -265,7 +262,6 @@ export default function PedidosLavanderia() {
 
     return pedidos.filter((pedido) => {
       const coincideEstado =
-        filtroEstado === "Todos" ||
         pedido.estado_pedido === filtroEstado;
 
       const coincideBusqueda =
@@ -286,10 +282,6 @@ export default function PedidosLavanderia() {
 
   const resumen = useMemo(() => {
     return {
-      recibidos: pedidos.filter(
-        (pedido) =>
-          pedido.estado_pedido === "Recibido"
-      ).length,
       proceso: pedidos.filter(
         (pedido) =>
           pedido.estado_pedido === "En proceso"
@@ -339,11 +331,6 @@ export default function PedidosLavanderia() {
       </header>
 
       <section className="resumen">
-        <article className="resumen-recibido">
-          <span>Recibidos</span>
-          <strong>{resumen.recibidos}</strong>
-        </article>
-
         <article className="resumen-proceso">
           <span>En proceso</span>
           <strong>{resumen.proceso}</strong>
@@ -398,7 +385,7 @@ export default function PedidosLavanderia() {
         <section className="vacio">
           <div className="vacio-icono">🧺</div>
           <strong>
-            No hay pedidos para mostrar
+            No hay pedidos en este estado
           </strong>
           <p>
             Crea el primer pedido o cambia los
@@ -536,9 +523,6 @@ export default function PedidosLavanderia() {
                         )
                       }
                     >
-                      <option value="Recibido">
-                        Recibido
-                      </option>
                       <option value="En proceso">
                         En proceso
                       </option>
@@ -662,10 +646,6 @@ export default function PedidosLavanderia() {
           display: block;
           margin-top: 5px;
           font-size: 22px;
-        }
-
-        .resumen-recibido {
-          border-left: 4px solid #eab308 !important;
         }
 
         .resumen-proceso {
