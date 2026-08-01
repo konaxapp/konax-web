@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
@@ -177,6 +177,14 @@ export default function NuevoPedidoLavanderia() {
     useState(false);
   const [comprobante, setComprobante] =
     useState(null);
+  const [editandoPedido, setEditandoPedido] =
+    useState(false);
+  const [pedidoGuardadoId, setPedidoGuardadoId] =
+    useState("");
+  const [numeroPedidoGuardado, setNumeroPedidoGuardado] =
+    useState("");
+
+  const borrarIntervaloRef = useRef(null);
 
   useEffect(() => {
     const empresa =
@@ -199,6 +207,10 @@ export default function NuevoPedidoLavanderia() {
       nombreEmpresa || "KONAX Lavandería"
     );
     setUsuarioId(usuario);
+
+    return () => {
+      detenerBorradoContinuo();
+    };
   }, [router]);
 
   const subtotal = useMemo(() => {
@@ -229,6 +241,31 @@ export default function NuevoPedidoLavanderia() {
     total - pagado,
     0
   );
+
+  function detenerBorradoContinuo() {
+    if (borrarIntervaloRef.current) {
+      clearInterval(borrarIntervaloRef.current);
+      borrarIntervaloRef.current = null;
+    }
+  }
+
+  function iniciarBorradoPrecio(idTemporal) {
+    detenerBorradoContinuo();
+    cambiarPrecioCentavos(idTemporal, "borrar");
+
+    borrarIntervaloRef.current = setInterval(() => {
+      cambiarPrecioCentavos(idTemporal, "borrar");
+    }, 90);
+  }
+
+  function iniciarBorradoAbono() {
+    detenerBorradoContinuo();
+    cambiarAbonoCentavos("borrar");
+
+    borrarIntervaloRef.current = setInterval(() => {
+      cambiarAbonoCentavos("borrar");
+    }, 90);
+  }
 
   async function buscarClientes(valor) {
     setBusquedaCliente(valor);
@@ -629,6 +666,19 @@ export default function NuevoPedidoLavanderia() {
     setMetodoPago("");
 
     setComprobante(null);
+    setEditandoPedido(false);
+    setPedidoGuardadoId("");
+    setNumeroPedidoGuardado("");
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }
+
+  function corregirPedido() {
+    setComprobante(null);
+    setEditandoPedido(true);
 
     window.scrollTo({
       top: 0,
@@ -653,48 +703,69 @@ export default function NuevoPedidoLavanderia() {
         await obtenerOCrearCliente();
 
       const numeroPedido =
+        numeroPedidoGuardado ||
         `LAV-${Date.now()}`;
 
-      const {
-        data: pedido,
-        error: errorPedido,
-      } = await supabase
-        .from("lavanderia_pedidos")
-        .insert([
-          {
-            empresa_id: empresaId,
-            cliente_id: clienteFinalId,
-            numero_pedido: numeroPedido,
-            fecha_recepcion:
-              new Date().toISOString(),
-            fecha_entrega: fechaEntrega,
-            prioridad,
-            estado_pedido:
-              "En proceso",
-            estado_pago: estadoPago,
-            subtotal,
-            descuento: 0,
-            total,
-            monto_pagado: pagado,
-            saldo_pendiente:
-              saldoPendiente,
-            metodo_pago:
-              estadoPago === "Pendiente"
-                ? null
-                : metodoPago,
-            observaciones:
-              observaciones.trim() ||
-              null,
-            creado_por: usuarioId,
-          },
-        ])
-        .select("id, numero_pedido")
-        .single();
+      const pedidoPayload = {
+        empresa_id: empresaId,
+        cliente_id: clienteFinalId,
+        numero_pedido: numeroPedido,
+        fecha_entrega: fechaEntrega,
+        prioridad,
+        estado_pedido: "En proceso",
+        estado_pago: estadoPago,
+        subtotal,
+        descuento: 0,
+        total,
+        monto_pagado: pagado,
+        saldo_pendiente: saldoPendiente,
+        metodo_pago:
+          estadoPago === "Pendiente"
+            ? null
+            : metodoPago,
+        observaciones:
+          observaciones.trim() || null,
+      };
+
+      let pedido = null;
+      let errorPedido = null;
+
+      if (editandoPedido && pedidoGuardadoId) {
+        const respuesta = await supabase
+          .from("lavanderia_pedidos")
+          .update(pedidoPayload)
+          .eq("id", pedidoGuardadoId)
+          .eq("empresa_id", empresaId)
+          .select("id, numero_pedido")
+          .single();
+
+        pedido = respuesta.data;
+        errorPedido = respuesta.error;
+      } else {
+        const respuesta = await supabase
+          .from("lavanderia_pedidos")
+          .insert([
+            {
+              ...pedidoPayload,
+              fecha_recepcion:
+                new Date().toISOString(),
+              creado_por: usuarioId,
+            },
+          ])
+          .select("id, numero_pedido")
+          .single();
+
+        pedido = respuesta.data;
+        errorPedido = respuesta.error;
+      }
 
       if (errorPedido) {
         throw new Error(
-          "No se pudo guardar el pedido: " +
-            errorPedido.message
+          editandoPedido
+            ? "No se pudo actualizar el pedido: " +
+                errorPedido.message
+            : "No se pudo guardar el pedido: " +
+                errorPedido.message
         );
       }
 
@@ -724,6 +795,22 @@ export default function NuevoPedidoLavanderia() {
         })
       );
 
+      if (editandoPedido && pedidoGuardadoId) {
+        const { error: errorEliminarDetalles } =
+          await supabase
+            .from("lavanderia_pedido_detalles")
+            .delete()
+            .eq("pedido_id", pedido.id)
+            .eq("empresa_id", empresaId);
+
+        if (errorEliminarDetalles) {
+          throw new Error(
+            "No se pudieron preparar las prendas para actualizar: " +
+              errorEliminarDetalles.message
+          );
+        }
+      }
+
       const { error: errorDetalles } =
         await supabase
           .from(
@@ -732,16 +819,24 @@ export default function NuevoPedidoLavanderia() {
           .insert(detalles);
 
       if (errorDetalles) {
-        await supabase
-          .from("lavanderia_pedidos")
-          .delete()
-          .eq("id", pedido.id);
+        if (!editandoPedido) {
+          await supabase
+            .from("lavanderia_pedidos")
+            .delete()
+            .eq("id", pedido.id);
+        }
 
         throw new Error(
           "No se pudieron guardar las prendas: " +
             errorDetalles.message
         );
       }
+
+      setPedidoGuardadoId(pedido.id);
+      setNumeroPedidoGuardado(
+        pedido.numero_pedido
+      );
+      setEditandoPedido(false);
 
       setComprobante({
         pedidoId: pedido.id,
@@ -876,6 +971,14 @@ export default function NuevoPedidoLavanderia() {
             Abrir comprobante en WhatsApp
           </button>
 
+          <button
+            type="button"
+            className="corregir"
+            onClick={corregirPedido}
+          >
+            Corregir pedido
+          </button>
+
           <div className="acciones-comprobante">
             <button
               type="button"
@@ -996,6 +1099,18 @@ export default function NuevoPedidoLavanderia() {
             color: white;
             font-size: 16px;
             font-weight: 900;
+            cursor: pointer;
+          }
+
+          .corregir {
+            width: 100%;
+            min-height: 48px;
+            margin-top: 9px;
+            border: 1px solid #d5dfd8;
+            border-radius: 11px;
+            background: #ffffff;
+            color: #173c2a;
+            font-weight: 850;
             cursor: pointer;
           }
 
@@ -1294,44 +1409,66 @@ export default function NuevoPedidoLavanderia() {
                     <label>
                       Precio unitario
                     </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={mostrarMontoDesdeCentavos(
-                        prenda.precioCentavos
-                      )}
-                      onBeforeInput={(e) => {
-                        const dato =
-                          e.nativeEvent?.data || "";
+                    <div className="monto-con-borrar">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={mostrarMontoDesdeCentavos(
+                          prenda.precioCentavos
+                        )}
+                        onBeforeInput={(e) => {
+                          const dato =
+                            e.nativeEvent?.data || "";
 
-                        if (/^\d+$/.test(dato)) {
-                          e.preventDefault();
+                          if (/^\d+$/.test(dato)) {
+                            e.preventDefault();
 
-                          cambiarPrecioCentavos(
-                            prenda.idTemporal,
-                            "agregar",
-                            dato
-                          );
+                            cambiarPrecioCentavos(
+                              prenda.idTemporal,
+                              "agregar",
+                              dato
+                            );
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (
+                            e.key === "Backspace" ||
+                            e.key === "Delete"
+                          ) {
+                            e.preventDefault();
+
+                            cambiarPrecioCentavos(
+                              prenda.idTemporal,
+                              "borrar"
+                            );
+                          }
+                        }}
+                        onChange={() => {}}
+                        placeholder="0.00"
+                      />
+
+                      <button
+                        type="button"
+                        className="borrar-monto"
+                        onPointerDown={() =>
+                          iniciarBorradoPrecio(
+                            prenda.idTemporal
+                          )
                         }
-                      }}
-                      onKeyDown={(e) => {
-                        if (
-                          e.key === "Backspace" ||
-                          e.key === "Delete"
-                        ) {
-                          e.preventDefault();
-
-                          cambiarPrecioCentavos(
-                            prenda.idTemporal,
-                            "borrar"
-                          );
+                        onPointerUp={
+                          detenerBorradoContinuo
                         }
-                      }}
-                      onChange={() => {
-                        // El valor se controla con onBeforeInput.
-                      }}
-                      placeholder="0.00"
-                    />
+                        onPointerLeave={
+                          detenerBorradoContinuo
+                        }
+                        onPointerCancel={
+                          detenerBorradoContinuo
+                        }
+                        aria-label="Mantener presionado para borrar"
+                      >
+                        ⌫
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1496,40 +1633,60 @@ export default function NuevoPedidoLavanderia() {
             <div>
               <label>Monto abonado</label>
 
-              <input
-                type="text"
-                inputMode="numeric"
-                value={mostrarMontoDesdeCentavos(
-                  montoPagadoCentavos
-                )}
-                onBeforeInput={(e) => {
-                  const dato =
-                    e.nativeEvent?.data || "";
+              <div className="monto-con-borrar">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={mostrarMontoDesdeCentavos(
+                    montoPagadoCentavos
+                  )}
+                  onBeforeInput={(e) => {
+                    const dato =
+                      e.nativeEvent?.data || "";
 
-                  if (/^\d+$/.test(dato)) {
-                    e.preventDefault();
-                    cambiarAbonoCentavos(
-                      "agregar",
-                      dato
-                    );
+                    if (/^\d+$/.test(dato)) {
+                      e.preventDefault();
+                      cambiarAbonoCentavos(
+                        "agregar",
+                        dato
+                      );
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (
+                      e.key === "Backspace" ||
+                      e.key === "Delete"
+                    ) {
+                      e.preventDefault();
+                      cambiarAbonoCentavos(
+                        "borrar"
+                      );
+                    }
+                  }}
+                  onChange={() => {}}
+                  placeholder="0.00"
+                />
+
+                <button
+                  type="button"
+                  className="borrar-monto"
+                  onPointerDown={
+                    iniciarBorradoAbono
                   }
-                }}
-                onKeyDown={(e) => {
-                  if (
-                    e.key === "Backspace" ||
-                    e.key === "Delete"
-                  ) {
-                    e.preventDefault();
-                    cambiarAbonoCentavos(
-                      "borrar"
-                    );
+                  onPointerUp={
+                    detenerBorradoContinuo
                   }
-                }}
-                onChange={() => {
-                  // El valor se controla con onBeforeInput.
-                }}
-                placeholder="0.00"
-              />
+                  onPointerLeave={
+                    detenerBorradoContinuo
+                  }
+                  onPointerCancel={
+                    detenerBorradoContinuo
+                  }
+                  aria-label="Mantener presionado para borrar"
+                >
+                  ⌫
+                </button>
+              </div>
             </div>
           )}
 
@@ -1600,7 +1757,11 @@ export default function NuevoPedidoLavanderia() {
           className="guardar"
         >
           {guardando
-            ? "Guardando pedido..."
+            ? editandoPedido
+              ? "Actualizando pedido..."
+              : "Guardando pedido..."
+            : editandoPedido
+            ? "Actualizar pedido"
             : "Guardar pedido"}
         </button>
       </form>
@@ -1811,6 +1972,25 @@ export default function NuevoPedidoLavanderia() {
           color: #14683e;
           font-weight: 850;
           cursor: pointer;
+        }
+
+        .monto-con-borrar {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 48px;
+          gap: 8px;
+          align-items: stretch;
+        }
+
+        .borrar-monto {
+          min-height: 48px;
+          border: none;
+          border-radius: 10px;
+          background: #fee2e2;
+          color: #b42318;
+          font-size: 20px;
+          font-weight: 900;
+          cursor: pointer;
+          touch-action: none;
         }
 
         .opciones-pago {
