@@ -326,7 +326,7 @@ export default function NuevoPedidoLavanderia() {
               fecha_recepcion: new Date().toISOString(),
               fecha_entrega: fechaEntrega,
               prioridad,
-              estado_pedido: "Recibido",
+              estado_pedido: "En proceso",
               estado_pago: estadoPago,
               subtotal,
               descuento: 0,
@@ -1080,4 +1080,3 @@ function TituloSeccion({ numero, titulo, texto }) {
     </div>
   );
 }
-
