@@ -1988,10 +1988,10 @@ const s = {
     top: 0,
     zIndex: 50,
     margin: "-14px -12px 16px",
-    padding: "10px 12px",
-    display: "flex",
+    padding: "10px 18px 10px 12px",
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) auto",
     alignItems: "center",
-    justifyContent: "space-between",
     gap: 12,
     borderBottom:
       "1px solid #dfe7e2",
@@ -2000,20 +2000,24 @@ const s = {
   },
 
   mobileLogo: {
-    width: 150,
-    maxWidth: "58vw",
+    width: 145,
+    maxWidth: "52vw",
     height: "auto",
+    display: "block",
   },
 
   mobileMenuButton: {
+    minWidth: 92,
     minHeight: 42,
-    padding: "9px 14px",
+    padding: "9px 16px",
     border: "none",
     borderRadius: 11,
     background: "#173c2a",
     color: "#fff",
     fontWeight: 850,
     cursor: "pointer",
+    whiteSpace: "nowrap",
+    justifySelf: "end",
   },
 
   mobileMenu: {
