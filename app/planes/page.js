@@ -1,15 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import { asignarPlanEmpresa } from "../../lib/konaxPlanes";
+
+function normalizar(valor) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
 
 export default function Planes() {
   const [tipoPlan, setTipoPlan] = useState("mensual");
   const [empresaId, setEmpresaId] = useState("");
   const [empresaNombre, setEmpresaNombre] = useState("");
   const [empresaActual, setEmpresaActual] = useState(null);
+  const [asignandoCodigo, setAsignandoCodigo] = useState("");
 
   useEffect(() => {
     cargarEmpresa();
@@ -34,7 +43,12 @@ export default function Planes() {
       .eq("id", id)
       .maybeSingle();
 
-    if (!error && data) {
+    if (error) {
+      alert("No se pudo cargar la empresa: " + error.message);
+      return;
+    }
+
+    if (data) {
       setEmpresaActual(data);
 
       if (data.plan_tipo) {
@@ -91,6 +105,32 @@ export default function Planes() {
       ],
     },
     {
+      nombre: "KONAX Lavandería Piloto",
+      codigo: "lavanderia_piloto",
+      etiqueta: "Plan piloto para lavanderías",
+      precioMensual: 20,
+      precioAnual: 200,
+      usuariosIncluidos: 2,
+      color: "#0f766e",
+      fondo: "#f0fdfa",
+      exclusivoLavanderia: true,
+      incluye: [
+        "2 usuarios incluidos",
+        "Registro de clientes",
+        "Nuevo pedido",
+        "Pedidos por estado",
+        "Recibido",
+        "En proceso",
+        "Listo para retirar",
+        "Entregado",
+        "Pago completo, abono o pendiente",
+        "Caja básica",
+        "Historial de pedidos",
+        "Resumen semanal de ventas",
+        "Soporte por WhatsApp",
+      ],
+    },
+    {
       nombre: "KONAX Pro",
       codigo: "pro",
       etiqueta: "Gerencia y crecimiento",
@@ -117,79 +157,155 @@ export default function Planes() {
     },
   ];
 
+  const esLavanderia =
+    normalizar(empresaActual?.tipo_negocio) === "lavanderia";
+
+  const planesVisibles = useMemo(() => {
+    if (esLavanderia) {
+      return planes.filter(
+        (plan) =>
+          plan.codigo === "lavanderia_piloto" ||
+          plan.codigo === "ventas_gestion" ||
+          plan.codigo === "pro"
+      );
+    }
+
+    return planes.filter((plan) => !plan.exclusivoLavanderia);
+  }, [esLavanderia]);
+
   async function asignarPlan(plan) {
-    if (!empresaId) {
-      alert("No hay empresa seleccionada.");
+    if (!empresaId || asignandoCodigo) {
       return;
     }
 
-    const yaTienePlan = !!empresaActual?.plan_codigo;
+    const yaTienePlan = Boolean(empresaActual?.plan_codigo);
     const accion = yaTienePlan ? "actualizará" : "asignará";
 
-    const confirmar = confirm(
+    const confirmar = window.confirm(
       `Se ${accion} ${plan.nombre} para ${empresaNombre}. ¿Deseas continuar?`
     );
 
     if (!confirmar) return;
 
-    const resultado = await asignarPlanEmpresa(empresaId, plan.codigo);
+    setAsignandoCodigo(plan.codigo);
 
-    if (!resultado.ok) {
-      alert(resultado.mensaje);
-      return;
+    try {
+      const resultado = await asignarPlanEmpresa(
+        empresaId,
+        plan.codigo
+      );
+
+      if (!resultado.ok) {
+        alert(resultado.mensaje);
+        return;
+      }
+
+      if (yaTienePlan) {
+        alert("Plan actualizado correctamente.");
+        window.location.href = "/centro-gestion";
+        return;
+      }
+
+      alert(
+        resultado.mensaje +
+          " Ahora crea el Usuario Principal."
+      );
+
+      window.location.href = "/usuarios";
+    } finally {
+      setAsignandoCodigo("");
     }
-
-    if (yaTienePlan) {
-      alert("Plan actualizado correctamente.");
-      window.location.href = "/centro-gestion";
-      return;
-    }
-
-    alert(resultado.mensaje + " Ahora crea el Usuario Principal.");
-    window.location.href = "/usuarios";
   }
 
   return (
     <div style={pagina}>
       <div style={cardPrincipal}>
         <div style={logoBox}>
-          <img src="/konax-logo.png" alt="KONAX" style={logo} />
+          <img
+            src="/konax-logo.png"
+            alt="KONAX"
+            style={logo}
+          />
         </div>
 
-        <h1 style={titulo}>Selecciona el plan de la empresa</h1>
+        <h1 style={titulo}>
+          Selecciona el plan de la empresa
+        </h1>
 
         <p style={subtitulo}>
-          Empresa seleccionada: <strong>{empresaNombre}</strong>
+          Empresa seleccionada:{" "}
+          <strong>{empresaNombre}</strong>
+
+          {empresaActual?.tipo_negocio && (
+            <>
+              <br />
+              Tipo de negocio:{" "}
+              <strong>
+                {empresaActual.tipo_negocio}
+              </strong>
+            </>
+          )}
+
           {empresaActual?.plan_nombre && (
             <>
               <br />
-              Plan actual: <strong>{empresaActual.plan_nombre}</strong>
+              Plan actual:{" "}
+              <strong>
+                {empresaActual.plan_nombre}
+              </strong>
             </>
           )}
         </p>
 
+        {esLavanderia && (
+          <div style={avisoLavanderia}>
+            <strong>
+              Configuración especial para lavandería
+            </strong>
+            <span>
+              Puedes iniciar con el plan piloto de $20
+              mensuales y luego subir de nivel.
+            </span>
+          </div>
+        )}
+
         <div style={toggleBox}>
           <button
             onClick={() => setTipoPlan("mensual")}
-            style={tipoPlan === "mensual" ? botonActivo : botonInactivo}
+            style={
+              tipoPlan === "mensual"
+                ? botonActivo
+                : botonInactivo
+            }
           >
             Mensual
           </button>
 
           <button
             onClick={() => setTipoPlan("anual")}
-            style={tipoPlan === "anual" ? botonActivo : botonInactivo}
+            style={
+              tipoPlan === "anual"
+                ? botonActivo
+                : botonInactivo
+            }
           >
             Anual
           </button>
         </div>
 
         <div style={planesBox}>
-          {planes.map((plan) => {
+          {planesVisibles.map((plan) => {
             const precio =
-              tipoPlan === "mensual" ? plan.precioMensual : plan.precioAnual;
+              tipoPlan === "mensual"
+                ? plan.precioMensual
+                : plan.precioAnual;
 
-            const esActual = empresaActual?.plan_codigo === plan.codigo;
+            const esActual =
+              empresaActual?.plan_codigo ===
+              plan.codigo;
+
+            const asignando =
+              asignandoCodigo === plan.codigo;
 
             return (
               <div
@@ -198,22 +314,48 @@ export default function Planes() {
                   ...planCard,
                   border: `2px solid ${plan.color}`,
                   background: plan.fondo,
-                  transform: plan.destacado ? "scale(1.02)" : "scale(1)",
+                  transform: plan.destacado
+                    ? "scale(1.02)"
+                    : "scale(1)",
                 }}
               >
-                {plan.destacado && <div style={recomendado}>Más recomendado</div>}
+                {plan.destacado && (
+                  <div style={recomendado}>
+                    Más recomendado
+                  </div>
+                )}
 
-                {esActual && <div style={planActual}>Plan actual</div>}
+                {plan.codigo ===
+                  "lavanderia_piloto" && (
+                  <div style={piloto}>
+                    Piloto
+                  </div>
+                )}
 
-                <div style={{ ...badge, background: plan.color }}>
+                {esActual && (
+                  <div style={planActual}>
+                    Plan actual
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    ...badge,
+                    background: plan.color,
+                  }}
+                >
                   {plan.etiqueta}
                 </div>
 
-                <h2 style={planTitulo}>{plan.nombre}</h2>
+                <h2 style={planTitulo}>
+                  {plan.nombre}
+                </h2>
 
                 <div style={precioBox}>
                   <span style={signo}>$</span>
-                  <span style={precioGrande}>{precio}</span>
+                  <span style={precioGrande}>
+                    {precio}
+                  </span>
                 </div>
 
                 <p style={precioTexto}>
@@ -223,7 +365,8 @@ export default function Planes() {
                 </p>
 
                 <p style={usuariosTexto}>
-                  {plan.usuariosIncluidos} usuarios incluidos
+                  {plan.usuariosIncluidos} usuarios
+                  incluidos
                 </p>
 
                 <ul style={lista}>
@@ -236,9 +379,22 @@ export default function Planes() {
 
                 <button
                   onClick={() => asignarPlan(plan)}
-                  style={{ ...botonPlan, background: plan.color }}
+                  disabled={Boolean(asignandoCodigo)}
+                  style={{
+                    ...botonPlan,
+                    background: plan.color,
+                    opacity:
+                      asignandoCodigo &&
+                      !asignando
+                        ? 0.55
+                        : 1,
+                  }}
                 >
-                  {esActual ? "Actualizar plan actual" : `Asignar ${plan.nombre}`}
+                  {asignando
+                    ? "Asignando..."
+                    : esActual
+                    ? "Actualizar plan actual"
+                    : `Asignar ${plan.nombre}`}
                 </button>
               </div>
             );
@@ -246,7 +402,8 @@ export default function Planes() {
         </div>
 
         <p style={nota}>
-          Si la empresa ya existe, el plan se actualiza sin crearla nuevamente.
+          Si la empresa ya existe, el plan se
+          actualiza sin crearla nuevamente.
         </p>
 
         <Link href="/empresas" style={botonVolver}>
@@ -265,7 +422,7 @@ const pagina = {
 };
 
 const cardPrincipal = {
-  maxWidth: "1300px",
+  maxWidth: "1400px",
   margin: "0 auto",
   background: "white",
   borderRadius: "20px",
@@ -294,7 +451,21 @@ const titulo = {
 const subtitulo = {
   textAlign: "center",
   color: "#6b7280",
-  marginBottom: "28px",
+  marginBottom: "18px",
+  lineHeight: 1.65,
+};
+
+const avisoLavanderia = {
+  maxWidth: "680px",
+  margin: "0 auto 24px",
+  padding: "14px 16px",
+  display: "grid",
+  gap: "4px",
+  border: "1px solid #99f6e4",
+  borderRadius: "14px",
+  background: "#f0fdfa",
+  color: "#115e59",
+  textAlign: "center",
 };
 
 const toggleBox = {
@@ -325,19 +496,20 @@ const botonInactivo = {
 };
 
 const planesBox = {
-  display: "flex",
+  display: "grid",
+  gridTemplateColumns:
+    "repeat(auto-fit,minmax(280px,1fr))",
   gap: "22px",
-  flexWrap: "wrap",
   alignItems: "stretch",
 };
 
 const planCard = {
-  flex: 1,
-  minWidth: "300px",
+  minWidth: 0,
   borderRadius: "18px",
   padding: "26px",
   position: "relative",
-  boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+  boxShadow:
+    "0 8px 20px rgba(0,0,0,0.08)",
 };
 
 const recomendado = {
@@ -346,6 +518,18 @@ const recomendado = {
   right: "20px",
   background: "#facc15",
   color: "#111827",
+  padding: "7px 12px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: "bold",
+};
+
+const piloto = {
+  position: "absolute",
+  top: "-14px",
+  right: "20px",
+  background: "#ccfbf1",
+  color: "#115e59",
   padding: "7px 12px",
   borderRadius: "999px",
   fontSize: "12px",
@@ -419,7 +603,7 @@ const lista = {
   color: "#374151",
   paddingLeft: "0",
   listStyle: "none",
-  minHeight: "330px",
+  minHeight: "355px",
   lineHeight: "27px",
   fontSize: "14px",
 };
@@ -456,3 +640,4 @@ const botonVolver = {
   textDecoration: "none",
   fontWeight: "bold",
 };
+
