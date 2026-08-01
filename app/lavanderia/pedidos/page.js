@@ -8,9 +8,8 @@ const ESTADOS = [
   "Todos",
   "Recibido",
   "En proceso",
-  "Listo",
+  "Listo para retirar",
   "Entregado",
-  "Cancelado",
 ];
 
 function formatoDinero(valor) {
@@ -33,9 +32,8 @@ function claseEstado(estado) {
   const mapa = {
     Recibido: "estado recibido",
     "En proceso": "estado proceso",
-    Listo: "estado listo",
+    "Listo para retirar": "estado listo",
     Entregado: "estado entregado",
-    Cancelado: "estado cancelado",
   };
 
   return mapa[estado] || "estado";
@@ -49,7 +47,9 @@ export default function PedidosLavanderia() {
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("Todos");
-  const [actualizandoId, setActualizandoId] = useState("");
+
+  const [estadosEditados, setEstadosEditados] = useState({});
+  const [guardandoId, setGuardandoId] = useState("");
 
   useEffect(() => {
     const empresa = localStorage.getItem("empresaId");
@@ -71,27 +71,28 @@ export default function PedidosLavanderia() {
     setCargando(true);
 
     try {
-      const { data: pedidosData, error: errorPedidos } = await supabase
-        .from("lavanderia_pedidos")
-        .select(`
-          id,
-          empresa_id,
-          cliente_id,
-          numero_pedido,
-          fecha_recepcion,
-          fecha_entrega,
-          prioridad,
-          estado_pedido,
-          estado_pago,
-          total,
-          monto_pagado,
-          saldo_pendiente,
-          metodo_pago,
-          observaciones,
-          created_at
-        `)
-        .eq("empresa_id", idEmpresa)
-        .order("created_at", { ascending: false });
+      const { data: pedidosData, error: errorPedidos } =
+        await supabase
+          .from("lavanderia_pedidos")
+          .select(`
+            id,
+            empresa_id,
+            cliente_id,
+            numero_pedido,
+            fecha_recepcion,
+            fecha_entrega,
+            prioridad,
+            estado_pedido,
+            estado_pago,
+            total,
+            monto_pagado,
+            saldo_pendiente,
+            metodo_pago,
+            observaciones,
+            created_at
+          `)
+          .eq("empresa_id", idEmpresa)
+          .order("created_at", { ascending: false });
 
       if (errorPedidos) {
         throw new Error(
@@ -104,6 +105,7 @@ export default function PedidosLavanderia() {
 
       if (listaPedidos.length === 0) {
         setPedidos([]);
+        setEstadosEditados({});
         return;
       }
 
@@ -115,7 +117,9 @@ export default function PedidosLavanderia() {
         ),
       ];
 
-      const pedidoIds = listaPedidos.map((pedido) => pedido.id);
+      const pedidoIds = listaPedidos.map(
+        (pedido) => pedido.id
+      );
 
       const [
         { data: clientesData, error: errorClientes },
@@ -133,11 +137,17 @@ export default function PedidosLavanderia() {
       ]);
 
       if (errorClientes) {
-        console.error("Error cargando clientes:", errorClientes);
+        console.error(
+          "Error cargando clientes:",
+          errorClientes
+        );
       }
 
       if (errorDetalles) {
-        console.error("Error cargando detalles:", errorDetalles);
+        console.error(
+          "Error cargando detalles:",
+          errorDetalles
+        );
       }
 
       const clientesPorId = Object.fromEntries(
@@ -162,46 +172,91 @@ export default function PedidosLavanderia() {
             nombre: "Cliente no encontrado",
             telefono: "-",
           },
-        cantidadPrendas: prendasPorPedido[pedido.id] || 0,
+        cantidadPrendas:
+          prendasPorPedido[pedido.id] || 0,
       }));
 
+      const estadosIniciales = Object.fromEntries(
+        resultado.map((pedido) => [
+          pedido.id,
+          pedido.estado_pedido,
+        ])
+      );
+
       setPedidos(resultado);
+      setEstadosEditados(estadosIniciales);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudieron cargar los pedidos.");
+      alert(
+        error.message ||
+          "No se pudieron cargar los pedidos."
+      );
     } finally {
       setCargando(false);
     }
   }
 
-  async function cambiarEstado(pedidoId, nuevoEstado) {
-    if (!pedidoId || !nuevoEstado) return;
+  function seleccionarEstado(pedidoId, nuevoEstado) {
+    setEstadosEditados((actuales) => ({
+      ...actuales,
+      [pedidoId]: nuevoEstado,
+    }));
+  }
 
-    setActualizandoId(pedidoId);
+  async function guardarEstado(pedido) {
+    const nuevoEstado =
+      estadosEditados[pedido.id] ||
+      pedido.estado_pedido;
+
+    if (nuevoEstado === pedido.estado_pedido) {
+      alert("No hay cambios pendientes para guardar.");
+      return;
+    }
+
+    const mensajeConfirmacion =
+      nuevoEstado === "Entregado"
+        ? "¿Confirmas que el pedido fue entregado y deseas cerrar el ciclo?"
+        : `¿Deseas cambiar el pedido a "${nuevoEstado}"?`;
+
+    if (!window.confirm(mensajeConfirmacion)) {
+      return;
+    }
+
+    setGuardandoId(pedido.id);
 
     const { error } = await supabase
       .from("lavanderia_pedidos")
       .update({
         estado_pedido: nuevoEstado,
       })
-      .eq("id", pedidoId)
+      .eq("id", pedido.id)
       .eq("empresa_id", empresaId);
 
-    setActualizandoId("");
+    setGuardandoId("");
 
     if (error) {
       alert(
-        "No se pudo actualizar el estado: " + error.message
+        "No se pudo guardar el estado: " +
+          error.message
       );
       return;
     }
 
     setPedidos((actuales) =>
-      actuales.map((pedido) =>
-        pedido.id === pedidoId
-          ? { ...pedido, estado_pedido: nuevoEstado }
-          : pedido
+      actuales.map((item) =>
+        item.id === pedido.id
+          ? {
+              ...item,
+              estado_pedido: nuevoEstado,
+            }
+          : item
       )
+    );
+
+    alert(
+      nuevoEstado === "Entregado"
+        ? "Pedido entregado y ciclo finalizado."
+        : "Estado actualizado correctamente."
     );
   }
 
@@ -231,19 +286,23 @@ export default function PedidosLavanderia() {
 
   const resumen = useMemo(() => {
     return {
-      activos: pedidos.filter((pedido) =>
-        ["Recibido", "En proceso", "Listo"].includes(
-          pedido.estado_pedido
-        )
+      recibidos: pedidos.filter(
+        (pedido) =>
+          pedido.estado_pedido === "Recibido"
+      ).length,
+      proceso: pedidos.filter(
+        (pedido) =>
+          pedido.estado_pedido === "En proceso"
       ).length,
       listos: pedidos.filter(
-        (pedido) => pedido.estado_pedido === "Listo"
+        (pedido) =>
+          pedido.estado_pedido ===
+          "Listo para retirar"
       ).length,
-      pendientes: pedidos.reduce(
-        (total, pedido) =>
-          total + Number(pedido.saldo_pendiente || 0),
-        0
-      ),
+      entregados: pedidos.filter(
+        (pedido) =>
+          pedido.estado_pedido === "Entregado"
+      ).length,
     };
   }, [pedidos]);
 
@@ -260,7 +319,9 @@ export default function PedidosLavanderia() {
         </button>
 
         <div className="encabezado-texto">
-          <span className="etiqueta">KONAX LAVANDERÍA</span>
+          <span className="etiqueta">
+            KONAX LAVANDERÍA
+          </span>
           <h1>Pedidos</h1>
         </div>
 
@@ -268,7 +329,9 @@ export default function PedidosLavanderia() {
           type="button"
           className="nuevo"
           onClick={() =>
-            router.push("/lavanderia/nuevo-pedido")
+            router.push(
+              "/lavanderia/nuevo-pedido"
+            )
           }
         >
           + Nuevo
@@ -276,19 +339,24 @@ export default function PedidosLavanderia() {
       </header>
 
       <section className="resumen">
-        <article>
-          <span>Activos</span>
-          <strong>{resumen.activos}</strong>
+        <article className="resumen-recibido">
+          <span>Recibidos</span>
+          <strong>{resumen.recibidos}</strong>
         </article>
 
-        <article>
+        <article className="resumen-proceso">
+          <span>En proceso</span>
+          <strong>{resumen.proceso}</strong>
+        </article>
+
+        <article className="resumen-listo">
           <span>Listos</span>
           <strong>{resumen.listos}</strong>
         </article>
 
-        <article>
-          <span>Por cobrar</span>
-          <strong>{formatoDinero(resumen.pendientes)}</strong>
+        <article className="resumen-entregado">
+          <span>Entregados</span>
+          <strong>{resumen.entregados}</strong>
         </article>
       </section>
 
@@ -296,8 +364,10 @@ export default function PedidosLavanderia() {
         <input
           type="search"
           value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar pedido, cliente o teléfono"
+          onChange={(e) =>
+            setBusqueda(e.target.value)
+          }
+          placeholder="Buscar por N.º de pedido, cliente o teléfono"
         />
 
         <div className="filtros">
@@ -305,7 +375,9 @@ export default function PedidosLavanderia() {
             <button
               key={estado}
               type="button"
-              onClick={() => setFiltroEstado(estado)}
+              onClick={() =>
+                setFiltroEstado(estado)
+              }
               className={
                 filtroEstado === estado
                   ? "filtro activo"
@@ -325,15 +397,20 @@ export default function PedidosLavanderia() {
       ) : pedidosFiltrados.length === 0 ? (
         <section className="vacio">
           <div className="vacio-icono">🧺</div>
-          <strong>No hay pedidos para mostrar</strong>
+          <strong>
+            No hay pedidos para mostrar
+          </strong>
           <p>
-            Crea el primer pedido o cambia los filtros.
+            Crea el primer pedido o cambia los
+            filtros.
           </p>
 
           <button
             type="button"
             onClick={() =>
-              router.push("/lavanderia/nuevo-pedido")
+              router.push(
+                "/lavanderia/nuevo-pedido"
+              )
             }
           >
             Crear pedido
@@ -341,98 +418,164 @@ export default function PedidosLavanderia() {
         </section>
       ) : (
         <section className="lista">
-          {pedidosFiltrados.map((pedido) => (
-            <article key={pedido.id} className="pedido">
-              <div className="pedido-cabecera">
-                <div>
-                  <span className="numero-pedido">
-                    {pedido.numero_pedido}
-                  </span>
+          {pedidosFiltrados.map((pedido) => {
+            const estadoSeleccionado =
+              estadosEditados[pedido.id] ||
+              pedido.estado_pedido;
 
-                  <h2>{pedido.cliente?.nombre}</h2>
+            const tieneCambios =
+              estadoSeleccionado !==
+              pedido.estado_pedido;
 
-                  <a
-                    href={`tel:${pedido.cliente?.telefono || ""}`}
-                    className="telefono"
+            const esEntregado =
+              estadoSeleccionado === "Entregado";
+
+            return (
+              <article
+                key={pedido.id}
+                className="pedido"
+              >
+                <div className="pedido-cabecera">
+                  <div>
+                    <span className="numero-pedido">
+                      {pedido.numero_pedido}
+                    </span>
+
+                    <h2>
+                      {pedido.cliente?.nombre}
+                    </h2>
+
+                    <a
+                      href={`tel:${
+                        pedido.cliente?.telefono ||
+                        ""
+                      }`}
+                      className="telefono"
+                    >
+                      {pedido.cliente?.telefono ||
+                        "-"}
+                    </a>
+                  </div>
+
+                  <span
+                    className={claseEstado(
+                      pedido.estado_pedido
+                    )}
                   >
-                    {pedido.cliente?.telefono || "-"}
-                  </a>
+                    {pedido.estado_pedido}
+                  </span>
                 </div>
 
-                <span className={claseEstado(pedido.estado_pedido)}>
-                  {pedido.estado_pedido}
-                </span>
-              </div>
+                <div className="datos">
+                  <div>
+                    <span>Prendas</span>
+                    <strong>
+                      {pedido.cantidadPrendas}
+                    </strong>
+                  </div>
 
-              <div className="datos">
-                <div>
-                  <span>Prendas</span>
-                  <strong>{pedido.cantidadPrendas}</strong>
+                  <div>
+                    <span>Entrega</span>
+                    <strong>
+                      {formatoFecha(
+                        pedido.fecha_entrega
+                      )}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>Total</span>
+                    <strong>
+                      {formatoDinero(
+                        pedido.total
+                      )}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>Saldo</span>
+                    <strong>
+                      {formatoDinero(
+                        pedido.saldo_pendiente
+                      )}
+                    </strong>
+                  </div>
                 </div>
 
-                <div>
-                  <span>Entrega</span>
-                  <strong>
-                    {formatoFecha(pedido.fecha_entrega)}
-                  </strong>
+                {pedido.prioridad ===
+                  "Express" && (
+                  <div className="express">
+                    ⚡ Servicio express
+                  </div>
+                )}
+
+                {pedido.observaciones && (
+                  <p className="observacion">
+                    {pedido.observaciones}
+                  </p>
+                )}
+
+                <div className="acciones">
+                  <div>
+                    <label
+                      htmlFor={`estado-${pedido.id}`}
+                    >
+                      Nuevo estado
+                    </label>
+
+                    <select
+                      id={`estado-${pedido.id}`}
+                      value={estadoSeleccionado}
+                      disabled={
+                        guardandoId === pedido.id
+                      }
+                      onChange={(e) =>
+                        seleccionarEstado(
+                          pedido.id,
+                          e.target.value
+                        )
+                      }
+                    >
+                      <option value="Recibido">
+                        Recibido
+                      </option>
+                      <option value="En proceso">
+                        En proceso
+                      </option>
+                      <option value="Listo para retirar">
+                        Listo para retirar
+                      </option>
+                      <option value="Entregado">
+                        Entregado
+                      </option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={
+                      !tieneCambios ||
+                      guardandoId === pedido.id
+                    }
+                    className={
+                      esEntregado
+                        ? "guardar-estado finalizar"
+                        : "guardar-estado"
+                    }
+                    onClick={() =>
+                      guardarEstado(pedido)
+                    }
+                  >
+                    {guardandoId === pedido.id
+                      ? "Guardando..."
+                      : esEntregado
+                      ? "Finalizar y entregar"
+                      : "Guardar estado"}
+                  </button>
                 </div>
-
-                <div>
-                  <span>Total</span>
-                  <strong>{formatoDinero(pedido.total)}</strong>
-                </div>
-
-                <div>
-                  <span>Saldo</span>
-                  <strong>
-                    {formatoDinero(pedido.saldo_pendiente)}
-                  </strong>
-                </div>
-              </div>
-
-              {pedido.prioridad === "Express" && (
-                <div className="express">
-                  ⚡ Servicio express
-                </div>
-              )}
-
-              {pedido.observaciones && (
-                <p className="observacion">
-                  {pedido.observaciones}
-                </p>
-              )}
-
-              <div className="acciones">
-                <label htmlFor={`estado-${pedido.id}`}>
-                  Cambiar estado
-                </label>
-
-                <select
-                  id={`estado-${pedido.id}`}
-                  value={pedido.estado_pedido}
-                  disabled={actualizandoId === pedido.id}
-                  onChange={(e) =>
-                    cambiarEstado(
-                      pedido.id,
-                      e.target.value
-                    )
-                  }
-                >
-                  <option value="Recibido">Recibido</option>
-                  <option value="En proceso">
-                    En proceso
-                  </option>
-                  <option value="Listo">Listo</option>
-                  <option value="Entregado">
-                    Entregado
-                  </option>
-                  <option value="Cancelado">
-                    Cancelado
-                  </option>
-                </select>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </section>
       )}
 
@@ -453,7 +596,8 @@ export default function PedidosLavanderia() {
           width: min(850px, 100%);
           margin: 0 auto 14px;
           display: grid;
-          grid-template-columns: 44px minmax(0, 1fr) auto;
+          grid-template-columns:
+            44px minmax(0, 1fr) auto;
           align-items: center;
           gap: 10px;
         }
@@ -495,7 +639,8 @@ export default function PedidosLavanderia() {
           width: min(850px, 100%);
           margin: 0 auto 12px;
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns:
+            repeat(2, minmax(0, 1fr));
           gap: 8px;
         }
 
@@ -509,15 +654,30 @@ export default function PedidosLavanderia() {
 
         .resumen span {
           display: block;
-          color: #718078;
           font-size: 11px;
+          font-weight: 800;
         }
 
         .resumen strong {
           display: block;
           margin-top: 5px;
-          overflow-wrap: anywhere;
-          font-size: 19px;
+          font-size: 22px;
+        }
+
+        .resumen-recibido {
+          border-left: 4px solid #eab308 !important;
+        }
+
+        .resumen-proceso {
+          border-left: 4px solid #2563eb !important;
+        }
+
+        .resumen-listo {
+          border-left: 4px solid #16a34a !important;
+        }
+
+        .resumen-entregado {
+          border-left: 4px solid #4b5563 !important;
         }
 
         .controles {
@@ -541,7 +701,9 @@ export default function PedidosLavanderia() {
 
         .controles input:focus {
           border-color: #16834f;
-          box-shadow: 0 0 0 3px rgba(22, 131, 79, 0.1);
+          box-shadow:
+            0 0 0 3px
+            rgba(22, 131, 79, 0.1);
         }
 
         .filtros {
@@ -582,7 +744,9 @@ export default function PedidosLavanderia() {
           border: 1px solid #dde7e0;
           border-radius: 16px;
           background: white;
-          box-shadow: 0 8px 20px rgba(21, 45, 31, 0.05);
+          box-shadow:
+            0 8px 20px
+            rgba(21, 45, 31, 0.05);
         }
 
         .pedido-cabecera {
@@ -620,13 +784,13 @@ export default function PedidosLavanderia() {
         }
 
         .recibido {
-          background: #eff6ff;
-          color: #1d4ed8;
+          background: #fef9c3;
+          color: #854d0e;
         }
 
         .proceso {
-          background: #fff7ed;
-          color: #c2410c;
+          background: #eff6ff;
+          color: #1d4ed8;
         }
 
         .listo {
@@ -639,15 +803,11 @@ export default function PedidosLavanderia() {
           color: #374151;
         }
 
-        .cancelado {
-          background: #fff1f2;
-          color: #be123c;
-        }
-
         .datos {
           margin-top: 14px;
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-columns:
+            repeat(2, minmax(0, 1fr));
           gap: 8px;
         }
 
@@ -690,25 +850,51 @@ export default function PedidosLavanderia() {
         }
 
         .acciones {
-          margin-top: 12px;
+          margin-top: 14px;
+          padding-top: 13px;
           display: grid;
           grid-template-columns: 1fr;
-          gap: 6px;
+          gap: 10px;
+          border-top: 1px solid #e4ebe6;
         }
 
         .acciones label {
+          display: block;
+          margin-bottom: 6px;
           font-size: 12px;
           font-weight: 850;
         }
 
         .acciones select {
           width: 100%;
-          min-height: 45px;
+          min-height: 46px;
           padding: 10px;
           border: 1px solid #d5dfd8;
           border-radius: 10px;
           background: white;
           font-size: 15px;
+        }
+
+        .guardar-estado {
+          min-height: 48px;
+          padding: 11px 14px;
+          border: none;
+          border-radius: 10px;
+          background: #173c2a;
+          color: white;
+          font-size: 14px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .guardar-estado.finalizar {
+          background: #16834f;
+        }
+
+        .guardar-estado:disabled {
+          background: #d7dfda;
+          color: #7a857e;
+          cursor: not-allowed;
         }
 
         .vacio {
@@ -746,31 +932,23 @@ export default function PedidosLavanderia() {
             padding: 20px 18px 40px;
           }
 
+          .resumen {
+            grid-template-columns:
+              repeat(4, minmax(0, 1fr));
+          }
+
           .datos {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns:
+              repeat(4, minmax(0, 1fr));
           }
 
           .acciones {
-            grid-template-columns: 150px 220px;
-            align-items: center;
-          }
-        }
-
-        @media (max-width: 430px) {
-          .resumen {
-            grid-template-columns: 1fr 1fr;
-          }
-
-          .resumen article:last-child {
-            grid-column: 1 / -1;
-          }
-
-          .nuevo {
-            padding: 9px 11px;
+            grid-template-columns:
+              minmax(0, 1fr) 230px;
+            align-items: end;
           }
         }
       `}</style>
     </main>
   );
 }
-
