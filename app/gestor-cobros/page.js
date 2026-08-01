@@ -434,26 +434,142 @@ export default function GestorCobros() {
   const porcentajeAlDia = montoAsignado > 0 ? Math.round((montoAlDia / montoAsignado) * 100) : 0;
 
   return (
-    <div style={pagina}>
-      <div style={contenedor}>
-        <div style={encabezado}>
-          <div style={marcaBox}>
-            <img src="/konax-logo.png" alt="KONAX" style={logo} />
+    <div style={pagina} className="gestor-pagina">
+      <style>{`
+        html, body {
+          max-width: 100%;
+          overflow-x: hidden;
+        }
+
+        .gestor-pagina,
+        .gestor-contenedor,
+        .gestor-card {
+          min-width: 0;
+          max-width: 100%;
+        }
+
+        .gestor-lista-movil {
+          display: none;
+        }
+
+        @media (max-width: 700px) {
+          .gestor-pagina {
+            padding: 12px !important;
+          }
+
+          .gestor-contenedor {
+            width: 100% !important;
+          }
+
+          .gestor-encabezado {
+            padding: 20px 16px !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            align-items: stretch !important;
+            gap: 18px !important;
+            border-radius: 20px !important;
+          }
+
+          .gestor-marca {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            align-items: start !important;
+            gap: 14px !important;
+          }
+
+          .gestor-logo {
+            width: 150px !important;
+            max-width: 58vw !important;
+          }
+
+          .gestor-titulo {
+            margin-top: 5px !important;
+            font-size: 36px !important;
+            line-height: 1.05 !important;
+            overflow-wrap: anywhere;
+          }
+
+          .gestor-acciones {
+            width: 100% !important;
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 9px !important;
+          }
+
+          .gestor-acciones button {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          .gestor-acciones button:first-child {
+            grid-column: 1 / -1;
+          }
+
+          .gestor-resumen {
+            grid-template-columns: 1fr !important;
+            gap: 11px !important;
+          }
+
+          .gestor-card {
+            padding: 18px 15px !important;
+            border-radius: 18px !important;
+            overflow: hidden !important;
+          }
+
+          .gestor-card-header {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            align-items: start !important;
+          }
+
+          .gestor-filtros {
+            grid-template-columns: 1fr !important;
+            gap: 14px !important;
+          }
+
+          .gestor-tabla-escritorio {
+            display: none !important;
+          }
+
+          .gestor-lista-movil {
+            display: grid !important;
+            gap: 12px;
+          }
+        }
+
+        @media (max-width: 390px) {
+          .gestor-titulo {
+            font-size: 32px !important;
+          }
+
+          .gestor-acciones {
+            grid-template-columns: 1fr !important;
+          }
+
+          .gestor-acciones button:first-child {
+            grid-column: auto;
+          }
+        }
+      `}</style>
+      <div style={contenedor} className="gestor-contenedor">
+        <div style={encabezado} className="gestor-encabezado">
+          <div style={marcaBox} className="gestor-marca">
+            <img src="/konax-logo.png" alt="KONAX" style={logo} className="gestor-logo" />
             <div>
               <p style={eyebrow}>Cobranza</p>
-              <h1 style={titulo}>Mi Cartera de Cobro</h1>
+              <h1 style={titulo} className="gestor-titulo">Mi Cartera de Cobro</h1>
               <p style={subtitulo}>Seguimiento, promesas y recuperación por gestor.</p>
             </div>
           </div>
 
-          <div style={accionesHeader}>
+          <div style={accionesHeader} className="gestor-acciones">
             <button style={botonClaro} onClick={volverDashboard}>← Dashboard</button>
             <button style={botonOscuro} onClick={cargarCartera}>Actualizar</button>
             <button style={botonOscuro} onClick={imprimirCartera}>Imprimir</button>
           </div>
         </div>
 
-        <div style={panelResumen}>
+        <div style={panelResumen} className="gestor-resumen">
           <KPI titulo="Clientes activos" valor={clientesAsignados} icono="👥" />
           <KPI titulo="Saldo asignado" valor={montoAsignado} tipo="dinero" icono="💰" />
           <KPI titulo="Al día" valor={montoAlDia} tipo="dinero" icono="🟢" />
@@ -468,15 +584,15 @@ export default function GestorCobros() {
           <KPI titulo="Cuentas canceladas" valor={cuentasCanceladas} icono="📁" />
         </div>
 
-        <div style={card}>
-          <div style={cardHeader}>
+        <div style={card} className="gestor-card">
+          <div style={cardHeader} className="gestor-card-header">
             <div>
               <h2 style={tituloSeccion}>Filtros de cartera</h2>
               <p style={textoSuave}>Busca por cliente, cédula o número de cuenta.</p>
             </div>
           </div>
 
-          <div style={gridFiltros}>
+          <div style={gridFiltros} className="gestor-filtros">
             <Campo label="Buscar cliente, cédula o cuenta">
               <input
                 placeholder="Ejemplo: Ana, 8-888, KX-001"
@@ -506,8 +622,8 @@ export default function GestorCobros() {
           </div>
         </div>
 
-        <div style={card}>
-          <div style={cardHeader}>
+        <div style={card} className="gestor-card">
+          <div style={cardHeader} className="gestor-card-header">
             <div>
               <h2 style={tituloSeccion}>
                 {filtroCartera === "Canceladas" ? "Cuentas canceladas" : "Clientes asignados"}
@@ -519,7 +635,120 @@ export default function GestorCobros() {
             <div style={badgeResultado}>{carteraFiltrada.length} resultados</div>
           </div>
 
-          <div style={{ overflowX: "auto" }}>
+          <div className="gestor-lista-movil">
+            {carteraFiltrada.map((item) => (
+              <article key={item.cobranza.id} style={cardClienteMovil}>
+                <div style={cardClienteCabecera}>
+                  <span style={estadoPill(item.estado)}>
+                    {item.semaforo}
+                  </span>
+
+                  <strong style={saldoClienteMovil}>
+                    {dinero(item.saldoReal)}
+                  </strong>
+                </div>
+
+                <div>
+                  <h3 style={nombreClienteMovil}>
+                    {item.cliente?.nombre || "-"}
+                  </h3>
+                  <p style={metaClienteMovil}>
+                    Cédula: {item.cliente?.cedula || "-"}
+                  </p>
+                  <p style={metaClienteMovil}>
+                    Cuenta: {item.cuenta?.numero_cuenta || "-"}
+                  </p>
+                  <p style={metaClienteMovil}>
+                    Teléfono: {item.cliente?.telefono || "Sin teléfono"}
+                  </p>
+                </div>
+
+                <div style={datosClienteMovil}>
+                  <div>
+                    <span>Monto original</span>
+                    <strong>{dinero(item.montoTotal)}</strong>
+                  </div>
+                  <div>
+                    <span>Pagado</span>
+                    <strong>{dinero(item.totalPagado)}</strong>
+                  </div>
+                  <div>
+                    <span>Mora</span>
+                    <strong>{item.dias} días</strong>
+                  </div>
+                </div>
+
+                <div style={promesaClienteMovil}>
+                  <span>Promesa</span>
+                  <strong>
+                    {item.estadoPromesa === "cumplida"
+                      ? "Cumplida"
+                      : item.promesaActiva
+                      ? item.promesaVencida
+                        ? "Vencida"
+                        : "Pendiente"
+                      : "Sin promesa"}
+                  </strong>
+                  {item.fechaPromesa && (
+                    <small>
+                      {item.fechaPromesa}
+                      {item.montoPromesa > 0
+                        ? ` · ${dinero(item.montoPromesa)}`
+                        : ""}
+                    </small>
+                  )}
+                </div>
+
+                <div style={accionesClienteMovil}>
+                  <button
+                    style={botonVerde}
+                    onClick={() => verCliente(item)}
+                  >
+                    Vista cliente
+                  </button>
+
+                  <button
+                    style={botonWhatsApp}
+                    onClick={() => abrirWhatsApp(item.cliente)}
+                  >
+                    WhatsApp
+                  </button>
+                </div>
+
+                {item.saldoReal > 0 && (
+                  <select
+                    style={gestionMovilSelect}
+                    defaultValue=""
+                    onChange={(e) => {
+                      registrarGestionRealizada(item, e.target.value);
+                      e.target.value = "";
+                    }}
+                  >
+                    <option value="">Registrar gestión rápida</option>
+                    <option>Llamada realizada</option>
+                    <option>WhatsApp enviado</option>
+                    <option>No contestó</option>
+                    <option>No localizado</option>
+                    <option>Número apagado</option>
+                    <option>Se conversó con cliente</option>
+                    <option>Se mudó</option>
+                    <option>Seguimiento pendiente</option>
+                  </select>
+                )}
+              </article>
+            ))}
+
+            {carteraFiltrada.length === 0 && (
+              <div style={tdVacio}>
+                No hay clientes asignados con este filtro.
+              </div>
+            )}
+          </div>
+
+          <div
+            style={{ overflowX: "auto", maxWidth: "100%" }}
+            className="gestor-tabla-escritorio"
+          >
             <table style={tabla}>
               <thead>
                 <tr>
@@ -636,6 +865,76 @@ function KPI({ titulo, valor, tipo, icono, alerta }) {
     </div>
   );
 }
+
+const cardClienteMovil = {
+  display: "grid",
+  gap: 14,
+  padding: 16,
+  border: "1px solid #e5e7eb",
+  borderRadius: 16,
+  background: "#ffffff",
+  boxShadow: "0 8px 20px rgba(15,23,42,.06)",
+};
+
+const cardClienteCabecera = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+};
+
+const saldoClienteMovil = {
+  color: "#111827",
+  fontSize: 20,
+  whiteSpace: "nowrap",
+};
+
+const nombreClienteMovil = {
+  margin: "0 0 6px",
+  color: "#111827",
+  fontSize: 19,
+  lineHeight: 1.15,
+};
+
+const metaClienteMovil = {
+  margin: "3px 0",
+  color: "#6b7280",
+  fontSize: 13,
+  overflowWrap: "anywhere",
+};
+
+const datosClienteMovil = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+  gap: 8,
+};
+
+const promesaClienteMovil = {
+  display: "grid",
+  gap: 4,
+  padding: 12,
+  borderRadius: 12,
+  background: "#f8faf9",
+  color: "#4b5563",
+  fontSize: 12,
+};
+
+const accionesClienteMovil = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 9,
+};
+
+const gestionMovilSelect = {
+  width: "100%",
+  minHeight: 46,
+  padding: "10px 12px",
+  border: "1px solid #d1d5db",
+  borderRadius: 11,
+  background: "#ffffff",
+  color: "#111827",
+  fontSize: 14,
+};
 
 function estadoPill(estado) {
   if (estado === "Al Día") return pillVerde;
