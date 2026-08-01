@@ -16,19 +16,30 @@ function normalizar(valor) {
 
 function fechaLocal(fecha) {
   if (!fecha) return null;
-  const [a, m, d] = String(fecha).slice(0, 10).split("-").map(Number);
+
+  const [a, m, d] = String(fecha)
+    .slice(0, 10)
+    .split("-")
+    .map(Number);
+
   if (!a || !m || !d) return null;
+
   return new Date(a, m - 1, d, 0, 0, 0, 0);
 }
 
 function formatoFecha(fecha) {
   if (!fecha) return "-";
-  const [a, m, d] = String(fecha).slice(0, 10).split("-");
+
+  const [a, m, d] = String(fecha)
+    .slice(0, 10)
+    .split("-");
+
   return a && m && d ? `${d}/${m}/${a}` : fecha;
 }
 
 function calcularDias(fechaFin) {
   const fin = fechaLocal(fechaFin);
+
   if (!fin) return null;
 
   const hoy = new Date();
@@ -36,7 +47,9 @@ function calcularDias(fechaFin) {
 
   return Math.max(
     0,
-    Math.ceil((fin.getTime() - hoy.getTime()) / 86400000)
+    Math.ceil(
+      (fin.getTime() - hoy.getTime()) / 86400000
+    )
   );
 }
 
@@ -45,25 +58,51 @@ function construirModulosPorPlan(codigoPlan) {
 
   const base = {
     dashboard: true,
+
     clientes: false,
     vista_cliente: false,
+
     creditos: false,
     cobranza: false,
     dashboard_cobros: false,
     gestor_cobros: false,
+
     caja: false,
     control_caja: false,
+
     reportes: false,
+
     inventario: false,
     movimientos_inventario: false,
+
     ventas: false,
     dashboard_ventas: false,
+
     gastos: false,
     recargos: false,
     suscripciones: false,
+
+    nuevo_pedido: false,
+    pedidos_lavanderia: false,
+    historial_lavanderia: false,
+
     usuarios: true,
     configuracion: true,
   };
+
+  if (codigo === "lavanderia_piloto") {
+    return {
+      ...base,
+      dashboard: true,
+      nuevo_pedido: true,
+      pedidos_lavanderia: true,
+      clientes: true,
+      caja: true,
+      historial_lavanderia: true,
+      usuarios: true,
+      configuracion: true,
+    };
+  }
 
   if (codigo === "cobros") {
     return {
@@ -102,7 +141,10 @@ function construirModulosPorPlan(codigoPlan) {
 
   if (codigo === "pro") {
     return Object.fromEntries(
-      Object.keys(base).map((codigoModulo) => [codigoModulo, true])
+      Object.keys(base).map((codigoModulo) => [
+        codigoModulo,
+        true,
+      ])
     );
   }
 
@@ -112,7 +154,9 @@ function construirModulosPorPlan(codigoPlan) {
 function leerModuloEmpresa(data, codigo) {
   if (!data) return true;
 
-  if (Object.prototype.hasOwnProperty.call(data, codigo)) {
+  if (
+    Object.prototype.hasOwnProperty.call(data, codigo)
+  ) {
     return Boolean(data[codigo]);
   }
 
@@ -144,6 +188,18 @@ function leerModuloEmpresa(data, codigo) {
     return Boolean(data[columna]);
   }
 
+  // Los módulos nuevos de lavandería no necesitan
+  // columnas adicionales en empresa_modulos.
+  if (
+    [
+      "nuevo_pedido",
+      "pedidos_lavanderia",
+      "historial_lavanderia",
+    ].includes(codigo)
+  ) {
+    return true;
+  }
+
   return true;
 }
 
@@ -151,31 +207,41 @@ export default function Dashboard() {
   const router = useRouter();
 
   const [modulos, setModulos] = useState({});
-  const [permisosUsuario, setPermisosUsuario] = useState([]);
+  const [permisosUsuario, setPermisosUsuario] =
+    useState([]);
 
-  const [empresaNombre, setEmpresaNombre] = useState("");
+  const [empresaNombre, setEmpresaNombre] =
+    useState("");
   const [planNombre, setPlanNombre] = useState("");
+  const [planCodigo, setPlanCodigo] = useState("");
   const [estadoPlan, setEstadoPlan] = useState("");
   const [tipoNegocio, setTipoNegocio] = useState("");
 
   const [usuarioRol, setUsuarioRol] = useState("");
-  const [usuarioNombre, setUsuarioNombre] = useState("");
+  const [usuarioNombre, setUsuarioNombre] =
+    useState("");
 
-  const [estadoSuscripcion, setEstadoSuscripcion] = useState("");
-  const [fechaInicioPrueba, setFechaInicioPrueba] = useState("");
-  const [fechaFinPrueba, setFechaFinPrueba] = useState("");
-  const [diasRestantes, setDiasRestantes] = useState(null);
+  const [estadoSuscripcion, setEstadoSuscripcion] =
+    useState("");
+  const [fechaInicioPrueba, setFechaInicioPrueba] =
+    useState("");
+  const [fechaFinPrueba, setFechaFinPrueba] =
+    useState("");
+  const [diasRestantes, setDiasRestantes] =
+    useState(null);
 
   const [bloqueado, setBloqueado] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [esMovil, setEsMovil] = useState(false);
-  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
+  const [menuMovilAbierto, setMenuMovilAbierto] =
+    useState(false);
 
   useEffect(() => {
     cargarDashboard();
 
     const actualizarVista = () => {
       const movil = window.innerWidth <= 900;
+
       setEsMovil(movil);
 
       if (!movil) {
@@ -184,10 +250,17 @@ export default function Dashboard() {
     };
 
     actualizarVista();
-    window.addEventListener("resize", actualizarVista);
+
+    window.addEventListener(
+      "resize",
+      actualizarVista
+    );
 
     return () => {
-      window.removeEventListener("resize", actualizarVista);
+      window.removeEventListener(
+        "resize",
+        actualizarVista
+      );
     };
   }, []);
 
@@ -195,108 +268,150 @@ export default function Dashboard() {
     return [
       "administrador",
       "superadmin",
+      "super_admin",
       "admin_master",
       "administrador_master",
     ].includes(normalizar(rol));
   }
 
   async function salir(mensaje = "") {
-    if (mensaje) alert(mensaje);
+    if (mensaje) {
+      alert(mensaje);
+    }
 
     try {
       await supabase.auth.signOut();
     } catch (error) {
-      console.error("Error cerrando sesión:", error);
+      console.error(
+        "Error cerrando sesión:",
+        error
+      );
     }
 
     localStorage.clear();
+
     router.replace("/login");
   }
 
   async function marcarPruebaVencida(empresaId) {
     const { error } = await supabase
       .from("empresas")
-      .update({ estado_suscripcion: "prueba_vencida" })
+      .update({
+        estado_suscripcion: "prueba_vencida",
+      })
       .eq("id", empresaId)
       .eq("estado_suscripcion", "prueba");
 
     if (error) {
-      console.error("No se pudo actualizar la prueba:", error);
+      console.error(
+        "No se pudo actualizar la prueba:",
+        error
+      );
     }
   }
 
   async function cargarDashboard() {
     setCargando(true);
 
-    const empresaId = localStorage.getItem("empresaId");
-    const usuarioId = localStorage.getItem("usuarioId");
+    const empresaId =
+      localStorage.getItem("empresaId");
+
+    const usuarioId =
+      localStorage.getItem("usuarioId");
 
     if (!empresaId || !usuarioId) {
-      await salir("La sesión no es válida. Inicie sesión nuevamente.");
+      await salir(
+        "La sesión no es válida. Inicie sesión nuevamente."
+      );
       return;
     }
 
-    const { data: usuario, error: errorUsuario } = await supabase
-      .from("usuarios")
-      .select("id, empresa_id, nombre, correo, rol, rol_id, estado")
-      .eq("id", usuarioId)
-      .maybeSingle();
+    const { data: usuario, error: errorUsuario } =
+      await supabase
+        .from("usuarios")
+        .select(
+          "id, empresa_id, nombre, correo, rol, rol_id, estado"
+        )
+        .eq("id", usuarioId)
+        .maybeSingle();
 
     if (errorUsuario) {
-      alert("Error validando usuario: " + errorUsuario.message);
+      alert(
+        "Error validando usuario: " +
+          errorUsuario.message
+      );
       setCargando(false);
       return;
     }
 
     if (!usuario) {
-      await salir("El usuario de la sesión ya no existe.");
+      await salir(
+        "El usuario de la sesión ya no existe."
+      );
       return;
     }
 
     if (normalizar(usuario.estado) !== "activo") {
-      await salir("Este usuario se encuentra inactivo.");
+      await salir(
+        "Este usuario se encuentra inactivo."
+      );
       return;
     }
 
-    if (String(usuario.empresa_id) !== String(empresaId)) {
-      await salir("La empresa activa no corresponde al usuario autenticado.");
+    if (
+      String(usuario.empresa_id) !==
+      String(empresaId)
+    ) {
+      await salir(
+        "La empresa activa no corresponde al usuario autenticado."
+      );
       return;
     }
 
-    const { data: empresa, error: errorEmpresa } = await supabase
-      .from("empresas")
-      .select(`
-        id,
-        nombre,
-        plan_nombre,
-        plan_codigo,
-        estado_plan,
-        estado,
-        tipo_negocio,
-        categoria_negocio,
-        estado_suscripcion,
-        fecha_inicio_prueba,
-        fecha_fin_prueba
-      `)
-      .eq("id", empresaId)
-      .maybeSingle();
+    const { data: empresa, error: errorEmpresa } =
+      await supabase
+        .from("empresas")
+        .select(`
+          id,
+          nombre,
+          plan_nombre,
+          plan_codigo,
+          estado_plan,
+          estado,
+          tipo_negocio,
+          categoria_negocio,
+          estado_suscripcion,
+          fecha_inicio_prueba,
+          fecha_fin_prueba
+        `)
+        .eq("id", empresaId)
+        .maybeSingle();
 
     if (errorEmpresa) {
-      alert("Error cargando empresa: " + errorEmpresa.message);
+      alert(
+        "Error cargando empresa: " +
+          errorEmpresa.message
+      );
       setCargando(false);
       return;
     }
 
     if (!empresa) {
-      await salir("La empresa de esta sesión ya no existe.");
+      await salir(
+        "La empresa de esta sesión ya no existe."
+      );
       return;
     }
 
     if (
-      normalizar(empresa.estado) === "suspendido" ||
-      normalizar(empresa.estado_plan) === "suspendido"
+      normalizar(empresa.estado) ===
+        "suspendido" ||
+      normalizar(empresa.estado_plan) ===
+        "suspendido"
     ) {
-      await salir("El servicio de esta empresa está suspendido.");
+      await salir(
+        "El servicio de esta empresa está suspendido."
+      );
       return;
     }
 
@@ -304,7 +419,10 @@ export default function Dashboard() {
       empresa.estado_suscripcion || "activo"
     );
 
-    const fin = fechaLocal(empresa.fecha_fin_prueba);
+    const fin = fechaLocal(
+      empresa.fecha_fin_prueba
+    );
+
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
@@ -315,6 +433,7 @@ export default function Dashboard() {
 
     if (pruebaVencida) {
       suscripcion = "prueba_vencida";
+
       await marcarPruebaVencida(empresa.id);
     }
 
@@ -324,34 +443,94 @@ export default function Dashboard() {
       "cancelado",
     ].includes(suscripcion);
 
-    localStorage.setItem("empresaId", empresa.id || "");
-    localStorage.setItem("empresaNombre", empresa.nombre || "");
-    localStorage.setItem("usuarioId", usuario.id || "");
-    localStorage.setItem("usuarioNombre", usuario.nombre || "");
-    localStorage.setItem("usuarioCorreo", usuario.correo || "");
-    localStorage.setItem("usuarioRol", usuario.rol || "");
-    localStorage.setItem("rolId", usuario.rol_id || "");
-    localStorage.setItem("tipoNegocio", empresa.tipo_negocio || "");
-    localStorage.setItem("categoriaNegocio", empresa.categoria_negocio || "");
-    localStorage.setItem("planCodigo", empresa.plan_codigo || "");
-    localStorage.setItem("planNombre", empresa.plan_nombre || "");
-    localStorage.setItem("estadoPlan", empresa.estado_plan || "");
-    localStorage.setItem("estadoEmpresa", empresa.estado || "");
-    localStorage.setItem("estadoSuscripcion", suscripcion);
+    localStorage.setItem(
+      "empresaId",
+      empresa.id || ""
+    );
+    localStorage.setItem(
+      "empresaNombre",
+      empresa.nombre || ""
+    );
+    localStorage.setItem(
+      "usuarioId",
+      usuario.id || ""
+    );
+    localStorage.setItem(
+      "usuarioNombre",
+      usuario.nombre || ""
+    );
+    localStorage.setItem(
+      "usuarioCorreo",
+      usuario.correo || ""
+    );
+    localStorage.setItem(
+      "usuarioRol",
+      usuario.rol || ""
+    );
+    localStorage.setItem(
+      "rolId",
+      usuario.rol_id || ""
+    );
+    localStorage.setItem(
+      "tipoNegocio",
+      empresa.tipo_negocio || ""
+    );
+    localStorage.setItem(
+      "categoriaNegocio",
+      empresa.categoria_negocio || ""
+    );
+    localStorage.setItem(
+      "planCodigo",
+      empresa.plan_codigo || ""
+    );
+    localStorage.setItem(
+      "planNombre",
+      empresa.plan_nombre || ""
+    );
+    localStorage.setItem(
+      "estadoPlan",
+      empresa.estado_plan || ""
+    );
+    localStorage.setItem(
+      "estadoEmpresa",
+      empresa.estado || ""
+    );
+    localStorage.setItem(
+      "estadoSuscripcion",
+      suscripcion
+    );
 
-    setEmpresaNombre(empresa.nombre || "Empresa");
-    setPlanNombre(empresa.plan_nombre || "Sin plan");
-    setEstadoPlan(empresa.estado_plan || "Activo");
-    setTipoNegocio(empresa.tipo_negocio || "");
+    setEmpresaNombre(
+      empresa.nombre || "Empresa"
+    );
+    setPlanNombre(
+      empresa.plan_nombre || "Sin plan"
+    );
+    setPlanCodigo(
+      empresa.plan_codigo || ""
+    );
+    setEstadoPlan(
+      empresa.estado_plan || "Activo"
+    );
+    setTipoNegocio(
+      empresa.tipo_negocio || ""
+    );
     setUsuarioRol(usuario.rol || "");
     setUsuarioNombre(usuario.nombre || "");
 
     setEstadoSuscripcion(suscripcion);
-    setFechaInicioPrueba(empresa.fecha_inicio_prueba || "");
-    setFechaFinPrueba(empresa.fecha_fin_prueba || "");
+    setFechaInicioPrueba(
+      empresa.fecha_inicio_prueba || ""
+    );
+    setFechaFinPrueba(
+      empresa.fecha_fin_prueba || ""
+    );
     setDiasRestantes(
-      suscripcion === "prueba" && !pruebaVencida
-        ? calcularDias(empresa.fecha_fin_prueba)
+      suscripcion === "prueba" &&
+        !pruebaVencida
+        ? calcularDias(
+            empresa.fecha_fin_prueba
+          )
         : null
     );
 
@@ -364,18 +543,29 @@ export default function Dashboard() {
       return;
     }
 
-    const [modulosEmpresa, permisos] = await Promise.all([
-      cargarModulosEmpresa(empresaId, empresa.plan_codigo),
-      cargarPermisosUsuario(empresaId, usuarioId),
-    ]);
+    const [modulosEmpresa, permisos] =
+      await Promise.all([
+        cargarModulosEmpresa(
+          empresaId,
+          empresa.plan_codigo
+        ),
+        cargarPermisosUsuario(
+          empresaId,
+          usuarioId
+        ),
+      ]);
 
     setModulos(modulosEmpresa);
     setPermisosUsuario(permisos);
     setCargando(false);
   }
 
-  async function cargarModulosEmpresa(empresaId, planCodigo) {
-    const permitidos = construirModulosPorPlan(planCodigo);
+  async function cargarModulosEmpresa(
+    empresaId,
+    codigoPlan
+  ) {
+    const permitidos =
+      construirModulosPorPlan(codigoPlan);
 
     const { data, error } = await supabase
       .from("empresa_modulos")
@@ -384,36 +574,57 @@ export default function Dashboard() {
       .maybeSingle();
 
     if (error) {
-      alert("Error cargando módulos de empresa: " + error.message);
+      alert(
+        "Error cargando módulos de empresa: " +
+          error.message
+      );
+
       return permitidos;
     }
 
     const resultado = {};
 
-    Object.keys(permitidos).forEach((codigoModulo) => {
-      const incluidoEnPlan = Boolean(permitidos[codigoModulo]);
+    Object.keys(permitidos).forEach(
+      (codigoModulo) => {
+        const incluidoEnPlan = Boolean(
+          permitidos[codigoModulo]
+        );
 
-      if (!incluidoEnPlan) {
-        resultado[codigoModulo] = false;
-        return;
+        if (!incluidoEnPlan) {
+          resultado[codigoModulo] = false;
+          return;
+        }
+
+        if (
+          [
+            "dashboard",
+            "nuevo_pedido",
+            "pedidos_lavanderia",
+            "historial_lavanderia",
+            "usuarios",
+            "configuracion",
+          ].includes(codigoModulo)
+        ) {
+          resultado[codigoModulo] = true;
+          return;
+        }
+
+        resultado[codigoModulo] = data
+          ? leerModuloEmpresa(
+              data,
+              codigoModulo
+            )
+          : true;
       }
-
-      if (
-        ["dashboard", "usuarios", "configuracion"].includes(codigoModulo)
-      ) {
-        resultado[codigoModulo] = true;
-        return;
-      }
-
-      resultado[codigoModulo] = data
-        ? leerModuloEmpresa(data, codigoModulo)
-        : true;
-    });
+    );
 
     return resultado;
   }
 
-  async function cargarPermisosUsuario(empresaId, usuarioId) {
+  async function cargarPermisosUsuario(
+    empresaId,
+    usuarioId
+  ) {
     const { data, error } = await supabase
       .from("permisos_usuarios_empresa")
       .select("permiso, activo")
@@ -422,16 +633,25 @@ export default function Dashboard() {
       .eq("activo", true);
 
     if (error) {
-      alert("Error cargando permisos del usuario: " + error.message);
+      alert(
+        "Error cargando permisos del usuario: " +
+          error.message
+      );
+
       return [];
     }
 
     return (data || [])
-      .map((item) => normalizar(item.permiso))
+      .map((item) =>
+        normalizar(item.permiso)
+      )
       .filter(Boolean);
   }
 
-  function puedeVer(codigoModulo, codigoPermiso = codigoModulo) {
+  function puedeVer(
+    codigoModulo,
+    codigoPermiso = codigoModulo
+  ) {
     if (bloqueado) return false;
 
     const modulo = normalizar(codigoModulo);
@@ -445,7 +665,10 @@ export default function Dashboard() {
       return true;
     }
 
-    return permiso === "dashboard" || permisosUsuario.includes(permiso);
+    return (
+      permiso === "dashboard" ||
+      permisosUsuario.includes(permiso)
+    );
   }
 
   async function cerrarSesion() {
@@ -460,47 +683,229 @@ export default function Dashboard() {
     );
   }
 
+  const esLavanderia =
+    normalizar(planCodigo) ===
+      "lavanderia_piloto" ||
+    normalizar(tipoNegocio) === "lavanderia";
+
   const modulosMenu = useMemo(() => {
-    const lista = [
-      ["Panel", "/dashboard", "dashboard", "▦"],
-      ["Clientes", "/clientes", "clientes", "👥"],
-      ["Vista Cliente", "/vista-cliente", "vista_cliente", "📄"],
-      ["Créditos", "/ventas-credito", "creditos", "💳"],
-      ["Caja", "/caja", "caja", "▣"],
-      ["Cobranza", "/cobranza", "cobranza", "$"],
-      ["Centro de Cobranza", "/dashboard-cobranza", "dashboard_cobros", "📊"],
-      ["Mi cartera de cobro", "/gestor-cobros", "gestor_cobros", "💼"],
-      ["Control Caja", "/control-caja", "control_caja", "🏦"],
-      ["Inventario", "/inventario", "inventario", "□"],
-      ["Movimientos Inventario", "/inventario/movimientos", "movimientos_inventario", "🔄"],
-      ["Ventas", "/ventas", "ventas", "🛒"],
-      ["Centro de Ventas", "/dashboard-ventas", "dashboard_ventas", "📈"],
-      ["Gastos", "/gastos", "gastos", "🧮"],
-      ["Suscripciones", "/suscripciones", "suscripciones", "🔁"],
-      ["Recargos", "/recargos", "recargos", "⚠️"],
-      ["Reportes", "/reportes", "reportes", "▥"],
-      ["Usuarios y Roles", "/usuarios", "usuarios", "🔐"],
-      ["Configuración", "/admin-configuracion", "configuracion", "⚙"],
+    const listaLavanderia = [
+      [
+        "Panel",
+        "/dashboard",
+        "dashboard",
+        "▦",
+      ],
+      [
+        "Nuevo pedido",
+        "/lavanderia/nuevo-pedido",
+        "nuevo_pedido",
+        "➕",
+      ],
+      [
+        "Pedidos",
+        "/lavanderia/pedidos",
+        "pedidos_lavanderia",
+        "🧺",
+      ],
+      [
+        "Clientes",
+        "/clientes",
+        "clientes",
+        "👥",
+      ],
+      [
+        "Caja básica",
+        "/caja",
+        "caja",
+        "▣",
+      ],
+      [
+        "Historial",
+        "/lavanderia/historial",
+        "historial_lavanderia",
+        "🕘",
+      ],
+      [
+        "Usuarios y Roles",
+        "/usuarios",
+        "usuarios",
+        "🔐",
+      ],
+      [
+        "Configuración",
+        "/admin-configuracion",
+        "configuracion",
+        "⚙",
+      ],
     ];
 
+    const listaGeneral = [
+      [
+        "Panel",
+        "/dashboard",
+        "dashboard",
+        "▦",
+      ],
+      [
+        "Clientes",
+        "/clientes",
+        "clientes",
+        "👥",
+      ],
+      [
+        "Vista Cliente",
+        "/vista-cliente",
+        "vista_cliente",
+        "📄",
+      ],
+      [
+        "Créditos",
+        "/ventas-credito",
+        "creditos",
+        "💳",
+      ],
+      ["Caja", "/caja", "caja", "▣"],
+      [
+        "Cobranza",
+        "/cobranza",
+        "cobranza",
+        "$",
+      ],
+      [
+        "Centro de Cobranza",
+        "/dashboard-cobranza",
+        "dashboard_cobros",
+        "📊",
+      ],
+      [
+        "Mi cartera de cobro",
+        "/gestor-cobros",
+        "gestor_cobros",
+        "💼",
+      ],
+      [
+        "Control Caja",
+        "/control-caja",
+        "control_caja",
+        "🏦",
+      ],
+      [
+        "Inventario",
+        "/inventario",
+        "inventario",
+        "□",
+      ],
+      [
+        "Movimientos Inventario",
+        "/inventario/movimientos",
+        "movimientos_inventario",
+        "🔄",
+      ],
+      [
+        "Ventas",
+        "/ventas",
+        "ventas",
+        "🛒",
+      ],
+      [
+        "Centro de Ventas",
+        "/dashboard-ventas",
+        "dashboard_ventas",
+        "📈",
+      ],
+      [
+        "Gastos",
+        "/gastos",
+        "gastos",
+        "🧮",
+      ],
+      [
+        "Suscripciones",
+        "/suscripciones",
+        "suscripciones",
+        "🔁",
+      ],
+      [
+        "Recargos",
+        "/recargos",
+        "recargos",
+        "⚠️",
+      ],
+      [
+        "Reportes",
+        "/reportes",
+        "reportes",
+        "▥",
+      ],
+      [
+        "Usuarios y Roles",
+        "/usuarios",
+        "usuarios",
+        "🔐",
+      ],
+      [
+        "Configuración",
+        "/admin-configuracion",
+        "configuracion",
+        "⚙",
+      ],
+    ];
+
+    const lista = esLavanderia
+      ? listaLavanderia
+      : listaGeneral;
+
     return lista
-      .map(([nombre, ruta, codigo, icono]) => ({
-        nombre,
-        ruta,
-        codigo,
-        icono,
-        activo: puedeVer(codigo),
-      }))
+      .map(
+        ([nombre, ruta, codigo, icono]) => ({
+          nombre,
+          ruta,
+          codigo,
+          icono,
+          activo: puedeVer(codigo),
+        })
+      )
       .filter((item) => item.activo);
-  }, [modulos, permisosUsuario, usuarioRol, bloqueado]);
+  }, [
+    modulos,
+    permisosUsuario,
+    usuarioRol,
+    bloqueado,
+    esLavanderia,
+  ]);
+
+  const accesosRapidos = useMemo(() => {
+    if (!esLavanderia) {
+      return modulosMenu.filter(
+        (item) => item.codigo !== "dashboard"
+      );
+    }
+
+    return modulosMenu.filter((item) =>
+      [
+        "nuevo_pedido",
+        "pedidos_lavanderia",
+        "clientes",
+        "caja",
+        "historial_lavanderia",
+      ].includes(item.codigo)
+    );
+  }, [modulosMenu, esLavanderia]);
 
   if (cargando) {
     return (
       <div style={s.loading}>
-        <img src="/konax-logo.png" alt="KONAX" style={s.loadingLogo} />
+        <img
+          src="/konax-logo.png"
+          alt="KONAX"
+          style={s.loadingLogo}
+        />
+
         <strong style={s.loadingTitle}>
           Preparando tu espacio de trabajo
         </strong>
+
         <span style={s.loadingText}>
           Validando empresa, plan y permisos.
         </span>
@@ -520,25 +925,38 @@ export default function Dashboard() {
 
           <div style={s.candado}>🔒</div>
 
-          <span style={s.bloqueoEtiqueta}>PRUEBA FINALIZADA</span>
+          <span style={s.bloqueoEtiqueta}>
+            PRUEBA FINALIZADA
+          </span>
 
           <h1 style={s.bloqueoTitulo}>
             El acceso operativo está bloqueado
           </h1>
 
           <p style={s.bloqueoTexto}>
-            La prueba de <strong>{empresaNombre}</strong> finalizó el{" "}
-            <strong>{formatoFecha(fechaFinPrueba)}</strong>. Los datos
-            permanecen registrados, pero los módulos estarán bloqueados
-            hasta activar un plan.
+            La prueba de{" "}
+            <strong>{empresaNombre}</strong>{" "}
+            finalizó el{" "}
+            <strong>
+              {formatoFecha(fechaFinPrueba)}
+            </strong>
+            . Los datos permanecen registrados,
+            pero los módulos estarán bloqueados
+            hasta activar el plan.
           </p>
 
           <div style={s.bloqueoAcciones}>
-            <button onClick={contactarKonax} style={s.botonVerde}>
+            <button
+              onClick={contactarKonax}
+              style={s.botonVerde}
+            >
               Contactar a KONAX
             </button>
 
-            <button onClick={cerrarSesion} style={s.botonClaro}>
+            <button
+              onClick={cerrarSesion}
+              style={s.botonClaro}
+            >
               Cerrar sesión
             </button>
           </div>
@@ -547,21 +965,27 @@ export default function Dashboard() {
     );
   }
 
-  const pruebaActiva = estadoSuscripcion === "prueba";
+  const pruebaActiva =
+    estadoSuscripcion === "prueba";
+
   const pendienteInicio =
-    estadoSuscripcion === "pendiente_inicio_prueba";
+    estadoSuscripcion ===
+    "pendiente_inicio_prueba";
 
   const alertaCritica =
     pruebaActiva &&
     diasRestantes !== null &&
     diasRestantes <= 5;
 
-  const fechaPanel = new Intl.DateTimeFormat("es-PA", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date());
+  const fechaPanel = new Intl.DateTimeFormat(
+    "es-PA",
+    {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }
+  ).format(new Date());
 
   return (
     <div
@@ -595,10 +1019,16 @@ export default function Dashboard() {
 
               <button
                 type="button"
-                onClick={() => setMenuMovilAbierto((actual) => !actual)}
+                onClick={() =>
+                  setMenuMovilAbierto(
+                    (actual) => !actual
+                  )
+                }
                 style={s.mobileMenuButton}
               >
-                {menuMovilAbierto ? "Cerrar" : "Menú"}
+                {menuMovilAbierto
+                  ? "Cerrar"
+                  : "Menú"}
               </button>
             </div>
 
@@ -608,10 +1038,14 @@ export default function Dashboard() {
                   <button
                     key={item.ruta}
                     type="button"
-                    onClick={() => router.push(item.ruta)}
+                    onClick={() => {
+                      setMenuMovilAbierto(false);
+                      router.push(item.ruta);
+                    }}
                     style={{
                       ...s.mobileMenuItem,
-                      ...(item.nombre === "Panel"
+                      ...(item.codigo ===
+                      "dashboard"
                         ? s.mobileMenuItemActivo
                         : {}),
                     }}
@@ -636,31 +1070,50 @@ export default function Dashboard() {
         <header
           style={{
             ...s.topbar,
-            ...(esMovil ? s.topbarMobile : {}),
+            ...(esMovil
+              ? s.topbarMobile
+              : {}),
           }}
         >
           <div>
-            <span style={s.eyebrow}>PANEL EMPRESARIAL</span>
-            <h1 style={s.pageTitle}>{empresaNombre}</h1>
+            <span style={s.eyebrow}>
+              {esLavanderia
+                ? "KONAX LAVANDERÍA"
+                : "PANEL EMPRESARIAL"}
+            </span>
+
+            <h1 style={s.pageTitle}>
+              {empresaNombre}
+            </h1>
+
             <span style={s.pageSubtitle}>
-              Panel general · {fechaPanel}
+              {esLavanderia
+                ? `Operación diaria · ${fechaPanel}`
+                : `Panel general · ${fechaPanel}`}
             </span>
           </div>
 
           <div
             style={{
               ...s.userBox,
-              ...(esMovil ? s.userBoxMobile : {}),
+              ...(esMovil
+                ? s.userBoxMobile
+                : {}),
             }}
           >
             <div style={s.avatar}>
-              {String(usuarioNombre || "U").charAt(0).toUpperCase()}
+              {String(
+                usuarioNombre || "U"
+              )
+                .charAt(0)
+                .toUpperCase()}
             </div>
 
             <div>
               <strong style={s.userName}>
                 {usuarioNombre || "Usuario"}
               </strong>
+
               <span style={s.userRole}>
                 {usuarioRol || "Sin rol"}
               </span>
@@ -672,17 +1125,27 @@ export default function Dashboard() {
           <section
             style={{
               ...s.avisoPendiente,
-              ...(esMovil ? s.avisoPendienteMobile : {}),
+              ...(esMovil
+                ? s.avisoPendienteMobile
+                : {}),
             }}
           >
-            <div style={s.avisoIcono}>⏱️</div>
+            <div style={s.avisoIcono}>
+              ⏱️
+            </div>
+
             <div>
-              <span style={s.avisoEtiqueta}>PROGRAMA PILOTO APROBADO</span>
+              <span style={s.avisoEtiqueta}>
+                PROGRAMA PILOTO APROBADO
+              </span>
+
               <strong style={s.avisoTitulo}>
                 La prueba todavía no ha comenzado
               </strong>
+
               <p style={s.avisoTexto}>
-                Un asesor de KONAX activará los días cuando la empresa esté lista.
+                Un asesor de KONAX activará los
+                días cuando la empresa esté lista.
               </p>
             </div>
           </section>
@@ -692,25 +1155,45 @@ export default function Dashboard() {
           <section
             style={{
               ...s.avisoPrueba,
-              ...(alertaCritica ? s.avisoCritico : {}),
-              ...(esMovil ? s.avisoPruebaMobile : {}),
+              ...(alertaCritica
+                ? s.avisoCritico
+                : {}),
+              ...(esMovil
+                ? s.avisoPruebaMobile
+                : {}),
             }}
           >
             <div
               style={{
                 ...s.avisoIzquierda,
-                ...(esMovil ? s.avisoIzquierdaMobile : {}),
+                ...(esMovil
+                  ? s.avisoIzquierdaMobile
+                  : {}),
               }}
             >
-              <div style={s.avisoIcono}>⏱️</div>
+              <div style={s.avisoIcono}>
+                ⏱️
+              </div>
+
               <div>
-                <span style={s.avisoEtiqueta}>PROGRAMA PILOTO ACTIVO</span>
+                <span style={s.avisoEtiqueta}>
+                  PROGRAMA PILOTO ACTIVO
+                </span>
+
                 <strong style={s.avisoTitulo}>
-                  Estás utilizando KONAX en período de prueba
+                  Estás utilizando KONAX en
+                  período de prueba
                 </strong>
+
                 <p style={s.avisoTexto}>
-                  Inicio: {formatoFecha(fechaInicioPrueba)} · Vencimiento:{" "}
-                  {formatoFecha(fechaFinPrueba)}
+                  Inicio:{" "}
+                  {formatoFecha(
+                    fechaInicioPrueba
+                  )}{" "}
+                  · Vencimiento:{" "}
+                  {formatoFecha(
+                    fechaFinPrueba
+                  )}
                 </p>
               </div>
             </div>
@@ -718,136 +1201,256 @@ export default function Dashboard() {
             <div
               style={{
                 ...s.diasCaja,
-                ...(esMovil ? s.diasCajaMobile : {}),
+                ...(esMovil
+                  ? s.diasCajaMobile
+                  : {}),
               }}
             >
-              <strong style={s.diasNumero}>{diasRestantes ?? 0}</strong>
+              <strong style={s.diasNumero}>
+                {diasRestantes ?? 0}
+              </strong>
+
               <span style={s.diasTexto}>
-                {diasRestantes === 1 ? "día restante" : "días restantes"}
+                {diasRestantes === 1
+                  ? "día restante"
+                  : "días restantes"}
               </span>
             </div>
           </section>
         )}
 
-        <section
-          style={{
-            ...s.heroGrid,
-            ...(esMovil ? s.heroGridMobile : {}),
-          }}
-        >
-          <article
-            style={{
-              ...s.heroMain,
-              ...(esMovil ? s.heroMainMobile : {}),
-            }}
-          >
-            <div style={s.heroAccent} />
-
-            <div style={s.heroContent}>
-              <span style={s.heroTag}>RESUMEN GENERAL</span>
-
-              <h2
-                style={{
-                  ...s.heroTitle,
-                  ...(esMovil ? s.heroTitleMobile : {}),
-                }}
-              >
-                Control total de tu negocio
-              </h2>
-
-              <p style={s.heroText}>
-                Consulta la información principal de {empresaNombre},
-                organiza el acceso por funciones y mantén cada área bajo control.
-              </p>
-            </div>
-
-            <div
-              style={{
-                ...s.heroBadge,
-                ...(esMovil ? s.heroBadgeMobile : {}),
-              }}
-            >
-              <span style={s.heroBadgeLabel}>TIPO DE NEGOCIO</span>
-              <strong style={s.heroBadgeValue}>
-                {tipoNegocio || "No definido"}
-              </strong>
-            </div>
-          </article>
-
-          <article
-            style={{
-              ...s.planPanel,
-              ...(esMovil ? s.planPanelMobile : {}),
-            }}
-          >
-            <div style={s.planTop}>
-              <span style={s.planLabel}>
-                {pruebaActiva ? "PLAN EN PRUEBA" : "PLAN ACTUAL"}
-              </span>
-
-              <span style={s.planStatus}>
-                <span style={s.greenDot} />
-                {pruebaActiva
-                  ? "Prueba activa"
-                  : pendienteInicio
-                  ? "Pendiente de inicio"
-                  : estadoPlan || "Activo"}
-              </span>
-            </div>
-
-            <strong style={s.planName}>{planNombre}</strong>
-
-            <div style={s.planDivider} />
-
-            <div style={s.planFooter}>
+        {esLavanderia ? (
+          <>
+            <section style={s.bienvenidaLavanderia}>
               <div>
-                <span style={s.planSmall}>Funciones disponibles</span>
-                <strong style={s.planCount}>{modulosMenu.length}</strong>
+                <span style={s.heroTag}>
+                  OPERACIÓN DE HOY
+                </span>
+
+                <h2 style={s.tituloLavanderia}>
+                  ¿Qué deseas hacer?
+                </h2>
+
+                <p style={s.heroText}>
+                  Registra pedidos, consulta
+                  estados y administra la
+                  lavandería desde el teléfono.
+                </p>
               </div>
 
-              <div style={s.planSeal}>K</div>
-            </div>
-          </article>
-        </section>
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    "/lavanderia/nuevo-pedido"
+                  )
+                }
+                style={s.botonPedidoPrincipal}
+              >
+                + Nuevo pedido
+              </button>
+            </section>
 
-        <section
-          style={{
-            ...s.bottomGrid,
-            ...(esMovil ? s.bottomGridMobile : {}),
-          }}
-        >
-          <Info
-            titulo="ACCESO ACTUAL"
-            valor={usuarioRol || "Sin rol"}
-            icono="🛡️"
-            detalle="Nivel de acceso asignado a este usuario."
-          />
+            <section
+              style={{
+                ...s.accesosGrid,
+                ...(esMovil
+                  ? s.accesosGridMobile
+                  : {}),
+              }}
+            >
+              {accesosRapidos.map((item) => (
+                <button
+                  key={item.codigo}
+                  type="button"
+                  onClick={() =>
+                    router.push(item.ruta)
+                  }
+                  style={s.accesoCard}
+                >
+                  <span style={s.accesoIcono}>
+                    {item.icono}
+                  </span>
 
-          <Info
-            titulo="TIPO DE NEGOCIO"
-            valor={tipoNegocio || "No definido"}
-            icono="🏢"
-            detalle="Configuración aplicada a esta empresa."
-          />
+                  <strong style={s.accesoTitulo}>
+                    {item.nombre}
+                  </strong>
 
-          <Info
-            titulo="FUNCIONES ACTIVAS"
-            valor={String(modulosMenu.length)}
-            icono="▦"
-            detalle="Módulos habilitados para este acceso."
-          />
-        </section>
+                  <span style={s.accesoTexto}>
+                    Abrir módulo
+                  </span>
+                </button>
+              ))}
+            </section>
+          </>
+        ) : (
+          <>
+            <section
+              style={{
+                ...s.heroGrid,
+                ...(esMovil
+                  ? s.heroGridMobile
+                  : {}),
+              }}
+            >
+              <article
+                style={{
+                  ...s.heroMain,
+                  ...(esMovil
+                    ? s.heroMainMobile
+                    : {}),
+                }}
+              >
+                <div style={s.heroAccent} />
+
+                <div style={s.heroContent}>
+                  <span style={s.heroTag}>
+                    RESUMEN GENERAL
+                  </span>
+
+                  <h2
+                    style={{
+                      ...s.heroTitle,
+                      ...(esMovil
+                        ? s.heroTitleMobile
+                        : {}),
+                    }}
+                  >
+                    Control total de tu negocio
+                  </h2>
+
+                  <p style={s.heroText}>
+                    Consulta la información
+                    principal de {empresaNombre},
+                    organiza el acceso por
+                    funciones y mantén cada área
+                    bajo control.
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    ...s.heroBadge,
+                    ...(esMovil
+                      ? s.heroBadgeMobile
+                      : {}),
+                  }}
+                >
+                  <span style={s.heroBadgeLabel}>
+                    TIPO DE NEGOCIO
+                  </span>
+
+                  <strong style={s.heroBadgeValue}>
+                    {tipoNegocio ||
+                      "No definido"}
+                  </strong>
+                </div>
+              </article>
+
+              <article
+                style={{
+                  ...s.planPanel,
+                  ...(esMovil
+                    ? s.planPanelMobile
+                    : {}),
+                }}
+              >
+                <div style={s.planTop}>
+                  <span style={s.planLabel}>
+                    {pruebaActiva
+                      ? "PLAN EN PRUEBA"
+                      : "PLAN ACTUAL"}
+                  </span>
+
+                  <span style={s.planStatus}>
+                    <span style={s.greenDot} />
+
+                    {pruebaActiva
+                      ? "Prueba activa"
+                      : pendienteInicio
+                      ? "Pendiente de inicio"
+                      : estadoPlan || "Activo"}
+                  </span>
+                </div>
+
+                <strong style={s.planName}>
+                  {planNombre}
+                </strong>
+
+                <div style={s.planDivider} />
+
+                <div style={s.planFooter}>
+                  <div>
+                    <span style={s.planSmall}>
+                      Funciones disponibles
+                    </span>
+
+                    <strong style={s.planCount}>
+                      {modulosMenu.length}
+                    </strong>
+                  </div>
+
+                  <div style={s.planSeal}>K</div>
+                </div>
+              </article>
+            </section>
+
+            <section
+              style={{
+                ...s.bottomGrid,
+                ...(esMovil
+                  ? s.bottomGridMobile
+                  : {}),
+              }}
+            >
+              <Info
+                titulo="ACCESO ACTUAL"
+                valor={
+                  usuarioRol || "Sin rol"
+                }
+                icono="🛡️"
+                detalle="Nivel de acceso asignado a este usuario."
+              />
+
+              <Info
+                titulo="TIPO DE NEGOCIO"
+                valor={
+                  tipoNegocio ||
+                  "No definido"
+                }
+                icono="🏢"
+                detalle="Configuración aplicada a esta empresa."
+              />
+
+              <Info
+                titulo="FUNCIONES ACTIVAS"
+                valor={String(
+                  modulosMenu.length
+                )}
+                icono="▦"
+                detalle="Módulos habilitados para este acceso."
+              />
+            </section>
+          </>
+        )}
       </main>
     </div>
   );
 }
 
-function Info({ titulo, valor, icono, detalle }) {
+function Info({
+  titulo,
+  valor,
+  icono,
+  detalle,
+}) {
   return (
     <article style={s.infoCard}>
       <div style={s.infoTop}>
         <div style={s.infoIcon}>{icono}</div>
-        <span style={s.infoLabel}>{titulo}</span>
+        <span style={s.infoLabel}>
+          {titulo}
+        </span>
       </div>
 
       <h3 style={s.infoTitle}>{valor}</h3>
@@ -860,10 +1463,12 @@ const s = {
   layout: {
     minHeight: "100vh",
     display: "grid",
-    gridTemplateColumns: "220px minmax(0,1fr)",
+    gridTemplateColumns:
+      "220px minmax(0,1fr)",
     background: "#f3f6f4",
     color: "#142019",
-    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
+    fontFamily:
+      'Inter, system-ui, "Segoe UI", sans-serif',
   },
 
   loading: {
@@ -874,17 +1479,29 @@ const s = {
     justifyContent: "center",
     gap: 10,
     background: "#f3f6f4",
-    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
+    fontFamily:
+      'Inter, system-ui, "Segoe UI", sans-serif',
   },
 
-  loadingLogo: { width: 210, marginBottom: 10 },
-  loadingTitle: { fontSize: 22 },
-  loadingText: { color: "#718078", fontSize: 14 },
+  loadingLogo: {
+    width: 210,
+    marginBottom: 10,
+  },
+
+  loadingTitle: {
+    fontSize: 22,
+  },
+
+  loadingText: {
+    color: "#718078",
+    fontSize: 14,
+  },
 
   main: {
     minWidth: 0,
     padding: "30px 34px 44px",
-    background: "linear-gradient(180deg,#f8faf9 0%,#f1f5f2 100%)",
+    background:
+      "linear-gradient(180deg,#f8faf9 0%,#f1f5f2 100%)",
   },
 
   topbar: {
@@ -895,7 +1512,8 @@ const s = {
     alignItems: "center",
     justifyContent: "space-between",
     gap: 20,
-    borderBottom: "1px solid #dfe7e2",
+    borderBottom:
+      "1px solid #dfe7e2",
   },
 
   eyebrow: {
@@ -909,7 +1527,8 @@ const s = {
 
   pageTitle: {
     margin: 0,
-    fontSize: "clamp(25px,3vw,34px)",
+    fontSize:
+      "clamp(25px,3vw,34px)",
     lineHeight: 1.1,
     letterSpacing: "-0.6px",
   },
@@ -944,7 +1563,11 @@ const s = {
     fontWeight: 900,
   },
 
-  userName: { display: "block", fontSize: 13 },
+  userName: {
+    display: "block",
+    fontSize: 13,
+  },
+
   userRole: {
     display: "block",
     marginTop: 2,
@@ -956,7 +1579,8 @@ const s = {
     maxWidth: 1440,
     margin: "0 auto 18px",
     display: "grid",
-    gridTemplateColumns: "48px 1fr",
+    gridTemplateColumns:
+      "48px 1fr",
     gap: 14,
     padding: 17,
     border: "1px solid #e3c868",
@@ -984,7 +1608,8 @@ const s = {
 
   avisoIzquierda: {
     display: "grid",
-    gridTemplateColumns: "48px 1fr",
+    gridTemplateColumns:
+      "48px 1fr",
     alignItems: "center",
     gap: 14,
   },
@@ -1040,11 +1665,88 @@ const s = {
     fontWeight: 800,
   },
 
+  bienvenidaLavanderia: {
+    maxWidth: 1440,
+    margin: "0 auto 16px",
+    padding: 24,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 18,
+    flexWrap: "wrap",
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg,#ffffff,#edf8f1)",
+    border: "1px solid #cfe7d8",
+  },
+
+  tituloLavanderia: {
+    margin: "7px 0 9px",
+    fontSize:
+      "clamp(29px,4vw,42px)",
+  },
+
+  botonPedidoPrincipal: {
+    minHeight: 52,
+    padding: "13px 20px",
+    border: 0,
+    borderRadius: 13,
+    background: "#16834f",
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  accesosGrid: {
+    maxWidth: 1440,
+    margin: "0 auto",
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit,minmax(190px,1fr))",
+    gap: 12,
+  },
+
+  accesoCard: {
+    minHeight: 150,
+    padding: 20,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    justifyContent: "center",
+    gap: 9,
+    border: "1px solid #dfe7e2",
+    borderRadius: 17,
+    background: "#fff",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  accesoIcono: {
+    width: 46,
+    height: 46,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 13,
+    background: "#edf8f1",
+    fontSize: 21,
+  },
+
+  accesoTitulo: {
+    fontSize: 17,
+  },
+
+  accesoTexto: {
+    color: "#718078",
+    fontSize: 12,
+  },
+
   heroGrid: {
     maxWidth: 1440,
     margin: "0 auto 20px",
     display: "grid",
-    gridTemplateColumns: "minmax(0,1.7fr) minmax(280px,.75fr)",
+    gridTemplateColumns:
+      "minmax(0,1.7fr) minmax(280px,.75fr)",
     gap: 16,
   },
 
@@ -1054,23 +1756,28 @@ const s = {
     overflow: "hidden",
     padding: "34px 34px 30px",
     display: "grid",
-    gridTemplateColumns: "minmax(0,1fr) auto",
+    gridTemplateColumns:
+      "minmax(0,1fr) auto",
     alignItems: "end",
     gap: 24,
     border: "1px solid #dfe7e2",
     borderRadius: 22,
     background: "#ffffff",
-    boxShadow: "0 14px 34px rgba(28,52,39,.07)",
+    boxShadow:
+      "0 14px 34px rgba(28,52,39,.07)",
   },
 
   heroAccent: {
     position: "absolute",
     inset: "0 auto 0 0",
     width: 8,
-    background: "linear-gradient(180deg,#16a34a,#0f766e)",
+    background:
+      "linear-gradient(180deg,#16a34a,#0f766e)",
   },
 
-  heroContent: { maxWidth: 760 },
+  heroContent: {
+    maxWidth: 760,
+  },
 
   heroTag: {
     display: "inline-flex",
@@ -1087,7 +1794,8 @@ const s = {
   heroTitle: {
     margin: "0 0 13px",
     color: "#142019",
-    fontSize: "clamp(34px,4vw,52px)",
+    fontSize:
+      "clamp(34px,4vw,52px)",
     lineHeight: 1.02,
     letterSpacing: "-1.4px",
   },
@@ -1131,8 +1839,10 @@ const s = {
     justifyContent: "space-between",
     border: "1px solid #173c2a",
     borderRadius: 22,
-    background: "linear-gradient(160deg,#10231a 0%,#173c2a 100%)",
-    boxShadow: "0 14px 34px rgba(17,48,31,.13)",
+    background:
+      "linear-gradient(160deg,#10231a 0%,#173c2a 100%)",
+    boxShadow:
+      "0 14px 34px rgba(17,48,31,.13)",
   },
 
   planTop: {
@@ -1171,13 +1881,13 @@ const s = {
     height: 8,
     borderRadius: "50%",
     background: "#52dd91",
-    boxShadow: "0 0 0 4px rgba(82,221,145,.12)",
   },
 
   planDivider: {
     height: 1,
     margin: "22px 0 18px",
-    background: "rgba(255,255,255,.12)",
+    background:
+      "rgba(255,255,255,.12)",
   },
 
   planFooter: {
@@ -1198,7 +1908,6 @@ const s = {
     marginTop: 6,
     color: "#fff",
     fontSize: 30,
-    lineHeight: 1,
   },
 
   planSeal: {
@@ -1206,9 +1915,11 @@ const s = {
     height: 52,
     display: "grid",
     placeItems: "center",
-    border: "1px solid rgba(255,255,255,.14)",
+    border:
+      "1px solid rgba(255,255,255,.14)",
     borderRadius: 16,
-    background: "rgba(255,255,255,.07)",
+    background:
+      "rgba(255,255,255,.07)",
     color: "#7de0a7",
     fontSize: 24,
     fontWeight: 900,
@@ -1218,7 +1929,8 @@ const s = {
     maxWidth: 1440,
     margin: "0 auto",
     display: "grid",
-    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+    gridTemplateColumns:
+      "repeat(3,minmax(0,1fr))",
     gap: 14,
   },
 
@@ -1228,7 +1940,6 @@ const s = {
     border: "1px solid #dfe7e2",
     borderRadius: 17,
     background: "#fff",
-    boxShadow: "0 8px 20px rgba(31,52,40,.045)",
   },
 
   infoTop: {
@@ -1257,7 +1968,6 @@ const s = {
   infoTitle: {
     margin: "16px 0 7px",
     fontSize: 21,
-    lineHeight: 1.15,
   },
 
   infoText: {
@@ -1290,9 +2000,10 @@ const s = {
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    borderBottom: "1px solid #dfe7e2",
-    background: "rgba(255,255,255,.96)",
-    boxShadow: "0 8px 24px rgba(15,23,42,.06)",
+    borderBottom:
+      "1px solid #dfe7e2",
+    background:
+      "rgba(255,255,255,.96)",
   },
 
   mobileLogo: {
@@ -1318,7 +2029,8 @@ const s = {
     left: 10,
     right: 10,
     zIndex: 60,
-    maxHeight: "calc(100vh - 78px)",
+    maxHeight:
+      "calc(100vh - 78px)",
     overflowY: "auto",
     padding: 10,
     display: "grid",
@@ -1326,17 +2038,20 @@ const s = {
     border: "1px solid #dfe7e2",
     borderRadius: 18,
     background: "#ffffff",
-    boxShadow: "0 24px 60px rgba(15,23,42,.20)",
+    boxShadow:
+      "0 24px 60px rgba(15,23,42,.20)",
   },
 
   mobileMenuItem: {
     minHeight: 46,
     padding: "10px 12px",
     display: "grid",
-    gridTemplateColumns: "30px minmax(0,1fr)",
+    gridTemplateColumns:
+      "30px minmax(0,1fr)",
     alignItems: "center",
     gap: 9,
-    border: "1px solid transparent",
+    border:
+      "1px solid transparent",
     borderRadius: 11,
     background: "#ffffff",
     color: "#213028",
@@ -1389,7 +2104,8 @@ const s = {
   },
 
   avisoIzquierdaMobile: {
-    gridTemplateColumns: "40px minmax(0,1fr)",
+    gridTemplateColumns:
+      "40px minmax(0,1fr)",
     alignItems: "start",
     gap: 10,
   },
@@ -1397,6 +2113,11 @@ const s = {
   diasCajaMobile: {
     width: "100%",
     minWidth: 0,
+  },
+
+  accesosGridMobile: {
+    gridTemplateColumns:
+      "repeat(2,minmax(0,1fr))",
   },
 
   heroGridMobile: {
@@ -1415,7 +2136,6 @@ const s = {
   heroTitleMobile: {
     fontSize: 36,
     lineHeight: 1.04,
-    overflowWrap: "anywhere",
   },
 
   heroBadgeMobile: {
@@ -1437,8 +2157,10 @@ const s = {
     display: "grid",
     placeItems: "center",
     padding: 24,
-    background: "radial-gradient(circle at top,#174d30,#07100b 70%)",
-    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
+    background:
+      "radial-gradient(circle at top,#174d30,#07100b 70%)",
+    fontFamily:
+      'Inter, system-ui, "Segoe UI", sans-serif',
   },
 
   bloqueoTarjeta: {
@@ -1447,10 +2169,12 @@ const s = {
     borderRadius: 24,
     background: "#fff",
     textAlign: "center",
-    boxShadow: "0 28px 70px rgba(0,0,0,.28)",
   },
 
-  bloqueoLogo: { width: 210, maxWidth: "70%" },
+  bloqueoLogo: {
+    width: 210,
+    maxWidth: "70%",
+  },
 
   candado: {
     width: 66,
