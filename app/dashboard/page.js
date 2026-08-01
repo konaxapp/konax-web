@@ -168,9 +168,27 @@ export default function Dashboard() {
 
   const [bloqueado, setBloqueado] = useState(false);
   const [cargando, setCargando] = useState(true);
+  const [esMovil, setEsMovil] = useState(false);
+  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
 
   useEffect(() => {
     cargarDashboard();
+
+    const actualizarVista = () => {
+      const movil = window.innerWidth <= 900;
+      setEsMovil(movil);
+
+      if (!movil) {
+        setMenuMovilAbierto(false);
+      }
+    };
+
+    actualizarVista();
+    window.addEventListener("resize", actualizarVista);
+
+    return () => {
+      window.removeEventListener("resize", actualizarVista);
+    };
   }, []);
 
   function esAdministrador(rol = usuarioRol) {
@@ -546,15 +564,81 @@ export default function Dashboard() {
   }).format(new Date());
 
   return (
-    <div style={s.layout}>
-      <SidebarKonax
-        items={modulosMenu}
-        onLogout={cerrarSesion}
-        tituloActivo="Panel"
-      />
+    <div
+      style={{
+        ...s.layout,
+        ...(esMovil ? s.layoutMobile : {}),
+      }}
+    >
+      {!esMovil && (
+        <SidebarKonax
+          items={modulosMenu}
+          onLogout={cerrarSesion}
+          tituloActivo="Panel"
+        />
+      )}
 
-      <main style={s.main}>
-        <header style={s.topbar}>
+      <main
+        style={{
+          ...s.main,
+          ...(esMovil ? s.mainMobile : {}),
+        }}
+      >
+        {esMovil && (
+          <>
+            <div style={s.mobileBar}>
+              <img
+                src="/konax-logo.png"
+                alt="KONAX"
+                style={s.mobileLogo}
+              />
+
+              <button
+                type="button"
+                onClick={() => setMenuMovilAbierto((actual) => !actual)}
+                style={s.mobileMenuButton}
+              >
+                {menuMovilAbierto ? "Cerrar" : "Menú"}
+              </button>
+            </div>
+
+            {menuMovilAbierto && (
+              <div style={s.mobileMenu}>
+                {modulosMenu.map((item) => (
+                  <button
+                    key={item.ruta}
+                    type="button"
+                    onClick={() => router.push(item.ruta)}
+                    style={{
+                      ...s.mobileMenuItem,
+                      ...(item.nombre === "Panel"
+                        ? s.mobileMenuItemActivo
+                        : {}),
+                    }}
+                  >
+                    <span>{item.icono}</span>
+                    <span>{item.nombre}</span>
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={cerrarSesion}
+                  style={s.mobileLogout}
+                >
+                  Cerrar sesión
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        <header
+          style={{
+            ...s.topbar,
+            ...(esMovil ? s.topbarMobile : {}),
+          }}
+        >
           <div>
             <span style={s.eyebrow}>PANEL EMPRESARIAL</span>
             <h1 style={s.pageTitle}>{empresaNombre}</h1>
@@ -563,7 +647,12 @@ export default function Dashboard() {
             </span>
           </div>
 
-          <div style={s.userBox}>
+          <div
+            style={{
+              ...s.userBox,
+              ...(esMovil ? s.userBoxMobile : {}),
+            }}
+          >
             <div style={s.avatar}>
               {String(usuarioNombre || "U").charAt(0).toUpperCase()}
             </div>
@@ -580,7 +669,12 @@ export default function Dashboard() {
         </header>
 
         {pendienteInicio && (
-          <section style={s.avisoPendiente}>
+          <section
+            style={{
+              ...s.avisoPendiente,
+              ...(esMovil ? s.avisoPendienteMobile : {}),
+            }}
+          >
             <div style={s.avisoIcono}>⏱️</div>
             <div>
               <span style={s.avisoEtiqueta}>PROGRAMA PILOTO APROBADO</span>
@@ -599,9 +693,15 @@ export default function Dashboard() {
             style={{
               ...s.avisoPrueba,
               ...(alertaCritica ? s.avisoCritico : {}),
+              ...(esMovil ? s.avisoPruebaMobile : {}),
             }}
           >
-            <div style={s.avisoIzquierda}>
+            <div
+              style={{
+                ...s.avisoIzquierda,
+                ...(esMovil ? s.avisoIzquierdaMobile : {}),
+              }}
+            >
               <div style={s.avisoIcono}>⏱️</div>
               <div>
                 <span style={s.avisoEtiqueta}>PROGRAMA PILOTO ACTIVO</span>
@@ -615,7 +715,12 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div style={s.diasCaja}>
+            <div
+              style={{
+                ...s.diasCaja,
+                ...(esMovil ? s.diasCajaMobile : {}),
+              }}
+            >
               <strong style={s.diasNumero}>{diasRestantes ?? 0}</strong>
               <span style={s.diasTexto}>
                 {diasRestantes === 1 ? "día restante" : "días restantes"}
@@ -624,14 +729,29 @@ export default function Dashboard() {
           </section>
         )}
 
-        <section style={s.heroGrid}>
-          <article style={s.heroMain}>
+        <section
+          style={{
+            ...s.heroGrid,
+            ...(esMovil ? s.heroGridMobile : {}),
+          }}
+        >
+          <article
+            style={{
+              ...s.heroMain,
+              ...(esMovil ? s.heroMainMobile : {}),
+            }}
+          >
             <div style={s.heroAccent} />
 
             <div style={s.heroContent}>
               <span style={s.heroTag}>RESUMEN GENERAL</span>
 
-              <h2 style={s.heroTitle}>
+              <h2
+                style={{
+                  ...s.heroTitle,
+                  ...(esMovil ? s.heroTitleMobile : {}),
+                }}
+              >
                 Control total de tu negocio
               </h2>
 
@@ -641,7 +761,12 @@ export default function Dashboard() {
               </p>
             </div>
 
-            <div style={s.heroBadge}>
+            <div
+              style={{
+                ...s.heroBadge,
+                ...(esMovil ? s.heroBadgeMobile : {}),
+              }}
+            >
               <span style={s.heroBadgeLabel}>TIPO DE NEGOCIO</span>
               <strong style={s.heroBadgeValue}>
                 {tipoNegocio || "No definido"}
@@ -649,7 +774,12 @@ export default function Dashboard() {
             </div>
           </article>
 
-          <article style={s.planPanel}>
+          <article
+            style={{
+              ...s.planPanel,
+              ...(esMovil ? s.planPanelMobile : {}),
+            }}
+          >
             <div style={s.planTop}>
               <span style={s.planLabel}>
                 {pruebaActiva ? "PLAN EN PRUEBA" : "PLAN ACTUAL"}
@@ -680,7 +810,12 @@ export default function Dashboard() {
           </article>
         </section>
 
-        <section style={s.bottomGrid}>
+        <section
+          style={{
+            ...s.bottomGrid,
+            ...(esMovil ? s.bottomGridMobile : {}),
+          }}
+        >
           <Info
             titulo="ACCESO ACTUAL"
             valor={usuarioRol || "Sin rol"}
@@ -1130,6 +1265,171 @@ const s = {
     color: "#748078",
     fontSize: 12,
     lineHeight: 1.5,
+  },
+
+  layoutMobile: {
+    display: "block",
+    width: "100%",
+    overflowX: "hidden",
+  },
+
+  mainMobile: {
+    width: "100%",
+    maxWidth: "100%",
+    padding: "14px 12px 30px",
+    overflowX: "hidden",
+  },
+
+  mobileBar: {
+    position: "sticky",
+    top: 0,
+    zIndex: 50,
+    margin: "-14px -12px 16px",
+    padding: "10px 12px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    borderBottom: "1px solid #dfe7e2",
+    background: "rgba(255,255,255,.96)",
+    boxShadow: "0 8px 24px rgba(15,23,42,.06)",
+  },
+
+  mobileLogo: {
+    width: 150,
+    maxWidth: "58vw",
+    height: "auto",
+  },
+
+  mobileMenuButton: {
+    minHeight: 42,
+    padding: "9px 14px",
+    border: "none",
+    borderRadius: 11,
+    background: "#173c2a",
+    color: "#fff",
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  mobileMenu: {
+    position: "fixed",
+    top: 66,
+    left: 10,
+    right: 10,
+    zIndex: 60,
+    maxHeight: "calc(100vh - 78px)",
+    overflowY: "auto",
+    padding: 10,
+    display: "grid",
+    gap: 7,
+    border: "1px solid #dfe7e2",
+    borderRadius: 18,
+    background: "#ffffff",
+    boxShadow: "0 24px 60px rgba(15,23,42,.20)",
+  },
+
+  mobileMenuItem: {
+    minHeight: 46,
+    padding: "10px 12px",
+    display: "grid",
+    gridTemplateColumns: "30px minmax(0,1fr)",
+    alignItems: "center",
+    gap: 9,
+    border: "1px solid transparent",
+    borderRadius: 11,
+    background: "#ffffff",
+    color: "#213028",
+    textAlign: "left",
+    fontWeight: 750,
+    cursor: "pointer",
+  },
+
+  mobileMenuItemActivo: {
+    borderColor: "#b9dfc8",
+    background: "#edf8f1",
+    color: "#14683e",
+  },
+
+  mobileLogout: {
+    minHeight: 46,
+    padding: "10px 12px",
+    border: "1px solid #fecaca",
+    borderRadius: 11,
+    background: "#fff5f5",
+    color: "#b42318",
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  topbarMobile: {
+    marginBottom: 16,
+    paddingBottom: 14,
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    alignItems: "stretch",
+    gap: 14,
+  },
+
+  userBoxMobile: {
+    width: "100%",
+    minWidth: 0,
+  },
+
+  avisoPendienteMobile: {
+    gridTemplateColumns: "1fr",
+    padding: 14,
+  },
+
+  avisoPruebaMobile: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    alignItems: "stretch",
+    padding: 14,
+  },
+
+  avisoIzquierdaMobile: {
+    gridTemplateColumns: "40px minmax(0,1fr)",
+    alignItems: "start",
+    gap: 10,
+  },
+
+  diasCajaMobile: {
+    width: "100%",
+    minWidth: 0,
+  },
+
+  heroGridMobile: {
+    gridTemplateColumns: "1fr",
+    gap: 14,
+  },
+
+  heroMainMobile: {
+    minHeight: 0,
+    padding: "26px 20px 22px",
+    gridTemplateColumns: "1fr",
+    alignItems: "start",
+    gap: 18,
+  },
+
+  heroTitleMobile: {
+    fontSize: 36,
+    lineHeight: 1.04,
+    overflowWrap: "anywhere",
+  },
+
+  heroBadgeMobile: {
+    width: "100%",
+    minWidth: 0,
+  },
+
+  planPanelMobile: {
+    minHeight: 210,
+    padding: 21,
+  },
+
+  bottomGridMobile: {
+    gridTemplateColumns: "1fr",
   },
 
   bloqueoPagina: {
