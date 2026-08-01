@@ -46,6 +46,7 @@ export default function PedidosLavanderia() {
   const [filtroEstado, setFiltroEstado] = useState("En proceso");
 
   const [estadosEditados, setEstadosEditados] = useState({});
+  const [pagosEditados, setPagosEditados] = useState({});
   const [guardandoId, setGuardandoId] = useState("");
 
   useEffect(() => {
@@ -180,8 +181,19 @@ export default function PedidosLavanderia() {
         ])
       );
 
+      const pagosIniciales = Object.fromEntries(
+        resultado.map((pedido) => [
+          pedido.id,
+          {
+            monto: "",
+            metodo: pedido.metodo_pago || "Efectivo",
+          },
+        ])
+      );
+
       setPedidos(resultado);
       setEstadosEditados(estadosIniciales);
+      setPagosEditados(pagosIniciales);
     } catch (error) {
       console.error(error);
       alert(
@@ -200,6 +212,19 @@ export default function PedidosLavanderia() {
     }));
   }
 
+  function actualizarPago(pedidoId, campo, valor) {
+    setPagosEditados((actuales) => ({
+      ...actuales,
+      [pedidoId]: {
+        ...(actuales[pedidoId] || {
+          monto: "",
+          metodo: "Efectivo",
+        }),
+        [campo]: valor,
+      },
+    }));
+  }
+
   async function guardarEstado(pedido) {
     const nuevoEstado =
       estadosEditados[pedido.id] ||
@@ -210,9 +235,49 @@ export default function PedidosLavanderia() {
       return;
     }
 
+    const saldoActual = Number(
+      pedido.saldo_pendiente || 0
+    );
+
+    const pagoEditado =
+      pagosEditados[pedido.id] || {};
+
+    const montoRecibido = Number(
+      pagoEditado.monto || 0
+    );
+
+    const metodoPago =
+      pagoEditado.metodo || "Efectivo";
+
+    if (
+      nuevoEstado === "Entregado" &&
+      saldoActual > 0
+    ) {
+      if (
+        !Number.isFinite(montoRecibido) ||
+        montoRecibido <= 0
+      ) {
+        alert(
+          "Ingrese el monto recibido antes de entregar el pedido."
+        );
+        return;
+      }
+
+      if (montoRecibido > saldoActual) {
+        alert(
+          "El monto recibido no puede ser mayor que el saldo pendiente."
+        );
+        return;
+      }
+    }
+
     const mensajeConfirmacion =
       nuevoEstado === "Entregado"
-        ? "¿Confirmas que el pedido fue entregado y deseas cerrar el ciclo?"
+        ? saldoActual > 0
+          ? `Se registrará un pago de ${formatoDinero(
+              montoRecibido
+            )} por ${metodoPago} y se entregará el pedido. ¿Deseas continuar?`
+          : "¿Confirmas que el pedido fue entregado y deseas cerrar el ciclo?"
         : `¿Deseas cambiar el pedido a "${nuevoEstado}"?`;
 
     if (!window.confirm(mensajeConfirmacion)) {
@@ -221,11 +286,50 @@ export default function PedidosLavanderia() {
 
     setGuardandoId(pedido.id);
 
+    const datosActualizar = {
+      estado_pedido: nuevoEstado,
+    };
+
+    let nuevoMontoPagado = Number(
+      pedido.monto_pagado || 0
+    );
+
+    let nuevoSaldo = saldoActual;
+    let nuevoEstadoPago =
+      pedido.estado_pago || "Pendiente";
+    let nuevoMetodoPago =
+      pedido.metodo_pago || null;
+
+    if (
+      nuevoEstado === "Entregado" &&
+      saldoActual > 0
+    ) {
+      nuevoMontoPagado += montoRecibido;
+      nuevoSaldo = Math.max(
+        0,
+        saldoActual - montoRecibido
+      );
+
+      nuevoEstadoPago =
+        nuevoSaldo <= 0
+          ? "Pagado"
+          : "Abono";
+
+      nuevoMetodoPago = metodoPago;
+
+      datosActualizar.monto_pagado =
+        nuevoMontoPagado;
+      datosActualizar.saldo_pendiente =
+        nuevoSaldo;
+      datosActualizar.estado_pago =
+        nuevoEstadoPago;
+      datosActualizar.metodo_pago =
+        nuevoMetodoPago;
+    }
+
     const { error } = await supabase
       .from("lavanderia_pedidos")
-      .update({
-        estado_pedido: nuevoEstado,
-      })
+      .update(datosActualizar)
       .eq("id", pedido.id)
       .eq("empresa_id", empresaId);
 
@@ -233,7 +337,7 @@ export default function PedidosLavanderia() {
 
     if (error) {
       alert(
-        "No se pudo guardar el estado: " +
+        "No se pudo guardar el pedido: " +
           error.message
       );
       return;
@@ -245,14 +349,28 @@ export default function PedidosLavanderia() {
           ? {
               ...item,
               estado_pedido: nuevoEstado,
+              monto_pagado: nuevoMontoPagado,
+              saldo_pendiente: nuevoSaldo,
+              estado_pago: nuevoEstadoPago,
+              metodo_pago: nuevoMetodoPago,
             }
           : item
       )
     );
 
+    setPagosEditados((actuales) => ({
+      ...actuales,
+      [pedido.id]: {
+        monto: "",
+        metodo: nuevoMetodoPago || "Efectivo",
+      },
+    }));
+
     alert(
       nuevoEstado === "Entregado"
-        ? "Pedido entregado y ciclo finalizado."
+        ? nuevoSaldo <= 0
+          ? "Pago registrado. Pedido entregado y ciclo finalizado."
+          : "Abono registrado. Pedido entregado con saldo pendiente."
         : "Estado actualizado correctamente."
     );
   }
@@ -417,6 +535,19 @@ export default function PedidosLavanderia() {
             const esEntregado =
               estadoSeleccionado === "Entregado";
 
+            const saldoPendiente = Number(
+              pedido.saldo_pendiente || 0
+            );
+
+            const pagoEditado =
+              pagosEditados[pedido.id] || {
+                monto: "",
+                metodo: pedido.metodo_pago || "Efectivo",
+              };
+
+            const requiereCobro =
+              esEntregado && saldoPendiente > 0;
+
             return (
               <article
                 key={pedido.id}
@@ -502,6 +633,75 @@ export default function PedidosLavanderia() {
                   </p>
                 )}
 
+                {requiereCobro && (
+                  <div className="cobro-entrega">
+                    <div className="cobro-encabezado">
+                      <div>
+                        <span>COBRO AL ENTREGAR</span>
+                        <strong>
+                          Saldo pendiente:{" "}
+                          {formatoDinero(
+                            saldoPendiente
+                          )}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div className="cobro-grid">
+                      <label>
+                        Monto recibido
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          max={saldoPendiente}
+                          value={pagoEditado.monto}
+                          onChange={(e) =>
+                            actualizarPago(
+                              pedido.id,
+                              "monto",
+                              e.target.value
+                            )
+                          }
+                          placeholder="0.00"
+                          disabled={
+                            guardandoId ===
+                            pedido.id
+                          }
+                        />
+                      </label>
+
+                      <label>
+                        Método de pago
+                        <select
+                          value={pagoEditado.metodo}
+                          onChange={(e) =>
+                            actualizarPago(
+                              pedido.id,
+                              "metodo",
+                              e.target.value
+                            )
+                          }
+                          disabled={
+                            guardandoId ===
+                            pedido.id
+                          }
+                        >
+                          <option value="Efectivo">
+                            Efectivo
+                          </option>
+                          <option value="Yappy">
+                            Yappy
+                          </option>
+                          <option value="Transferencia">
+                            Transferencia
+                          </option>
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
                 <div className="acciones">
                   <div>
                     <label
@@ -553,7 +753,9 @@ export default function PedidosLavanderia() {
                     {guardandoId === pedido.id
                       ? "Guardando..."
                       : esEntregado
-                      ? "Finalizar y entregar"
+                      ? requiereCobro
+                        ? "Cobrar, finalizar y entregar"
+                        : "Finalizar y entregar"
                       : "Guardar estado"}
                   </button>
                 </div>
@@ -829,6 +1031,54 @@ export default function PedidosLavanderia() {
           line-height: 1.5;
         }
 
+        .cobro-entrega {
+          margin-top: 14px;
+          padding: 13px;
+          border: 1px solid #bbf7d0;
+          border-radius: 13px;
+          background: #f0fdf4;
+        }
+
+        .cobro-encabezado span {
+          display: block;
+          color: #16834f;
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: 1px;
+        }
+
+        .cobro-encabezado strong {
+          display: block;
+          margin-top: 5px;
+          font-size: 15px;
+        }
+
+        .cobro-grid {
+          margin-top: 11px;
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+
+        .cobro-grid label {
+          display: grid;
+          gap: 6px;
+          color: #33443a;
+          font-size: 12px;
+          font-weight: 850;
+        }
+
+        .cobro-grid input,
+        .cobro-grid select {
+          width: 100%;
+          min-height: 46px;
+          padding: 10px;
+          border: 1px solid #cddbd2;
+          border-radius: 10px;
+          background: white;
+          font-size: 15px;
+        }
+
         .acciones {
           margin-top: 14px;
           padding-top: 13px;
@@ -920,6 +1170,11 @@ export default function PedidosLavanderia() {
           .datos {
             grid-template-columns:
               repeat(4, minmax(0, 1fr));
+          }
+
+          .cobro-grid {
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
           }
 
           .acciones {
