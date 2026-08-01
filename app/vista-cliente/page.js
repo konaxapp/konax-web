@@ -1120,11 +1120,168 @@ export default function VistaCliente() {
   }
 
   return (
-    <main style={styles.pagina}>
-      <div style={styles.contenedor}>
-        <header style={styles.encabezado}>
-          <div style={styles.encabezadoMarca}>
-            <div style={styles.logoPanel}>
+    <main style={styles.pagina} className="vista-pagina">
+      <style>{`
+        html, body {
+          width: 100%;
+          max-width: 100%;
+          overflow-x: hidden;
+        }
+
+        .vista-pagina,
+        .vista-contenedor,
+        .vista-card,
+        .vista-busqueda-card {
+          min-width: 0;
+          max-width: 100%;
+        }
+
+        @media (max-width: 700px) {
+          .vista-pagina {
+            width: 100% !important;
+            max-width: 100% !important;
+            padding: 12px !important;
+            overflow-x: hidden !important;
+          }
+
+          .vista-contenedor {
+            width: 100% !important;
+            max-width: 100% !important;
+          }
+
+          .vista-encabezado {
+            width: 100% !important;
+            padding: 20px 16px !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            align-items: stretch !important;
+            gap: 18px !important;
+            border-radius: 20px !important;
+            overflow: hidden !important;
+          }
+
+          .vista-encabezado-marca {
+            width: 100% !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            align-items: start !important;
+            gap: 15px !important;
+          }
+
+          .vista-logo-panel {
+            width: 180px !important;
+            min-width: 0 !important;
+            max-width: 65vw !important;
+            height: 76px !important;
+            padding: 8px !important;
+            border-radius: 14px !important;
+          }
+
+          .vista-titulo {
+            max-width: 100% !important;
+            margin-top: 4px !important;
+            font-size: 36px !important;
+            line-height: 1.04 !important;
+            overflow-wrap: anywhere;
+          }
+
+          .vista-dashboard-btn,
+          .vista-buscar-btn,
+          .vista-whatsapp-btn {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          .vista-card,
+          .vista-busqueda-card {
+            width: 100% !important;
+            padding: 18px 15px !important;
+            border-radius: 18px !important;
+            overflow: hidden !important;
+          }
+
+          .vista-buscador-row {
+            width: 100% !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+
+          .vista-search-input {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          .vista-resultado-item {
+            width: 100% !important;
+            min-width: 0 !important;
+            grid-template-columns: 42px minmax(0,1fr) !important;
+          }
+
+          .vista-resultado-item > div:last-child {
+            grid-column: 2;
+            overflow-wrap: anywhere;
+          }
+
+          .vista-cliente-hero {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            align-items: stretch !important;
+            padding: 17px 15px !important;
+          }
+
+          .vista-cliente-principal {
+            min-width: 0 !important;
+            align-items: flex-start !important;
+          }
+
+          .vista-kpi-grid,
+          .vista-resumen-grid,
+          .vista-action-grid {
+            width: 100% !important;
+            grid-template-columns: 1fr !important;
+            gap: 11px !important;
+          }
+
+          .vista-document-upload {
+            grid-template-columns: 1fr !important;
+          }
+
+          .vista-tabla-scroll {
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .vista-document-card {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          input,
+          select,
+          textarea,
+          button {
+            max-width: 100%;
+            box-sizing: border-box;
+          }
+        }
+
+        @media (max-width: 390px) {
+          .vista-titulo {
+            font-size: 32px !important;
+          }
+
+          .vista-logo-panel {
+            width: 160px !important;
+          }
+        }
+      `}</style>
+      <div style={styles.contenedor} className="vista-contenedor">
+        <header style={styles.encabezado} className="vista-encabezado">
+          <div style={styles.encabezadoMarca} className="vista-encabezado-marca">
+            <div style={styles.logoPanel} className="vista-logo-panel">
               <img
                 src="/konax-logo.png"
                 alt="KONAX"
@@ -1134,19 +1291,19 @@ export default function VistaCliente() {
 
             <div>
               <span style={styles.etiqueta}>EXPEDIENTE COMERCIAL</span>
-              <h1 style={styles.titulo}>Vista integral del cliente</h1>
+              <h1 style={styles.titulo} className="vista-titulo">Vista integral del cliente</h1>
               <p style={styles.subtituloVista}>
                 {nombreEmpresa()} · consulta, cobranza y seguimiento
               </p>
             </div>
           </div>
 
-          <button onClick={volverDashboard} style={styles.botonDashboard}>
+          <button onClick={volverDashboard} style={styles.botonDashboard} className="vista-dashboard-btn">
             ← Volver al dashboard
           </button>
         </header>
 
-        <section style={styles.busquedaCard}>
+        <section style={styles.busquedaCard} className="vista-card vista-busqueda-card">
           <div style={styles.busquedaHeader}>
             <div>
               <span style={styles.sectionEyebrow}>BÚSQUEDA INTELIGENTE</span>
@@ -1157,7 +1314,7 @@ export default function VistaCliente() {
             </div>
           </div>
 
-          <div style={styles.buscadorRow}>
+          <div style={styles.buscadorRow} className="vista-buscador-row">
             <input
               placeholder="Nombre, cédula o número de cuenta"
               value={buscar}
@@ -1166,12 +1323,14 @@ export default function VistaCliente() {
                 if (event.key === "Enter") buscarCliente();
               }}
               style={styles.searchInput}
+              className="vista-search-input"
             />
 
             <button
               style={
                 buscando ? styles.botonDeshabilitado : styles.botonBuscar
               }
+              className="vista-buscar-btn"
               onClick={buscarCliente}
               disabled={buscando}
             >
@@ -1186,6 +1345,7 @@ export default function VistaCliente() {
                   key={item.clave || index}
                   type="button"
                   style={styles.resultadoItem}
+                  className="vista-resultado-item"
                   onClick={() => seleccionarCliente(item)}
                 >
                   <div style={styles.resultadoAvatar}>
@@ -1210,8 +1370,8 @@ export default function VistaCliente() {
 
         {cliente && (
           <>
-            <section style={styles.clienteHero}>
-              <div style={styles.clientePrincipal}>
+            <section style={styles.clienteHero} className="vista-cliente-hero">
+              <div style={styles.clientePrincipal} className="vista-cliente-principal">
                 <div style={styles.clienteAvatar}>
                   {String(cliente.nombre || "C").charAt(0).toUpperCase()}
                 </div>
@@ -1231,13 +1391,14 @@ export default function VistaCliente() {
               <button
                 type="button"
                 style={styles.whatsappBtn}
+                className="vista-whatsapp-btn"
                 onClick={abrirWhatsAppCliente}
               >
                 WhatsApp
               </button>
             </section>
 
-            <section style={styles.kpiGrid}>
+            <section style={styles.kpiGrid} className="vista-kpi-grid">
               <KPI
                 label="Saldo actual"
                 value={formatoDinero(cuenta?.saldo_actual)}
@@ -1283,8 +1444,8 @@ export default function VistaCliente() {
               />
             </section>
 
-            <section style={styles.resumenLayout}>
-              <article style={styles.infoCard}>
+            <section style={styles.resumenLayout} className="vista-resumen-grid">
+              <article style={styles.infoCard} className="vista-card">
                 <CardTitle
                   title="Perfil del cliente"
                   subtitle="Datos de contacto y localización"
@@ -1297,7 +1458,7 @@ export default function VistaCliente() {
                 <DataRow label="Dirección" value={cliente.direccion || "-"} />
               </article>
 
-              <article style={styles.infoCard}>
+              <article style={styles.infoCard} className="vista-card">
                 <CardTitle
                   title="Información comercial"
                   subtitle="Cuenta y condiciones vigentes"
@@ -1339,7 +1500,7 @@ export default function VistaCliente() {
                 />
               </article>
 
-              <article style={styles.infoCard}>
+              <article style={styles.infoCard} className="vista-card">
                 <CardTitle
                   title="Cobranza"
                   subtitle="Estado y seguimiento de la cuenta"
@@ -1387,8 +1548,8 @@ export default function VistaCliente() {
               </article>
             </section>
 
-            <section style={styles.actionGrid}>
-              <article style={styles.promesaCard}>
+            <section style={styles.actionGrid} className="vista-action-grid">
+              <article style={styles.promesaCard} className="vista-card">
                 <CardTitle
                   title="Promesa de pago"
                   subtitle="Registra el compromiso de pago del cliente"
@@ -1453,7 +1614,7 @@ export default function VistaCliente() {
                 </button>
               </article>
 
-              <article style={styles.gestionCard}>
+              <article style={styles.gestionCard} className="vista-card">
                 <CardTitle
                   title="Nueva gestión"
                   subtitle="Registra llamadas, visitas y seguimientos"
@@ -1512,13 +1673,13 @@ export default function VistaCliente() {
               </article>
             </section>
 
-            <section style={styles.card}>
+            <section style={styles.card} className="vista-card">
               <CardTitle
                 title="Historial de pagos"
                 subtitle="Movimientos procesados para la cuenta seleccionada"
               />
 
-              <div style={styles.tablaScroll}>
+              <div style={styles.tablaScroll} className="vista-tabla-scroll">
                 <table style={styles.tabla}>
                   <thead>
                     <tr>
@@ -1561,7 +1722,7 @@ export default function VistaCliente() {
               </div>
             </section>
 
-            <section style={styles.timelineCard}>
+            <section style={styles.timelineCard} className="vista-card">
               <CardTitle
                 title="Historial de gestiones"
                 subtitle="Seguimiento cronológico de la cuenta"
@@ -1649,13 +1810,13 @@ export default function VistaCliente() {
               </div>
             </section>
 
-            <section style={styles.card}>
+            <section style={styles.card} className="vista-card">
               <CardTitle
                 title="Expediente digital"
                 subtitle="Documentos asociados al cliente"
               />
 
-              <div style={styles.documentUpload}>
+              <div style={styles.documentUpload} className="vista-document-upload">
                 <label style={styles.fileBox}>
                   <div>
                     <strong style={styles.fileTitle}>
@@ -1702,6 +1863,7 @@ export default function VistaCliente() {
                     type="button"
                     key={documento.name}
                     style={styles.documentCard}
+                    className="vista-document-card"
                     onClick={() => verDocumento(documento.name)}
                   >
                     <div style={styles.documentName}>
