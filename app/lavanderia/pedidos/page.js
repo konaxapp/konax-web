@@ -4,417 +4,958 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const ESTADOS = [
-  "En proceso",
-  "Listo para retirar",
-  "Entregado",
+const TIPOS_PRENDA = [
+  "Camisa",
+  "Pantalón",
+  "Vestido",
+  "Falda",
+  "Suéter",
+  "Sábana",
+  "Toalla",
+  "Edredón",
+  "Cortina",
+  "Otro",
 ];
 
-function formatoDinero(valor) {
-  return `B/. ${Number(valor || 0).toFixed(2)}`;
+const SERVICIOS = [
+  "Lavado",
+  "Lavado y secado",
+  "Lavado y planchado",
+  "Planchado",
+  "Servicio express",
+  "Otro",
+];
+
+const METODOS_PAGO = [
+  "Efectivo",
+  "Yappy",
+  "Transferencia",
+  "Tarjeta",
+  "Otro",
+];
+
+function crearIdTemporal() {
+  return `${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}`;
 }
 
-function formatoFecha(valor) {
-  if (!valor) return "-";
-
-  const fecha = new Date(`${String(valor).slice(0, 10)}T00:00:00`);
-
-  return new Intl.DateTimeFormat("es-PA", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(fecha);
-}
-
-function claseEstado(estado) {
-  const mapa = {
-    "En proceso": "estado proceso",
-    "Listo para retirar": "estado listo",
-    Entregado: "estado entregado",
+function nuevaPrenda() {
+  return {
+    idTemporal: crearIdTemporal(),
+    tipo: "",
+    servicio: "",
+    cantidad: 1,
+    precioUnitario: "",
+    observacion: "",
   };
-
-  return mapa[estado] || "estado";
 }
 
-export default function PedidosLavanderia() {
+function numeroSeguro(valor) {
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? numero : 0;
+}
+
+function formatearMontoCentavos(valor) {
+  const digitos = String(valor || "").replace(/\D/g, "");
+
+  if (!digitos) return "";
+
+  return (Number(digitos) / 100).toFixed(2);
+}
+
+
+function limpiarTextoBusqueda(valor) {
+  return String(valor || "")
+    .replace(/[%(),]/g, " ")
+    .trim();
+}
+
+function formatoDinero(valor) {
+  return `B/. ${numeroSeguro(valor).toFixed(2)}`;
+}
+
+function formatoFecha(fechaTexto) {
+  if (!fechaTexto) return "-";
+
+  const [anio, mes, dia] = String(fechaTexto)
+    .slice(0, 10)
+    .split("-");
+
+  return anio && mes && dia
+    ? `${dia}/${mes}/${anio}`
+    : fechaTexto;
+}
+
+function telefonoWhatsApp(telefono) {
+  let digitos = String(telefono || "")
+    .replace(/\D/g, "");
+
+  if (!digitos) return "";
+
+  if (digitos.startsWith("00")) {
+    digitos = digitos.slice(2);
+  }
+
+  if (digitos.startsWith("507")) {
+    return digitos;
+  }
+
+  if (digitos.length === 8) {
+    return `507${digitos}`;
+  }
+
+  return digitos;
+}
+
+export default function NuevoPedidoLavanderia() {
   const router = useRouter();
 
-  const [empresaId, setEmpresaId] = useState("");
-  const [pedidos, setPedidos] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [busqueda, setBusqueda] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState("En proceso");
+  const [empresaId, setEmpresaId] =
+    useState("");
+  const [empresaNombre, setEmpresaNombre] =
+    useState("");
+  const [usuarioId, setUsuarioId] =
+    useState("");
 
-  const [estadosEditados, setEstadosEditados] = useState({});
-  const [pagosEditados, setPagosEditados] = useState({});
-  const [guardandoId, setGuardandoId] = useState("");
+  const [busquedaCliente, setBusquedaCliente] =
+    useState("");
+  const [clienteId, setClienteId] =
+    useState("");
+  const [nombreCliente, setNombreCliente] =
+    useState("");
+  const [telefonoCliente, setTelefonoCliente] =
+    useState("");
+  const [direccionCliente, setDireccionCliente] =
+    useState("");
+  const [
+    resultadosClientes,
+    setResultadosClientes,
+  ] = useState([]);
+  const [buscandoCliente, setBuscandoCliente] =
+    useState(false);
+
+  const [prendas, setPrendas] = useState([
+    nuevaPrenda(),
+  ]);
+  const [fechaEntrega, setFechaEntrega] =
+    useState("");
+  const [prioridad, setPrioridad] =
+    useState("Normal");
+  const [observaciones, setObservaciones] =
+    useState("");
+
+  const [estadoPago, setEstadoPago] =
+    useState("Pendiente");
+  const [montoPagado, setMontoPagado] =
+    useState("");
+  const [metodoPago, setMetodoPago] =
+    useState("");
+
+  const [guardando, setGuardando] =
+    useState(false);
+  const [comprobante, setComprobante] =
+    useState(null);
 
   useEffect(() => {
-    const empresa = localStorage.getItem("empresaId");
-    const usuario = localStorage.getItem("usuarioId");
+    const empresa =
+      localStorage.getItem("empresaId");
+    const nombreEmpresa =
+      localStorage.getItem("empresaNombre");
+    const usuario =
+      localStorage.getItem("usuarioId");
 
     if (!empresa || !usuario) {
-      alert("La sesión no es válida. Inicie sesión nuevamente.");
+      alert(
+        "La sesión no es válida. Inicie sesión nuevamente."
+      );
       router.replace("/login");
       return;
     }
 
     setEmpresaId(empresa);
-    cargarPedidos(empresa);
+    setEmpresaNombre(
+      nombreEmpresa || "KONAX Lavandería"
+    );
+    setUsuarioId(usuario);
   }, [router]);
 
-  async function cargarPedidos(idEmpresa = empresaId) {
-    if (!idEmpresa) return;
+  const subtotal = useMemo(() => {
+    return prendas.reduce(
+      (acumulado, prenda) =>
+        acumulado +
+        numeroSeguro(prenda.cantidad) *
+          numeroSeguro(
+            prenda.precioUnitario
+          ),
+      0
+    );
+  }, [prendas]);
 
-    setCargando(true);
+  const total = subtotal;
 
-    try {
-      const { data: pedidosData, error: errorPedidos } =
-        await supabase
-          .from("lavanderia_pedidos")
-          .select(`
-            id,
-            empresa_id,
-            cliente_id,
-            numero_pedido,
-            fecha_recepcion,
-            fecha_entrega,
-            prioridad,
-            estado_pedido,
-            estado_pago,
-            total,
-            monto_pagado,
-            saldo_pendiente,
-            metodo_pago,
-            observaciones,
-            created_at
-          `)
-          .eq("empresa_id", idEmpresa)
-          .order("created_at", { ascending: false });
+  const pagado =
+    estadoPago === "Pagado"
+      ? total
+      : estadoPago === "Abono"
+      ? Math.min(
+          numeroSeguro(montoPagado),
+          total
+        )
+      : 0;
 
-      if (errorPedidos) {
-        throw new Error(
-          "No se pudieron cargar los pedidos: " +
-            errorPedidos.message
-        );
-      }
+  const saldoPendiente = Math.max(
+    total - pagado,
+    0
+  );
 
-      const listaPedidos = pedidosData || [];
+  async function buscarClientes(valor) {
+    setBusquedaCliente(valor);
 
-      if (listaPedidos.length === 0) {
-        setPedidos([]);
-        setEstadosEditados({});
-        return;
-      }
+    const texto =
+      limpiarTextoBusqueda(valor);
 
-      const clienteIds = [
-        ...new Set(
-          listaPedidos
-            .map((pedido) => pedido.cliente_id)
-            .filter(Boolean)
-        ),
-      ];
-
-      const pedidoIds = listaPedidos.map(
-        (pedido) => pedido.id
-      );
-
-      const [
-        { data: clientesData, error: errorClientes },
-        { data: detallesData, error: errorDetalles },
-      ] = await Promise.all([
-        supabase
-          .from("clientes")
-          .select("id, nombre, telefono")
-          .in("id", clienteIds),
-
-        supabase
-          .from("lavanderia_pedido_detalles")
-          .select("pedido_id, cantidad")
-          .in("pedido_id", pedidoIds),
-      ]);
-
-      if (errorClientes) {
-        console.error(
-          "Error cargando clientes:",
-          errorClientes
-        );
-      }
-
-      if (errorDetalles) {
-        console.error(
-          "Error cargando detalles:",
-          errorDetalles
-        );
-      }
-
-      const clientesPorId = Object.fromEntries(
-        (clientesData || []).map((cliente) => [
-          cliente.id,
-          cliente,
-        ])
-      );
-
-      const prendasPorPedido = {};
-
-      (detallesData || []).forEach((detalle) => {
-        prendasPorPedido[detalle.pedido_id] =
-          (prendasPorPedido[detalle.pedido_id] || 0) +
-          Number(detalle.cantidad || 0);
-      });
-
-      const resultado = listaPedidos.map((pedido) => ({
-        ...pedido,
-        cliente:
-          clientesPorId[pedido.cliente_id] || {
-            nombre: "Cliente no encontrado",
-            telefono: "-",
-          },
-        cantidadPrendas:
-          prendasPorPedido[pedido.id] || 0,
-      }));
-
-      const estadosIniciales = Object.fromEntries(
-        resultado.map((pedido) => [
-          pedido.id,
-          pedido.estado_pedido,
-        ])
-      );
-
-      const pagosIniciales = Object.fromEntries(
-        resultado.map((pedido) => [
-          pedido.id,
-          {
-            monto: "",
-            metodo: pedido.metodo_pago || "Efectivo",
-          },
-        ])
-      );
-
-      setPedidos(resultado);
-      setEstadosEditados(estadosIniciales);
-      setPagosEditados(pagosIniciales);
-    } catch (error) {
-      console.error(error);
-      alert(
-        error.message ||
-          "No se pudieron cargar los pedidos."
-      );
-    } finally {
-      setCargando(false);
-    }
-  }
-
-  function seleccionarEstado(pedidoId, nuevoEstado) {
-    setEstadosEditados((actuales) => ({
-      ...actuales,
-      [pedidoId]: nuevoEstado,
-    }));
-  }
-
-  function actualizarPago(pedidoId, campo, valor) {
-    setPagosEditados((actuales) => ({
-      ...actuales,
-      [pedidoId]: {
-        ...(actuales[pedidoId] || {
-          monto: "",
-          metodo: "Efectivo",
-        }),
-        [campo]: valor,
-      },
-    }));
-  }
-
-  async function guardarEstado(pedido) {
-    const nuevoEstado =
-      estadosEditados[pedido.id] ||
-      pedido.estado_pedido;
-
-    if (nuevoEstado === pedido.estado_pedido) {
-      alert("No hay cambios pendientes para guardar.");
+    if (!empresaId || texto.length < 2) {
+      setResultadosClientes([]);
       return;
     }
 
-    const saldoActual = Number(
-      pedido.saldo_pendiente || 0
-    );
+    setBuscandoCliente(true);
 
-    const pagoEditado =
-      pagosEditados[pedido.id] || {};
+    const { data, error } = await supabase
+      .from("clientes")
+      .select(
+        "id, nombre, telefono, direccion"
+      )
+      .eq("empresa_id", empresaId)
+      .or(
+        `nombre.ilike.%${texto}%,telefono.ilike.%${texto}%`
+      )
+      .limit(8);
 
-    const montoRecibido = Number(
-      pagoEditado.monto || 0
-    );
-
-    const metodoPago =
-      pagoEditado.metodo || "Efectivo";
-
-    if (
-      nuevoEstado === "Entregado" &&
-      saldoActual > 0
-    ) {
-      if (
-        !Number.isFinite(montoRecibido) ||
-        montoRecibido <= 0
-      ) {
-        alert(
-          "Ingrese el monto recibido antes de entregar el pedido."
-        );
-        return;
-      }
-
-      if (montoRecibido > saldoActual) {
-        alert(
-          "El monto recibido no puede ser mayor que el saldo pendiente."
-        );
-        return;
-      }
-    }
-
-    const mensajeConfirmacion =
-      nuevoEstado === "Entregado"
-        ? saldoActual > 0
-          ? `Se registrará un pago de ${formatoDinero(
-              montoRecibido
-            )} por ${metodoPago} y se entregará el pedido. ¿Deseas continuar?`
-          : "¿Confirmas que el pedido fue entregado y deseas cerrar el ciclo?"
-        : `¿Deseas cambiar el pedido a "${nuevoEstado}"?`;
-
-    if (!window.confirm(mensajeConfirmacion)) {
-      return;
-    }
-
-    setGuardandoId(pedido.id);
-
-    const datosActualizar = {
-      estado_pedido: nuevoEstado,
-    };
-
-    let nuevoMontoPagado = Number(
-      pedido.monto_pagado || 0
-    );
-
-    let nuevoSaldo = saldoActual;
-    let nuevoEstadoPago =
-      pedido.estado_pago || "Pendiente";
-    let nuevoMetodoPago =
-      pedido.metodo_pago || null;
-
-    if (
-      nuevoEstado === "Entregado" &&
-      saldoActual > 0
-    ) {
-      nuevoMontoPagado += montoRecibido;
-      nuevoSaldo = Math.max(
-        0,
-        saldoActual - montoRecibido
-      );
-
-      nuevoEstadoPago =
-        nuevoSaldo <= 0
-          ? "Pagado"
-          : "Abono";
-
-      nuevoMetodoPago = metodoPago;
-
-      datosActualizar.monto_pagado =
-        nuevoMontoPagado;
-      datosActualizar.saldo_pendiente =
-        nuevoSaldo;
-      datosActualizar.estado_pago =
-        nuevoEstadoPago;
-      datosActualizar.metodo_pago =
-        nuevoMetodoPago;
-    }
-
-    const { error } = await supabase
-      .from("lavanderia_pedidos")
-      .update(datosActualizar)
-      .eq("id", pedido.id)
-      .eq("empresa_id", empresaId);
-
-    setGuardandoId("");
+    setBuscandoCliente(false);
 
     if (error) {
-      alert(
-        "No se pudo guardar el pedido: " +
-          error.message
+      console.error(
+        "Error buscando clientes:",
+        error
       );
       return;
     }
 
-    setPedidos((actuales) =>
-      actuales.map((item) =>
-        item.id === pedido.id
-          ? {
-              ...item,
-              estado_pedido: nuevoEstado,
-              monto_pagado: nuevoMontoPagado,
-              saldo_pendiente: nuevoSaldo,
-              estado_pago: nuevoEstadoPago,
-              metodo_pago: nuevoMetodoPago,
-            }
-          : item
-      )
+    setResultadosClientes(data || []);
+  }
+
+  function seleccionarCliente(cliente) {
+    setClienteId(cliente.id);
+    setNombreCliente(cliente.nombre || "");
+    setTelefonoCliente(
+      cliente.telefono || ""
     );
+    setDireccionCliente(
+      cliente.direccion || ""
+    );
+    setBusquedaCliente(
+      cliente.nombre ||
+        cliente.telefono ||
+        ""
+    );
+    setResultadosClientes([]);
+  }
 
-    setPagosEditados((actuales) => ({
+  function limpiarCliente() {
+    setClienteId("");
+    setBusquedaCliente("");
+    setNombreCliente("");
+    setTelefonoCliente("");
+    setDireccionCliente("");
+    setResultadosClientes([]);
+  }
+
+  function agregarPrenda() {
+    setPrendas((actuales) => [
       ...actuales,
-      [pedido.id]: {
-        monto: "",
-        metodo: nuevoMetodoPago || "Efectivo",
-      },
-    }));
+      nuevaPrenda(),
+    ]);
+  }
 
-    alert(
-      nuevoEstado === "Entregado"
-        ? nuevoSaldo <= 0
-          ? "Pago registrado. Pedido entregado y ciclo finalizado."
-          : "Abono registrado. Pedido entregado con saldo pendiente."
-        : "Estado actualizado correctamente."
+  function actualizarPrenda(
+    idTemporal,
+    campo,
+    valor
+  ) {
+    setPrendas((actuales) =>
+      actuales.map((prenda) =>
+        prenda.idTemporal === idTemporal
+          ? {
+              ...prenda,
+              [campo]: valor,
+            }
+          : prenda
+      )
     );
   }
 
-  const pedidosFiltrados = useMemo(() => {
-    const texto = busqueda.trim().toLowerCase();
+  function eliminarPrenda(idTemporal) {
+    setPrendas((actuales) =>
+      actuales.length === 1
+        ? actuales
+        : actuales.filter(
+            (prenda) =>
+              prenda.idTemporal !==
+              idTemporal
+          )
+    );
+  }
 
-    return pedidos.filter((pedido) => {
-      const coincideEstado =
-        pedido.estado_pedido === filtroEstado;
+  async function obtenerOCrearCliente() {
+    if (clienteId) return clienteId;
 
-      const coincideBusqueda =
-        !texto ||
-        String(pedido.numero_pedido || "")
-          .toLowerCase()
-          .includes(texto) ||
-        String(pedido.cliente?.nombre || "")
-          .toLowerCase()
-          .includes(texto) ||
-        String(pedido.cliente?.telefono || "")
-          .toLowerCase()
-          .includes(texto);
+    const nombreLimpio =
+      nombreCliente.trim();
+    const telefonoLimpio =
+      telefonoCliente.trim();
 
-      return coincideEstado && coincideBusqueda;
+    if (
+      !nombreLimpio ||
+      !telefonoLimpio
+    ) {
+      throw new Error(
+        "Debe ingresar el nombre y teléfono del cliente."
+      );
+    }
+
+    const {
+      data: clienteExistente,
+      error: errorBusqueda,
+    } = await supabase
+      .from("clientes")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("telefono", telefonoLimpio)
+      .maybeSingle();
+
+    if (errorBusqueda) {
+      throw new Error(
+        "No se pudo validar el cliente: " +
+          errorBusqueda.message
+      );
+    }
+
+    if (clienteExistente?.id) {
+      return clienteExistente.id;
+    }
+
+    const { data, error } = await supabase
+      .from("clientes")
+      .insert([
+        {
+          empresa_id: empresaId,
+          nombre: nombreLimpio,
+          telefono: telefonoLimpio,
+          direccion:
+            direccionCliente.trim() ||
+            null,
+          estado: "Activo",
+          modalidad: "Lavandería",
+          observacion:
+            "Cliente registrado desde Nuevo pedido",
+        },
+      ])
+      .select("id")
+      .single();
+
+    if (error) {
+      throw new Error(
+        "No se pudo registrar el cliente: " +
+          error.message
+      );
+    }
+
+    return data.id;
+  }
+
+  function validarFormulario() {
+    if (!nombreCliente.trim()) {
+      alert(
+        "Ingrese el nombre del cliente."
+      );
+      return false;
+    }
+
+    if (!telefonoCliente.trim()) {
+      alert(
+        "Ingrese el teléfono del cliente."
+      );
+      return false;
+    }
+
+    if (!fechaEntrega) {
+      alert(
+        "Seleccione la fecha de entrega."
+      );
+      return false;
+    }
+
+    const prendasValidas =
+      prendas.every(
+        (prenda) =>
+          prenda.tipo &&
+          prenda.servicio &&
+          numeroSeguro(
+            prenda.cantidad
+          ) > 0 &&
+          numeroSeguro(
+            prenda.precioUnitario
+          ) > 0
+      );
+
+    if (!prendasValidas) {
+      alert(
+        "Complete el tipo, servicio, cantidad y precio de todas las prendas."
+      );
+      return false;
+    }
+
+    if (total <= 0) {
+      alert(
+        "El total del pedido debe ser mayor que cero."
+      );
+      return false;
+    }
+
+    if (
+      estadoPago === "Abono" &&
+      (pagado <= 0 || pagado >= total)
+    ) {
+      alert(
+        "El abono debe ser mayor que cero y menor que el total."
+      );
+      return false;
+    }
+
+    if (
+      estadoPago !== "Pendiente" &&
+      !metodoPago
+    ) {
+      alert(
+        "Seleccione el método de pago."
+      );
+      return false;
+    }
+
+    return true;
+  }
+
+  function construirMensajeWhatsApp(
+    datos
+  ) {
+    const detallePrendas = datos.prendas
+      .map(
+        (prenda) =>
+          `• ${prenda.cantidad} ${prenda.tipo} - ${prenda.servicio}`
+      )
+      .join("\n");
+
+    const pagoTexto =
+      datos.estadoPago === "Pendiente"
+        ? "Pendiente"
+        : `${datos.estadoPago} por ${datos.metodoPago}`;
+
+    return [
+      `*${datos.empresaNombre}*`,
+      "",
+      `Hola ${datos.nombreCliente}, recibimos tu pedido.`,
+      "",
+      `*Pedido:* ${datos.numeroPedido}`,
+      `*Estado:* En proceso`,
+      `*Entrega estimada:* ${formatoFecha(
+        datos.fechaEntrega
+      )}`,
+      `*Prioridad:* ${datos.prioridad}`,
+      "",
+      "*Prendas y servicios:*",
+      detallePrendas,
+      "",
+      `*Total:* ${formatoDinero(
+        datos.total
+      )}`,
+      `*Pagado:* ${formatoDinero(
+        datos.pagado
+      )}`,
+      `*Saldo:* ${formatoDinero(
+        datos.saldoPendiente
+      )}`,
+      `*Pago:* ${pagoTexto}`,
+      datos.observaciones
+        ? `*Indicaciones:* ${datos.observaciones}`
+        : "",
+      "",
+      "Conserva este mensaje para retirar tu pedido.",
+      "Gracias por preferirnos.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  function enviarWhatsApp() {
+    if (!comprobante) return;
+
+    const telefono = telefonoWhatsApp(
+      comprobante.telefonoCliente
+    );
+
+    if (!telefono) {
+      alert(
+        "El cliente no tiene un teléfono válido."
+      );
+      return;
+    }
+
+    const mensaje =
+      construirMensajeWhatsApp(
+        comprobante
+      );
+
+    const url =
+      `https://wa.me/${telefono}` +
+      `?text=${encodeURIComponent(
+        mensaje
+      )}`;
+
+    window.open(
+      url,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  function reiniciarFormulario() {
+    setBusquedaCliente("");
+    setClienteId("");
+    setNombreCliente("");
+    setTelefonoCliente("");
+    setDireccionCliente("");
+    setResultadosClientes([]);
+
+    setPrendas([nuevaPrenda()]);
+    setFechaEntrega("");
+    setPrioridad("Normal");
+    setObservaciones("");
+
+    setEstadoPago("Pendiente");
+    setMontoPagado("");
+    setMetodoPago("");
+
+    setComprobante(null);
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
     });
-  }, [pedidos, filtroEstado, busqueda]);
+  }
 
-  const resumen = useMemo(() => {
-    return {
-      proceso: pedidos.filter(
-        (pedido) =>
-          pedido.estado_pedido === "En proceso"
-      ).length,
-      listos: pedidos.filter(
-        (pedido) =>
-          pedido.estado_pedido ===
-          "Listo para retirar"
-      ).length,
-      entregados: pedidos.filter(
-        (pedido) =>
-          pedido.estado_pedido === "Entregado"
-      ).length,
-    };
-  }, [pedidos]);
+  async function guardarPedido(evento) {
+    evento.preventDefault();
+
+    if (
+      guardando ||
+      !validarFormulario()
+    ) {
+      return;
+    }
+
+    setGuardando(true);
+
+    try {
+      const clienteFinalId =
+        await obtenerOCrearCliente();
+
+      const numeroPedido =
+        `LAV-${Date.now()}`;
+
+      const {
+        data: pedido,
+        error: errorPedido,
+      } = await supabase
+        .from("lavanderia_pedidos")
+        .insert([
+          {
+            empresa_id: empresaId,
+            cliente_id: clienteFinalId,
+            numero_pedido: numeroPedido,
+            fecha_recepcion:
+              new Date().toISOString(),
+            fecha_entrega: fechaEntrega,
+            prioridad,
+            estado_pedido:
+              "En proceso",
+            estado_pago: estadoPago,
+            subtotal,
+            descuento: 0,
+            total,
+            monto_pagado: pagado,
+            saldo_pendiente:
+              saldoPendiente,
+            metodo_pago:
+              estadoPago === "Pendiente"
+                ? null
+                : metodoPago,
+            observaciones:
+              observaciones.trim() ||
+              null,
+            creado_por: usuarioId,
+          },
+        ])
+        .select("id, numero_pedido")
+        .single();
+
+      if (errorPedido) {
+        throw new Error(
+          "No se pudo guardar el pedido: " +
+            errorPedido.message
+        );
+      }
+
+      const detalles = prendas.map(
+        (prenda) => ({
+          empresa_id: empresaId,
+          pedido_id: pedido.id,
+          tipo_prenda: prenda.tipo,
+          servicio: prenda.servicio,
+          cantidad: numeroSeguro(
+            prenda.cantidad
+          ),
+          precio_unitario:
+            numeroSeguro(
+              prenda.precioUnitario
+            ),
+          subtotal:
+            numeroSeguro(
+              prenda.cantidad
+            ) *
+            numeroSeguro(
+              prenda.precioUnitario
+            ),
+          observacion:
+            prenda.observacion.trim() ||
+            null,
+        })
+      );
+
+      const { error: errorDetalles } =
+        await supabase
+          .from(
+            "lavanderia_pedido_detalles"
+          )
+          .insert(detalles);
+
+      if (errorDetalles) {
+        await supabase
+          .from("lavanderia_pedidos")
+          .delete()
+          .eq("id", pedido.id);
+
+        throw new Error(
+          "No se pudieron guardar las prendas: " +
+            errorDetalles.message
+        );
+      }
+
+      setComprobante({
+        pedidoId: pedido.id,
+        numeroPedido:
+          pedido.numero_pedido,
+        empresaNombre,
+        nombreCliente:
+          nombreCliente.trim(),
+        telefonoCliente:
+          telefonoCliente.trim(),
+        fechaEntrega,
+        prioridad,
+        observaciones:
+          observaciones.trim(),
+        estadoPago,
+        metodoPago,
+        total,
+        pagado,
+        saldoPendiente,
+        prendas: prendas.map(
+          (prenda) => ({
+            tipo: prenda.tipo,
+            servicio:
+              prenda.servicio,
+            cantidad:
+              numeroSeguro(
+                prenda.cantidad
+              ),
+          })
+        ),
+      });
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    } catch (error) {
+      console.error(
+        "Error guardando pedido:",
+        error
+      );
+
+      alert(
+        error.message ||
+          "No se pudo guardar el pedido."
+      );
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  if (comprobante) {
+    return (
+      <main className="pagina">
+        <section className="comprobante">
+          <div className="check">✓</div>
+
+          <span className="etiqueta">
+            PEDIDO GUARDADO
+          </span>
+
+          <h1>
+            {comprobante.numeroPedido}
+          </h1>
+
+          <p className="confirmacion">
+            El pedido quedó en{" "}
+            <strong>En proceso</strong>.
+          </p>
+
+          <div className="comprobante-datos">
+            <div>
+              <span>Cliente</span>
+              <strong>
+                {
+                  comprobante.nombreCliente
+                }
+              </strong>
+            </div>
+
+            <div>
+              <span>Teléfono</span>
+              <strong>
+                {
+                  comprobante.telefonoCliente
+                }
+              </strong>
+            </div>
+
+            <div>
+              <span>Entrega</span>
+              <strong>
+                {formatoFecha(
+                  comprobante.fechaEntrega
+                )}
+              </strong>
+            </div>
+
+            <div>
+              <span>Total</span>
+              <strong>
+                {formatoDinero(
+                  comprobante.total
+                )}
+              </strong>
+            </div>
+
+            <div>
+              <span>Pagado</span>
+              <strong>
+                {formatoDinero(
+                  comprobante.pagado
+                )}
+              </strong>
+            </div>
+
+            <div>
+              <span>Saldo</span>
+              <strong>
+                {formatoDinero(
+                  comprobante.saldoPendiente
+                )}
+              </strong>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="whatsapp"
+            onClick={enviarWhatsApp}
+          >
+            Abrir comprobante en WhatsApp
+          </button>
+
+          <div className="acciones-comprobante">
+            <button
+              type="button"
+              className="nuevo"
+              onClick={reiniciarFormulario}
+            >
+              Crear otro pedido
+            </button>
+
+            <button
+              type="button"
+              className="ver-pedidos"
+              onClick={() =>
+                router.push(
+                  "/lavanderia/pedidos"
+                )
+              }
+            >
+              Ver pedidos
+            </button>
+          </div>
+        </section>
+
+        <style jsx>{`
+          * {
+            box-sizing: border-box;
+          }
+
+          .pagina {
+            min-height: 100vh;
+            padding: 18px 12px 36px;
+            display: grid;
+            place-items: center;
+            background: #f2f6f3;
+            color: #142019;
+            font-family:
+              Inter,
+              Arial,
+              sans-serif;
+          }
+
+          .comprobante {
+            width: min(620px, 100%);
+            padding: 24px 18px;
+            border: 1px solid #cfe2d6;
+            border-radius: 22px;
+            background: white;
+            box-shadow:
+              0 18px 48px
+              rgba(21, 45, 31, 0.1);
+            text-align: center;
+          }
+
+          .check {
+            width: 68px;
+            height: 68px;
+            margin: 0 auto 14px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            background: #dcfce7;
+            color: #16834f;
+            font-size: 36px;
+            font-weight: 900;
+          }
+
+          .etiqueta {
+            color: #16834f;
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 1.2px;
+          }
+
+          h1 {
+            margin: 7px 0 4px;
+            font-size: 27px;
+            overflow-wrap: anywhere;
+          }
+
+          .confirmacion {
+            margin: 0 0 18px;
+            color: #6d7a72;
+          }
+
+          .comprobante-datos {
+            display: grid;
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+            gap: 9px;
+            text-align: left;
+          }
+
+          .comprobante-datos div {
+            padding: 12px;
+            border-radius: 11px;
+            background: #f5f8f6;
+          }
+
+          .comprobante-datos span {
+            display: block;
+            color: #718078;
+            font-size: 11px;
+          }
+
+          .comprobante-datos strong {
+            display: block;
+            margin-top: 4px;
+            overflow-wrap: anywhere;
+          }
+
+          .whatsapp {
+            width: 100%;
+            min-height: 54px;
+            margin-top: 17px;
+            border: 0;
+            border-radius: 13px;
+            background: #25d366;
+            color: white;
+            font-size: 16px;
+            font-weight: 900;
+            cursor: pointer;
+          }
+
+          .acciones-comprobante {
+            margin-top: 9px;
+            display: grid;
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+            gap: 9px;
+          }
+
+          .nuevo,
+          .ver-pedidos {
+            min-height: 48px;
+            padding: 10px;
+            border-radius: 11px;
+            font-weight: 850;
+            cursor: pointer;
+          }
+
+          .nuevo {
+            border: 1px solid #a9cfb8;
+            background: #edf8f1;
+            color: #14683e;
+          }
+
+          .ver-pedidos {
+            border: 0;
+            background: #173c2a;
+            color: white;
+          }
+
+          @media (max-width: 430px) {
+            .acciones-comprobante {
+              grid-template-columns: 1fr;
+            }
+          }
+        `}</style>
+      </main>
+    );
+  }
 
   return (
     <main className="pagina">
@@ -422,348 +963,518 @@ export default function PedidosLavanderia() {
         <button
           type="button"
           className="volver"
-          onClick={() => router.push("/dashboard")}
+          onClick={() =>
+            router.push("/dashboard")
+          }
           aria-label="Volver al panel"
         >
           ←
         </button>
 
-        <div className="encabezado-texto">
+        <div>
           <span className="etiqueta">
             KONAX LAVANDERÍA
           </span>
-          <h1>Pedidos</h1>
+          <h1>Nuevo pedido</h1>
         </div>
-
-        <button
-          type="button"
-          className="nuevo"
-          onClick={() =>
-            router.push(
-              "/lavanderia/nuevo-pedido"
-            )
-          }
-        >
-          + Nuevo
-        </button>
       </header>
 
-      <section className="resumen">
-        <article className="resumen-proceso">
-          <span>En proceso</span>
-          <strong>{resumen.proceso}</strong>
-        </article>
+      <form
+        onSubmit={guardarPedido}
+        className="formulario"
+      >
+        <section className="tarjeta">
+          <TituloSeccion
+            numero="1"
+            titulo="Cliente"
+            texto="Busca un cliente o registra uno nuevo."
+          />
 
-        <article className="resumen-listo">
-          <span>Listos</span>
-          <strong>{resumen.listos}</strong>
-        </article>
+          <label>
+            Buscar por nombre o teléfono
+          </label>
 
-        <article className="resumen-entregado">
-          <span>Entregados</span>
-          <strong>{resumen.entregados}</strong>
-        </article>
-      </section>
+          <input
+            type="text"
+            value={busquedaCliente}
+            onChange={(e) =>
+              buscarClientes(e.target.value)
+            }
+            placeholder="Ej. María o 6000-0000"
+          />
 
-      <section className="controles">
-        <input
-          type="search"
-          value={busqueda}
-          onChange={(e) =>
-            setBusqueda(e.target.value)
-          }
-          placeholder="Buscar por N.º de pedido, cliente o teléfono"
-        />
+          {buscandoCliente && (
+            <span className="ayuda">
+              Buscando...
+            </span>
+          )}
 
-        <div className="filtros">
-          {ESTADOS.map((estado) => (
-            <button
-              key={estado}
-              type="button"
-              onClick={() =>
-                setFiltroEstado(estado)
-              }
-              className={
-                filtroEstado === estado
-                  ? "filtro activo"
-                  : "filtro"
-              }
-            >
-              {estado}
-            </button>
-          ))}
-        </div>
-      </section>
+          {resultadosClientes.length >
+            0 && (
+            <div className="resultados">
+              {resultadosClientes.map(
+                (cliente) => (
+                  <button
+                    key={cliente.id}
+                    type="button"
+                    onClick={() =>
+                      seleccionarCliente(
+                        cliente
+                      )
+                    }
+                    className="resultado"
+                  >
+                    <strong>
+                      {cliente.nombre}
+                    </strong>
+                    <span>
+                      {cliente.telefono}
+                    </span>
+                  </button>
+                )
+              )}
+            </div>
+          )}
 
-      {cargando ? (
-        <section className="vacio">
-          <strong>Cargando pedidos...</strong>
-        </section>
-      ) : pedidosFiltrados.length === 0 ? (
-        <section className="vacio">
-          <div className="vacio-icono">🧺</div>
-          <strong>
-            No hay pedidos en este estado
-          </strong>
-          <p>
-            Crea el primer pedido o cambia los
-            filtros.
-          </p>
+          <div className="grid">
+            <div>
+              <label>
+                Nombre completo
+              </label>
+              <input
+                value={nombreCliente}
+                onChange={(e) =>
+                  setNombreCliente(
+                    e.target.value
+                  )
+                }
+                placeholder="Nombre del cliente"
+              />
+            </div>
 
-          <button
-            type="button"
-            onClick={() =>
-              router.push(
-                "/lavanderia/nuevo-pedido"
+            <div>
+              <label>Teléfono</label>
+              <input
+                value={telefonoCliente}
+                onChange={(e) =>
+                  setTelefonoCliente(
+                    e.target.value
+                  )
+                }
+                placeholder="Número de teléfono"
+              />
+            </div>
+          </div>
+
+          <label>
+            Dirección, opcional
+          </label>
+
+          <input
+            value={direccionCliente}
+            onChange={(e) =>
+              setDireccionCliente(
+                e.target.value
               )
             }
-          >
-            Crear pedido
-          </button>
+            placeholder="Dirección del cliente"
+          />
+
+          {clienteId && (
+            <button
+              type="button"
+              onClick={limpiarCliente}
+              className="boton-secundario"
+            >
+              Cambiar cliente
+            </button>
+          )}
         </section>
-      ) : (
-        <section className="lista">
-          {pedidosFiltrados.map((pedido) => {
-            const estadoSeleccionado =
-              estadosEditados[pedido.id] ||
-              pedido.estado_pedido;
 
-            const tieneCambios =
-              estadoSeleccionado !==
-              pedido.estado_pedido;
+        <section className="tarjeta">
+          <TituloSeccion
+            numero="2"
+            titulo="Prendas y servicios"
+            texto="Agrega las prendas recibidas."
+          />
 
-            const esEntregado =
-              estadoSeleccionado === "Entregado";
-
-            const saldoPendiente = Number(
-              pedido.saldo_pendiente || 0
-            );
-
-            const pagoEditado =
-              pagosEditados[pedido.id] || {
-                monto: "",
-                metodo: pedido.metodo_pago || "Efectivo",
-              };
-
-            const requiereCobro =
-              esEntregado && saldoPendiente > 0;
-
-            return (
-              <article
-                key={pedido.id}
-                className="pedido"
+          {prendas.map(
+            (prenda, indice) => (
+              <div
+                key={
+                  prenda.idTemporal
+                }
+                className="prenda"
               >
-                <div className="pedido-cabecera">
-                  <div>
-                    <span className="numero-pedido">
-                      {pedido.numero_pedido}
-                    </span>
+                <div className="prenda-cabecera">
+                  <strong>
+                    Artículo {indice + 1}
+                  </strong>
 
-                    <h2>
-                      {pedido.cliente?.nombre}
-                    </h2>
-
-                    <a
-                      href={`tel:${
-                        pedido.cliente?.telefono ||
-                        ""
-                      }`}
-                      className="telefono"
-                    >
-                      {pedido.cliente?.telefono ||
-                        "-"}
-                    </a>
-                  </div>
-
-                  <span
-                    className={claseEstado(
-                      pedido.estado_pedido
-                    )}
-                  >
-                    {pedido.estado_pedido}
-                  </span>
-                </div>
-
-                <div className="datos">
-                  <div>
-                    <span>Prendas</span>
-                    <strong>
-                      {pedido.cantidadPrendas}
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span>Entrega</span>
-                    <strong>
-                      {formatoFecha(
-                        pedido.fecha_entrega
-                      )}
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span>Total</span>
-                    <strong>
-                      {formatoDinero(
-                        pedido.total
-                      )}
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span>Saldo</span>
-                    <strong>
-                      {formatoDinero(
-                        pedido.saldo_pendiente
-                      )}
-                    </strong>
-                  </div>
-                </div>
-
-                {pedido.prioridad ===
-                  "Express" && (
-                  <div className="express">
-                    ⚡ Servicio express
-                  </div>
-                )}
-
-                {pedido.observaciones && (
-                  <p className="observacion">
-                    {pedido.observaciones}
-                  </p>
-                )}
-
-                {requiereCobro && (
-                  <div className="cobro-entrega">
-                    <div className="cobro-encabezado">
-                      <div>
-                        <span>COBRO AL ENTREGAR</span>
-                        <strong>
-                          Saldo pendiente:{" "}
-                          {formatoDinero(
-                            saldoPendiente
-                          )}
-                        </strong>
-                      </div>
-                    </div>
-
-                    <div className="cobro-grid">
-                      <label>
-                        Monto recibido
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          max={saldoPendiente}
-                          value={pagoEditado.monto}
-                          onChange={(e) =>
-                            actualizarPago(
-                              pedido.id,
-                              "monto",
-                              e.target.value
-                            )
-                          }
-                          placeholder="0.00"
-                          disabled={
-                            guardandoId ===
-                            pedido.id
-                          }
-                        />
-                      </label>
-
-                      <label>
-                        Método de pago
-                        <select
-                          value={pagoEditado.metodo}
-                          onChange={(e) =>
-                            actualizarPago(
-                              pedido.id,
-                              "metodo",
-                              e.target.value
-                            )
-                          }
-                          disabled={
-                            guardandoId ===
-                            pedido.id
-                          }
-                        >
-                          <option value="Efectivo">
-                            Efectivo
-                          </option>
-                          <option value="Yappy">
-                            Yappy
-                          </option>
-                          <option value="Transferencia">
-                            Transferencia
-                          </option>
-                        </select>
-                      </label>
-                    </div>
-                  </div>
-                )}
-
-                <div className="acciones">
-                  <div>
-                    <label
-                      htmlFor={`estado-${pedido.id}`}
-                    >
-                      Nuevo estado
-                    </label>
-
-                    <select
-                      id={`estado-${pedido.id}`}
-                      value={estadoSeleccionado}
-                      disabled={
-                        guardandoId === pedido.id
+                  {prendas.length >
+                    1 && (
+                    <button
+                      type="button"
+                      className="eliminar"
+                      onClick={() =>
+                        eliminarPrenda(
+                          prenda.idTemporal
+                        )
                       }
+                    >
+                      Eliminar
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid">
+                  <div>
+                    <label>
+                      Tipo de prenda
+                    </label>
+                    <select
+                      value={prenda.tipo}
                       onChange={(e) =>
-                        seleccionarEstado(
-                          pedido.id,
+                        actualizarPrenda(
+                          prenda.idTemporal,
+                          "tipo",
                           e.target.value
                         )
                       }
                     >
-                      <option value="En proceso">
-                        En proceso
+                      <option value="">
+                        Seleccionar
                       </option>
-                      <option value="Listo para retirar">
-                        Listo para retirar
-                      </option>
-                      <option value="Entregado">
-                        Entregado
-                      </option>
+                      {TIPOS_PRENDA.map(
+                        (tipo) => (
+                          <option
+                            key={tipo}
+                            value={tipo}
+                          >
+                            {tipo}
+                          </option>
+                        )
+                      )}
                     </select>
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={
-                      !tieneCambios ||
-                      guardandoId === pedido.id
-                    }
-                    className={
-                      esEntregado
-                        ? "guardar-estado finalizar"
-                        : "guardar-estado"
-                    }
-                    onClick={() =>
-                      guardarEstado(pedido)
-                    }
-                  >
-                    {guardandoId === pedido.id
-                      ? "Guardando..."
-                      : esEntregado
-                      ? requiereCobro
-                        ? "Cobrar, finalizar y entregar"
-                        : "Finalizar y entregar"
-                      : "Guardar estado"}
-                  </button>
+                  <div>
+                    <label>Servicio</label>
+                    <select
+                      value={
+                        prenda.servicio
+                      }
+                      onChange={(e) =>
+                        actualizarPrenda(
+                          prenda.idTemporal,
+                          "servicio",
+                          e.target.value
+                        )
+                      }
+                    >
+                      <option value="">
+                        Seleccionar
+                      </option>
+                      {SERVICIOS.map(
+                        (servicio) => (
+                          <option
+                            key={servicio}
+                            value={
+                              servicio
+                            }
+                          >
+                            {servicio}
+                          </option>
+                        )
+                      )}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label>Cantidad</label>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={
+                        prenda.cantidad
+                      }
+                      onChange={(e) =>
+                        actualizarPrenda(
+                          prenda.idTemporal,
+                          "cantidad",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <label>
+                      Precio unitario
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={
+                        prenda.precioUnitario
+                      }
+                      onChange={(e) =>
+                        actualizarPrenda(
+                          prenda.idTemporal,
+                          "precioUnitario",
+                          formatearMontoCentavos(
+                            e.target.value
+                          )
+                        )
+                      }
+                      placeholder="0.00"
+                    />
+                  </div>
                 </div>
-              </article>
-            );
-          })}
+
+                <label>
+                  Observación de la prenda
+                </label>
+
+                <input
+                  value={
+                    prenda.observacion
+                  }
+                  onChange={(e) =>
+                    actualizarPrenda(
+                      prenda.idTemporal,
+                      "observacion",
+                      e.target.value
+                    )
+                  }
+                  placeholder="Ej. Mancha en la manga"
+                />
+
+                <div className="subtotal-prenda">
+                  Subtotal:{" "}
+                  <strong>
+                    {formatoDinero(
+                      numeroSeguro(
+                        prenda.cantidad
+                      ) *
+                        numeroSeguro(
+                          prenda.precioUnitario
+                        )
+                    )}
+                  </strong>
+                </div>
+              </div>
+            )
+          )}
+
+          <button
+            type="button"
+            onClick={agregarPrenda}
+            className="boton-agregar"
+          >
+            + Agregar otra prenda
+          </button>
         </section>
-      )}
+
+        <section className="tarjeta">
+          <TituloSeccion
+            numero="3"
+            titulo="Entrega"
+            texto="Define la fecha y prioridad."
+          />
+
+          <div className="grid">
+            <div>
+              <label>
+                Fecha estimada de entrega
+              </label>
+
+              <input
+                type="date"
+                value={fechaEntrega}
+                onChange={(e) =>
+                  setFechaEntrega(
+                    e.target.value
+                  )
+                }
+              />
+            </div>
+
+            <div>
+              <label>Prioridad</label>
+
+              <select
+                value={prioridad}
+                onChange={(e) =>
+                  setPrioridad(
+                    e.target.value
+                  )
+                }
+              >
+                <option value="Normal">
+                  Normal
+                </option>
+                <option value="Express">
+                  Express
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <label>
+            Observaciones generales
+          </label>
+
+          <textarea
+            value={observaciones}
+            onChange={(e) =>
+              setObservaciones(
+                e.target.value
+              )
+            }
+            placeholder="Instrucciones generales del pedido"
+            rows={3}
+          />
+        </section>
+
+        <section className="tarjeta">
+          <TituloSeccion
+            numero="4"
+            titulo="Pago"
+            texto="Registra el estado del pago."
+          />
+
+          <div className="opciones-pago">
+            {[
+              "Pagado",
+              "Abono",
+              "Pendiente",
+            ].map((opcion) => (
+              <button
+                key={opcion}
+                type="button"
+                onClick={() => {
+                  setEstadoPago(opcion);
+
+                  if (
+                    opcion === "Pagado"
+                  ) {
+                    setMontoPagado(
+                      total.toFixed(2)
+                    );
+                  }
+
+                  if (
+                    opcion ===
+                    "Pendiente"
+                  ) {
+                    setMontoPagado("");
+                    setMetodoPago("");
+                  }
+                }}
+                className={
+                  estadoPago === opcion
+                    ? "opcion activa"
+                    : "opcion"
+                }
+              >
+                {opcion}
+              </button>
+            ))}
+          </div>
+
+          {estadoPago === "Abono" && (
+            <div>
+              <label>Monto abonado</label>
+
+              <input
+                type="text"
+                inputMode="numeric"
+                value={montoPagado}
+                onChange={(e) =>
+                  setMontoPagado(
+                    formatearMontoCentavos(
+                      e.target.value
+                    )
+                  )
+                }
+                placeholder="0.00"
+              />
+            </div>
+          )}
+
+          {estadoPago !==
+            "Pendiente" && (
+            <div>
+              <label>
+                Método de pago
+              </label>
+
+              <select
+                value={metodoPago}
+                onChange={(e) =>
+                  setMetodoPago(
+                    e.target.value
+                  )
+                }
+              >
+                <option value="">
+                  Seleccione un método
+                </option>
+
+                {METODOS_PAGO.map(
+                  (metodo) => (
+                    <option
+                      key={metodo}
+                      value={metodo}
+                    >
+                      {metodo}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+          )}
+
+          <div className="resumen">
+            <div>
+              <span>Total</span>
+              <strong>
+                {formatoDinero(total)}
+              </strong>
+            </div>
+
+            <div>
+              <span>Pagado</span>
+              <strong>
+                {formatoDinero(pagado)}
+              </strong>
+            </div>
+
+            <div>
+              <span>
+                Saldo pendiente
+              </span>
+              <strong>
+                {formatoDinero(
+                  saldoPendiente
+                )}
+              </strong>
+            </div>
+          </div>
+        </section>
+
+        <button
+          type="submit"
+          disabled={guardando}
+          className="guardar"
+        >
+          {guardando
+            ? "Guardando pedido..."
+            : "Guardar pedido"}
+        </button>
+      </form>
 
       <style jsx>{`
         * {
@@ -772,25 +1483,26 @@ export default function PedidosLavanderia() {
 
         .pagina {
           min-height: 100vh;
-          padding: 12px 10px 32px;
+          padding: 12px 10px 30px;
           background: #f2f6f3;
           color: #142019;
-          font-family: Inter, Arial, sans-serif;
+          font-family:
+            Inter,
+            Arial,
+            sans-serif;
         }
 
         .encabezado {
-          width: min(850px, 100%);
+          width: min(760px, 100%);
           margin: 0 auto 14px;
-          display: grid;
-          grid-template-columns:
-            44px minmax(0, 1fr) auto;
+          display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 12px;
         }
 
         .encabezado h1 {
           margin: 3px 0 0;
-          font-size: 26px;
+          font-size: 25px;
         }
 
         .etiqueta {
@@ -803,6 +1515,7 @@ export default function PedidosLavanderia() {
         .volver {
           width: 44px;
           height: 44px;
+          flex: 0 0 44px;
           border: 1px solid #dce6df;
           border-radius: 12px;
           background: white;
@@ -810,380 +1523,285 @@ export default function PedidosLavanderia() {
           cursor: pointer;
         }
 
-        .nuevo {
-          min-height: 44px;
-          padding: 10px 14px;
-          border: none;
+        .formulario {
+          width: min(760px, 100%);
+          margin: 0 auto;
+          display: grid;
+          gap: 12px;
+        }
+
+        .tarjeta {
+          padding: 15px 13px;
+          border: 1px solid #dde7e0;
+          border-radius: 17px;
+          background: white;
+          box-shadow:
+            0 8px 22px
+            rgba(21, 45, 31, 0.05);
+        }
+
+        :global(.titulo-seccion) {
+          margin-bottom: 17px;
+          display: flex;
+          align-items: center;
+          gap: 11px;
+        }
+
+        :global(.titulo-seccion h2) {
+          margin: 0;
+          font-size: 18px;
+        }
+
+        :global(.titulo-seccion p) {
+          margin: 3px 0 0;
+          color: #718078;
+          font-size: 12px;
+        }
+
+        :global(.numero) {
+          width: 35px;
+          height: 35px;
+          flex: 0 0 35px;
+          display: grid;
+          place-items: center;
           border-radius: 11px;
-          background: #16834f;
+          background: #173c2a;
           color: white;
           font-weight: 900;
-          cursor: pointer;
         }
 
-        .resumen {
-          width: min(850px, 100%);
-          margin: 0 auto 12px;
-          display: grid;
-          grid-template-columns:
-            repeat(2, minmax(0, 1fr));
-          gap: 8px;
-        }
-
-        .resumen article {
-          min-width: 0;
-          padding: 13px 10px;
-          border: 1px solid #dde7e0;
-          border-radius: 13px;
-          background: white;
-        }
-
-        .resumen span {
+        label {
           display: block;
-          font-size: 11px;
+          margin: 12px 0 6px;
+          font-size: 13px;
           font-weight: 800;
         }
 
-        .resumen strong {
-          display: block;
-          margin-top: 5px;
-          font-size: 22px;
-        }
-
-        .resumen-proceso {
-          border-left: 4px solid #2563eb !important;
-        }
-
-        .resumen-listo {
-          border-left: 4px solid #16a34a !important;
-        }
-
-        .resumen-entregado {
-          border-left: 4px solid #4b5563 !important;
-        }
-
-        .controles {
-          width: min(850px, 100%);
-          margin: 0 auto 12px;
-          padding: 12px;
-          border: 1px solid #dde7e0;
-          border-radius: 15px;
-          background: white;
-        }
-
-        .controles input {
+        input,
+        select,
+        textarea {
           width: 100%;
-          min-height: 47px;
+          min-height: 48px;
           padding: 11px 12px;
           border: 1px solid #d5dfd8;
           border-radius: 10px;
+          background: white;
+          color: #142019;
           font-size: 16px;
           outline: none;
         }
 
-        .controles input:focus {
+        textarea {
+          resize: vertical;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
           border-color: #16834f;
           box-shadow:
             0 0 0 3px
             rgba(22, 131, 79, 0.1);
         }
 
-        .filtros {
-          margin-top: 10px;
-          display: flex;
-          gap: 7px;
-          overflow-x: auto;
-          padding-bottom: 3px;
+        .grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 0;
         }
 
-        .filtro {
-          flex: 0 0 auto;
-          min-height: 38px;
-          padding: 8px 12px;
-          border: 1px solid #d5dfd8;
-          border-radius: 999px;
+        .resultados {
+          margin-top: 5px;
+          display: grid;
+          gap: 4px;
+          padding: 6px;
+          border: 1px solid #dce6df;
+          border-radius: 10px;
           background: white;
-          color: #33443a;
+        }
+
+        .resultado {
+          min-height: 46px;
+          padding: 10px;
+          display: flex;
+          justify-content:
+            space-between;
+          align-items: center;
+          gap: 10px;
+          border: 0;
+          border-radius: 8px;
+          background: #f3f8f5;
+          text-align: left;
+          cursor: pointer;
+        }
+
+        .resultado span,
+        .ayuda {
+          color: #748078;
+          font-size: 12px;
+        }
+
+        .prenda {
+          margin-bottom: 13px;
+          padding: 14px;
+          border: 1px solid #dce6df;
+          border-radius: 13px;
+          background: #f8faf9;
+        }
+
+        .prenda-cabecera {
+          display: flex;
+          justify-content:
+            space-between;
+          align-items: center;
+        }
+
+        .eliminar {
+          border: 0;
+          background: transparent;
+          color: #b42318;
           font-weight: 800;
           cursor: pointer;
         }
 
-        .filtro.activo {
-          border-color: #173c2a;
-          background: #173c2a;
-          color: white;
-        }
-
-        .lista {
-          width: min(850px, 100%);
-          margin: 0 auto;
-          display: grid;
-          gap: 11px;
-        }
-
-        .pedido {
-          padding: 15px;
-          border: 1px solid #dde7e0;
-          border-radius: 16px;
-          background: white;
-          box-shadow:
-            0 8px 20px
-            rgba(21, 45, 31, 0.05);
-        }
-
-        .pedido-cabecera {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 12px;
-        }
-
-        .numero-pedido {
-          display: block;
-          color: #16834f;
-          font-size: 11px;
-          font-weight: 900;
-          letter-spacing: 0.5px;
-        }
-
-        .pedido h2 {
-          margin: 5px 0 3px;
-          font-size: 19px;
-        }
-
-        .telefono {
-          color: #65736b;
+        .subtotal-prenda {
+          margin-top: 12px;
+          text-align: right;
           font-size: 13px;
-          text-decoration: none;
         }
 
-        .estado {
-          flex: 0 0 auto;
-          padding: 7px 9px;
-          border-radius: 999px;
-          font-size: 11px;
-          font-weight: 900;
-        }
-
-        .recibido {
-          background: #fef9c3;
-          color: #854d0e;
-        }
-
-        .proceso {
-          background: #eff6ff;
-          color: #1d4ed8;
-        }
-
-        .listo {
-          background: #ecfdf3;
-          color: #15803d;
-        }
-
-        .entregado {
-          background: #f3f4f6;
-          color: #374151;
-        }
-
-        .datos {
-          margin-top: 14px;
-          display: grid;
-          grid-template-columns:
-            repeat(2, minmax(0, 1fr));
-          gap: 8px;
-        }
-
-        .datos div {
-          padding: 10px;
-          border-radius: 10px;
-          background: #f6f9f7;
-        }
-
-        .datos span {
-          display: block;
-          color: #748078;
-          font-size: 11px;
-        }
-
-        .datos strong {
-          display: block;
-          margin-top: 4px;
-          font-size: 14px;
-        }
-
-        .express {
-          margin-top: 10px;
-          padding: 9px 10px;
-          border-radius: 9px;
-          background: #fff7ed;
-          color: #c2410c;
-          font-size: 12px;
-          font-weight: 850;
-        }
-
-        .observacion {
-          margin: 10px 0 0;
-          padding: 10px;
-          border-left: 3px solid #16834f;
-          background: #f4f8f5;
-          color: #55635b;
-          font-size: 12px;
-          line-height: 1.5;
-        }
-
-        .cobro-entrega {
-          margin-top: 14px;
-          padding: 13px;
-          border: 1px solid #bbf7d0;
-          border-radius: 13px;
-          background: #f0fdf4;
-        }
-
-        .cobro-encabezado span {
-          display: block;
-          color: #16834f;
-          font-size: 10px;
-          font-weight: 900;
-          letter-spacing: 1px;
-        }
-
-        .cobro-encabezado strong {
-          display: block;
-          margin-top: 5px;
-          font-size: 15px;
-        }
-
-        .cobro-grid {
-          margin-top: 11px;
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 10px;
-        }
-
-        .cobro-grid label {
-          display: grid;
-          gap: 6px;
-          color: #33443a;
-          font-size: 12px;
-          font-weight: 850;
-        }
-
-        .cobro-grid input,
-        .cobro-grid select {
+        .boton-agregar,
+        .boton-secundario {
           width: 100%;
           min-height: 46px;
-          padding: 10px;
-          border: 1px solid #cddbd2;
+          margin-top: 12px;
+          padding: 12px;
+          border: 1px solid #a9cfb8;
           border-radius: 10px;
-          background: white;
-          font-size: 15px;
+          background: #edf8f1;
+          color: #14683e;
+          font-weight: 850;
+          cursor: pointer;
         }
 
-        .acciones {
-          margin-top: 14px;
-          padding-top: 13px;
+        .opciones-pago {
           display: grid;
           grid-template-columns: 1fr;
-          gap: 10px;
-          border-top: 1px solid #e4ebe6;
+          gap: 7px;
         }
 
-        .acciones label {
-          display: block;
-          margin-bottom: 6px;
-          font-size: 12px;
-          font-weight: 850;
-        }
-
-        .acciones select {
-          width: 100%;
-          min-height: 46px;
-          padding: 10px;
+        .opcion {
+          min-height: 45px;
           border: 1px solid #d5dfd8;
           border-radius: 10px;
           background: white;
-          font-size: 15px;
-        }
-
-        .guardar-estado {
-          min-height: 48px;
-          padding: 11px 14px;
-          border: none;
-          border-radius: 10px;
-          background: #173c2a;
-          color: white;
-          font-size: 14px;
-          font-weight: 900;
+          font-weight: 800;
           cursor: pointer;
         }
 
-        .guardar-estado.finalizar {
+        .opcion.activa {
+          border-color: #16834f;
           background: #16834f;
+          color: white;
         }
 
-        .guardar-estado:disabled {
-          background: #d7dfda;
-          color: #7a857e;
-          cursor: not-allowed;
+        .resumen {
+          margin-top: 16px;
+          padding: 14px;
+          display: grid;
+          gap: 10px;
+          border-radius: 12px;
+          background: #10291d;
+          color: white;
         }
 
-        .vacio {
-          width: min(850px, 100%);
-          margin: 0 auto;
-          padding: 35px 20px;
-          border: 1px solid #dde7e0;
-          border-radius: 16px;
-          background: white;
-          text-align: center;
+        .resumen div {
+          display: flex;
+          justify-content:
+            space-between;
+          gap: 12px;
         }
 
-        .vacio-icono {
-          font-size: 35px;
-        }
-
-        .vacio p {
-          color: #718078;
+        .resumen span {
+          color: #b9d8c5;
           font-size: 13px;
         }
 
-        .vacio button {
-          min-height: 44px;
-          padding: 10px 15px;
-          border: none;
-          border-radius: 10px;
-          background: #16834f;
+        .guardar {
+          position: sticky;
+          bottom: 10px;
+          z-index: 10;
+          min-height: 56px;
+          border: 0;
+          border-radius: 13px;
+          background:
+            linear-gradient(
+              135deg,
+              #117a46,
+              #1aa55f
+            );
           color: white;
-          font-weight: 850;
+          font-size: 17px;
+          font-weight: 900;
           cursor: pointer;
+          box-shadow:
+            0 13px 28px
+            rgba(17, 122, 70, 0.25);
         }
 
-        @media (min-width: 700px) {
+        .guardar:disabled {
+          opacity: 0.65;
+          cursor: not-allowed;
+        }
+
+        @media (min-width: 640px) {
           .pagina {
-            padding: 20px 18px 40px;
+            padding:
+              18px 14px 40px;
           }
 
-          .resumen {
-            grid-template-columns:
-              repeat(4, minmax(0, 1fr));
+          .tarjeta {
+            padding: 18px;
           }
 
-          .datos {
+          .grid {
             grid-template-columns:
-              repeat(4, minmax(0, 1fr));
+              repeat(
+                2,
+                minmax(0, 1fr)
+              );
+            gap: 12px;
           }
 
-          .cobro-grid {
+          .opciones-pago {
             grid-template-columns:
-              repeat(2, minmax(0, 1fr));
+              repeat(3, 1fr);
           }
 
-          .acciones {
-            grid-template-columns:
-              minmax(0, 1fr) 230px;
-            align-items: end;
+          .guardar {
+            position: static;
           }
         }
       `}</style>
     </main>
+  );
+}
+
+function TituloSeccion({
+  numero,
+  titulo,
+  texto,
+}) {
+  return (
+    <div className="titulo-seccion">
+      <span className="numero">
+        {numero}
+      </span>
+
+      <div>
+        <h2>{titulo}</h2>
+        <p>{texto}</p>
+      </div>
+    </div>
   );
 }
