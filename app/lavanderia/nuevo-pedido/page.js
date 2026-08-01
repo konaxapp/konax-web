@@ -47,6 +47,7 @@ function nuevaPrenda() {
     servicio: "",
     cantidad: 1,
     precioUnitario: "",
+    precioCentavos: "",
     observacion: "",
   };
 }
@@ -55,6 +56,33 @@ function numeroSeguro(valor) {
   const numero = Number(valor);
   return Number.isFinite(numero) ? numero : 0;
 }
+
+function mostrarMontoDesdeCentavos(digitos) {
+  const limpio = String(digitos || "").replace(/\D/g, "");
+
+  if (!limpio) return "";
+
+  return (Number(limpio) / 100).toFixed(2);
+}
+
+function agregarDigitoCentavos(digitosActuales, digito) {
+  const limpio = String(digito || "").replace(/\D/g, "");
+
+  if (!limpio) {
+    return String(digitosActuales || "");
+  }
+
+  return (
+    String(digitosActuales || "") + limpio
+  )
+    .replace(/^0+(?=\d)/, "")
+    .slice(0, 10);
+}
+
+function borrarDigitoCentavos(digitosActuales) {
+  return String(digitosActuales || "").slice(0, -1);
+}
+
 
 function limpiarTextoBusqueda(valor) {
   return String(valor || "")
@@ -139,6 +167,8 @@ export default function NuevoPedidoLavanderia() {
   const [estadoPago, setEstadoPago] =
     useState("Pendiente");
   const [montoPagado, setMontoPagado] =
+    useState("");
+  const [montoPagadoCentavos, setMontoPagadoCentavos] =
     useState("");
   const [metodoPago, setMetodoPago] =
     useState("");
@@ -285,6 +315,65 @@ export default function NuevoPedidoLavanderia() {
           : prenda
       )
     );
+  }
+
+  function cambiarPrecioCentavos(
+    idTemporal,
+    accion,
+    valor = ""
+  ) {
+    setPrendas((actuales) =>
+      actuales.map((prenda) => {
+        if (prenda.idTemporal !== idTemporal) {
+          return prenda;
+        }
+
+        const actualesCentavos =
+          prenda.precioCentavos || "";
+
+        const nuevosCentavos =
+          accion === "borrar"
+            ? borrarDigitoCentavos(actualesCentavos)
+            : agregarDigitoCentavos(
+                actualesCentavos,
+                valor
+              );
+
+        return {
+          ...prenda,
+          precioCentavos: nuevosCentavos,
+          precioUnitario: nuevosCentavos
+            ? Number(nuevosCentavos) / 100
+            : "",
+        };
+      })
+    );
+  }
+
+  function cambiarAbonoCentavos(
+    accion,
+    valor = ""
+  ) {
+    setMontoPagadoCentavos((actuales) => {
+      const nuevosCentavos =
+        accion === "borrar"
+          ? borrarDigitoCentavos(actuales)
+          : agregarDigitoCentavos(
+              actuales,
+              valor
+            );
+
+      setMontoPagado(
+        nuevosCentavos
+          ? (
+              Number(nuevosCentavos) /
+              100
+            ).toFixed(2)
+          : ""
+      );
+
+      return nuevosCentavos;
+    });
   }
 
   function eliminarPrenda(idTemporal) {
@@ -536,6 +625,7 @@ export default function NuevoPedidoLavanderia() {
 
     setEstadoPago("Pendiente");
     setMontoPagado("");
+    setMontoPagadoCentavos("");
     setMetodoPago("");
 
     setComprobante(null);
@@ -1205,19 +1295,41 @@ export default function NuevoPedidoLavanderia() {
                       Precio unitario
                     </label>
                     <input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      value={
-                        prenda.precioUnitario
-                      }
-                      onChange={(e) =>
-                        actualizarPrenda(
-                          prenda.idTemporal,
-                          "precioUnitario",
-                          e.target.value
-                        )
-                      }
+                      type="text"
+                      inputMode="numeric"
+                      value={mostrarMontoDesdeCentavos(
+                        prenda.precioCentavos
+                      )}
+                      onBeforeInput={(e) => {
+                        const dato =
+                          e.nativeEvent?.data || "";
+
+                        if (/^\d+$/.test(dato)) {
+                          e.preventDefault();
+
+                          cambiarPrecioCentavos(
+                            prenda.idTemporal,
+                            "agregar",
+                            dato
+                          );
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (
+                          e.key === "Backspace" ||
+                          e.key === "Delete"
+                        ) {
+                          e.preventDefault();
+
+                          cambiarPrecioCentavos(
+                            prenda.idTemporal,
+                            "borrar"
+                          );
+                        }
+                      }}
+                      onChange={() => {
+                        // El valor se controla con onBeforeInput.
+                      }}
                       placeholder="0.00"
                     />
                   </div>
@@ -1353,6 +1465,11 @@ export default function NuevoPedidoLavanderia() {
                     setMontoPagado(
                       total.toFixed(2)
                     );
+                    setMontoPagadoCentavos(
+                      String(
+                        Math.round(total * 100)
+                      )
+                    );
                   }
 
                   if (
@@ -1360,6 +1477,7 @@ export default function NuevoPedidoLavanderia() {
                     "Pendiente"
                   ) {
                     setMontoPagado("");
+                    setMontoPagadoCentavos("");
                     setMetodoPago("");
                   }
                 }}
@@ -1379,19 +1497,37 @@ export default function NuevoPedidoLavanderia() {
               <label>Monto abonado</label>
 
               <input
-                type="number"
-                min="0.01"
-                max={Math.max(
-                  total - 0.01,
-                  0
+                type="text"
+                inputMode="numeric"
+                value={mostrarMontoDesdeCentavos(
+                  montoPagadoCentavos
                 )}
-                step="0.01"
-                value={montoPagado}
-                onChange={(e) =>
-                  setMontoPagado(
-                    e.target.value
-                  )
-                }
+                onBeforeInput={(e) => {
+                  const dato =
+                    e.nativeEvent?.data || "";
+
+                  if (/^\d+$/.test(dato)) {
+                    e.preventDefault();
+                    cambiarAbonoCentavos(
+                      "agregar",
+                      dato
+                    );
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (
+                    e.key === "Backspace" ||
+                    e.key === "Delete"
+                  ) {
+                    e.preventDefault();
+                    cambiarAbonoCentavos(
+                      "borrar"
+                    );
+                  }
+                }}
+                onChange={() => {
+                  // El valor se controla con onBeforeInput.
+                }}
                 placeholder="0.00"
               />
             </div>
