@@ -6,7 +6,7 @@ import { supabase } from "../../lib/supabase";
 
 const OPCIONES = [
   {
-    nombre: "Empresas Clientes",
+    nombre: "Crear Nueva Empresa",
     ruta: "/empresas",
     icono: "building",
   },
@@ -269,6 +269,19 @@ export default function Admin() {
         borderColor: "#d1d5db",
       }
     );
+  }
+
+  function configurarUsuariosModulos(empresa) {
+    localStorage.setItem(
+      "empresaAdminCreadaId",
+      empresa.id
+    );
+    localStorage.setItem(
+      "empresaAdminCreadaNombre",
+      empresa.nombre || ""
+    );
+
+    window.location.href = "/usuarios";
   }
 
   function renderAccion(empresa, movil = false) {
@@ -730,6 +743,17 @@ export default function Admin() {
                     </div>
 
                     <div style={styles.accionMobileBox}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          configurarUsuariosModulos(empresa)
+                        }
+                        style={styles.botonConfigurarMobile}
+                      >
+                        <Icon name="users" size={17} />
+                        Usuarios y módulos
+                      </button>
+
                       {renderAccion(empresa, true)}
                     </div>
                   </article>
@@ -818,6 +842,17 @@ export default function Admin() {
 
                         <td style={styles.td}>
                           <div style={styles.accionesTabla}>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                configurarUsuariosModulos(empresa)
+                              }
+                              style={styles.botonConfigurar}
+                            >
+                              <Icon name="users" size={15} />
+                              Usuarios y módulos
+                            </button>
+
                             {renderAccion(empresa)}
                           </div>
                         </td>
@@ -1151,6 +1186,14 @@ function Icon({ name, size = 20 }) {
       <>
         <circle cx="11" cy="11" r="7" />
         <path d="M20 20l-4-4" />
+      </>
+    ),
+    users: (
+      <>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+        <circle cx="9.5" cy="7" r="4" />
+        <path d="M17 11a4 4 0 0 1 4 4v2" />
+        <path d="M17 3.5a4 4 0 0 1 0 7" />
       </>
     ),
   };
@@ -2012,6 +2055,22 @@ const styles = {
     flexWrap: "wrap",
   },
 
+  botonConfigurar: {
+    minHeight: 36,
+    padding: "8px 11px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    border: "1px solid #bddfca",
+    borderRadius: 10,
+    background: "#edf8f1",
+    color: "#14683e",
+    fontSize: 9.5,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
   botonAprobar: {
     minHeight: 36,
     padding: "8px 11px",
@@ -2188,9 +2247,26 @@ const styles = {
   accionMobileBox: {
     marginTop: 11,
     paddingTop: 11,
-    display: "flex",
-    justifyContent: "flex-end",
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: 8,
     borderTop: "1px solid #e7ece9",
+  },
+
+  botonConfigurarMobile: {
+    width: "100%",
+    minHeight: 43,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    border: "1px solid #bddfca",
+    borderRadius: 10,
+    background: "#edf8f1",
+    color: "#14683e",
+    fontSize: 10.5,
+    fontWeight: 850,
+    cursor: "pointer",
   },
 
   botonAccionMobile: {
