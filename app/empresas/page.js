@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 
-const OPCIONES = [
+const OPCIONES_ADMIN = [
   {
-    nombre: "Empresas Clientes",
+    nombre: "Panel Maestro",
+    ruta: "/admin",
+    icono: "dashboard",
+  },
+  {
+    nombre: "Crear Nueva Empresa",
     ruta: "/empresas",
     icono: "building",
   },
@@ -27,21 +32,74 @@ const OPCIONES = [
   },
 ];
 
-export default function Admin() {
-  const [empresasPrueba, setEmpresasPrueba] = useState([]);
+const CATEGORIAS = {
+  "Ventas a Crédito": [
+    "Mueblería",
+    "Electrónica",
+    "Distribuidora",
+    "Cooperativa",
+    "Financiera",
+    "Casa de Empeño",
+  ],
+  "Suscripciones y Membresías": [
+    "Gimnasio",
+    "IPTV",
+    "Internet y Cable",
+    "Club",
+    "Servicio por Membresía",
+  ],
+  Comercio: [
+    "Ferretería",
+    "Farmacia",
+    "Tienda",
+    "Mercado",
+    "Repuestos",
+    "Boutique",
+    "Mueblería",
+  ],
+  Servicios: [
+    "Lavandería",
+    "Lavaauto",
+    "Seguridad",
+    "Limpieza",
+    "Jardinería",
+    "Mantenimiento",
+    "Veterinaria",
+    "Clínica",
+    "Belleza",
+    "Consultoría",
+  ],
+  Educación: [
+    "Escuela",
+    "Colegio",
+    "Academia",
+    "Centro de Capacitación",
+  ],
+};
+
+export default function Empresas() {
+  const [empresas, setEmpresas] = useState([]);
+  const [mostrarEmpresas, setMostrarEmpresas] = useState(false);
   const [cargandoEmpresas, setCargandoEmpresas] = useState(true);
-  const [procesandoId, setProcesandoId] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState("Todos");
+
+  const [nombre, setNombre] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [correo, setCorreo] = useState("");
+  const [direccion, setDireccion] = useState("");
+  const [categoria, setCategoria] = useState("");
+  const [tipoNegocio, setTipoNegocio] = useState("");
+  const [guardando, setGuardando] = useState(false);
 
   const [esMovil, setEsMovil] = useState(false);
-  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
-  const [adminNombre, setAdminNombre] = useState("Administrador KONAX");
+  const [menuMovilAbierto, setMenuMovilAbierto] =
+    useState(false);
 
   useEffect(() => {
-    validarAdminYCargar();
+    cargarEmpresas();
 
     const actualizarVista = () => {
       const movil = window.innerWidth <= 920;
+
       setEsMovil(movil);
 
       if (!movil) {
@@ -50,158 +108,199 @@ export default function Admin() {
     };
 
     actualizarVista();
-    window.addEventListener("resize", actualizarVista);
+
+    window.addEventListener(
+      "resize",
+      actualizarVista
+    );
 
     return () => {
-      window.removeEventListener("resize", actualizarVista);
+      window.removeEventListener(
+        "resize",
+        actualizarVista
+      );
     };
   }, []);
 
-  async function validarAdminYCargar() {
-    const adminId = localStorage.getItem("adminKonaxId");
-    const nombreGuardado =
-      localStorage.getItem("adminKonaxNombre") ||
-      "Administrador KONAX";
-
-    setAdminNombre(nombreGuardado);
-
-    if (!adminId) {
-      window.location.href = "/admin-login";
-      return;
-    }
-
-    await cargarEmpresasPrueba();
-  }
-
-  async function cargarEmpresasPrueba() {
+  async function cargarEmpresas() {
     setCargandoEmpresas(true);
 
     const { data, error } = await supabase
-      .from("vista_control_pruebas")
+      .from("empresas")
       .select("*")
-      .order("nombre", { ascending: true });
+      .order("created_at", {
+        ascending: false,
+      });
 
     if (error) {
       alert(
-        "Error cargando control de pruebas: " +
+        "Error cargando empresas: " +
           error.message
       );
-      setEmpresasPrueba([]);
+      setEmpresas([]);
       setCargandoEmpresas(false);
       return;
     }
 
-    setEmpresasPrueba(data || []);
+    setEmpresas(data || []);
     setCargandoEmpresas(false);
   }
 
-  function cerrarSesion() {
-    localStorage.removeItem("adminKonaxId");
-    localStorage.removeItem("adminKonaxNombre");
-    localStorage.removeItem("adminKonaxCorreo");
-    localStorage.removeItem("adminKonaxRol");
-
-    window.location.href = "/admin-login";
+  function limpiarFormulario() {
+    setNombre("");
+    setTelefono("");
+    setCorreo("");
+    setDireccion("");
+    setCategoria("");
+    setTipoNegocio("");
   }
 
-  async function aprobarPiloto(empresa) {
-    const confirmar = window.confirm(
-      `¿Deseas aprobar a ${empresa.nombre} para el programa piloto?\n\nEsto dejará la empresa pendiente de iniciar la capacitación, pero todavía no comenzará a descontar los días.`
+  function guardarEmpresaEnLocalStorage(
+    empresa
+  ) {
+    localStorage.setItem(
+      "empresaAdminCreadaId",
+      empresa.id
+    );
+    localStorage.setItem(
+      "empresaAdminCreadaNombre",
+      empresa.nombre || ""
+    );
+    localStorage.setItem(
+      "categoriaNegocioAdmin",
+      empresa.categoria_negocio || ""
+    );
+    localStorage.setItem(
+      "tipoNegocioAdmin",
+      empresa.tipo_negocio || ""
     );
 
-    if (!confirmar) return;
-
-    const adminId =
-      localStorage.getItem("adminKonaxId") || null;
-
-    const observacion = window.prompt(
-      "Observación comercial del piloto:",
-      "Empresa aprobada para capacitación e implementación inicial."
+    localStorage.setItem(
+      "empresaId",
+      empresa.id
     );
-
-    if (observacion === null) return;
-
-    setProcesandoId(empresa.id);
-
-    const { error } = await supabase.rpc(
-      "aprobar_piloto_empresa",
-      {
-        p_empresa_id: empresa.id,
-        p_usuario_konax: adminId,
-        p_observacion:
-          observacion.trim() || null,
-      }
+    localStorage.setItem(
+      "empresaNombre",
+      empresa.nombre || ""
     );
+  }
+
+  async function guardarEmpresa() {
+    if (
+      !nombre.trim() ||
+      !telefono.trim() ||
+      !categoria ||
+      !tipoNegocio
+    ) {
+      alert(
+        "Complete nombre, teléfono, categoría y tipo de negocio."
+      );
+      return;
+    }
+
+    if (guardando) return;
+
+    setGuardando(true);
+
+    const { data, error } = await supabase
+      .from("empresas")
+      .insert([
+        {
+          nombre: nombre.trim(),
+          telefono: telefono.trim(),
+          correo: correo.trim(),
+          direccion: direccion.trim(),
+          categoria_negocio: categoria,
+          tipo_negocio: tipoNegocio,
+          estado: "Activo",
+          estado_pago: "Pendiente",
+          estado_plan: "Pendiente",
+          configuracion_completa: false,
+          plan_codigo: null,
+          plan_nombre: null,
+          plan_tipo: null,
+          plan_precio: 0,
+          fecha_activacion: null,
+          fecha_ultimo_pago: null,
+          fecha_proxima_facturacion: null,
+        },
+      ])
+      .select()
+      .single();
 
     if (error) {
-      setProcesandoId("");
+      setGuardando(false);
       alert(
-        "Error aprobando piloto: " +
+        "Error al guardar empresa: " +
           error.message
       );
       return;
     }
 
-    await cargarEmpresasPrueba();
-    setProcesandoId("");
+    const { error: errorBitacora } =
+      await supabase
+        .from("bitacora_konax")
+        .insert([
+          {
+            empresa_id: data.id,
+            empresa_nombre: data.nombre,
+            accion: "Empresa creada",
+            descripcion:
+              `Se creó la empresa ${data.nombre} en KONAX. ` +
+              "Pendiente de asignar plan.",
+            estado_anterior: null,
+            estado_nuevo: "Activo",
+            usuario:
+              localStorage.getItem(
+                "adminKonaxNombre"
+              ) || "KONAX",
+          },
+        ]);
+
+    if (errorBitacora) {
+      console.error(
+        "No se pudo registrar la bitácora:",
+        errorBitacora
+      );
+    }
+
+    guardarEmpresaEnLocalStorage(data);
+    limpiarFormulario();
+    await cargarEmpresas();
+
+    setGuardando(false);
 
     alert(
-      `${empresa.nombre} fue aprobada para el piloto. Los días todavía no han comenzado.`
+      "Empresa creada correctamente. Ahora selecciona el plan."
+    );
+
+    window.location.href = "/planes";
+  }
+
+  function seleccionarEmpresa(empresa) {
+    guardarEmpresaEnLocalStorage(empresa);
+
+    alert(
+      "Empresa seleccionada: " +
+        empresa.nombre
     );
   }
 
-  async function iniciarPrueba(empresa) {
-    const diasTexto = window.prompt(
-      `¿Cuántos días tendrá la prueba de ${empresa.nombre}?`,
-      "14"
-    );
+  function irPlan(empresa) {
+    guardarEmpresaEnLocalStorage(empresa);
+    window.location.href = "/planes";
+  }
 
-    if (diasTexto === null) return;
+  function irUsuarioPrincipal(empresa) {
+    guardarEmpresaEnLocalStorage(empresa);
+    window.location.href = "/usuarios";
+  }
 
-    const dias = Number(diasTexto);
+  function irAdministrarEmpresa(empresa) {
+    guardarEmpresaEnLocalStorage(empresa);
 
-    if (!Number.isInteger(dias) || dias <= 0) {
-      alert(
-        "Ingrese una cantidad válida de días."
-      );
-      return;
-    }
-
-    const confirmar = window.confirm(
-      `¿Confirmas iniciar ahora la prueba de ${empresa.nombre} por ${dias} días?\n\nLa fecha de inicio y vencimiento se registrarán desde hoy.`
-    );
-
-    if (!confirmar) return;
-
-    const adminId =
-      localStorage.getItem("adminKonaxId") || null;
-
-    setProcesandoId(empresa.id);
-
-    const { error } = await supabase.rpc(
-      "iniciar_prueba_empresa",
-      {
-        p_empresa_id: empresa.id,
-        p_dias_prueba: dias,
-        p_usuario_konax: adminId,
-      }
-    );
-
-    if (error) {
-      setProcesandoId("");
-      alert(
-        "Error iniciando prueba: " +
-          error.message
-      );
-      return;
-    }
-
-    await cargarEmpresasPrueba();
-    setProcesandoId("");
-
-    alert(
-      `La prueba de ${empresa.nombre} comenzó correctamente por ${dias} días.`
-    );
+    window.location.href =
+      `/admin-empresa?empresa=${empresa.id}`;
   }
 
   function formatoFecha(fecha) {
@@ -218,383 +317,135 @@ export default function Admin() {
     return `${day}/${month}/${year}`;
   }
 
-  function etiquetaEstado(estado) {
-    const mapa = {
-      activo: "Activo",
-      pendiente_inicio_prueba:
-        "Pendiente de inicio",
-      prueba: "Prueba activa",
-      prueba_vencida: "Prueba vencida",
-      pendiente_activacion:
-        "Pendiente de activación",
-      gracia: "Período de gracia",
-      suspendido: "Suspendido",
-      cancelado: "Cancelado",
-    };
-
+  function empresaActiva(empresa) {
     return (
-      mapa[estado] ||
-      estado ||
-      "Sin estado"
+      empresa.estado === "Activo" ||
+      empresa.estado === "Activa"
     );
   }
-
-  function colorEstado(estado) {
-    const mapa = {
-      activo: {
-        background: "#e8f8ef",
-        color: "#166534",
-        borderColor: "#b9e6c9",
-      },
-      pendiente_inicio_prueba: {
-        background: "#fff8df",
-        color: "#946200",
-        borderColor: "#f0d98a",
-      },
-      prueba: {
-        background: "#eaf2ff",
-        color: "#1d4ed8",
-        borderColor: "#bed2ff",
-      },
-      prueba_vencida: {
-        background: "#fff0f0",
-        color: "#b91c1c",
-        borderColor: "#f2b8b8",
-      },
-      pendiente_activacion: {
-        background: "#f5edff",
-        color: "#7e22ce",
-        borderColor: "#d9b8f5",
-      },
-      gracia: {
-        background: "#fff6e8",
-        color: "#c2410c",
-        borderColor: "#f3c99e",
-      },
-      suspendido: {
-        background: "#f3f4f6",
-        color: "#374151",
-        borderColor: "#d1d5db",
-      },
-      cancelado: {
-        background: "#f3f4f6",
-        color: "#6b7280",
-        borderColor: "#d1d5db",
-      },
-    };
-
-    return (
-      mapa[estado] || {
-        background: "#f3f4f6",
-        color: "#374151",
-        borderColor: "#d1d5db",
-      }
-    );
-  }
-
-  function renderAccion(empresa, modoMovil = false) {
-    const procesando =
-      procesandoId === empresa.id;
-
-    if (
-      empresa.estado_suscripcion === "activo"
-    ) {
-      return (
-        <button
-          type="button"
-          onClick={() => aprobarPiloto(empresa)}
-          style={{
-            ...styles.botonAprobar,
-            ...(modoMovil
-              ? styles.botonAccionMobile
-              : {}),
-            ...(procesando
-              ? styles.botonDeshabilitado
-              : {}),
-          }}
-          disabled={procesando}
-        >
-          <Icon name="check" size={16} />
-
-          {procesando
-            ? "Procesando..."
-            : "Aprobar piloto"}
-        </button>
-      );
-    }
-
-    if (
-      empresa.estado_suscripcion ===
-      "pendiente_inicio_prueba"
-    ) {
-      return (
-        <button
-          type="button"
-          onClick={() => iniciarPrueba(empresa)}
-          style={{
-            ...styles.botonIniciar,
-            ...(modoMovil
-              ? styles.botonAccionMobile
-              : {}),
-            ...(procesando
-              ? styles.botonDeshabilitado
-              : {}),
-          }}
-          disabled={procesando}
-        >
-          <Icon name="play" size={16} />
-
-          {procesando
-            ? "Procesando..."
-            : "Iniciar prueba"}
-        </button>
-      );
-    }
-
-    if (
-      empresa.estado_suscripcion === "prueba"
-    ) {
-      return (
-        <span style={styles.estadoEnCurso}>
-          <span style={styles.puntoAzul} />
-          Prueba en curso
-        </span>
-      );
-    }
-
-    return (
-      <span style={styles.sinAccion}>
-        Sin acción disponible
-      </span>
-    );
-  }
-
-  const empresasFiltradas = useMemo(() => {
-    if (filtroEstado === "Todos") {
-      return empresasPrueba;
-    }
-
-    return empresasPrueba.filter(
-      (empresa) =>
-        empresa.estado_suscripcion ===
-        filtroEstado
-    );
-  }, [empresasPrueba, filtroEstado]);
-
-  const totalEmpresas =
-    empresasPrueba.length;
-
-  const pendientes = empresasPrueba.filter(
-    (item) =>
-      item.estado_suscripcion ===
-      "pendiente_inicio_prueba"
-  ).length;
-
-  const pruebasActivas = empresasPrueba.filter(
-    (item) =>
-      item.estado_suscripcion === "prueba"
-  ).length;
-
-  const pruebasPorVencer =
-    empresasPrueba.filter(
-      (item) =>
-        item.estado_suscripcion ===
-          "prueba" &&
-        Number(
-          item.dias_restantes || 0
-        ) <= 5
-    ).length;
 
   return (
-    <div
-      style={{
-        ...styles.layout,
-        ...(esMovil
-          ? styles.layoutMobile
-          : {}),
-      }}
-    >
-      {!esMovil && (
-        <SidebarAdmin
-          adminNombre={adminNombre}
-          onLogout={cerrarSesion}
-        />
+    <div style={s.page}>
+      {esMovil && (
+        <>
+          <div style={s.mobileBar}>
+            <img
+              src="/konax-logo.png"
+              alt="KONAX"
+              style={s.mobileLogo}
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                setMenuMovilAbierto(
+                  (actual) => !actual
+                )
+              }
+              style={s.mobileMenuButton}
+              aria-expanded={
+                menuMovilAbierto
+              }
+            >
+              <Icon
+                name={
+                  menuMovilAbierto
+                    ? "close"
+                    : "menu"
+                }
+                size={21}
+              />
+
+              {menuMovilAbierto
+                ? "Cerrar"
+                : "Menú"}
+            </button>
+          </div>
+
+          {menuMovilAbierto && (
+            <div style={s.mobileMenu}>
+              {OPCIONES_ADMIN.map((item) => (
+                <Link
+                  key={item.ruta}
+                  href={item.ruta}
+                  onClick={() =>
+                    setMenuMovilAbierto(false)
+                  }
+                  style={s.mobileMenuItem}
+                >
+                  <span
+                    style={s.mobileMenuIcon}
+                  >
+                    <Icon
+                      name={item.icono}
+                      size={18}
+                    />
+                  </span>
+
+                  <span>{item.nombre}</span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       <main
         style={{
-          ...styles.contenido,
+          ...s.main,
           ...(esMovil
-            ? styles.contenidoMobile
+            ? s.mainMobile
             : {}),
         }}
       >
-        {esMovil && (
-          <>
-            <div style={styles.mobileBar}>
-              <img
-                src="/konax-logo.png"
-                alt="KONAX"
-                style={styles.mobileLogo}
-              />
-
-              <button
-                type="button"
-                onClick={() =>
-                  setMenuMovilAbierto(
-                    (abierto) => !abierto
-                  )
-                }
-                style={styles.mobileMenuButton}
-                aria-expanded={
-                  menuMovilAbierto
-                }
-                aria-label="Abrir menú administrativo"
-              >
-                <Icon
-                  name={
-                    menuMovilAbierto
-                      ? "close"
-                      : "menu"
-                  }
-                  size={21}
-                />
-
-                <span>
-                  {menuMovilAbierto
-                    ? "Cerrar"
-                    : "Menú"}
-                </span>
-              </button>
-            </div>
-
-            {menuMovilAbierto && (
-              <div style={styles.mobileMenu}>
-                <div
-                  style={
-                    styles.mobileMenuAdmin
-                  }
-                >
-                  <div
-                    style={
-                      styles.avatarAdminMobile
-                    }
-                  >
-                    {String(
-                      adminNombre || "K"
-                    )
-                      .charAt(0)
-                      .toUpperCase()}
-                  </div>
-
-                  <div>
-                    <strong
-                      style={
-                        styles.mobileAdminNombre
-                      }
-                    >
-                      {adminNombre}
-                    </strong>
-
-                    <span
-                      style={
-                        styles.mobileAdminRol
-                      }
-                    >
-                      Panel maestro
-                    </span>
-                  </div>
-                </div>
-
-                {OPCIONES.map((item) => (
-                  <Link
-                    key={item.nombre}
-                    href={item.ruta}
-                    onClick={() =>
-                      setMenuMovilAbierto(false)
-                    }
-                    style={
-                      styles.mobileMenuItem
-                    }
-                  >
-                    <span
-                      style={
-                        styles.mobileMenuIcono
-                      }
-                    >
-                      <Icon
-                        name={item.icono}
-                        size={19}
-                      />
-                    </span>
-
-                    <span>{item.nombre}</span>
-                  </Link>
-                ))}
-
-                <button
-                  type="button"
-                  onClick={cerrarSesion}
-                  style={styles.mobileLogout}
-                >
-                  <Icon
-                    name="logout"
-                    size={18}
-                  />
-                  Cerrar sesión
-                </button>
-              </div>
-            )}
-          </>
-        )}
-
         <section
           style={{
-            ...styles.hero,
+            ...s.hero,
             ...(esMovil
-              ? styles.heroMobile
+              ? s.heroMobile
               : {}),
           }}
         >
-          <div style={styles.heroDecoracionUno} />
-          <div style={styles.heroDecoracionDos} />
+          <div style={s.heroGlowOne} />
+          <div style={s.heroGlowTwo} />
 
-          <div style={styles.heroTexto}>
-            <span style={styles.etiqueta}>
-              CENTRO DE OPERACIONES INTERNAS
+          <div style={s.heroContent}>
+            <span style={s.eyebrow}>
+              GESTIÓN DE EMPRESAS
             </span>
 
             <h1
               style={{
-                ...styles.titulo,
+                ...s.heroTitle,
                 ...(esMovil
-                  ? styles.tituloMobile
+                  ? s.heroTitleMobile
                   : {}),
               }}
             >
-              Centro Administrativo KONAX
+              Crear Nueva Empresa
             </h1>
 
             <p
               style={{
-                ...styles.subtitulo,
+                ...s.heroText,
                 ...(esMovil
-                  ? styles.subtituloMobile
+                  ? s.heroTextMobile
                   : {}),
               }}
             >
-              Administra empresas, planes,
-              módulos y períodos de prueba
-              desde un solo panel.
+              Registra la empresa, asigna el
+              plan, crea el usuario
+              administrador y configura sus
+              módulos.
             </p>
           </div>
 
           {!esMovil && (
-            <div style={styles.heroLogoBox}>
+            <div style={s.heroLogoBox}>
               <img
                 src="/konax-logo.png"
                 alt="KONAX"
-                style={styles.heroLogo}
+                style={s.heroLogo}
               />
             </div>
           )}
@@ -602,145 +453,314 @@ export default function Admin() {
 
         <section
           style={{
-            ...styles.resumenGrid,
+            ...s.flowGrid,
             ...(esMovil
-              ? styles.resumenGridMobile
+              ? s.flowGridMobile
               : {}),
           }}
         >
-          <ResumenCard
-            titulo="Empresas registradas"
-            valor={totalEmpresas}
-            texto="Empresas visibles en el control"
-            icono="building"
-            tono="verde"
-            esMovil={esMovil}
+          <FlowStep
+            numero="1"
+            titulo="Crear empresa"
+            texto="Datos generales del negocio"
           />
 
-          <ResumenCard
-            titulo="Pendientes de iniciar"
-            valor={pendientes}
-            texto="Aprobadas, sin consumir días"
-            icono="clock"
-            tono="amarillo"
-            esMovil={esMovil}
+          <FlowStep
+            numero="2"
+            titulo="Asignar plan"
+            texto="Cobros, Gestión o Pro"
           />
 
-          <ResumenCard
-            titulo="Pruebas activas"
-            valor={pruebasActivas}
-            texto="Pilotos actualmente en curso"
-            icono="play"
-            tono="azul"
-            esMovil={esMovil}
+          <FlowStep
+            numero="3"
+            titulo="Crear administrador"
+            texto="Usuario principal del negocio"
           />
 
-          <ResumenCard
-            titulo="Próximas a vencer"
-            valor={pruebasPorVencer}
-            texto="Pruebas con 5 días o menos"
-            icono="alert"
-            tono="rojo"
-            esMovil={esMovil}
+          <FlowStep
+            numero="4"
+            titulo="Configurar módulos"
+            texto="Permisos y funciones"
           />
         </section>
 
         <section
           style={{
-            ...styles.controlCard,
+            ...s.formCard,
             ...(esMovil
-              ? styles.controlCardMobile
+              ? s.formCardMobile
               : {}),
           }}
         >
-          <div
-            style={{
-              ...styles.controlHeader,
-              ...(esMovil
-                ? styles.controlHeaderMobile
-                : {}),
-            }}
-          >
+          <div style={s.sectionHeader}>
             <div>
-              <span
-                style={styles.seccionEtiqueta}
-              >
-                CONTROL COMERCIAL
+              <span style={s.sectionEyebrow}>
+                PASO 1
               </span>
 
               <h2
                 style={{
-                  ...styles.seccionTitulo,
+                  ...s.sectionTitle,
                   ...(esMovil
-                    ? styles.seccionTituloMobile
+                    ? s.sectionTitleMobile
                     : {}),
                 }}
               >
-                Empresas y períodos de prueba
+                Nueva Empresa Cliente
               </h2>
 
-              <p style={styles.seccionTexto}>
-                Aprueba pilotos e inicia los
-                días cuando cada empresa esté
-                lista.
+              <p style={s.sectionText}>
+                Complete los datos principales
+                del negocio.
               </p>
             </div>
 
-            <div
+            <button
+              type="button"
+              onClick={() =>
+                setMostrarEmpresas(
+                  (actual) => !actual
+                )
+              }
               style={{
-                ...styles.headerAcciones,
+                ...s.showCompaniesButton,
                 ...(esMovil
-                  ? styles.headerAccionesMobile
+                  ? s.fullWidthButton
                   : {}),
               }}
             >
-              <select
-                value={filtroEstado}
+              <Icon
+                name="list"
+                size={17}
+              />
+
+              {mostrarEmpresas
+                ? "Ocultar empresas"
+                : "Ver empresas registradas"}
+            </button>
+          </div>
+
+          <div
+            style={{
+              ...s.formGrid,
+              ...(esMovil
+                ? s.formGridMobile
+                : {}),
+            }}
+          >
+            <Campo label="Nombre de la empresa *">
+              <input
+                type="text"
+                placeholder="Ej. Lavandería El Sol"
+                value={nombre}
                 onChange={(event) =>
-                  setFiltroEstado(
+                  setNombre(
+                    event.target.value
+                  )
+                }
+                style={s.input}
+              />
+            </Campo>
+
+            <Campo label="Teléfono *">
+              <input
+                type="tel"
+                inputMode="tel"
+                placeholder="Ej. 6000-0000"
+                value={telefono}
+                onChange={(event) =>
+                  setTelefono(
+                    event.target.value
+                  )
+                }
+                style={s.input}
+              />
+            </Campo>
+
+            <Campo label="Correo">
+              <input
+                type="email"
+                inputMode="email"
+                placeholder="empresa@correo.com"
+                value={correo}
+                onChange={(event) =>
+                  setCorreo(
+                    event.target.value
+                  )
+                }
+                style={s.input}
+              />
+            </Campo>
+
+            <Campo label="Dirección">
+              <input
+                type="text"
+                placeholder="Dirección del negocio"
+                value={direccion}
+                onChange={(event) =>
+                  setDireccion(
+                    event.target.value
+                  )
+                }
+                style={s.input}
+              />
+            </Campo>
+
+            <Campo label="Categoría del negocio *">
+              <select
+                value={categoria}
+                onChange={(event) => {
+                  setCategoria(
+                    event.target.value
+                  );
+                  setTipoNegocio("");
+                }}
+                style={s.input}
+              >
+                <option value="">
+                  Seleccione una categoría
+                </option>
+
+                {Object.keys(
+                  CATEGORIAS
+                ).map((item) => (
+                  <option
+                    key={item}
+                    value={item}
+                  >
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </Campo>
+
+            <Campo label="Tipo de negocio *">
+              <select
+                value={tipoNegocio}
+                onChange={(event) =>
+                  setTipoNegocio(
                     event.target.value
                   )
                 }
                 style={{
-                  ...styles.selectFiltro,
-                  ...(esMovil
-                    ? styles.selectFiltroMobile
+                  ...s.input,
+                  ...(!categoria
+                    ? s.inputDisabled
                     : {}),
                 }}
+                disabled={!categoria}
               >
-                <option value="Todos">
-                  Todos los estados
+                <option value="">
+                  Seleccione el tipo de
+                  negocio
                 </option>
-                <option value="activo">
-                  Activo
-                </option>
-                <option value="pendiente_inicio_prueba">
-                  Pendiente de inicio
-                </option>
-                <option value="prueba">
-                  Prueba activa
-                </option>
-                <option value="prueba_vencida">
-                  Prueba vencida
-                </option>
-                <option value="pendiente_activacion">
-                  Pendiente de activación
-                </option>
-                <option value="suspendido">
-                  Suspendido
-                </option>
+
+                {categoria &&
+                  CATEGORIAS[
+                    categoria
+                  ].map((negocio) => (
+                    <option
+                      key={negocio}
+                      value={negocio}
+                    >
+                      {negocio}
+                    </option>
+                  ))}
               </select>
+            </Campo>
+          </div>
+
+          <div
+            style={{
+              ...s.formActions,
+              ...(esMovil
+                ? s.formActionsMobile
+                : {}),
+            }}
+          >
+            <button
+              type="button"
+              onClick={guardarEmpresa}
+              style={{
+                ...s.createButton,
+                ...(guardando
+                  ? s.disabledButton
+                  : {}),
+              }}
+              disabled={guardando}
+            >
+              <Icon
+                name="plus"
+                size={18}
+              />
+
+              {guardando
+                ? "Guardando..."
+                : "Crear Empresa"}
+            </button>
+
+            <button
+              type="button"
+              onClick={limpiarFormulario}
+              style={s.clearButton}
+              disabled={guardando}
+            >
+              Limpiar
+            </button>
+
+            <Link
+              href="/admin"
+              style={s.backButton}
+            >
+              <Icon
+                name="arrowBack"
+                size={17}
+              />
+              Volver al Admin
+            </Link>
+          </div>
+        </section>
+
+        {mostrarEmpresas && (
+          <section
+            style={{
+              ...s.companiesCard,
+              ...(esMovil
+                ? s.companiesCardMobile
+                : {}),
+            }}
+          >
+            <div style={s.sectionHeader}>
+              <div>
+                <span style={s.sectionEyebrow}>
+                  EMPRESAS CREADAS
+                </span>
+
+                <h2
+                  style={{
+                    ...s.sectionTitle,
+                    ...(esMovil
+                      ? s.sectionTitleMobile
+                      : {}),
+                  }}
+                >
+                  Empresas Registradas
+                </h2>
+
+                <p style={s.sectionText}>
+                  Selecciona una empresa para
+                  continuar con su plan,
+                  administrador o módulos.
+                </p>
+              </div>
 
               <button
                 type="button"
-                onClick={cargarEmpresasPrueba}
+                onClick={cargarEmpresas}
                 style={{
-                  ...styles.botonActualizar,
+                  ...s.refreshButton,
                   ...(esMovil
-                    ? styles.botonActualizarMobile
-                    : {}),
-                  ...(cargandoEmpresas
-                    ? styles.botonDeshabilitado
+                    ? s.fullWidthButton
                     : {}),
                 }}
                 disabled={cargandoEmpresas}
@@ -755,69 +775,244 @@ export default function Admin() {
                   : "Actualizar"}
               </button>
             </div>
-          </div>
 
-          {cargandoEmpresas ? (
-            <EstadoCarga />
-          ) : empresasFiltradas.length === 0 ? (
-            <div style={styles.estadoVacio}>
-              <div style={styles.estadoVacioIcono}>
-                <Icon name="search" size={24} />
+            {cargandoEmpresas ? (
+              <div style={s.loadingBox}>
+                Cargando empresas...
               </div>
-
-              <strong style={styles.estadoVacioTitulo}>
-                No hay empresas
-              </strong>
-
-              <span style={styles.estadoVacioTexto}>
-                No existen resultados para el
-                estado seleccionado.
-              </span>
-            </div>
-          ) : esMovil ? (
-            <div style={styles.empresasMobileGrid}>
-              {empresasFiltradas.map(
-                (empresa) => {
-                  const estiloEstado =
-                    colorEstado(
-                      empresa.estado_suscripcion
-                    );
-
-                  return (
-                    <article
-                      key={empresa.id}
-                      style={styles.empresaMobileCard}
+            ) : empresas.length === 0 ? (
+              <div style={s.emptyBox}>
+                No hay empresas registradas.
+              </div>
+            ) : esMovil ? (
+              <div style={s.mobileCompanyGrid}>
+                {empresas.map((empresa) => (
+                  <article
+                    key={empresa.id}
+                    style={s.mobileCompanyCard}
+                  >
+                    <div
+                      style={
+                        s.mobileCompanyTop
+                      }
                     >
                       <div
                         style={
-                          styles.empresaMobileTop
+                          s.mobileIdentity
                         }
                       >
                         <div
                           style={
-                            styles.empresaMobileIdentidad
+                            s.companyInitial
                           }
                         >
-                          <div
+                          {String(
+                            empresa.nombre ||
+                              "E"
+                          )
+                            .charAt(0)
+                            .toUpperCase()}
+                        </div>
+
+                        <div
+                          style={{
+                            minWidth: 0,
+                          }}
+                        >
+                          <strong
                             style={
-                              styles.empresaInicialMobile
+                              s.mobileCompanyName
                             }
                           >
-                            {String(
-                              empresa.nombre || "E"
-                            )
-                              .charAt(0)
-                              .toUpperCase()}
-                          </div>
+                            {empresa.nombre}
+                          </strong>
 
-                          <div
-                            style={{
-                              minWidth: 0,
-                            }}
+                          <span
+                            style={
+                              s.mobileCompanyText
+                            }
                           >
+                            {empresa.correo ||
+                              "-"}
+                          </span>
+
+                          <span
+                            style={
+                              s.mobileCompanyText
+                            }
+                          >
+                            {empresa.telefono ||
+                              "-"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <span
+                        style={{
+                          ...s.statusBadge,
+                          ...(empresaActiva(
+                            empresa
+                          )
+                            ? s.statusActive
+                            : s.statusInactive),
+                        }}
+                      >
+                        {empresa.estado ||
+                          "Activo"}
+                      </span>
+                    </div>
+
+                    <div
+                      style={
+                        s.mobileDetailsGrid
+                      }
+                    >
+                      <Detail
+                        label="Negocio"
+                        value={
+                          empresa.tipo_negocio ||
+                          "-"
+                        }
+                      />
+
+                      <Detail
+                        label="Plan"
+                        value={
+                          empresa.plan_nombre ||
+                          "Sin plan"
+                        }
+                      />
+
+                      <Detail
+                        label="Pago"
+                        value={
+                          empresa.estado_pago ||
+                          "Pendiente"
+                        }
+                      />
+
+                      <Detail
+                        label="Facturación"
+                        value={formatoFecha(
+                          empresa.fecha_proxima_facturacion
+                        )}
+                      />
+
+                      <Detail
+                        label="Configuración"
+                        value={
+                          empresa.configuracion_completa
+                            ? "Completa"
+                            : "Pendiente"
+                        }
+                      />
+                    </div>
+
+                    <div
+                      style={
+                        s.mobileActions
+                      }
+                    >
+                      <button
+                        type="button"
+                        style={
+                          s.mobileAdminButton
+                        }
+                        onClick={() =>
+                          irAdministrarEmpresa(
+                            empresa
+                          )
+                        }
+                      >
+                        Administrar
+                      </button>
+
+                      <button
+                        type="button"
+                        style={
+                          s.mobilePlanButton
+                        }
+                        onClick={() =>
+                          irPlan(empresa)
+                        }
+                      >
+                        Plan
+                      </button>
+
+                      <button
+                        type="button"
+                        style={
+                          s.mobileUserButton
+                        }
+                        onClick={() =>
+                          irUsuarioPrincipal(
+                            empresa
+                          )
+                        }
+                      >
+                        Usuario administrador
+                      </button>
+
+                      <button
+                        type="button"
+                        style={
+                          s.mobileSelectButton
+                        }
+                        onClick={() =>
+                          seleccionarEmpresa(
+                            empresa
+                          )
+                        }
+                      >
+                        Seleccionar
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div style={s.tableScroll}>
+                <table style={s.table}>
+                  <thead>
+                    <tr>
+                      <th style={s.th}>
+                        Empresa
+                      </th>
+                      <th style={s.th}>
+                        Teléfono
+                      </th>
+                      <th style={s.th}>
+                        Negocio
+                      </th>
+                      <th style={s.th}>
+                        Plan
+                      </th>
+                      <th style={s.th}>
+                        Pago
+                      </th>
+                      <th style={s.th}>
+                        Servicio
+                      </th>
+                      <th style={s.th}>
+                        Facturación
+                      </th>
+                      <th style={s.th}>
+                        Configuración
+                      </th>
+                      <th style={s.th}>
+                        Acciones
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {empresas.map(
+                      (empresa) => (
+                        <tr key={empresa.id}>
+                          <td style={s.td}>
                             <strong
                               style={
-                                styles.nombreEmpresaMobile
+                                s.tableCompanyName
                               }
                             >
                               {empresa.nombre}
@@ -825,456 +1020,200 @@ export default function Admin() {
 
                             <span
                               style={
-                                styles.idEmpresaMobile
+                                s.tableSmallText
                               }
                             >
-                              ID: {empresa.id}
+                              {empresa.correo ||
+                                "-"}
                             </span>
-                          </div>
-                        </div>
-
-                        <span
-                          style={{
-                            ...styles.badgeEstado,
-                            ...styles.badgeEstadoMobile,
-                            ...estiloEstado,
-                          }}
-                        >
-                          {etiquetaEstado(
-                            empresa.estado_suscripcion
-                          )}
-                        </span>
-                      </div>
-
-                      <div
-                        style={
-                          styles.detallesMobileGrid
-                        }
-                      >
-                        <DetalleMobile
-                          etiqueta="Aceptación"
-                          valor={formatoFecha(
-                            empresa.fecha_aceptacion_piloto
-                          )}
-                        />
-
-                        <DetalleMobile
-                          etiqueta="Inicio"
-                          valor={formatoFecha(
-                            empresa.fecha_inicio_prueba
-                          )}
-                        />
-
-                        <DetalleMobile
-                          etiqueta="Vencimiento"
-                          valor={formatoFecha(
-                            empresa.fecha_fin_prueba
-                          )}
-                        />
-
-                        <DetalleMobile
-                          etiqueta="Días restantes"
-                          valor={
-                            empresa.estado_suscripcion ===
-                            "prueba"
-                              ? empresa.dias_restantes ??
-                                0
-                              : "-"
-                          }
-                          destacado={
-                            empresa.estado_suscripcion ===
-                            "prueba"
-                          }
-                        />
-                      </div>
-
-                      <div
-                        style={
-                          styles.accionMobileBox
-                        }
-                      >
-                        {renderAccion(
-                          empresa,
-                          true
-                        )}
-                      </div>
-                    </article>
-                  );
-                }
-              )}
-            </div>
-          ) : (
-            <div style={styles.tablaScroll}>
-              <table style={styles.tabla}>
-                <thead>
-                  <tr>
-                    <th style={styles.th}>
-                      Empresa
-                    </th>
-                    <th style={styles.th}>
-                      Estado
-                    </th>
-                    <th style={styles.th}>
-                      Aceptación
-                    </th>
-                    <th style={styles.th}>
-                      Inicio
-                    </th>
-                    <th style={styles.th}>
-                      Vencimiento
-                    </th>
-                    <th style={styles.th}>
-                      Días restantes
-                    </th>
-                    <th style={styles.th}>
-                      Acción
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {empresasFiltradas.map(
-                    (empresa) => {
-                      const estiloEstado =
-                        colorEstado(
-                          empresa.estado_suscripcion
-                        );
-
-                      return (
-                        <tr key={empresa.id}>
-                          <td style={styles.td}>
-                            <div
-                              style={
-                                styles.empresaTabla
-                              }
-                            >
-                              <div
-                                style={
-                                  styles.empresaInicial
-                                }
-                              >
-                                {String(
-                                  empresa.nombre ||
-                                    "E"
-                                )
-                                  .charAt(0)
-                                  .toUpperCase()}
-                              </div>
-
-                              <div
-                                style={{
-                                  minWidth: 0,
-                                }}
-                              >
-                                <strong
-                                  style={
-                                    styles.nombreEmpresaTabla
-                                  }
-                                >
-                                  {empresa.nombre}
-                                </strong>
-
-                                <span
-                                  style={
-                                    styles.idEmpresa
-                                  }
-                                >
-                                  {empresa.id}
-                                </span>
-                              </div>
-                            </div>
                           </td>
 
-                          <td style={styles.td}>
+                          <td style={s.td}>
+                            {empresa.telefono ||
+                              "-"}
+                          </td>
+
+                          <td style={s.td}>
+                            {empresa.categoria_negocio ||
+                              "-"}
+
+                            <span
+                              style={
+                                s.tableSmallText
+                              }
+                            >
+                              {empresa.tipo_negocio ||
+                                "-"}
+                            </span>
+                          </td>
+
+                          <td style={s.td}>
+                            {empresa.plan_nombre ||
+                              "Sin plan"}
+                          </td>
+
+                          <td style={s.td}>
+                            {empresa.estado_pago ||
+                              "Pendiente"}
+                          </td>
+
+                          <td style={s.td}>
                             <span
                               style={{
-                                ...styles.badgeEstado,
-                                ...estiloEstado,
+                                ...s.statusBadge,
+                                ...(empresaActiva(
+                                  empresa
+                                )
+                                  ? s.statusActive
+                                  : s.statusInactive),
                               }}
                             >
-                              {etiquetaEstado(
-                                empresa.estado_suscripcion
-                              )}
+                              {empresa.estado ||
+                                "Activo"}
                             </span>
                           </td>
 
-                          <td style={styles.td}>
+                          <td style={s.td}>
                             {formatoFecha(
-                              empresa.fecha_aceptacion_piloto
+                              empresa.fecha_proxima_facturacion
                             )}
                           </td>
 
-                          <td style={styles.td}>
-                            {formatoFecha(
-                              empresa.fecha_inicio_prueba
-                            )}
+                          <td style={s.td}>
+                            {empresa.configuracion_completa
+                              ? "Completa"
+                              : "Pendiente"}
                           </td>
 
-                          <td style={styles.td}>
-                            {formatoFecha(
-                              empresa.fecha_fin_prueba
-                            )}
-                          </td>
-
-                          <td style={styles.td}>
-                            {empresa.estado_suscripcion ===
-                            "prueba"
-                              ? empresa.dias_restantes ??
-                                0
-                              : "-"}
-                          </td>
-
-                          <td style={styles.td}>
+                          <td style={s.td}>
                             <div
                               style={
-                                styles.accionesTabla
+                                s.tableActions
                               }
                             >
-                              {renderAccion(
-                                empresa
-                              )}
+                              <button
+                                type="button"
+                                style={
+                                  s.adminButton
+                                }
+                                onClick={() =>
+                                  irAdministrarEmpresa(
+                                    empresa
+                                  )
+                                }
+                              >
+                                Administrar
+                              </button>
+
+                              <button
+                                type="button"
+                                style={
+                                  s.planButton
+                                }
+                                onClick={() =>
+                                  irPlan(
+                                    empresa
+                                  )
+                                }
+                              >
+                                Plan
+                              </button>
+
+                              <button
+                                type="button"
+                                style={
+                                  s.userButton
+                                }
+                                onClick={() =>
+                                  irUsuarioPrincipal(
+                                    empresa
+                                  )
+                                }
+                              >
+                                Usuario
+                              </button>
+
+                              <button
+                                type="button"
+                                style={
+                                  s.selectButton
+                                }
+                                onClick={() =>
+                                  seleccionarEmpresa(
+                                    empresa
+                                  )
+                                }
+                              >
+                                Seleccionar
+                              </button>
                             </div>
                           </td>
                         </tr>
-                      );
-                    }
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+                      )
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <p style={s.note}>
+              Usa “Administrar” para configurar
+              módulos, roles, usuarios y
+              permisos de la empresa.
+            </p>
+          </section>
+        )}
       </main>
     </div>
   );
 }
 
-function SidebarAdmin({
-  adminNombre,
-  onLogout,
-}) {
+function Campo({ label, children }) {
   return (
-    <aside style={styles.sidebar}>
-      <div style={styles.brandBox}>
-        <div style={styles.logoBox}>
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            style={styles.logoSidebar}
-          />
-        </div>
+    <div style={s.field}>
+      <label style={s.label}>
+        {label}
+      </label>
 
-        <div>
-          <span style={styles.brandLabel}>
-            CENTRO INTERNO
-          </span>
-
-          <h2 style={styles.brandTitle}>
-            KONAX
-          </h2>
-
-          <p style={styles.brandSub}>
-            Administración
-          </p>
-        </div>
-      </div>
-
-      <div style={styles.empresaBox}>
-        <div style={styles.avatarAdmin}>
-          {String(adminNombre || "K")
-            .charAt(0)
-            .toUpperCase()}
-        </div>
-
-        <div style={{ minWidth: 0 }}>
-          <strong style={styles.empresaNombre}>
-            {adminNombre}
-          </strong>
-
-          <span style={styles.empresaRol}>
-            SuperAdmin
-          </span>
-        </div>
-      </div>
-
-      <span style={styles.menuTitulo}>
-        NAVEGACIÓN
-      </span>
-
-      <nav style={styles.menu}>
-        {OPCIONES.map((item) => (
-          <Link
-            key={item.nombre}
-            href={item.ruta}
-            style={styles.menuItem}
-          >
-            <span style={styles.menuIcono}>
-              <Icon
-                name={item.icono}
-                size={18}
-              />
-            </span>
-
-            <span>{item.nombre}</span>
-
-            <Icon
-              name="chevron"
-              size={15}
-            />
-          </Link>
-        ))}
-      </nav>
-
-      <div style={styles.sidebarAyuda}>
-        <span style={styles.sidebarAyudaEtiqueta}>
-          PANEL MAESTRO
-        </span>
-
-        <strong style={styles.sidebarAyudaTitulo}>
-          Control centralizado
-        </strong>
-
-        <p style={styles.sidebarAyudaTexto}>
-          Gestiona la operación interna de
-          KONAX desde un solo lugar.
-        </p>
-      </div>
-
-      <button
-        type="button"
-        onClick={onLogout}
-        style={styles.botonSalir}
-      >
-        <Icon name="logout" size={18} />
-        Cerrar sesión
-      </button>
-    </aside>
-  );
-}
-
-function ResumenCard({
-  titulo,
-  valor,
-  texto,
-  icono,
-  tono,
-  esMovil,
-}) {
-  const tonos = {
-    verde: {
-      iconBackground: "#e9f8ef",
-      iconColor: "#16834f",
-      line: "#16834f",
-    },
-    amarillo: {
-      iconBackground: "#fff7df",
-      iconColor: "#a56a00",
-      line: "#d89a19",
-    },
-    azul: {
-      iconBackground: "#eaf2ff",
-      iconColor: "#2563eb",
-      line: "#2563eb",
-    },
-    rojo: {
-      iconBackground: "#fff0f0",
-      iconColor: "#c62828",
-      line: "#d33d3d",
-    },
-  };
-
-  const color =
-    tonos[tono] || tonos.verde;
-
-  return (
-    <article
-      style={{
-        ...styles.resumenCard,
-        ...(esMovil
-          ? styles.resumenCardMobile
-          : {}),
-      }}
-    >
-      <div
-        style={{
-          ...styles.resumenLinea,
-          background: color.line,
-        }}
-      />
-
-      <div style={styles.resumenTop}>
-        <span
-          style={{
-            ...styles.resumenIcono,
-            background:
-              color.iconBackground,
-            color: color.iconColor,
-          }}
-        >
-          <Icon name={icono} size={19} />
-        </span>
-
-        <span style={styles.resumenLabel}>
-          {titulo}
-        </span>
-      </div>
-
-      <strong
-        style={{
-          ...styles.resumenValor,
-          ...(esMovil
-            ? styles.resumenValorMobile
-            : {}),
-        }}
-      >
-        {valor}
-      </strong>
-
-      <span style={styles.resumenTexto}>
-        {texto}
-      </span>
-    </article>
-  );
-}
-
-function DetalleMobile({
-  etiqueta,
-  valor,
-  destacado = false,
-}) {
-  return (
-    <div style={styles.detalleMobile}>
-      <span style={styles.detalleMobileEtiqueta}>
-        {etiqueta}
-      </span>
-
-      <strong
-        style={{
-          ...styles.detalleMobileValor,
-          ...(destacado
-            ? styles.detalleMobileDestacado
-            : {}),
-        }}
-      >
-        {valor}
-      </strong>
+      {children}
     </div>
   );
 }
 
-function EstadoCarga() {
+function FlowStep({
+  numero,
+  titulo,
+  texto,
+}) {
   return (
-    <div style={styles.estadoCarga}>
-      <span style={styles.spinner} />
-
-      <strong style={styles.estadoCargaTitulo}>
-        Cargando empresas
-      </strong>
-
-      <span style={styles.estadoCargaTexto}>
-        Consultando estados y períodos de
-        prueba.
+    <article style={s.flowCard}>
+      <span style={s.flowNumber}>
+        {numero}
       </span>
+
+      <div>
+        <strong style={s.flowTitle}>
+          {titulo}
+        </strong>
+
+        <span style={s.flowText}>
+          {texto}
+        </span>
+      </div>
+    </article>
+  );
+}
+
+function Detail({ label, value }) {
+  return (
+    <div style={s.detailBox}>
+      <span style={s.detailLabel}>
+        {label}
+      </span>
+
+      <strong style={s.detailValue}>
+        {value}
+      </strong>
     </div>
   );
 }
@@ -1286,13 +1225,45 @@ function Icon({ name, size = 20 }) {
     viewBox: "0 0 24 24",
     fill: "none",
     stroke: "currentColor",
-    strokeWidth: 1.8,
+    strokeWidth: 1.9,
     strokeLinecap: "round",
     strokeLinejoin: "round",
     "aria-hidden": true,
   };
 
   const icons = {
+    dashboard: (
+      <>
+        <rect
+          x="3"
+          y="3"
+          width="7"
+          height="7"
+          rx="1"
+        />
+        <rect
+          x="14"
+          y="3"
+          width="7"
+          height="7"
+          rx="1"
+        />
+        <rect
+          x="3"
+          y="14"
+          width="7"
+          height="7"
+          rx="1"
+        />
+        <rect
+          x="14"
+          y="14"
+          width="7"
+          height="7"
+          rx="1"
+        />
+      </>
+    ),
     building: (
       <>
         <path d="M3 21h18M6 21V3h12v18" />
@@ -1313,10 +1284,34 @@ function Icon({ name, size = 20 }) {
     ),
     modules: (
       <>
-        <rect x="3" y="3" width="7" height="7" rx="1" />
-        <rect x="14" y="3" width="7" height="7" rx="1" />
-        <rect x="3" y="14" width="7" height="7" rx="1" />
-        <rect x="14" y="14" width="7" height="7" rx="1" />
+        <rect
+          x="3"
+          y="3"
+          width="7"
+          height="7"
+          rx="1"
+        />
+        <rect
+          x="14"
+          y="3"
+          width="7"
+          height="7"
+          rx="1"
+        />
+        <rect
+          x="3"
+          y="14"
+          width="7"
+          height="7"
+          rx="1"
+        />
+        <rect
+          x="14"
+          y="14"
+          width="7"
+          height="7"
+          rx="1"
+        />
       </>
     ),
     chart: (
@@ -1325,10 +1320,40 @@ function Icon({ name, size = 20 }) {
         <path d="M7 16l4-5 4 3 4-7" />
       </>
     ),
-    logout: (
+    list: (
       <>
-        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-        <path d="M16 17l5-5-5-5M21 12H9" />
+        <path d="M9 6h11M9 12h11M9 18h11" />
+        <circle
+          cx="4"
+          cy="6"
+          r="1"
+          fill="currentColor"
+          stroke="none"
+        />
+        <circle
+          cx="4"
+          cy="12"
+          r="1"
+          fill="currentColor"
+          stroke="none"
+        />
+        <circle
+          cx="4"
+          cy="18"
+          r="1"
+          fill="currentColor"
+          stroke="none"
+        />
+      </>
+    ),
+    plus: (
+      <>
+        <path d="M12 5v14M5 12h14" />
+      </>
+    ),
+    arrowBack: (
+      <>
+        <path d="M19 12H5M12 19l-7-7 7-7" />
       </>
     ),
     refresh: (
@@ -1348,280 +1373,37 @@ function Icon({ name, size = 20 }) {
         <path d="M6 6l12 12M18 6L6 18" />
       </>
     ),
-    chevron: (
-      <>
-        <path d="M9 18l6-6-6-6" />
-      </>
-    ),
-    check: (
-      <>
-        <path d="M5 12l4 4L19 6" />
-      </>
-    ),
-    play: (
-      <>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M10 8l6 4-6 4z" />
-      </>
-    ),
-    clock: (
-      <>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 7v5l3 2" />
-      </>
-    ),
-    alert: (
-      <>
-        <path d="M12 3L2.8 20h18.4L12 3z" />
-        <path d="M12 9v5M12 17.5h.01" />
-      </>
-    ),
-    search: (
-      <>
-        <circle cx="11" cy="11" r="7" />
-        <path d="M20 20l-4-4" />
-      </>
-    ),
   };
 
   return (
     <svg {...props}>
-      {icons[name] || icons.modules}
+      {icons[name] ||
+        icons.dashboard}
     </svg>
   );
 }
 
-const styles = {
-  layout: {
+const s = {
+  page: {
     minHeight: "100vh",
-    display: "flex",
     background:
-      "linear-gradient(180deg,#f6f8f7 0%,#eef3f0 100%)",
+      "linear-gradient(180deg,#f6f8f7 0%,#edf3ef 100%)",
     color: "#152019",
     fontFamily:
       'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   },
 
-  layoutMobile: {
-    display: "block",
-    width: "100%",
-    overflowX: "hidden",
+  main: {
+    maxWidth: 1500,
+    margin: "0 auto",
+    padding: "28px 30px 42px",
   },
 
-  sidebar: {
-    width: 274,
-    minWidth: 274,
-    height: "100vh",
-    position: "sticky",
-    top: 0,
-    display: "flex",
-    flexDirection: "column",
-    padding: "20px 15px",
-    boxSizing: "border-box",
-    overflowY: "auto",
-    background:
-      "linear-gradient(180deg,#07110b 0%,#0d281a 55%,#123b25 100%)",
-    color: "#ffffff",
-    boxShadow:
-      "14px 0 38px rgba(7,25,15,.12)",
-  },
-
-  brandBox: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    padding: "0 4px 18px",
-    borderBottom:
-      "1px solid rgba(255,255,255,.09)",
-  },
-
-  logoBox: {
-    width: 105,
-    height: 55,
-    padding: 5,
-    display: "grid",
-    placeItems: "center",
-    boxSizing: "border-box",
-    borderRadius: 13,
-    background: "#ffffff",
-    boxShadow:
-      "0 10px 24px rgba(0,0,0,.16)",
-  },
-
-  logoSidebar: {
-    width: "100%",
-    height: "100%",
-    objectFit: "contain",
-  },
-
-  brandLabel: {
-    color: "#76dda3",
-    fontSize: 8,
-    fontWeight: 900,
-    letterSpacing: 1.1,
-  },
-
-  brandTitle: {
-    margin: "2px 0 0",
-    fontSize: 20,
-    lineHeight: 1,
-  },
-
-  brandSub: {
-    margin: "4px 0 0",
-    color: "#bdd8c7",
-    fontSize: 10,
-  },
-
-  empresaBox: {
-    margin: "17px 0 20px",
-    padding: 13,
-    display: "grid",
-    gridTemplateColumns:
-      "42px minmax(0,1fr)",
-    gap: 10,
-    alignItems: "center",
-    border:
-      "1px solid rgba(255,255,255,.10)",
-    borderRadius: 15,
-    background:
-      "rgba(255,255,255,.065)",
-  },
-
-  avatarAdmin: {
-    width: 42,
-    height: 42,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: 13,
-    background:
-      "linear-gradient(145deg,#ffffff,#dff3e7)",
-    color: "#123b25",
-    fontWeight: 950,
-    boxShadow:
-      "0 8px 18px rgba(0,0,0,.12)",
-  },
-
-  empresaNombre: {
-    display: "block",
-    overflow: "hidden",
-    color: "#ffffff",
-    fontSize: 12,
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-
-  empresaRol: {
-    display: "block",
-    marginTop: 3,
-    color: "#9fc5ad",
-    fontSize: 10,
-  },
-
-  menuTitulo: {
-    display: "block",
-    margin: "0 7px 8px",
-    color: "#80ae91",
-    fontSize: 8,
-    fontWeight: 900,
-    letterSpacing: 1.2,
-  },
-
-  menu: {
-    display: "grid",
-    gap: 7,
-  },
-
-  menuItem: {
-    minHeight: 47,
-    display: "grid",
-    gridTemplateColumns:
-      "32px minmax(0,1fr) 16px",
-    alignItems: "center",
-    gap: 8,
-    padding: "9px 11px",
-    border:
-      "1px solid rgba(255,255,255,.035)",
-    borderRadius: 13,
-    background:
-      "rgba(255,255,255,.025)",
-    color: "#e4ece7",
-    fontSize: 12,
-    fontWeight: 760,
-    textDecoration: "none",
-  },
-
-  menuIcono: {
-    width: 31,
-    height: 31,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: 9,
-    background:
-      "rgba(125,220,171,.10)",
-    color: "#7ddcab",
-  },
-
-  sidebarAyuda: {
-    marginTop: "auto",
-    marginBottom: 12,
-    padding: 14,
-    border:
-      "1px solid rgba(125,220,171,.15)",
-    borderRadius: 15,
-    background:
-      "linear-gradient(145deg,rgba(125,220,171,.08),rgba(255,255,255,.025))",
-  },
-
-  sidebarAyudaEtiqueta: {
-    color: "#7ddcab",
-    fontSize: 8,
-    fontWeight: 900,
-    letterSpacing: 1,
-  },
-
-  sidebarAyudaTitulo: {
-    display: "block",
-    marginTop: 7,
-    color: "#ffffff",
-    fontSize: 13,
-  },
-
-  sidebarAyudaTexto: {
-    margin: "6px 0 0",
-    color: "#abc7b5",
-    fontSize: 10,
-    lineHeight: 1.45,
-  },
-
-  botonSalir: {
-    width: "100%",
-    minHeight: 45,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    border:
-      "1px solid rgba(255,255,255,.13)",
-    borderRadius: 12,
-    background:
-      "rgba(255,255,255,.065)",
-    color: "#ffffff",
-    fontWeight: 850,
-    cursor: "pointer",
-  },
-
-  contenido: {
-    flex: 1,
-    minWidth: 0,
-    padding: "26px 28px 42px",
-    boxSizing: "border-box",
-  },
-
-  contenidoMobile: {
+  mainMobile: {
     width: "100%",
     maxWidth: "100%",
     padding: "14px 12px 30px",
+    boxSizing: "border-box",
     overflowX: "hidden",
   },
 
@@ -1629,7 +1411,6 @@ const styles = {
     position: "sticky",
     top: 0,
     zIndex: 70,
-    margin: "-14px -12px 14px",
     padding: "10px 22px 10px 13px",
     display: "grid",
     gridTemplateColumns:
@@ -1655,7 +1436,6 @@ const styles = {
   mobileMenuButton: {
     minWidth: 106,
     minHeight: 44,
-    marginRight: 2,
     padding: "9px 15px",
     display: "inline-flex",
     alignItems: "center",
@@ -1692,43 +1472,6 @@ const styles = {
       "0 26px 65px rgba(15,23,42,.22)",
   },
 
-  mobileMenuAdmin: {
-    padding: "10px 9px 13px",
-    display: "grid",
-    gridTemplateColumns:
-      "42px minmax(0,1fr)",
-    alignItems: "center",
-    gap: 10,
-    borderBottom:
-      "1px solid #e5ece8",
-  },
-
-  avatarAdminMobile: {
-    width: 42,
-    height: 42,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: 13,
-    background: "#173c2a",
-    color: "#ffffff",
-    fontWeight: 900,
-  },
-
-  mobileAdminNombre: {
-    display: "block",
-    overflow: "hidden",
-    fontSize: 13,
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-
-  mobileAdminRol: {
-    display: "block",
-    marginTop: 2,
-    color: "#7a877f",
-    fontSize: 10,
-  },
-
   mobileMenuItem: {
     minHeight: 48,
     padding: "9px 11px",
@@ -1737,7 +1480,8 @@ const styles = {
       "34px minmax(0,1fr)",
     alignItems: "center",
     gap: 10,
-    border: "1px solid #edf1ee",
+    border:
+      "1px solid #edf1ee",
     borderRadius: 13,
     background: "#ffffff",
     color: "#1d2b23",
@@ -1746,7 +1490,7 @@ const styles = {
     textDecoration: "none",
   },
 
-  mobileMenuIcono: {
+  mobileMenuIcon: {
     width: 34,
     height: 34,
     display: "grid",
@@ -1756,77 +1500,59 @@ const styles = {
     color: "#16834f",
   },
 
-  mobileLogout: {
-    minHeight: 47,
-    padding: "10px 12px",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    border: "1px solid #fecaca",
-    borderRadius: 12,
-    background: "#fff6f6",
-    color: "#b42318",
-    fontWeight: 850,
-    cursor: "pointer",
-  },
-
   hero: {
-    maxWidth: 1500,
-    minHeight: 190,
-    margin: "0 auto 18px",
-    padding: "28px 30px",
+    minHeight: 178,
+    marginBottom: 14,
+    padding: "27px 29px",
     position: "relative",
     overflow: "hidden",
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: 22,
-    border:
-      "1px solid rgba(255,255,255,.08)",
-    borderRadius: 25,
+    borderRadius: 24,
     background:
       "linear-gradient(135deg,#07100b 0%,#103421 55%,#16834f 100%)",
+    color: "#ffffff",
     boxShadow:
-      "0 23px 58px rgba(11,48,29,.18)",
+      "0 22px 52px rgba(11,48,29,.17)",
   },
 
   heroMobile: {
     minHeight: 0,
-    marginBottom: 13,
     padding: "21px 18px 22px",
     borderRadius: 20,
+    marginBottom: 13,
   },
 
-  heroDecoracionUno: {
+  heroGlowOne: {
     position: "absolute",
-    width: 260,
-    height: 260,
-    top: -145,
-    right: -70,
+    width: 250,
+    height: 250,
+    top: -150,
+    right: -65,
     borderRadius: "50%",
     background:
-      "rgba(125,220,171,.10)",
+      "rgba(125,220,171,.11)",
   },
 
-  heroDecoracionDos: {
+  heroGlowTwo: {
     position: "absolute",
     width: 170,
     height: 170,
-    bottom: -105,
+    bottom: -115,
     left: "44%",
     border:
-      "1px solid rgba(255,255,255,.10)",
+      "1px solid rgba(255,255,255,.11)",
     borderRadius: "50%",
   },
 
-  heroTexto: {
+  heroContent: {
     position: "relative",
     zIndex: 2,
-    flex: 1,
   },
 
-  etiqueta: {
+  eyebrow: {
     display: "block",
     marginBottom: 8,
     color: "#7ce1aa",
@@ -1835,23 +1561,23 @@ const styles = {
     letterSpacing: 1.45,
   },
 
-  titulo: {
+  heroTitle: {
     maxWidth: 780,
     margin: "0 0 10px",
     color: "#ffffff",
     fontSize:
-      "clamp(34px,4vw,50px)",
-    lineHeight: 1.02,
+      "clamp(33px,4vw,49px)",
+    lineHeight: 1.03,
     letterSpacing: -1,
   },
 
-  tituloMobile: {
+  heroTitleMobile: {
     fontSize: 30,
-    lineHeight: 1.05,
+    lineHeight: 1.06,
     letterSpacing: -0.7,
   },
 
-  subtitulo: {
+  heroText: {
     maxWidth: 720,
     margin: 0,
     color: "#d1e5d8",
@@ -1859,8 +1585,7 @@ const styles = {
     lineHeight: 1.55,
   },
 
-  subtituloMobile: {
-    maxWidth: "100%",
+  heroTextMobile: {
     fontSize: 12.5,
     lineHeight: 1.5,
   },
@@ -1887,427 +1612,395 @@ const styles = {
     objectFit: "contain",
   },
 
-  resumenGrid: {
-    maxWidth: 1500,
-    margin: "0 auto 18px",
+  flowGrid: {
+    marginBottom: 14,
     display: "grid",
     gridTemplateColumns:
       "repeat(4,minmax(0,1fr))",
-    gap: 13,
+    gap: 10,
   },
 
-  resumenGridMobile: {
+  flowGridMobile: {
     gridTemplateColumns:
       "repeat(2,minmax(0,1fr))",
-    gap: 10,
-    marginBottom: 13,
   },
 
-  resumenCard: {
-    minHeight: 128,
-    padding: "17px 17px 15px",
-    position: "relative",
-    overflow: "hidden",
-    display: "flex",
-    flexDirection: "column",
-    border: "1px solid #dfe7e2",
-    borderRadius: 19,
-    background:
-      "linear-gradient(155deg,#ffffff 0%,#f7faf8 100%)",
-    boxShadow:
-      "0 12px 30px rgba(15,23,42,.055)",
-  },
-
-  resumenCardMobile: {
-    minHeight: 120,
-    padding: "14px 13px 13px",
-    borderRadius: 17,
-  },
-
-  resumenLinea: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 4,
-  },
-
-  resumenTop: {
-    display: "flex",
+  flowCard: {
+    minHeight: 78,
+    padding: 13,
+    display: "grid",
+    gridTemplateColumns:
+      "36px minmax(0,1fr)",
     alignItems: "center",
     gap: 9,
+    border: "1px solid #dfe7e2",
+    borderRadius: 15,
+    background: "#ffffff",
+    boxShadow:
+      "0 8px 22px rgba(15,23,42,.045)",
   },
 
-  resumenIcono: {
+  flowNumber: {
     width: 36,
     height: 36,
-    flex: "0 0 auto",
     display: "grid",
     placeItems: "center",
     borderRadius: 11,
+    background: "#173c2a",
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: 900,
   },
 
-  resumenLabel: {
-    color: "#657169",
-    fontSize: 10,
-    fontWeight: 850,
-    lineHeight: 1.25,
+  flowTitle: {
+    display: "block",
+    color: "#17211c",
+    fontSize: 10.5,
   },
 
-  resumenValor: {
-    marginTop: 10,
-    color: "#152019",
-    fontSize: 31,
-    lineHeight: 1,
-  },
-
-  resumenValorMobile: {
-    fontSize: 27,
-  },
-
-  resumenTexto: {
-    marginTop: "auto",
-    paddingTop: 7,
-    color: "#89948d",
-    fontSize: 9.5,
+  flowText: {
+    display: "block",
+    marginTop: 3,
+    color: "#829087",
+    fontSize: 8.5,
     lineHeight: 1.3,
   },
 
-  controlCard: {
-    maxWidth: 1500,
-    margin: "0 auto",
+  formCard: {
+    marginBottom: 15,
     padding: 22,
     border: "1px solid #dfe7e2",
-    borderRadius: 22,
+    borderRadius: 21,
     background: "#ffffff",
     boxShadow:
-      "0 14px 38px rgba(15,23,42,.055)",
+      "0 12px 34px rgba(15,23,42,.05)",
   },
 
-  controlCardMobile: {
+  formCardMobile: {
     padding: 14,
     borderRadius: 18,
   },
 
-  controlHeader: {
-    marginBottom: 18,
+  companiesCard: {
+    padding: 22,
+    border: "1px solid #dfe7e2",
+    borderRadius: 21,
+    background: "#ffffff",
+    boxShadow:
+      "0 12px 34px rgba(15,23,42,.05)",
+  },
+
+  companiesCardMobile: {
+    padding: 14,
+    borderRadius: 18,
+  },
+
+  sectionHeader: {
+    marginBottom: 17,
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "flex-end",
-    gap: 18,
+    justifyContent: "space-between",
+    gap: 14,
     flexWrap: "wrap",
   },
 
-  controlHeaderMobile: {
-    display: "grid",
-    gridTemplateColumns: "1fr",
-    alignItems: "stretch",
-    gap: 13,
-    marginBottom: 14,
-  },
-
-  seccionEtiqueta: {
+  sectionEyebrow: {
     display: "block",
     marginBottom: 5,
     color: "#16834f",
     fontSize: 8,
     fontWeight: 900,
-    letterSpacing: 1.2,
+    letterSpacing: 1.1,
   },
 
-  seccionTitulo: {
-    margin: "0 0 5px",
-    fontSize: 24,
+  sectionTitle: {
+    margin: 0,
+    color: "#17211c",
+    fontSize: 23,
     lineHeight: 1.15,
   },
 
-  seccionTituloMobile: {
+  sectionTitleMobile: {
     fontSize: 21,
   },
 
-  seccionTexto: {
-    maxWidth: 610,
-    margin: 0,
+  sectionText: {
+    margin: "6px 0 0",
     color: "#758078",
-    fontSize: 11.5,
-    lineHeight: 1.5,
+    fontSize: 11,
+    lineHeight: 1.45,
   },
 
-  headerAcciones: {
-    display: "flex",
-    gap: 9,
-    flexWrap: "wrap",
-  },
-
-  headerAccionesMobile: {
-    display: "grid",
-    gridTemplateColumns:
-      "minmax(0,1fr) auto",
-    gap: 8,
-  },
-
-  selectFiltro: {
-    minHeight: 43,
-    padding: "9px 34px 9px 12px",
-    border: "1px solid #ccd7d0",
-    borderRadius: 11,
-    outline: "none",
-    background: "#ffffff",
-    color: "#18221c",
-    fontSize: 11.5,
-    fontWeight: 750,
-  },
-
-  selectFiltroMobile: {
-    width: "100%",
-    minWidth: 0,
-  },
-
-  botonActualizar: {
-    minHeight: 43,
-    padding: "9px 14px",
+  showCompaniesButton: {
+    minHeight: 42,
+    padding: "9px 13px",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     gap: 7,
-    border: "1px solid #c5d2ca",
+    border: "1px solid #c8d5cd",
     borderRadius: 11,
     background:
       "linear-gradient(145deg,#ffffff,#f2f6f3)",
-    color: "#243129",
-    fontSize: 11.5,
+    color: "#26342c",
+    fontSize: 10.5,
     fontWeight: 850,
     cursor: "pointer",
+  },
+
+  refreshButton: {
+    minHeight: 42,
+    padding: "9px 13px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    border: "1px solid #c8d5cd",
+    borderRadius: 11,
+    background: "#ffffff",
+    color: "#26342c",
+    fontSize: 10.5,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  fullWidthButton: {
+    width: "100%",
+  },
+
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(3,minmax(0,1fr))",
+    gap: 13,
+  },
+
+  formGridMobile: {
+    gridTemplateColumns: "1fr",
+    gap: 0,
+  },
+
+  field: {
+    minWidth: 0,
+  },
+
+  label: {
+    display: "block",
+    marginBottom: 6,
+    color: "#37433c",
+    fontSize: 10,
+    fontWeight: 850,
+  },
+
+  input: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 11px",
+    boxSizing: "border-box",
+    border: "1px solid #ccd7d0",
+    borderRadius: 10,
+    outline: "none",
+    background: "#ffffff",
+    color: "#17211c",
+    fontSize: 11.5,
+  },
+
+  inputDisabled: {
+    background: "#f2f4f3",
+    color: "#8b958f",
+  },
+
+  formActions: {
+    marginTop: 18,
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+
+  formActionsMobile: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+  },
+
+  createButton: {
+    minHeight: 44,
+    padding: "10px 16px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    border: "none",
+    borderRadius: 11,
+    background:
+      "linear-gradient(135deg,#16834f,#0f6a3d)",
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: 900,
+    cursor: "pointer",
     boxShadow:
-      "0 7px 17px rgba(23,60,42,.06)",
+      "0 8px 19px rgba(22,131,79,.16)",
   },
 
-  botonActualizarMobile: {
-    padding: "9px 12px",
+  clearButton: {
+    minHeight: 44,
+    padding: "10px 16px",
+    border: "1px solid #ccd7d0",
+    borderRadius: 11,
+    background: "#ffffff",
+    color: "#526057",
+    fontSize: 11,
+    fontWeight: 850,
+    cursor: "pointer",
   },
 
-  botonDeshabilitado: {
-    opacity: 0.62,
+  backButton: {
+    minHeight: 44,
+    padding: "10px 16px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    border: "1px solid #16241c",
+    borderRadius: 11,
+    background:
+      "linear-gradient(135deg,#17211c,#263a2e)",
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: 850,
+    textDecoration: "none",
+  },
+
+  disabledButton: {
+    opacity: 0.6,
     cursor: "not-allowed",
   },
 
-  estadoCarga: {
-    minHeight: 230,
-    padding: "35px 12px",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#758078",
-    textAlign: "center",
-  },
-
-  spinner: {
-    width: 34,
-    height: 34,
-    marginBottom: 13,
-    display: "block",
-    border: "4px solid #dcebe2",
-    borderTopColor: "#16834f",
-    borderRadius: "50%",
-  },
-
-  estadoCargaTitulo: {
-    color: "#243129",
-    fontSize: 14,
-  },
-
-  estadoCargaTexto: {
-    marginTop: 5,
-    fontSize: 10.5,
-  },
-
-  estadoVacio: {
-    minHeight: 220,
-    padding: "30px 14px",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#7c8880",
-    textAlign: "center",
-  },
-
-  estadoVacioIcono: {
-    width: 50,
-    height: 50,
-    marginBottom: 11,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: 15,
-    background: "#edf8f1",
-    color: "#16834f",
-  },
-
-  estadoVacioTitulo: {
-    color: "#27352d",
-    fontSize: 15,
-  },
-
-  estadoVacioTexto: {
-    marginTop: 5,
-    fontSize: 10.5,
-  },
-
-  tablaScroll: {
+  tableScroll: {
     overflowX: "auto",
-    border: "1px solid #e5ebe7",
-    borderRadius: 15,
+    border: "1px solid #e4ebe6",
+    borderRadius: 14,
   },
 
-  tabla: {
+  table: {
     width: "100%",
-    minWidth: 1080,
+    minWidth: 1220,
     borderCollapse: "separate",
     borderSpacing: 0,
   },
 
   th: {
-    padding: "12px 13px",
+    padding: "11px 12px",
     borderBottom: "1px solid #dce5df",
     background: "#f5f8f6",
     color: "#536058",
-    fontSize: 8.5,
+    fontSize: 8,
     textAlign: "left",
     textTransform: "uppercase",
-    letterSpacing: 0.75,
+    letterSpacing: 0.7,
   },
 
   td: {
-    padding: "14px 13px",
+    padding: "13px 12px",
     borderBottom: "1px solid #edf1ee",
     background: "#ffffff",
     color: "#435047",
     fontSize: 10.5,
-    verticalAlign: "middle",
+    verticalAlign: "top",
   },
 
-  empresaTabla: {
-    display: "grid",
-    gridTemplateColumns:
-      "42px minmax(0,1fr)",
-    gap: 10,
-    alignItems: "center",
-  },
-
-  empresaInicial: {
-    width: 42,
-    height: 42,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: 13,
-    background:
-      "linear-gradient(145deg,#edf8f1,#dff1e7)",
-    color: "#16834f",
-    fontWeight: 900,
-  },
-
-  nombreEmpresaTabla: {
+  tableCompanyName: {
     display: "block",
     color: "#17211c",
     fontSize: 11.5,
   },
 
-  idEmpresa: {
+  tableSmallText: {
     display: "block",
-    maxWidth: 215,
     marginTop: 3,
-    overflow: "hidden",
-    color: "#8a958e",
-    fontSize: 7.5,
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
+    color: "#7d8981",
+    fontSize: 8.5,
   },
 
-  badgeEstado: {
+  statusBadge: {
     display: "inline-flex",
     alignItems: "center",
     padding: "6px 9px",
-    border: "1px solid transparent",
     borderRadius: 999,
-    fontSize: 8.5,
+    fontSize: 8,
     fontWeight: 900,
     whiteSpace: "nowrap",
   },
 
-  accionesTabla: {
+  statusActive: {
+    background: "#dcfce7",
+    color: "#166534",
+  },
+
+  statusInactive: {
+    background: "#fee2e2",
+    color: "#991b1b",
+  },
+
+  tableActions: {
     display: "flex",
-    gap: 7,
+    gap: 5,
     flexWrap: "wrap",
   },
 
-  botonAprobar: {
-    minHeight: 36,
-    padding: "8px 11px",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
+  adminButton: {
+    minHeight: 33,
+    padding: "7px 9px",
     border: "none",
-    borderRadius: 10,
-    background:
-      "linear-gradient(135deg,#17211c,#263a2e)",
+    borderRadius: 9,
+    background: "#16834f",
     color: "#ffffff",
-    fontSize: 9.5,
+    fontSize: 8.5,
     fontWeight: 850,
     cursor: "pointer",
-    boxShadow:
-      "0 7px 16px rgba(23,33,28,.15)",
   },
 
-  botonIniciar: {
-    minHeight: 36,
-    padding: "8px 11px",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
+  planButton: {
+    minHeight: 33,
+    padding: "7px 9px",
     border: "none",
-    borderRadius: 10,
-    background:
-      "linear-gradient(135deg,#16834f,#0f6a3d)",
-    color: "#ffffff",
-    fontSize: 9.5,
-    fontWeight: 850,
-    cursor: "pointer",
-    boxShadow:
-      "0 7px 16px rgba(22,131,79,.17)",
-  },
-
-  estadoEnCurso: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 7,
-    color: "#1d4ed8",
-    fontSize: 9.5,
-    fontWeight: 850,
-  },
-
-  puntoAzul: {
-    width: 7,
-    height: 7,
-    borderRadius: "50%",
+    borderRadius: 9,
     background: "#2563eb",
-    boxShadow:
-      "0 0 0 4px rgba(37,99,235,.10)",
+    color: "#ffffff",
+    fontSize: 8.5,
+    fontWeight: 850,
+    cursor: "pointer",
   },
 
-  sinAccion: {
-    color: "#8a958e",
-    fontSize: 9.5,
+  userButton: {
+    minHeight: 33,
+    padding: "7px 9px",
+    border: "1px solid #bddfca",
+    borderRadius: 9,
+    background: "#edf8f1",
+    color: "#14683e",
+    fontSize: 8.5,
+    fontWeight: 850,
+    cursor: "pointer",
   },
 
-  empresasMobileGrid: {
+  selectButton: {
+    minHeight: 33,
+    padding: "7px 9px",
+    border: "1px solid #d1d7d3",
+    borderRadius: 9,
+    background: "#ffffff",
+    color: "#536058",
+    fontSize: 8.5,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  mobileCompanyGrid: {
     display: "grid",
     gap: 11,
   },
 
-  empresaMobileCard: {
+  mobileCompanyCard: {
     padding: 14,
     border: "1px solid #dfe7e2",
     borderRadius: 17,
@@ -2317,7 +2010,7 @@ const styles = {
       "0 10px 25px rgba(15,23,42,.05)",
   },
 
-  empresaMobileTop: {
+  mobileCompanyTop: {
     display: "grid",
     gridTemplateColumns:
       "minmax(0,1fr) auto",
@@ -2325,28 +2018,28 @@ const styles = {
     gap: 9,
   },
 
-  empresaMobileIdentidad: {
+  mobileIdentity: {
     minWidth: 0,
     display: "grid",
     gridTemplateColumns:
-      "42px minmax(0,1fr)",
+      "43px minmax(0,1fr)",
     alignItems: "center",
     gap: 10,
   },
 
-  empresaInicialMobile: {
-    width: 42,
-    height: 42,
+  companyInitial: {
+    width: 43,
+    height: 43,
     display: "grid",
     placeItems: "center",
     borderRadius: 13,
     background:
       "linear-gradient(145deg,#e8f7ee,#d9efe2)",
     color: "#16834f",
-    fontWeight: 900,
+    fontWeight: 950,
   },
 
-  nombreEmpresaMobile: {
+  mobileCompanyName: {
     display: "block",
     overflow: "hidden",
     color: "#152019",
@@ -2356,75 +2049,128 @@ const styles = {
     whiteSpace: "nowrap",
   },
 
-  idEmpresaMobile: {
+  mobileCompanyText: {
     display: "block",
-    marginTop: 3,
+    marginTop: 2,
     overflow: "hidden",
-    color: "#909b94",
-    fontSize: 7.5,
+    color: "#88948d",
+    fontSize: 8.5,
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
 
-  badgeEstadoMobile: {
-    maxWidth: 118,
-    fontSize: 7.5,
-    lineHeight: 1.15,
-    whiteSpace: "normal",
-    textAlign: "center",
-  },
-
-  detallesMobileGrid: {
-    marginTop: 13,
+  mobileDetailsGrid: {
+    marginTop: 12,
     display: "grid",
     gridTemplateColumns:
       "repeat(2,minmax(0,1fr))",
     gap: 8,
   },
 
-  detalleMobile: {
+  detailBox: {
     minWidth: 0,
-    padding: "10px 11px",
+    padding: "9px 10px",
     border: "1px solid #e7ece9",
-    borderRadius: 12,
+    borderRadius: 11,
     background: "#ffffff",
   },
 
-  detalleMobileEtiqueta: {
+  detailLabel: {
     display: "block",
     color: "#7d8981",
-    fontSize: 8,
-    fontWeight: 800,
+    fontSize: 7.5,
+    fontWeight: 850,
     textTransform: "uppercase",
-    letterSpacing: 0.45,
+    letterSpacing: 0.4,
   },
 
-  detalleMobileValor: {
+  detailValue: {
     display: "block",
-    marginTop: 5,
+    marginTop: 4,
     overflow: "hidden",
     color: "#27342d",
-    fontSize: 11,
+    fontSize: 10.5,
+    lineHeight: 1.25,
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
 
-  detalleMobileDestacado: {
-    color: "#16834f",
-    fontSize: 17,
-  },
-
-  accionMobileBox: {
+  mobileActions: {
     marginTop: 11,
     paddingTop: 11,
-    display: "flex",
-    justifyContent: "flex-end",
+    display: "grid",
+    gridTemplateColumns:
+      "1fr 1fr",
+    gap: 7,
     borderTop: "1px solid #e7ece9",
   },
 
-  botonAccionMobile: {
-    width: "100%",
-    minHeight: 43,
-    fontSize: 10.5,
+  mobileAdminButton: {
+    minHeight: 40,
+    border: "none",
+    borderRadius: 10,
+    background: "#16834f",
+    color: "#ffffff",
+    fontSize: 9.5,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  mobilePlanButton: {
+    minHeight: 40,
+    border: "none",
+    borderRadius: 10,
+    background: "#2563eb",
+    color: "#ffffff",
+    fontSize: 9.5,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  mobileUserButton: {
+    gridColumn: "1 / -1",
+    minHeight: 41,
+    border: "1px solid #bddfca",
+    borderRadius: 10,
+    background: "#edf8f1",
+    color: "#14683e",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  mobileSelectButton: {
+    gridColumn: "1 / -1",
+    minHeight: 41,
+    border: "1px solid #d1d7d3",
+    borderRadius: 10,
+    background: "#ffffff",
+    color: "#536058",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  note: {
+    margin: "12px 0 0",
+    color: "#78857d",
+    fontSize: 9.5,
+    lineHeight: 1.45,
+  },
+
+  loadingBox: {
+    minHeight: 120,
+    display: "grid",
+    placeItems: "center",
+    color: "#78857d",
+    fontSize: 11,
+  },
+
+  emptyBox: {
+    minHeight: 120,
+    display: "grid",
+    placeItems: "center",
+    color: "#78857d",
+    fontSize: 11,
   },
 };
