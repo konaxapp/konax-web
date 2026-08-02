@@ -1536,13 +1536,7 @@ function IlustracionLavanderia() {
           <stop offset="100%" stopColor="#111a20" />
         </radialGradient>
 
-        <filter
-          id="softShadow"
-          x="-30%"
-          y="-30%"
-          width="160%"
-          height="160%"
-        >
+        <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
           <feDropShadow
             dx="0"
             dy="8"
@@ -1564,7 +1558,6 @@ function IlustracionLavanderia() {
           stroke="#cfd9d2"
           strokeWidth="3"
         />
-
         <rect
           x="215"
           y="43"
@@ -1574,21 +1567,8 @@ function IlustracionLavanderia() {
           fill="#f7faf8"
           stroke="#d6dfd9"
         />
-
-        <circle
-          cx="228"
-          cy="57"
-          r="5"
-          fill="#8aa299"
-        />
-
-        <circle
-          cx="247"
-          cy="57"
-          r="5"
-          fill="#8aa299"
-        />
-
+        <circle cx="228" cy="57" r="5" fill="#8aa299" />
+        <circle cx="247" cy="57" r="5" fill="#8aa299" />
         <rect
           x="273"
           y="51"
@@ -1597,7 +1577,6 @@ function IlustracionLavanderia() {
           rx="3"
           fill="#173c2a"
         />
-
         <circle
           cx="266"
           cy="128"
@@ -1606,14 +1585,12 @@ function IlustracionLavanderia() {
           stroke="#cad6cf"
           strokeWidth="5"
         />
-
         <circle
           cx="266"
           cy="128"
           r="38"
           fill="url(#door)"
         />
-
         <ellipse
           cx="255"
           cy="115"
@@ -1629,7 +1606,6 @@ function IlustracionLavanderia() {
             stroke="#0f5f35"
             strokeWidth="3"
           />
-
           <rect
             x="-6"
             y="14"
@@ -1638,38 +1614,16 @@ function IlustracionLavanderia() {
             rx="8"
             fill="#1a7e47"
           />
-
           <g
             stroke="#b9e7ca"
             strokeWidth="4"
             opacity=".65"
           >
-            <line
-              x1="21"
-              y1="39"
-              x2="19"
-              y2="73"
-            />
-            <line
-              x1="43"
-              y1="39"
-              x2="42"
-              y2="76"
-            />
-            <line
-              x1="66"
-              y1="39"
-              x2="66"
-              y2="76"
-            />
-            <line
-              x1="89"
-              y1="39"
-              x2="91"
-              y2="73"
-            />
+            <line x1="21" y1="39" x2="19" y2="73" />
+            <line x1="43" y1="39" x2="42" y2="76" />
+            <line x1="66" y1="39" x2="66" y2="76" />
+            <line x1="89" y1="39" x2="91" y2="73" />
           </g>
-
           <path
             d="M20 11 Q39 -8 61 11"
             fill="none"
@@ -1677,7 +1631,6 @@ function IlustracionLavanderia() {
             strokeWidth="14"
             strokeLinecap="round"
           />
-
           <path
             d="M49 10 Q70 -13 94 8"
             fill="none"
@@ -1685,7 +1638,6 @@ function IlustracionLavanderia() {
             strokeWidth="14"
             strokeLinecap="round"
           />
-
           <path
             d="M69 12 Q86 -4 105 10"
             fill="none"
@@ -1705,7 +1657,6 @@ function IlustracionLavanderia() {
             fill="#f7faf8"
             stroke="#cfd9d2"
           />
-
           <path
             d="M12 36 C8 23 2 18 4 11 C13 13 17 19 16 29 C18 18 25 13 31 13 C31 23 26 31 16 36 Z"
             fill="#2f9156"
@@ -1994,41 +1945,56 @@ const s = {
     display: "grid",
     gridTemplateColumns:
       "repeat(auto-fit,minmax(190px,1fr))",
-    gap: 12,
+    gap: 14,
   },
 
   accesoCard: {
-    minHeight: 150,
-    padding: 20,
+    minHeight: 158,
+    padding: "18px 18px 17px",
     display: "flex",
     flexDirection: "column",
     alignItems: "flex-start",
     justifyContent: "center",
-    gap: 9,
-    border: "1px solid #dfe7e2",
-    borderRadius: 17,
-    background: "#fff",
+    gap: 10,
+    border: "1px solid #dbe6df",
+    borderTop: "4px solid #16834f",
+    borderRadius: 22,
+    background:
+      "linear-gradient(180deg,#ffffff 0%,#f5faf7 100%)",
     textAlign: "left",
     cursor: "pointer",
+    boxShadow:
+      "0 12px 28px rgba(23,60,42,.08)",
+    position: "relative",
+    overflow: "hidden",
+    transition:
+      "transform .18s ease, box-shadow .18s ease, border-color .18s ease",
   },
 
   accesoIcono: {
-    width: 46,
-    height: 46,
+    width: 54,
+    height: 54,
     display: "grid",
     placeItems: "center",
-    borderRadius: 13,
-    background: "#edf8f1",
-    fontSize: 21,
+    borderRadius: 16,
+    background:
+      "linear-gradient(180deg,#eef8f2 0%,#dff1e7 100%)",
+    fontSize: 24,
+    boxShadow:
+      "inset 0 1px 0 rgba(255,255,255,.85), 0 8px 18px rgba(23,60,42,.06)",
   },
 
   accesoTitulo: {
     fontSize: 17,
+    fontWeight: 900,
+    color: "#132019",
+    lineHeight: 1.15,
   },
 
   accesoTexto: {
-    color: "#718078",
+    color: "#6d7b73",
     fontSize: 12,
+    fontWeight: 600,
   },
 
   heroGrid: {
@@ -2285,15 +2251,17 @@ const s = {
     top: 0,
     zIndex: 50,
     margin: "-14px -12px 16px",
-    padding: "10px 18px 10px 12px",
+    padding: "10px 24px 10px 14px",
     display: "grid",
-    gridTemplateColumns: "minmax(0,1fr) auto",
+    gridTemplateColumns:
+      "minmax(0,1fr) auto",
     alignItems: "center",
     gap: 12,
     borderBottom:
       "1px solid #dfe7e2",
     background:
       "rgba(255,255,255,.96)",
+    backdropFilter: "blur(10px)",
   },
 
   mobileLogo: {
@@ -2304,21 +2272,26 @@ const s = {
   },
 
   mobileMenuButton: {
-    minWidth: 104,
-    minHeight: 42,
-    padding: "9px 14px",
-    border: "none",
-    borderRadius: 11,
-    background: "#173c2a",
+    minWidth: 110,
+    minHeight: 44,
+    padding: "9px 16px",
+    border:
+      "1px solid rgba(255,255,255,.18)",
+    borderRadius: 14,
+    background:
+      "linear-gradient(135deg,#173c2a 0%,#0f6a3d 100%)",
     color: "#fff",
     fontWeight: 850,
     cursor: "pointer",
     whiteSpace: "nowrap",
     justifySelf: "end",
+    marginRight: 4,
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+    boxShadow:
+      "0 10px 24px rgba(23,60,42,.18)",
   },
 
   hamburgerIcon: {
@@ -2402,7 +2375,8 @@ const s = {
 
   avisoPruebaMobile: {
     display: "grid",
-    gridTemplateColumns: "minmax(0,1fr) 76px",
+    gridTemplateColumns:
+      "minmax(0,1fr) 76px",
     alignItems: "center",
     gap: 8,
     marginBottom: 12,
@@ -2411,7 +2385,8 @@ const s = {
   },
 
   avisoIzquierdaMobile: {
-    gridTemplateColumns: "34px minmax(0,1fr)",
+    gridTemplateColumns:
+      "34px minmax(0,1fr)",
     alignItems: "center",
     gap: 8,
   },
@@ -2462,6 +2437,8 @@ const s = {
   accesosGridMobile: {
     gridTemplateColumns:
       "repeat(2,minmax(0,1fr))",
+    gap: 12,
+    marginTop: 2,
   },
 
   bienvenidaLavanderiaMobile: {
