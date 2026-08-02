@@ -6,7 +6,7 @@ import { supabase } from "../../lib/supabase";
 
 const OPCIONES_ADMIN = [
   { nombre: "Panel Maestro", ruta: "/admin", icono: "dashboard" },
-  { nombre: "Empresas Clientes", ruta: "/empresas", icono: "building" },
+  { nombre: "Crear Nueva Empresa", ruta: "/empresas", icono: "building" },
   { nombre: "Planes Comerciales", ruta: "/planes", icono: "briefcase" },
   { nombre: "Gestión de Módulos", ruta: "/modulos", icono: "modules" },
   { nombre: "Centro de Gestión", ruta: "/centro-gestion", icono: "chart" },
@@ -197,6 +197,11 @@ export default function GestionKonax() {
     if (mostrarAlerta) {
       alert("Empresa seleccionada: " + empresa.nombre);
     }
+  }
+
+  function abrirUsuariosModulos(empresa) {
+    seleccionarEmpresa(empresa, false);
+    window.location.href = "/usuarios";
   }
 
   function abrirPago(empresa) {
@@ -600,6 +605,9 @@ export default function GestionKonax() {
                     seleccionarEmpresa(empresa, false);
                     window.location.href = "/planes";
                   }}
+                  onUsers={() =>
+                    abrirUsuariosModulos(empresa)
+                  }
                   onPayment={() => abrirPago(empresa)}
                 />
               ))}
@@ -691,6 +699,16 @@ export default function GestionKonax() {
                             }}
                           >
                             Plan
+                          </button>
+
+                          <button
+                            type="button"
+                            style={s.usersButton}
+                            onClick={() =>
+                              abrirUsuariosModulos(empresa)
+                            }
+                          >
+                            Usuarios y módulos
                           </button>
 
                           <button
@@ -1201,6 +1219,7 @@ function EmpresaMobileCard({
   activa,
   onSelect,
   onPlan,
+  onUsers,
   onPayment,
 }) {
   return (
@@ -1284,6 +1303,14 @@ function EmpresaMobileCard({
           onClick={onPlan}
         >
           Plan
+        </button>
+
+        <button
+          type="button"
+          style={s.mobileUsersButton}
+          onClick={onUsers}
+        >
+          Usuarios y módulos
         </button>
 
         <button
@@ -2046,6 +2073,18 @@ const s = {
     cursor: "pointer",
   },
 
+  usersButton: {
+    minHeight: 33,
+    padding: "7px 9px",
+    border: "1px solid #bddfca",
+    borderRadius: 9,
+    background: "#edf8f1",
+    color: "#14683e",
+    fontSize: 8.5,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
   paymentButton: {
     minHeight: 33,
     padding: "7px 9px",
@@ -2188,6 +2227,18 @@ const s = {
     background: "#2563eb",
     color: "#ffffff",
     fontSize: 9.5,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  mobileUsersButton: {
+    gridColumn: "1 / -1",
+    minHeight: 41,
+    border: "1px solid #bddfca",
+    borderRadius: 10,
+    background: "#edf8f1",
+    color: "#14683e",
+    fontSize: 10,
     fontWeight: 850,
     cursor: "pointer",
   },
