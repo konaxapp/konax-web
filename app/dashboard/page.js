@@ -96,7 +96,7 @@ function construirModulosPorPlan(codigoPlan) {
       dashboard: true,
       nuevo_pedido: true,
       pedidos_lavanderia: true,
-      clientes: true, // Se usa internamente, pero no aparece en el menú.
+      clientes: true,
       caja: true,
       historial_lavanderia: true,
       usuarios: true,
@@ -188,8 +188,6 @@ function leerModuloEmpresa(data, codigo) {
     return Boolean(data[columna]);
   }
 
-  // Los módulos nuevos de lavandería no necesitan
-  // columnas adicionales en empresa_modulos.
   if (
     [
       "nuevo_pedido",
@@ -1181,29 +1179,53 @@ export default function Dashboard() {
                   : {}),
               }}
             >
-              <div style={s.avisoIcono}>
+              <div
+                style={{
+                  ...s.avisoIcono,
+                  ...(esMovil
+                    ? s.avisoIconoMobile
+                    : {}),
+                }}
+              >
                 ⏱️
               </div>
 
-              <div>
-                <span style={s.avisoEtiqueta}>
+              <div style={{ minWidth: 0 }}>
+                <span
+                  style={{
+                    ...s.avisoEtiqueta,
+                    ...(esMovil
+                      ? s.avisoEtiquetaMobile
+                      : {}),
+                  }}
+                >
                   PROGRAMA PILOTO ACTIVO
                 </span>
 
-                <strong style={s.avisoTitulo}>
-                  Estás utilizando KONAX en
-                  período de prueba
+                <strong
+                  style={{
+                    ...s.avisoTitulo,
+                    ...(esMovil
+                      ? s.avisoTituloMobile
+                      : {}),
+                  }}
+                >
+                  Estás utilizando KONAX en período de prueba
                 </strong>
 
-                <p style={s.avisoTexto}>
+                <p
+                  style={{
+                    ...s.avisoTexto,
+                    ...(esMovil
+                      ? s.avisoTextoMobile
+                      : {}),
+                  }}
+                >
                   Inicio:{" "}
-                  {formatoFecha(
-                    fechaInicioPrueba
-                  )}{" "}
-                  · Vencimiento:{" "}
-                  {formatoFecha(
-                    fechaFinPrueba
-                  )}
+                  {formatoFecha(fechaInicioPrueba)}
+                  {" · "}
+                  Vencimiento:{" "}
+                  {formatoFecha(fechaFinPrueba)}
                 </p>
               </div>
             </div>
@@ -1216,11 +1238,25 @@ export default function Dashboard() {
                   : {}),
               }}
             >
-              <strong style={s.diasNumero}>
+              <strong
+                style={{
+                  ...s.diasNumero,
+                  ...(esMovil
+                    ? s.diasNumeroMobile
+                    : {}),
+                }}
+              >
                 {diasRestantes ?? 0}
               </strong>
 
-              <span style={s.diasTexto}>
+              <span
+                style={{
+                  ...s.diasTexto,
+                  ...(esMovil
+                    ? s.diasTextoMobile
+                    : {}),
+                }}
+              >
                 {diasRestantes === 1
                   ? "día restante"
                   : "días restantes"}
@@ -1240,18 +1276,38 @@ export default function Dashboard() {
               }}
             >
               <div style={s.bienvenidaTexto}>
-                <span style={s.heroTag}>
+                <span
+                  style={{
+                    ...s.heroTag,
+                    ...(esMovil
+                      ? s.heroTagLavanderiaMobile
+                      : {}),
+                  }}
+                >
                   OPERACIÓN DE HOY
                 </span>
 
-                <h2 style={s.tituloLavanderia}>
+                <h2
+                  style={{
+                    ...s.tituloLavanderia,
+                    ...(esMovil
+                      ? s.tituloLavanderiaMobile
+                      : {}),
+                  }}
+                >
                   ¿Qué deseas hacer?
                 </h2>
 
-                <p style={s.heroText}>
-                  Registra pedidos, consulta
-                  estados, revisa caja e historial
-                  desde el teléfono.
+                <p
+                  style={{
+                    ...s.heroText,
+                    ...(esMovil
+                      ? s.heroTextLavanderiaMobile
+                      : {}),
+                  }}
+                >
+                  Registra pedidos, consulta estados, revisa caja
+                  e historial desde el teléfono.
                 </p>
               </div>
 
@@ -1454,7 +1510,6 @@ export default function Dashboard() {
   );
 }
 
-
 function IlustracionLavanderia() {
   return (
     <svg
@@ -1481,44 +1536,185 @@ function IlustracionLavanderia() {
           <stop offset="100%" stopColor="#111a20" />
         </radialGradient>
 
-        <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#173c2a" floodOpacity=".18" />
+        <filter
+          id="softShadow"
+          x="-30%"
+          y="-30%"
+          width="160%"
+          height="160%"
+        >
+          <feDropShadow
+            dx="0"
+            dy="8"
+            stdDeviation="8"
+            floodColor="#173c2a"
+            floodOpacity=".18"
+          />
         </filter>
       </defs>
 
       <g filter="url(#softShadow)">
-        <rect x="205" y="32" width="122" height="166" rx="12" fill="url(#washerBody)" stroke="#cfd9d2" strokeWidth="3" />
-        <rect x="215" y="43" width="102" height="28" rx="5" fill="#f7faf8" stroke="#d6dfd9" />
-        <circle cx="228" cy="57" r="5" fill="#8aa299" />
-        <circle cx="247" cy="57" r="5" fill="#8aa299" />
-        <rect x="273" y="51" width="30" height="11" rx="3" fill="#173c2a" />
-        <circle cx="266" cy="128" r="48" fill="#e8efeb" stroke="#cad6cf" strokeWidth="5" />
-        <circle cx="266" cy="128" r="38" fill="url(#door)" />
-        <ellipse cx="255" cy="115" rx="15" ry="10" fill="rgba(255,255,255,.18)" />
+        <rect
+          x="205"
+          y="32"
+          width="122"
+          height="166"
+          rx="12"
+          fill="url(#washerBody)"
+          stroke="#cfd9d2"
+          strokeWidth="3"
+        />
+
+        <rect
+          x="215"
+          y="43"
+          width="102"
+          height="28"
+          rx="5"
+          fill="#f7faf8"
+          stroke="#d6dfd9"
+        />
+
+        <circle
+          cx="228"
+          cy="57"
+          r="5"
+          fill="#8aa299"
+        />
+
+        <circle
+          cx="247"
+          cy="57"
+          r="5"
+          fill="#8aa299"
+        />
+
+        <rect
+          x="273"
+          y="51"
+          width="30"
+          height="11"
+          rx="3"
+          fill="#173c2a"
+        />
+
+        <circle
+          cx="266"
+          cy="128"
+          r="48"
+          fill="#e8efeb"
+          stroke="#cad6cf"
+          strokeWidth="5"
+        />
+
+        <circle
+          cx="266"
+          cy="128"
+          r="38"
+          fill="url(#door)"
+        />
+
+        <ellipse
+          cx="255"
+          cy="115"
+          rx="15"
+          ry="10"
+          fill="rgba(255,255,255,.18)"
+        />
 
         <g transform="translate(72 120)">
-          <path d="M0 20 L112 20 L98 92 L14 92 Z" fill="url(#basket)" stroke="#0f5f35" strokeWidth="3" />
-          <rect x="-6" y="14" width="124" height="16" rx="8" fill="#1a7e47" />
-          <g stroke="#b9e7ca" strokeWidth="4" opacity=".65">
-            <line x1="21" y1="39" x2="19" y2="73" />
-            <line x1="43" y1="39" x2="42" y2="76" />
-            <line x1="66" y1="39" x2="66" y2="76" />
-            <line x1="89" y1="39" x2="91" y2="73" />
+          <path
+            d="M0 20 L112 20 L98 92 L14 92 Z"
+            fill="url(#basket)"
+            stroke="#0f5f35"
+            strokeWidth="3"
+          />
+
+          <rect
+            x="-6"
+            y="14"
+            width="124"
+            height="16"
+            rx="8"
+            fill="#1a7e47"
+          />
+
+          <g
+            stroke="#b9e7ca"
+            strokeWidth="4"
+            opacity=".65"
+          >
+            <line
+              x1="21"
+              y1="39"
+              x2="19"
+              y2="73"
+            />
+            <line
+              x1="43"
+              y1="39"
+              x2="42"
+              y2="76"
+            />
+            <line
+              x1="66"
+              y1="39"
+              x2="66"
+              y2="76"
+            />
+            <line
+              x1="89"
+              y1="39"
+              x2="91"
+              y2="73"
+            />
           </g>
-          <path d="M20 11 Q39 -8 61 11" fill="none" stroke="#f4f7f5" strokeWidth="14" strokeLinecap="round" />
-          <path d="M49 10 Q70 -13 94 8" fill="none" stroke="#2f8b55" strokeWidth="14" strokeLinecap="round" />
-          <path d="M69 12 Q86 -4 105 10" fill="none" stroke="#d7efe0" strokeWidth="13" strokeLinecap="round" />
+
+          <path
+            d="M20 11 Q39 -8 61 11"
+            fill="none"
+            stroke="#f4f7f5"
+            strokeWidth="14"
+            strokeLinecap="round"
+          />
+
+          <path
+            d="M49 10 Q70 -13 94 8"
+            fill="none"
+            stroke="#2f8b55"
+            strokeWidth="14"
+            strokeLinecap="round"
+          />
+
+          <path
+            d="M69 12 Q86 -4 105 10"
+            fill="none"
+            stroke="#d7efe0"
+            strokeWidth="13"
+            strokeLinecap="round"
+          />
         </g>
 
         <g transform="translate(286 0)">
-          <rect x="0" y="36" width="24" height="29" rx="3" fill="#f7faf8" stroke="#cfd9d2" />
-          <path d="M12 36 C8 23 2 18 4 11 C13 13 17 19 16 29 C18 18 25 13 31 13 C31 23 26 31 16 36 Z" fill="#2f9156" />
+          <rect
+            x="0"
+            y="36"
+            width="24"
+            height="29"
+            rx="3"
+            fill="#f7faf8"
+            stroke="#cfd9d2"
+          />
+
+          <path
+            d="M12 36 C8 23 2 18 4 11 C13 13 17 19 16 29 C18 18 25 13 31 13 C31 23 26 31 16 36 Z"
+            fill="#2f9156"
+          />
         </g>
       </g>
     </svg>
   );
 }
-
 
 function Info({
   titulo,
@@ -1752,7 +1948,8 @@ const s = {
     margin: "0 auto 16px",
     padding: 24,
     display: "grid",
-    gridTemplateColumns: "minmax(0,1fr) minmax(220px,360px)",
+    gridTemplateColumns:
+      "minmax(0,1fr) minmax(220px,360px)",
     alignItems: "center",
     gap: 18,
     borderRadius: 20,
@@ -2205,21 +2402,61 @@ const s = {
 
   avisoPruebaMobile: {
     display: "grid",
-    gridTemplateColumns: "1fr",
-    alignItems: "stretch",
-    padding: 14,
+    gridTemplateColumns: "minmax(0,1fr) 76px",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+    padding: "9px 10px",
+    borderRadius: 14,
   },
 
   avisoIzquierdaMobile: {
-    gridTemplateColumns:
-      "40px minmax(0,1fr)",
-    alignItems: "start",
-    gap: 10,
+    gridTemplateColumns: "34px minmax(0,1fr)",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  avisoIconoMobile: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    fontSize: 16,
+  },
+
+  avisoEtiquetaMobile: {
+    fontSize: 7,
+    letterSpacing: 0.9,
+    lineHeight: 1.2,
+  },
+
+  avisoTituloMobile: {
+    marginTop: 2,
+    fontSize: 11,
+    lineHeight: 1.25,
+  },
+
+  avisoTextoMobile: {
+    margin: "2px 0 0",
+    fontSize: 8.5,
+    lineHeight: 1.25,
   },
 
   diasCajaMobile: {
-    width: "100%",
-    minWidth: 0,
+    width: 76,
+    minWidth: 76,
+    padding: "7px 4px",
+    borderRadius: 10,
+  },
+
+  diasNumeroMobile: {
+    fontSize: 21,
+    lineHeight: 1,
+  },
+
+  diasTextoMobile: {
+    marginTop: 3,
+    fontSize: 7.5,
+    lineHeight: 1.1,
   },
 
   accesosGridMobile: {
@@ -2229,11 +2466,41 @@ const s = {
 
   bienvenidaLavanderiaMobile: {
     gridTemplateColumns: "1fr",
-    padding: 20,
+    padding: "14px 14px 8px",
+    gap: 2,
+    minHeight: 0,
+    marginBottom: 12,
+    borderRadius: 17,
+  },
+
+  heroTagLavanderiaMobile: {
+    marginBottom: 6,
+    padding: "5px 8px",
+    fontSize: 7.5,
+  },
+
+  tituloLavanderiaMobile: {
+    margin: "1px 0 5px",
+    fontSize: 25,
+    lineHeight: 1.08,
+    letterSpacing: "-0.4px",
+  },
+
+  heroTextLavanderiaMobile: {
+    maxWidth: "100%",
+    fontSize: 12.5,
+    lineHeight: 1.4,
   },
 
   ilustracionLavanderiaMobile: {
-    minHeight: 170,
+    width: 165,
+    height: 105,
+    minHeight: 0,
+    justifySelf: "start",
+    alignSelf: "start",
+    placeItems: "center",
+    marginTop: 0,
+    marginLeft: -8,
   },
 
   heroGridMobile: {
