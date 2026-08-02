@@ -862,25 +862,25 @@ export default function Dashboard() {
         nombre: "Nuevo pedido",
         ruta: "/lavanderia/nuevo-pedido",
         codigo: "nuevo_pedido",
-        icono: "➕",
+        icono: "nuevo",
       },
       {
         nombre: "Pedidos",
         ruta: "/lavanderia/pedidos",
         codigo: "pedidos_lavanderia",
-        icono: "🧺",
+        icono: "pedidos",
       },
       {
         nombre: "Resumen de caja",
         ruta: "/lavanderia/caja",
         codigo: "caja",
-        icono: "💵",
+        icono: "caja",
       },
       {
         nombre: "Historial",
         ruta: "/lavanderia/historial",
         codigo: "historial_lavanderia",
-        icono: "🕘",
+        icono: "historial",
       },
     ];
 
@@ -1335,13 +1335,14 @@ export default function Dashboard() {
                 <button
                   key={item.codigo}
                   type="button"
+                  aria-label={`Abrir ${item.nombre}`}
                   onClick={() =>
                     router.push(item.ruta)
                   }
                   style={s.accesoCard}
                 >
                   <span style={s.accesoIcono}>
-                    {item.icono}
+                    <IconoAcceso tipo={item.icono} />
                   </span>
 
                   <strong style={s.accesoTitulo}>
@@ -1667,6 +1668,64 @@ function IlustracionLavanderia() {
   );
 }
 
+function IconoAcceso({ tipo }) {
+  const propiedades = {
+    width: 40,
+    height: 40,
+    viewBox: "0 0 48 48",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2.8,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": true,
+  };
+
+  if (tipo === "nuevo") {
+    return (
+      <svg {...propiedades}>
+        <rect x="7" y="7" width="34" height="34" rx="9" />
+        <path d="M24 15v18M15 24h18" />
+      </svg>
+    );
+  }
+
+  if (tipo === "pedidos") {
+    return (
+      <svg {...propiedades}>
+        <rect x="10" y="8" width="28" height="34" rx="6" />
+        <path d="M18 8.5V6h12v2.5" />
+        <path d="M17 18h14M17 25h14M17 32h9" />
+        <circle cx="14" cy="18" r="1" fill="currentColor" stroke="none" />
+        <circle cx="14" cy="25" r="1" fill="currentColor" stroke="none" />
+        <circle cx="14" cy="32" r="1" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+
+  if (tipo === "caja") {
+    return (
+      <svg {...propiedades}>
+        <rect x="6" y="13" width="36" height="25" rx="6" />
+        <path d="M6 20h36" />
+        <path d="M29 27h8" />
+        <circle cx="19" cy="29" r="6" />
+        <path d="M19 25.5v7M16.8 27.2c.8-1 3.6-1.2 4.4.2.8 1.5-.7 2.2-2.2 2.4-1.6.2-2.9 1-2.2 2.3.7 1.4 3.6 1.2 4.5.1" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...propiedades}>
+      <circle cx="24" cy="24" r="16" />
+      <path d="M24 15v10l7 4" />
+      <path d="M13 9H8v5" />
+      <path d="M8.5 14A19 19 0 0 1 24 5" />
+    </svg>
+  );
+}
+
+
 function Info({
   titulo,
   valor,
@@ -1944,57 +2003,63 @@ const s = {
     margin: "0 auto",
     display: "grid",
     gridTemplateColumns:
-      "repeat(auto-fit,minmax(190px,1fr))",
-    gap: 14,
+      "repeat(auto-fit,minmax(150px,1fr))",
+    gap: 16,
   },
 
   accesoCard: {
-    minHeight: 158,
-    padding: "18px 18px 17px",
+    minHeight: 148,
+    padding: "18px 12px 16px",
     display: "flex",
     flexDirection: "column",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    border: "1px solid #dbe6df",
-    borderTop: "4px solid #16834f",
+    gap: 12,
+    appearance: "none",
+    border: "1px solid #d9e2dd",
     borderRadius: 22,
     background:
-      "linear-gradient(180deg,#ffffff 0%,#f5faf7 100%)",
-    textAlign: "left",
+      "linear-gradient(145deg,#ffffff 0%,#eef3f0 100%)",
+    color: "#142019",
+    textAlign: "center",
+    fontFamily: "inherit",
     cursor: "pointer",
     boxShadow:
-      "0 12px 28px rgba(23,60,42,.08)",
+      "8px 10px 20px rgba(22,45,32,.12), -5px -5px 14px rgba(255,255,255,.96), inset 0 1px 0 rgba(255,255,255,.95)",
+    WebkitTapHighlightColor: "transparent",
     position: "relative",
     overflow: "hidden",
     transition:
-      "transform .18s ease, box-shadow .18s ease, border-color .18s ease",
+      "transform .16s ease, box-shadow .16s ease, border-color .16s ease",
   },
 
   accesoIcono: {
-    width: 54,
-    height: 54,
+    width: 72,
+    height: 72,
+    flex: "0 0 auto",
     display: "grid",
     placeItems: "center",
-    borderRadius: 16,
+    border: "1px solid #dce5e0",
+    borderRadius: 19,
     background:
-      "linear-gradient(180deg,#eef8f2 0%,#dff1e7 100%)",
-    fontSize: 24,
+      "linear-gradient(145deg,#ffffff 0%,#e7ece9 100%)",
+    color: "#16834f",
+    lineHeight: 1,
     boxShadow:
-      "inset 0 1px 0 rgba(255,255,255,.85), 0 8px 18px rgba(23,60,42,.06)",
+      "7px 9px 15px rgba(26,49,36,.17), -4px -4px 11px rgba(255,255,255,.98), inset 0 1px 0 rgba(255,255,255,.95)",
   },
 
   accesoTitulo: {
-    fontSize: 17,
+    display: "block",
+    maxWidth: "100%",
+    color: "#152119",
+    fontSize: 15,
     fontWeight: 900,
-    color: "#132019",
-    lineHeight: 1.15,
+    lineHeight: 1.18,
   },
 
   accesoTexto: {
-    color: "#6d7b73",
-    fontSize: 12,
-    fontWeight: 600,
+    display: "none",
   },
 
   heroGrid: {
@@ -2437,8 +2502,8 @@ const s = {
   accesosGridMobile: {
     gridTemplateColumns:
       "repeat(2,minmax(0,1fr))",
-    gap: 12,
-    marginTop: 2,
+    gap: 13,
+    marginTop: 3,
   },
 
   bienvenidaLavanderiaMobile: {
