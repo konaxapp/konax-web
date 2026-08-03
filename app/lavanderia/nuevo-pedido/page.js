@@ -83,7 +83,6 @@ function borrarDigitoCentavos(digitosActuales) {
   return String(digitosActuales || "").slice(0, -1);
 }
 
-
 function limpiarTextoBusqueda(valor) {
   return String(valor || "")
     .replace(/[%(),]/g, " ")
@@ -130,82 +129,49 @@ function telefonoWhatsApp(telefono) {
 export default function NuevoPedidoLavanderia() {
   const router = useRouter();
 
-  const [empresaId, setEmpresaId] =
-    useState("");
-  const [empresaNombre, setEmpresaNombre] =
-    useState("");
-  const [usuarioId, setUsuarioId] =
-    useState("");
+  const [empresaId, setEmpresaId] = useState("");
+  const [empresaNombre, setEmpresaNombre] = useState("");
+  const [usuarioId, setUsuarioId] = useState("");
 
-  const [busquedaCliente, setBusquedaCliente] =
-    useState("");
-  const [clienteId, setClienteId] =
-    useState("");
-  const [nombreCliente, setNombreCliente] =
-    useState("");
-  const [telefonoCliente, setTelefonoCliente] =
-    useState("");
-  const [direccionCliente, setDireccionCliente] =
-    useState("");
-  const [
-    resultadosClientes,
-    setResultadosClientes,
-  ] = useState([]);
-  const [buscandoCliente, setBuscandoCliente] =
-    useState(false);
+  const [busquedaCliente, setBusquedaCliente] = useState("");
+  const [clienteId, setClienteId] = useState("");
+  const [nombreCliente, setNombreCliente] = useState("");
+  const [telefonoCliente, setTelefonoCliente] = useState("");
+  const [direccionCliente, setDireccionCliente] = useState("");
+  const [resultadosClientes, setResultadosClientes] = useState([]);
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
 
-  const [prendas, setPrendas] = useState([
-    nuevaPrenda(),
-  ]);
-  const [fechaEntrega, setFechaEntrega] =
-    useState("");
-  const [prioridad, setPrioridad] =
-    useState("Normal");
-  const [observaciones, setObservaciones] =
-    useState("");
+  const [prendas, setPrendas] = useState([nuevaPrenda()]);
+  const [fechaEntrega, setFechaEntrega] = useState("");
+  const [prioridad, setPrioridad] = useState("Normal");
+  const [observaciones, setObservaciones] = useState("");
 
-  const [estadoPago, setEstadoPago] =
-    useState("Pendiente");
-  const [montoPagado, setMontoPagado] =
-    useState("");
-  const [montoPagadoCentavos, setMontoPagadoCentavos] =
-    useState("");
-  const [metodoPago, setMetodoPago] =
-    useState("");
+  const [estadoPago, setEstadoPago] = useState("Pendiente");
+  const [montoPagado, setMontoPagado] = useState("");
+  const [montoPagadoCentavos, setMontoPagadoCentavos] = useState("");
+  const [metodoPago, setMetodoPago] = useState("");
 
-  const [guardando, setGuardando] =
-    useState(false);
-  const [comprobante, setComprobante] =
-    useState(null);
-  const [editandoPedido, setEditandoPedido] =
-    useState(false);
-  const [pedidoGuardadoId, setPedidoGuardadoId] =
-    useState("");
-  const [numeroPedidoGuardado, setNumeroPedidoGuardado] =
-    useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [comprobante, setComprobante] = useState(null);
+  const [editandoPedido, setEditandoPedido] = useState(false);
+  const [pedidoGuardadoId, setPedidoGuardadoId] = useState("");
+  const [numeroPedidoGuardado, setNumeroPedidoGuardado] = useState("");
 
   const borrarIntervaloRef = useRef(null);
 
   useEffect(() => {
-    const empresa =
-      localStorage.getItem("empresaId");
-    const nombreEmpresa =
-      localStorage.getItem("empresaNombre");
-    const usuario =
-      localStorage.getItem("usuarioId");
+    const empresa = localStorage.getItem("empresaId");
+    const nombreEmpresa = localStorage.getItem("empresaNombre");
+    const usuario = localStorage.getItem("usuarioId");
 
     if (!empresa || !usuario) {
-      alert(
-        "La sesión no es válida. Inicie sesión nuevamente."
-      );
+      alert("La sesión no es válida. Inicie sesión nuevamente.");
       router.replace("/login");
       return;
     }
 
     setEmpresaId(empresa);
-    setEmpresaNombre(
-      nombreEmpresa || "KONAX Lavandería"
-    );
+    setEmpresaNombre(nombreEmpresa || "KONAX Lavandería");
     setUsuarioId(usuario);
 
     return () => {
@@ -218,9 +184,7 @@ export default function NuevoPedidoLavanderia() {
       (acumulado, prenda) =>
         acumulado +
         numeroSeguro(prenda.cantidad) *
-          numeroSeguro(
-            prenda.precioUnitario
-          ),
+          numeroSeguro(prenda.precioUnitario),
       0
     );
   }, [prendas]);
@@ -231,16 +195,10 @@ export default function NuevoPedidoLavanderia() {
     estadoPago === "Pagado"
       ? total
       : estadoPago === "Abono"
-      ? Math.min(
-          numeroSeguro(montoPagado),
-          total
-        )
+      ? Math.min(numeroSeguro(montoPagado), total)
       : 0;
 
-  const saldoPendiente = Math.max(
-    total - pagado,
-    0
-  );
+  const saldoPendiente = Math.max(total - pagado, 0);
 
   function detenerBorradoContinuo() {
     if (borrarIntervaloRef.current) {
@@ -270,8 +228,7 @@ export default function NuevoPedidoLavanderia() {
   async function buscarClientes(valor) {
     setBusquedaCliente(valor);
 
-    const texto =
-      limpiarTextoBusqueda(valor);
+    const texto = limpiarTextoBusqueda(valor);
 
     if (!empresaId || texto.length < 2) {
       setResultadosClientes([]);
@@ -282,22 +239,16 @@ export default function NuevoPedidoLavanderia() {
 
     const { data, error } = await supabase
       .from("clientes")
-      .select(
-        "id, nombre, telefono, direccion"
-      )
+      .select("id, nombre, telefono, direccion")
       .eq("empresa_id", empresaId)
-      .or(
-        `nombre.ilike.%${texto}%,telefono.ilike.%${texto}%`
-      )
+      .or(`nombre.ilike.%${texto}%,telefono.ilike.%${texto}%`)
       .limit(8);
 
     setBuscandoCliente(false);
 
     if (error) {
-      console.error(
-        "Error buscando clientes:",
-        error
-      );
+      console.error("Error buscando clientes:", error);
+      setResultadosClientes([]);
       return;
     }
 
@@ -307,17 +258,9 @@ export default function NuevoPedidoLavanderia() {
   function seleccionarCliente(cliente) {
     setClienteId(cliente.id);
     setNombreCliente(cliente.nombre || "");
-    setTelefonoCliente(
-      cliente.telefono || ""
-    );
-    setDireccionCliente(
-      cliente.direccion || ""
-    );
-    setBusquedaCliente(
-      cliente.nombre ||
-        cliente.telefono ||
-        ""
-    );
+    setTelefonoCliente(cliente.telefono || "");
+    setDireccionCliente(cliente.direccion || "");
+    setBusquedaCliente(cliente.nombre || cliente.telefono || "");
     setResultadosClientes([]);
   }
 
@@ -331,17 +274,10 @@ export default function NuevoPedidoLavanderia() {
   }
 
   function agregarPrenda() {
-    setPrendas((actuales) => [
-      ...actuales,
-      nuevaPrenda(),
-    ]);
+    setPrendas((actuales) => [...actuales, nuevaPrenda()]);
   }
 
-  function actualizarPrenda(
-    idTemporal,
-    campo,
-    valor
-  ) {
+  function actualizarPrenda(idTemporal, campo, valor) {
     setPrendas((actuales) =>
       actuales.map((prenda) =>
         prenda.idTemporal === idTemporal
@@ -354,27 +290,19 @@ export default function NuevoPedidoLavanderia() {
     );
   }
 
-  function cambiarPrecioCentavos(
-    idTemporal,
-    accion,
-    valor = ""
-  ) {
+  function cambiarPrecioCentavos(idTemporal, accion, valor = "") {
     setPrendas((actuales) =>
       actuales.map((prenda) => {
         if (prenda.idTemporal !== idTemporal) {
           return prenda;
         }
 
-        const actualesCentavos =
-          prenda.precioCentavos || "";
+        const actualesCentavos = prenda.precioCentavos || "";
 
         const nuevosCentavos =
           accion === "borrar"
             ? borrarDigitoCentavos(actualesCentavos)
-            : agregarDigitoCentavos(
-                actualesCentavos,
-                valor
-              );
+            : agregarDigitoCentavos(actualesCentavos, valor);
 
         return {
           ...prenda,
@@ -387,25 +315,16 @@ export default function NuevoPedidoLavanderia() {
     );
   }
 
-  function cambiarAbonoCentavos(
-    accion,
-    valor = ""
-  ) {
+  function cambiarAbonoCentavos(accion, valor = "") {
     setMontoPagadoCentavos((actuales) => {
       const nuevosCentavos =
         accion === "borrar"
           ? borrarDigitoCentavos(actuales)
-          : agregarDigitoCentavos(
-              actuales,
-              valor
-            );
+          : agregarDigitoCentavos(actuales, valor);
 
       setMontoPagado(
         nuevosCentavos
-          ? (
-              Number(nuevosCentavos) /
-              100
-            ).toFixed(2)
+          ? (Number(nuevosCentavos) / 100).toFixed(2)
           : ""
       );
 
@@ -418,9 +337,7 @@ export default function NuevoPedidoLavanderia() {
       actuales.length === 1
         ? actuales
         : actuales.filter(
-            (prenda) =>
-              prenda.idTemporal !==
-              idTemporal
+            (prenda) => prenda.idTemporal !== idTemporal
           )
     );
   }
@@ -428,39 +345,62 @@ export default function NuevoPedidoLavanderia() {
   async function obtenerOCrearCliente() {
     if (clienteId) return clienteId;
 
-    const nombreLimpio =
-      nombreCliente.trim();
-    const telefonoLimpio =
-      telefonoCliente.trim();
+    const nombreLimpio = nombreCliente.trim();
+    const telefonoLimpio = telefonoCliente.trim();
 
-    if (
-      !nombreLimpio ||
-      !telefonoLimpio
-    ) {
-      throw new Error(
-        "Debe ingresar el nombre y teléfono del cliente."
-      );
+    if (!nombreLimpio) {
+      throw new Error("Debe ingresar el nombre del cliente.");
     }
 
-    const {
-      data: clienteExistente,
-      error: errorBusqueda,
-    } = await supabase
-      .from("clientes")
-      .select("id")
-      .eq("empresa_id", empresaId)
-      .eq("telefono", telefonoLimpio)
-      .maybeSingle();
+    if (telefonoLimpio) {
+      const {
+        data: clienteExistente,
+        error: errorBusqueda,
+      } = await supabase
+        .from("clientes")
+        .select("id")
+        .eq("empresa_id", empresaId)
+        .eq("telefono", telefonoLimpio)
+        .maybeSingle();
 
-    if (errorBusqueda) {
-      throw new Error(
-        "No se pudo validar el cliente: " +
-          errorBusqueda.message
-      );
+      if (errorBusqueda) {
+        throw new Error(
+          "No se pudo validar el cliente: " + errorBusqueda.message
+        );
+      }
+
+      if (clienteExistente?.id) {
+        return clienteExistente.id;
+      }
     }
 
-    if (clienteExistente?.id) {
-      return clienteExistente.id;
+    if (!telefonoLimpio) {
+      const {
+        data: clientesMismoNombre,
+        error: errorNombre,
+      } = await supabase
+        .from("clientes")
+        .select("id, nombre, telefono")
+        .eq("empresa_id", empresaId)
+        .ilike("nombre", nombreLimpio)
+        .limit(2);
+
+      if (errorNombre) {
+        throw new Error(
+          "No se pudo validar el nombre del cliente: " +
+            errorNombre.message
+        );
+      }
+
+      if (clientesMismoNombre?.length === 1) {
+        return clientesMismoNombre[0].id;
+      }
+
+      if (clientesMismoNombre?.length > 1) {
+        throw new Error(
+          "Hay varios clientes registrados con ese nombre. Seleccione el cliente desde el buscador o agregue un número de teléfono."
+        );
+      }
     }
 
     const { data, error } = await supabase
@@ -469,14 +409,11 @@ export default function NuevoPedidoLavanderia() {
         {
           empresa_id: empresaId,
           nombre: nombreLimpio,
-          telefono: telefonoLimpio,
-          direccion:
-            direccionCliente.trim() ||
-            null,
+          telefono: telefonoLimpio || null,
+          direccion: direccionCliente.trim() || null,
           estado: "Activo",
           modalidad: "Lavandería",
-          observacion:
-            "Cliente registrado desde Nuevo pedido",
+          observacion: "Cliente registrado desde Nuevo pedido",
         },
       ])
       .select("id")
@@ -484,8 +421,7 @@ export default function NuevoPedidoLavanderia() {
 
     if (error) {
       throw new Error(
-        "No se pudo registrar el cliente: " +
-          error.message
+        "No se pudo registrar el cliente: " + error.message
       );
     }
 
@@ -494,38 +430,22 @@ export default function NuevoPedidoLavanderia() {
 
   function validarFormulario() {
     if (!nombreCliente.trim()) {
-      alert(
-        "Ingrese el nombre del cliente."
-      );
-      return false;
-    }
-
-    if (!telefonoCliente.trim()) {
-      alert(
-        "Ingrese el teléfono del cliente."
-      );
+      alert("Ingrese el nombre del cliente.");
       return false;
     }
 
     if (!fechaEntrega) {
-      alert(
-        "Seleccione la fecha de entrega."
-      );
+      alert("Seleccione la fecha de entrega.");
       return false;
     }
 
-    const prendasValidas =
-      prendas.every(
-        (prenda) =>
-          prenda.tipo &&
-          prenda.servicio &&
-          numeroSeguro(
-            prenda.cantidad
-          ) > 0 &&
-          numeroSeguro(
-            prenda.precioUnitario
-          ) > 0
-      );
+    const prendasValidas = prendas.every(
+      (prenda) =>
+        prenda.tipo &&
+        prenda.servicio &&
+        numeroSeguro(prenda.cantidad) > 0 &&
+        numeroSeguro(prenda.precioUnitario) > 0
+    );
 
     if (!prendasValidas) {
       alert(
@@ -535,9 +455,7 @@ export default function NuevoPedidoLavanderia() {
     }
 
     if (total <= 0) {
-      alert(
-        "El total del pedido debe ser mayor que cero."
-      );
+      alert("El total del pedido debe ser mayor que cero.");
       return false;
     }
 
@@ -545,28 +463,19 @@ export default function NuevoPedidoLavanderia() {
       estadoPago === "Abono" &&
       (pagado <= 0 || pagado >= total)
     ) {
-      alert(
-        "El abono debe ser mayor que cero y menor que el total."
-      );
+      alert("El abono debe ser mayor que cero y menor que el total.");
       return false;
     }
 
-    if (
-      estadoPago !== "Pendiente" &&
-      !metodoPago
-    ) {
-      alert(
-        "Seleccione el método de pago."
-      );
+    if (estadoPago !== "Pendiente" && !metodoPago) {
+      alert("Seleccione el método de pago.");
       return false;
     }
 
     return true;
   }
 
-  function construirMensajeWhatsApp(
-    datos
-  ) {
+  function construirMensajeWhatsApp(datos) {
     const detallePrendas = datos.prendas
       .map(
         (prenda) =>
@@ -586,23 +495,15 @@ export default function NuevoPedidoLavanderia() {
       "",
       `*Pedido:* ${datos.numeroPedido}`,
       `*Estado:* En proceso`,
-      `*Entrega estimada:* ${formatoFecha(
-        datos.fechaEntrega
-      )}`,
+      `*Entrega estimada:* ${formatoFecha(datos.fechaEntrega)}`,
       `*Prioridad:* ${datos.prioridad}`,
       "",
       "*Prendas y servicios:*",
       detallePrendas,
       "",
-      `*Total:* ${formatoDinero(
-        datos.total
-      )}`,
-      `*Pagado:* ${formatoDinero(
-        datos.pagado
-      )}`,
-      `*Saldo:* ${formatoDinero(
-        datos.saldoPendiente
-      )}`,
+      `*Total:* ${formatoDinero(datos.total)}`,
+      `*Pagado:* ${formatoDinero(datos.pagado)}`,
+      `*Saldo:* ${formatoDinero(datos.saldoPendiente)}`,
       `*Pago:* ${pagoTexto}`,
       datos.observaciones
         ? `*Indicaciones:* ${datos.observaciones}`
@@ -623,28 +524,17 @@ export default function NuevoPedidoLavanderia() {
     );
 
     if (!telefono) {
-      alert(
-        "El cliente no tiene un teléfono válido."
-      );
+      alert("El cliente no tiene un teléfono válido.");
       return;
     }
 
-    const mensaje =
-      construirMensajeWhatsApp(
-        comprobante
-      );
+    const mensaje = construirMensajeWhatsApp(comprobante);
 
     const url =
       `https://wa.me/${telefono}` +
-      `?text=${encodeURIComponent(
-        mensaje
-      )}`;
+      `?text=${encodeURIComponent(mensaje)}`;
 
-    window.open(
-      url,
-      "_blank",
-      "noopener,noreferrer"
-    );
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   function reiniciarFormulario() {
@@ -689,22 +579,17 @@ export default function NuevoPedidoLavanderia() {
   async function guardarPedido(evento) {
     evento.preventDefault();
 
-    if (
-      guardando ||
-      !validarFormulario()
-    ) {
+    if (guardando || !validarFormulario()) {
       return;
     }
 
     setGuardando(true);
 
     try {
-      const clienteFinalId =
-        await obtenerOCrearCliente();
+      const clienteFinalId = await obtenerOCrearCliente();
 
       const numeroPedido =
-        numeroPedidoGuardado ||
-        `LAV-${Date.now()}`;
+        numeroPedidoGuardado || `LAV-${Date.now()}`;
 
       const pedidoPayload = {
         empresa_id: empresaId,
@@ -720,11 +605,8 @@ export default function NuevoPedidoLavanderia() {
         monto_pagado: pagado,
         saldo_pendiente: saldoPendiente,
         metodo_pago:
-          estadoPago === "Pendiente"
-            ? null
-            : metodoPago,
-        observaciones:
-          observaciones.trim() || null,
+          estadoPago === "Pendiente" ? null : metodoPago,
+        observaciones: observaciones.trim() || null,
       };
 
       let pedido = null;
@@ -747,8 +629,7 @@ export default function NuevoPedidoLavanderia() {
           .insert([
             {
               ...pedidoPayload,
-              fecha_recepcion:
-                new Date().toISOString(),
+              fecha_recepcion: new Date().toISOString(),
               creado_por: usuarioId,
             },
           ])
@@ -762,46 +643,30 @@ export default function NuevoPedidoLavanderia() {
       if (errorPedido) {
         throw new Error(
           editandoPedido
-            ? "No se pudo actualizar el pedido: " +
-                errorPedido.message
-            : "No se pudo guardar el pedido: " +
-                errorPedido.message
+            ? "No se pudo actualizar el pedido: " + errorPedido.message
+            : "No se pudo guardar el pedido: " + errorPedido.message
         );
       }
 
-      const detalles = prendas.map(
-        (prenda) => ({
-          empresa_id: empresaId,
-          pedido_id: pedido.id,
-          tipo_prenda: prenda.tipo,
-          servicio: prenda.servicio,
-          cantidad: numeroSeguro(
-            prenda.cantidad
-          ),
-          precio_unitario:
-            numeroSeguro(
-              prenda.precioUnitario
-            ),
-          subtotal:
-            numeroSeguro(
-              prenda.cantidad
-            ) *
-            numeroSeguro(
-              prenda.precioUnitario
-            ),
-          observacion:
-            prenda.observacion.trim() ||
-            null,
-        })
-      );
+      const detalles = prendas.map((prenda) => ({
+        empresa_id: empresaId,
+        pedido_id: pedido.id,
+        tipo_prenda: prenda.tipo,
+        servicio: prenda.servicio,
+        cantidad: numeroSeguro(prenda.cantidad),
+        precio_unitario: numeroSeguro(prenda.precioUnitario),
+        subtotal:
+          numeroSeguro(prenda.cantidad) *
+          numeroSeguro(prenda.precioUnitario),
+        observacion: prenda.observacion.trim() || null,
+      }));
 
       if (editandoPedido && pedidoGuardadoId) {
-        const { error: errorEliminarDetalles } =
-          await supabase
-            .from("lavanderia_pedido_detalles")
-            .delete()
-            .eq("pedido_id", pedido.id)
-            .eq("empresa_id", empresaId);
+        const { error: errorEliminarDetalles } = await supabase
+          .from("lavanderia_pedido_detalles")
+          .delete()
+          .eq("pedido_id", pedido.id)
+          .eq("empresa_id", empresaId);
 
         if (errorEliminarDetalles) {
           throw new Error(
@@ -811,12 +676,9 @@ export default function NuevoPedidoLavanderia() {
         }
       }
 
-      const { error: errorDetalles } =
-        await supabase
-          .from(
-            "lavanderia_pedido_detalles"
-          )
-          .insert(detalles);
+      const { error: errorDetalles } = await supabase
+        .from("lavanderia_pedido_detalles")
+        .insert(detalles);
 
       if (errorDetalles) {
         if (!editandoPedido) {
@@ -833,40 +695,28 @@ export default function NuevoPedidoLavanderia() {
       }
 
       setPedidoGuardadoId(pedido.id);
-      setNumeroPedidoGuardado(
-        pedido.numero_pedido
-      );
+      setNumeroPedidoGuardado(pedido.numero_pedido);
       setEditandoPedido(false);
 
       setComprobante({
         pedidoId: pedido.id,
-        numeroPedido:
-          pedido.numero_pedido,
+        numeroPedido: pedido.numero_pedido,
         empresaNombre,
-        nombreCliente:
-          nombreCliente.trim(),
-        telefonoCliente:
-          telefonoCliente.trim(),
+        nombreCliente: nombreCliente.trim(),
+        telefonoCliente: telefonoCliente.trim(),
         fechaEntrega,
         prioridad,
-        observaciones:
-          observaciones.trim(),
+        observaciones: observaciones.trim(),
         estadoPago,
         metodoPago,
         total,
         pagado,
         saldoPendiente,
-        prendas: prendas.map(
-          (prenda) => ({
-            tipo: prenda.tipo,
-            servicio:
-              prenda.servicio,
-            cantidad:
-              numeroSeguro(
-                prenda.cantidad
-              ),
-          })
-        ),
+        prendas: prendas.map((prenda) => ({
+          tipo: prenda.tipo,
+          servicio: prenda.servicio,
+          cantidad: numeroSeguro(prenda.cantidad),
+        })),
       });
 
       window.scrollTo({
@@ -874,14 +724,10 @@ export default function NuevoPedidoLavanderia() {
         behavior: "smooth",
       });
     } catch (error) {
-      console.error(
-        "Error guardando pedido:",
-        error
-      );
+      console.error("Error guardando pedido:", error);
 
       alert(
-        error.message ||
-          "No se pudo guardar el pedido."
+        error.message || "No se pudo guardar el pedido."
       );
     } finally {
       setGuardando(false);
@@ -898,78 +744,60 @@ export default function NuevoPedidoLavanderia() {
             PEDIDO GUARDADO
           </span>
 
-          <h1>
-            {comprobante.numeroPedido}
-          </h1>
+          <h1>{comprobante.numeroPedido}</h1>
 
           <p className="confirmacion">
-            El pedido quedó en{" "}
-            <strong>En proceso</strong>.
+            El pedido quedó en <strong>En proceso</strong>.
           </p>
 
           <div className="comprobante-datos">
             <div>
               <span>Cliente</span>
-              <strong>
-                {
-                  comprobante.nombreCliente
-                }
-              </strong>
+              <strong>{comprobante.nombreCliente}</strong>
             </div>
 
             <div>
               <span>Teléfono</span>
               <strong>
-                {
-                  comprobante.telefonoCliente
-                }
+                {comprobante.telefonoCliente || "No registrado"}
               </strong>
             </div>
 
             <div>
               <span>Entrega</span>
-              <strong>
-                {formatoFecha(
-                  comprobante.fechaEntrega
-                )}
-              </strong>
+              <strong>{formatoFecha(comprobante.fechaEntrega)}</strong>
             </div>
 
             <div>
               <span>Total</span>
-              <strong>
-                {formatoDinero(
-                  comprobante.total
-                )}
-              </strong>
+              <strong>{formatoDinero(comprobante.total)}</strong>
             </div>
 
             <div>
               <span>Pagado</span>
-              <strong>
-                {formatoDinero(
-                  comprobante.pagado
-                )}
-              </strong>
+              <strong>{formatoDinero(comprobante.pagado)}</strong>
             </div>
 
             <div>
               <span>Saldo</span>
-              <strong>
-                {formatoDinero(
-                  comprobante.saldoPendiente
-                )}
-              </strong>
+              <strong>{formatoDinero(comprobante.saldoPendiente)}</strong>
             </div>
           </div>
 
-          <button
-            type="button"
-            className="whatsapp"
-            onClick={enviarWhatsApp}
-          >
-            Abrir comprobante en WhatsApp
-          </button>
+          {comprobante.telefonoCliente ? (
+            <button
+              type="button"
+              className="whatsapp"
+              onClick={enviarWhatsApp}
+            >
+              Abrir comprobante en WhatsApp
+            </button>
+          ) : (
+            <div className="sin-whatsapp">
+              Pedido guardado sin teléfono. El comprobante puede
+              consultarse desde el historial.
+            </div>
+          )}
 
           <button
             type="button"
@@ -991,11 +819,7 @@ export default function NuevoPedidoLavanderia() {
             <button
               type="button"
               className="ver-pedidos"
-              onClick={() =>
-                router.push(
-                  "/lavanderia/pedidos"
-                )
-              }
+              onClick={() => router.push("/lavanderia/pedidos")}
             >
               Ver pedidos
             </button>
@@ -1014,10 +838,7 @@ export default function NuevoPedidoLavanderia() {
             place-items: center;
             background: #f2f6f3;
             color: #142019;
-            font-family:
-              Inter,
-              Arial,
-              sans-serif;
+            font-family: Inter, Arial, sans-serif;
           }
 
           .comprobante {
@@ -1026,9 +847,7 @@ export default function NuevoPedidoLavanderia() {
             border: 1px solid #cfe2d6;
             border-radius: 22px;
             background: white;
-            box-shadow:
-              0 18px 48px
-              rgba(21, 45, 31, 0.1);
+            box-shadow: 0 18px 48px rgba(21, 45, 31, 0.1);
             text-align: center;
           }
 
@@ -1065,8 +884,7 @@ export default function NuevoPedidoLavanderia() {
 
           .comprobante-datos {
             display: grid;
-            grid-template-columns:
-              repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 9px;
             text-align: left;
           }
@@ -1102,6 +920,18 @@ export default function NuevoPedidoLavanderia() {
             cursor: pointer;
           }
 
+          .sin-whatsapp {
+            width: 100%;
+            margin-top: 17px;
+            padding: 13px;
+            border: 1px solid #d5dfd8;
+            border-radius: 11px;
+            background: #f5f8f6;
+            color: #58665e;
+            font-size: 13px;
+            text-align: center;
+          }
+
           .corregir {
             width: 100%;
             min-height: 48px;
@@ -1117,8 +947,7 @@ export default function NuevoPedidoLavanderia() {
           .acciones-comprobante {
             margin-top: 9px;
             display: grid;
-            grid-template-columns:
-              repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 9px;
           }
 
@@ -1159,26 +988,19 @@ export default function NuevoPedidoLavanderia() {
         <button
           type="button"
           className="volver"
-          onClick={() =>
-            router.push("/dashboard")
-          }
+          onClick={() => router.push("/dashboard")}
           aria-label="Volver al panel"
         >
           ←
         </button>
 
         <div>
-          <span className="etiqueta">
-            KONAX LAVANDERÍA
-          </span>
+          <span className="etiqueta">KONAX LAVANDERÍA</span>
           <h1>Nuevo pedido</h1>
         </div>
       </header>
 
-      <form
-        onSubmit={guardarPedido}
-        className="formulario"
-      >
+      <form onSubmit={guardarPedido} className="formulario">
         <section className="tarjeta">
           <TituloSeccion
             numero="1"
@@ -1186,93 +1008,60 @@ export default function NuevoPedidoLavanderia() {
             texto="Busca un cliente o registra uno nuevo."
           />
 
-          <label>
-            Buscar por nombre o teléfono
-          </label>
+          <label>Buscar por nombre o teléfono</label>
 
           <input
             type="text"
             value={busquedaCliente}
-            onChange={(e) =>
-              buscarClientes(e.target.value)
-            }
+            onChange={(e) => buscarClientes(e.target.value)}
             placeholder="Ej. María o 6000-0000"
           />
 
           {buscandoCliente && (
-            <span className="ayuda">
-              Buscando...
-            </span>
+            <span className="ayuda">Buscando...</span>
           )}
 
-          {resultadosClientes.length >
-            0 && (
+          {resultadosClientes.length > 0 && (
             <div className="resultados">
-              {resultadosClientes.map(
-                (cliente) => (
-                  <button
-                    key={cliente.id}
-                    type="button"
-                    onClick={() =>
-                      seleccionarCliente(
-                        cliente
-                      )
-                    }
-                    className="resultado"
-                  >
-                    <strong>
-                      {cliente.nombre}
-                    </strong>
-                    <span>
-                      {cliente.telefono}
-                    </span>
-                  </button>
-                )
-              )}
+              {resultadosClientes.map((cliente) => (
+                <button
+                  key={cliente.id}
+                  type="button"
+                  onClick={() => seleccionarCliente(cliente)}
+                  className="resultado"
+                >
+                  <strong>{cliente.nombre}</strong>
+                  <span>{cliente.telefono || "Sin teléfono"}</span>
+                </button>
+              ))}
             </div>
           )}
 
           <div className="grid">
             <div>
-              <label>
-                Nombre completo
-              </label>
+              <label>Nombre completo</label>
               <input
                 value={nombreCliente}
-                onChange={(e) =>
-                  setNombreCliente(
-                    e.target.value
-                  )
-                }
+                onChange={(e) => setNombreCliente(e.target.value)}
                 placeholder="Nombre del cliente"
               />
             </div>
 
             <div>
-              <label>Teléfono</label>
+              <label>Teléfono, opcional</label>
               <input
                 value={telefonoCliente}
-                onChange={(e) =>
-                  setTelefonoCliente(
-                    e.target.value
-                  )
-                }
-                placeholder="Número de teléfono"
+                onChange={(e) => setTelefonoCliente(e.target.value)}
+                placeholder="Número para enviar por WhatsApp"
               />
             </div>
           </div>
 
-          <label>
-            Dirección, opcional
-          </label>
+          <label>Dirección, opcional</label>
 
           <input
             value={direccionCliente}
-            onChange={(e) =>
-              setDireccionCliente(
-                e.target.value
-              )
-            }
+            onChange={(e) => setDireccionCliente(e.target.value)}
             placeholder="Dirección del cliente"
           />
 
@@ -1294,218 +1083,163 @@ export default function NuevoPedidoLavanderia() {
             texto="Agrega las prendas recibidas."
           />
 
-          {prendas.map(
-            (prenda, indice) => (
-              <div
-                key={
-                  prenda.idTemporal
-                }
-                className="prenda"
-              >
-                <div className="prenda-cabecera">
-                  <strong>
-                    Artículo {indice + 1}
-                  </strong>
+          {prendas.map((prenda, indice) => (
+            <div key={prenda.idTemporal} className="prenda">
+              <div className="prenda-cabecera">
+                <strong>Artículo {indice + 1}</strong>
 
-                  {prendas.length >
-                    1 && (
+                {prendas.length > 1 && (
+                  <button
+                    type="button"
+                    className="eliminar"
+                    onClick={() => eliminarPrenda(prenda.idTemporal)}
+                  >
+                    Eliminar
+                  </button>
+                )}
+              </div>
+
+              <div className="grid">
+                <div>
+                  <label>Tipo de prenda</label>
+                  <select
+                    value={prenda.tipo}
+                    onChange={(e) =>
+                      actualizarPrenda(
+                        prenda.idTemporal,
+                        "tipo",
+                        e.target.value
+                      )
+                    }
+                  >
+                    <option value="">Seleccionar</option>
+                    {TIPOS_PRENDA.map((tipo) => (
+                      <option key={tipo} value={tipo}>
+                        {tipo}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label>Servicio</label>
+                  <select
+                    value={prenda.servicio}
+                    onChange={(e) =>
+                      actualizarPrenda(
+                        prenda.idTemporal,
+                        "servicio",
+                        e.target.value
+                      )
+                    }
+                  >
+                    <option value="">Seleccionar</option>
+                    {SERVICIOS.map((servicio) => (
+                      <option key={servicio} value={servicio}>
+                        {servicio}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label>Cantidad</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={prenda.cantidad}
+                    onChange={(e) =>
+                      actualizarPrenda(
+                        prenda.idTemporal,
+                        "cantidad",
+                        e.target.value
+                      )
+                    }
+                  />
+                </div>
+
+                <div>
+                  <label>Precio unitario</label>
+                  <div className="monto-con-borrar">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={mostrarMontoDesdeCentavos(
+                        prenda.precioCentavos
+                      )}
+                      onBeforeInput={(e) => {
+                        const dato = e.nativeEvent?.data || "";
+
+                        if (/^\d+$/.test(dato)) {
+                          e.preventDefault();
+
+                          cambiarPrecioCentavos(
+                            prenda.idTemporal,
+                            "agregar",
+                            dato
+                          );
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (
+                          e.key === "Backspace" ||
+                          e.key === "Delete"
+                        ) {
+                          e.preventDefault();
+
+                          cambiarPrecioCentavos(
+                            prenda.idTemporal,
+                            "borrar"
+                          );
+                        }
+                      }}
+                      onChange={() => {}}
+                      placeholder="0.00"
+                    />
+
                     <button
                       type="button"
-                      className="eliminar"
-                      onClick={() =>
-                        eliminarPrenda(
-                          prenda.idTemporal
-                        )
+                      className="borrar-monto"
+                      onPointerDown={() =>
+                        iniciarBorradoPrecio(prenda.idTemporal)
                       }
+                      onPointerUp={detenerBorradoContinuo}
+                      onPointerLeave={detenerBorradoContinuo}
+                      onPointerCancel={detenerBorradoContinuo}
+                      aria-label="Mantener presionado para borrar"
                     >
-                      Eliminar
+                      ⌫
                     </button>
-                  )}
-                </div>
-
-                <div className="grid">
-                  <div>
-                    <label>
-                      Tipo de prenda
-                    </label>
-                    <select
-                      value={prenda.tipo}
-                      onChange={(e) =>
-                        actualizarPrenda(
-                          prenda.idTemporal,
-                          "tipo",
-                          e.target.value
-                        )
-                      }
-                    >
-                      <option value="">
-                        Seleccionar
-                      </option>
-                      {TIPOS_PRENDA.map(
-                        (tipo) => (
-                          <option
-                            key={tipo}
-                            value={tipo}
-                          >
-                            {tipo}
-                          </option>
-                        )
-                      )}
-                    </select>
                   </div>
-
-                  <div>
-                    <label>Servicio</label>
-                    <select
-                      value={
-                        prenda.servicio
-                      }
-                      onChange={(e) =>
-                        actualizarPrenda(
-                          prenda.idTemporal,
-                          "servicio",
-                          e.target.value
-                        )
-                      }
-                    >
-                      <option value="">
-                        Seleccionar
-                      </option>
-                      {SERVICIOS.map(
-                        (servicio) => (
-                          <option
-                            key={servicio}
-                            value={
-                              servicio
-                            }
-                          >
-                            {servicio}
-                          </option>
-                        )
-                      )}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label>Cantidad</label>
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={
-                        prenda.cantidad
-                      }
-                      onChange={(e) =>
-                        actualizarPrenda(
-                          prenda.idTemporal,
-                          "cantidad",
-                          e.target.value
-                        )
-                      }
-                    />
-                  </div>
-
-                  <div>
-                    <label>
-                      Precio unitario
-                    </label>
-                    <div className="monto-con-borrar">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={mostrarMontoDesdeCentavos(
-                          prenda.precioCentavos
-                        )}
-                        onBeforeInput={(e) => {
-                          const dato =
-                            e.nativeEvent?.data || "";
-
-                          if (/^\d+$/.test(dato)) {
-                            e.preventDefault();
-
-                            cambiarPrecioCentavos(
-                              prenda.idTemporal,
-                              "agregar",
-                              dato
-                            );
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (
-                            e.key === "Backspace" ||
-                            e.key === "Delete"
-                          ) {
-                            e.preventDefault();
-
-                            cambiarPrecioCentavos(
-                              prenda.idTemporal,
-                              "borrar"
-                            );
-                          }
-                        }}
-                        onChange={() => {}}
-                        placeholder="0.00"
-                      />
-
-                      <button
-                        type="button"
-                        className="borrar-monto"
-                        onPointerDown={() =>
-                          iniciarBorradoPrecio(
-                            prenda.idTemporal
-                          )
-                        }
-                        onPointerUp={
-                          detenerBorradoContinuo
-                        }
-                        onPointerLeave={
-                          detenerBorradoContinuo
-                        }
-                        onPointerCancel={
-                          detenerBorradoContinuo
-                        }
-                        aria-label="Mantener presionado para borrar"
-                      >
-                        ⌫
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <label>
-                  Observación de la prenda
-                </label>
-
-                <input
-                  value={
-                    prenda.observacion
-                  }
-                  onChange={(e) =>
-                    actualizarPrenda(
-                      prenda.idTemporal,
-                      "observacion",
-                      e.target.value
-                    )
-                  }
-                  placeholder="Ej. Mancha en la manga"
-                />
-
-                <div className="subtotal-prenda">
-                  Subtotal:{" "}
-                  <strong>
-                    {formatoDinero(
-                      numeroSeguro(
-                        prenda.cantidad
-                      ) *
-                        numeroSeguro(
-                          prenda.precioUnitario
-                        )
-                    )}
-                  </strong>
                 </div>
               </div>
-            )
-          )}
+
+              <label>Observación de la prenda</label>
+
+              <input
+                value={prenda.observacion}
+                onChange={(e) =>
+                  actualizarPrenda(
+                    prenda.idTemporal,
+                    "observacion",
+                    e.target.value
+                  )
+                }
+                placeholder="Ej. Mancha en la manga"
+              />
+
+              <div className="subtotal-prenda">
+                Subtotal:{" "}
+                <strong>
+                  {formatoDinero(
+                    numeroSeguro(prenda.cantidad) *
+                      numeroSeguro(prenda.precioUnitario)
+                  )}
+                </strong>
+              </div>
+            </div>
+          ))}
 
           <button
             type="button"
@@ -1525,18 +1259,12 @@ export default function NuevoPedidoLavanderia() {
 
           <div className="grid">
             <div>
-              <label>
-                Fecha estimada de entrega
-              </label>
+              <label>Fecha estimada de entrega</label>
 
               <input
                 type="date"
                 value={fechaEntrega}
-                onChange={(e) =>
-                  setFechaEntrega(
-                    e.target.value
-                  )
-                }
+                onChange={(e) => setFechaEntrega(e.target.value)}
               />
             </div>
 
@@ -1545,33 +1273,19 @@ export default function NuevoPedidoLavanderia() {
 
               <select
                 value={prioridad}
-                onChange={(e) =>
-                  setPrioridad(
-                    e.target.value
-                  )
-                }
+                onChange={(e) => setPrioridad(e.target.value)}
               >
-                <option value="Normal">
-                  Normal
-                </option>
-                <option value="Express">
-                  Express
-                </option>
+                <option value="Normal">Normal</option>
+                <option value="Express">Express</option>
               </select>
             </div>
           </div>
 
-          <label>
-            Observaciones generales
-          </label>
+          <label>Observaciones generales</label>
 
           <textarea
             value={observaciones}
-            onChange={(e) =>
-              setObservaciones(
-                e.target.value
-              )
-            }
+            onChange={(e) => setObservaciones(e.target.value)}
             placeholder="Instrucciones generales del pedido"
             rows={3}
           />
@@ -1585,34 +1299,21 @@ export default function NuevoPedidoLavanderia() {
           />
 
           <div className="opciones-pago">
-            {[
-              "Pagado",
-              "Abono",
-              "Pendiente",
-            ].map((opcion) => (
+            {["Pagado", "Abono", "Pendiente"].map((opcion) => (
               <button
                 key={opcion}
                 type="button"
                 onClick={() => {
                   setEstadoPago(opcion);
 
-                  if (
-                    opcion === "Pagado"
-                  ) {
-                    setMontoPagado(
-                      total.toFixed(2)
-                    );
+                  if (opcion === "Pagado") {
+                    setMontoPagado(total.toFixed(2));
                     setMontoPagadoCentavos(
-                      String(
-                        Math.round(total * 100)
-                      )
+                      String(Math.round(total * 100))
                     );
                   }
 
-                  if (
-                    opcion ===
-                    "Pendiente"
-                  ) {
+                  if (opcion === "Pendiente") {
                     setMontoPagado("");
                     setMontoPagadoCentavos("");
                     setMetodoPago("");
@@ -1641,15 +1342,11 @@ export default function NuevoPedidoLavanderia() {
                     montoPagadoCentavos
                   )}
                   onBeforeInput={(e) => {
-                    const dato =
-                      e.nativeEvent?.data || "";
+                    const dato = e.nativeEvent?.data || "";
 
                     if (/^\d+$/.test(dato)) {
                       e.preventDefault();
-                      cambiarAbonoCentavos(
-                        "agregar",
-                        dato
-                      );
+                      cambiarAbonoCentavos("agregar", dato);
                     }
                   }}
                   onKeyDown={(e) => {
@@ -1658,9 +1355,7 @@ export default function NuevoPedidoLavanderia() {
                       e.key === "Delete"
                     ) {
                       e.preventDefault();
-                      cambiarAbonoCentavos(
-                        "borrar"
-                      );
+                      cambiarAbonoCentavos("borrar");
                     }
                   }}
                   onChange={() => {}}
@@ -1670,18 +1365,10 @@ export default function NuevoPedidoLavanderia() {
                 <button
                   type="button"
                   className="borrar-monto"
-                  onPointerDown={
-                    iniciarBorradoAbono
-                  }
-                  onPointerUp={
-                    detenerBorradoContinuo
-                  }
-                  onPointerLeave={
-                    detenerBorradoContinuo
-                  }
-                  onPointerCancel={
-                    detenerBorradoContinuo
-                  }
+                  onPointerDown={iniciarBorradoAbono}
+                  onPointerUp={detenerBorradoContinuo}
+                  onPointerLeave={detenerBorradoContinuo}
+                  onPointerCancel={detenerBorradoContinuo}
                   aria-label="Mantener presionado para borrar"
                 >
                   ⌫
@@ -1690,35 +1377,21 @@ export default function NuevoPedidoLavanderia() {
             </div>
           )}
 
-          {estadoPago !==
-            "Pendiente" && (
+          {estadoPago !== "Pendiente" && (
             <div>
-              <label>
-                Método de pago
-              </label>
+              <label>Método de pago</label>
 
               <select
                 value={metodoPago}
-                onChange={(e) =>
-                  setMetodoPago(
-                    e.target.value
-                  )
-                }
+                onChange={(e) => setMetodoPago(e.target.value)}
               >
-                <option value="">
-                  Seleccione un método
-                </option>
+                <option value="">Seleccione un método</option>
 
-                {METODOS_PAGO.map(
-                  (metodo) => (
-                    <option
-                      key={metodo}
-                      value={metodo}
-                    >
-                      {metodo}
-                    </option>
-                  )
-                )}
+                {METODOS_PAGO.map((metodo) => (
+                  <option key={metodo} value={metodo}>
+                    {metodo}
+                  </option>
+                ))}
               </select>
             </div>
           )}
@@ -1726,27 +1399,17 @@ export default function NuevoPedidoLavanderia() {
           <div className="resumen">
             <div>
               <span>Total</span>
-              <strong>
-                {formatoDinero(total)}
-              </strong>
+              <strong>{formatoDinero(total)}</strong>
             </div>
 
             <div>
               <span>Pagado</span>
-              <strong>
-                {formatoDinero(pagado)}
-              </strong>
+              <strong>{formatoDinero(pagado)}</strong>
             </div>
 
             <div>
-              <span>
-                Saldo pendiente
-              </span>
-              <strong>
-                {formatoDinero(
-                  saldoPendiente
-                )}
-              </strong>
+              <span>Saldo pendiente</span>
+              <strong>{formatoDinero(saldoPendiente)}</strong>
             </div>
           </div>
         </section>
@@ -1776,10 +1439,7 @@ export default function NuevoPedidoLavanderia() {
           padding: 12px 10px 30px;
           background: #f2f6f3;
           color: #142019;
-          font-family:
-            Inter,
-            Arial,
-            sans-serif;
+          font-family: Inter, Arial, sans-serif;
         }
 
         .encabezado {
@@ -1825,9 +1485,7 @@ export default function NuevoPedidoLavanderia() {
           border: 1px solid #dde7e0;
           border-radius: 17px;
           background: white;
-          box-shadow:
-            0 8px 22px
-            rgba(21, 45, 31, 0.05);
+          box-shadow: 0 8px 22px rgba(21, 45, 31, 0.05);
         }
 
         :global(.titulo-seccion) {
@@ -1889,9 +1547,7 @@ export default function NuevoPedidoLavanderia() {
         select:focus,
         textarea:focus {
           border-color: #16834f;
-          box-shadow:
-            0 0 0 3px
-            rgba(22, 131, 79, 0.1);
+          box-shadow: 0 0 0 3px rgba(22, 131, 79, 0.1);
         }
 
         .grid {
@@ -1914,8 +1570,7 @@ export default function NuevoPedidoLavanderia() {
           min-height: 46px;
           padding: 10px;
           display: flex;
-          justify-content:
-            space-between;
+          justify-content: space-between;
           align-items: center;
           gap: 10px;
           border: 0;
@@ -1941,8 +1596,7 @@ export default function NuevoPedidoLavanderia() {
 
         .prenda-cabecera {
           display: flex;
-          justify-content:
-            space-between;
+          justify-content: space-between;
           align-items: center;
         }
 
@@ -2026,8 +1680,7 @@ export default function NuevoPedidoLavanderia() {
 
         .resumen div {
           display: flex;
-          justify-content:
-            space-between;
+          justify-content: space-between;
           gap: 12px;
         }
 
@@ -2043,19 +1696,12 @@ export default function NuevoPedidoLavanderia() {
           min-height: 56px;
           border: 0;
           border-radius: 13px;
-          background:
-            linear-gradient(
-              135deg,
-              #117a46,
-              #1aa55f
-            );
+          background: linear-gradient(135deg, #117a46, #1aa55f);
           color: white;
           font-size: 17px;
           font-weight: 900;
           cursor: pointer;
-          box-shadow:
-            0 13px 28px
-            rgba(17, 122, 70, 0.25);
+          box-shadow: 0 13px 28px rgba(17, 122, 70, 0.25);
         }
 
         .guardar:disabled {
@@ -2065,8 +1711,7 @@ export default function NuevoPedidoLavanderia() {
 
         @media (min-width: 640px) {
           .pagina {
-            padding:
-              18px 14px 40px;
+            padding: 18px 14px 40px;
           }
 
           .tarjeta {
@@ -2074,17 +1719,12 @@ export default function NuevoPedidoLavanderia() {
           }
 
           .grid {
-            grid-template-columns:
-              repeat(
-                2,
-                minmax(0, 1fr)
-              );
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 12px;
           }
 
           .opciones-pago {
-            grid-template-columns:
-              repeat(3, 1fr);
+            grid-template-columns: repeat(3, 1fr);
           }
 
           .guardar {
@@ -2096,16 +1736,10 @@ export default function NuevoPedidoLavanderia() {
   );
 }
 
-function TituloSeccion({
-  numero,
-  titulo,
-  texto,
-}) {
+function TituloSeccion({ numero, titulo, texto }) {
   return (
     <div className="titulo-seccion">
-      <span className="numero">
-        {numero}
-      </span>
+      <span className="numero">{numero}</span>
 
       <div>
         <h2>{titulo}</h2>
