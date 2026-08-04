@@ -2727,14 +2727,31 @@ function DashboardGimnasio({
                       <button
                         type="button"
                         style={s.gymMenuAccionItem}
-                        onClick={() =>
-                          onNavigate(
-                            crearRutaAlumno(
-                              "/clientes",
-                              alumnoSeleccionado.id
-                            )
-                          )
-                        }
+                        onClick={() => {
+                          const criterioFicha =
+                            alumnoSeleccionado.documento ||
+                            alumnoSeleccionado.nombre;
+
+                          if (!criterioFicha) {
+                            alert(
+                              "No se pudo identificar al alumno seleccionado."
+                            );
+                            return;
+                          }
+
+                          /*
+                            La pantalla /vista-cliente ya reconoce
+                            busquedaVistaCliente y carga automáticamente
+                            la ficha correspondiente.
+                          */
+                          localStorage.setItem(
+                            "busquedaVistaCliente",
+                            criterioFicha
+                          );
+
+                          setMenuAccionesAbierto(false);
+                          onNavigate("/vista-cliente");
+                        }}
                       >
                         Ver ficha del alumno
                       </button>
