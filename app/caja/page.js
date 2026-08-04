@@ -224,7 +224,7 @@ export default function Caja() {
         activar automáticamente una membresía que ya tiene
         un pago registrado. Si esa actualización falla por
         permisos, columnas o conexión, el error debe mostrarse
-        sin dejar la página bloqueada en "Preparando caja · Versión I".
+        sin dejar la página bloqueada en "Preparando caja · Versión J".
       */
       await Promise.race([
         cargarFlujoDesdeUrl(empresaId),
@@ -1820,7 +1820,9 @@ export default function Caja() {
     conservarVencimiento = false
   ) {
     const hoy = obtenerFechaPanama();
-    const estadoActual = normalizar(suscripcion.estado);
+    const estadoActual = normalizar(
+      suscripcion.estado
+    );
 
     const esActivacionInicial =
       conservarVencimiento ||
@@ -1848,87 +1850,68 @@ export default function Caja() {
             );
     }
 
-    const { error: errorSuscripcion } = await supabase
-      .from("suscripciones")
-      .update({
-        fecha_vencimiento: nuevaFecha,
-        estado: "Activo",
-        forma_pago: metodoAplicado || "Efectivo",
-      })
-      .eq("id", suscripcion.id)
-      .eq("empresa_id", empresaId);
+    /*
+      La activación se confirma mediante una función segura
+      de Supabase. De esta manera no depende de que el RLS
+      permita varias actualizaciones separadas desde el
+      navegador.
+    */
+    const {
+      data: resultado,
+      error: errorActivacion,
+    } = await supabase.rpc(
+      "confirmar_activacion_membresia",
+      {
+        p_empresa_id: empresaId,
+        p_suscripcion_id: suscripcion.id,
+        p_metodo_pago:
+          metodoAplicado || "Efectivo",
+        p_fecha_vencimiento: nuevaFecha,
+      }
+    );
 
-    if (errorSuscripcion) {
+    if (errorActivacion) {
       throw new Error(
         "No se pudo activar la membresía: " +
-          errorSuscripcion.message
+          errorActivacion.message
+      );
+    }
+
+    if (!resultado?.ok) {
+      throw new Error(
+        "Supabase no confirmó la activación de la membresía."
       );
     }
 
     const cuentaId =
+      resultado.cuenta_id ||
       suscripcion.informacion_comercial_id ||
       cuentaSeleccionada?.id;
 
-    if (cuentaId) {
-      const { error: errorComercial } = await supabase
-        .from("informacion_comercial")
-        .update({
-          fecha_vencimiento: nuevaFecha,
-          saldo_actual: 0,
-          estado: "Activo",
-          estado_servicio: "Activo",
-          fecha_suspension: null,
-          fecha_cancelacion: null,
-          motivo_suspension: null,
-        })
-        .eq("id", cuentaId)
-        .eq("empresa_id", empresaId);
-
-      if (errorComercial) {
-        throw new Error(
-          "El pago se registró, pero no se pudo activar la cuenta de la membresía: " +
-            errorComercial.message
-        );
-      }
-    }
-
-    const {
-      data: membresiaVerificada,
-      error: errorVerificacion,
-    } = await supabase
-      .from("suscripciones")
-      .select("id, estado, forma_pago, fecha_vencimiento")
-      .eq("id", suscripcion.id)
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
-
-    if (
-      errorVerificacion ||
-      !membresiaVerificada ||
-      normalizar(membresiaVerificada.estado) !== "activo"
-    ) {
-      throw new Error(
-        "El pago quedó registrado, pero la membresía no confirmó el estado Activo. No vuelva a cobrar; revise los permisos de actualización."
-      );
-    }
+    const fechaConfirmada =
+      resultado.fecha_vencimiento ||
+      nuevaFecha;
 
     const cuentaActualizada = {
       ...(cuentaSeleccionada || {}),
       id: cuentaId || cuentaSeleccionada?.id,
-      fecha_vencimiento: nuevaFecha,
+      fecha_vencimiento: fechaConfirmada,
       estado: "Activo",
       estado_servicio: "Activo",
       saldo_actual: 0,
     };
 
-    setCuentaSeleccionada(cuentaActualizada);
+    setCuentaSeleccionada(
+      cuentaActualizada
+    );
 
     setCuentasCliente((actuales) =>
       actuales.map((cuenta) =>
         String(cuenta.id) === String(cuentaId)
           ? {
               ...cuenta,
-              fecha_vencimiento: nuevaFecha,
+              fecha_vencimiento:
+                fechaConfirmada,
               estado: "Activo",
               estado_servicio: "Activo",
               saldo_actual: 0,
@@ -1937,7 +1920,10 @@ export default function Caja() {
       )
     );
 
-    return cuentaActualizada;
+    return {
+      nuevaFecha: fechaConfirmada,
+      resultado,
+    };
   }
 
   async function procesarMembresiaDesdeCaja(
