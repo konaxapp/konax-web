@@ -1377,7 +1377,6 @@ Responde este mensaje y te ayudamos a reactivarla.`;
               planSeleccionado.id,
             numero_cuenta: numeroCuenta,
             tipo_producto: "Membresía",
-            tipo_cuenta: "Suscripción",
             descripcion: `${formulario.plan} - ${
               formulario.descripcion || ""
             }`,
