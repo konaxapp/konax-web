@@ -1224,39 +1224,25 @@ Responde este mensaje y te ayudamos a reactivarla.`;
     }
 
     if (clienteExistente) {
-      const clienteActualizado = {
-        ...clienteExistente,
-        nombre:
-          formulario.cliente.trim() ||
-          clienteExistente.nombre,
-        telefono:
-          formulario.telefono.trim() ||
-          clienteExistente.telefono ||
-          "",
-        correo:
-          formulario.correo.trim() ||
-          clienteExistente.correo ||
-          "",
-        estado: "Activo",
-      };
-
-      /*
-        No usamos .select().single() después del UPDATE.
-        Con RLS, Supabase puede actualizar la fila correctamente
-        pero no devolverla en la misma operación, produciendo:
-        "Cannot coerce the result to a single JSON object".
-      */
-      const { error: errorActualizar } =
+      const { data, error: errorActualizar } =
         await supabase
           .from("clientes")
           .update({
-            nombre: clienteActualizado.nombre,
-            telefono: clienteActualizado.telefono,
-            correo: clienteActualizado.correo,
-            estado: clienteActualizado.estado,
+            nombre:
+              formulario.cliente ||
+              clienteExistente.nombre,
+            telefono:
+              formulario.telefono ||
+              clienteExistente.telefono,
+            correo:
+              formulario.correo ||
+              clienteExistente.correo,
+            estado: "Activo",
           })
           .eq("id", clienteExistente.id)
-          .eq("empresa_id", empresaId);
+          .eq("empresa_id", empresaId)
+          .select()
+          .single();
 
       if (errorActualizar) {
         alert(
@@ -1266,7 +1252,7 @@ Responde este mensaje y te ayudamos a reactivarla.`;
         return null;
       }
 
-      return clienteActualizado;
+      return data;
     }
 
     const { data, error: errorCrear } =
@@ -1282,9 +1268,7 @@ Responde este mensaje y te ayudamos a reactivarla.`;
             estado: "Activo",
           },
         ])
-        .select(
-          "id, empresa_id, cedula, nombre, telefono, correo, estado"
-        )
+        .select()
         .single();
 
     if (errorCrear) {
@@ -1377,6 +1361,7 @@ Responde este mensaje y te ayudamos a reactivarla.`;
               planSeleccionado.id,
             numero_cuenta: numeroCuenta,
             tipo_producto: "Membresía",
+            tipo_cuenta: "Suscripción",
             descripcion: `${formulario.plan} - ${
               formulario.descripcion || ""
             }`,
