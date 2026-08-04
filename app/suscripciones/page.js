@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
 const DIAS_PROXIMO_VENCER = 5;
 const DIAS_GRACIA = 3;
-const VERSION_SUSCRIPCIONES = "2026.08.04-E";
+const VERSION_SUSCRIPCIONES = "2026.08.04-F";
 
 const FORMULARIO_INICIAL = {
   planId: "",
@@ -146,7 +146,7 @@ function limpiarTelefono(telefono) {
   return limpio;
 }
 
-export default function Suscripciones() {
+function SuscripcionesContenido() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -1204,6 +1204,59 @@ export default function Suscripciones() {
         </section>
       </div>
     </main>
+  );
+}
+
+
+export default function Suscripciones() {
+  return (
+    <Suspense fallback={<CargandoSuscripciones />}>
+      <SuscripcionesContenido />
+    </Suspense>
+  );
+}
+
+function CargandoSuscripciones() {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        alignContent: "center",
+        gap: "12px",
+        padding: "24px",
+        background: "#eef2f7",
+        fontFamily: 'Inter, Arial, system-ui, sans-serif',
+      }}
+    >
+      <img
+        src="/konax-logo.png"
+        alt="KONAX"
+        style={{
+          width: "220px",
+          maxWidth: "75%",
+        }}
+      />
+
+      <strong
+        style={{
+          color: "#111827",
+          fontSize: "20px",
+        }}
+      >
+        Preparando membresías
+      </strong>
+
+      <span
+        style={{
+          color: "#6b7280",
+          fontSize: "13px",
+        }}
+      >
+        Cargando el alumno y los planes disponibles.
+      </span>
+    </div>
   );
 }
 
