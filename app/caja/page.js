@@ -199,20 +199,60 @@ export default function Caja() {
 
   async function iniciarCaja() {
     const empresaId = obtenerEmpresaId();
-    if (!empresaId) return;
+
+    if (!empresaId) {
+      setCargando(false);
+      return;
+    }
 
     setCargando(true);
 
-    await Promise.all([
-      cargarEmpresa(empresaId),
-      cargarVendedores(empresaId),
-      cargarProductos(empresaId),
-      cargarMovimientos(empresaId, hoyPanama, hoyPanama),
-    ]);
+    try {
+      await Promise.all([
+        cargarEmpresa(empresaId),
+        cargarVendedores(empresaId),
+        cargarProductos(empresaId),
+        cargarMovimientos(
+          empresaId,
+          hoyPanama,
+          hoyPanama
+        ),
+      ]);
 
-    await cargarFlujoDesdeUrl(empresaId);
+      /*
+        El flujo recibido desde Membresías puede intentar
+        activar automáticamente una membresía que ya tiene
+        un pago registrado. Si esa actualización falla por
+        permisos, columnas o conexión, el error debe mostrarse
+        sin dejar la página bloqueada en "Preparando caja · Versión I".
+      */
+      await Promise.race([
+        cargarFlujoDesdeUrl(empresaId),
+        new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(
+              new Error(
+                "La carga del alumno o la membresía tardó demasiado."
+              )
+            );
+          }, 15000);
+        }),
+      ]);
+    } catch (error) {
+      console.error(
+        "Error inicializando Caja:",
+        error
+      );
 
-    setCargando(false);
+      alert(
+        "La Caja no pudo completar la carga automática: " +
+          (error?.message ||
+            "Error desconocido.") +
+          "\n\nLa pantalla se abrirá para que pueda revisar el alumno sin volver a registrar el pago."
+      );
+    } finally {
+      setCargando(false);
+    }
   }
 
   async function cargarFlujoDesdeUrl(empresaId) {
@@ -399,23 +439,44 @@ export default function Caja() {
         .maybeSingle();
 
       if (!errorPagoExistente && pagoExistente) {
-        await activarMembresiaConPago(
-          empresaId,
-          suscripcion,
-          pagoExistente.metodo_pago || "Efectivo",
-          true
-        );
+        try {
+          await activarMembresiaConPago(
+            empresaId,
+            suscripcion,
+            pagoExistente.metodo_pago || "Efectivo",
+            true
+          );
 
-        alert(
-          `El pago de $${Number(
-            pagoExistente.monto || 0
-          ).toFixed(
-            2
-          )} ya estaba registrado. La membresía fue activada sin realizar otro cobro.`
-        );
+          alert(
+            `El pago de $${Number(
+              pagoExistente.monto || 0
+            ).toFixed(
+              2
+            )} ya estaba registrado. La membresía fue activada sin realizar otro cobro.`
+          );
 
-        router.replace("/suscripciones");
-        return;
+          router.replace("/suscripciones");
+          return;
+        } catch (errorActivacion) {
+          /*
+            No se vuelve a cobrar. La Caja se abre y muestra
+            el error real para poder corregir permisos o datos.
+          */
+          alert(
+            "El pago ya existe y no debe registrarse otra vez. " +
+              "No se pudo activar automáticamente la membresía: " +
+              (errorActivacion?.message ||
+                "Error desconocido.")
+          );
+
+          setMonto("");
+          setConcepto(
+            `Pago ya registrado - ${
+              suscripcion?.plan || "Membresía"
+            }`
+          );
+          return;
+        }
       }
     }
 
