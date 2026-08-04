@@ -185,7 +185,171 @@ export default function Caja() {
       cargarMovimientos(empresaId, hoyPanama, hoyPanama),
     ]);
 
+    await cargarFlujoDesdeUrl(empresaId);
+
     setCargando(false);
+  }
+
+  async function cargarFlujoDesdeUrl(empresaId) {
+    if (typeof window === "undefined") return;
+
+    const parametros = new URLSearchParams(
+      window.location.search
+    );
+
+    const clienteId = parametros.get("clienteId");
+    const suscripcionId =
+      parametros.get("suscripcionId");
+    const cuentaId = parametros.get("cuentaId");
+    const flujo = parametros.get("flujo");
+
+    if (!clienteId) return;
+
+    const [
+      respuestaCliente,
+      respuestaCuentas,
+      respuestaSuscripcion,
+    ] = await Promise.all([
+      supabase
+        .from("clientes")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .eq("id", clienteId)
+        .maybeSingle(),
+
+      supabase
+        .from("informacion_comercial")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .eq("cliente_id", clienteId)
+        .order("created_at", {
+          ascending: false,
+        }),
+
+      suscripcionId
+        ? supabase
+            .from("suscripciones")
+            .select("*")
+            .eq("empresa_id", empresaId)
+            .eq("id", suscripcionId)
+            .maybeSingle()
+        : supabase
+            .from("suscripciones")
+            .select("*")
+            .eq("empresa_id", empresaId)
+            .eq("cliente_id", clienteId)
+            .order("fecha_vencimiento", {
+              ascending: false,
+            })
+            .limit(1)
+            .maybeSingle(),
+    ]);
+
+    if (
+      respuestaCliente.error ||
+      !respuestaCliente.data
+    ) {
+      alert(
+        "No se pudo cargar el alumno enviado a Caja: " +
+          (respuestaCliente.error?.message ||
+            "Alumno no encontrado.")
+      );
+      return;
+    }
+
+    if (respuestaCuentas.error) {
+      alert(
+        "No se pudo cargar la cuenta de la membresía: " +
+          respuestaCuentas.error.message
+      );
+      return;
+    }
+
+    if (respuestaSuscripcion.error) {
+      alert(
+        "No se pudo cargar la membresía seleccionada: " +
+          respuestaSuscripcion.error.message
+      );
+      return;
+    }
+
+    const cliente = respuestaCliente.data;
+    const cuentas = respuestaCuentas.data || [];
+    const suscripcion =
+      respuestaSuscripcion.data || null;
+
+    const cuentaSeleccionadaUrl =
+      cuentas.find(
+        (cuenta) =>
+          cuentaId &&
+          String(cuenta.id) === String(cuentaId)
+      ) ||
+      cuentas.find(
+        (cuenta) =>
+          suscripcion?.informacion_comercial_id &&
+          String(cuenta.id) ===
+            String(
+              suscripcion.informacion_comercial_id
+            )
+      ) ||
+      cuentas[0] ||
+      null;
+
+    setClienteSeleccionado(cliente);
+    setBuscarCliente(cliente.nombre || "");
+    setResultadosBusqueda([]);
+    setCuentasCliente(cuentas);
+    setCuentaSeleccionada(
+      cuentaSeleccionadaUrl
+    );
+
+    const esNuevaMembresia =
+      flujo === "nueva_membresia";
+
+    const operacion = esNuevaMembresia
+      ? "Membresía"
+      : "Renovación";
+
+    setTipoMovimiento(operacion);
+
+    const montoSugerido = Number(
+      cuentaSeleccionadaUrl?.saldo_actual ||
+        cuentaSeleccionadaUrl?.cuota ||
+        cuentaSeleccionadaUrl?.monto_total ||
+        suscripcion?.precio ||
+        0
+    );
+
+    setMonto(
+      montoSugerido > 0
+        ? montoSugerido.toFixed(2)
+        : ""
+    );
+
+    setConcepto(
+      `${operacion}${
+        suscripcion?.plan
+          ? ` - ${suscripcion.plan}`
+          : ""
+      }`
+    );
+
+    const cajeroActual =
+      localStorage.getItem("usuarioNombre") ||
+      localStorage.getItem("nombreUsuario") ||
+      localStorage.getItem("adminKonaxNombre") ||
+      "Caja";
+
+    setResponsable(cajeroActual);
+
+    setTimeout(() => {
+      document
+        .getElementById("caja-gimnasio-formulario")
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    }, 150);
   }
 
   function obtenerEmpresaId() {
@@ -1923,6 +2087,14 @@ export default function Caja() {
 
       alert(obtenerMensajeExito());
 
+      if (typeof window !== "undefined") {
+        window.history.replaceState(
+          {},
+          "",
+          "/caja"
+        );
+      }
+
       limpiarFormulario();
 
       await Promise.all([
@@ -2110,7 +2282,7 @@ export default function Caja() {
 
           {esNegocioMembresia() ? (
             <section style={estilos.gymCajaLayout}>
-              <article style={estilos.gymCobroPanel}>
+              <article id="caja-gimnasio-formulario" style={estilos.gymCobroPanel}>
                 <div style={estilos.gymCobroEncabezado}>
                   <div>
                     <span style={estilos.gymEyebrow}>
