@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import SidebarKonax from "../../components/SidebarKonax";
 
+const DIA_MS = 86400000;
+
 function normalizar(valor) {
   return String(valor || "")
     .normalize("NFD")
@@ -12,6 +14,20 @@ function normalizar(valor) {
     .toLowerCase()
     .trim()
     .replace(/\s+/g, "_");
+}
+
+function esTipoGimnasio(tipoNegocio, categoriaNegocio = "") {
+  const texto = normalizar(
+    `${tipoNegocio || ""} ${categoriaNegocio || ""}`
+  );
+
+  return [
+    "gimnasio",
+    "gym",
+    "fitness",
+    "academia",
+    "club",
+  ].some((palabra) => texto.includes(palabra));
 }
 
 function fechaLocal(fecha) {
@@ -47,9 +63,7 @@ function calcularDias(fechaFin) {
 
   return Math.max(
     0,
-    Math.ceil(
-      (fin.getTime() - hoy.getTime()) / 86400000
-    )
+    Math.ceil((fin.getTime() - hoy.getTime()) / DIA_MS)
   );
 }
 
@@ -154,9 +168,7 @@ function construirModulosPorPlan(codigoPlan) {
 function leerModuloEmpresa(data, codigo) {
   if (!data) return true;
 
-  if (
-    Object.prototype.hasOwnProperty.call(data, codigo)
-  ) {
+  if (Object.prototype.hasOwnProperty.call(data, codigo)) {
     return Boolean(data[codigo]);
   }
 
@@ -201,6 +213,107 @@ function leerModuloEmpresa(data, codigo) {
   return true;
 }
 
+function obtenerMembresiaActualPorAlumno(registros = []) {
+  const ordenadas = [...registros].sort((a, b) => {
+    const fechaA =
+      fechaLocal(a.fecha_vencimiento)?.getTime() || 0;
+    const fechaB =
+      fechaLocal(b.fecha_vencimiento)?.getTime() || 0;
+
+    return fechaB - fechaA;
+  });
+
+  const porAlumno = new Map();
+
+  ordenadas.forEach((membresia) => {
+    const clave = membresia.cliente_id || membresia.id;
+
+    if (!porAlumno.has(clave)) {
+      porAlumno.set(clave, membresia);
+    }
+  });
+
+  return Array.from(porAlumno.values());
+}
+
+function calcularResumenGimnasio(
+  clientes = [],
+  suscripciones = []
+) {
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  const limiteAviso = new Date(
+    hoy.getTime() + 7 * DIA_MS
+  );
+
+  const alumnosActivos = clientes.filter((cliente) => {
+    const estado = normalizar(cliente.estado);
+
+    return ![
+      "inactivo",
+      "cancelado",
+      "suspendido",
+      "bloqueado",
+    ].includes(estado);
+  }).length;
+
+  const membresiasActuales =
+    obtenerMembresiaActualPorAlumno(suscripciones);
+
+  let membresiasActivas = 0;
+  let porVencer = 0;
+  let vencidas = 0;
+
+  membresiasActuales.forEach((membresia) => {
+    const estado = normalizar(membresia.estado);
+    const vencimiento = fechaLocal(
+      membresia.fecha_vencimiento
+    );
+
+    if (
+      ["cancelado", "suspendido", "inactivo"].includes(
+        estado
+      )
+    ) {
+      return;
+    }
+
+    if (estado === "vencida") {
+      vencidas += 1;
+      return;
+    }
+
+    if (!vencimiento) {
+      if (["activo", "activa"].includes(estado)) {
+        membresiasActivas += 1;
+      }
+
+      return;
+    }
+
+    if (vencimiento.getTime() < hoy.getTime()) {
+      vencidas += 1;
+      return;
+    }
+
+    membresiasActivas += 1;
+
+    if (
+      vencimiento.getTime() <= limiteAviso.getTime()
+    ) {
+      porVencer += 1;
+    }
+  });
+
+  return {
+    alumnosActivos,
+    membresiasActivas,
+    porVencer,
+    vencidas,
+  };
+}
+
 export default function Dashboard() {
   const router = useRouter();
 
@@ -214,6 +327,8 @@ export default function Dashboard() {
   const [planCodigo, setPlanCodigo] = useState("");
   const [estadoPlan, setEstadoPlan] = useState("");
   const [tipoNegocio, setTipoNegocio] = useState("");
+  const [categoriaNegocio, setCategoriaNegocio] =
+    useState("");
 
   const [usuarioRol, setUsuarioRol] = useState("");
   const [usuarioNombre, setUsuarioNombre] =
@@ -234,6 +349,22 @@ export default function Dashboard() {
   const [menuMovilAbierto, setMenuMovilAbierto] =
     useState(false);
 
+  const [resumenGimnasio, setResumenGimnasio] =
+    useState({
+      alumnosActivos: 0,
+      membresiasActivas: 0,
+      porVencer: 0,
+      vencidas: 0,
+    });
+
+  const [
+    cargandoResumenGimnasio,
+    setCargandoResumenGimnasio,
+  ] = useState(false);
+
+  const [avisoResumenGimnasio, setAvisoResumenGimnasio] =
+    useState("");
+
   useEffect(() => {
     cargarDashboard();
 
@@ -249,10 +380,7 @@ export default function Dashboard() {
 
     actualizarVista();
 
-    window.addEventListener(
-      "resize",
-      actualizarVista
-    );
+    window.addEventListener("resize", actualizarVista);
 
     return () => {
       window.removeEventListener(
@@ -280,14 +408,10 @@ export default function Dashboard() {
     try {
       await supabase.auth.signOut();
     } catch (error) {
-      console.error(
-        "Error cerrando sesión:",
-        error
-      );
+      console.error("Error cerrando sesión:", error);
     }
 
     localStorage.clear();
-
     router.replace("/login");
   }
 
@@ -402,10 +526,8 @@ export default function Dashboard() {
     }
 
     if (
-      normalizar(empresa.estado) ===
-        "suspendido" ||
-      normalizar(empresa.estado_plan) ===
-        "suspendido"
+      normalizar(empresa.estado) === "suspendido" ||
+      normalizar(empresa.estado_plan) === "suspendido"
     ) {
       await salir(
         "El servicio de esta empresa está suspendido."
@@ -513,6 +635,9 @@ export default function Dashboard() {
     setTipoNegocio(
       empresa.tipo_negocio || ""
     );
+    setCategoriaNegocio(
+      empresa.categoria_negocio || ""
+    );
     setUsuarioRol(usuario.rol || "");
     setUsuarioNombre(usuario.nombre || "");
 
@@ -556,6 +681,15 @@ export default function Dashboard() {
     setModulos(modulosEmpresa);
     setPermisosUsuario(permisos);
     setCargando(false);
+
+    if (
+      esTipoGimnasio(
+        empresa.tipo_negocio,
+        empresa.categoria_negocio
+      )
+    ) {
+      cargarResumenGimnasio(empresaId);
+    }
   }
 
   async function cargarModulosEmpresa(
@@ -646,6 +780,51 @@ export default function Dashboard() {
       .filter(Boolean);
   }
 
+  async function cargarResumenGimnasio(empresaId) {
+    setCargandoResumenGimnasio(true);
+    setAvisoResumenGimnasio("");
+
+    const [respuestaClientes, respuestaSuscripciones] =
+      await Promise.all([
+        supabase
+          .from("clientes")
+          .select("id, estado")
+          .eq("empresa_id", empresaId),
+
+        supabase
+          .from("suscripciones")
+          .select(
+            "id, cliente_id, estado, fecha_inicio, fecha_vencimiento"
+          )
+          .eq("empresa_id", empresaId),
+      ]);
+
+    const errores = [
+      respuestaClientes.error,
+      respuestaSuscripciones.error,
+    ].filter(Boolean);
+
+    if (errores.length > 0) {
+      console.error(
+        "No se pudo cargar todo el resumen del gimnasio:",
+        errores
+      );
+
+      setAvisoResumenGimnasio(
+        "El dashboard de gimnasio está activo. Algunos indicadores se completarán cuando terminemos de conectar la seguridad y los pagos de membresías."
+      );
+    }
+
+    setResumenGimnasio(
+      calcularResumenGimnasio(
+        respuestaClientes.data || [],
+        respuestaSuscripciones.data || []
+      )
+    );
+
+    setCargandoResumenGimnasio(false);
+  }
+
   function puedeVer(
     codigoModulo,
     codigoPermiso = codigoModulo
@@ -686,11 +865,17 @@ export default function Dashboard() {
       "lavanderia_piloto" ||
     normalizar(tipoNegocio) === "lavanderia";
 
+  const esGimnasio = esTipoGimnasio(
+    tipoNegocio,
+    categoriaNegocio
+  );
+
   const modulosMenu = useMemo(() => {
     const listaLavanderia = [
       [
         "Panel",
         "/dashboard",
+        "dashboard",
         "dashboard",
         "▦",
       ],
@@ -698,11 +883,79 @@ export default function Dashboard() {
         "Usuarios y Roles",
         "/usuarios",
         "usuarios",
+        "usuarios",
         "🔐",
       ],
       [
         "Configuración",
         "/admin-configuracion",
+        "configuracion",
+        "configuracion",
+        "⚙",
+      ],
+    ];
+
+    const listaGimnasio = [
+      [
+        "Panel",
+        "/dashboard",
+        "dashboard",
+        "dashboard",
+        "▦",
+      ],
+      [
+        "Alumnos",
+        "/clientes",
+        "clientes",
+        "clientes",
+        "👥",
+      ],
+      [
+        "Membresías",
+        "/suscripciones",
+        "suscripciones",
+        "suscripciones",
+        "▣",
+      ],
+      [
+        "Check-in",
+        "/gimnasio/check-in",
+        "clientes",
+        "clientes",
+        "✓",
+      ],
+      [
+        "Caja",
+        "/caja",
+        "caja",
+        "caja",
+        "$",
+      ],
+      [
+        "Historial",
+        "/vista-cliente",
+        "vista_cliente",
+        "vista_cliente",
+        "◷",
+      ],
+      [
+        "Reportes",
+        "/reportes",
+        "reportes",
+        "reportes",
+        "▥",
+      ],
+      [
+        "Usuarios y Roles",
+        "/usuarios",
+        "usuarios",
+        "usuarios",
+        "🔐",
+      ],
+      [
+        "Configuración",
+        "/admin-configuracion",
+        "configuracion",
         "configuracion",
         "⚙",
       ],
@@ -713,11 +966,13 @@ export default function Dashboard() {
         "Panel",
         "/dashboard",
         "dashboard",
+        "dashboard",
         "▦",
       ],
       [
         "Clientes",
         "/clientes",
+        "clientes",
         "clientes",
         "👥",
       ],
@@ -725,18 +980,21 @@ export default function Dashboard() {
         "Vista Cliente",
         "/vista-cliente",
         "vista_cliente",
+        "vista_cliente",
         "📄",
       ],
       [
         "Créditos",
         "/ventas-credito",
         "creditos",
+        "creditos",
         "💳",
       ],
-      ["Caja", "/caja", "caja", "▣"],
+      ["Caja", "/caja", "caja", "caja", "▣"],
       [
         "Cobranza",
         "/cobranza",
+        "cobranza",
         "cobranza",
         "$",
       ],
@@ -744,11 +1002,13 @@ export default function Dashboard() {
         "Centro de Cobranza",
         "/dashboard-cobranza",
         "dashboard_cobros",
+        "dashboard_cobros",
         "📊",
       ],
       [
         "Mi cartera de cobro",
         "/gestor-cobros",
+        "gestor_cobros",
         "gestor_cobros",
         "💼",
       ],
@@ -756,11 +1016,13 @@ export default function Dashboard() {
         "Control Caja",
         "/control-caja",
         "control_caja",
+        "control_caja",
         "🏦",
       ],
       [
         "Inventario",
         "/inventario",
+        "inventario",
         "inventario",
         "□",
       ],
@@ -768,11 +1030,13 @@ export default function Dashboard() {
         "Movimientos Inventario",
         "/inventario/movimientos",
         "movimientos_inventario",
+        "movimientos_inventario",
         "🔄",
       ],
       [
         "Ventas",
         "/ventas",
+        "ventas",
         "ventas",
         "🛒",
       ],
@@ -780,11 +1044,13 @@ export default function Dashboard() {
         "Centro de Ventas",
         "/dashboard-ventas",
         "dashboard_ventas",
+        "dashboard_ventas",
         "📈",
       ],
       [
         "Gastos",
         "/gastos",
+        "gastos",
         "gastos",
         "🧮",
       ],
@@ -792,11 +1058,13 @@ export default function Dashboard() {
         "Suscripciones",
         "/suscripciones",
         "suscripciones",
+        "suscripciones",
         "🔁",
       ],
       [
         "Recargos",
         "/recargos",
+        "recargos",
         "recargos",
         "⚠️",
       ],
@@ -804,11 +1072,13 @@ export default function Dashboard() {
         "Reportes",
         "/reportes",
         "reportes",
+        "reportes",
         "▥",
       ],
       [
         "Usuarios y Roles",
         "/usuarios",
+        "usuarios",
         "usuarios",
         "🔐",
       ],
@@ -816,29 +1086,41 @@ export default function Dashboard() {
         "Configuración",
         "/admin-configuracion",
         "configuracion",
+        "configuracion",
         "⚙",
       ],
     ];
 
     const listaBase = esLavanderia
       ? listaLavanderia
+      : esGimnasio
+      ? listaGimnasio
       : listaGeneral;
 
     const lista =
-      esLavanderia && !esAdministrador()
+      (esLavanderia || esGimnasio) &&
+      !esAdministrador()
         ? listaBase.filter(
-            ([, , codigo]) => codigo !== "usuarios"
+            ([, , codigo]) =>
+              codigo !== "usuarios"
           )
         : listaBase;
 
     return lista
       .map(
-        ([nombre, ruta, codigo, icono]) => ({
+        ([
           nombre,
           ruta,
           codigo,
+          permiso,
           icono,
-          activo: puedeVer(codigo),
+        ]) => ({
+          nombre,
+          ruta,
+          codigo,
+          permiso,
+          icono,
+          activo: puedeVer(codigo, permiso),
         })
       )
       .filter((item) => item.activo);
@@ -848,6 +1130,7 @@ export default function Dashboard() {
     usuarioRol,
     bloqueado,
     esLavanderia,
+    esGimnasio,
   ]);
 
   const accesosRapidos = useMemo(() => {
@@ -990,6 +1273,18 @@ export default function Dashboard() {
     }
   ).format(new Date());
 
+  const etiquetaPanel = esLavanderia
+    ? "KONAX LAVANDERÍA"
+    : esGimnasio
+    ? "KONAX GIMNASIOS"
+    : "PANEL EMPRESARIAL";
+
+  const subtituloPanel = esLavanderia
+    ? `Operación diaria · ${fechaPanel}`
+    : esGimnasio
+    ? `Control de alumnos y membresías · ${fechaPanel}`
+    : `Panel general · ${fechaPanel}`;
+
   return (
     <div
       style={{
@@ -1044,7 +1339,7 @@ export default function Dashboard() {
               <div style={s.mobileMenu}>
                 {modulosMenu.map((item) => (
                   <button
-                    key={item.ruta}
+                    key={`${item.ruta}-${item.nombre}`}
                     type="button"
                     onClick={() => {
                       setMenuMovilAbierto(false);
@@ -1085,9 +1380,7 @@ export default function Dashboard() {
         >
           <div>
             <span style={s.eyebrow}>
-              {esLavanderia
-                ? "KONAX LAVANDERÍA"
-                : "PANEL EMPRESARIAL"}
+              {etiquetaPanel}
             </span>
 
             <h1 style={s.pageTitle}>
@@ -1095,9 +1388,7 @@ export default function Dashboard() {
             </h1>
 
             <span style={s.pageSubtitle}>
-              {esLavanderia
-                ? `Operación diaria · ${fechaPanel}`
-                : `Panel general · ${fechaPanel}`}
+              {subtituloPanel}
             </span>
           </div>
 
@@ -1144,7 +1435,7 @@ export default function Dashboard() {
 
             <div>
               <span style={s.avisoEtiqueta}>
-                PROGRAMA PILOTO APROBADO
+                DEMOSTRACIÓN APROBADA
               </span>
 
               <strong style={s.avisoTitulo}>
@@ -1199,7 +1490,7 @@ export default function Dashboard() {
                       : {}),
                   }}
                 >
-                  PROGRAMA PILOTO ACTIVO
+                  PERÍODO DE PRUEBA ACTIVO
                 </span>
 
                 <strong
@@ -1356,6 +1647,21 @@ export default function Dashboard() {
               ))}
             </section>
           </>
+        ) : esGimnasio ? (
+          <DashboardGimnasio
+            empresaNombre={empresaNombre}
+            resumen={resumenGimnasio}
+            cargandoResumen={
+              cargandoResumenGimnasio
+            }
+            avisoResumen={
+              avisoResumenGimnasio
+            }
+            esMovil={esMovil}
+            onNavigate={(ruta) =>
+              router.push(ruta)
+            }
+          />
         ) : (
           <>
             <section
@@ -1511,6 +1817,325 @@ export default function Dashboard() {
   );
 }
 
+function DashboardGimnasio({
+  empresaNombre,
+  resumen,
+  cargandoResumen,
+  avisoResumen,
+  esMovil,
+  onNavigate,
+}) {
+  const indicadores = [
+    {
+      titulo: "Alumnos activos",
+      valor: resumen.alumnosActivos,
+      detalle: "Alumnos habilitados en el gimnasio",
+      icono: "👥",
+      color: "#16834f",
+      fondo: "#eaf8ef",
+    },
+    {
+      titulo: "Membresías activas",
+      valor: resumen.membresiasActivas,
+      detalle: "Planes con vigencia disponible",
+      icono: "▣",
+      color: "#2867a9",
+      fondo: "#edf5ff",
+    },
+    {
+      titulo: "Por vencer",
+      valor: resumen.porVencer,
+      detalle: "Vencen durante los próximos 7 días",
+      icono: "◷",
+      color: "#956400",
+      fondo: "#fff8df",
+    },
+    {
+      titulo: "Vencidas",
+      valor: resumen.vencidas,
+      detalle: "Requieren renovación o seguimiento",
+      icono: "!",
+      color: "#b42318",
+      fondo: "#fff0ee",
+    },
+  ];
+
+  const accesos = [
+    {
+      nombre: "Registrar alumno",
+      detalle: "Crear o consultar la ficha del alumno",
+      icono: "＋",
+      ruta: "/clientes",
+    },
+    {
+      nombre: "Membresías",
+      detalle: "Activar, renovar o revisar un plan",
+      icono: "▣",
+      ruta: "/suscripciones",
+    },
+    {
+      nombre: "Registrar entrada",
+      detalle: "Validar el acceso del alumno",
+      icono: "✓",
+      ruta: "/gimnasio/check-in",
+    },
+    {
+      nombre: "Cobrar",
+      detalle: "Registrar mensualidad o servicio",
+      icono: "$",
+      ruta: "/caja",
+    },
+  ];
+
+  return (
+    <>
+      <section
+        style={{
+          ...s.gymHero,
+          ...(esMovil
+            ? s.gymHeroMobile
+            : {}),
+        }}
+      >
+        <div style={s.gymHeroContenido}>
+          <span style={s.gymEtiqueta}>
+            GESTIÓN DEL GIMNASIO
+          </span>
+
+          <h2
+            style={{
+              ...s.gymTitulo,
+              ...(esMovil
+                ? s.gymTituloMobile
+                : {}),
+            }}
+          >
+            Controla alumnos, membresías y accesos
+          </h2>
+
+          <p style={s.gymDescripcion}>
+            Administra la operación diaria de{" "}
+            <strong>{empresaNombre}</strong>,
+            revisa los vencimientos y registra
+            cada movimiento desde una sola
+            plataforma.
+          </p>
+
+          <div style={s.gymBotones}>
+            <button
+              type="button"
+              onClick={() =>
+                onNavigate("/clientes")
+              }
+              style={s.gymBotonPrincipal}
+            >
+              Registrar alumno
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                onNavigate(
+                  "/gimnasio/check-in"
+                )
+              }
+              style={s.gymBotonSecundario}
+            >
+              Abrir check-in
+            </button>
+          </div>
+        </div>
+
+        <div style={s.gymVisual}>
+          <div style={s.gymPesa}>
+            <span style={s.gymDiscoGrande} />
+            <span style={s.gymDiscoPequeno} />
+            <span style={s.gymBarra} />
+            <span style={s.gymDiscoPequeno} />
+            <span style={s.gymDiscoGrande} />
+          </div>
+
+          <div style={s.gymSello}>K</div>
+        </div>
+      </section>
+
+      {avisoResumen && (
+        <div style={s.gymAviso}>
+          <strong style={s.gymAvisoIcono}>
+            i
+          </strong>
+          <span>{avisoResumen}</span>
+        </div>
+      )}
+
+      <section
+        style={{
+          ...s.gymIndicadores,
+          ...(esMovil
+            ? s.gymIndicadoresMobile
+            : {}),
+        }}
+      >
+        {indicadores.map((item) => (
+          <article
+            key={item.titulo}
+            style={s.gymIndicador}
+          >
+            <div
+              style={{
+                ...s.gymIndicadorIcono,
+                color: item.color,
+                background: item.fondo,
+              }}
+            >
+              {item.icono}
+            </div>
+
+            <div>
+              <span style={s.gymIndicadorEtiqueta}>
+                {item.titulo}
+              </span>
+
+              <strong style={s.gymIndicadorValor}>
+                {cargandoResumen
+                  ? "…"
+                  : item.valor}
+              </strong>
+
+              <p style={s.gymIndicadorDetalle}>
+                {item.detalle}
+              </p>
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <section
+        style={{
+          ...s.gymContenidoInferior,
+          ...(esMovil
+            ? s.gymContenidoInferiorMobile
+            : {}),
+        }}
+      >
+        <article style={s.gymPanelAcciones}>
+          <span style={s.gymSubEtiqueta}>
+            ACCIONES RÁPIDAS
+          </span>
+
+          <h3 style={s.gymSubTitulo}>
+            ¿Qué deseas hacer?
+          </h3>
+
+          <div
+            style={{
+              ...s.gymAccesos,
+              ...(esMovil
+                ? s.gymAccesosMobile
+                : {}),
+            }}
+          >
+            {accesos.map((item) => (
+              <button
+                key={item.nombre}
+                type="button"
+                onClick={() =>
+                  onNavigate(item.ruta)
+                }
+                style={s.gymAcceso}
+              >
+                <span style={s.gymAccesoIcono}>
+                  {item.icono}
+                </span>
+
+                <span style={s.gymAccesoTexto}>
+                  <strong>{item.nombre}</strong>
+                  <small>{item.detalle}</small>
+                </span>
+
+                <span style={s.gymFlecha}>
+                  →
+                </span>
+              </button>
+            ))}
+          </div>
+        </article>
+
+        <aside style={s.gymPanelAtencion}>
+          <span style={s.gymSubEtiqueta}>
+            ATENCIÓN DE HOY
+          </span>
+
+          <h3 style={s.gymSubTitulo}>
+            Prioridades del gimnasio
+          </h3>
+
+          <PrioridadGimnasio
+            titulo="Renovaciones próximas"
+            detalle="Contacta a los alumnos antes del vencimiento."
+            valor={
+              cargandoResumen
+                ? "…"
+                : resumen.porVencer
+            }
+            onClick={() =>
+              onNavigate("/suscripciones")
+            }
+          />
+
+          <PrioridadGimnasio
+            titulo="Membresías vencidas"
+            detalle="Revisa los casos pendientes de renovación."
+            valor={
+              cargandoResumen
+                ? "…"
+                : resumen.vencidas
+            }
+            onClick={() =>
+              onNavigate("/suscripciones")
+            }
+          />
+
+          <PrioridadGimnasio
+            titulo="Control de accesos"
+            detalle="Valida la membresía antes de registrar la entrada."
+            valor="Abrir"
+            onClick={() =>
+              onNavigate(
+                "/gimnasio/check-in"
+              )
+            }
+          />
+        </aside>
+      </section>
+    </>
+  );
+}
+
+function PrioridadGimnasio({
+  titulo,
+  detalle,
+  valor,
+  onClick,
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={s.gymPrioridad}
+    >
+      <span style={s.gymPrioridadTexto}>
+        <strong>{titulo}</strong>
+        <small>{detalle}</small>
+      </span>
+
+      <span style={s.gymPrioridadValor}>
+        {valor}
+      </span>
+    </button>
+  );
+}
+
 function IlustracionLavanderia() {
   return (
     <svg
@@ -1647,22 +2272,6 @@ function IlustracionLavanderia() {
             strokeLinecap="round"
           />
         </g>
-
-        <g transform="translate(286 0)">
-          <rect
-            x="0"
-            y="36"
-            width="24"
-            height="29"
-            rx="3"
-            fill="#f7faf8"
-            stroke="#cfd9d2"
-          />
-          <path
-            d="M12 36 C8 23 2 18 4 11 C13 13 17 19 16 29 C18 18 25 13 31 13 C31 23 26 31 16 36 Z"
-            fill="#2f9156"
-          />
-        </g>
       </g>
     </svg>
   );
@@ -1724,7 +2333,6 @@ function IconoAcceso({ tipo }) {
     </svg>
   );
 }
-
 
 function Info({
   titulo,
@@ -1953,6 +2561,344 @@ const s = {
     fontWeight: 800,
   },
 
+  gymHero: {
+    maxWidth: 1440,
+    minHeight: 280,
+    margin: "0 auto 18px",
+    padding: "34px 38px",
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(0,1.45fr) minmax(250px,.65fr)",
+    alignItems: "center",
+    gap: 28,
+    borderRadius: 26,
+    background:
+      "linear-gradient(135deg,#102b1d 0%,#174d30 62%,#1d7044 100%)",
+    color: "#fff",
+    overflow: "hidden",
+    boxShadow:
+      "0 20px 50px rgba(17,60,38,.16)",
+  },
+
+  gymHeroContenido: {
+    maxWidth: 760,
+  },
+
+  gymEtiqueta: {
+    display: "inline-flex",
+    padding: "7px 11px",
+    border: "1px solid rgba(255,255,255,.16)",
+    borderRadius: 999,
+    background: "rgba(255,255,255,.08)",
+    color: "#b7edcc",
+    fontSize: 9,
+    fontWeight: 900,
+    letterSpacing: 1.35,
+  },
+
+  gymTitulo: {
+    margin: "18px 0 14px",
+    maxWidth: 760,
+    fontSize:
+      "clamp(38px,4.5vw,62px)",
+    lineHeight: 1,
+    letterSpacing: "-1.8px",
+  },
+
+  gymDescripcion: {
+    maxWidth: 690,
+    margin: 0,
+    color: "#d7eadf",
+    fontSize: 15,
+    lineHeight: 1.7,
+  },
+
+  gymBotones: {
+    marginTop: 24,
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+
+  gymBotonPrincipal: {
+    minHeight: 46,
+    padding: "11px 18px",
+    border: 0,
+    borderRadius: 12,
+    background: "#56d98c",
+    color: "#0e2c1c",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  gymBotonSecundario: {
+    minHeight: 46,
+    padding: "11px 18px",
+    border: "1px solid rgba(255,255,255,.24)",
+    borderRadius: 12,
+    background: "rgba(255,255,255,.08)",
+    color: "#fff",
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  gymVisual: {
+    minHeight: 210,
+    position: "relative",
+    display: "grid",
+    placeItems: "center",
+  },
+
+  gymPesa: {
+    display: "flex",
+    alignItems: "center",
+    filter:
+      "drop-shadow(0 16px 16px rgba(4,20,11,.25))",
+  },
+
+  gymBarra: {
+    width: 125,
+    height: 22,
+    background:
+      "linear-gradient(180deg,#e7eee9,#8fa49a)",
+    borderRadius: 999,
+  },
+
+  gymDiscoGrande: {
+    width: 34,
+    height: 88,
+    borderRadius: 10,
+    background: "#10291c",
+  },
+
+  gymDiscoPequeno: {
+    width: 27,
+    height: 65,
+    borderRadius: 9,
+    background:
+      "linear-gradient(180deg,#56d98c,#16834f)",
+  },
+
+  gymSello: {
+    position: "absolute",
+    right: 22,
+    bottom: 10,
+    width: 58,
+    height: 58,
+    display: "grid",
+    placeItems: "center",
+    border: "1px solid rgba(255,255,255,.18)",
+    borderRadius: 18,
+    background: "rgba(255,255,255,.08)",
+    color: "#8ae6af",
+    fontSize: 27,
+    fontWeight: 950,
+  },
+
+  gymAviso: {
+    maxWidth: 1440,
+    margin: "0 auto 16px",
+    padding: "12px 14px",
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 10,
+    border: "1px solid #c9dfd2",
+    borderRadius: 13,
+    background: "#f3faf6",
+    color: "#4e6257",
+    fontSize: 12,
+    lineHeight: 1.5,
+  },
+
+  gymAvisoIcono: {
+    width: 22,
+    height: 22,
+    flex: "0 0 auto",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background: "#16834f",
+    color: "#fff",
+  },
+
+  gymIndicadores: {
+    maxWidth: 1440,
+    margin: "0 auto 18px",
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(4,minmax(0,1fr))",
+    gap: 14,
+  },
+
+  gymIndicador: {
+    minHeight: 150,
+    padding: 19,
+    display: "grid",
+    gridTemplateColumns:
+      "50px minmax(0,1fr)",
+    alignItems: "start",
+    gap: 14,
+    border: "1px solid #dfe7e2",
+    borderRadius: 18,
+    background: "#fff",
+    boxShadow:
+      "0 10px 26px rgba(24,54,37,.06)",
+  },
+
+  gymIndicadorIcono: {
+    width: 50,
+    height: 50,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 15,
+    fontSize: 22,
+    fontWeight: 900,
+  },
+
+  gymIndicadorEtiqueta: {
+    display: "block",
+    color: "#6e7d74",
+    fontSize: 11,
+    fontWeight: 800,
+  },
+
+  gymIndicadorValor: {
+    display: "block",
+    marginTop: 6,
+    color: "#142019",
+    fontSize: 32,
+    lineHeight: 1,
+  },
+
+  gymIndicadorDetalle: {
+    margin: "9px 0 0",
+    color: "#839087",
+    fontSize: 11,
+    lineHeight: 1.4,
+  },
+
+  gymContenidoInferior: {
+    maxWidth: 1440,
+    margin: "0 auto",
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(0,1.45fr) minmax(300px,.65fr)",
+    gap: 16,
+  },
+
+  gymPanelAcciones: {
+    padding: 22,
+    border: "1px solid #dfe7e2",
+    borderRadius: 20,
+    background: "#fff",
+  },
+
+  gymPanelAtencion: {
+    padding: 22,
+    border: "1px solid #dfe7e2",
+    borderRadius: 20,
+    background:
+      "linear-gradient(180deg,#ffffff 0%,#f4f8f5 100%)",
+  },
+
+  gymSubEtiqueta: {
+    display: "block",
+    color: "#16834f",
+    fontSize: 9,
+    fontWeight: 900,
+    letterSpacing: 1.2,
+  },
+
+  gymSubTitulo: {
+    margin: "5px 0 16px",
+    color: "#142019",
+    fontSize: 22,
+  },
+
+  gymAccesos: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(2,minmax(0,1fr))",
+    gap: 12,
+  },
+
+  gymAcceso: {
+    minHeight: 112,
+    padding: 15,
+    display: "grid",
+    gridTemplateColumns:
+      "48px minmax(0,1fr) auto",
+    alignItems: "center",
+    gap: 12,
+    border: "1px solid #dde7e1",
+    borderRadius: 16,
+    background: "#f9fbfa",
+    color: "#142019",
+    textAlign: "left",
+    fontFamily: "inherit",
+    cursor: "pointer",
+  },
+
+  gymAccesoIcono: {
+    width: 48,
+    height: 48,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 14,
+    background: "#eaf8ef",
+    color: "#16834f",
+    fontSize: 23,
+    fontWeight: 900,
+  },
+
+  gymAccesoTexto: {
+    minWidth: 0,
+    display: "grid",
+    gap: 5,
+  },
+
+  gymFlecha: {
+    color: "#16834f",
+    fontSize: 22,
+    fontWeight: 900,
+  },
+
+  gymPrioridad: {
+    width: "100%",
+    padding: "14px 0",
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(0,1fr) auto",
+    alignItems: "center",
+    gap: 12,
+    border: 0,
+    borderBottom:
+      "1px solid #e4ebe7",
+    background: "transparent",
+    color: "#142019",
+    textAlign: "left",
+    fontFamily: "inherit",
+    cursor: "pointer",
+  },
+
+  gymPrioridadTexto: {
+    display: "grid",
+    gap: 4,
+  },
+
+  gymPrioridadValor: {
+    minWidth: 46,
+    height: 38,
+    padding: "0 10px",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 11,
+    background: "#eaf8ef",
+    color: "#16834f",
+    fontSize: 15,
+    fontWeight: 900,
+  },
+
   bienvenidaLavanderia: {
     maxWidth: 1440,
     margin: "0 auto 16px",
@@ -1984,18 +2930,6 @@ const s = {
     margin: "7px 0 9px",
     fontSize:
       "clamp(29px,4vw,42px)",
-  },
-
-  botonPedidoPrincipal: {
-    minHeight: 52,
-    padding: "13px 20px",
-    border: 0,
-    borderRadius: 13,
-    background: "#16834f",
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: 900,
-    cursor: "pointer",
   },
 
   accesosGrid: {
@@ -2497,6 +3431,33 @@ const s = {
     marginTop: 3,
     fontSize: 7.5,
     lineHeight: 1.1,
+  },
+
+  gymHeroMobile: {
+    minHeight: 0,
+    padding: "24px 19px 18px",
+    gridTemplateColumns: "1fr",
+    gap: 8,
+    borderRadius: 20,
+  },
+
+  gymTituloMobile: {
+    fontSize: 38,
+    lineHeight: 1.02,
+  },
+
+  gymIndicadoresMobile: {
+    gridTemplateColumns:
+      "repeat(2,minmax(0,1fr))",
+    gap: 10,
+  },
+
+  gymContenidoInferiorMobile: {
+    gridTemplateColumns: "1fr",
+  },
+
+  gymAccesosMobile: {
+    gridTemplateColumns: "1fr",
   },
 
   accesosGridMobile: {
