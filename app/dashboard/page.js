@@ -1741,6 +1741,21 @@ export default function Dashboard() {
             </span>
           </div>
 
+          {esGimnasio && !esMovil && (
+            <div style={s.topbarGymImagenWrap}>
+              <span style={s.topbarGymCirculo} />
+
+              <Image
+                src="/gym-hero-fitness.png"
+                alt="Persona fitness motivada"
+                width={190}
+                height={150}
+                priority
+                style={s.topbarGymImagen}
+              />
+            </div>
+          )}
+
           <div
             style={{
               ...s.userBox,
@@ -2349,62 +2364,6 @@ function DashboardGimnasio({
 
   return (
     <>
-      <section
-        style={{
-          ...s.gymHeroCompacto,
-          ...(esMovil
-            ? s.gymHeroCompactoMobile
-            : {}),
-        }}
-      >
-        <div style={s.gymHeroCompactoContenido}>
-          <span style={s.gymEtiquetaCompacta}>
-            PANEL DEL GIMNASIO
-          </span>
-
-          <h2
-            style={{
-              ...s.gymNombreEmpresa,
-              ...(esMovil
-                ? s.gymNombreEmpresaMobile
-                : {}),
-            }}
-          >
-            {empresaNombre}
-          </h2>
-
-          <p style={s.gymDescripcionCompacta}>
-            Control de alumnos, membresías, accesos
-            y caja desde un solo lugar.
-          </p>
-        </div>
-
-        <div
-          style={{
-            ...s.gymImagenWrap,
-            ...(esMovil
-              ? s.gymImagenWrapMobile
-              : {}),
-          }}
-        >
-          <span style={s.gymCirculoDecorativo} />
-
-          <Image
-            src="/gym-hero-fitness.png"
-            alt="Persona fitness motivada"
-            width={330}
-            height={230}
-            priority
-            style={{
-              ...s.gymImagenFitness,
-              ...(esMovil
-                ? s.gymImagenFitnessMobile
-                : {}),
-            }}
-          />
-        </div>
-      </section>
-
       {avisoResumen && (
         <div style={s.gymAviso}>
           <strong style={s.gymAvisoIcono}>
@@ -3288,6 +3247,39 @@ const s = {
     color: "#7a867f",
     fontSize: 12,
     textTransform: "capitalize",
+  },
+
+  topbarGymImagenWrap: {
+    width: 170,
+    height: 94,
+    position: "relative",
+    display: "flex",
+    alignItems: "flex-end",
+    justifyContent: "center",
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+
+  topbarGymCirculo: {
+    position: "absolute",
+    bottom: -62,
+    width: 168,
+    height: 168,
+    borderRadius: "50%",
+    background:
+      "linear-gradient(145deg,#d9f0e1,#a9dfbc)",
+    opacity: 0.9,
+  },
+
+  topbarGymImagen: {
+    width: "auto",
+    height: 112,
+    position: "relative",
+    zIndex: 2,
+    objectFit: "contain",
+    objectPosition: "center bottom",
+    filter:
+      "drop-shadow(0 8px 10px rgba(21,74,44,.15))",
   },
 
   userBox: {
