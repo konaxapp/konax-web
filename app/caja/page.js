@@ -144,6 +144,8 @@ export default function Caja() {
 
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
+  const [mostrarOtrosCobros, setMostrarOtrosCobros] =
+    useState(false);
 
   useEffect(() => {
     iniciarCaja();
@@ -358,6 +360,198 @@ export default function Caja() {
     );
   }
 
+  function limpiarSeleccionGimnasio({ conservarCliente = true } = {}) {
+    setMonto("");
+    setValorProducto("");
+    setCodigoProducto("");
+    setProductoSeleccionado(null);
+    setCantidad("1");
+    setNumeroVentaAbono("");
+    setConcepto("");
+    setObservacion("");
+
+    if (!conservarCliente) {
+      setBuscarCliente("");
+      setResultadosBusqueda([]);
+      setClienteSeleccionado(null);
+      setCuentasCliente([]);
+      setCuentaSeleccionada(null);
+    }
+  }
+
+  function seleccionarTipoGimnasio(nuevoTipo) {
+    limpiarSeleccionGimnasio({ conservarCliente: true });
+    setTipoMovimiento(nuevoTipo);
+    setMostrarOtrosCobros(false);
+
+    const conceptos = {
+      "Pase diario": "Pase diario",
+      "Clase / Sesión individual":
+        "Clase o sesión individual",
+      "Servicio adicional": "Servicio adicional",
+      "Otro ingreso": "Otro ingreso",
+      "Inscripción / Matrícula":
+        "Inscripción o matrícula",
+      "Venta de producto": "Venta de producto",
+    };
+
+    setConcepto(conceptos[nuevoTipo] || nuevoTipo);
+  }
+
+  function obtenerEstadoMembresiaVisual() {
+    if (!clienteSeleccionado) {
+      return {
+        etiqueta: "Sin alumno seleccionado",
+        color: "#6b7280",
+        fondo: "#f3f4f6",
+      };
+    }
+
+    if (!cuentaSeleccionada?.id) {
+      return {
+        etiqueta: "Sin membresía configurada",
+        color: "#9a6700",
+        fondo: "#fff7db",
+      };
+    }
+
+    const estado = normalizar(
+      cuentaSeleccionada.estado_servicio ||
+        cuentaSeleccionada.estado
+    );
+
+    const fechaVencimiento = String(
+      cuentaSeleccionada.fecha_vencimiento || ""
+    ).slice(0, 10);
+
+    const hoy = obtenerFechaPanama();
+
+    if (
+      ["cancelado", "suspendido", "inactivo"].includes(
+        estado
+      ) ||
+      (fechaVencimiento && fechaVencimiento < hoy)
+    ) {
+      return {
+        etiqueta: "Membresía vencida",
+        color: "#b42318",
+        fondo: "#fff0ee",
+      };
+    }
+
+    if (fechaVencimiento) {
+      const hoyFecha = new Date(`${hoy}T12:00:00`);
+      const venceFecha = new Date(
+        `${fechaVencimiento}T12:00:00`
+      );
+
+      const dias = Math.ceil(
+        (venceFecha.getTime() - hoyFecha.getTime()) /
+          86400000
+      );
+
+      if (dias >= 0 && dias <= 7) {
+        return {
+          etiqueta: `Vence en ${dias} ${
+            dias === 1 ? "día" : "días"
+          }`,
+          color: "#956400",
+          fondo: "#fff8df",
+        };
+      }
+    }
+
+    return {
+      etiqueta: "Membresía activa",
+      color: "#08743c",
+      fondo: "#e8f7ed",
+    };
+  }
+
+  function obtenerMontoSugeridoMembresia() {
+    return Number(
+      cuentaSeleccionada?.cuota ||
+        cuentaSeleccionada?.monto_cuota ||
+        cuentaSeleccionada?.monto_total ||
+        cuentaSeleccionada?.saldo_actual ||
+        0
+    );
+  }
+
+  function etiquetaAccionMembresia() {
+    if (!clienteSeleccionado) {
+      return "Cobrar membresía";
+    }
+
+    if (!cuentaSeleccionada?.id) {
+      return "Configurar membresía";
+    }
+
+    const estadoVisual = obtenerEstadoMembresiaVisual();
+
+    return estadoVisual.etiqueta === "Membresía vencida"
+      ? "Cobrar y renovar"
+      : "Renovar membresía";
+  }
+
+  function prepararCobroMembresia() {
+    if (!clienteSeleccionado) {
+      alert(
+        "Busque y seleccione al alumno antes de cobrar una membresía."
+      );
+      return;
+    }
+
+    if (!cuentaSeleccionada?.id) {
+      router.push(
+        `/suscripciones?clienteId=${clienteSeleccionado.id}`
+      );
+      return;
+    }
+
+    limpiarSeleccionGimnasio({ conservarCliente: true });
+    setTipoMovimiento("Renovación");
+    setConcepto("Renovación de membresía");
+    setMostrarOtrosCobros(false);
+
+    const sugerido = obtenerMontoSugeridoMembresia();
+
+    if (sugerido > 0) {
+      setMonto(sugerido.toFixed(2));
+    }
+  }
+
+  function limpiarAlumnoGimnasio() {
+    setBuscarCliente("");
+    setResultadosBusqueda([]);
+    setClienteSeleccionado(null);
+    setCuentasCliente([]);
+    setCuentaSeleccionada(null);
+
+    if (
+      ["Membresía", "Renovación"].includes(tipoMovimiento)
+    ) {
+      setTipoMovimiento("Pase diario");
+      setConcepto("Pase diario");
+      setMonto("");
+    }
+  }
+
+  function obtenerOtrosCobrosGimnasio() {
+    const opciones = [
+      "Inscripción / Matrícula",
+      "Clase / Sesión individual",
+      "Servicio adicional",
+      "Otro ingreso",
+    ];
+
+    if (productos.length > 0) {
+      opciones.splice(3, 0, "Venta de producto");
+    }
+
+    return opciones;
+  }
+
   async function cargarEmpresa(empresaId) {
     const { data, error } = await supabase
       .from("empresas")
@@ -389,7 +583,24 @@ export default function Caja() {
     localStorage.setItem("empresaNombre", nombreFinal);
 
     const opciones = obtenerOpcionesMovimiento(tipoCompleto);
-    setTipoMovimiento(opciones[0] || "");
+    const esPerfilMembresia =
+      normalizar(tipoCompleto).includes("gimnasio") ||
+      normalizar(tipoCompleto).includes("club") ||
+      normalizar(tipoCompleto).includes("academia") ||
+      normalizar(tipoCompleto).includes("escuela") ||
+      normalizar(tipoCompleto).includes("colegio") ||
+      normalizar(tipoCompleto).includes("suscripciones") ||
+      normalizar(tipoCompleto).includes("membres");
+
+    setTipoMovimiento(
+      esPerfilMembresia
+        ? "Pase diario"
+        : opciones[0] || ""
+    );
+
+    if (esPerfilMembresia) {
+      setConcepto("Pase diario");
+    }
   }
 
   function obtenerOpcionesMovimiento(tipoNegocio) {
@@ -753,9 +964,11 @@ export default function Caja() {
     const claves = new Set();
 
     resultados.forEach((resultado) => {
-      const clave = `${resultado.cliente.id}-${
-        resultado.cuenta?.id || "sin-cuenta"
-      }`;
+      const clave = esNegocioMembresia()
+        ? String(resultado.cliente.id)
+        : `${resultado.cliente.id}-${
+            resultado.cuenta?.id || "sin-cuenta"
+          }`;
 
       if (!claves.has(clave)) {
         claves.add(clave);
@@ -776,26 +989,86 @@ export default function Caja() {
     setBuscarCliente(cliente.nombre);
     setResultadosBusqueda([]);
 
-    const { data, error } = await supabase
-      .from("informacion_comercial")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .eq("cliente_id", cliente.id)
-      .order("created_at", { ascending: false });
+    const solicitudes = [
+      supabase
+        .from("informacion_comercial")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .eq("cliente_id", cliente.id)
+        .order("created_at", { ascending: false }),
+    ];
 
-    if (error || !data?.length) {
+    if (esNegocioMembresia()) {
+      solicitudes.push(
+        supabase
+          .from("suscripciones")
+          .select(
+            "id, cliente_id, informacion_comercial_id, estado, fecha_vencimiento, periodicidad"
+          )
+          .eq("empresa_id", empresaId)
+          .eq("cliente_id", cliente.id)
+          .order("fecha_vencimiento", { ascending: false })
+      );
+    }
+
+    const respuestas = await Promise.all(solicitudes);
+    const respuestaCuentas = respuestas[0];
+    const respuestaSuscripciones = respuestas[1];
+
+    if (respuestaCuentas.error) {
+      alert(
+        "No se pudieron cargar las cuentas del alumno: " +
+          respuestaCuentas.error.message
+      );
       setCuentasCliente([]);
       setCuentaSeleccionada(null);
       return;
     }
 
-    setCuentasCliente(data);
-    setCuentaSeleccionada(resultado.cuenta || data[0]);
+    let cuentasDisponibles = respuestaCuentas.data || [];
+
+    if (
+      esNegocioMembresia() &&
+      !respuestaSuscripciones?.error &&
+      respuestaSuscripciones?.data?.length
+    ) {
+      const idsMembresia = new Set(
+        respuestaSuscripciones.data
+          .map(
+            (suscripcion) =>
+              suscripcion.informacion_comercial_id
+          )
+          .filter(Boolean)
+          .map(String)
+      );
+
+      const cuentasMembresia = cuentasDisponibles.filter(
+        (cuenta) => idsMembresia.has(String(cuenta.id))
+      );
+
+      if (cuentasMembresia.length > 0) {
+        cuentasDisponibles = cuentasMembresia;
+      }
+    }
+
+    setCuentasCliente(cuentasDisponibles);
+
+    const cuentaResultado = resultado.cuenta
+      ? cuentasDisponibles.find(
+          (cuenta) =>
+            String(cuenta.id) ===
+            String(resultado.cuenta.id)
+        )
+      : null;
+
+    const cuentaInicial =
+      cuentaResultado || cuentasDisponibles[0] || null;
+
+    setCuentaSeleccionada(cuentaInicial);
 
     /*
       El responsable de Caja siempre es el usuario conectado
-      que está registrando el movimiento. No se sustituye por
-      el vendedor, gestor o administrador asociado a la cuenta.
+      que está registrando el movimiento.
     */
     const cajeroActual =
       localStorage.getItem("usuarioNombre") ||
@@ -804,6 +1077,24 @@ export default function Caja() {
       "Caja";
 
     setResponsable(cajeroActual);
+
+    if (
+      esNegocioMembresia() &&
+      cuentaInicial &&
+      ["Membresía", "Renovación"].includes(tipoMovimiento)
+    ) {
+      const sugerido = Number(
+        cuentaInicial.cuota ||
+          cuentaInicial.monto_cuota ||
+          cuentaInicial.monto_total ||
+          cuentaInicial.saldo_actual ||
+          0
+      );
+
+      if (sugerido > 0) {
+        setMonto(sugerido.toFixed(2));
+      }
+    }
   }
 
   async function descontarInventario(empresaId) {
@@ -1328,6 +1619,44 @@ export default function Caja() {
     );
   }
 
+  function obtenerMensajeExito() {
+    const mensajes = {
+      "Inscripción / Matrícula":
+        "Inscripción registrada correctamente.",
+      Membresía:
+        "Pago registrado y membresía activada correctamente.",
+      Renovación:
+        "Pago registrado y membresía renovada correctamente.",
+      "Pase diario":
+        "Pase diario registrado correctamente.",
+      "Clase / Sesión individual":
+        "Pago de clase individual registrado correctamente.",
+      "Servicio adicional":
+        "Servicio adicional registrado correctamente.",
+      "Otro ingreso":
+        "Ingreso registrado correctamente.",
+      "Servicio Contado":
+        "Servicio cobrado correctamente.",
+      "Venta de producto":
+        "Venta registrada y producto descontado del inventario.",
+      "Venta Contado":
+        "Venta registrada y producto descontado del inventario.",
+      "Venta Crédito":
+        "Venta a crédito aplicada y producto descontado del inventario.",
+      Abono:
+        "Abono registrado correctamente.",
+      "Cuota Crédito":
+        "Cuota de crédito registrada correctamente.",
+      Cancelación:
+        "Cuenta cancelada y pago registrado correctamente.",
+    };
+
+    return (
+      mensajes[tipoMovimiento] ||
+      "Movimiento registrado correctamente."
+    );
+  }
+
   async function guardarMovimiento() {
     const empresaId = obtenerEmpresaId();
 
@@ -1356,6 +1685,16 @@ export default function Caja() {
     if (esPagoDeCuenta() && !cuentaSeleccionada?.id) {
       alert(
         "Seleccione la cuenta por cobrar donde se aplicará el pago."
+      );
+      return;
+    }
+
+    if (
+      requiereCuentaMembresia() &&
+      !cuentaSeleccionada?.id
+    ) {
+      alert(
+        "Este alumno todavía no tiene una membresía configurada. Abra Membresías y asígnele un plan antes de cobrar."
       );
       return;
     }
@@ -1556,6 +1895,17 @@ export default function Caja() {
         );
       }
 
+      if (requiereCuentaMembresia()) {
+        cuentaActualizada =
+          await procesarMembresiaDesdeCaja(empresaId);
+
+        if (!cuentaActualizada) {
+          throw new Error(
+            "No se pudo completar la actualización de la membresía."
+          );
+        }
+      }
+
       /*
         Solo las ventas rebajan inventario.
         Abono, Cuota Crédito y Cancelación no lo rebajan.
@@ -1571,17 +1921,7 @@ export default function Caja() {
         }
       }
 
-      alert(
-        esCancelacion()
-          ? "Cuenta cancelada y pago registrado correctamente."
-          : esCuotaCredito()
-          ? "Cuota de crédito registrada correctamente."
-          : esAbono()
-          ? "Abono registrado correctamente."
-          : esVentaCredito()
-          ? "Venta a crédito aplicada a la cuenta y producto descontado."
-          : "Venta registrada y producto descontado del inventario."
-      );
+      alert(obtenerMensajeExito());
 
       limpiarFormulario();
 
@@ -1628,8 +1968,13 @@ export default function Caja() {
         `${categoriaNegocio} ${tipoNegocioEmpresa}`
       );
 
-    setTipoMovimiento(opciones[0] || "");
+    setTipoMovimiento(
+      esNegocioMembresia()
+        ? "Pase diario"
+        : opciones[0] || ""
+    );
     setFechaPago(obtenerFechaPanama());
+    setMostrarOtrosCobros(false);
 
     setBuscarCliente("");
     setResultadosBusqueda([]);
@@ -1650,7 +1995,9 @@ export default function Caja() {
 
     setMetodoPago("Efectivo");
     setMonto("");
-    setConcepto("");
+    setConcepto(
+      esNegocioMembresia() ? "Pase diario" : ""
+    );
     setObservacion("");
 
     const usuarioActual =
@@ -1733,12 +2080,20 @@ export default function Caja() {
             <div style={estilos.topbarLogoCard}><img src="/konax-logo.png" alt="KONAX" style={estilos.topbarLogo} /></div>
             <div style={estilos.topbarSeparador} />
             <div>
-              <div style={estilos.topbarModulo}>🧾 CAJA Y REGISTRO DE INGRESOS</div>
+              <div style={estilos.topbarModulo}>
+                {esNegocioMembresia()
+                  ? "💳 CAJA DEL GIMNASIO"
+                  : "🧾 CAJA Y REGISTRO DE INGRESOS"}
+              </div>
             </div>
             <div style={estilos.topbarSeparador} />
             <div>
               <h1 style={estilos.topbarEmpresa}>{empresaNombre}</h1>
-              <p style={estilos.topbarTexto}>Registro de pagos, membresías, ventas, servicios e ingresos.</p>
+              <p style={estilos.topbarTexto}>
+                {esNegocioMembresia()
+                  ? "Cobro de membresías, pases diarios y servicios."
+                  : "Registro de pagos, ventas, servicios e ingresos."}
+              </p>
             </div>
           </div>
 
@@ -1753,6 +2108,666 @@ export default function Caja() {
             <KpiCard titulo="Pagos digitales" valor={`$${totalDigitalHoy.toFixed(2)}`} detalle="Tarjetas y otros medios" icono="▤" digital />
           </section>
 
+          {esNegocioMembresia() ? (
+            <section style={estilos.gymCajaLayout}>
+              <article style={estilos.gymCobroPanel}>
+                <div style={estilos.gymCobroEncabezado}>
+                  <div>
+                    <span style={estilos.gymEyebrow}>
+                      COBRO RÁPIDO
+                    </span>
+                    <h2 style={estilos.gymCobroTitulo}>
+                      Registra el ingreso sin usar un POS complicado
+                    </h2>
+                    <p style={estilos.gymCobroTexto}>
+                      Selecciona la operación, busca al alumno cuando
+                      corresponda y registra el pago.
+                    </p>
+                  </div>
+
+                  <div style={estilos.gymFechaCompacta}>
+                    <span style={estilos.label}>Fecha</span>
+                    <input
+                      type="date"
+                      value={fechaPago}
+                      onChange={(e) =>
+                        setFechaPago(e.target.value)
+                      }
+                      style={estilos.input}
+                    />
+                  </div>
+                </div>
+
+                <div style={estilos.gymAccionesPrincipales}>
+                  <button
+                    type="button"
+                    onClick={prepararCobroMembresia}
+                    style={
+                      ["Membresía", "Renovación"].includes(
+                        tipoMovimiento
+                      )
+                        ? estilos.gymAccionActiva
+                        : estilos.gymAccion
+                    }
+                  >
+                    <span style={estilos.gymAccionIcono}>🔁</span>
+                    <span style={estilos.gymAccionTexto}>
+                      <strong>{etiquetaAccionMembresia()}</strong>
+                      <small>
+                        {clienteSeleccionado
+                          ? cuentaSeleccionada?.id
+                            ? "Usa el plan asignado al alumno"
+                            : "Abre la configuración de membresía"
+                          : "Selecciona primero al alumno"}
+                      </small>
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      seleccionarTipoGimnasio("Pase diario")
+                    }
+                    style={
+                      tipoMovimiento === "Pase diario"
+                        ? estilos.gymAccionActiva
+                        : estilos.gymAccion
+                    }
+                  >
+                    <span style={estilos.gymAccionIcono}>🎟️</span>
+                    <span style={estilos.gymAccionTexto}>
+                      <strong>Pase diario</strong>
+                      <small>
+                        Registra una entrada sin renovar membresía
+                      </small>
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMostrarOtrosCobros(
+                        (actual) => !actual
+                      )
+                    }
+                    style={
+                      mostrarOtrosCobros ||
+                      obtenerOtrosCobrosGimnasio().includes(
+                        tipoMovimiento
+                      )
+                        ? estilos.gymAccionActiva
+                        : estilos.gymAccion
+                    }
+                  >
+                    <span style={estilos.gymAccionIcono}>＋</span>
+                    <span style={estilos.gymAccionTexto}>
+                      <strong>Otro cobro</strong>
+                      <small>
+                        Inscripción, clase, servicio o producto
+                      </small>
+                    </span>
+                  </button>
+                </div>
+
+                {mostrarOtrosCobros && (
+                  <div style={estilos.gymOtrosCobros}>
+                    {obtenerOtrosCobrosGimnasio().map(
+                      (opcion) => (
+                        <button
+                          key={opcion}
+                          type="button"
+                          onClick={() =>
+                            seleccionarTipoGimnasio(opcion)
+                          }
+                          style={
+                            tipoMovimiento === opcion
+                              ? estilos.gymOtroActivo
+                              : estilos.gymOtro
+                          }
+                        >
+                          {opcion}
+                        </button>
+                      )
+                    )}
+                  </div>
+                )}
+
+                <div style={estilos.gymOperacionSeleccionada}>
+                  <div>
+                    <span style={estilos.gymOperacionEtiqueta}>
+                      OPERACIÓN SELECCIONADA
+                    </span>
+                    <strong style={estilos.gymOperacionValor}>
+                      {tipoMovimiento || "Seleccione una operación"}
+                    </strong>
+                  </div>
+
+                  {tipoMovimiento === "Venta de producto" && (
+                    <span style={estilos.gymInventarioAviso}>
+                      Solo esta operación descuenta inventario
+                    </span>
+                  )}
+                </div>
+
+                <section style={estilos.gymBloque}>
+                  <div style={estilos.gymBloqueCabecera}>
+                    <div>
+                      <span style={estilos.gymEyebrow}>ALUMNO</span>
+                      <h3 style={estilos.gymBloqueTitulo}>
+                        Buscar por nombre, teléfono o cédula
+                      </h3>
+                    </div>
+
+                    <span style={estilos.gymOpcional}>
+                      {requiereCliente()
+                        ? "Requerido"
+                        : "Opcional"}
+                    </span>
+                  </div>
+
+                  <div style={estilos.gymBuscarFila}>
+                    <input
+                      placeholder="Escriba mínimo 3 caracteres"
+                      value={buscarCliente}
+                      onChange={(e) =>
+                        setBuscarCliente(e.target.value)
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          buscarClientes();
+                        }
+                      }}
+                      style={estilos.input}
+                    />
+                    <button
+                      type="button"
+                      onClick={buscarClientes}
+                      style={estilos.gymBuscarBoton}
+                    >
+                      Buscar
+                    </button>
+                  </div>
+
+                  {resultadosBusqueda.length > 0 && (
+                    <div style={estilos.gymResultados}>
+                      {resultadosBusqueda.map(
+                        (item, index) => (
+                          <button
+                            key={`${item.cliente.id}-${index}`}
+                            type="button"
+                            onClick={() =>
+                              seleccionarResultado(item)
+                            }
+                            style={estilos.gymResultado}
+                          >
+                            <span style={estilos.gymResultadoAvatar}>
+                              {String(
+                                item.cliente.nombre || "A"
+                              )
+                                .charAt(0)
+                                .toUpperCase()}
+                            </span>
+                            <span style={estilos.gymResultadoTexto}>
+                              <strong>
+                                {item.cliente.nombre}
+                              </strong>
+                              <small>
+                                {item.cliente.telefono ||
+                                  item.cliente.celular ||
+                                  item.cliente.cedula ||
+                                  "Sin teléfono registrado"}
+                              </small>
+                            </span>
+                            <span style={estilos.gymResultadoFlecha}>
+                              →
+                            </span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  )}
+
+                  {clienteSeleccionado ? (
+                    <div style={estilos.gymAlumnoCard}>
+                      <div style={estilos.gymAlumnoSuperior}>
+                        <div style={estilos.gymAlumnoIdentidad}>
+                          <span style={estilos.gymAlumnoAvatar}>
+                            {String(
+                              clienteSeleccionado.nombre || "A"
+                            )
+                              .charAt(0)
+                              .toUpperCase()}
+                          </span>
+
+                          <div>
+                            <strong style={estilos.gymAlumnoNombre}>
+                              {clienteSeleccionado.nombre}
+                            </strong>
+                            <span style={estilos.gymAlumnoDato}>
+                              {obtenerTelefonoCliente(
+                                clienteSeleccionado
+                              ) || "Sin teléfono"}
+                              {" · "}
+                              {clienteSeleccionado.cedula ||
+                                "Sin cédula"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={estilos.gymAlumnoAcciones}>
+                          <span
+                            style={{
+                              ...estilos.gymEstadoMembresia,
+                              color:
+                                obtenerEstadoMembresiaVisual()
+                                  .color,
+                              background:
+                                obtenerEstadoMembresiaVisual()
+                                  .fondo,
+                            }}
+                          >
+                            {
+                              obtenerEstadoMembresiaVisual()
+                                .etiqueta
+                            }
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={limpiarAlumnoGimnasio}
+                            style={estilos.gymQuitarAlumno}
+                          >
+                            Cambiar alumno
+                          </button>
+                        </div>
+                      </div>
+
+                      {cuentasCliente.length > 1 && (
+                        <div style={estilos.gymCuentaSelector}>
+                          <span style={estilos.label}>
+                            Membresía o cuenta
+                          </span>
+                          <select
+                            value={
+                              cuentaSeleccionada?.id || ""
+                            }
+                            onChange={(e) => {
+                              const cuenta =
+                                cuentasCliente.find(
+                                  (item) =>
+                                    String(item.id) ===
+                                    String(e.target.value)
+                                );
+
+                              setCuentaSeleccionada(
+                                cuenta || null
+                              );
+
+                              if (
+                                cuenta &&
+                                [
+                                  "Membresía",
+                                  "Renovación",
+                                ].includes(tipoMovimiento)
+                              ) {
+                                const sugerido = Number(
+                                  cuenta.cuota ||
+                                    cuenta.monto_cuota ||
+                                    cuenta.monto_total ||
+                                    cuenta.saldo_actual ||
+                                    0
+                                );
+
+                                setMonto(
+                                  sugerido > 0
+                                    ? sugerido.toFixed(2)
+                                    : ""
+                                );
+                              }
+                            }}
+                            style={estilos.input}
+                          >
+                            {cuentasCliente.map((cuenta) => (
+                              <option
+                                key={cuenta.id}
+                                value={cuenta.id}
+                              >
+                                {cuenta.descripcion ||
+                                  cuenta.numero_cuenta ||
+                                  "Membresía"}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      <div style={estilos.gymAlumnoResumen}>
+                        <MiniStat
+                          label="Plan"
+                          value={
+                            cuentaSeleccionada?.descripcion ||
+                            "Sin plan asignado"
+                          }
+                        />
+                        <MiniStat
+                          label="Vencimiento"
+                          value={
+                            cuentaSeleccionada?.fecha_vencimiento
+                              ? String(
+                                  cuentaSeleccionada.fecha_vencimiento
+                                ).slice(0, 10)
+                              : "-"
+                          }
+                        />
+                        <MiniStat
+                          label="Monto"
+                          value={`$${Number(
+                            cuentaSeleccionada?.cuota ||
+                              cuentaSeleccionada?.monto_total ||
+                              0
+                          ).toFixed(2)}`}
+                          resaltado
+                        />
+                        <MiniStat
+                          label="Saldo"
+                          value={`$${Number(
+                            cuentaSeleccionada?.saldo_actual || 0
+                          ).toFixed(2)}`}
+                        />
+                      </div>
+
+                      {!cuentaSeleccionada?.id && (
+                        <div style={estilos.gymSinMembresia}>
+                          <span>
+                            Este alumno no tiene una membresía
+                            vinculada.
+                          </span>
+                          <button
+                            type="button"
+                            onClick={prepararCobroMembresia}
+                            style={estilos.gymConfigurarMembresia}
+                          >
+                            Configurar membresía
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={estilos.gymAlumnoVacio}>
+                      <span style={estilos.gymAlumnoVacioIcono}>
+                        👤
+                      </span>
+                      <div>
+                        <strong>
+                          No hay un alumno seleccionado
+                        </strong>
+                        <p>
+                          Para pases diarios y otros ingresos puede
+                          continuar sin alumno. Para membresías e
+                          inscripciones debe seleccionarlo.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </section>
+
+                {esVentaConProducto() && (
+                  <section style={estilos.gymBloque}>
+                    <div style={estilos.gymBloqueCabecera}>
+                      <div>
+                        <span style={estilos.gymEyebrow}>
+                          PRODUCTO
+                        </span>
+                        <h3 style={estilos.gymBloqueTitulo}>
+                          Seleccione el artículo a vender
+                        </h3>
+                      </div>
+                      <span style={estilos.gymInventarioAviso}>
+                        Descuenta inventario
+                      </span>
+                    </div>
+
+                    <div style={estilos.gymProductoGrid}>
+                      <Campo label="Producto">
+                        <select
+                          value={
+                            productoSeleccionado?.id || ""
+                          }
+                          onChange={(e) => {
+                            const producto = productos.find(
+                              (item) =>
+                                String(item.id) ===
+                                String(e.target.value)
+                            );
+                            seleccionarProducto(
+                              producto || null
+                            );
+                          }}
+                          style={estilos.input}
+                        >
+                          <option value="">
+                            Seleccione un producto
+                          </option>
+                          {productos.map((producto) => (
+                            <option
+                              key={producto.id}
+                              value={producto.id}
+                            >
+                              {producto.codigo} - {producto.nombre}
+                              {" · "}Stock {stockProducto(producto)}
+                            </option>
+                          ))}
+                        </select>
+                      </Campo>
+
+                      <Campo label="Cantidad">
+                        <input
+                          type="number"
+                          min="1"
+                          value={cantidad}
+                          onChange={(e) =>
+                            setCantidad(e.target.value)
+                          }
+                          style={estilos.input}
+                        />
+                      </Campo>
+
+                      <Campo label="Total del producto">
+                        <input
+                          value={valorProducto}
+                          readOnly
+                          style={estilos.inputReadOnly}
+                        />
+                      </Campo>
+                    </div>
+                  </section>
+                )}
+
+                <section style={estilos.gymBloque}>
+                  <div style={estilos.gymBloqueCabecera}>
+                    <div>
+                      <span style={estilos.gymEyebrow}>
+                        DETALLE DEL PAGO
+                      </span>
+                      <h3 style={estilos.gymBloqueTitulo}>
+                        Complete únicamente lo necesario
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div style={estilos.gymPagoGrid}>
+                    <Campo label="Método de pago">
+                      <select
+                        value={metodoPago}
+                        onChange={(e) =>
+                          setMetodoPago(e.target.value)
+                        }
+                        style={estilos.input}
+                      >
+                        <option>Efectivo</option>
+                        <option>Yappy</option>
+                        <option>Transferencia</option>
+                        <option>Tarjeta</option>
+                        <option>Cheque</option>
+                        <option>Otro</option>
+                      </select>
+                    </Campo>
+
+                    <Campo label="Monto">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={monto}
+                        onChange={(e) =>
+                          setMonto(e.target.value)
+                        }
+                        style={estilos.gymMontoInput}
+                        placeholder="0.00"
+                      />
+                    </Campo>
+
+                    <Campo label="Concepto">
+                      <input
+                        value={concepto}
+                        onChange={(e) =>
+                          setConcepto(e.target.value)
+                        }
+                        style={estilos.input}
+                        placeholder="Ej. Pase diario"
+                      />
+                    </Campo>
+
+                    <Campo label="Cajero">
+                      <input
+                        value={responsable}
+                        readOnly
+                        style={estilos.inputResponsable}
+                      />
+                    </Campo>
+
+                    <Campo label="Observación">
+                      <input
+                        value={observacion}
+                        onChange={(e) =>
+                          setObservacion(e.target.value)
+                        }
+                        style={estilos.input}
+                        placeholder="Opcional"
+                      />
+                    </Campo>
+                  </div>
+
+                  <div style={estilos.gymAccionesCobro}>
+                    <button
+                      type="button"
+                      onClick={guardarMovimiento}
+                      disabled={guardando}
+                      style={estilos.gymRegistrarPago}
+                    >
+                      {guardando
+                        ? "Procesando..."
+                        : `Registrar pago${
+                            monto
+                              ? ` · $${Number(
+                                  monto || 0
+                                ).toFixed(2)}`
+                              : ""
+                          }`}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={limpiarFormulario}
+                      disabled={guardando}
+                      style={estilos.gymLimpiar}
+                    >
+                      Limpiar
+                    </button>
+                  </div>
+                </section>
+              </article>
+
+              <aside style={estilos.gymResumenLateral}>
+                <section style={estilos.gymResumenCard}>
+                  <span style={estilos.gymEyebrow}>
+                    RESUMEN DEL COBRO
+                  </span>
+                  <h3 style={estilos.gymResumenTitulo}>
+                    Así se registrará
+                  </h3>
+
+                  <div style={estilos.gymResumenLista}>
+                    <div style={estilos.gymResumenFila}>
+                      <span>Operación</span>
+                      <strong>{tipoMovimiento || "-"}</strong>
+                    </div>
+                    <div style={estilos.gymResumenFila}>
+                      <span>Alumno</span>
+                      <strong>
+                        {clienteSeleccionado?.nombre ||
+                          "Sin alumno"}
+                      </strong>
+                    </div>
+                    <div style={estilos.gymResumenFila}>
+                      <span>Método</span>
+                      <strong>{metodoPago}</strong>
+                    </div>
+                    <div style={estilos.gymResumenFila}>
+                      <span>Monto</span>
+                      <strong style={estilos.gymResumenMonto}>
+                        ${Number(monto || 0).toFixed(2)}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <p style={estilos.gymResumenNota}>
+                    {tipoMovimiento === "Venta de producto"
+                      ? "Esta operación sí descontará el producto del inventario."
+                      : "Este cobro se registrará como ingreso de caja y no tocará el inventario."}
+                  </p>
+                </section>
+
+                <section style={estilos.gymResumenCard}>
+                  <span style={estilos.gymEyebrow}>
+                    ÚLTIMOS MOVIMIENTOS
+                  </span>
+                  <h3 style={estilos.gymResumenTitulo}>
+                    Actividad de hoy
+                  </h3>
+
+                  <div style={estilos.gymUltimosLista}>
+                    {movimientosHoy.length === 0 ? (
+                      <p style={estilos.gymSinMovimientos}>
+                        Todavía no hay cobros registrados hoy.
+                      </p>
+                    ) : (
+                      movimientosHoy.slice(0, 5).map((mov) => (
+                        <div
+                          key={mov.id}
+                          style={estilos.gymUltimoItem}
+                        >
+                          <div>
+                            <strong>
+                              {mov.cliente_nombre ||
+                                mov.tipo ||
+                                "Ingreso"}
+                            </strong>
+                            <span>
+                              {mov.tipo} · {mov.metodo_pago}
+                            </span>
+                          </div>
+                          <strong>
+                            ${Number(mov.monto || 0).toFixed(2)}
+                          </strong>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </section>
+              </aside>
+            </section>
+          ) : (
           <section style={estilos.panelGrid}>
             <div style={estilos.columnaIzquierda}>
               <article style={estilos.panel}>
@@ -1946,6 +2961,128 @@ export default function Caja() {
             </div>
           </section>
 
+          )}
+          {esNegocioMembresia() ? (
+            <article style={estilos.gymMovimientosPanel}>
+              <div style={estilos.gymMovimientosHeader}>
+                <div>
+                  <span style={estilos.gymEyebrow}>
+                    MOVIMIENTOS DE CAJA
+                  </span>
+                  <h2 style={estilos.gymMovimientosTitulo}>
+                    Cobros registrados
+                  </h2>
+                </div>
+
+                <div style={estilos.gymFiltros}>
+                  <label style={estilos.gymFiltroCampo}>
+                    <span>Desde</span>
+                    <input
+                      type="date"
+                      value={fechaDesde}
+                      onChange={(e) =>
+                        setFechaDesde(e.target.value)
+                      }
+                      style={estilos.inputCompacto}
+                    />
+                  </label>
+
+                  <label style={estilos.gymFiltroCampo}>
+                    <span>Hasta</span>
+                    <input
+                      type="date"
+                      value={fechaHasta}
+                      onChange={(e) =>
+                        setFechaHasta(e.target.value)
+                      }
+                      style={estilos.inputCompacto}
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={buscarMovimientosPorFecha}
+                    style={estilos.gymFiltrarBoton}
+                  >
+                    {filtrandoMovimientos
+                      ? "Buscando..."
+                      : "Filtrar"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={mostrarMovimientosHoy}
+                    style={estilos.gymHoyBoton}
+                  >
+                    Ver hoy
+                  </button>
+                </div>
+              </div>
+
+              <div style={estilos.gymMovimientosLista}>
+                {movimientos.length === 0 ? (
+                  <div style={estilos.gymMovimientoVacio}>
+                    No hay movimientos en el período seleccionado.
+                  </div>
+                ) : (
+                  movimientos.map((movimiento) => (
+                    <article
+                      key={movimiento.id}
+                      style={estilos.gymMovimientoItem}
+                    >
+                      <div style={estilos.gymMovimientoFecha}>
+                        <strong>
+                          {String(
+                            movimiento.fecha_pago ||
+                              movimiento.created_at ||
+                              ""
+                          ).slice(8, 10) || "--"}
+                        </strong>
+                        <span>
+                          {String(
+                            movimiento.fecha_pago ||
+                              movimiento.created_at ||
+                              ""
+                          ).slice(0, 7)}
+                        </span>
+                      </div>
+
+                      <div style={estilos.gymMovimientoPrincipal}>
+                        <strong>
+                          {movimiento.cliente_nombre ||
+                            "Ingreso sin alumno"}
+                        </strong>
+                        <span>
+                          {movimiento.tipo} ·{" "}
+                          {movimiento.metodo_pago}
+                        </span>
+                      </div>
+
+                      <div style={estilos.gymMovimientoResponsable}>
+                        <span>Cajero</span>
+                        <strong>
+                          {movimiento.vendedor_responsable ||
+                            movimiento.usuario ||
+                            "-"}
+                        </strong>
+                      </div>
+
+                      <div style={estilos.gymMovimientoMonto}>
+                        <strong>
+                          ${Number(
+                            movimiento.monto || 0
+                          ).toFixed(2)}
+                        </strong>
+                        <span>
+                          {movimiento.estado || "Procesado"}
+                        </span>
+                      </div>
+                    </article>
+                  ))
+                )}
+              </div>
+            </article>
+          ) : (
           <article style={estilos.panelTabla}>
             <div style={estilos.tablaHeaderRow}>
               <TituloPanel icono="📋" titulo="Movimientos registrados" />
@@ -1986,6 +3123,7 @@ export default function Caja() {
               </table>
             </div>
           </article>
+          )}
         </div>
       </div>
     </main>
@@ -2036,5 +3174,580 @@ const estilos={
   clienteCard:{marginTop:"10px",padding:"14px",border:"1px solid #dce5df",borderRadius:"12px",background:"#fff"},clienteDatosFila:{display:"grid",gridTemplateColumns:"64px minmax(0,1fr) minmax(220px,300px)",gap:"14px",alignItems:"center"},avatarCliente:{width:"58px",height:"58px",display:"grid",placeItems:"center",borderRadius:"50%",background:"linear-gradient(180deg,#e9f8ee,#d4efdf)",color:"#098f47",fontSize:"28px"},clienteInfo:{display:"grid",gap:"3px",fontSize:"12px",color:"#4d5952"},clienteNombre:{fontSize:"17px",color:"#17211b"},cuentaSelectorWrap:{display:"grid",gap:"6px"},cuentaStats:{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:"10px",marginTop:"14px"},miniStat:{padding:"13px",display:"grid",gap:"6px",border:"1px solid #e1e7e3",borderRadius:"10px",background:"linear-gradient(180deg,#fff,#fafcfb)",fontSize:"12px"},miniStatResaltado:{padding:"13px",display:"grid",gap:"6px",border:"1px solid #f1e2b9",borderRadius:"10px",background:"linear-gradient(180deg,#fffdf5,#fff7dc)",fontSize:"12px"},estadoActivo:{color:"#0a8d46"},
   productoGrid:{display:"grid",gridTemplateColumns:"minmax(150px,.9fr) minmax(210px,1.35fr) minmax(80px,.55fr) minmax(105px,.7fr)",gap:"12px",alignItems:"start"},codigoProductoBloque:{display:"grid",gap:"10px",minWidth:0},miniaturaProductoCampo:{display:"flex",flexDirection:"column",gap:"6px",alignItems:"flex-start"},miniaturaProductoBox:{width:"72px",height:"58px",display:"grid",placeItems:"center",overflow:"hidden",border:"1px solid #d7dfda",borderRadius:"10px",background:"#f6f8f7"},miniaturaProducto:{width:"100%",height:"100%",objectFit:"cover",display:"block"},miniaturaSinImagen:{width:"100%",height:"100%",placeItems:"center",fontSize:"24px",color:"#7d8a82"},cobroGrid:{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:"12px"},accionesFila:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px",marginTop:"14px"},botonPrincipal:{minHeight:"42px",border:"none",borderRadius:"8px",background:"linear-gradient(135deg,#159552,#08743c)",color:"#fff",fontWeight:900,cursor:"pointer"},botonLimpiar:{minHeight:"42px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff",color:"#17211b",fontWeight:850,cursor:"pointer"},
   tablaHeaderRow:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"14px",flexWrap:"wrap"},filtrosInline:{display:"flex",alignItems:"center",gap:"8px",fontSize:"12px"},inputCompacto:{minHeight:"36px",padding:"7px 10px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff"},inputBuscarTabla:{minHeight:"36px",minWidth:"280px",padding:"7px 10px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff"},botonBuscarMovimientos:{width:"38px",height:"36px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff",cursor:"pointer"},botonHoy:{minHeight:"36px",padding:"0 16px",border:"1px solid #159552",borderRadius:"8px",background:"#fff",color:"#08743c",fontWeight:850,cursor:"pointer"},
-  tablaBox:{overflowX:"auto",border:"1px solid #dfe7e2",borderRadius:"10px"},tabla:{width:"100%",minWidth:"1150px",borderCollapse:"collapse"},th:{padding:"11px",background:"linear-gradient(180deg,#f3faf5,#edf6f0)",color:"#1e3327",textAlign:"left",fontSize:"12px",fontWeight:900,whiteSpace:"nowrap"},td:{padding:"10px 11px",borderBottom:"1px solid #edf1ee",fontSize:"12px",whiteSpace:"nowrap"},tdResponsable:{maxWidth:"145px",padding:"8px 9px",borderBottom:"1px solid #edf1ee",fontSize:"10.5px",lineHeight:1.25,whiteSpace:"normal",overflowWrap:"anywhere",verticalAlign:"middle"},tdVacio:{padding:"28px",textAlign:"center",color:"#6b7280"},badgeTipo:{padding:"4px 9px",borderRadius:"999px",background:"#e7f7ed",color:"#0d8244",fontWeight:800},badgeEstado:{color:"#0a8d46",fontWeight:800}
+  tablaBox:{overflowX:"auto",border:"1px solid #dfe7e2",borderRadius:"10px"},tabla:{width:"100%",minWidth:"1150px",borderCollapse:"collapse"},th:{padding:"11px",background:"linear-gradient(180deg,#f3faf5,#edf6f0)",color:"#1e3327",textAlign:"left",fontSize:"12px",fontWeight:900,whiteSpace:"nowrap"},td:{padding:"10px 11px",borderBottom:"1px solid #edf1ee",fontSize:"12px",whiteSpace:"nowrap"},tdResponsable:{maxWidth:"145px",padding:"8px 9px",borderBottom:"1px solid #edf1ee",fontSize:"10.5px",lineHeight:1.25,whiteSpace:"normal",overflowWrap:"anywhere",verticalAlign:"middle"},tdVacio:{padding:"28px",textAlign:"center",color:"#6b7280"},badgeTipo:{padding:"4px 9px",borderRadius:"999px",background:"#e7f7ed",color:"#0d8244",fontWeight:800},badgeEstado:{color:"#0a8d46",fontWeight:800},
+
+  gymCajaLayout:{
+    display:"grid",
+    gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,420px),1fr))",
+    gap:"14px",
+    alignItems:"start"
+  },
+  gymCobroPanel:{
+    padding:"20px",
+    border:"1px solid #dfe7e2",
+    borderRadius:"20px",
+    background:"#fff",
+    boxShadow:"0 12px 30px rgba(18,66,42,.07)"
+  },
+  gymCobroEncabezado:{
+    display:"grid",
+    gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,220px),1fr))",
+    gap:"18px",
+    alignItems:"end",
+    marginBottom:"16px"
+  },
+  gymEyebrow:{
+    display:"block",
+    color:"#16834f",
+    fontSize:"9px",
+    fontWeight:900,
+    letterSpacing:"1.15px"
+  },
+  gymCobroTitulo:{
+    margin:"6px 0 7px",
+    fontSize:"clamp(23px,3vw,34px)",
+    lineHeight:1.08,
+    letterSpacing:"-.7px"
+  },
+  gymCobroTexto:{
+    margin:0,
+    color:"#6c7971",
+    fontSize:"13px",
+    lineHeight:1.55
+  },
+  gymFechaCompacta:{
+    display:"grid",
+    gap:"6px"
+  },
+  gymAccionesPrincipales:{
+    display:"grid",
+    gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",
+    gap:"10px",
+    marginBottom:"10px"
+  },
+  gymAccion:{
+    minHeight:"92px",
+    padding:"14px",
+    display:"grid",
+    gridTemplateColumns:"42px minmax(0,1fr)",
+    alignItems:"center",
+    gap:"10px",
+    border:"1px solid #dfe7e2",
+    borderRadius:"15px",
+    background:"#f9fbfa",
+    color:"#17211b",
+    textAlign:"left",
+    cursor:"pointer"
+  },
+  gymAccionActiva:{
+    minHeight:"92px",
+    padding:"14px",
+    display:"grid",
+    gridTemplateColumns:"42px minmax(0,1fr)",
+    alignItems:"center",
+    gap:"10px",
+    border:"1px solid #16834f",
+    borderRadius:"15px",
+    background:"linear-gradient(180deg,#ecf9f1,#e5f6eb)",
+    color:"#153d29",
+    textAlign:"left",
+    cursor:"pointer",
+    boxShadow:"0 8px 20px rgba(22,131,79,.12)"
+  },
+  gymAccionIcono:{
+    width:"42px",
+    height:"42px",
+    display:"grid",
+    placeItems:"center",
+    borderRadius:"12px",
+    background:"#fff",
+    fontSize:"21px"
+  },
+  gymAccionTexto:{
+    minWidth:0,
+    display:"grid",
+    gap:"4px"
+  },
+  gymAccionTextoStrong:{
+    fontSize:"14px"
+  },
+  gymOtrosCobros:{
+    display:"flex",
+    flexWrap:"wrap",
+    gap:"8px",
+    padding:"10px",
+    marginBottom:"10px",
+    border:"1px solid #dfe7e2",
+    borderRadius:"13px",
+    background:"#f6f9f7"
+  },
+  gymOtro:{
+    minHeight:"36px",
+    padding:"0 12px",
+    border:"1px solid #d9e3dd",
+    borderRadius:"999px",
+    background:"#fff",
+    color:"#32453a",
+    fontWeight:750,
+    cursor:"pointer"
+  },
+  gymOtroActivo:{
+    minHeight:"36px",
+    padding:"0 12px",
+    border:"1px solid #16834f",
+    borderRadius:"999px",
+    background:"#16834f",
+    color:"#fff",
+    fontWeight:850,
+    cursor:"pointer"
+  },
+  gymOperacionSeleccionada:{
+    marginBottom:"14px",
+    padding:"12px 14px",
+    display:"flex",
+    alignItems:"center",
+    justifyContent:"space-between",
+    gap:"12px",
+    flexWrap:"wrap",
+    border:"1px solid #dce7e0",
+    borderRadius:"13px",
+    background:"#f8fbf9"
+  },
+  gymOperacionEtiqueta:{
+    display:"block",
+    color:"#7a867f",
+    fontSize:"8px",
+    fontWeight:900,
+    letterSpacing:"1px"
+  },
+  gymOperacionValor:{
+    display:"block",
+    marginTop:"3px",
+    color:"#173c2a",
+    fontSize:"15px"
+  },
+  gymInventarioAviso:{
+    display:"inline-flex",
+    padding:"6px 9px",
+    borderRadius:"999px",
+    background:"#fff3cd",
+    color:"#856404",
+    fontSize:"10px",
+    fontWeight:800
+  },
+  gymBloque:{
+    marginTop:"12px",
+    padding:"16px",
+    border:"1px solid #e0e8e3",
+    borderRadius:"16px",
+    background:"#fff"
+  },
+  gymBloqueCabecera:{
+    marginBottom:"12px",
+    display:"flex",
+    alignItems:"flex-start",
+    justifyContent:"space-between",
+    gap:"12px",
+    flexWrap:"wrap"
+  },
+  gymBloqueTitulo:{
+    margin:"5px 0 0",
+    fontSize:"18px"
+  },
+  gymOpcional:{
+    padding:"6px 9px",
+    borderRadius:"999px",
+    background:"#eef6f1",
+    color:"#4c6457",
+    fontSize:"10px",
+    fontWeight:800
+  },
+  gymBuscarFila:{
+    display:"grid",
+    gridTemplateColumns:"minmax(0,1fr) auto",
+    gap:"8px"
+  },
+  gymBuscarBoton:{
+    minWidth:"90px",
+    minHeight:"42px",
+    padding:"0 16px",
+    border:0,
+    borderRadius:"10px",
+    background:"#16834f",
+    color:"#fff",
+    fontWeight:850,
+    cursor:"pointer"
+  },
+  gymResultados:{
+    marginTop:"9px",
+    display:"grid",
+    gap:"7px",
+    maxHeight:"240px",
+    overflowY:"auto"
+  },
+  gymResultado:{
+    width:"100%",
+    padding:"10px",
+    display:"grid",
+    gridTemplateColumns:"38px minmax(0,1fr) auto",
+    gap:"10px",
+    alignItems:"center",
+    border:"1px solid #dfe7e2",
+    borderRadius:"11px",
+    background:"#fff",
+    color:"#17211b",
+    textAlign:"left",
+    cursor:"pointer"
+  },
+  gymResultadoAvatar:{
+    width:"38px",
+    height:"38px",
+    display:"grid",
+    placeItems:"center",
+    borderRadius:"11px",
+    background:"#e8f7ed",
+    color:"#16834f",
+    fontWeight:900
+  },
+  gymResultadoTexto:{
+    minWidth:0,
+    display:"grid",
+    gap:"3px"
+  },
+  gymResultadoFlecha:{
+    color:"#16834f",
+    fontSize:"20px",
+    fontWeight:900
+  },
+  gymAlumnoCard:{
+    marginTop:"10px",
+    padding:"14px",
+    border:"1px solid #cfe4d7",
+    borderRadius:"14px",
+    background:"linear-gradient(180deg,#fbfefc,#f2f8f4)"
+  },
+  gymAlumnoSuperior:{
+    display:"flex",
+    alignItems:"center",
+    justifyContent:"space-between",
+    gap:"12px",
+    flexWrap:"wrap"
+  },
+  gymAlumnoIdentidad:{
+    minWidth:0,
+    display:"flex",
+    alignItems:"center",
+    gap:"11px"
+  },
+  gymAlumnoAvatar:{
+    width:"48px",
+    height:"48px",
+    flex:"0 0 auto",
+    display:"grid",
+    placeItems:"center",
+    borderRadius:"14px",
+    background:"#173c2a",
+    color:"#fff",
+    fontSize:"20px",
+    fontWeight:900
+  },
+  gymAlumnoNombre:{
+    display:"block",
+    fontSize:"17px"
+  },
+  gymAlumnoDato:{
+    display:"block",
+    marginTop:"4px",
+    color:"#6d7b72",
+    fontSize:"11px"
+  },
+  gymAlumnoAcciones:{
+    display:"flex",
+    alignItems:"center",
+    gap:"8px",
+    flexWrap:"wrap"
+  },
+  gymEstadoMembresia:{
+    padding:"7px 10px",
+    borderRadius:"999px",
+    fontSize:"10px",
+    fontWeight:900
+  },
+  gymQuitarAlumno:{
+    minHeight:"32px",
+    padding:"0 10px",
+    border:"1px solid #d6dfda",
+    borderRadius:"9px",
+    background:"#fff",
+    color:"#4b5c52",
+    fontWeight:750,
+    cursor:"pointer"
+  },
+  gymCuentaSelector:{
+    marginTop:"12px",
+    display:"grid",
+    gap:"6px"
+  },
+  gymAlumnoResumen:{
+    marginTop:"12px",
+    display:"grid",
+    gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",
+    gap:"8px"
+  },
+  gymSinMembresia:{
+    marginTop:"10px",
+    padding:"10px 12px",
+    display:"flex",
+    alignItems:"center",
+    justifyContent:"space-between",
+    gap:"10px",
+    flexWrap:"wrap",
+    border:"1px solid #f0d58b",
+    borderRadius:"11px",
+    background:"#fff9e8",
+    color:"#725400",
+    fontSize:"11px"
+  },
+  gymConfigurarMembresia:{
+    minHeight:"34px",
+    padding:"0 11px",
+    border:0,
+    borderRadius:"9px",
+    background:"#956400",
+    color:"#fff",
+    fontWeight:850,
+    cursor:"pointer"
+  },
+  gymAlumnoVacio:{
+    marginTop:"10px",
+    padding:"14px",
+    display:"grid",
+    gridTemplateColumns:"42px minmax(0,1fr)",
+    gap:"11px",
+    alignItems:"center",
+    border:"1px dashed #cfd9d2",
+    borderRadius:"13px",
+    background:"#fafcfb"
+  },
+  gymAlumnoVacioIcono:{
+    width:"42px",
+    height:"42px",
+    display:"grid",
+    placeItems:"center",
+    borderRadius:"12px",
+    background:"#edf4ef",
+    fontSize:"19px"
+  },
+  gymProductoGrid:{
+    display:"grid",
+    gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",
+    gap:"10px"
+  },
+  gymPagoGrid:{
+    display:"grid",
+    gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",
+    gap:"10px"
+  },
+  gymMontoInput:{
+    width:"100%",
+    minHeight:"52px",
+    padding:"10px 12px",
+    boxSizing:"border-box",
+    border:"2px solid #16834f",
+    borderRadius:"11px",
+    background:"#f5fff8",
+    color:"#123d28",
+    outline:"none",
+    fontSize:"22px",
+    fontWeight:900
+  },
+  gymAccionesCobro:{
+    marginTop:"14px",
+    display:"grid",
+    gridTemplateColumns:"minmax(0,1fr) minmax(110px,.25fr)",
+    gap:"10px"
+  },
+  gymRegistrarPago:{
+    minHeight:"50px",
+    padding:"0 18px",
+    border:0,
+    borderRadius:"12px",
+    background:"linear-gradient(135deg,#159552,#08743c)",
+    color:"#fff",
+    fontSize:"14px",
+    fontWeight:900,
+    cursor:"pointer",
+    boxShadow:"0 10px 22px rgba(8,116,60,.22)"
+  },
+  gymLimpiar:{
+    minHeight:"50px",
+    padding:"0 14px",
+    border:"1px solid #d7dfda",
+    borderRadius:"12px",
+    background:"#fff",
+    color:"#33463b",
+    fontWeight:850,
+    cursor:"pointer"
+  },
+  gymResumenLateral:{
+    display:"grid",
+    gap:"12px",
+    position:"sticky",
+    top:"14px"
+  },
+  gymResumenCard:{
+    padding:"17px",
+    border:"1px solid #dfe7e2",
+    borderRadius:"17px",
+    background:"#fff",
+    boxShadow:"0 9px 24px rgba(18,66,42,.06)"
+  },
+  gymResumenTitulo:{
+    margin:"5px 0 13px",
+    fontSize:"19px"
+  },
+  gymResumenLista:{
+    display:"grid",
+    gap:"9px"
+  },
+  gymResumenFila:{
+    paddingBottom:"8px",
+    display:"flex",
+    alignItems:"center",
+    justifyContent:"space-between",
+    gap:"12px",
+    borderBottom:"1px solid #edf1ee",
+    color:"#66736b",
+    fontSize:"11px"
+  },
+  gymResumenListaItem:{
+    display:"flex"
+  },
+  gymResumenMonto:{
+    color:"#16834f",
+    fontSize:"20px"
+  },
+  gymResumenNota:{
+    margin:"14px 0 0",
+    padding:"10px",
+    borderRadius:"10px",
+    background:"#f3f8f5",
+    color:"#617068",
+    fontSize:"11px",
+    lineHeight:1.45
+  },
+  gymUltimosLista:{
+    display:"grid",
+    gap:"9px"
+  },
+  gymUltimoItem:{
+    paddingBottom:"9px",
+    display:"flex",
+    alignItems:"center",
+    justifyContent:"space-between",
+    gap:"10px",
+    borderBottom:"1px solid #edf1ee"
+  },
+  gymSinMovimientos:{
+    margin:0,
+    color:"#748078",
+    fontSize:"12px",
+    lineHeight:1.45
+  },
+  gymMovimientosPanel:{
+    marginTop:"14px",
+    padding:"18px",
+    border:"1px solid #dfe7e2",
+    borderRadius:"18px",
+    background:"#fff",
+    boxShadow:"0 8px 22px rgba(18,66,42,.06)"
+  },
+  gymMovimientosHeader:{
+    marginBottom:"13px",
+    display:"flex",
+    alignItems:"flex-end",
+    justifyContent:"space-between",
+    gap:"12px",
+    flexWrap:"wrap"
+  },
+  gymMovimientosTitulo:{
+    margin:"5px 0 0",
+    fontSize:"21px"
+  },
+  gymFiltros:{
+    display:"flex",
+    alignItems:"flex-end",
+    gap:"8px",
+    flexWrap:"wrap"
+  },
+  gymFiltroCampo:{
+    display:"grid",
+    gap:"4px",
+    color:"#5e6d64",
+    fontSize:"10px",
+    fontWeight:800
+  },
+  gymFiltrarBoton:{
+    minHeight:"36px",
+    padding:"0 13px",
+    border:0,
+    borderRadius:"9px",
+    background:"#16834f",
+    color:"#fff",
+    fontWeight:850,
+    cursor:"pointer"
+  },
+  gymHoyBoton:{
+    minHeight:"36px",
+    padding:"0 13px",
+    border:"1px solid #16834f",
+    borderRadius:"9px",
+    background:"#fff",
+    color:"#16834f",
+    fontWeight:850,
+    cursor:"pointer"
+  },
+  gymMovimientosLista:{
+    display:"grid",
+    gap:"8px"
+  },
+  gymMovimientoItem:{
+    padding:"11px",
+    display:"grid",
+    gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",
+    gap:"12px",
+    alignItems:"center",
+    border:"1px solid #e3e9e5",
+    borderRadius:"12px",
+    background:"#fbfcfb"
+  },
+  gymMovimientoFecha:{
+    display:"grid",
+    gap:"2px",
+    textAlign:"center"
+  },
+  gymMovimientoPrincipal:{
+    minWidth:0,
+    display:"grid",
+    gap:"3px"
+  },
+  gymMovimientoResponsable:{
+    display:"grid",
+    gap:"3px",
+    color:"#67746c",
+    fontSize:"10px"
+  },
+  gymMovimientoMonto:{
+    display:"grid",
+    gap:"3px",
+    textAlign:"right"
+  },
+  gymMovimientoVacio:{
+    padding:"24px",
+    border:"1px dashed #d7dfda",
+    borderRadius:"12px",
+    color:"#6d7972",
+    textAlign:"center",
+    fontSize:"12px"
+  }
 };
