@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 import SidebarKonax from "../../components/SidebarKonax";
 
@@ -603,7 +604,8 @@ function obtenerAccionInteligente(alumno) {
         "/suscripciones",
         alumno.id,
         {
-          accion: "activar",
+          modo: "nueva",
+          origen: "dashboard",
         }
       ),
       icono: "＋",
@@ -2349,53 +2351,57 @@ function DashboardGimnasio({
     <>
       <section
         style={{
-          ...s.gymHero,
+          ...s.gymHeroCompacto,
           ...(esMovil
-            ? s.gymHeroMobile
+            ? s.gymHeroCompactoMobile
             : {}),
         }}
       >
-        <div style={s.gymHeroContenido}>
-          <span style={s.gymEtiqueta}>
-            GESTIÓN DEL GIMNASIO
+        <div style={s.gymHeroCompactoContenido}>
+          <span style={s.gymEtiquetaCompacta}>
+            PANEL DEL GIMNASIO
           </span>
 
           <h2
             style={{
-              ...s.gymTitulo,
+              ...s.gymNombreEmpresa,
               ...(esMovil
-                ? s.gymTituloMobile
+                ? s.gymNombreEmpresaMobile
                 : {}),
             }}
           >
-            La operación de hoy, sin complicaciones
+            {empresaNombre}
           </h2>
 
-          <p style={s.gymDescripcion}>
-            Busca un alumno y KONAX te mostrará
-            directamente la acción que corresponde
-            según su membresía en{" "}
-            <strong>{empresaNombre}</strong>.
+          <p style={s.gymDescripcionCompacta}>
+            Control de alumnos, membresías, accesos
+            y caja desde un solo lugar.
           </p>
         </div>
 
         <div
           style={{
-            ...s.gymVisual,
+            ...s.gymImagenWrap,
             ...(esMovil
-              ? s.gymVisualMobile
+              ? s.gymImagenWrapMobile
               : {}),
           }}
         >
-          <div style={s.gymPesa}>
-            <span style={s.gymDiscoGrande} />
-            <span style={s.gymDiscoPequeno} />
-            <span style={s.gymBarra} />
-            <span style={s.gymDiscoPequeno} />
-            <span style={s.gymDiscoGrande} />
-          </div>
+          <span style={s.gymCirculoDecorativo} />
 
-          <div style={s.gymSello}>K</div>
+          <Image
+            src="/gym-hero-fitness.png"
+            alt="Persona fitness motivada"
+            width={330}
+            height={230}
+            priority
+            style={{
+              ...s.gymImagenFitness,
+              ...(esMovil
+                ? s.gymImagenFitnessMobile
+                : {}),
+            }}
+          />
         </div>
       </section>
 
@@ -2783,7 +2789,11 @@ function DashboardGimnasio({
                           onNavigate(
                             crearRutaAlumno(
                               "/suscripciones",
-                              alumnoSeleccionado.id
+                              alumnoSeleccionado.id,
+                              {
+                                modo: "nueva",
+                                origen: "dashboard",
+                              }
                             )
                           )
                         }
@@ -2798,7 +2808,21 @@ function DashboardGimnasio({
                           onNavigate(
                             crearRutaAlumno(
                               "/caja",
-                              alumnoSeleccionado.id
+                              alumnoSeleccionado.id,
+                              {
+                                suscripcionId:
+                                  alumnoSeleccionado.membresia?.id ||
+                                  "",
+                                cuentaId:
+                                  alumnoSeleccionado.membresia
+                                    ?.informacion_comercial_id ||
+                                  "",
+                                flujo:
+                                  alumnoSeleccionado.membresia
+                                    ? "renovacion"
+                                    : "otro_pago",
+                                origen: "dashboard",
+                              }
                             )
                           )
                         }
@@ -2901,7 +2925,7 @@ function DashboardGimnasio({
             }
             style={s.gymVerTodas}
           >
-            Ver todas las membresías
+            Ver membresías activas
           </button>
         </aside>
       </section>
@@ -3388,6 +3412,92 @@ const s = {
     color: "#6f7c74",
     fontSize: 10,
     fontWeight: 800,
+  },
+
+  gymHeroCompacto: {
+    maxWidth: 1440,
+    minHeight: 150,
+    margin: "0 auto 16px",
+    padding: "18px 24px",
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(0,1fr) minmax(250px,330px)",
+    alignItems: "center",
+    gap: 20,
+    border: "1px solid #dce9e1",
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg,#ffffff 0%,#f4faf6 62%,#e7f5ec 100%)",
+    color: "#15261c",
+    overflow: "hidden",
+    boxShadow:
+      "0 12px 30px rgba(17,60,38,.08)",
+  },
+
+  gymHeroCompactoContenido: {
+    minWidth: 0,
+    paddingLeft: 4,
+  },
+
+  gymEtiquetaCompacta: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    border: "1px solid #cbe2d3",
+    borderRadius: 999,
+    background: "#ecf8f0",
+    color: "#157744",
+    fontSize: 9,
+    fontWeight: 950,
+    letterSpacing: 1.2,
+  },
+
+  gymNombreEmpresa: {
+    margin: "10px 0 6px",
+    color: "#13251a",
+    fontSize: "clamp(28px,3.1vw,42px)",
+    lineHeight: 1.02,
+    letterSpacing: "-1px",
+  },
+
+  gymDescripcionCompacta: {
+    maxWidth: 620,
+    margin: 0,
+    color: "#607067",
+    fontSize: 13,
+    lineHeight: 1.55,
+  },
+
+  gymImagenWrap: {
+    minHeight: 118,
+    height: 132,
+    position: "relative",
+    display: "flex",
+    alignItems: "flex-end",
+    justifyContent: "center",
+    overflow: "visible",
+  },
+
+  gymCirculoDecorativo: {
+    position: "absolute",
+    right: 18,
+    bottom: -72,
+    width: 235,
+    height: 235,
+    borderRadius: "50%",
+    background:
+      "linear-gradient(145deg,#d8f0e1,#a9dfbc)",
+    opacity: 0.78,
+  },
+
+  gymImagenFitness: {
+    width: "auto",
+    height: 190,
+    position: "relative",
+    zIndex: 2,
+    objectFit: "contain",
+    objectPosition: "center bottom",
+    filter:
+      "drop-shadow(0 14px 15px rgba(21,74,44,.16))",
   },
 
   gymHero: {
@@ -4580,6 +4690,31 @@ const s = {
     marginTop: 3,
     fontSize: 7.5,
     lineHeight: 1.1,
+  },
+
+  gymHeroCompactoMobile: {
+    minHeight: 0,
+    padding: "17px 16px 0",
+    gridTemplateColumns: "1fr",
+    gap: 2,
+    borderRadius: 19,
+    textAlign: "center",
+  },
+
+  gymNombreEmpresaMobile: {
+    marginTop: 9,
+    fontSize: 29,
+    lineHeight: 1.04,
+  },
+
+  gymImagenWrapMobile: {
+    height: 112,
+    minHeight: 112,
+    marginTop: 3,
+  },
+
+  gymImagenFitnessMobile: {
+    height: 142,
   },
 
   gymHeroMobile: {
