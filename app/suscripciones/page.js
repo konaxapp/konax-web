@@ -6,7 +6,7 @@ import { supabase } from "../../lib/supabase";
 
 const DIAS_PROXIMO_VENCER = 5;
 const DIAS_GRACIA = 3;
-const VERSION_SUSCRIPCIONES = "2026.08.04-B";
+const VERSION_SUSCRIPCIONES = "2026.08.04-C";
 
 const FORMULARIO_INICIAL = {
   cedula: "",
@@ -1419,8 +1419,6 @@ Responde este mensaje y te ayudamos a reactivarla.`;
                 planSeleccionado.id,
               cliente: formulario.cliente.trim(),
               cedula: formulario.cedula.trim(),
-              telefono:
-                formulario.telefono.trim(),
               plan: formulario.plan.trim(),
               tipo_servicio: "Membresía",
               descripcion:
