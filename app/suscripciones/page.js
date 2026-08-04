@@ -6,7 +6,7 @@ import { supabase } from "../../lib/supabase";
 
 const DIAS_PROXIMO_VENCER = 5;
 const DIAS_GRACIA = 3;
-const VERSION_SUSCRIPCIONES = "2026.08.04-C";
+const VERSION_SUSCRIPCIONES = "2026.08.04-D";
 
 const FORMULARIO_INICIAL = {
   cedula: "",
@@ -28,12 +28,6 @@ const FORMULARIO_INICIAL = {
   estado: "Activo",
 };
 
-const PAGO_INICIAL = {
-  item: null,
-  monto: "",
-  metodo: "Efectivo",
-  observacion: "",
-};
 
 const PLAN_INICIAL = {
   nombre: "",
@@ -69,7 +63,6 @@ export default function Suscripciones() {
   const [filtroEstado, setFiltroEstado] = useState("Todos");
 
   const [formulario, setFormulario] = useState(FORMULARIO_INICIAL);
-  const [pagoModal, setPagoModal] = useState(PAGO_INICIAL);
 
   useEffect(() => {
     inicializar();
@@ -1389,9 +1382,8 @@ Responde este mensaje y te ayudamos a reactivarla.`;
             fecha_vencimiento: fechaVencimiento,
             responsable:
               formulario.vendedor || null,
-            estado: formulario.estado,
-            estado_servicio:
-              formulario.estado,
+            estado: "Pendiente",
+            estado_servicio: "Pendiente",
             observacion:
               formulario.descripcion || null,
           },
@@ -1406,8 +1398,10 @@ Responde este mensaje y te ayudamos a reactivarla.`;
         );
       }
 
-      const { error: errorSuscripcion } =
-        await supabase
+      const {
+        data: suscripcionCreada,
+        error: errorSuscripcion,
+      } = await supabase
           .from("suscripciones")
           .insert([
             {
@@ -1445,9 +1439,11 @@ Responde este mensaje y te ayudamos a reactivarla.`;
               dias_gracia: Number(
                 formulario.diasGracia
               ),
-              estado: formulario.estado,
+              estado: "Pendiente",
             },
-          ]);
+          ])
+          .select("id, cliente_id, informacion_comercial_id")
+          .single();
 
       if (errorSuscripcion) {
         await supabase
@@ -1463,12 +1459,20 @@ Responde este mensaje y te ayudamos a reactivarla.`;
       }
 
       alert(
-        `Membresía creada correctamente. Cuenta: ${numeroCuenta}`
+        `Membresía creada correctamente. Cuenta: ${numeroCuenta}. Continúa con el pago en Caja.`
       );
 
       limpiarFormulario();
 
-      await cargarSuscripciones(empresaId);
+      router.push(
+        `/caja?clienteId=${encodeURIComponent(
+          clienteCreado.id
+        )}&suscripcionId=${encodeURIComponent(
+          suscripcionCreada.id
+        )}&cuentaId=${encodeURIComponent(
+          comercialCreado.id
+        )}&flujo=nueva_membresia`
+      );
     } catch (error) {
       alert(error.message || "No se pudo crear la membresía.");
     } finally {
@@ -1476,171 +1480,28 @@ Responde este mensaje y te ayudamos a reactivarla.`;
     }
   }
 
-  function abrirModalPago(item) {
-    setPagoModal({
-      item,
-      monto: String(
-        Number(item.precio || 0).toFixed(2)
-      ),
-      metodo:
-        item.forma_pago || "Efectivo",
-      observacion: "",
-    });
-  }
-
-  function cerrarModalPago() {
-    if (guardando) return;
-    setPagoModal(PAGO_INICIAL);
-  }
-
-  async function registrarPagoYRenovar() {
-    const empresaId = obtenerEmpresaId();
-    const item = pagoModal.item;
-
-    if (!empresaId || !item || guardando) return;
-
-    const monto = Number(pagoModal.monto || 0);
-
-    if (!Number.isFinite(monto) || monto <= 0) {
+  function irACaja(item) {
+    if (!item?.cliente_id) {
       alert(
-        "El monto del pago debe ser mayor que cero."
+        "La membresía no tiene un alumno vinculado."
       );
       return;
     }
 
-    setGuardando(true);
+    const parametros = new URLSearchParams({
+      clienteId: String(item.cliente_id),
+      suscripcionId: String(item.id),
+      flujo: "renovacion",
+    });
 
-    try {
-      const estadoActual =
-        obtenerEstadoAutomatico(item);
-
-      const fechaBase =
-        ["Vencida", "Suspendido"].includes(
-          estadoActual
-        )
-          ? fechaHoy()
-          : item.fecha_vencimiento;
-
-      const nuevaFecha =
-        item.duracion_cantidad &&
-        item.duracion_unidad
-          ? calcularVencimientoPorDuracion(
-              fechaBase,
-              item.duracion_cantidad,
-              item.duracion_unidad
-            )
-          : calcularVencimientoDesde(
-              fechaBase,
-              item.periodicidad
-            );
-
-      const { error: errorCaja } =
-        await supabase.from("caja").insert([
-          {
-            empresa_id: empresaId,
-            cliente_id: item.cliente_id,
-            informacion_comercial_id:
-              item.informacion_comercial_id,
-            tipo: "Membresía",
-            tipo_movimiento:
-              "PAGO_MEMBRESIA",
-            descripcion:
-              `Pago y renovación de membresía: ${
-                item.plan
-              }${
-                pagoModal.observacion
-                  ? ` - ${pagoModal.observacion}`
-                  : ""
-              }`,
-            monto,
-            metodo_pago: pagoModal.metodo,
-            fecha_pago: new Date().toISOString(),
-            estado: "Procesado",
-            cliente_nombre:
-              item.cliente || null,
-            cliente_cedula:
-              item.cedula || null,
-          },
-        ]);
-
-      if (errorCaja) {
-        throw new Error(
-          "Error registrando pago: " +
-            errorCaja.message
-        );
-      }
-
-      const { error: errorSuscripcion } =
-        await supabase
-          .from("suscripciones")
-          .update({
-            fecha_vencimiento: nuevaFecha,
-            estado: "Activo",
-            forma_pago: pagoModal.metodo,
-          })
-          .eq("id", item.id)
-          .eq("empresa_id", empresaId);
-
-      if (errorSuscripcion) {
-        throw new Error(
-          "El pago fue registrado, pero no se pudo renovar la membresía: " +
-            errorSuscripcion.message
-        );
-      }
-
-      if (item.informacion_comercial_id) {
-        const { error: errorComercial } =
-          await supabase
-            .from("informacion_comercial")
-            .update({
-              fecha_vencimiento: nuevaFecha,
-              saldo_actual: 0,
-              estado: "Activo",
-              estado_servicio: "Activo",
-              fecha_suspension: null,
-              fecha_cancelacion: null,
-              motivo_suspension: null,
-            })
-            .eq(
-              "id",
-              item.informacion_comercial_id
-            )
-            .eq("empresa_id", empresaId);
-
-        if (errorComercial) {
-          throw new Error(
-            "La membresía fue renovada, pero no se pudo actualizar la vista comercial: " +
-              errorComercial.message
-          );
-        }
-      }
-
-      await supabase
-        .from("clientes")
-        .update({ estado: "Activo" })
-        .eq("id", item.cliente_id)
-        .eq("empresa_id", empresaId);
-
-      alert(
-        `Pago registrado y membresía renovada hasta el ${formatearFecha(
-          nuevaFecha
-        )}.`
+    if (item.informacion_comercial_id) {
+      parametros.set(
+        "cuentaId",
+        String(item.informacion_comercial_id)
       );
-
-      cerrarModalPago();
-
-      await Promise.all([
-        cargarSuscripciones(empresaId),
-        cargarPagos(empresaId),
-      ]);
-    } catch (error) {
-      alert(
-        error.message ||
-          "No se pudo registrar el pago."
-      );
-    } finally {
-      setGuardando(false);
     }
+
+    router.push(`/caja?${parametros.toString()}`);
   }
 
   async function cambiarEstado(
@@ -1918,10 +1779,10 @@ Responde este mensaje y te ayudamos a reactivarla.`;
                       <button
                         style={botonPequeno}
                         onClick={() =>
-                          abrirModalPago(item)
+                          irACaja(item)
                         }
                       >
-                        Registrar pago
+                        Ir a caja
                       </button>
                     </div>
                   </div>
@@ -1982,10 +1843,10 @@ Responde este mensaje y te ayudamos a reactivarla.`;
                       <button
                         style={botonPequeno}
                         onClick={() =>
-                          abrirModalPago(item)
+                          irACaja(item)
                         }
                       >
-                        Registrar pago
+                        Ir a caja
                       </button>
 
                       <button
@@ -2817,11 +2678,11 @@ Responde este mensaje y te ayudamos a reactivarla.`;
                             <button
                               style={botonPequeno}
                               onClick={() =>
-                                abrirModalPago(item)
+                                irACaja(item)
                               }
                             >
-                              Registrar pago
-                            </button>
+                        Ir a caja
+                      </button>
 
                             {estado !== "Suspendido" &&
                               estado !==
@@ -2998,135 +2859,7 @@ Responde este mensaje y te ayudamos a reactivarla.`;
         </div>
       </div>
 
-      {pagoModal.item && (
-        <div style={modalOverlay}>
-          <div style={modalCard}>
-            <div style={modalHeader}>
-              <div>
-                <span style={modalEyebrow}>
-                  REGISTRAR PAGO
-                </span>
-                <h2 style={modalTitle}>
-                  Renovar membresía
-                </h2>
-                <p style={textoSuave}>
-                  {pagoModal.item.cliente} ·{" "}
-                  {pagoModal.item.plan}
-                </p>
-              </div>
-
-              <button
-                onClick={cerrarModalPago}
-                style={cerrarModal}
-                disabled={guardando}
-              >
-                ×
-              </button>
-            </div>
-
-            <Campo etiqueta="Monto recibido">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={pagoModal.monto}
-                onChange={(e) =>
-                  setPagoModal({
-                    ...pagoModal,
-                    monto: e.target.value,
-                  })
-                }
-                style={input}
-              />
-            </Campo>
-
-            <Campo etiqueta="Método de pago">
-              <select
-                value={pagoModal.metodo}
-                onChange={(e) =>
-                  setPagoModal({
-                    ...pagoModal,
-                    metodo: e.target.value,
-                  })
-                }
-                style={input}
-              >
-                <option>Efectivo</option>
-                <option>Transferencia</option>
-                <option>Tarjeta</option>
-                <option>Yappy</option>
-                <option>ACH</option>
-                <option>Débito Directo</option>
-              </select>
-            </Campo>
-
-            <Campo etiqueta="Observación">
-              <textarea
-                value={pagoModal.observacion}
-                onChange={(e) =>
-                  setPagoModal({
-                    ...pagoModal,
-                    observacion:
-                      e.target.value,
-                  })
-                }
-                style={textareaModal}
-                placeholder="Observación opcional"
-              />
-            </Campo>
-
-            <div style={modalResumen}>
-              <span>
-                Vencimiento actual:{" "}
-                <strong>
-                  {formatearFecha(
-                    pagoModal.item
-                      .fecha_vencimiento
-                  )}
-                </strong>
-              </span>
-              <span>
-                Nueva vigencia:{" "}
-                <strong>
-                  {formatearFecha(
-                    calcularVencimientoDesde(
-                      ["Vencida", "Suspendido"].includes(
-                        obtenerEstadoAutomatico(
-                          pagoModal.item
-                        )
-                      )
-                        ? fechaHoy()
-                        : pagoModal.item
-                            .fecha_vencimiento,
-                      pagoModal.item.periodicidad
-                    )
-                  )}
-                </strong>
-              </span>
-            </div>
-
-            <div style={modalActions}>
-              <button
-                onClick={cerrarModalPago}
-                style={botonCancelar}
-                disabled={guardando}
-              >
-                Cancelar
-              </button>
-
-              <button
-                onClick={registrarPagoYRenovar}
-                style={boton}
-                disabled={guardando}
-              >
-                {guardando
-                  ? "Procesando..."
-                  : "Registrar pago y renovar"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Los pagos se procesan exclusivamente en Caja. */}
     </div>
   );
 }
