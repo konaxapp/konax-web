@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
+const VERSION_CAJA_GIMNASIO = "2026.08.04-H";
+
 function obtenerFechaPanama(fecha = new Date()) {
   const fechaObjeto =
     fecha instanceof Date ? fecha : new Date(fecha);
@@ -99,6 +101,26 @@ function calcularNuevaFechaVencimiento(fechaBase, periodicidad) {
   }
 }
 
+function calcularVencimientoPorDuracion(
+  fechaBase,
+  cantidad,
+  unidad
+) {
+  const numero = Math.max(1, Number(cantidad || 1));
+
+  switch (unidad) {
+    case "Días":
+      return sumarDiasFecha(fechaBase, numero);
+    case "Semanas":
+      return sumarDiasFecha(fechaBase, numero * 7);
+    case "Años":
+      return sumarMesesFecha(fechaBase, numero * 12);
+    case "Meses":
+    default:
+      return sumarMesesFecha(fechaBase, numero);
+  }
+}
+
 export default function Caja() {
   const router = useRouter();
 
@@ -146,6 +168,9 @@ export default function Caja() {
   const [cargando, setCargando] = useState(true);
   const [mostrarOtrosCobros, setMostrarOtrosCobros] =
     useState(false);
+  const [suscripcionFlujoId, setSuscripcionFlujoId] =
+    useState("");
+  const [flujoCaja, setFlujoCaja] = useState("");
 
   useEffect(() => {
     iniciarCaja();
@@ -202,6 +227,9 @@ export default function Caja() {
       parametros.get("suscripcionId");
     const cuentaId = parametros.get("cuentaId");
     const flujo = parametros.get("flujo");
+
+    setSuscripcionFlujoId(suscripcionId || "");
+    setFlujoCaja(flujo || "");
 
     if (!clienteId) return;
 
@@ -341,6 +369,55 @@ export default function Caja() {
       "Caja";
 
     setResponsable(cajeroActual);
+
+    /*
+      Reparación automática:
+      si la membresía sigue Pendiente pero ya existe un pago
+      procesado para esta misma cuenta, no se vuelve a cobrar.
+      Se activa la membresía y se regresa al listado.
+    */
+    if (
+      suscripcion &&
+      normalizar(suscripcion.estado) === "pendiente" &&
+      cuentaSeleccionadaUrl?.id
+    ) {
+      const {
+        data: pagoExistente,
+        error: errorPagoExistente,
+      } = await supabase
+        .from("caja")
+        .select("id, monto, metodo_pago, estado, tipo")
+        .eq("empresa_id", empresaId)
+        .eq(
+          "informacion_comercial_id",
+          cuentaSeleccionadaUrl.id
+        )
+        .eq("estado", "Procesado")
+        .in("tipo", ["Membresía", "Renovación"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!errorPagoExistente && pagoExistente) {
+        await activarMembresiaConPago(
+          empresaId,
+          suscripcion,
+          pagoExistente.metodo_pago || "Efectivo",
+          true
+        );
+
+        alert(
+          `El pago de $${Number(
+            pagoExistente.monto || 0
+          ).toFixed(
+            2
+          )} ya estaba registrado. La membresía fue activada sin realizar otro cobro.`
+        );
+
+        router.replace("/suscripciones");
+        return;
+      }
+    }
 
     setTimeout(() => {
       document
@@ -1643,73 +1720,96 @@ export default function Caja() {
       .eq("id", pagoPreparado.cuentaActual.id);
   }
 
-  async function procesarMembresiaDesdeCaja(empresaId) {
-    if (!requiereCuentaMembresia()) {
-      return cuentaSeleccionada;
+  async function obtenerMembresiaObjetivo(empresaId) {
+    if (!cuentaSeleccionada?.id && !suscripcionFlujoId) {
+      return {
+        suscripcion: null,
+        error: new Error(
+          "No hay una membresía seleccionada para procesar."
+        ),
+      };
     }
 
-    if (!cuentaSeleccionada?.id) {
-      alert("Seleccione la cuenta de membresía del cliente.");
-      return null;
-    }
+    let consulta = supabase
+      .from("suscripciones")
+      .select("*")
+      .eq("empresa_id", empresaId);
 
-    const { data: suscripcion, error } =
-      await supabase
-        .from("suscripciones")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .eq(
-          "informacion_comercial_id",
-          cuentaSeleccionada.id
-        )
-        .maybeSingle();
-
-    if (error) {
-      alert("Error consultando la membresía: " + error.message);
-      return null;
-    }
-
-    if (!suscripcion) {
-      alert(
-        "La cuenta seleccionada no está vinculada a una membresía."
+    if (suscripcionFlujoId) {
+      consulta = consulta.eq("id", suscripcionFlujoId);
+    } else {
+      consulta = consulta.eq(
+        "informacion_comercial_id",
+        cuentaSeleccionada.id
       );
-      return null;
     }
 
-    if (tipoMovimiento === "Renovación") {
-      const hoy = obtenerFechaPanama();
-      const fechaActual =
-        suscripcion.fecha_vencimiento || hoy;
+    const { data, error } = await consulta.maybeSingle();
 
+    return {
+      suscripcion: data || null,
+      error: error || null,
+    };
+  }
+
+  async function activarMembresiaConPago(
+    empresaId,
+    suscripcion,
+    metodoAplicado,
+    conservarVencimiento = false
+  ) {
+    const hoy = obtenerFechaPanama();
+    const estadoActual = normalizar(suscripcion.estado);
+
+    const esActivacionInicial =
+      conservarVencimiento ||
+      flujoCaja === "nueva_membresia" ||
+      estadoActual === "pendiente";
+
+    let nuevaFecha =
+      suscripcion.fecha_vencimiento || hoy;
+
+    if (!esActivacionInicial) {
       const fechaBase =
-        fechaActual < hoy ? hoy : fechaActual;
+        nuevaFecha < hoy ? hoy : nuevaFecha;
 
-      const nuevaFecha =
-        calcularNuevaFechaVencimiento(
-          fechaBase,
-          suscripcion.periodicidad
-        );
+      nuevaFecha =
+        suscripcion.duracion_cantidad &&
+        suscripcion.duracion_unidad
+          ? calcularVencimientoPorDuracion(
+              fechaBase,
+              suscripcion.duracion_cantidad,
+              suscripcion.duracion_unidad
+            )
+          : calcularNuevaFechaVencimiento(
+              fechaBase,
+              suscripcion.periodicidad
+            );
+    }
 
-      const { error: errorSuscripcion } =
-        await supabase
-          .from("suscripciones")
-          .update({
-            fecha_vencimiento: nuevaFecha,
-            estado: "Activo",
-            forma_pago: metodoPago,
-          })
-          .eq("id", suscripcion.id)
-          .eq("empresa_id", empresaId);
+    const { error: errorSuscripcion } = await supabase
+      .from("suscripciones")
+      .update({
+        fecha_vencimiento: nuevaFecha,
+        estado: "Activo",
+        forma_pago: metodoAplicado || "Efectivo",
+      })
+      .eq("id", suscripcion.id)
+      .eq("empresa_id", empresaId);
 
-      if (errorSuscripcion) {
-        alert(
-          "No se pudo renovar la membresía: " +
-            errorSuscripcion.message
-        );
-        return null;
-      }
+    if (errorSuscripcion) {
+      throw new Error(
+        "No se pudo activar la membresía: " +
+          errorSuscripcion.message
+      );
+    }
 
-      await supabase
+    const cuentaId =
+      suscripcion.informacion_comercial_id ||
+      cuentaSeleccionada?.id;
+
+    if (cuentaId) {
+      const { error: errorComercial } = await supabase
         .from("informacion_comercial")
         .update({
           fecha_vencimiento: nuevaFecha,
@@ -1720,50 +1820,146 @@ export default function Caja() {
           fecha_cancelacion: null,
           motivo_suspension: null,
         })
-        .eq("id", cuentaSeleccionada.id)
+        .eq("id", cuentaId)
         .eq("empresa_id", empresaId);
 
-      return {
-        ...cuentaSeleccionada,
-        fecha_vencimiento: nuevaFecha,
-        estado: "Activo",
-        saldo_actual: 0,
-      };
+      if (errorComercial) {
+        throw new Error(
+          "El pago se registró, pero no se pudo activar la cuenta de la membresía: " +
+            errorComercial.message
+        );
+      }
     }
 
-    const { error: errorSuscripcion } =
-      await supabase
-        .from("suscripciones")
-        .update({
-          estado: "Activo",
-          forma_pago: metodoPago,
-        })
-        .eq("id", suscripcion.id)
-        .eq("empresa_id", empresaId);
+    const {
+      data: membresiaVerificada,
+      error: errorVerificacion,
+    } = await supabase
+      .from("suscripciones")
+      .select("id, estado, forma_pago, fecha_vencimiento")
+      .eq("id", suscripcion.id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
 
-    if (errorSuscripcion) {
-      alert(
-        "No se pudo activar la membresía: " +
-          errorSuscripcion.message
+    if (
+      errorVerificacion ||
+      !membresiaVerificada ||
+      normalizar(membresiaVerificada.estado) !== "activo"
+    ) {
+      throw new Error(
+        "El pago quedó registrado, pero la membresía no confirmó el estado Activo. No vuelva a cobrar; revise los permisos de actualización."
       );
-      return null;
     }
 
-    await supabase
-      .from("informacion_comercial")
-      .update({
-        saldo_actual: 0,
-        estado: "Activo",
-        estado_servicio: "Activo",
-      })
-      .eq("id", cuentaSeleccionada.id)
-      .eq("empresa_id", empresaId);
-
-    return {
-      ...cuentaSeleccionada,
+    const cuentaActualizada = {
+      ...(cuentaSeleccionada || {}),
+      id: cuentaId || cuentaSeleccionada?.id,
+      fecha_vencimiento: nuevaFecha,
       estado: "Activo",
+      estado_servicio: "Activo",
       saldo_actual: 0,
     };
+
+    setCuentaSeleccionada(cuentaActualizada);
+
+    setCuentasCliente((actuales) =>
+      actuales.map((cuenta) =>
+        String(cuenta.id) === String(cuentaId)
+          ? {
+              ...cuenta,
+              fecha_vencimiento: nuevaFecha,
+              estado: "Activo",
+              estado_servicio: "Activo",
+              saldo_actual: 0,
+            }
+          : cuenta
+      )
+    );
+
+    return cuentaActualizada;
+  }
+
+  async function procesarMembresiaDesdeCaja(
+    empresaId,
+    metodoAplicado = metodoPago
+  ) {
+    const { suscripcion, error } =
+      await obtenerMembresiaObjetivo(empresaId);
+
+    if (error) {
+      throw new Error(
+        "Error consultando la membresía: " +
+          error.message
+      );
+    }
+
+    if (!suscripcion) {
+      throw new Error(
+        "La cuenta seleccionada no está vinculada a una membresía."
+      );
+    }
+
+    return activarMembresiaConPago(
+      empresaId,
+      suscripcion,
+      metodoAplicado
+    );
+  }
+
+  async function reconciliarPagoPendienteExistente(
+    empresaId
+  ) {
+    if (!requiereCuentaMembresia()) return false;
+
+    const { suscripcion, error } =
+      await obtenerMembresiaObjetivo(empresaId);
+
+    if (error || !suscripcion) return false;
+
+    if (normalizar(suscripcion.estado) !== "pendiente") {
+      return false;
+    }
+
+    const cuentaId =
+      suscripcion.informacion_comercial_id ||
+      cuentaSeleccionada?.id;
+
+    if (!cuentaId) return false;
+
+    const { data: pagoExistente, error: errorPago } =
+      await supabase
+        .from("caja")
+        .select(
+          "id, monto, metodo_pago, estado, tipo, created_at"
+        )
+        .eq("empresa_id", empresaId)
+        .eq("informacion_comercial_id", cuentaId)
+        .eq("estado", "Procesado")
+        .in("tipo", ["Membresía", "Renovación"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (errorPago || !pagoExistente) {
+      return false;
+    }
+
+    await activarMembresiaConPago(
+      empresaId,
+      suscripcion,
+      pagoExistente.metodo_pago || metodoPago,
+      true
+    );
+
+    alert(
+      `El pago de $${Number(
+        pagoExistente.monto || 0
+      ).toFixed(
+        2
+      )} ya estaba registrado. La membresía fue activada sin realizar un segundo cobro.`
+    );
+
+    return true;
   }
 
   function obtenerDireccionCliente(cliente) {
@@ -1893,6 +2089,31 @@ export default function Caja() {
     let cuentaActualizada = cuentaSeleccionada;
 
     try {
+      const pagoYaRegistrado =
+        await reconciliarPagoPendienteExistente(
+          empresaId
+        );
+
+      if (pagoYaRegistrado) {
+        if (typeof window !== "undefined") {
+          window.history.replaceState(
+            {},
+            "",
+            "/caja"
+          );
+        }
+
+        limpiarFormulario();
+
+        await cargarMovimientos(
+          empresaId,
+          fechaDesde,
+          fechaHasta
+        );
+
+        return;
+      }
+
       const numeroTransaccion = generarTransaccion();
       const usuarioRegistro =
         localStorage.getItem("usuarioNombre") ||
@@ -2147,6 +2368,8 @@ export default function Caja() {
     );
     setFechaPago(obtenerFechaPanama());
     setMostrarOtrosCobros(false);
+    setSuscripcionFlujoId("");
+    setFlujoCaja("");
 
     setBuscarCliente("");
     setResultadosBusqueda([]);
