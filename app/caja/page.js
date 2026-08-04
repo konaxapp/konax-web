@@ -2114,15 +2114,8 @@ export default function Caja() {
                 <div style={estilos.gymCobroEncabezado}>
                   <div>
                     <span style={estilos.gymEyebrow}>
-                      COBRO RÁPIDO
+                      REGISTRAR COBRO
                     </span>
-                    <h2 style={estilos.gymCobroTitulo}>
-                      Registra el ingreso sin usar un POS complicado
-                    </h2>
-                    <p style={estilos.gymCobroTexto}>
-                      Selecciona la operación, busca al alumno cuando
-                      corresponda y registra el pago.
-                    </p>
                   </div>
 
                   <div style={estilos.gymFechaCompacta}>
@@ -2231,23 +2224,6 @@ export default function Caja() {
                     )}
                   </div>
                 )}
-
-                <div style={estilos.gymOperacionSeleccionada}>
-                  <div>
-                    <span style={estilos.gymOperacionEtiqueta}>
-                      OPERACIÓN SELECCIONADA
-                    </span>
-                    <strong style={estilos.gymOperacionValor}>
-                      {tipoMovimiento || "Seleccione una operación"}
-                    </strong>
-                  </div>
-
-                  {tipoMovimiento === "Venta de producto" && (
-                    <span style={estilos.gymInventarioAviso}>
-                      Solo esta operación descuenta inventario
-                    </span>
-                  )}
-                </div>
 
                 <section style={estilos.gymBloque}>
                   <div style={estilos.gymBloqueCabecera}>
@@ -2688,84 +2664,6 @@ export default function Caja() {
                 </section>
               </article>
 
-              <aside style={estilos.gymResumenLateral}>
-                <section style={estilos.gymResumenCard}>
-                  <span style={estilos.gymEyebrow}>
-                    RESUMEN DEL COBRO
-                  </span>
-                  <h3 style={estilos.gymResumenTitulo}>
-                    Así se registrará
-                  </h3>
-
-                  <div style={estilos.gymResumenLista}>
-                    <div style={estilos.gymResumenFila}>
-                      <span>Operación</span>
-                      <strong>{tipoMovimiento || "-"}</strong>
-                    </div>
-                    <div style={estilos.gymResumenFila}>
-                      <span>Alumno</span>
-                      <strong>
-                        {clienteSeleccionado?.nombre ||
-                          "Sin alumno"}
-                      </strong>
-                    </div>
-                    <div style={estilos.gymResumenFila}>
-                      <span>Método</span>
-                      <strong>{metodoPago}</strong>
-                    </div>
-                    <div style={estilos.gymResumenFila}>
-                      <span>Monto</span>
-                      <strong style={estilos.gymResumenMonto}>
-                        ${Number(monto || 0).toFixed(2)}
-                      </strong>
-                    </div>
-                  </div>
-
-                  <p style={estilos.gymResumenNota}>
-                    {tipoMovimiento === "Venta de producto"
-                      ? "Esta operación sí descontará el producto del inventario."
-                      : "Este cobro se registrará como ingreso de caja y no tocará el inventario."}
-                  </p>
-                </section>
-
-                <section style={estilos.gymResumenCard}>
-                  <span style={estilos.gymEyebrow}>
-                    ÚLTIMOS MOVIMIENTOS
-                  </span>
-                  <h3 style={estilos.gymResumenTitulo}>
-                    Actividad de hoy
-                  </h3>
-
-                  <div style={estilos.gymUltimosLista}>
-                    {movimientosHoy.length === 0 ? (
-                      <p style={estilos.gymSinMovimientos}>
-                        Todavía no hay cobros registrados hoy.
-                      </p>
-                    ) : (
-                      movimientosHoy.slice(0, 5).map((mov) => (
-                        <div
-                          key={mov.id}
-                          style={estilos.gymUltimoItem}
-                        >
-                          <div>
-                            <strong>
-                              {mov.cliente_nombre ||
-                                mov.tipo ||
-                                "Ingreso"}
-                            </strong>
-                            <span>
-                              {mov.tipo} · {mov.metodo_pago}
-                            </span>
-                          </div>
-                          <strong>
-                            ${Number(mov.monto || 0).toFixed(2)}
-                          </strong>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </section>
-              </aside>
             </section>
           ) : (
           <section style={estilos.panelGrid}>
@@ -3177,24 +3075,23 @@ const estilos={
   tablaBox:{overflowX:"auto",border:"1px solid #dfe7e2",borderRadius:"10px"},tabla:{width:"100%",minWidth:"1150px",borderCollapse:"collapse"},th:{padding:"11px",background:"linear-gradient(180deg,#f3faf5,#edf6f0)",color:"#1e3327",textAlign:"left",fontSize:"12px",fontWeight:900,whiteSpace:"nowrap"},td:{padding:"10px 11px",borderBottom:"1px solid #edf1ee",fontSize:"12px",whiteSpace:"nowrap"},tdResponsable:{maxWidth:"145px",padding:"8px 9px",borderBottom:"1px solid #edf1ee",fontSize:"10.5px",lineHeight:1.25,whiteSpace:"normal",overflowWrap:"anywhere",verticalAlign:"middle"},tdVacio:{padding:"28px",textAlign:"center",color:"#6b7280"},badgeTipo:{padding:"4px 9px",borderRadius:"999px",background:"#e7f7ed",color:"#0d8244",fontWeight:800},badgeEstado:{color:"#0a8d46",fontWeight:800},
 
   gymCajaLayout:{
-    display:"grid",
-    gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,420px),1fr))",
-    gap:"14px",
-    alignItems:"start"
+    display:"block"
   },
   gymCobroPanel:{
-    padding:"20px",
+    width:"100%",
+    padding:"18px",
     border:"1px solid #dfe7e2",
     borderRadius:"20px",
     background:"#fff",
     boxShadow:"0 12px 30px rgba(18,66,42,.07)"
   },
   gymCobroEncabezado:{
-    display:"grid",
-    gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,220px),1fr))",
-    gap:"18px",
+    display:"flex",
     alignItems:"end",
-    marginBottom:"16px"
+    justifyContent:"space-between",
+    gap:"14px",
+    flexWrap:"wrap",
+    marginBottom:"12px"
   },
   gymEyebrow:{
     display:"block",
