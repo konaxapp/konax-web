@@ -1743,13 +1743,11 @@ export default function Dashboard() {
 
           {esGimnasio && !esMovil && (
             <div style={s.topbarGymImagenWrap}>
-              <span style={s.topbarGymCirculo} />
-
               <Image
                 src="/gym-hero-fitness.png"
                 alt="Persona fitness motivada"
-                width={190}
-                height={150}
+                width={140}
+                height={140}
                 priority
                 style={s.topbarGymImagen}
               />
@@ -3250,36 +3248,28 @@ const s = {
   },
 
   topbarGymImagenWrap: {
-    width: 170,
-    height: 94,
+    width: 118,
+    height: 118,
     position: "relative",
-    display: "flex",
-    alignItems: "flex-end",
-    justifyContent: "center",
+    display: "grid",
+    placeItems: "center",
     overflow: "hidden",
     flexShrink: 0,
-  },
-
-  topbarGymCirculo: {
-    position: "absolute",
-    bottom: -62,
-    width: 168,
-    height: 168,
     borderRadius: "50%",
-    background:
-      "linear-gradient(145deg,#d9f0e1,#a9dfbc)",
-    opacity: 0.9,
+    border: "4px solid #ffffff",
+    background: "#dcefe3",
+    boxShadow:
+      "0 8px 20px rgba(21,74,44,.16)",
   },
 
   topbarGymImagen: {
-    width: "auto",
-    height: 112,
+    width: "100%",
+    height: "100%",
     position: "relative",
     zIndex: 2,
-    objectFit: "contain",
-    objectPosition: "center bottom",
-    filter:
-      "drop-shadow(0 8px 10px rgba(21,74,44,.15))",
+    objectFit: "cover",
+    objectPosition: "center center",
+    borderRadius: "50%",
   },
 
   userBox: {
