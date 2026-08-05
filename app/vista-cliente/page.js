@@ -3,6 +3,34 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
+function normalizar(valor) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_");
+}
+
+function esTipoGimnasio(
+  tipoNegocio,
+  categoriaNegocio = ""
+) {
+  const texto = normalizar(
+    `${tipoNegocio || ""} ${
+      categoriaNegocio || ""
+    }`
+  );
+
+  return [
+    "gimnasio",
+    "gym",
+    "fitness",
+    "academia",
+    "club",
+  ].some((palabra) => texto.includes(palabra));
+}
+
 export default function VistaCliente() {
   const [buscar, setBuscar] = useState("");
   const [resultados, setResultados] = useState([]);
@@ -722,12 +750,16 @@ export default function VistaCliente() {
     const empresaId = obtenerEmpresaId();
 
     if (!empresaId) {
-      cerrarSesionInvalida("No existe empresa activa.");
+      cerrarSesionInvalida(
+        "No existe empresa activa."
+      );
       return;
     }
 
     if (!cliente || !cuenta) {
-      alert("Seleccione un cliente y una cuenta.");
+      alert(
+        "Seleccione un cliente y una cuenta."
+      );
       return;
     }
 
@@ -740,59 +772,107 @@ export default function VistaCliente() {
 
     setGuardandoGestion(true);
 
-    const usuarioActual = obtenerUsuarioActual();
-    const fechaRegistro = new Date().toISOString();
+    const registroGimnasio = esTipoGimnasio(
+      empresa?.tipo_negocio,
+      empresa?.categoria_negocio
+    );
 
-    const { error: errorGestion } = await supabase
-      .from("bitacora_cliente")
-      .insert([
-        {
-          empresa_id: empresaId,
-          cliente_id: cliente.id,
-          informacion_comercial_id: cuenta.id,
-          tipo_gestion: tipoGestion,
-          resultado_gestion: resultadoGestion,
-          observacion: observacion.trim(),
-          descripcion: observacion.trim(),
-          usuario: usuarioActual,
-          fecha_gestion: fechaRegistro,
-          monto_promesa: 0,
-        },
-      ]);
+    const usuarioActual =
+      obtenerUsuarioActual();
+
+    const fechaRegistro =
+      new Date().toISOString();
+
+    const { error: errorGestion } =
+      await supabase
+        .from("bitacora_cliente")
+        .insert([
+          {
+            empresa_id: empresaId,
+            cliente_id: cliente.id,
+            informacion_comercial_id:
+              cuenta.id,
+            tipo_gestion: registroGimnasio
+              ? "Observación"
+              : tipoGestion,
+            resultado_gestion:
+              registroGimnasio
+                ? "Registrada"
+                : resultadoGestion,
+            observacion:
+              observacion.trim(),
+            descripcion:
+              observacion.trim(),
+            usuario: usuarioActual,
+            fecha_gestion:
+              fechaRegistro,
+            monto_promesa: 0,
+          },
+        ]);
 
     if (errorGestion) {
       setGuardandoGestion(false);
-      alert("Error guardando gestión: " + errorGestion.message);
+      alert(
+        "Error guardando " +
+          (registroGimnasio
+            ? "observación"
+            : "gestión") +
+          ": " +
+          errorGestion.message
+      );
       return;
     }
 
-    const {
-      data: cobranzaExistente,
-      error: errorBuscarCobranza,
-    } = await supabase
-      .from("informacion_cobranza")
-      .select("id")
-      .eq("empresa_id", empresaId)
-      .eq("informacion_comercial_id", cuenta.id)
-      .maybeSingle();
-
-    if (errorBuscarCobranza) {
-      console.error(
-        "La gestión se guardó, pero no se pudo consultar cobranza:",
-        errorBuscarCobranza
-      );
-    } else if (cobranzaExistente?.id) {
-      const { error: errorActualizarCobranza } = await supabase
+    /*
+      En gimnasios la nota pertenece al expediente
+      del alumno. No se actualiza informacion_cobranza.
+      Los demás negocios conservan su flujo actual.
+    */
+    if (!registroGimnasio) {
+      const {
+        data: cobranzaExistente,
+        error: errorBuscarCobranza,
+      } = await supabase
         .from("informacion_cobranza")
-        .update({ observacion_cobro: observacion.trim() })
+        .select("id")
         .eq("empresa_id", empresaId)
-        .eq("id", cobranzaExistente.id);
+        .eq(
+          "informacion_comercial_id",
+          cuenta.id
+        )
+        .maybeSingle();
 
-      if (errorActualizarCobranza) {
+      if (errorBuscarCobranza) {
         console.error(
-          "La gestión se guardó, pero no se actualizó observacion_cobro:",
-          errorActualizarCobranza
+          "La gestión se guardó, pero no se pudo consultar cobranza:",
+          errorBuscarCobranza
         );
+      } else if (
+        cobranzaExistente?.id
+      ) {
+        const {
+          error:
+            errorActualizarCobranza,
+        } = await supabase
+          .from("informacion_cobranza")
+          .update({
+            observacion_cobro:
+              observacion.trim(),
+          })
+          .eq("empresa_id", empresaId)
+          .eq(
+            "id",
+            cobranzaExistente.id
+          );
+
+        if (
+          errorActualizarCobranza
+        ) {
+          console.error(
+            "La gestión se guardó, pero no se actualizó observacion_cobro:",
+            errorActualizarCobranza
+          );
+        }
       }
     }
 
@@ -806,7 +886,12 @@ export default function VistaCliente() {
     );
 
     setGuardandoGestion(false);
-    alert("Gestión registrada correctamente.");
+
+    alert(
+      registroGimnasio
+        ? "Observación guardada correctamente."
+        : "Gestión registrada correctamente."
+    );
   }
 
   async function registrarPromesa() {
@@ -1081,9 +1166,26 @@ export default function VistaCliente() {
       telefono = telefono.slice(3);
     }
 
-    const mensaje = cuenta
-      ? `Hola ${cliente.nombre || ""}, le contactamos de ${nombreEmpresa()} con relación a su cuenta ${cuenta.numero_cuenta || ""}.`
-      : `Hola ${cliente.nombre || ""}, le contactamos de ${nombreEmpresa()}.`;
+    const mensaje = esTipoGimnasio(
+      empresa?.tipo_negocio,
+      empresa?.categoria_negocio
+    )
+      ? `Hola ${
+          cliente.nombre || ""
+        }, le contactamos de ${nombreEmpresa()} con relación a su membresía ${
+          cuenta?.descripcion ||
+          cuenta?.numero_cuenta ||
+          ""
+        }.`
+      : cuenta
+      ? `Hola ${
+          cliente.nombre || ""
+        }, le contactamos de ${nombreEmpresa()} con relación a su cuenta ${
+          cuenta.numero_cuenta || ""
+        }.`
+      : `Hola ${
+          cliente.nombre || ""
+        }, le contactamos de ${nombreEmpresa()}.`;
 
     window.open(
       `https://wa.me/507${telefono}?text=${encodeURIComponent(mensaje)}`,
@@ -1091,13 +1193,73 @@ export default function VistaCliente() {
     );
   }
 
+  const esGimnasio = esTipoGimnasio(
+    empresa?.tipo_negocio,
+    empresa?.categoria_negocio
+  );
+
   const diasAtraso = calcularDiasAtraso(
     cuenta?.fecha_vencimiento,
     cuenta?.saldo_actual
   );
 
-  const semaforo = obtenerSemaforo(diasAtraso);
-  const estadoCalculado = obtenerEstadoCalculado();
+  const semaforo =
+    obtenerSemaforo(diasAtraso);
+
+  const estadoCalculado =
+    obtenerEstadoCalculado();
+
+  const ultimoPago =
+    pagos?.[0] || null;
+
+  const estadoMembresiaGimnasio =
+    cuenta?.estado_servicio ||
+    cuenta?.estado ||
+    (Number(cuenta?.saldo_actual || 0) <= 0
+      ? "Activo"
+      : "Pendiente");
+
+  const estadoMembresiaNormalizado =
+    limpiarTexto(
+      estadoMembresiaGimnasio
+    );
+
+  const colorEstadoMembresia =
+    ["activo", "activa"].includes(
+      estadoMembresiaNormalizado
+    )
+      ? "#22c55e"
+      : [
+          "suspendido",
+          "suspendida",
+          "vencido",
+          "vencida",
+          "cancelado",
+          "cancelada",
+        ].includes(
+          estadoMembresiaNormalizado
+        )
+      ? "#ef4444"
+      : "#eab308";
+
+  const gestionesVisibles =
+    esGimnasio
+      ? gestiones.filter((item) => {
+          const tipo = limpiarTexto(
+            item.tipo_gestion
+          );
+
+          const resultado = limpiarTexto(
+            item.resultado_gestion
+          );
+
+          return (
+            tipo !== "promesa de pago" &&
+            resultado !==
+              "promesa registrada"
+          );
+        })
+      : gestiones;
 
   if (cargandoSesion) {
     return (
@@ -1290,10 +1452,23 @@ export default function VistaCliente() {
             </div>
 
             <div>
-              <span style={styles.etiqueta}>EXPEDIENTE COMERCIAL</span>
-              <h1 style={styles.titulo} className="vista-titulo">Vista integral del cliente</h1>
+              <span style={styles.etiqueta}>
+                {esGimnasio
+                  ? "EXPEDIENTE DEL ALUMNO"
+                  : "EXPEDIENTE COMERCIAL"}
+              </span>
+              <h1
+                style={styles.titulo}
+                className="vista-titulo"
+              >
+                {esGimnasio
+                  ? "Ficha integral del alumno"
+                  : "Vista integral del cliente"}
+              </h1>
               <p style={styles.subtituloVista}>
-                {nombreEmpresa()} · consulta, cobranza y seguimiento
+                {esGimnasio
+                  ? `${nombreEmpresa()} · membresía, pagos y observaciones`
+                  : `${nombreEmpresa()} · consulta, cobranza y seguimiento`}
               </p>
             </div>
           </div>
@@ -1307,16 +1482,26 @@ export default function VistaCliente() {
           <div style={styles.busquedaHeader}>
             <div>
               <span style={styles.sectionEyebrow}>BÚSQUEDA INTELIGENTE</span>
-              <h2 style={styles.tituloSeccion}>Localizar cliente o cuenta</h2>
+              <h2 style={styles.tituloSeccion}>
+                {esGimnasio
+                  ? "Localizar alumno"
+                  : "Localizar cliente o cuenta"}
+              </h2>
               <p style={styles.textoAyuda}>
-                Busca por nombre, cédula o número de cuenta.
+                {esGimnasio
+                  ? "Busca por nombre o cédula."
+                  : "Busca por nombre, cédula o número de cuenta."}
               </p>
             </div>
           </div>
 
           <div style={styles.buscadorRow} className="vista-buscador-row">
             <input
-              placeholder="Nombre, cédula o número de cuenta"
+              placeholder={
+                esGimnasio
+                  ? "Nombre o cédula del alumno"
+                  : "Nombre, cédula o número de cuenta"
+              }
               value={buscar}
               onChange={(event) => setBuscar(event.target.value)}
               onKeyDown={(event) => {
@@ -1334,7 +1519,11 @@ export default function VistaCliente() {
               onClick={buscarCliente}
               disabled={buscando}
             >
-              {buscando ? "Buscando..." : "Buscar cliente"}
+              {buscando
+                ? "Buscando..."
+                : esGimnasio
+                ? "Buscar alumno"
+                : "Buscar cliente"}
             </button>
           </div>
 
@@ -1378,7 +1567,9 @@ export default function VistaCliente() {
 
                 <div>
                   <span style={styles.clienteEtiqueta}>
-                    CLIENTE SELECCIONADO
+                    {esGimnasio
+                      ? "ALUMNO SELECCIONADO"
+                      : "CLIENTE SELECCIONADO"}
                   </span>
                   <h2 style={styles.clienteNombre}>{cliente.nombre}</h2>
                   <p style={styles.clienteMeta}>
@@ -1398,57 +1589,112 @@ export default function VistaCliente() {
               </button>
             </section>
 
-            <section style={styles.kpiGrid} className="vista-kpi-grid">
+            <section
+              style={styles.kpiGrid}
+              className="vista-kpi-grid"
+            >
               <KPI
                 label="Saldo actual"
-                value={formatoDinero(cuenta?.saldo_actual)}
-                detail={`Monto original ${formatoDinero(
-                  cuenta?.monto_total
-                )}`}
+                value={formatoDinero(
+                  cuenta?.saldo_actual
+                )}
+                detail={
+                  esGimnasio
+                    ? `Vencimiento ${formatoFecha(
+                        cuenta?.fecha_vencimiento
+                      )}`
+                    : `Monto original ${formatoDinero(
+                        cuenta?.monto_total
+                      )}`
+                }
               />
 
-              <KPI
-                label="Estado de cartera"
-                value={estadoCalculado}
-                detail={`${diasAtraso} días de atraso`}
-                color={semaforo}
-              />
+              {esGimnasio ? (
+                <KPI
+                  label="Estado de membresía"
+                  value={
+                    estadoMembresiaGimnasio
+                  }
+                  detail={
+                    cuenta?.fecha_vencimiento
+                      ? `Vence ${formatoFecha(
+                          cuenta.fecha_vencimiento
+                        )}`
+                      : "Sin fecha de vencimiento"
+                  }
+                  color={
+                    colorEstadoMembresia
+                  }
+                />
+              ) : (
+                <KPI
+                  label="Estado de cartera"
+                  value={estadoCalculado}
+                  detail={`${diasAtraso} días de atraso`}
+                  color={semaforo}
+                />
+              )}
 
               <KPI
                 label="Último pago"
-                value={formatoDinero(cobranza?.monto_ultimo_pago)}
-                detail={formatoFecha(cobranza?.fecha_ultimo_pago)}
+                value={formatoDinero(
+                  esGimnasio
+                    ? ultimoPago?.monto
+                    : cobranza?.monto_ultimo_pago
+                )}
+                detail={formatoFecha(
+                  esGimnasio
+                    ? ultimoPago?.fecha_pago ||
+                        ultimoPago?.created_at
+                    : cobranza?.fecha_ultimo_pago
+                )}
               />
 
-              <KPI
-                label="Promesa de pago"
-                value={
-                  cobranza?.estado_promesa
-                    ? cobranza.estado_promesa
-                    : "Sin promesa"
-                }
-                detail={
-                  cobranza?.fecha_promesa
-                    ? `${formatoFecha(cobranza.fecha_promesa)} · ${formatoDinero(
-                        cobranza.monto_promesa
-                      )}`
-                    : "No hay promesa activa"
-                }
-                color={
-                  limpiarTexto(cobranza?.estado_promesa) === "cumplida"
-                    ? "#22c55e"
-                    : limpiarTexto(cobranza?.estado_promesa) === "vencida"
-                    ? "#ef4444"
-                    : "#eab308"
-                }
-              />
+              {!esGimnasio && (
+                <KPI
+                  label="Promesa de pago"
+                  value={
+                    cobranza?.estado_promesa
+                      ? cobranza.estado_promesa
+                      : "Sin promesa"
+                  }
+                  detail={
+                    cobranza?.fecha_promesa
+                      ? `${formatoFecha(
+                          cobranza.fecha_promesa
+                        )} · ${formatoDinero(
+                          cobranza.monto_promesa
+                        )}`
+                      : "No hay promesa activa"
+                  }
+                  color={
+                    limpiarTexto(
+                      cobranza?.estado_promesa
+                    ) === "cumplida"
+                      ? "#22c55e"
+                      : limpiarTexto(
+                          cobranza?.estado_promesa
+                        ) === "vencida"
+                      ? "#ef4444"
+                      : "#eab308"
+                  }
+                />
+              )}
             </section>
 
             <section style={styles.resumenLayout} className="vista-resumen-grid">
               <article style={styles.infoCard} className="vista-card">
                 <CardTitle
-                  title="Perfil del cliente"
-                  subtitle="Datos de contacto y localización"
+                  title={
+                    esGimnasio
+                      ? "Perfil del alumno"
+                      : "Perfil del cliente"
+                  }
+                  subtitle={
+                    esGimnasio
+                      ? "Datos personales y de contacto"
+                      : "Datos de contacto y localización"
+                  }
                 />
 
                 <DataRow label="Nombre" value={cliente.nombre} />
@@ -1460,8 +1706,16 @@ export default function VistaCliente() {
 
               <article style={styles.infoCard} className="vista-card">
                 <CardTitle
-                  title="Información comercial"
-                  subtitle="Cuenta y condiciones vigentes"
+                  title={
+                    esGimnasio
+                      ? "Membresía"
+                      : "Información comercial"
+                  }
+                  subtitle={
+                    esGimnasio
+                      ? "Plan y condiciones vigentes"
+                      : "Cuenta y condiciones vigentes"
+                  }
                 />
 
                 {cuentas.length > 1 && (
@@ -1500,7 +1754,8 @@ export default function VistaCliente() {
                 />
               </article>
 
-              <article style={styles.infoCard} className="vista-card">
+              {!esGimnasio && (
+                <article style={styles.infoCard} className="vista-card">
                 <CardTitle
                   title="Cobranza"
                   subtitle="Estado y seguimiento de la cuenta"
@@ -1546,10 +1801,12 @@ export default function VistaCliente() {
                   value={formatoFecha(cobranza?.proxima_gestion)}
                 />
               </article>
+              )}
             </section>
 
             <section style={styles.actionGrid} className="vista-action-grid">
-              <article style={styles.promesaCard} className="vista-card">
+              {!esGimnasio && (
+                <article style={styles.promesaCard} className="vista-card">
                 <CardTitle
                   title="Promesa de pago"
                   subtitle="Registra el compromiso de pago del cliente"
@@ -1613,14 +1870,24 @@ export default function VistaCliente() {
                     : "Registrar promesa"}
                 </button>
               </article>
+              )}
 
               <article style={styles.gestionCard} className="vista-card">
                 <CardTitle
-                  title="Nueva gestión"
-                  subtitle="Registra llamadas, visitas y seguimientos"
+                  title={
+                    esGimnasio
+                      ? "Observaciones del alumno"
+                      : "Nueva gestión"
+                  }
+                  subtitle={
+                    esGimnasio
+                      ? "Registra notas administrativas, restricciones o novedades"
+                      : "Registra llamadas, visitas y seguimientos"
+                  }
                 />
 
-                <div style={styles.gridFormulario}>
+                {!esGimnasio && (
+                  <div style={styles.gridFormulario}>
                   <select
                     value={tipoGestion}
                     onChange={(event) =>
@@ -1649,9 +1916,14 @@ export default function VistaCliente() {
                     <option>Reprogramar</option>
                   </select>
                 </div>
+                )}
 
                 <textarea
-                  placeholder="Agregar nueva observación..."
+                  placeholder={
+                    esGimnasio
+                      ? "Ej. lesión, restricción, congelamiento, cambio de horario o nota administrativa..."
+                      : "Agregar nueva observación..."
+                  }
                   value={observacion}
                   onChange={(event) => setObservacion(event.target.value)}
                   style={styles.textarea}
@@ -1668,6 +1940,8 @@ export default function VistaCliente() {
                 >
                   {guardandoGestion
                     ? "Guardando..."
+                    : esGimnasio
+                    ? "Guardar observación del alumno"
                     : "Guardar observación"}
                 </button>
               </article>
@@ -1724,12 +1998,20 @@ export default function VistaCliente() {
 
             <section style={styles.timelineCard} className="vista-card">
               <CardTitle
-                title="Historial de gestiones"
-                subtitle="Seguimiento cronológico de la cuenta"
+                title={
+                  esGimnasio
+                    ? "Historial de observaciones"
+                    : "Historial de gestiones"
+                }
+                subtitle={
+                  esGimnasio
+                    ? "Notas registradas en el expediente del alumno"
+                    : "Seguimiento cronológico de la cuenta"
+                }
               />
 
               <div style={styles.timeline}>
-                {gestiones.map((item) => {
+                {gestionesVisibles.map((item) => {
                   const esPromesa =
                     limpiarTexto(item.tipo_gestion) ===
                       "promesa de pago" ||
@@ -1802,9 +2084,11 @@ export default function VistaCliente() {
                   );
                 })}
 
-                {gestiones.length === 0 && (
+                {gestionesVisibles.length === 0 && (
                   <div style={styles.sinDatos}>
-                    No hay gestiones registradas para esta cuenta.
+                    {esGimnasio
+                      ? "No hay observaciones registradas para este alumno."
+                      : "No hay gestiones registradas para esta cuenta."}
                   </div>
                 )}
               </div>
