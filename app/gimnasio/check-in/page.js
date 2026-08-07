@@ -862,11 +862,20 @@ export default function CheckInGimnasio() {
   return (
     <main style={s.pagina} className="checkin-page">
       <style>{`
-        @media (max-width: 900px) {
+        @media (max-width: 900px), (max-device-width: 900px), (pointer: coarse) {
+          html,
+          body {
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow-x: hidden !important;
+          }
+
           .checkin-page {
             width: 100% !important;
-            max-width: 100vw !important;
-            padding: 12px !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            padding: 10px !important;
+            margin: 0 !important;
             box-sizing: border-box !important;
             overflow-x: hidden !important;
           }
@@ -875,66 +884,156 @@ export default function CheckInGimnasio() {
             width: 100% !important;
             max-width: 100% !important;
             min-width: 0 !important;
+            margin: 0 auto !important;
+            box-sizing: border-box !important;
           }
 
           .checkin-encabezado {
             width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
             padding: 16px !important;
+            margin-bottom: 12px !important;
             display: grid !important;
-            grid-template-columns: 1fr !important;
+            grid-template-columns: minmax(0,1fr) !important;
             align-items: stretch !important;
             gap: 14px !important;
+            border-radius: 18px !important;
             box-sizing: border-box !important;
+            overflow: hidden !important;
           }
 
           .checkin-marca {
+            width: 100% !important;
+            max-width: 100% !important;
             min-width: 0 !important;
             display: grid !important;
-            grid-template-columns: 1fr !important;
-            gap: 12px !important;
+            grid-template-columns: minmax(0,1fr) !important;
+            align-items: start !important;
+            gap: 11px !important;
+          }
+
+          .checkin-marca > div {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
           }
 
           .checkin-marca img {
-            width: 145px !important;
+            width: 150px !important;
+            max-width: 55vw !important;
+            height: auto !important;
+            justify-self: start !important;
+          }
+
+          .checkin-marca h1 {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            font-size: 31px !important;
+            line-height: 1.02 !important;
+            letter-spacing: -.7px !important;
+            overflow-wrap: anywhere !important;
+            word-break: normal !important;
+          }
+
+          .checkin-marca p {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin-top: 7px !important;
+            font-size: 11px !important;
+            line-height: 1.35 !important;
+            overflow-wrap: anywhere !important;
           }
 
           .checkin-encabezado-acciones {
             width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
             display: grid !important;
-            grid-template-columns: minmax(0,1fr) auto !important;
+            grid-template-columns: minmax(0,1fr) minmax(120px,auto) !important;
+            gap: 9px !important;
+            align-items: stretch !important;
+          }
+
+          .checkin-encabezado-acciones > * {
+            min-width: 0 !important;
+            max-width: 100% !important;
           }
 
           .checkin-indicadores {
             width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
             grid-template-columns: repeat(2,minmax(0,1fr)) !important;
             gap: 9px !important;
+            margin-bottom: 12px !important;
+          }
+
+          .checkin-indicadores > article {
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 96px !important;
+            padding: 13px !important;
+            grid-template-columns: 38px minmax(0,1fr) !important;
+            gap: 9px !important;
+            box-sizing: border-box !important;
           }
 
           .checkin-indicadores > article:last-child {
-            grid-column: 1 / -1;
+            grid-column: 1 / -1 !important;
           }
 
           .checkin-grid-principal {
             width: 100% !important;
-            grid-template-columns: 1fr !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
             gap: 12px !important;
+          }
+
+          .checkin-panel {
+            order: 1 !important;
+          }
+
+          .checkin-actividad {
+            order: 2 !important;
           }
 
           .checkin-panel,
           .checkin-actividad {
             width: 100% !important;
+            max-width: 100% !important;
             min-width: 0 !important;
             min-height: 0 !important;
             padding: 14px !important;
+            border-radius: 17px !important;
             box-sizing: border-box !important;
+            overflow: hidden !important;
+          }
+
+          .checkin-panel h2,
+          .checkin-actividad h2 {
+            max-width: 100% !important;
+            font-size: 21px !important;
+            line-height: 1.1 !important;
+            overflow-wrap: anywhere !important;
           }
 
           .checkin-datos {
+            width: 100% !important;
+            max-width: 100% !important;
             grid-template-columns: 1fr !important;
+            gap: 8px !important;
           }
 
           .checkin-resultado-item {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
             grid-template-columns: 38px minmax(0,1fr) !important;
+            box-sizing: border-box !important;
           }
 
           .checkin-resultado-item > span:last-child {
@@ -944,15 +1043,34 @@ export default function CheckInGimnasio() {
           }
 
           .checkin-page input,
+          .checkin-page select,
           .checkin-page textarea,
           .checkin-page button {
             max-width: 100% !important;
+            box-sizing: border-box !important;
+          }
+
+          .checkin-page input,
+          .checkin-page textarea {
+            font-size: 16px !important;
+          }
+
+          .checkin-actividad > div:first-child {
+            align-items: center !important;
+          }
+
+          .checkin-actividad button {
+            min-width: 94px !important;
           }
         }
 
-        @media (max-width: 390px) {
+        @media (max-width: 390px), (max-device-width: 390px) {
           .checkin-encabezado-acciones {
             grid-template-columns: 1fr !important;
+          }
+
+          .checkin-marca h1 {
+            font-size: 28px !important;
           }
 
           .checkin-indicadores {
@@ -960,7 +1078,7 @@ export default function CheckInGimnasio() {
           }
 
           .checkin-indicadores > article:last-child {
-            grid-column: auto;
+            grid-column: auto !important;
           }
         }
       `}</style>
