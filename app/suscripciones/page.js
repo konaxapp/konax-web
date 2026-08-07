@@ -6,7 +6,7 @@ import { supabase } from "../../lib/supabase";
 
 const DIAS_PROXIMO_VENCER = 5;
 const DIAS_GRACIA = 3;
-const VERSION_SUSCRIPCIONES = "2026.08.04-G";
+const VERSION_SUSCRIPCIONES = "2026.08.06-I";
 
 const FORMULARIO_INICIAL = {
   planId: "",
@@ -828,9 +828,9 @@ function SuscripcionesContenido() {
 
   if (modoCreacion) {
     return (
-      <main style={s.pagina}>
-        <div style={s.contenedorAngosto}>
-          <header style={s.heroCompacto}>
+      <main style={s.pagina} className="suscripciones-page">
+        <div style={s.contenedorAngosto} className="suscripciones-contenedor-angosto">
+          <header style={s.heroCompacto} className="suscripciones-hero">
             <div>
               <span style={s.etiqueta}>NUEVA MEMBRESÍA</span>
               <h1 style={s.tituloHero}>Asignar plan al alumno</h1>
@@ -850,8 +850,8 @@ function SuscripcionesContenido() {
             <span style={s.paso}>3. Caja</span>
           </div>
 
-          <section style={s.card}>
-            <div style={s.cabeceraSeccion}>
+          <section style={s.card} className="suscripciones-card">
+            <div style={s.cabeceraSeccion} className="suscripciones-cabecera">
               <div>
                 <h2 style={s.tituloSeccion}>Alumno</h2>
                 <p style={s.textoSeccion}>
@@ -894,7 +894,7 @@ function SuscripcionesContenido() {
                 )}
               </>
             ) : (
-              <div style={s.alumnoSeleccionado}>
+              <div style={s.alumnoSeleccionado} className="suscripciones-alumno-seleccionado">
                 <div style={s.avatar}>{String(clienteSeleccionado.nombre || "A").charAt(0)}</div>
                 <div>
                   <strong style={s.nombreAlumno}>{clienteSeleccionado.nombre}</strong>
@@ -914,7 +914,7 @@ function SuscripcionesContenido() {
             )}
           </section>
 
-          <section style={s.card}>
+          <section style={s.card} className="suscripciones-card">
             <div style={s.cabeceraSeccion}>
               <div>
                 <h2 style={s.tituloSeccion}>Plan y vigencia</h2>
@@ -929,7 +929,7 @@ function SuscripcionesContenido() {
                 No hay planes activos configurados para esta empresa.
               </div>
             ) : (
-              <div style={s.gridFormulario}>
+              <div style={s.gridFormulario} className="suscripciones-grid-formulario">
                 <label style={s.campo}>
                   <span style={s.label}>Plan *</span>
                   <select
@@ -1022,9 +1022,357 @@ function SuscripcionesContenido() {
   }
 
   return (
-    <main style={s.pagina}>
-      <div style={s.contenedor}>
-        <header style={s.heroCompacto}>
+    <main style={s.pagina} className="suscripciones-page">
+      <style>{`
+        @media (max-width: 900px), (max-device-width: 900px), (pointer: coarse) {
+          html,
+          body {
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow-x: hidden !important;
+          }
+
+          .suscripciones-page {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            padding: 10px !important;
+            box-sizing: border-box !important;
+            overflow-x: hidden !important;
+          }
+
+          .suscripciones-contenedor,
+          .suscripciones-contenedor-angosto {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            margin: 0 auto !important;
+            box-sizing: border-box !important;
+          }
+
+          .suscripciones-hero {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            margin-bottom: 12px !important;
+            padding: 17px 16px !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            align-items: stretch !important;
+            gap: 14px !important;
+            border-radius: 18px !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+          }
+
+          .suscripciones-hero > div {
+            min-width: 0 !important;
+            max-width: 100% !important;
+          }
+
+          .suscripciones-hero h1 {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 5px 0 !important;
+            font-size: 31px !important;
+            line-height: 1.05 !important;
+            letter-spacing: -.5px !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .suscripciones-hero p {
+            width: 100% !important;
+            max-width: 100% !important;
+            font-size: 12px !important;
+            line-height: 1.4 !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .suscripciones-hero button {
+            width: 100% !important;
+            max-width: 100% !important;
+          }
+
+          .suscripciones-version {
+            width: 100% !important;
+            max-width: 100% !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 4px !important;
+            margin-bottom: 12px !important;
+            padding: 9px 11px !important;
+            box-sizing: border-box !important;
+          }
+
+          .suscripciones-resumen {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+            gap: 9px !important;
+            margin-bottom: 12px !important;
+          }
+
+          .suscripciones-resumen > article {
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 104px !important;
+            padding: 12px !important;
+            grid-template-columns: 40px minmax(0,1fr) !important;
+            gap: 9px !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+          }
+
+          .suscripciones-resumen > article > div:first-child {
+            width: 40px !important;
+            height: 40px !important;
+            border-radius: 12px !important;
+            font-size: 18px !important;
+          }
+
+          .suscripciones-resumen > article > div:last-child {
+            min-width: 0 !important;
+          }
+
+          .suscripciones-resumen > article span {
+            white-space: normal !important;
+            overflow-wrap: anywhere !important;
+            line-height: 1.2 !important;
+          }
+
+          .suscripciones-resumen > article strong {
+            font-size: 25px !important;
+          }
+
+          .suscripciones-doble-grid {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+
+          .suscripciones-card {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            padding: 15px !important;
+            border-radius: 17px !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+          }
+
+          .suscripciones-cabecera {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            align-items: flex-start !important;
+            gap: 9px !important;
+          }
+
+          .suscripciones-cabecera > div {
+            min-width: 0 !important;
+          }
+
+          .suscripciones-cabecera h2 {
+            font-size: 20px !important;
+            line-height: 1.08 !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .suscripciones-cabecera p {
+            font-size: 11px !important;
+            line-height: 1.4 !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .suscripciones-item-atencion {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            align-items: stretch !important;
+            gap: 10px !important;
+            box-sizing: border-box !important;
+          }
+
+          .suscripciones-item-atencion > div:first-child {
+            min-width: 0 !important;
+          }
+
+          .suscripciones-acciones-compactas {
+            width: 100% !important;
+            justify-content: flex-start !important;
+          }
+
+          .suscripciones-filtros {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            grid-template-columns: 1fr !important;
+            gap: 9px !important;
+          }
+
+          .suscripciones-filtros input,
+          .suscripciones-filtros select,
+          .suscripciones-filtros button {
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+          }
+
+          .suscripciones-tabla-wrap {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            overflow: visible !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+          }
+
+          .suscripciones-tabla {
+            width: 100% !important;
+            min-width: 0 !important;
+            border-collapse: separate !important;
+            border-spacing: 0 !important;
+          }
+
+          .suscripciones-tabla thead {
+            display: none !important;
+          }
+
+          .suscripciones-tabla tbody {
+            width: 100% !important;
+            display: grid !important;
+            gap: 10px !important;
+          }
+
+          .suscripciones-tabla tr {
+            width: 100% !important;
+            min-width: 0 !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 0 !important;
+            padding: 12px !important;
+            border: 1px solid #dfe7e2 !important;
+            border-radius: 14px !important;
+            background: #fff !important;
+            box-sizing: border-box !important;
+          }
+
+          .suscripciones-tabla td {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            padding: 8px 0 !important;
+            display: flex !important;
+            align-items: flex-start !important;
+            justify-content: space-between !important;
+            gap: 12px !important;
+            border-bottom: 1px solid #edf1ee !important;
+            white-space: normal !important;
+            box-sizing: border-box !important;
+            text-align: right !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .suscripciones-tabla td:last-child {
+            border-bottom: 0 !important;
+          }
+
+          .suscripciones-tabla td::before {
+            content: attr(data-label);
+            flex: 0 0 92px;
+            color: #6f7b74;
+            font-size: 10px;
+            font-weight: 900;
+            text-align: left;
+          }
+
+          .suscripciones-tabla td[data-label="Alumno"] {
+            display: block !important;
+            text-align: left !important;
+          }
+
+          .suscripciones-tabla td[data-label="Alumno"]::before {
+            display: block !important;
+            margin-bottom: 5px !important;
+          }
+
+          .suscripciones-tabla td[data-label="Acciones"] {
+            display: block !important;
+            text-align: left !important;
+          }
+
+          .suscripciones-tabla td[data-label="Acciones"]::before {
+            display: block !important;
+            margin-bottom: 8px !important;
+          }
+
+          .suscripciones-tabla td[colspan] {
+            display: block !important;
+            text-align: center !important;
+          }
+
+          .suscripciones-tabla td[colspan]::before {
+            display: none !important;
+          }
+
+          .suscripciones-tabla .acciones-mobile {
+            width: 100% !important;
+            justify-content: flex-start !important;
+          }
+
+          .suscripciones-grid-formulario {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            grid-template-columns: 1fr !important;
+            gap: 11px !important;
+          }
+
+          .suscripciones-alumno-seleccionado {
+            width: 100% !important;
+            min-width: 0 !important;
+            grid-template-columns: 46px minmax(0,1fr) !important;
+            box-sizing: border-box !important;
+          }
+
+          .suscripciones-alumno-seleccionado > button {
+            grid-column: 1 / -1 !important;
+            width: 100% !important;
+          }
+
+          .suscripciones-page input,
+          .suscripciones-page select,
+          .suscripciones-page textarea,
+          .suscripciones-page button {
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+          }
+
+          .suscripciones-page input,
+          .suscripciones-page select,
+          .suscripciones-page textarea {
+            font-size: 16px !important;
+          }
+        }
+
+        @media (max-width: 390px), (max-device-width: 390px) {
+          .suscripciones-resumen {
+            grid-template-columns: 1fr !important;
+          }
+
+          .suscripciones-hero h1 {
+            font-size: 28px !important;
+          }
+        }
+      `}</style>
+
+      <div style={s.contenedor} className="suscripciones-contenedor">
+        <header style={s.heroCompacto} className="suscripciones-hero">
           <div>
             <span style={s.etiqueta}>CONTROL DE MEMBRESÍAS</span>
             <h1 style={s.tituloHero}>Membresías del gimnasio</h1>
@@ -1038,12 +1386,12 @@ function SuscripcionesContenido() {
           </button>
         </header>
 
-        <div style={s.versionBar}>
+        <div style={s.versionBar} className="suscripciones-version">
           <span>{sincronizando ? "Actualizando estados..." : "Estados actualizados"}</span>
           <span>Versión: {VERSION_SUSCRIPCIONES}</span>
         </div>
 
-        <section style={s.resumenGrid}>
+        <section style={s.resumenGrid} className="suscripciones-resumen">
           <KPI titulo="Activas" valor={resumen.activas} icono="✓" tipo="verde" />
           <KPI titulo="Próximas a vencer" valor={resumen.proximas} icono="◷" tipo="amarillo" />
           <KPI
@@ -1060,8 +1408,8 @@ function SuscripcionesContenido() {
           />
         </section>
 
-        <section style={s.dobleGrid}>
-          <article style={s.card}>
+        <section style={s.dobleGrid} className="suscripciones-doble-grid">
+          <article style={s.card} className="suscripciones-card">
             <CabeceraSeccion
               titulo="Próximas a vencer"
               texto="Alumnos que conviene contactar antes del vencimiento."
@@ -1076,7 +1424,7 @@ function SuscripcionesContenido() {
                   const dias = calcularDiasParaVencer(item.fecha_vencimiento);
 
                   return (
-                    <div key={item.id} style={s.itemAtencion}>
+                    <div key={item.id} style={s.itemAtencion} className="suscripciones-item-atencion">
                       <div>
                         <strong>{item.cliente}</strong>
                         <span style={s.detalleItem}>
@@ -1084,7 +1432,7 @@ function SuscripcionesContenido() {
                         </span>
                       </div>
 
-                      <div style={s.accionesCompactas}>
+                      <div style={s.accionesCompactas} className="suscripciones-acciones-compactas">
                         <button onClick={() => enviarRecordatorio(item)} style={s.botonWhatsApp}>
                           WhatsApp
                         </button>
@@ -1099,7 +1447,7 @@ function SuscripcionesContenido() {
             )}
           </article>
 
-          <article style={s.card}>
+          <article style={s.card} className="suscripciones-card">
             <CabeceraSeccion
               titulo="Morosas y suspendidas"
               texto="Membresías vencidas, suspendidas o pendientes de pago."
@@ -1114,7 +1462,7 @@ function SuscripcionesContenido() {
                   const estado = obtenerEstadoAutomatico(item);
 
                   return (
-                    <div key={item.id} style={s.itemAtencion}>
+                    <div key={item.id} style={s.itemAtencion} className="suscripciones-item-atencion">
                       <div>
                         <strong>{item.cliente}</strong>
                         <span style={s.detalleItem}>
@@ -1122,7 +1470,7 @@ function SuscripcionesContenido() {
                         </span>
                       </div>
 
-                      <div style={s.accionesCompactas}>
+                      <div style={s.accionesCompactas} className="suscripciones-acciones-compactas">
                         <button onClick={() => irACaja(item)} style={s.botonMiniVerde}>
                           Ir a Caja
                         </button>
@@ -1140,14 +1488,14 @@ function SuscripcionesContenido() {
           </article>
         </section>
 
-        <section style={s.card}>
+        <section style={s.card} className="suscripciones-card">
           <CabeceraSeccion
             titulo="Clientes con membresía"
             texto="Consulta el estado actual y envía los cobros a Caja."
             cantidad={membresiasFiltradas.length}
           />
 
-          <div style={s.filtros}>
+          <div style={s.filtros} className="suscripciones-filtros">
             <input
               value={busquedaMembresia}
               onChange={(e) => setBusquedaMembresia(e.target.value)}
@@ -1180,8 +1528,8 @@ function SuscripcionesContenido() {
             </button>
           </div>
 
-          <div style={s.tablaContenedor}>
-            <table style={s.tabla}>
+          <div style={s.tablaContenedor} className="suscripciones-tabla-wrap">
+            <table style={s.tabla} className="suscripciones-tabla">
               <thead>
                 <tr>
                   <th style={s.th}>Alumno</th>
@@ -1206,18 +1554,18 @@ function SuscripcionesContenido() {
 
                     return (
                       <tr key={item.id}>
-                        <td style={s.td}>
+                        <td style={s.td} data-label="Alumno">
                           <strong>{item.cliente}</strong>
                           <span style={s.subdato}>{item.cedula || "Sin cédula"}</span>
                         </td>
-                        <td style={s.td}>{item.telefono || "-"}</td>
-                        <td style={s.td}>{item.plan}</td>
-                        <td style={s.td}>{formatearFecha(item.fecha_vencimiento)}</td>
-                        <td style={s.td}>
+                        <td style={s.td} data-label="Teléfono">{item.telefono || "-"}</td>
+                        <td style={s.td} data-label="Plan">{item.plan}</td>
+                        <td style={s.td} data-label="Vence">{formatearFecha(item.fecha_vencimiento)}</td>
+                        <td style={s.td} data-label="Estado">
                           <span style={estiloEstado(estado)}>{estado}</span>
                         </td>
-                        <td style={s.td}>
-                          <div style={s.accionesTabla}>
+                        <td style={s.td} data-label="Acciones">
+                          <div style={s.accionesTabla} className="acciones-mobile">
                             <button onClick={() => irACaja(item)} style={s.botonMiniVerde}>
                               Ir a Caja
                             </button>
