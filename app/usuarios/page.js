@@ -1,5 +1,7 @@
 "use client";
 
+// KONAX Usuarios y Roles · Gimnasio · VERSION 2026.08.07-P
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
@@ -595,10 +597,16 @@ export default function Usuarios() {
 
       if (
         rolUsuario === "vendedor" &&
-        !["dashboard", "caja"].includes(modulo.codigo)
+        ![
+          "dashboard",
+          "clientes",
+          "suscripciones",
+          "checkin_gimnasio",
+          "caja",
+        ].includes(modulo.codigo)
       ) {
         alert(
-          "El rol Vendedor del gimnasio está limitado a Panel y Caja."
+          "El Vendedor del gimnasio puede usar Panel, Alumnos, Membresías, Check-in y Caja. Los módulos administrativos permanecen restringidos."
         );
         return;
       }
@@ -702,7 +710,13 @@ export default function Usuarios() {
       activo: esAdmin
         ? true
         : esVendedor
-        ? ["dashboard", "caja"].includes(modulo.codigo)
+        ? [
+            "dashboard",
+            "clientes",
+            "suscripciones",
+            "checkin_gimnasio",
+            "caja",
+          ].includes(modulo.codigo)
         : false,
       updated_at: new Date().toISOString(),
     }));
@@ -1032,7 +1046,7 @@ export default function Usuarios() {
               operativos necesarios. Para crear usuarios se muestran
               solo dos roles: Administrador y Vendedor. El Administrador
               tiene acceso completo al perfil y el Vendedor queda con
-              acceso a Panel y Caja.
+              acceso a Panel, Alumnos, Membresías, Check-in y Caja.
             </p>
           </div>
         </section>
