@@ -32,111 +32,124 @@ export default function SidebarKonax({
   }
 
   return (
-    <aside style={s.sidebar}>
-      <div style={s.brand}>
-        <div style={s.logoBox}>
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            style={s.logo}
-          />
+    <>
+      <style>{`
+        @media (max-width: 900px) {
+          .konax-sidebar-desktop {
+            display: none !important;
+          }
+        }
+      `}</style>
+
+      <aside
+        className="konax-sidebar-desktop"
+        style={s.sidebar}
+      >
+        <div style={s.brand}>
+          <div style={s.logoBox}>
+            <img
+              src="/konax-logo.png"
+              alt="KONAX"
+              style={s.logo}
+            />
+          </div>
+
+          <div style={s.brandText}>
+            <strong style={s.brandName}>KONAX</strong>
+            <span style={s.brandCaption}>
+              Gestión empresarial
+            </span>
+          </div>
         </div>
 
-        <div style={s.brandText}>
-          <strong style={s.brandName}>KONAX</strong>
-          <span style={s.brandCaption}>
-            Gestión empresarial
-          </span>
-        </div>
-      </div>
+        <div style={s.divider} />
 
-      <div style={s.divider} />
+        <nav style={s.menu}>
+          {items.map((item) => {
+            const activo = estaActivo(item);
+            const clave = obtenerClave(item);
+            const hover = itemHover === clave;
 
-      <nav style={s.menu}>
-        {items.map((item) => {
-          const activo = estaActivo(item);
-          const clave = obtenerClave(item);
-          const hover = itemHover === clave;
+            const estiloBoton = activo
+              ? s.menuActivo
+              : hover
+              ? {
+                  ...s.menuItem,
+                  ...s.menuHover,
+                }
+              : s.menuItem;
 
-          const estiloBoton = activo
-            ? s.menuActivo
-            : hover
-            ? {
-                ...s.menuItem,
-                ...s.menuHover,
-              }
-            : s.menuItem;
+            const estiloIcono = activo
+              ? s.menuIconoActivo
+              : hover
+              ? {
+                  ...s.menuIcono,
+                  ...s.menuIconoHover,
+                }
+              : s.menuIcono;
 
-          const estiloIcono = activo
-            ? s.menuIconoActivo
-            : hover
-            ? {
-                ...s.menuIcono,
-                ...s.menuIconoHover,
-              }
-            : s.menuIcono;
-
-          return (
-            <button
-              key={clave}
-              type="button"
-              onClick={() => router.push(item.ruta)}
-              onMouseEnter={() => setItemHover(clave)}
-              onMouseLeave={() => setItemHover("")}
-              style={estiloBoton}
-              title={item.nombre}
-            >
-              <span style={estiloIcono}>
-                {item.icono}
-              </span>
-
-              <span style={s.menuTexto}>
-                {item.nombre}
-              </span>
-
-              {activo ? (
-                <span style={s.activeDot} />
-              ) : (
-                <span
-                  style={{
-                    ...s.hoverArrow,
-                    opacity: hover ? 1 : 0,
-                    transform: hover
-                      ? "translateX(0)"
-                      : "translateX(-4px)",
-                  }}
-                >
-                  ›
+            return (
+              <button
+                key={clave}
+                type="button"
+                onClick={() => router.push(item.ruta)}
+                onMouseEnter={() => setItemHover(clave)}
+                onMouseLeave={() => setItemHover("")}
+                style={estiloBoton}
+                title={item.nombre}
+              >
+                <span style={estiloIcono}>
+                  {item.icono}
                 </span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
 
-      <div style={s.sidebarFooter}>
-        <span style={s.footerLabel}>
-          SESIÓN ACTIVA
-        </span>
+                <span style={s.menuTexto}>
+                  {item.nombre}
+                </span>
 
-        <button
-          type="button"
-          onClick={onLogout}
-          style={s.logout}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background =
-              "rgba(255,255,255,.09)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background =
-              "rgba(255,255,255,.045)";
-          }}
-        >
-          <span style={s.logoutIcon}>↪</span>
-          Cerrar sesión
-        </button>
-      </div>
-    </aside>
+                {activo ? (
+                  <span style={s.activeDot} />
+                ) : (
+                  <span
+                    style={{
+                      ...s.hoverArrow,
+                      opacity: hover ? 1 : 0,
+                      transform: hover
+                        ? "translateX(0)"
+                        : "translateX(-4px)",
+                    }}
+                  >
+                    ›
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div style={s.sidebarFooter}>
+          <span style={s.footerLabel}>
+            SESIÓN ACTIVA
+          </span>
+
+          <button
+            type="button"
+            onClick={onLogout}
+            style={s.logout}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background =
+                "rgba(255,255,255,.09)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background =
+                "rgba(255,255,255,.045)";
+            }}
+          >
+            <span style={s.logoutIcon}>↪</span>
+            Cerrar sesión
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }
 
