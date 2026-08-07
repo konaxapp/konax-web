@@ -32,7 +32,7 @@ import {
 } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.07-Y";
+const VERSION = "2026.08.07-Z";
 const DIAS_AVISO_DEFAULT = 5;
 const DIAS_GRACIA_DEFAULT = 3;
 
