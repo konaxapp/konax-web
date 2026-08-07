@@ -1,5 +1,7 @@
 "use client";
 
+// KONAX Mobile Nav · Gimnasio · VERSION 2026.08.07-P
+
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -22,6 +24,10 @@ function esAdministrador(rol) {
   ].includes(normalizar(rol));
 }
 
+function esVendedor(rol) {
+  return normalizar(rol) === "vendedor";
+}
+
 function esGimnasio(tipo, categoria = "") {
   const texto = normalizar(`${tipo || ""} ${categoria || ""}`);
 
@@ -30,7 +36,7 @@ function esGimnasio(tipo, categoria = "") {
   );
 }
 
-const MENU_GIMNASIO = [
+const MENU_GIMNASIO_ADMIN = [
   { nombre: "Panel", ruta: "/dashboard", icono: "▦" },
   { nombre: "Alumnos", ruta: "/clientes", icono: "👥" },
   { nombre: "Membresías", ruta: "/suscripciones", icono: "▣" },
@@ -39,6 +45,14 @@ const MENU_GIMNASIO = [
   { nombre: "Reportes", ruta: "/reportes", icono: "▥" },
   { nombre: "Usuarios y Roles", ruta: "/usuarios", icono: "🔐" },
   { nombre: "Configuración", ruta: "/admin-configuracion", icono: "⚙" },
+];
+
+const MENU_GIMNASIO_VENDEDOR = [
+  { nombre: "Panel", ruta: "/dashboard", icono: "▦" },
+  { nombre: "Alumnos", ruta: "/clientes", icono: "👥" },
+  { nombre: "Membresías", ruta: "/suscripciones", icono: "▣" },
+  { nombre: "Check-in", ruta: "/gimnasio/check-in", icono: "✓" },
+  { nombre: "Caja", ruta: "/caja", icono: "$" },
 ];
 
 export default function KonaxMobileNav() {
@@ -50,6 +64,7 @@ export default function KonaxMobileNav() {
   const [abierto, setAbierto] = useState(false);
   const [empresaNombre, setEmpresaNombre] = useState("");
   const [usuarioNombre, setUsuarioNombre] = useState("");
+  const [rolUsuario, setRolUsuario] = useState("");
 
   useEffect(() => {
     const tipoNegocio =
@@ -68,15 +83,17 @@ export default function KonaxMobileNav() {
       "";
 
     const habilitado =
-      esGimnasio(tipoNegocio, categoriaNegocio) && esAdministrador(rol);
+      esGimnasio(tipoNegocio, categoriaNegocio) &&
+      (esAdministrador(rol) || esVendedor(rol));
 
     setMostrar(habilitado);
     setEmpresaNombre(
       localStorage.getItem("empresaNombre") || "KONAX Gimnasio"
     );
     setUsuarioNombre(
-      localStorage.getItem("usuarioNombre") || "Administrador"
+      localStorage.getItem("usuarioNombre") || "Usuario"
     );
+    setRolUsuario(rol);
     setListo(true);
   }, [pathname]);
 
@@ -124,6 +141,10 @@ export default function KonaxMobileNav() {
   }
 
   if (!listo || !mostrar) return null;
+
+  const menuVisible = esAdministrador(rolUsuario)
+    ? MENU_GIMNASIO_ADMIN
+    : MENU_GIMNASIO_VENDEDOR;
 
   return (
     <>
@@ -215,7 +236,7 @@ export default function KonaxMobileNav() {
               </div>
 
               <nav style={s.menu}>
-                {MENU_GIMNASIO.map((item) => {
+                {menuVisible.map((item) => {
                   const activo = estaActivo(item.ruta);
 
                   return (
