@@ -1680,6 +1680,26 @@ function SuscripcionesContenido() {
   }
 
   if (vista === "planes") {
+    const totalPlanes = planes.length;
+    const totalActivos = planes.filter(
+      (plan) => plan.activo !== false
+    ).length;
+    const totalInactivos = Math.max(
+      0,
+      totalPlanes - totalActivos
+    );
+    const precioBase = planes.length
+      ? Math.min(
+          ...planes
+            .map((plan) =>
+              Number(plan.precio || 0)
+            )
+            .filter((valor) =>
+              Number.isFinite(valor)
+            )
+        )
+      : 0;
+
     return (
       <main style={s.page}>
         <div
@@ -1693,505 +1713,558 @@ function SuscripcionesContenido() {
           <Header
             etiqueta="PLANES DE MEMBRESÍA"
             titulo="Administrar planes"
-            texto="Crea, edita y activa los planes que luego podrás asignar a cada alumno."
+            texto="Crea, edita y organiza los planes que luego podrás asignar a cada alumno."
             boton="← Regresar a Membresías"
             onBack={abrirPrincipal}
             esMovil={esMovil}
           />
 
-          <section
-            style={s.cardPremium}
-          >
-            <div
-              style={
-                s.sectionHeader
-              }
-            >
-              <div>
-                <span
-                  style={
-                    s.sectionEyebrow
-                  }
-                >
-                  {planEditandoId
-                    ? "EDITANDO PLAN"
-                    : "NUEVO PLAN"}
-                </span>
-
-                <h2
-                  style={
-                    s.sectionTitle
-                  }
-                >
-                  {planEditandoId
-                    ? "Actualizar plan de membresía"
-                    : "Crear plan de membresía"}
-                </h2>
-              </div>
-
-              {planEditandoId && (
-                <button
-                  type="button"
-                  onClick={
-                    limpiarFormPlan
-                  }
-                  style={
-                    s.secondaryBtn
-                  }
-                >
-                  Cancelar edición
-                </button>
-              )}
-            </div>
-
+          <section style={s.planSummaryStrip}>
             <div
               style={{
-                ...s.formGrid,
+                ...s.planSummaryGrid,
                 ...(esMovil
                   ? s.oneColumn
                   : {}),
               }}
             >
-              <Campo
-                label="Nombre del plan *"
-              >
-                <input
-                  value={
-                    formPlan.nombre
-                  }
-                  onChange={(e) =>
-                    setFormPlan(
-                      (actual) => ({
-                        ...actual,
-                        nombre:
-                          e.target.value,
-                      })
-                    )
-                  }
-                  placeholder="Ej. Plan Regular"
-                  style={s.input}
-                />
-              </Campo>
+              <div style={s.planMiniStat}>
+                <span style={s.planMiniLabel}>
+                  Total de planes
+                </span>
+                <strong style={s.planMiniValue}>
+                  {totalPlanes}
+                </strong>
+              </div>
 
-              <Campo
-                label="Precio *"
-              >
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={
-                    formPlan.precio
-                  }
-                  onChange={(e) =>
-                    setFormPlan(
-                      (actual) => ({
-                        ...actual,
-                        precio:
-                          e.target.value,
-                      })
-                    )
-                  }
-                  placeholder="20.00"
-                  style={s.input}
-                />
-              </Campo>
+              <div style={s.planMiniStat}>
+                <span style={s.planMiniLabel}>
+                  Planes activos
+                </span>
+                <strong style={s.planMiniValueGreen}>
+                  {totalActivos}
+                </strong>
+              </div>
 
-              <Campo
-                label="Periodicidad"
-              >
-                <select
-                  value={
-                    formPlan.periodicidad
-                  }
-                  onChange={(e) =>
-                    cambiarPeriodicidadPlan(
-                      e.target.value
-                    )
-                  }
-                  style={s.input}
-                >
-                  <option>
-                    Diaria
-                  </option>
-                  <option>
-                    Semanal
-                  </option>
-                  <option>
-                    Quincenal
-                  </option>
-                  <option>
-                    Mensual
-                  </option>
-                  <option>
-                    Trimestral
-                  </option>
-                  <option>
-                    Semestral
-                  </option>
-                  <option>
-                    Anual
-                  </option>
-                </select>
-              </Campo>
+              <div style={s.planMiniStat}>
+                <span style={s.planMiniLabel}>
+                  Planes inactivos
+                </span>
+                <strong style={s.planMiniValueMuted}>
+                  {totalInactivos}
+                </strong>
+              </div>
 
-              <Campo
-                label="Duración"
-              >
-                <div
-                  style={
-                    s.durationGrid
-                  }
-                >
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={
-                      formPlan.duracionCantidad
-                    }
-                    onChange={(e) =>
-                      setFormPlan(
-                        (actual) => ({
-                          ...actual,
-                          duracionCantidad:
-                            e.target.value,
-                        })
-                      )
-                    }
-                    style={s.input}
-                  />
-
-                  <select
-                    value={
-                      formPlan.duracionUnidad
-                    }
-                    onChange={(e) =>
-                      setFormPlan(
-                        (actual) => ({
-                          ...actual,
-                          duracionUnidad:
-                            e.target.value,
-                        })
-                      )
-                    }
-                    style={s.input}
-                  >
-                    <option>
-                      Días
-                    </option>
-                    <option>
-                      Semanas
-                    </option>
-                    <option>
-                      Meses
-                    </option>
-                    <option>
-                      Años
-                    </option>
-                  </select>
-                </div>
-              </Campo>
-
-              <Campo
-                label="Avisar antes de vencer"
-              >
-                <div
-                  style={
-                    s.inputSuffix
-                  }
-                >
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={
-                      formPlan.diasAviso
-                    }
-                    onChange={(e) =>
-                      setFormPlan(
-                        (actual) => ({
-                          ...actual,
-                          diasAviso:
-                            e.target.value,
-                        })
-                      )
-                    }
-                    style={s.input}
-                  />
-
-                  <span>
-                    días
-                  </span>
-                </div>
-              </Campo>
-
-              <Campo
-                label="Días de gracia"
-              >
-                <div
-                  style={
-                    s.inputSuffix
-                  }
-                >
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={
-                      formPlan.diasGracia
-                    }
-                    onChange={(e) =>
-                      setFormPlan(
-                        (actual) => ({
-                          ...actual,
-                          diasGracia:
-                            e.target.value,
-                        })
-                      )
-                    }
-                    style={s.input}
-                  />
-
-                  <span>
-                    días
-                  </span>
-                </div>
-              </Campo>
+              <div style={s.planMiniHighlight}>
+                <span style={s.planMiniLabel}>
+                  Precio base
+                </span>
+                <strong style={s.planMiniValueDark}>
+                  {totalPlanes > 0
+                    ? `B/. ${precioBase.toFixed(2)}`
+                    : "Sin planes"}
+                </strong>
+                <small style={s.planMiniHint}>
+                  Usa precios y vigencias claras para facilitar la venta.
+                </small>
+              </div>
             </div>
-
-            <Campo
-              label="Descripción"
-            >
-              <textarea
-                value={
-                  formPlan.descripcion
-                }
-                onChange={(e) =>
-                  setFormPlan(
-                    (actual) => ({
-                      ...actual,
-                      descripcion:
-                        e.target.value,
-                    })
-                  )
-                }
-                placeholder="Ej. Acceso mensual al gimnasio"
-                style={s.textarea}
-              />
-            </Campo>
-
-            <label
-              style={
-                s.checkRow
-              }
-            >
-              <input
-                type="checkbox"
-                checked={
-                  formPlan.activo
-                }
-                onChange={(e) =>
-                  setFormPlan(
-                    (actual) => ({
-                      ...actual,
-                      activo:
-                        e.target.checked,
-                    })
-                  )
-                }
-              />
-
-              Plan activo
-            </label>
-
-            <button
-              type="button"
-              onClick={
-                guardarPlan
-              }
-              disabled={
-                guardando
-              }
-              style={{
-                ...s.primaryBtn,
-                opacity:
-                  guardando
-                    ? 0.6
-                    : 1,
-              }}
-            >
-              {guardando
-                ? "Guardando..."
-                : planEditandoId
-                ? "Actualizar plan"
-                : "Crear plan"}
-            </button>
           </section>
 
           <section
-            style={s.cardPremium}
+            style={{
+              ...s.planAdminGrid,
+              ...(esMovil
+                ? s.oneColumn
+                : {}),
+            }}
           >
-            <div
-              style={
-                s.sectionHeader
-              }
-            >
-              <div>
-                <span
-                  style={
-                    s.sectionEyebrow
-                  }
-                >
-                  CATÁLOGO
-                </span>
+            <section style={s.cardPremiumStrong}>
+              <div style={s.sectionHeaderPremium}>
+                <div>
+                  <span style={s.sectionEyebrow}>
+                    {planEditandoId
+                      ? "EDITANDO PLAN"
+                      : "NUEVO PLAN"}
+                  </span>
 
-                <h2
-                  style={
-                    s.sectionTitle
-                  }
-                >
-                  Planes disponibles
-                </h2>
+                  <h2 style={s.sectionTitleLarge}>
+                    {planEditandoId
+                      ? "Actualizar plan de membresía"
+                      : "Crear plan de membresía"}
+                  </h2>
+
+                  <p style={s.sectionTextSoft}>
+                    Completa los datos principales del plan y deja lista su configuración comercial.
+                  </p>
+                </div>
+
+                {planEditandoId && (
+                  <button
+                    type="button"
+                    onClick={limpiarFormPlan}
+                    style={s.secondaryBtn}
+                  >
+                    Cancelar edición
+                  </button>
+                )}
               </div>
 
-              <span
-                style={s.counter}
-              >
+              <div style={s.planFormBlock}>
+                <div style={s.formSectionCard}>
+                  <div style={s.formSectionHeader}>
+                    <span style={s.formSectionIndex}>
+                      01
+                    </span>
+                    <div>
+                      <strong style={s.formSectionTitle}>
+                        Identidad del plan
+                      </strong>
+                      <p style={s.formSectionText}>
+                        Nombre, descripción y precio comercial.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      ...s.formGrid,
+                      ...(esMovil
+                        ? s.oneColumn
+                        : {}),
+                    }}
+                  >
+                    <Campo label="Nombre del plan *">
+                      <input
+                        value={formPlan.nombre}
+                        onChange={(e) =>
+                          setFormPlan(
+                            (actual) => ({
+                              ...actual,
+                              nombre: e.target.value,
+                            })
+                          )
+                        }
+                        placeholder="Ej. Plan Regular"
+                        style={s.input}
+                      />
+                    </Campo>
+
+                    <Campo label="Precio *">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formPlan.precio}
+                        onChange={(e) =>
+                          setFormPlan(
+                            (actual) => ({
+                              ...actual,
+                              precio: e.target.value,
+                            })
+                          )
+                        }
+                        placeholder="20.00"
+                        style={s.input}
+                      />
+                    </Campo>
+                  </div>
+
+                  <Campo label="Descripción">
+                    <textarea
+                      value={formPlan.descripcion}
+                      onChange={(e) =>
+                        setFormPlan(
+                          (actual) => ({
+                            ...actual,
+                            descripcion: e.target.value,
+                          })
+                        )
+                      }
+                      placeholder="Ej. Acceso mensual al gimnasio con seguimiento general"
+                      style={s.textarea}
+                    />
+                  </Campo>
+                </div>
+
+                <div style={s.formSectionCard}>
+                  <div style={s.formSectionHeader}>
+                    <span style={s.formSectionIndex}>
+                      02
+                    </span>
+                    <div>
+                      <strong style={s.formSectionTitle}>
+                        Vigencia y control
+                      </strong>
+                      <p style={s.formSectionText}>
+                        Define cómo vence y cuándo debe avisarse.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      ...s.formGrid,
+                      ...(esMovil
+                        ? s.oneColumn
+                        : {}),
+                    }}
+                  >
+                    <Campo label="Periodicidad">
+                      <select
+                        value={formPlan.periodicidad}
+                        onChange={(e) =>
+                          cambiarPeriodicidadPlan(
+                            e.target.value
+                          )
+                        }
+                        style={s.input}
+                      >
+                        <option>Diaria</option>
+                        <option>Semanal</option>
+                        <option>Quincenal</option>
+                        <option>Mensual</option>
+                        <option>Trimestral</option>
+                        <option>Semestral</option>
+                        <option>Anual</option>
+                      </select>
+                    </Campo>
+
+                    <Campo label="Duración">
+                      <div style={s.durationGrid}>
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={formPlan.duracionCantidad}
+                          onChange={(e) =>
+                            setFormPlan(
+                              (actual) => ({
+                                ...actual,
+                                duracionCantidad: e.target.value,
+                              })
+                            )
+                          }
+                          style={s.input}
+                        />
+
+                        <select
+                          value={formPlan.duracionUnidad}
+                          onChange={(e) =>
+                            setFormPlan(
+                              (actual) => ({
+                                ...actual,
+                                duracionUnidad: e.target.value,
+                              })
+                            )
+                          }
+                          style={s.input}
+                        >
+                          <option>Días</option>
+                          <option>Semanas</option>
+                          <option>Meses</option>
+                          <option>Años</option>
+                        </select>
+                      </div>
+                    </Campo>
+
+                    <Campo label="Avisar antes de vencer">
+                      <div style={s.inputSuffix}>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={formPlan.diasAviso}
+                          onChange={(e) =>
+                            setFormPlan(
+                              (actual) => ({
+                                ...actual,
+                                diasAviso: e.target.value,
+                              })
+                            )
+                          }
+                          style={s.input}
+                        />
+
+                        <span>días</span>
+                      </div>
+                    </Campo>
+
+                    <Campo label="Días de gracia">
+                      <div style={s.inputSuffix}>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={formPlan.diasGracia}
+                          onChange={(e) =>
+                            setFormPlan(
+                              (actual) => ({
+                                ...actual,
+                                diasGracia: e.target.value,
+                              })
+                            )
+                          }
+                          style={s.input}
+                        />
+
+                        <span>días</span>
+                      </div>
+                    </Campo>
+                  </div>
+                </div>
+              </div>
+
+              <div style={s.formBottomBar}>
+                <label style={s.checkRowPremium}>
+                  <input
+                    type="checkbox"
+                    checked={formPlan.activo}
+                    onChange={(e) =>
+                      setFormPlan(
+                        (actual) => ({
+                          ...actual,
+                          activo: e.target.checked,
+                        })
+                      )
+                    }
+                  />
+
+                  <span>
+                    Plan activo y disponible para asignar
+                  </span>
+                </label>
+
+                <div
+                  style={{
+                    ...s.actions,
+                    ...(esMovil
+                      ? s.actionsMobile
+                      : {}),
+                  }}
+                >
+                  {planEditandoId && (
+                    <button
+                      type="button"
+                      onClick={limpiarFormPlan}
+                      style={s.secondaryBtn}
+                    >
+                      Limpiar formulario
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={guardarPlan}
+                    disabled={guardando}
+                    style={{
+                      ...s.primaryBtn,
+                      opacity: guardando ? 0.6 : 1,
+                    }}
+                  >
+                    {guardando
+                      ? "Guardando..."
+                      : planEditandoId
+                      ? "Actualizar plan"
+                      : "Crear plan"}
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <aside style={s.planPreviewPanel}>
+              <span style={s.sectionEyebrow}>
+                VISTA PREVIA
+              </span>
+
+              <h3 style={s.previewTitle}>
+                {formPlan.nombre.trim() ||
+                  "Tu nuevo plan"}
+              </h3>
+
+              <div style={s.previewPriceRow}>
+                <span style={s.previewCurrency}>
+                  B/.
+                </span>
+                <strong style={s.previewPrice}>
+                  {Number(
+                    formPlan.precio || 0
+                  ).toFixed(2)}
+                </strong>
+              </div>
+
+              <span style={s.previewBadge}>
+                {formPlan.periodicidad} · {formPlan.duracionCantidad} {formPlan.duracionUnidad}
+              </span>
+
+              <p style={s.previewDescription}>
+                {formPlan.descripcion.trim() ||
+                  "Agrega una descripción comercial breve para explicar qué incluye este plan."}
+              </p>
+
+              <div style={s.previewMetaList}>
+                <div style={s.previewMetaItem}>
+                  <span style={s.previewMetaLabel}>
+                    Aviso previo
+                  </span>
+                  <strong style={s.previewMetaValue}>
+                    {formPlan.diasAviso || 0} días
+                  </strong>
+                </div>
+
+                <div style={s.previewMetaItem}>
+                  <span style={s.previewMetaLabel}>
+                    Gracia
+                  </span>
+                  <strong style={s.previewMetaValue}>
+                    {formPlan.diasGracia || 0} días
+                  </strong>
+                </div>
+
+                <div style={s.previewMetaItem}>
+                  <span style={s.previewMetaLabel}>
+                    Estado
+                  </span>
+                  <strong style={s.previewMetaValue}>
+                    {formPlan.activo ? "Activo" : "Inactivo"}
+                  </strong>
+                </div>
+              </div>
+
+              <div style={s.previewNoteBox}>
+                <strong style={s.previewNoteTitle}>
+                  Recomendación KONAX
+                </strong>
+                <p style={s.previewNoteText}>
+                  Mantén nombres simples, precios claros y una periodicidad fácil de entender para el cliente.
+                </p>
+              </div>
+            </aside>
+          </section>
+
+          <section style={s.cardPremiumStrong}>
+            <div style={s.sectionHeaderPremium}>
+              <div>
+                <span style={s.sectionEyebrow}>
+                  CATÁLOGO
+                </span>
+                <h2 style={s.sectionTitleLarge}>
+                  Planes disponibles
+                </h2>
+                <p style={s.sectionTextSoft}>
+                  Consulta, edita o cambia el estado de cada plan de forma más visual.
+                </p>
+              </div>
+
+              <span style={s.counterLarge}>
                 {planes.length}
               </span>
             </div>
 
             {planes.length === 0 ? (
-              <div style={s.empty}>
-                Todavía no hay
-                planes creados.
+              <div style={s.emptyPremium}>
+                Todavía no hay planes creados.
               </div>
             ) : (
               <div
-                style={s.planList}
+                style={{
+                  ...s.planCatalogGrid,
+                  ...(esMovil ? s.oneColumn : {}),
+                }}
               >
-                {planes.map(
-                  (plan) => (
-                    <article
-                      key={plan.id}
-                      style={s.planCard}
-                    >
+                {planes.map((plan) => (
+                  <article key={plan.id} style={s.planCatalogCard}>
+                    <div style={s.planCatalogTop}>
                       <div>
-                        <div
-                          style={
-                            s.planTitleRow
-                          }
-                        >
-                          <strong
-                            style={
-                              s.planName
-                            }
-                          >
-                            {
-                              plan.nombre
-                            }
-                          </strong>
-
+                        <div style={s.planCatalogChips}>
                           <span
-                            style={
-                              plan.activo
-                                ? s.badgeActive
-                                : s.badgeInactive
-                            }
+                            style={plan.activo ? s.badgeActive : s.badgeInactive}
                           >
-                            {plan.activo
-                              ? "Activo"
-                              : "Inactivo"}
+                            {plan.activo ? "Activo" : "Inactivo"}
+                          </span>
+
+                          <span style={s.planPeriodBadge}>
+                            {plan.periodicidad || "Mensual"}
                           </span>
                         </div>
 
-                        <strong
-                          style={
-                            s.planPrice
-                          }
-                        >
-                          B/.{" "}
-                          {Number(
-                            plan.precio ||
-                              0
-                          ).toFixed(
-                            2
-                          )}
-                        </strong>
+                        <h3 style={s.planCatalogTitle}>
+                          {plan.nombre}
+                        </h3>
+                      </div>
 
-                        <span
-                          style={
-                            s.planMeta
-                          }
-                        >
-                          {plan.periodicidad ||
-                            "Mensual"}{" "}
-                          ·{" "}
-                          {Number(
-                            plan.duracion_cantidad ||
-                              1
-                          )}{" "}
-                          {plan.duracion_unidad ||
-                            "Meses"}
+                      <div style={s.planCatalogPriceBox}>
+                        <span style={s.planCatalogPriceLabel}>
+                          Precio
                         </span>
+                        <strong style={s.planCatalogPrice}>
+                          B/. {Number(plan.precio || 0).toFixed(2)}
+                        </strong>
+                      </div>
+                    </div>
 
-                        {plan.descripcion && (
-                          <p
-                            style={
-                              s.planDescription
-                            }
-                          >
-                            {
-                              plan.descripcion
-                            }
-                          </p>
-                        )}
+                    <p style={s.planCatalogDescription}>
+                      {plan.descripcion ||
+                        "Sin descripción registrada."}
+                    </p>
+
+                    <div style={s.planCatalogMetaGrid}>
+                      <div style={s.planCatalogMetaCard}>
+                        <span style={s.planCatalogMetaLabel}>
+                          Duración
+                        </span>
+                        <strong style={s.planCatalogMetaValue}>
+                          {Number(plan.duracion_cantidad || 1)} {plan.duracion_unidad || "Meses"}
+                        </strong>
                       </div>
 
-                      <div
-                        style={{
-                          ...s.actions,
-                          ...(esMovil
-                            ? s.actionsMobile
-                            : {}),
-                        }}
+                      <div style={s.planCatalogMetaCard}>
+                        <span style={s.planCatalogMetaLabel}>
+                          Aviso
+                        </span>
+                        <strong style={s.planCatalogMetaValue}>
+                          {Number(plan.dias_aviso ?? DIAS_AVISO_DEFAULT)} días
+                        </strong>
+                      </div>
+
+                      <div style={s.planCatalogMetaCard}>
+                        <span style={s.planCatalogMetaLabel}>
+                          Gracia
+                        </span>
+                        <strong style={s.planCatalogMetaValue}>
+                          {Number(plan.dias_gracia ?? DIAS_GRACIA_DEFAULT)} días
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        ...s.planCatalogActions,
+                        ...(esMovil ? s.oneColumn : {}),
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => editarPlan(plan)}
+                        style={s.secondaryBtn}
                       >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            editarPlan(
-                              plan
-                            )
-                          }
-                          style={
-                            s.secondaryBtn
-                          }
-                        >
-                          Editar
-                        </button>
+                        Editar plan
+                      </button>
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            cambiarEstadoPlan(
-                              plan
-                            )
-                          }
-                          style={
-                            plan.activo
-                              ? s.warningBtn
-                              : s.greenOutlineBtn
-                          }
-                        >
-                          {plan.activo
-                            ? "Desactivar"
-                            : "Activar"}
-                        </button>
-                      </div>
-                    </article>
-                  )
-                )}
+                      <button
+                        type="button"
+                        onClick={() => cambiarEstadoPlan(plan)}
+                        style={
+                          plan.activo
+                            ? s.warningBtn
+                            : s.greenOutlineBtn
+                        }
+                      >
+                        {plan.activo ? "Desactivar" : "Activar"}
+                      </button>
+                    </div>
+                  </article>
+                ))}
               </div>
             )}
           </section>
@@ -4284,6 +4357,427 @@ const s = {
     color: "#758079",
     fontSize: 11,
     textAlign: "center",
+  },
+
+
+  planSummaryStrip: {
+    marginTop: 14,
+  },
+
+  planSummaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4,minmax(0,1fr))",
+    gap: 10,
+  },
+
+  planMiniStat: {
+    minHeight: 92,
+    padding: 16,
+    border: "1px solid #dbe7df",
+    borderRadius: 18,
+    background: "linear-gradient(135deg,#ffffff,#f6fbf8)",
+    boxShadow: "0 12px 28px rgba(15,23,42,.04)",
+  },
+
+  planMiniHighlight: {
+    minHeight: 92,
+    padding: 16,
+    border: "1px solid #cfe2d5",
+    borderRadius: 18,
+    background: "linear-gradient(135deg,#173c2a,#16834f)",
+    color: "#ffffff",
+    boxShadow: "0 14px 34px rgba(22,131,79,.16)",
+  },
+
+  planMiniLabel: {
+    display: "block",
+    fontSize: 9.5,
+    fontWeight: 900,
+    color: "#728078",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+
+  planMiniValue: {
+    display: "block",
+    marginTop: 8,
+    fontSize: 28,
+    color: "#1a2821",
+    lineHeight: 1,
+  },
+
+  planMiniValueGreen: {
+    display: "block",
+    marginTop: 8,
+    fontSize: 28,
+    color: "#16834f",
+    lineHeight: 1,
+  },
+
+  planMiniValueMuted: {
+    display: "block",
+    marginTop: 8,
+    fontSize: 28,
+    color: "#7a867f",
+    lineHeight: 1,
+  },
+
+  planMiniValueDark: {
+    display: "block",
+    marginTop: 8,
+    fontSize: 24,
+    color: "#ffffff",
+    lineHeight: 1.1,
+  },
+
+  planMiniHint: {
+    display: "block",
+    marginTop: 6,
+    color: "rgba(255,255,255,.75)",
+    fontSize: 9.5,
+    lineHeight: 1.45,
+  },
+
+  planAdminGrid: {
+    marginTop: 14,
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1.55fr) minmax(280px,.85fr)",
+    gap: 16,
+    alignItems: "start",
+  },
+
+  cardPremiumStrong: {
+    marginTop: 0,
+    padding: 20,
+    border: "1px solid #d8e6dd",
+    borderRadius: 24,
+    background: "linear-gradient(180deg,#ffffff 0%,#fbfdfc 100%)",
+    boxShadow: "0 20px 45px rgba(15,23,42,.05)",
+  },
+
+  sectionHeaderPremium: {
+    marginBottom: 18,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 14,
+    flexWrap: "wrap",
+  },
+
+  sectionTitleLarge: {
+    margin: "4px 0 0",
+    fontSize: 24,
+    color: "#17211c",
+    lineHeight: 1.08,
+  },
+
+  sectionTextSoft: {
+    margin: "7px 0 0",
+    color: "#718078",
+    fontSize: 11,
+    lineHeight: 1.5,
+    maxWidth: 620,
+  },
+
+  planFormBlock: {
+    display: "grid",
+    gap: 14,
+  },
+
+  formSectionCard: {
+    padding: 16,
+    border: "1px solid #e2ebe5",
+    borderRadius: 18,
+    background: "#ffffff",
+  },
+
+  formSectionHeader: {
+    marginBottom: 14,
+    display: "grid",
+    gridTemplateColumns: "44px minmax(0,1fr)",
+    gap: 12,
+    alignItems: "start",
+  },
+
+  formSectionIndex: {
+    width: 44,
+    height: 44,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 14,
+    background: "#eaf7ef",
+    color: "#16834f",
+    fontWeight: 950,
+    fontSize: 13,
+  },
+
+  formSectionTitle: {
+    display: "block",
+    color: "#17211c",
+    fontSize: 14,
+  },
+
+  formSectionText: {
+    margin: "4px 0 0",
+    color: "#728078",
+    fontSize: 10.5,
+    lineHeight: 1.45,
+  },
+
+  formBottomBar: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTop: "1px solid #e7ede9",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+
+  checkRowPremium: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    color: "#334139",
+    fontSize: 11,
+    fontWeight: 800,
+  },
+
+  planPreviewPanel: {
+    position: "sticky",
+    top: 16,
+    padding: 20,
+    border: "1px solid #d7e7dc",
+    borderRadius: 24,
+    background: "linear-gradient(180deg,#173c2a 0%,#16834f 100%)",
+    color: "#ffffff",
+    boxShadow: "0 24px 50px rgba(15,61,35,.18)",
+  },
+
+  previewTitle: {
+    margin: "6px 0 0",
+    fontSize: 28,
+    lineHeight: 1.05,
+  },
+
+  previewPriceRow: {
+    marginTop: 14,
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 4,
+  },
+
+  previewCurrency: {
+    marginTop: 8,
+    color: "rgba(255,255,255,.82)",
+    fontSize: 18,
+    fontWeight: 900,
+  },
+
+  previewPrice: {
+    fontSize: 42,
+    lineHeight: 1,
+    letterSpacing: -1,
+  },
+
+  previewBadge: {
+    display: "inline-block",
+    marginTop: 10,
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,.14)",
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: 900,
+  },
+
+  previewDescription: {
+    margin: "14px 0 0",
+    color: "rgba(255,255,255,.82)",
+    fontSize: 11,
+    lineHeight: 1.6,
+  },
+
+  previewMetaList: {
+    marginTop: 16,
+    display: "grid",
+    gap: 8,
+  },
+
+  previewMetaItem: {
+    padding: "11px 12px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 14,
+    background: "rgba(255,255,255,.11)",
+  },
+
+  previewMetaLabel: {
+    color: "rgba(255,255,255,.75)",
+    fontSize: 10,
+  },
+
+  previewMetaValue: {
+    color: "#ffffff",
+    fontSize: 11,
+  },
+
+  previewNoteBox: {
+    marginTop: 18,
+    padding: 14,
+    borderRadius: 16,
+    background: "rgba(0,0,0,.12)",
+    border: "1px solid rgba(255,255,255,.12)",
+  },
+
+  previewNoteTitle: {
+    display: "block",
+    fontSize: 11,
+  },
+
+  previewNoteText: {
+    margin: "6px 0 0",
+    color: "rgba(255,255,255,.82)",
+    fontSize: 10.5,
+    lineHeight: 1.55,
+  },
+
+  counterLarge: {
+    minWidth: 42,
+    height: 42,
+    padding: "0 12px",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 999,
+    background: "#eaf7ef",
+    color: "#16834f",
+    fontWeight: 950,
+    fontSize: 15,
+  },
+
+  emptyPremium: {
+    padding: 28,
+    border: "1px dashed #d3ddd6",
+    borderRadius: 16,
+    background: "#f9fbfa",
+    color: "#758079",
+    fontSize: 12,
+    textAlign: "center",
+  },
+
+  planCatalogGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2,minmax(0,1fr))",
+    gap: 14,
+  },
+
+  planCatalogCard: {
+    padding: 16,
+    border: "1px solid #dbe6df",
+    borderRadius: 20,
+    background: "linear-gradient(180deg,#ffffff 0%,#f8fbf9 100%)",
+    boxShadow: "0 12px 28px rgba(15,23,42,.04)",
+  },
+
+  planCatalogTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+
+  planCatalogChips: {
+    display: "flex",
+    gap: 7,
+    flexWrap: "wrap",
+  },
+
+  planPeriodBadge: {
+    padding: "4px 8px",
+    borderRadius: 999,
+    background: "#eef5f1",
+    color: "#516058",
+    fontSize: 9,
+    fontWeight: 900,
+  },
+
+  planCatalogTitle: {
+    margin: "10px 0 0",
+    color: "#17211c",
+    fontSize: 19,
+    lineHeight: 1.15,
+  },
+
+  planCatalogPriceBox: {
+    minWidth: 108,
+    padding: "10px 11px",
+    borderRadius: 14,
+    background: "#edf8f1",
+    textAlign: "right",
+  },
+
+  planCatalogPriceLabel: {
+    display: "block",
+    color: "#6c7a72",
+    fontSize: 9,
+    fontWeight: 800,
+    textTransform: "uppercase",
+  },
+
+  planCatalogPrice: {
+    display: "block",
+    marginTop: 5,
+    color: "#16834f",
+    fontSize: 22,
+    lineHeight: 1,
+  },
+
+  planCatalogDescription: {
+    minHeight: 38,
+    margin: "12px 0 0",
+    color: "#6e7b74",
+    fontSize: 10.5,
+    lineHeight: 1.55,
+  },
+
+  planCatalogMetaGrid: {
+    marginTop: 14,
+    display: "grid",
+    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+    gap: 8,
+  },
+
+  planCatalogMetaCard: {
+    padding: "10px 10px",
+    border: "1px solid #e3ebe6",
+    borderRadius: 14,
+    background: "#ffffff",
+  },
+
+  planCatalogMetaLabel: {
+    display: "block",
+    color: "#6e7b74",
+    fontSize: 9,
+    fontWeight: 800,
+    textTransform: "uppercase",
+  },
+
+  planCatalogMetaValue: {
+    display: "block",
+    marginTop: 5,
+    color: "#1a2821",
+    fontSize: 11,
+    lineHeight: 1.3,
+  },
+
+  planCatalogActions: {
+    marginTop: 16,
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 9,
   },
 
   version: {
