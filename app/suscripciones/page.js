@@ -1,31 +1,49 @@
 "use client";
 
-// KONAX · Suscripciones / Membresías · 2026.08.07-S
-// MISMO archivo: pantalla principal + nueva membresía + administrar planes.
-// No usa /planes y no necesita una carpeta nueva.
+// KONAX · Membresías · Versión Premium
+// VERSION 2026.08.07-T
+//
+// CAMBIOS PRINCIPALES:
+// - NO muestra una lista interminable de alumnos/membresías.
+// - El administrador debe buscar por nombre, cédula, teléfono o plan.
+// - Solo aparecen resultados cuando se ejecuta una búsqueda.
+// - Resultados limitados para mantener la pantalla limpia.
+// - Diseño premium y responsive para escritorio y móvil.
+// - Mantiene Nueva membresía + Administrar planes dentro de /suscripciones.
+// - "Regresar" vuelve siempre a Membresías, no al panel maestro.
 
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import {
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const DIAS_AVISO = 5;
-const DIAS_GRACIA = 3;
+const VERSION = "2026.08.07-T";
+const LIMITE_RESULTADOS = 10;
+const DIAS_AVISO_DEFAULT = 5;
+const DIAS_GRACIA_DEFAULT = 3;
 
-const MEMBRESIA_INICIAL = {
+const FORM_MEMBRESIA_INICIAL = {
   planId: "",
   fechaInicio: "",
   descripcion: "",
 };
 
-const PLAN_INICIAL = {
+const FORM_PLAN_INICIAL = {
   nombre: "",
   descripcion: "",
   precio: "",
   periodicidad: "Mensual",
   duracionCantidad: "1",
   duracionUnidad: "Meses",
-  diasAviso: String(DIAS_AVISO),
-  diasGracia: String(DIAS_GRACIA),
+  diasAviso: String(DIAS_AVISO_DEFAULT),
+  diasGracia: String(DIAS_GRACIA_DEFAULT),
   activo: true,
 };
 
@@ -48,21 +66,35 @@ function fechaHoy() {
 
 function fechaLocal(fechaTexto) {
   if (!fechaTexto) return null;
-  const [a, m, d] = String(fechaTexto).slice(0, 10).split("-").map(Number);
-  if (!a || !m || !d) return null;
-  return new Date(a, m - 1, d, 12, 0, 0, 0);
+
+  const [anio, mes, dia] = String(fechaTexto)
+    .slice(0, 10)
+    .split("-")
+    .map(Number);
+
+  if (!anio || !mes || !dia) return null;
+
+  return new Date(anio, mes - 1, dia, 12, 0, 0, 0);
 }
 
 function formatearFecha(fechaTexto) {
   if (!fechaTexto) return "-";
-  const [a, m, d] = String(fechaTexto).slice(0, 10).split("-");
-  return a && m && d ? `${d}/${m}/${a}` : String(fechaTexto);
+
+  const partes = String(fechaTexto)
+    .slice(0, 10)
+    .split("-");
+
+  if (partes.length !== 3) return String(fechaTexto);
+
+  return `${partes[2]}/${partes[1]}/${partes[0]}`;
 }
 
-function sumarDias(fechaTexto, dias) {
+function sumarDiasFecha(fechaTexto, dias) {
   const fecha = fechaLocal(fechaTexto);
   if (!fecha) return "";
+
   fecha.setDate(fecha.getDate() + Number(dias || 0));
+
   return [
     fecha.getFullYear(),
     String(fecha.getMonth() + 1).padStart(2, "0"),
@@ -70,14 +102,23 @@ function sumarDias(fechaTexto, dias) {
   ].join("-");
 }
 
-function sumarMeses(fechaTexto, meses) {
+function sumarMesesFecha(fechaTexto, meses) {
   const fecha = fechaLocal(fechaTexto);
   if (!fecha) return "";
+
   const diaOriginal = fecha.getDate();
+
   fecha.setDate(1);
   fecha.setMonth(fecha.getMonth() + Number(meses || 0));
-  const ultimoDia = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0).getDate();
+
+  const ultimoDia = new Date(
+    fecha.getFullYear(),
+    fecha.getMonth() + 1,
+    0
+  ).getDate();
+
   fecha.setDate(Math.min(diaOriginal, ultimoDia));
+
   return [
     fecha.getFullYear(),
     String(fecha.getMonth() + 1).padStart(2, "0"),
@@ -87,48 +128,87 @@ function sumarMeses(fechaTexto, meses) {
 
 function calcularVencimiento(fechaBase, cantidad, unidad) {
   if (!fechaBase) return "";
-  const n = Math.max(1, Number(cantidad || 1));
 
-  if (unidad === "Días") return sumarDias(fechaBase, n);
-  if (unidad === "Semanas") return sumarDias(fechaBase, n * 7);
-  if (unidad === "Años") return sumarMeses(fechaBase, n * 12);
-  return sumarMeses(fechaBase, n);
+  const numero = Math.max(1, Number(cantidad || 1));
+
+  switch (unidad) {
+    case "Días":
+      return sumarDiasFecha(fechaBase, numero);
+
+    case "Semanas":
+      return sumarDiasFecha(fechaBase, numero * 7);
+
+    case "Años":
+      return sumarMesesFecha(fechaBase, numero * 12);
+
+    case "Meses":
+    default:
+      return sumarMesesFecha(fechaBase, numero);
+  }
 }
 
-function diasParaVencer(fechaTexto) {
+function calcularDiasParaVencer(fechaTexto) {
   const vence = fechaLocal(fechaTexto);
   const hoy = fechaLocal(fechaHoy());
+
   if (!vence || !hoy) return 0;
-  return Math.ceil((vence.getTime() - hoy.getTime()) / 86400000);
+
+  return Math.ceil(
+    (vence.getTime() - hoy.getTime()) / 86400000
+  );
 }
 
-function estadoAutomatico(item) {
+function obtenerEstadoAutomatico(item) {
   const guardado = normalizar(item.estado);
+
   if (guardado === "cancelado") return "Cancelado";
   if (guardado === "suspendido") return "Suspendido";
   if (guardado === "pendiente") return "Pendiente";
 
-  const aviso = Math.max(0, Number(item.dias_aviso ?? DIAS_AVISO));
-  const gracia = Math.max(0, Number(item.dias_gracia ?? DIAS_GRACIA));
-  const dias = diasParaVencer(item.fecha_vencimiento);
+  const diasAviso = Math.max(
+    0,
+    Number(item.dias_aviso ?? DIAS_AVISO_DEFAULT)
+  );
 
-  if (dias < -gracia) return "Suspendido";
+  const diasGracia = Math.max(
+    0,
+    Number(item.dias_gracia ?? DIAS_GRACIA_DEFAULT)
+  );
+
+  const dias = calcularDiasParaVencer(item.fecha_vencimiento);
+
+  if (dias < -diasGracia) return "Suspendido";
   if (dias < 0) return "Vencida";
-  if (dias <= aviso) return "Próxima a vencer";
+  if (dias <= diasAviso) return "Próxima a vencer";
+
   return "Activo";
 }
 
-function duracionPorPeriodicidad(periodicidad) {
+function configurarDuracion(periodicidad) {
   const mapa = {
-    Diaria: ["1", "Días"],
-    Semanal: ["1", "Semanas"],
-    Quincenal: ["15", "Días"],
-    Mensual: ["1", "Meses"],
-    Trimestral: ["3", "Meses"],
-    Semestral: ["6", "Meses"],
-    Anual: ["1", "Años"],
+    Diaria: { cantidad: "1", unidad: "Días" },
+    Semanal: { cantidad: "1", unidad: "Semanas" },
+    Quincenal: { cantidad: "15", unidad: "Días" },
+    Mensual: { cantidad: "1", unidad: "Meses" },
+    Trimestral: { cantidad: "3", unidad: "Meses" },
+    Semestral: { cantidad: "6", unidad: "Meses" },
+    Anual: { cantidad: "1", unidad: "Años" },
   };
+
   return mapa[periodicidad] || mapa.Mensual;
+}
+
+function colorEstado(estado) {
+  const mapa = {
+    Activo: { fondo: "#eaf8ef", color: "#147243" },
+    "Próxima a vencer": { fondo: "#fff7df", color: "#8b5b00" },
+    Pendiente: { fondo: "#eaf4ff", color: "#1e5f91" },
+    Vencida: { fondo: "#fff0e5", color: "#9b4314" },
+    Suspendido: { fondo: "#ffeded", color: "#a23030" },
+    Cancelado: { fondo: "#f0f2f1", color: "#58635d" },
+  };
+
+  return mapa[estado] || mapa.Cancelado;
 }
 
 function SuscripcionesContenido() {
@@ -141,8 +221,11 @@ function SuscripcionesContenido() {
   const [empresaId, setEmpresaId] = useState("");
   const [empresaNombre, setEmpresaNombre] = useState("");
   const [vista, setVista] = useState(
-    modoUrl === "nueva" || clienteIdUrl ? "nueva" : "principal"
+    modoUrl === "nueva" || Boolean(clienteIdUrl)
+      ? "nueva"
+      : "principal"
   );
+
   const [esMovil, setEsMovil] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -154,30 +237,38 @@ function SuscripcionesContenido() {
   const [buscarCliente, setBuscarCliente] = useState("");
   const [resultadosClientes, setResultadosClientes] = useState([]);
 
-  const [busqueda, setBusqueda] = useState("");
+  const [textoBusqueda, setTextoBusqueda] = useState("");
+  const [busquedaAplicada, setBusquedaAplicada] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("Todos");
 
   const [formMembresia, setFormMembresia] = useState({
-    ...MEMBRESIA_INICIAL,
+    ...FORM_MEMBRESIA_INICIAL,
     fechaInicio: fechaHoy(),
   });
 
-  const [formPlan, setFormPlan] = useState(PLAN_INICIAL);
+  const [formPlan, setFormPlan] = useState(FORM_PLAN_INICIAL);
   const [planEditandoId, setPlanEditandoId] = useState(null);
 
   useEffect(() => {
     inicializar();
 
-    const medir = () => setEsMovil(window.innerWidth <= 820);
+    const medir = () => {
+      setEsMovil(window.innerWidth <= 840);
+    };
+
     medir();
     window.addEventListener("resize", medir);
-    return () => window.removeEventListener("resize", medir);
+
+    return () => {
+      window.removeEventListener("resize", medir);
+    };
   }, [clienteIdUrl]);
 
   async function inicializar() {
     setCargando(true);
 
     const id = localStorage.getItem("empresaId");
+
     if (!id) {
       alert("No hay una empresa activa. Inicie sesión nuevamente.");
       router.replace("/login");
@@ -219,6 +310,7 @@ function SuscripcionesContenido() {
     }
 
     const nombre = data?.nombre || nombreLocal || "Tu gimnasio";
+
     setEmpresaNombre(nombre);
     localStorage.setItem("empresaNombre", nombre);
   }
@@ -256,30 +348,53 @@ function SuscripcionesContenido() {
     }
 
     const lista = data || [];
-    const ids = [...new Set(lista.map((x) => x.cliente_id).filter(Boolean))];
+
+    const idsClientes = [
+      ...new Set(
+        lista
+          .map((item) => item.cliente_id)
+          .filter(Boolean)
+      ),
+    ];
 
     let clientes = [];
-    if (ids.length > 0) {
-      const { data: clientesData, error: errorClientes } = await supabase
+
+    if (idsClientes.length > 0) {
+      const { data: dataClientes, error: errorClientes } = await supabase
         .from("clientes")
         .select("id,nombre,cedula,telefono,correo,estado")
         .eq("empresa_id", id)
-        .in("id", ids);
+        .in("id", idsClientes);
 
-      if (!errorClientes) clientes = clientesData || [];
+      if (!errorClientes) {
+        clientes = dataClientes || [];
+      }
     }
 
-    const mapa = new Map(clientes.map((x) => [String(x.id), x]));
+    const mapaClientes = new Map(
+      clientes.map((cliente) => [String(cliente.id), cliente])
+    );
 
     setSuscripciones(
       lista.map((item) => {
-        const cliente = mapa.get(String(item.cliente_id));
+        const cliente = mapaClientes.get(String(item.cliente_id));
+
         return {
           ...item,
-          cliente: item.cliente || cliente?.nombre || "Alumno",
-          cedula: item.cedula || cliente?.cedula || "",
-          telefono: cliente?.telefono || "",
-          correo: cliente?.correo || "",
+          cliente:
+            item.cliente ||
+            cliente?.nombre ||
+            "Alumno",
+          cedula:
+            item.cedula ||
+            cliente?.cedula ||
+            "",
+          telefono:
+            cliente?.telefono ||
+            "",
+          correo:
+            cliente?.correo ||
+            "",
         };
       })
     );
@@ -294,7 +409,10 @@ function SuscripcionesContenido() {
       .maybeSingle();
 
     if (error || !data) {
-      alert("No se pudo cargar el alumno: " + (error?.message || "Alumno no encontrado."));
+      alert(
+        "No se pudo cargar el alumno: " +
+          (error?.message || "Alumno no encontrado.")
+      );
       return;
     }
 
@@ -305,8 +423,9 @@ function SuscripcionesContenido() {
     if (!empresaId) return;
 
     const texto = buscarCliente.trim();
-    if (texto.length < 3) {
-      alert("Escriba por lo menos tres caracteres.");
+
+    if (texto.length < 2) {
+      alert("Escriba por lo menos dos caracteres.");
       return;
     }
 
@@ -316,8 +435,10 @@ function SuscripcionesContenido() {
       .from("clientes")
       .select("id,nombre,cedula,telefono,correo,estado")
       .eq("empresa_id", empresaId)
-      .or(`nombre.ilike.%${seguro}%,cedula.ilike.%${seguro}%,telefono.ilike.%${seguro}%`)
-      .limit(12);
+      .or(
+        `nombre.ilike.%${seguro}%,cedula.ilike.%${seguro}%,telefono.ilike.%${seguro}%`
+      )
+      .limit(10);
 
     if (error) {
       alert("Error buscando alumnos: " + error.message);
@@ -341,13 +462,15 @@ function SuscripcionesContenido() {
   const planSeleccionado = useMemo(
     () =>
       planesActivos.find(
-        (plan) => String(plan.id) === String(formMembresia.planId)
+        (plan) =>
+          String(plan.id) === String(formMembresia.planId)
       ) || null,
     [planesActivos, formMembresia.planId]
   );
 
   const vencimientoNuevo = useMemo(() => {
     if (!planSeleccionado || !formMembresia.fechaInicio) return "";
+
     return calcularVencimiento(
       formMembresia.fechaInicio,
       planSeleccionado.duracion_cantidad,
@@ -356,68 +479,137 @@ function SuscripcionesContenido() {
   }, [planSeleccionado, formMembresia.fechaInicio]);
 
   const resumen = useMemo(() => {
-    const r = { activas: 0, proximas: 0, vencidas: 0, suspendidas: 0 };
+    const r = {
+      activas: 0,
+      proximas: 0,
+      vencidas: 0,
+      suspendidas: 0,
+      pendientes: 0,
+    };
 
     suscripciones.forEach((item) => {
-      const estado = estadoAutomatico(item);
+      const estado = obtenerEstadoAutomatico(item);
+
       if (estado === "Activo") r.activas += 1;
       if (estado === "Próxima a vencer") r.proximas += 1;
       if (estado === "Vencida") r.vencidas += 1;
       if (estado === "Suspendido") r.suspendidas += 1;
+      if (estado === "Pendiente") r.pendientes += 1;
     });
 
     return r;
   }, [suscripciones]);
 
-  const membresiasFiltradas = useMemo(() => {
-    const texto = normalizar(busqueda);
+  const resultadosBusqueda = useMemo(() => {
+    const texto = normalizar(busquedaAplicada);
+
+    if (!texto) return [];
+
+    return suscripciones
+      .filter((item) => {
+        const estado = obtenerEstadoAutomatico(item);
+
+        const bolsa = normalizar(
+          `${item.cliente || ""} ${item.cedula || ""} ${
+            item.telefono || ""
+          } ${item.plan || ""} ${estado}`
+        );
+
+        const coincideTexto = bolsa.includes(texto);
+        const coincideEstado =
+          filtroEstado === "Todos" || filtroEstado === estado;
+
+        return coincideTexto && coincideEstado;
+      })
+      .slice(0, LIMITE_RESULTADOS);
+  }, [suscripciones, busquedaAplicada, filtroEstado]);
+
+  const totalCoincidencias = useMemo(() => {
+    const texto = normalizar(busquedaAplicada);
+
+    if (!texto) return 0;
 
     return suscripciones.filter((item) => {
-      const estado = estadoAutomatico(item);
-      const coincideTexto = normalizar(
-        `${item.cliente || ""} ${item.cedula || ""} ${item.telefono || ""} ${item.plan || ""} ${estado}`
-      ).includes(texto);
-      const coincideEstado = filtroEstado === "Todos" || estado === filtroEstado;
+      const estado = obtenerEstadoAutomatico(item);
+
+      const bolsa = normalizar(
+        `${item.cliente || ""} ${item.cedula || ""} ${
+          item.telefono || ""
+        } ${item.plan || ""} ${estado}`
+      );
+
+      const coincideTexto = bolsa.includes(texto);
+      const coincideEstado =
+        filtroEstado === "Todos" || filtroEstado === estado;
+
       return coincideTexto && coincideEstado;
-    });
-  }, [suscripciones, busqueda, filtroEstado]);
+    }).length;
+  }, [suscripciones, busquedaAplicada, filtroEstado]);
+
+  function ejecutarBusqueda() {
+    const texto = textoBusqueda.trim();
+
+    if (texto.length < 2) {
+      alert("Escriba por lo menos dos caracteres para buscar.");
+      return;
+    }
+
+    setBusquedaAplicada(texto);
+  }
+
+  function limpiarBusqueda() {
+    setTextoBusqueda("");
+    setBusquedaAplicada("");
+    setFiltroEstado("Todos");
+  }
 
   function abrirPrincipal() {
     setVista("principal");
     setClienteSeleccionado(null);
     setBuscarCliente("");
     setResultadosClientes([]);
-    setFormMembresia({ ...MEMBRESIA_INICIAL, fechaInicio: fechaHoy() });
+
+    setFormMembresia({
+      ...FORM_MEMBRESIA_INICIAL,
+      fechaInicio: fechaHoy(),
+    });
+
     router.replace("/suscripciones");
   }
 
   function abrirNueva() {
     setVista("nueva");
-    setFormMembresia({ ...MEMBRESIA_INICIAL, fechaInicio: fechaHoy() });
+
+    setFormMembresia({
+      ...FORM_MEMBRESIA_INICIAL,
+      fechaInicio: fechaHoy(),
+    });
   }
 
   function abrirPlanes() {
     setVista("planes");
-    limpiarPlan();
+    limpiarFormPlan();
   }
 
-  function limpiarPlan() {
-    setFormPlan(PLAN_INICIAL);
+  function limpiarFormPlan() {
+    setFormPlan(FORM_PLAN_INICIAL);
     setPlanEditandoId(null);
   }
 
-  function cambiarPeriodicidad(periodicidad) {
-    const [cantidad, unidad] = duracionPorPeriodicidad(periodicidad);
+  function cambiarPeriodicidadPlan(periodicidad) {
+    const config = configurarDuracion(periodicidad);
+
     setFormPlan((actual) => ({
       ...actual,
       periodicidad,
-      duracionCantidad: cantidad,
-      duracionUnidad: unidad,
+      duracionCantidad: config.cantidad,
+      duracionUnidad: config.unidad,
     }));
   }
 
   function editarPlan(plan) {
     setPlanEditandoId(plan.id);
+
     setFormPlan({
       nombre: plan.nombre || "",
       descripcion: plan.descripcion || "",
@@ -425,10 +617,15 @@ function SuscripcionesContenido() {
       periodicidad: plan.periodicidad || "Mensual",
       duracionCantidad: String(plan.duracion_cantidad || 1),
       duracionUnidad: plan.duracion_unidad || "Meses",
-      diasAviso: String(plan.dias_aviso ?? DIAS_AVISO),
-      diasGracia: String(plan.dias_gracia ?? DIAS_GRACIA),
+      diasAviso: String(
+        plan.dias_aviso ?? DIAS_AVISO_DEFAULT
+      ),
+      diasGracia: String(
+        plan.dias_gracia ?? DIAS_GRACIA_DEFAULT
+      ),
       activo: plan.activo !== false,
     });
+
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -437,15 +634,36 @@ function SuscripcionesContenido() {
 
     const nombre = formPlan.nombre.trim();
     const precio = Number(formPlan.precio);
-    const duracion = Number(formPlan.duracionCantidad);
-    const aviso = Number(formPlan.diasAviso || 0);
-    const gracia = Number(formPlan.diasGracia || 0);
+    const duracionCantidad = Number(formPlan.duracionCantidad);
+    const diasAviso = Number(formPlan.diasAviso || 0);
+    const diasGracia = Number(formPlan.diasGracia || 0);
 
-    if (!nombre) return alert("Escriba el nombre del plan.");
-    if (!Number.isFinite(precio) || precio <= 0) return alert("El precio debe ser mayor que cero.");
-    if (!Number.isInteger(duracion) || duracion <= 0) return alert("La duración debe ser mayor que cero.");
-    if (!Number.isInteger(aviso) || aviso < 0 || !Number.isInteger(gracia) || gracia < 0) {
-      return alert("Revise los días de aviso y de gracia.");
+    if (!nombre) {
+      alert("Escriba el nombre del plan.");
+      return;
+    }
+
+    if (!Number.isFinite(precio) || precio <= 0) {
+      alert("El precio debe ser mayor que cero.");
+      return;
+    }
+
+    if (
+      !Number.isInteger(duracionCantidad) ||
+      duracionCantidad <= 0
+    ) {
+      alert("La duración debe ser un número entero mayor que cero.");
+      return;
+    }
+
+    if (
+      !Number.isInteger(diasAviso) ||
+      diasAviso < 0 ||
+      !Number.isInteger(diasGracia) ||
+      diasGracia < 0
+    ) {
+      alert("Revise los días de aviso y de gracia.");
+      return;
     }
 
     const payload = {
@@ -454,10 +672,10 @@ function SuscripcionesContenido() {
       descripcion: formPlan.descripcion.trim() || null,
       precio,
       periodicidad: formPlan.periodicidad,
-      duracion_cantidad: duracion,
+      duracion_cantidad: duracionCantidad,
       duracion_unidad: formPlan.duracionUnidad,
-      dias_aviso: aviso,
-      dias_gracia: gracia,
+      dias_aviso: diasAviso,
+      dias_gracia: diasGracia,
       activo: Boolean(formPlan.activo),
     };
 
@@ -470,15 +688,21 @@ function SuscripcionesContenido() {
           .update(payload)
           .eq("id", planEditandoId)
           .eq("empresa_id", empresaId);
+
         if (error) throw error;
+
         alert("Plan actualizado correctamente.");
       } else {
-        const { error } = await supabase.from("planes_membresia").insert([payload]);
+        const { error } = await supabase
+          .from("planes_membresia")
+          .insert([payload]);
+
         if (error) throw error;
+
         alert("Plan creado correctamente.");
       }
 
-      limpiarPlan();
+      limpiarFormPlan();
       await cargarPlanes(empresaId);
     } catch (error) {
       alert("No se pudo guardar el plan: " + error.message);
@@ -490,21 +714,32 @@ function SuscripcionesContenido() {
   async function cambiarEstadoPlan(plan) {
     if (!empresaId || guardando) return;
 
-    const nuevoEstado = !Boolean(plan.activo);
-    const accion = nuevoEstado ? "activar" : "desactivar";
-    if (!confirm(`¿Deseas ${accion} el plan \"${plan.nombre}\"?`)) return;
+    const nuevo = !Boolean(plan.activo);
+    const accion = nuevo ? "activar" : "desactivar";
+
+    const confirmar = window.confirm(
+      `¿Deseas ${accion} el plan "${plan.nombre}"?`
+    );
+
+    if (!confirmar) return;
 
     setGuardando(true);
+
     try {
       const { error } = await supabase
         .from("planes_membresia")
-        .update({ activo: nuevoEstado })
+        .update({ activo: nuevo })
         .eq("id", plan.id)
         .eq("empresa_id", empresaId);
+
       if (error) throw error;
+
       await cargarPlanes(empresaId);
     } catch (error) {
-      alert("No se pudo cambiar el estado del plan: " + error.message);
+      alert(
+        "No se pudo cambiar el estado del plan: " +
+          error.message
+      );
     } finally {
       setGuardando(false);
     }
@@ -512,100 +747,166 @@ function SuscripcionesContenido() {
 
   async function crearMembresia() {
     if (!empresaId || guardando) return;
-    if (!clienteSeleccionado?.id) return alert("Seleccione un alumno registrado.");
-    if (!planSeleccionado) return alert("Seleccione un plan de membresía.");
-    if (!formMembresia.fechaInicio || !vencimientoNuevo) return alert("Seleccione una fecha de inicio válida.");
+
+    if (!clienteSeleccionado?.id) {
+      alert("Seleccione un alumno registrado.");
+      return;
+    }
+
+    if (!planSeleccionado) {
+      alert("Seleccione un plan de membresía.");
+      return;
+    }
+
+    if (!formMembresia.fechaInicio || !vencimientoNuevo) {
+      alert("Seleccione una fecha de inicio válida.");
+      return;
+    }
 
     const existente = suscripciones.find((item) => {
-      if (String(item.cliente_id) !== String(clienteSeleccionado.id)) return false;
-      return ["Activo", "Próxima a vencer", "Pendiente"].includes(estadoAutomatico(item));
+      if (
+        String(item.cliente_id) !==
+        String(clienteSeleccionado.id)
+      ) {
+        return false;
+      }
+
+      return [
+        "Activo",
+        "Próxima a vencer",
+        "Pendiente",
+      ].includes(obtenerEstadoAutomatico(item));
     });
 
     if (existente) {
-      return alert(`${clienteSeleccionado.nombre} ya tiene una membresía ${estadoAutomatico(existente).toLowerCase()}.`);
+      alert(
+        `${clienteSeleccionado.nombre} ya tiene una membresía ${obtenerEstadoAutomatico(
+          existente
+        ).toLowerCase()}.`
+      );
+      return;
     }
 
     const precio = Number(planSeleccionado.precio || 0);
-    if (!Number.isFinite(precio) || precio <= 0) return alert("El plan seleccionado no tiene un precio válido.");
+
+    if (!Number.isFinite(precio) || precio <= 0) {
+      alert("El plan seleccionado no tiene un precio válido.");
+      return;
+    }
 
     setGuardando(true);
+
     let comercialCreado = null;
 
     try {
       const numeroCuenta = `MEM-${Date.now()}`;
+
       const responsable =
         localStorage.getItem("usuarioNombre") ||
         localStorage.getItem("adminKonaxNombre") ||
         "Administración";
 
-      const { data: comercial, error: errorComercial } = await supabase
-        .from("informacion_comercial")
-        .insert([
-          {
-            empresa_id: empresaId,
-            cliente_id: clienteSeleccionado.id,
-            plan_membresia_id: planSeleccionado.id,
-            numero_cuenta: numeroCuenta,
-            tipo_producto: "Membresía",
-            descripcion: `${planSeleccionado.nombre} - ${
-              formMembresia.descripcion || planSeleccionado.descripcion || ""
-            }`,
-            modalidad: planSeleccionado.periodicidad,
-            monto_total: precio,
-            saldo_actual: precio,
-            cuota: precio,
-            fecha_inicio: formMembresia.fechaInicio,
-            fecha_vencimiento: vencimientoNuevo,
-            responsable,
-            estado: "Pendiente",
-            estado_servicio: "Pendiente",
-            observacion:
-              formMembresia.descripcion.trim() || planSeleccionado.descripcion || null,
-          },
-        ])
-        .select()
-        .single();
+      const { data: comercial, error: errorComercial } =
+        await supabase
+          .from("informacion_comercial")
+          .insert([
+            {
+              empresa_id: empresaId,
+              cliente_id: clienteSeleccionado.id,
+              plan_membresia_id: planSeleccionado.id,
+              numero_cuenta: numeroCuenta,
+              tipo_producto: "Membresía",
+              descripcion: `${planSeleccionado.nombre} - ${
+                formMembresia.descripcion ||
+                planSeleccionado.descripcion ||
+                ""
+              }`,
+              modalidad: planSeleccionado.periodicidad,
+              monto_total: precio,
+              saldo_actual: precio,
+              cuota: precio,
+              fecha_inicio: formMembresia.fechaInicio,
+              fecha_vencimiento: vencimientoNuevo,
+              responsable,
+              estado: "Pendiente",
+              estado_servicio: "Pendiente",
+              observacion:
+                formMembresia.descripcion.trim() ||
+                planSeleccionado.descripcion ||
+                null,
+            },
+          ])
+          .select()
+          .single();
 
-      if (errorComercial) throw new Error("Error creando información comercial: " + errorComercial.message);
+      if (errorComercial) {
+        throw new Error(
+          "Error creando información comercial: " +
+            errorComercial.message
+        );
+      }
+
       comercialCreado = comercial;
 
-      const { data: suscripcionCreada, error: errorSuscripcion } = await supabase
-        .from("suscripciones")
-        .insert([
-          {
-            empresa_id: empresaId,
-            cliente_id: clienteSeleccionado.id,
-            informacion_comercial_id: comercial.id,
-            plan_membresia_id: planSeleccionado.id,
-            cliente: clienteSeleccionado.nombre,
-            cedula: clienteSeleccionado.cedula || "",
-            plan: planSeleccionado.nombre,
-            tipo_servicio: "Membresía",
-            descripcion:
-              formMembresia.descripcion.trim() || planSeleccionado.descripcion || "",
-            precio,
-            vendedor: responsable,
-            forma_pago: "Pendiente",
-            fecha_inicio: formMembresia.fechaInicio,
-            fecha_vencimiento: vencimientoNuevo,
-            periodicidad: planSeleccionado.periodicidad,
-            duracion_cantidad: Number(planSeleccionado.duracion_cantidad || 1),
-            duracion_unidad: planSeleccionado.duracion_unidad || "Meses",
-            dias_aviso: Number(planSeleccionado.dias_aviso ?? DIAS_AVISO),
-            dias_gracia: Number(planSeleccionado.dias_gracia ?? DIAS_GRACIA),
-            estado: "Pendiente",
-          },
-        ])
-        .select("id,cliente_id,informacion_comercial_id")
-        .single();
+      const { data: suscripcionCreada, error: errorSuscripcion } =
+        await supabase
+          .from("suscripciones")
+          .insert([
+            {
+              empresa_id: empresaId,
+              cliente_id: clienteSeleccionado.id,
+              informacion_comercial_id: comercial.id,
+              plan_membresia_id: planSeleccionado.id,
+              cliente: clienteSeleccionado.nombre,
+              cedula: clienteSeleccionado.cedula || "",
+              plan: planSeleccionado.nombre,
+              tipo_servicio: "Membresía",
+              descripcion:
+                formMembresia.descripcion.trim() ||
+                planSeleccionado.descripcion ||
+                "",
+              precio,
+              vendedor: responsable,
+              forma_pago: "Pendiente",
+              fecha_inicio: formMembresia.fechaInicio,
+              fecha_vencimiento: vencimientoNuevo,
+              periodicidad: planSeleccionado.periodicidad,
+              duracion_cantidad: Number(
+                planSeleccionado.duracion_cantidad || 1
+              ),
+              duracion_unidad:
+                planSeleccionado.duracion_unidad || "Meses",
+              dias_aviso: Number(
+                planSeleccionado.dias_aviso ??
+                  DIAS_AVISO_DEFAULT
+              ),
+              dias_gracia: Number(
+                planSeleccionado.dias_gracia ??
+                  DIAS_GRACIA_DEFAULT
+              ),
+              estado: "Pendiente",
+            },
+          ])
+          .select(
+            "id,cliente_id,informacion_comercial_id"
+          )
+          .single();
 
-      if (errorSuscripcion) throw new Error("Error creando membresía: " + errorSuscripcion.message);
+      if (errorSuscripcion) {
+        throw new Error(
+          "Error creando membresía: " +
+            errorSuscripcion.message
+        );
+      }
 
       router.push(
-        `/caja?clienteId=${encodeURIComponent(clienteSeleccionado.id)}` +
-          `&suscripcionId=${encodeURIComponent(suscripcionCreada.id)}` +
-          `&cuentaId=${encodeURIComponent(comercial.id)}` +
-          `&flujo=nueva_membresia`
+        `/caja?clienteId=${encodeURIComponent(
+          clienteSeleccionado.id
+        )}&suscripcionId=${encodeURIComponent(
+          suscripcionCreada.id
+        )}&cuentaId=${encodeURIComponent(
+          comercial.id
+        )}&flujo=nueva_membresia`
       );
     } catch (error) {
       if (comercialCreado?.id) {
@@ -615,6 +916,7 @@ function SuscripcionesContenido() {
           .eq("id", comercialCreado.id)
           .eq("empresa_id", empresaId);
       }
+
       alert(error.message || "No se pudo crear la membresía.");
     } finally {
       setGuardando(false);
@@ -622,7 +924,10 @@ function SuscripcionesContenido() {
   }
 
   function irACaja(item) {
-    if (!item?.cliente_id) return alert("La membresía no tiene un alumno vinculado.");
+    if (!item?.cliente_id) {
+      alert("La membresía no tiene un alumno vinculado.");
+      return;
+    }
 
     const params = new URLSearchParams({
       clienteId: String(item.cliente_id),
@@ -631,76 +936,123 @@ function SuscripcionesContenido() {
     });
 
     if (item.informacion_comercial_id) {
-      params.set("cuentaId", String(item.informacion_comercial_id));
+      params.set(
+        "cuentaId",
+        String(item.informacion_comercial_id)
+      );
     }
 
     router.push(`/caja?${params.toString()}`);
   }
 
+  function verFicha(item) {
+    localStorage.setItem(
+      "busquedaVistaCliente",
+      item.cedula || item.cliente || ""
+    );
+
+    router.push("/vista-cliente");
+  }
+
   if (cargando) {
     return (
       <div style={s.loading}>
-        <img src="/konax-logo.png" alt="KONAX" style={s.loadingLogo} />
+        <img
+          src="/konax-logo.png"
+          alt="KONAX"
+          style={s.loadingLogo}
+        />
         <strong>Preparando membresías...</strong>
       </div>
     );
   }
 
-  // ---------------- ADMINISTRAR PLANES ----------------
   if (vista === "planes") {
     return (
       <main style={s.page}>
-        <div style={{ ...s.container, ...(esMovil ? s.mobileContainer : {}) }}>
+        <div
+          style={{
+            ...s.container,
+            ...(esMovil ? s.containerMobile : {}),
+          }}
+        >
           <Header
             etiqueta="PLANES DE MEMBRESÍA"
             titulo="Administrar planes"
-            texto="Crea los planes que luego podrás asignar a cada alumno."
+            texto="Crea, edita y activa los planes que luego podrás asignar a cada alumno."
             boton="← Regresar a Membresías"
             onBack={abrirPrincipal}
             esMovil={esMovil}
           />
 
-          <section style={s.card}>
+          <section style={s.cardPremium}>
             <div style={s.sectionHeader}>
               <div>
-                <span style={s.eyebrow}>{planEditandoId ? "EDITANDO PLAN" : "NUEVO PLAN"}</span>
+                <span style={s.sectionEyebrow}>
+                  {planEditandoId ? "EDITANDO PLAN" : "NUEVO PLAN"}
+                </span>
+
                 <h2 style={s.sectionTitle}>
-                  {planEditandoId ? "Actualizar plan de membresía" : "Crear plan de membresía"}
+                  {planEditandoId
+                    ? "Actualizar plan de membresía"
+                    : "Crear plan de membresía"}
                 </h2>
               </div>
+
               {planEditandoId && (
-                <button type="button" onClick={limpiarPlan} style={s.secondaryBtn}>
+                <button
+                  type="button"
+                  onClick={limpiarFormPlan}
+                  style={s.secondaryBtn}
+                >
                   Cancelar edición
                 </button>
               )}
             </div>
 
-            <div style={{ ...s.formGrid, ...(esMovil ? s.oneColumn : {}) }}>
-              <Field label="Nombre del plan *">
+            <div
+              style={{
+                ...s.formGrid,
+                ...(esMovil ? s.oneColumn : {}),
+              }}
+            >
+              <Campo label="Nombre del plan *">
                 <input
                   value={formPlan.nombre}
-                  onChange={(e) => setFormPlan((x) => ({ ...x, nombre: e.target.value }))}
+                  onChange={(e) =>
+                    setFormPlan((actual) => ({
+                      ...actual,
+                      nombre: e.target.value,
+                    }))
+                  }
                   placeholder="Ej. Plan Regular"
                   style={s.input}
                 />
-              </Field>
+              </Campo>
 
-              <Field label="Precio *">
+              <Campo label="Precio *">
                 <input
                   type="number"
                   min="0"
                   step="0.01"
                   value={formPlan.precio}
-                  onChange={(e) => setFormPlan((x) => ({ ...x, precio: e.target.value }))}
+                  onChange={(e) =>
+                    setFormPlan((actual) => ({
+                      ...actual,
+                      precio: e.target.value,
+                    }))
+                  }
                   placeholder="20.00"
                   style={s.input}
                 />
-              </Field>
+              </Campo>
 
-              <Field label="Periodicidad">
+              <Campo label="Periodicidad">
                 <select
                   value={formPlan.periodicidad}
-                  onChange={(e) => cambiarPeriodicidad(e.target.value)}
+                  onChange={(e) =>
+                    cambiarPeriodicidadPlan(e.target.value)
+                  }
                   style={s.input}
                 >
                   <option>Diaria</option>
@@ -711,21 +1063,32 @@ function SuscripcionesContenido() {
                   <option>Semestral</option>
                   <option>Anual</option>
                 </select>
-              </Field>
+              </Campo>
 
-              <Field label="Duración">
+              <Campo label="Duración">
                 <div style={s.durationGrid}>
                   <input
                     type="number"
                     min="1"
                     step="1"
                     value={formPlan.duracionCantidad}
-                    onChange={(e) => setFormPlan((x) => ({ ...x, duracionCantidad: e.target.value }))}
+                    onChange={(e) =>
+                      setFormPlan((actual) => ({
+                        ...actual,
+                        duracionCantidad: e.target.value,
+                      }))
+                    }
                     style={s.input}
                   />
+
                   <select
                     value={formPlan.duracionUnidad}
-                    onChange={(e) => setFormPlan((x) => ({ ...x, duracionUnidad: e.target.value }))}
+                    onChange={(e) =>
+                      setFormPlan((actual) => ({
+                        ...actual,
+                        duracionUnidad: e.target.value,
+                      }))
+                    }
                     style={s.input}
                   >
                     <option>Días</option>
@@ -734,45 +1097,71 @@ function SuscripcionesContenido() {
                     <option>Años</option>
                   </select>
                 </div>
-              </Field>
+              </Campo>
 
-              <Field label="Avisar antes de vencer">
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={formPlan.diasAviso}
-                  onChange={(e) => setFormPlan((x) => ({ ...x, diasAviso: e.target.value }))}
-                  style={s.input}
-                />
-              </Field>
+              <Campo label="Avisar antes de vencer">
+                <div style={s.inputSuffix}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formPlan.diasAviso}
+                    onChange={(e) =>
+                      setFormPlan((actual) => ({
+                        ...actual,
+                        diasAviso: e.target.value,
+                      }))
+                    }
+                    style={s.input}
+                  />
+                  <span>días</span>
+                </div>
+              </Campo>
 
-              <Field label="Días de gracia">
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={formPlan.diasGracia}
-                  onChange={(e) => setFormPlan((x) => ({ ...x, diasGracia: e.target.value }))}
-                  style={s.input}
-                />
-              </Field>
+              <Campo label="Días de gracia">
+                <div style={s.inputSuffix}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formPlan.diasGracia}
+                    onChange={(e) =>
+                      setFormPlan((actual) => ({
+                        ...actual,
+                        diasGracia: e.target.value,
+                      }))
+                    }
+                    style={s.input}
+                  />
+                  <span>días</span>
+                </div>
+              </Campo>
             </div>
 
-            <Field label="Descripción">
+            <Campo label="Descripción">
               <textarea
                 value={formPlan.descripcion}
-                onChange={(e) => setFormPlan((x) => ({ ...x, descripcion: e.target.value }))}
+                onChange={(e) =>
+                  setFormPlan((actual) => ({
+                    ...actual,
+                    descripcion: e.target.value,
+                  }))
+                }
                 placeholder="Ej. Acceso mensual al gimnasio"
                 style={s.textarea}
               />
-            </Field>
+            </Campo>
 
             <label style={s.checkRow}>
               <input
                 type="checkbox"
                 checked={formPlan.activo}
-                onChange={(e) => setFormPlan((x) => ({ ...x, activo: e.target.checked }))}
+                onChange={(e) =>
+                  setFormPlan((actual) => ({
+                    ...actual,
+                    activo: e.target.checked,
+                  }))
+                }
               />
               Plan activo
             </label>
@@ -781,49 +1170,93 @@ function SuscripcionesContenido() {
               type="button"
               onClick={guardarPlan}
               disabled={guardando}
-              style={{ ...s.primaryBtn, opacity: guardando ? 0.6 : 1 }}
+              style={{
+                ...s.primaryBtn,
+                opacity: guardando ? 0.6 : 1,
+              }}
             >
-              {guardando ? "Guardando..." : planEditandoId ? "Actualizar plan" : "Crear plan"}
+              {guardando
+                ? "Guardando..."
+                : planEditandoId
+                ? "Actualizar plan"
+                : "Crear plan"}
             </button>
           </section>
 
-          <section style={s.card}>
+          <section style={s.cardPremium}>
             <div style={s.sectionHeader}>
               <div>
-                <span style={s.eyebrow}>CATÁLOGO</span>
+                <span style={s.sectionEyebrow}>CATÁLOGO</span>
                 <h2 style={s.sectionTitle}>Planes disponibles</h2>
               </div>
+
               <span style={s.counter}>{planes.length}</span>
             </div>
 
             {planes.length === 0 ? (
-              <div style={s.empty}>Todavía no hay planes creados.</div>
+              <div style={s.empty}>
+                Todavía no hay planes creados.
+              </div>
             ) : (
-              <div style={s.list}>
+              <div style={s.planList}>
                 {planes.map((plan) => (
                   <article key={plan.id} style={s.planCard}>
                     <div>
-                      <div style={s.titleRow}>
-                        <strong>{plan.nombre}</strong>
-                        <span style={plan.activo ? s.activeBadge : s.inactiveBadge}>
+                      <div style={s.planTitleRow}>
+                        <strong style={s.planName}>
+                          {plan.nombre}
+                        </strong>
+
+                        <span
+                          style={
+                            plan.activo
+                              ? s.badgeActive
+                              : s.badgeInactive
+                          }
+                        >
                           {plan.activo ? "Activo" : "Inactivo"}
                         </span>
                       </div>
-                      <strong style={s.price}>B/. {Number(plan.precio || 0).toFixed(2)}</strong>
-                      <span style={s.meta}>
-                        {plan.periodicidad || "Mensual"} · {Number(plan.duracion_cantidad || 1)} {plan.duracion_unidad || "Meses"}
+
+                      <strong style={s.planPrice}>
+                        B/. {Number(plan.precio || 0).toFixed(2)}
+                      </strong>
+
+                      <span style={s.planMeta}>
+                        {plan.periodicidad || "Mensual"} ·{" "}
+                        {Number(plan.duracion_cantidad || 1)}{" "}
+                        {plan.duracion_unidad || "Meses"}
                       </span>
-                      {plan.descripcion && <p style={s.description}>{plan.descripcion}</p>}
+
+                      {plan.descripcion && (
+                        <p style={s.planDescription}>
+                          {plan.descripcion}
+                        </p>
+                      )}
                     </div>
 
-                    <div style={{ ...s.actions, ...(esMovil ? s.actionsMobile : {}) }}>
-                      <button type="button" onClick={() => editarPlan(plan)} style={s.secondaryBtn}>
+                    <div
+                      style={{
+                        ...s.actions,
+                        ...(esMovil ? s.actionsMobile : {}),
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => editarPlan(plan)}
+                        style={s.secondaryBtn}
+                      >
                         Editar
                       </button>
+
                       <button
                         type="button"
                         onClick={() => cambiarEstadoPlan(plan)}
-                        style={plan.activo ? s.warningBtn : s.greenOutlineBtn}
+                        style={
+                          plan.activo
+                            ? s.warningBtn
+                            : s.greenOutlineBtn
+                        }
                       >
                         {plan.activo ? "Desactivar" : "Activar"}
                       </button>
@@ -838,11 +1271,15 @@ function SuscripcionesContenido() {
     );
   }
 
-  // ---------------- NUEVA MEMBRESÍA ----------------
   if (vista === "nueva") {
     return (
       <main style={s.page}>
-        <div style={{ ...s.narrow, ...(esMovil ? s.mobileContainer : {}) }}>
+        <div
+          style={{
+            ...s.narrow,
+            ...(esMovil ? s.containerMobile : {}),
+          }}
+        >
           <Header
             etiqueta="NUEVA MEMBRESÍA"
             titulo="Asignar membresía"
@@ -852,33 +1289,56 @@ function SuscripcionesContenido() {
             esMovil={esMovil}
           />
 
-          <div style={s.steps}>
+          <div
+            style={{
+              ...s.steps,
+              ...(esMovil ? s.stepsMobile : {}),
+            }}
+          >
             <span style={s.stepDone}>1. Alumno</span>
             <span style={s.stepActive}>2. Membresía</span>
             <span style={s.step}>3. Caja</span>
           </div>
 
-          <section style={s.card}>
-            <span style={s.eyebrow}>ALUMNO</span>
-            <h2 style={s.sectionTitle}>Seleccionar alumno</h2>
+          <section style={s.cardPremium}>
+            <div style={s.sectionHeader}>
+              <div>
+                <span style={s.sectionEyebrow}>ALUMNO</span>
+                <h2 style={s.sectionTitle}>Seleccionar alumno</h2>
+              </div>
+            </div>
 
             {!clienteSeleccionado ? (
               <>
-                <div style={{ ...s.searchRow, ...(esMovil ? s.oneColumn : {}) }}>
+                <div
+                  style={{
+                    ...s.searchRow,
+                    ...(esMovil ? s.oneColumn : {}),
+                  }}
+                >
                   <input
                     value={buscarCliente}
-                    onChange={(e) => setBuscarCliente(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && buscarClientes()}
+                    onChange={(e) =>
+                      setBuscarCliente(e.target.value)
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") buscarClientes();
+                    }}
                     placeholder="Nombre, cédula o teléfono"
                     style={s.input}
                   />
-                  <button type="button" onClick={buscarClientes} style={s.darkBtn}>
+
+                  <button
+                    type="button"
+                    onClick={buscarClientes}
+                    style={s.darkBtn}
+                  >
                     Buscar
                   </button>
                 </div>
 
                 {resultadosClientes.length > 0 && (
-                  <div style={s.list}>
+                  <div style={s.results}>
                     {resultadosClientes.map((cliente) => (
                       <button
                         key={cliente.id}
@@ -887,21 +1347,44 @@ function SuscripcionesContenido() {
                         style={s.result}
                       >
                         <strong>{cliente.nombre}</strong>
-                        <span>{cliente.cedula || "Sin cédula"}</span>
-                        <small>{cliente.telefono || "Sin teléfono"}</small>
+                        <span>
+                          {cliente.cedula || "Sin cédula"}
+                        </span>
+                        <small>
+                          {cliente.telefono || "Sin teléfono"}
+                        </small>
                       </button>
                     ))}
                   </div>
                 )}
               </>
             ) : (
-              <div style={s.studentCard}>
-                <div style={s.avatar}>{String(clienteSeleccionado.nombre || "A").charAt(0).toUpperCase()}</div>
-                <div>
-                  <strong>{clienteSeleccionado.nombre}</strong>
-                  <span style={s.meta}>Cédula: {clienteSeleccionado.cedula || "-"}</span>
-                  <span style={s.meta}>Teléfono: {clienteSeleccionado.telefono || "-"}</span>
+              <div
+                style={{
+                  ...s.selectedStudent,
+                  ...(esMovil ? s.selectedStudentMobile : {}),
+                }}
+              >
+                <div style={s.avatar}>
+                  {String(clienteSeleccionado.nombre || "A")
+                    .charAt(0)
+                    .toUpperCase()}
                 </div>
+
+                <div>
+                  <strong style={s.studentName}>
+                    {clienteSeleccionado.nombre}
+                  </strong>
+
+                  <span style={s.studentData}>
+                    Cédula: {clienteSeleccionado.cedula || "-"}
+                  </span>
+
+                  <span style={s.studentData}>
+                    Teléfono: {clienteSeleccionado.telefono || "-"}
+                  </span>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -916,88 +1399,135 @@ function SuscripcionesContenido() {
             )}
           </section>
 
-          <section style={s.card}>
+          <section style={s.cardPremium}>
             <div style={s.sectionHeader}>
               <div>
-                <span style={s.eyebrow}>PLAN</span>
+                <span style={s.sectionEyebrow}>PLAN</span>
                 <h2 style={s.sectionTitle}>Plan y vigencia</h2>
               </div>
-              <button type="button" onClick={abrirPlanes} style={s.secondaryBtn}>
-                ⚙ Administrar planes
+
+              <button
+                type="button"
+                onClick={abrirPlanes}
+                style={s.secondaryBtn}
+              >
+                Administrar planes
               </button>
             </div>
 
             {planesActivos.length === 0 ? (
               <div style={s.noPlans}>
                 <strong>No hay planes activos.</strong>
-                <span>Crea primero un plan para poder asignar una membresía.</span>
-                <button type="button" onClick={abrirPlanes} style={s.primaryBtn}>
+                <span>
+                  Crea primero un plan para poder asignar una membresía.
+                </span>
+
+                <button
+                  type="button"
+                  onClick={abrirPlanes}
+                  style={s.primaryBtn}
+                >
                   + Crear plan
                 </button>
               </div>
             ) : (
-              <div style={{ ...s.formGrid, ...(esMovil ? s.oneColumn : {}) }}>
-                <Field label="Plan *">
+              <div
+                style={{
+                  ...s.formGrid,
+                  ...(esMovil ? s.oneColumn : {}),
+                }}
+              >
+                <Campo label="Plan *">
                   <select
                     value={formMembresia.planId}
-                    onChange={(e) => setFormMembresia((x) => ({ ...x, planId: e.target.value }))}
+                    onChange={(e) =>
+                      setFormMembresia((actual) => ({
+                        ...actual,
+                        planId: e.target.value,
+                      }))
+                    }
                     style={s.input}
                   >
                     <option value="">Seleccione un plan</option>
+
                     {planesActivos.map((plan) => (
                       <option key={plan.id} value={plan.id}>
-                        {plan.nombre} · B/. {Number(plan.precio || 0).toFixed(2)}
+                        {plan.nombre} · B/.{" "}
+                        {Number(plan.precio || 0).toFixed(2)}
                       </option>
                     ))}
                   </select>
-                </Field>
+                </Campo>
 
-                <Field label="Fecha de inicio *">
+                <Campo label="Fecha de inicio *">
                   <input
                     type="date"
                     value={formMembresia.fechaInicio}
-                    onChange={(e) => setFormMembresia((x) => ({ ...x, fechaInicio: e.target.value }))}
+                    onChange={(e) =>
+                      setFormMembresia((actual) => ({
+                        ...actual,
+                        fechaInicio: e.target.value,
+                      }))
+                    }
                     style={s.input}
                   />
-                </Field>
+                </Campo>
 
-                <Field label="Precio">
+                <Campo label="Precio">
                   <input
                     readOnly
                     value={
                       planSeleccionado
-                        ? `B/. ${Number(planSeleccionado.precio || 0).toFixed(2)}`
+                        ? `B/. ${Number(
+                            planSeleccionado.precio || 0
+                          ).toFixed(2)}`
                         : ""
                     }
-                    style={s.readonly}
+                    style={s.readonlyInput}
                   />
-                </Field>
+                </Campo>
 
-                <Field label="Vencimiento">
-                  <input readOnly value={formatearFecha(vencimientoNuevo)} style={s.readonly} />
-                </Field>
+                <Campo label="Vencimiento">
+                  <input
+                    readOnly
+                    value={formatearFecha(vencimientoNuevo)}
+                    style={s.readonlyInput}
+                  />
+                </Campo>
               </div>
             )}
 
-            <Field label="Observación">
+            <Campo label="Observación">
               <textarea
                 value={formMembresia.descripcion}
-                onChange={(e) => setFormMembresia((x) => ({ ...x, descripcion: e.target.value }))}
+                onChange={(e) =>
+                  setFormMembresia((actual) => ({
+                    ...actual,
+                    descripcion: e.target.value,
+                  }))
+                }
                 placeholder="Opcional"
                 style={s.textarea}
               />
-            </Field>
+            </Campo>
 
             <button
               type="button"
               onClick={crearMembresia}
-              disabled={guardando || planesActivos.length === 0}
+              disabled={
+                guardando || planesActivos.length === 0
+              }
               style={{
                 ...s.primaryBtn,
-                opacity: guardando || planesActivos.length === 0 ? 0.6 : 1,
+                opacity:
+                  guardando || planesActivos.length === 0
+                    ? 0.6
+                    : 1,
               }}
             >
-              {guardando ? "Guardando..." : "Guardar y continuar a Caja →"}
+              {guardando
+                ? "Guardando..."
+                : "Guardar y continuar a Caja →"}
             </button>
           </section>
         </div>
@@ -1005,44 +1535,141 @@ function SuscripcionesContenido() {
     );
   }
 
-  // ---------------- PANTALLA PRINCIPAL ----------------
   return (
     <main style={s.page}>
-      <div style={{ ...s.container, ...(esMovil ? s.mobileContainer : {}) }}>
+      <div
+        style={{
+          ...s.container,
+          ...(esMovil ? s.containerMobile : {}),
+        }}
+      >
         <Header
           etiqueta="CONTROL DE MEMBRESÍAS"
           titulo="Membresías del gimnasio"
-          texto={`${empresaNombre} · Control de planes, vigencias y renovaciones.`}
+          texto={`${empresaNombre} · Control claro de planes, vigencias y renovaciones.`}
           boton="← Volver al Dashboard"
           onBack={() => router.push("/dashboard")}
           esMovil={esMovil}
         />
 
-        <div style={{ ...s.topActions, ...(esMovil ? s.oneColumn : {}) }}>
-          <button type="button" onClick={abrirNueva} style={s.primaryBtn}>
-            + Nueva membresía
+        <div
+          style={{
+            ...s.topActions,
+            ...(esMovil ? s.topActionsMobile : {}),
+          }}
+        >
+          <button
+            type="button"
+            onClick={abrirNueva}
+            style={s.primaryBtnLarge}
+          >
+            <span style={s.actionIcon}>＋</span>
+            <span>
+              <strong style={s.actionTitle}>Nueva membresía</strong>
+              <small style={s.actionSubtitle}>
+                Asignar un plan a un alumno
+              </small>
+            </span>
           </button>
-          <button type="button" onClick={abrirPlanes} style={s.secondaryBtn}>
-            ⚙ Administrar planes
+
+          <button
+            type="button"
+            onClick={abrirPlanes}
+            style={s.secondaryActionLarge}
+          >
+            <span style={s.actionIconSoft}>⚙</span>
+            <span>
+              <strong style={s.actionTitleDark}>
+                Administrar planes
+              </strong>
+              <small style={s.actionSubtitleDark}>
+                Crear, editar o desactivar planes
+              </small>
+            </span>
           </button>
         </div>
 
-        <section style={{ ...s.kpiGrid, ...(esMovil ? s.kpiGridMobile : {}) }}>
-          <KPI titulo="Activas" valor={resumen.activas} tipo="verde" />
-          <KPI titulo="Próximas a vencer" valor={resumen.proximas} tipo="amarillo" />
-          <KPI titulo="Vencidas" valor={resumen.vencidas} tipo="naranja" />
-          <KPI titulo="Suspendidas" valor={resumen.suspendidas} tipo="rojo" />
+        <section
+          style={{
+            ...s.kpiGrid,
+            ...(esMovil ? s.kpiGridMobile : {}),
+          }}
+        >
+          <KPI
+            titulo="Activas"
+            valor={resumen.activas}
+            tipo="verde"
+            icono="✓"
+          />
+
+          <KPI
+            titulo="Próximas"
+            valor={resumen.proximas}
+            tipo="amarillo"
+            icono="!"
+          />
+
+          <KPI
+            titulo="Vencidas"
+            valor={resumen.vencidas}
+            tipo="naranja"
+            icono="↻"
+          />
+
+          <KPI
+            titulo="Suspendidas"
+            valor={resumen.suspendidas}
+            tipo="rojo"
+            icono="×"
+          />
         </section>
 
-        <section style={s.card}>
-          <div style={{ ...s.filters, ...(esMovil ? s.oneColumn : {}) }}>
-            <input
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar alumno, cédula, teléfono o plan"
-              style={s.input}
-            />
-            <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} style={s.input}>
+        <section style={s.searchPanel}>
+          <div style={s.searchPanelHeader}>
+            <div>
+              <span style={s.sectionEyebrow}>BUSCAR MEMBRESÍA</span>
+              <h2 style={s.searchTitle}>
+                Encuentra un alumno sin recorrer listas
+              </h2>
+              <p style={s.searchText}>
+                Busca por nombre, cédula, teléfono o nombre del plan.
+              </p>
+            </div>
+
+            <div style={s.searchMiniBadge}>
+              {suscripciones.length} registradas
+            </div>
+          </div>
+
+          <div
+            style={{
+              ...s.searchPremiumGrid,
+              ...(esMovil ? s.searchPremiumGridMobile : {}),
+            }}
+          >
+            <div style={s.searchInputWrap}>
+              <span style={s.searchIcon}>⌕</span>
+
+              <input
+                value={textoBusqueda}
+                onChange={(e) =>
+                  setTextoBusqueda(e.target.value)
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") ejecutarBusqueda();
+                }}
+                placeholder="Ej. Katherine, 8-826..., 6106..., Plan Regular"
+                style={s.searchInput}
+              />
+            </div>
+
+            <select
+              value={filtroEstado}
+              onChange={(e) =>
+                setFiltroEstado(e.target.value)
+              }
+              style={s.filterSelect}
+            >
               <option>Todos</option>
               <option>Activo</option>
               <option>Próxima a vencer</option>
@@ -1051,63 +1678,212 @@ function SuscripcionesContenido() {
               <option>Suspendido</option>
               <option>Cancelado</option>
             </select>
-          </div>
 
-          <div style={s.list}>
-            {membresiasFiltradas.length === 0 ? (
-              <div style={s.empty}>No hay membresías para mostrar.</div>
-            ) : (
-              membresiasFiltradas.map((item) => {
-                const estado = estadoAutomatico(item);
-                return (
-                  <article key={item.id} style={s.memberCard}>
-                    <div style={{ ...s.memberGrid, ...(esMovil ? s.oneColumn : {}) }}>
-                      <div>
-                        <strong>{item.cliente}</strong>
-                        <span style={s.meta}>
-                          {item.cedula || "Sin cédula"} · {item.telefono || "Sin teléfono"}
-                        </span>
-                      </div>
-                      <div>
-                        <strong>{item.plan || "Sin plan"}</strong>
-                        <span style={s.meta}>
-                          B/. {Number(item.precio || 0).toFixed(2)} · vence {formatearFecha(item.fecha_vencimiento)}
-                        </span>
-                      </div>
-                      <Estado estado={estado} />
-                    </div>
-                    <div style={s.memberActions}>
-                      <button type="button" onClick={() => irACaja(item)} style={s.greenOutlineBtn}>
-                        Ir a Caja
-                      </button>
-                    </div>
-                  </article>
-                );
-              })
+            <button
+              type="button"
+              onClick={ejecutarBusqueda}
+              style={s.searchButton}
+            >
+              Buscar
+            </button>
+
+            {busquedaAplicada && (
+              <button
+                type="button"
+                onClick={limpiarBusqueda}
+                style={s.clearButton}
+              >
+                Limpiar
+              </button>
             )}
           </div>
         </section>
+
+        {!busquedaAplicada ? (
+          <section style={s.searchEmptyPremium}>
+            <div style={s.emptySearchIcon}>⌕</div>
+
+            <div>
+              <strong style={s.emptySearchTitle}>
+                Busca al alumno que deseas administrar
+              </strong>
+
+              <p style={s.emptySearchText}>
+                La pantalla ya no carga una lista completa. Escribe el
+                nombre, cédula, teléfono o plan y KONAX mostrará solo
+                las coincidencias.
+              </p>
+            </div>
+          </section>
+        ) : (
+          <section style={s.resultsSection}>
+            <div style={s.resultsHeader}>
+              <div>
+                <span style={s.sectionEyebrow}>RESULTADOS</span>
+                <h2 style={s.resultsTitle}>
+                  {totalCoincidencias === 0
+                    ? "No encontramos coincidencias"
+                    : totalCoincidencias === 1
+                    ? "1 membresía encontrada"
+                    : `${totalCoincidencias} membresías encontradas`}
+                </h2>
+              </div>
+
+              {totalCoincidencias > LIMITE_RESULTADOS && (
+                <span style={s.limitBadge}>
+                  Mostrando primeras {LIMITE_RESULTADOS}
+                </span>
+              )}
+            </div>
+
+            {resultadosBusqueda.length === 0 ? (
+              <div style={s.noResults}>
+                <strong>No encontramos ese alumno.</strong>
+                <span>
+                  Revisa el nombre, cédula o teléfono e intenta nuevamente.
+                </span>
+              </div>
+            ) : (
+              <div style={s.premiumResultsList}>
+                {resultadosBusqueda.map((item) => {
+                  const estado = obtenerEstadoAutomatico(item);
+                  const colores = colorEstado(estado);
+
+                  return (
+                    <article
+                      key={item.id}
+                      style={{
+                        ...s.resultPremiumCard,
+                        ...(esMovil ? s.resultPremiumCardMobile : {}),
+                      }}
+                    >
+                      <div style={s.resultIdentity}>
+                        <div style={s.resultAvatar}>
+                          {String(item.cliente || "A")
+                            .charAt(0)
+                            .toUpperCase()}
+                        </div>
+
+                        <div style={{ minWidth: 0 }}>
+                          <strong style={s.resultName}>
+                            {item.cliente}
+                          </strong>
+
+                          <span style={s.resultDetail}>
+                            {item.cedula || "Sin cédula"}
+                            {item.telefono
+                              ? ` · ${item.telefono}`
+                              : ""}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={s.resultPlan}>
+                        <span style={s.resultLabel}>PLAN</span>
+                        <strong>{item.plan || "Sin plan"}</strong>
+                        <small style={s.resultDetail}>
+                          B/. {Number(item.precio || 0).toFixed(2)}
+                        </small>
+                      </div>
+
+                      <div style={s.resultDate}>
+                        <span style={s.resultLabel}>VENCIMIENTO</span>
+                        <strong>
+                          {formatearFecha(item.fecha_vencimiento)}
+                        </strong>
+                        <small style={s.resultDetail}>
+                          {item.periodicidad || "Membresía"}
+                        </small>
+                      </div>
+
+                      <div
+                        style={{
+                          ...s.resultStatus,
+                          background: colores.fondo,
+                          color: colores.color,
+                        }}
+                      >
+                        {estado}
+                      </div>
+
+                      <div
+                        style={{
+                          ...s.resultActions,
+                          ...(esMovil ? s.resultActionsMobile : {}),
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => verFicha(item)}
+                          style={s.secondaryBtn}
+                        >
+                          Ver ficha
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => irACaja(item)}
+                          style={s.greenOutlineBtn}
+                        >
+                          Ir a Caja
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+        <div style={s.version}>Versión {VERSION}</div>
       </div>
     </main>
   );
 }
 
-function Header({ etiqueta, titulo, texto, boton, onBack, esMovil }) {
+function Header({
+  etiqueta,
+  titulo,
+  texto,
+  boton,
+  onBack,
+  esMovil,
+}) {
   return (
-    <header style={{ ...s.hero, ...(esMovil ? s.heroMobile : {}) }}>
-      <div>
+    <header
+      style={{
+        ...s.hero,
+        ...(esMovil ? s.heroMobile : {}),
+      }}
+    >
+      <div style={s.heroCopy}>
         <span style={s.eyebrow}>{etiqueta}</span>
-        <h1 style={{ ...s.heroTitle, ...(esMovil ? s.heroTitleMobile : {}) }}>{titulo}</h1>
+
+        <h1
+          style={{
+            ...s.heroTitle,
+            ...(esMovil ? s.heroTitleMobile : {}),
+          }}
+        >
+          {titulo}
+        </h1>
+
         <p style={s.heroText}>{texto}</p>
       </div>
-      <button type="button" onClick={onBack} style={s.heroBack}>
+
+      <button
+        type="button"
+        onClick={onBack}
+        style={s.heroBack}
+      >
         {boton}
       </button>
     </header>
   );
 }
 
-function Field({ label, children }) {
+function Campo({ label, children }) {
   return (
     <label style={s.field}>
       <span style={s.label}>{label}</span>
@@ -1116,51 +1892,60 @@ function Field({ label, children }) {
   );
 }
 
-function KPI({ titulo, valor, tipo }) {
-  const fondo = {
-    verde: "#ecfdf3",
-    amarillo: "#fffbeb",
-    naranja: "#fff7ed",
-    rojo: "#fef2f2",
-  }[tipo];
-
-  const color = {
-    verde: "#166534",
-    amarillo: "#92400e",
-    naranja: "#9a3412",
-    rojo: "#991b1b",
-  }[tipo];
-
-  return (
-    <div style={{ ...s.kpi, background: fondo }}>
-      <span style={s.kpiLabel}>{titulo}</span>
-      <strong style={{ ...s.kpiValue, color }}>{valor}</strong>
-    </div>
-  );
-}
-
-function Estado({ estado }) {
-  const estilos = {
-    Activo: ["#dcfce7", "#166534"],
-    "Próxima a vencer": ["#fef3c7", "#92400e"],
-    Pendiente: ["#e0f2fe", "#075985"],
-    Vencida: ["#ffedd5", "#9a3412"],
-    Suspendido: ["#fee2e2", "#991b1b"],
-    Cancelado: ["#f3f4f6", "#4b5563"],
+function KPI({ titulo, valor, tipo, icono }) {
+  const fondos = {
+    verde: "#eefaf2",
+    amarillo: "#fff9e8",
+    naranja: "#fff4ea",
+    rojo: "#fff0f0",
   };
 
-  const [background, color] = estilos[estado] || estilos.Cancelado;
+  const colores = {
+    verde: "#167044",
+    amarillo: "#8b6300",
+    naranja: "#9a4e1a",
+    rojo: "#9f3434",
+  };
 
   return (
-    <span style={{ ...s.status, background, color }}>
-      {estado}
-    </span>
+    <div
+      style={{
+        ...s.kpi,
+        background: fondos[tipo],
+      }}
+    >
+      <div
+        style={{
+          ...s.kpiIcon,
+          color: colores[tipo],
+        }}
+      >
+        {icono}
+      </div>
+
+      <div>
+        <span style={s.kpiLabel}>{titulo}</span>
+
+        <strong
+          style={{
+            ...s.kpiValue,
+            color: colores[tipo],
+          }}
+        >
+          {valor}
+        </strong>
+      </div>
+    </div>
   );
 }
 
 export default function Suscripciones() {
   return (
-    <Suspense fallback={<div style={s.loading}>Cargando...</div>}>
+    <Suspense
+      fallback={
+        <div style={s.loading}>Cargando...</div>
+      }
+    >
       <SuscripcionesContenido />
     </Suspense>
   );
@@ -1169,181 +1954,701 @@ export default function Suscripciones() {
 const s = {
   page: {
     minHeight: "100vh",
-    background: "#f4f7f5",
+    background:
+      "linear-gradient(180deg,#f7faf8 0%,#eef4f0 100%)",
     color: "#17211c",
-    fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    fontFamily:
+      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   },
+
   container: {
     width: "min(1180px, calc(100% - 36px))",
     margin: "0 auto",
     padding: "24px 0 42px",
     boxSizing: "border-box",
   },
+
+  containerMobile: {
+    width: "100%",
+    maxWidth: "100%",
+    padding: "12px 12px 28px",
+    overflowX: "hidden",
+  },
+
   narrow: {
     width: "min(900px, calc(100% - 36px))",
     margin: "0 auto",
     padding: "24px 0 42px",
     boxSizing: "border-box",
   },
-  mobileContainer: {
-    width: "100%",
-    padding: "12px 12px 30px",
-    overflowX: "hidden",
-  },
+
   hero: {
-    padding: "24px 26px",
+    minHeight: 148,
+    padding: "25px 27px",
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "center",
-    gap: 18,
-    border: "1px solid #d5e8dc",
-    borderRadius: 22,
-    background: "linear-gradient(135deg,#f9fffb,#e9f7ee)",
-    boxShadow: "0 12px 28px rgba(20,70,43,.07)",
+    justifyContent: "space-between",
+    gap: 20,
+    overflow: "hidden",
+    border: "1px solid #d8e8de",
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg,#ffffff 0%,#f0faf4 52%,#e3f3e9 100%)",
+    boxShadow:
+      "0 18px 45px rgba(28,73,46,.08)",
+    boxSizing: "border-box",
   },
+
   heroMobile: {
+    minHeight: 0,
+    padding: "20px 17px",
     display: "grid",
     gridTemplateColumns: "1fr",
-    padding: "19px 17px",
+    gap: 16,
+    borderRadius: 20,
   },
+
+  heroCopy: {
+    minWidth: 0,
+  },
+
   eyebrow: {
     display: "block",
+    marginBottom: 7,
     color: "#16834f",
     fontSize: 9,
-    fontWeight: 900,
-    letterSpacing: 1.15,
-    marginBottom: 6,
+    fontWeight: 950,
+    letterSpacing: 1.25,
   },
+
   heroTitle: {
     margin: 0,
-    fontSize: 31,
-    lineHeight: 1.08,
+    color: "#17211c",
+    fontSize: 34,
+    lineHeight: 1.06,
+    letterSpacing: -0.8,
   },
-  heroTitleMobile: { fontSize: 27 },
+
+  heroTitleMobile: {
+    fontSize: 28,
+  },
+
   heroText: {
-    margin: "8px 0 0",
-    color: "#65736a",
+    maxWidth: 690,
+    margin: "9px 0 0",
+    color: "#627068",
     fontSize: 12.5,
-    lineHeight: 1.5,
+    lineHeight: 1.55,
   },
+
   heroBack: {
-    minHeight: 42,
+    minHeight: 43,
     padding: "10px 14px",
-    border: "1px solid #bed4c5",
-    borderRadius: 11,
-    background: "#fff",
+    border: "1px solid #c8d9ce",
+    borderRadius: 12,
+    background: "rgba(255,255,255,.9)",
     color: "#173c2a",
     fontWeight: 850,
     cursor: "pointer",
+    whiteSpace: "nowrap",
   },
+
   topActions: {
     margin: "14px 0",
     display: "grid",
-    gridTemplateColumns: "max-content max-content",
+    gridTemplateColumns: "repeat(2,minmax(0,280px))",
+    gap: 11,
+  },
+
+  topActionsMobile: {
+    gridTemplateColumns: "1fr",
+  },
+
+  primaryBtnLarge: {
+    minHeight: 76,
+    padding: "14px 16px",
+    display: "grid",
+    gridTemplateColumns: "42px minmax(0,1fr)",
+    alignItems: "center",
+    gap: 12,
+    border: "none",
+    borderRadius: 17,
+    background:
+      "linear-gradient(135deg,#18844f,#106d40)",
+    color: "#ffffff",
+    textAlign: "left",
+    cursor: "pointer",
+    boxShadow:
+      "0 12px 28px rgba(22,131,79,.18)",
+  },
+
+  secondaryActionLarge: {
+    minHeight: 76,
+    padding: "14px 16px",
+    display: "grid",
+    gridTemplateColumns: "42px minmax(0,1fr)",
+    alignItems: "center",
+    gap: 12,
+    border: "1px solid #d5e1d9",
+    borderRadius: 17,
+    background: "#ffffff",
+    color: "#1e2c24",
+    textAlign: "left",
+    cursor: "pointer",
+    boxShadow:
+      "0 9px 25px rgba(15,23,42,.045)",
+  },
+
+  actionIcon: {
+    width: 42,
+    height: 42,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 13,
+    background: "rgba(255,255,255,.17)",
+    fontSize: 25,
+    fontWeight: 500,
+  },
+
+  actionIconSoft: {
+    width: 42,
+    height: 42,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 13,
+    background: "#edf8f1",
+    color: "#16834f",
+    fontSize: 19,
+  },
+
+  actionTitle: {
+    display: "block",
+    fontSize: 13,
+  },
+
+  actionTitleDark: {
+    display: "block",
+    color: "#1b2921",
+    fontSize: 13,
+  },
+
+  actionSubtitle: {
+    display: "block",
+    marginTop: 3,
+    color: "rgba(255,255,255,.78)",
+    fontSize: 9.5,
+    fontWeight: 600,
+  },
+
+  actionSubtitleDark: {
+    display: "block",
+    marginTop: 3,
+    color: "#718078",
+    fontSize: 9.5,
+    fontWeight: 600,
+  },
+
+  kpiGrid: {
+    marginTop: 8,
+    display: "grid",
+    gridTemplateColumns: "repeat(4,minmax(0,1fr))",
     gap: 10,
   },
-  card: {
+
+  kpiGridMobile: {
+    gridTemplateColumns: "repeat(2,minmax(0,1fr))",
+  },
+
+  kpi: {
+    minHeight: 88,
+    padding: 14,
+    display: "grid",
+    gridTemplateColumns: "38px minmax(0,1fr)",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 17,
+    border: "1px solid rgba(30,65,44,.05)",
+    boxShadow:
+      "0 8px 20px rgba(15,23,42,.03)",
+  },
+
+  kpiIcon: {
+    width: 38,
+    height: 38,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 12,
+    background: "rgba(255,255,255,.72)",
+    fontSize: 18,
+    fontWeight: 900,
+  },
+
+  kpiLabel: {
+    display: "block",
+    color: "#69776f",
+    fontSize: 9.5,
+    fontWeight: 800,
+  },
+
+  kpiValue: {
+    display: "block",
+    marginTop: 3,
+    fontSize: 24,
+    lineHeight: 1,
+  },
+
+  searchPanel: {
+    marginTop: 14,
+    padding: 20,
+    border: "1px solid #dce7e0",
+    borderRadius: 20,
+    background: "#ffffff",
+    boxShadow:
+      "0 14px 35px rgba(15,23,42,.05)",
+  },
+
+  searchPanelHeader: {
+    marginBottom: 15,
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 14,
+    flexWrap: "wrap",
+  },
+
+  sectionEyebrow: {
+    display: "block",
+    color: "#16834f",
+    fontSize: 8,
+    fontWeight: 950,
+    letterSpacing: 1.05,
+  },
+
+  searchTitle: {
+    margin: "5px 0 0",
+    color: "#17211c",
+    fontSize: 21,
+    lineHeight: 1.15,
+  },
+
+  searchText: {
+    margin: "6px 0 0",
+    color: "#758179",
+    fontSize: 10.5,
+    lineHeight: 1.45,
+  },
+
+  searchMiniBadge: {
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#f0f8f3",
+    color: "#397055",
+    fontSize: 9,
+    fontWeight: 850,
+  },
+
+  searchPremiumGrid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) 190px 110px auto",
+    gap: 9,
+    alignItems: "stretch",
+  },
+
+  searchPremiumGridMobile: {
+    gridTemplateColumns: "1fr",
+  },
+
+  searchInputWrap: {
+    minWidth: 0,
+    position: "relative",
+  },
+
+  searchIcon: {
+    position: "absolute",
+    left: 13,
+    top: "50%",
+    transform: "translateY(-50%)",
+    color: "#7b8a81",
+    fontSize: 20,
+    pointerEvents: "none",
+  },
+
+  searchInput: {
+    width: "100%",
+    minHeight: 48,
+    padding: "11px 13px 11px 42px",
+    boxSizing: "border-box",
+    border: "1px solid #ccd9d1",
+    borderRadius: 13,
+    background: "#fbfdfc",
+    color: "#17211c",
+    fontSize: 16,
+    outline: "none",
+  },
+
+  filterSelect: {
+    width: "100%",
+    minHeight: 48,
+    padding: "10px 12px",
+    boxSizing: "border-box",
+    border: "1px solid #ccd9d1",
+    borderRadius: 13,
+    background: "#ffffff",
+    color: "#324238",
+    fontSize: 14,
+    outline: "none",
+  },
+
+  searchButton: {
+    minHeight: 48,
+    padding: "10px 16px",
+    border: "none",
+    borderRadius: 13,
+    background:
+      "linear-gradient(135deg,#16834f,#0f6b3e)",
+    color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow:
+      "0 8px 18px rgba(22,131,79,.15)",
+  },
+
+  clearButton: {
+    minHeight: 48,
+    padding: "10px 14px",
+    border: "1px solid #d7e0da",
+    borderRadius: 13,
+    background: "#ffffff",
+    color: "#66736b",
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  searchEmptyPremium: {
+    marginTop: 14,
+    minHeight: 170,
+    padding: 25,
+    display: "grid",
+    gridTemplateColumns: "56px minmax(0,1fr)",
+    alignItems: "center",
+    gap: 15,
+    border: "1px dashed #cbdad1",
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg,#fbfdfc,#f3f8f5)",
+  },
+
+  emptySearchIcon: {
+    width: 56,
+    height: 56,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 17,
+    background: "#e7f5ec",
+    color: "#16834f",
+    fontSize: 28,
+  },
+
+  emptySearchTitle: {
+    display: "block",
+    color: "#1c2a22",
+    fontSize: 15,
+  },
+
+  emptySearchText: {
+    maxWidth: 680,
+    margin: "6px 0 0",
+    color: "#758179",
+    fontSize: 10.5,
+    lineHeight: 1.55,
+  },
+
+  resultsSection: {
     marginTop: 14,
     padding: 18,
-    border: "1px solid #dfe7e2",
-    borderRadius: 18,
-    background: "#fff",
-    boxShadow: "0 8px 24px rgba(15,23,42,.045)",
+    border: "1px solid #dce7e0",
+    borderRadius: 20,
+    background: "#ffffff",
+    boxShadow:
+      "0 14px 35px rgba(15,23,42,.045)",
   },
-  sectionHeader: {
+
+  resultsHeader: {
+    marginBottom: 12,
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 12,
     flexWrap: "wrap",
-    marginBottom: 14,
   },
-  sectionTitle: { margin: "4px 0 0", fontSize: 20 },
+
+  resultsTitle: {
+    margin: "4px 0 0",
+    fontSize: 18,
+    color: "#17211c",
+  },
+
+  limitBadge: {
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#fff7df",
+    color: "#8b5b00",
+    fontSize: 8.5,
+    fontWeight: 850,
+  },
+
+  premiumResultsList: {
+    display: "grid",
+    gap: 9,
+  },
+
+  resultPremiumCard: {
+    padding: 14,
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(220px,1.5fr) minmax(140px,.8fr) minmax(135px,.7fr) auto auto",
+    alignItems: "center",
+    gap: 12,
+    border: "1px solid #e1e8e3",
+    borderRadius: 15,
+    background: "#fcfefd",
+  },
+
+  resultPremiumCardMobile: {
+    gridTemplateColumns: "1fr",
+    alignItems: "stretch",
+  },
+
+  resultIdentity: {
+    minWidth: 0,
+    display: "grid",
+    gridTemplateColumns: "42px minmax(0,1fr)",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  resultAvatar: {
+    width: 42,
+    height: 42,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 13,
+    background:
+      "linear-gradient(145deg,#e8f7ed,#d9eee1)",
+    color: "#16834f",
+    fontWeight: 950,
+  },
+
+  resultName: {
+    display: "block",
+    overflow: "hidden",
+    color: "#1a2720",
+    fontSize: 12.5,
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  resultDetail: {
+    display: "block",
+    marginTop: 3,
+    color: "#76827a",
+    fontSize: 9.5,
+    lineHeight: 1.4,
+  },
+
+  resultPlan: {
+    display: "grid",
+    gap: 2,
+  },
+
+  resultDate: {
+    display: "grid",
+    gap: 2,
+  },
+
+  resultLabel: {
+    color: "#16834f",
+    fontSize: 7.5,
+    fontWeight: 950,
+    letterSpacing: 0.8,
+  },
+
+  resultStatus: {
+    justifySelf: "start",
+    padding: "7px 10px",
+    borderRadius: 999,
+    fontSize: 8.5,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  resultActions: {
+    display: "flex",
+    gap: 7,
+    justifyContent: "flex-end",
+  },
+
+  resultActionsMobile: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+  },
+
+  noResults: {
+    padding: 22,
+    display: "grid",
+    gap: 5,
+    justifyItems: "center",
+    border: "1px dashed #d3ddd6",
+    borderRadius: 14,
+    background: "#f9fbfa",
+    color: "#758079",
+    fontSize: 10.5,
+    textAlign: "center",
+  },
+
+  cardPremium: {
+    marginTop: 14,
+    padding: 18,
+    border: "1px solid #dce7e0",
+    borderRadius: 20,
+    background: "#ffffff",
+    boxShadow:
+      "0 14px 35px rgba(15,23,42,.05)",
+  },
+
+  sectionHeader: {
+    marginBottom: 15,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+
+  sectionTitle: {
+    margin: "4px 0 0",
+    fontSize: 20,
+    color: "#17211c",
+  },
+
   formGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2,minmax(0,1fr))",
-    gap: 12,
+    gap: 13,
   },
-  oneColumn: { gridTemplateColumns: "1fr" },
-  field: { display: "grid", gap: 6, marginBottom: 12 },
-  label: { color: "#39473f", fontSize: 10.5, fontWeight: 800 },
+
+  oneColumn: {
+    gridTemplateColumns: "1fr",
+  },
+
+  field: {
+    display: "grid",
+    gap: 6,
+    marginBottom: 12,
+  },
+
+  label: {
+    color: "#39473f",
+    fontSize: 10.5,
+    fontWeight: 800,
+  },
+
   input: {
     width: "100%",
-    minHeight: 44,
+    minHeight: 46,
     padding: "10px 12px",
     boxSizing: "border-box",
     border: "1px solid #ccd8d0",
-    borderRadius: 10,
-    background: "#fff",
+    borderRadius: 12,
+    background: "#ffffff",
     color: "#17211c",
     fontSize: 16,
     outline: "none",
   },
-  readonly: {
+
+  readonlyInput: {
     width: "100%",
-    minHeight: 44,
+    minHeight: 46,
     padding: "10px 12px",
     boxSizing: "border-box",
     border: "1px solid #dce5df",
-    borderRadius: 10,
+    borderRadius: 12,
     background: "#f5f8f6",
     color: "#526159",
     fontSize: 16,
   },
+
   textarea: {
     width: "100%",
-    minHeight: 84,
+    minHeight: 86,
     padding: "11px 12px",
     boxSizing: "border-box",
     border: "1px solid #ccd8d0",
-    borderRadius: 10,
+    borderRadius: 12,
     resize: "vertical",
     fontFamily: "inherit",
     fontSize: 16,
+    outline: "none",
   },
+
   durationGrid: {
     display: "grid",
     gridTemplateColumns: "minmax(90px,.7fr) minmax(130px,1.3fr)",
     gap: 8,
   },
+
+  inputSuffix: {
+    display: "grid",
+    gridTemplateColumns: "1fr auto",
+    alignItems: "center",
+    gap: 8,
+  },
+
   checkRow: {
+    margin: "4px 0 15px",
     display: "flex",
     alignItems: "center",
     gap: 8,
-    margin: "2px 0 14px",
     fontSize: 11,
     fontWeight: 800,
   },
+
   primaryBtn: {
     minHeight: 45,
     padding: "10px 15px",
-    border: 0,
-    borderRadius: 11,
-    background: "linear-gradient(135deg,#16834f,#0f6a3d)",
-    color: "#fff",
+    border: "none",
+    borderRadius: 12,
+    background:
+      "linear-gradient(135deg,#16834f,#0f6a3d)",
+    color: "#ffffff",
     fontWeight: 900,
     cursor: "pointer",
+    boxShadow:
+      "0 9px 20px rgba(22,131,79,.16)",
   },
+
   secondaryBtn: {
-    minHeight: 42,
-    padding: "9px 13px",
+    minHeight: 40,
+    padding: "8px 12px",
     border: "1px solid #cbd8d0",
     borderRadius: 10,
-    background: "#fff",
+    background: "#ffffff",
     color: "#26342c",
     fontWeight: 850,
     cursor: "pointer",
   },
+
   darkBtn: {
-    minHeight: 44,
+    minHeight: 46,
     padding: "10px 15px",
-    border: 0,
-    borderRadius: 10,
+    border: "none",
+    borderRadius: 11,
     background: "#173c2a",
-    color: "#fff",
+    color: "#ffffff",
     fontWeight: 900,
     cursor: "pointer",
   },
+
   warningBtn: {
     minHeight: 40,
     padding: "8px 12px",
@@ -1354,16 +2659,96 @@ const s = {
     fontWeight: 850,
     cursor: "pointer",
   },
+
   greenOutlineBtn: {
     minHeight: 40,
     padding: "8px 12px",
     border: "1px solid #b9d9c4",
-    borderRadius: 9,
+    borderRadius: 10,
     background: "#f4fbf6",
     color: "#166534",
     fontWeight: 850,
     cursor: "pointer",
   },
+
+  planList: {
+    display: "grid",
+    gap: 10,
+  },
+
+  planCard: {
+    padding: 14,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 14,
+    border: "1px solid #e1e8e3",
+    borderRadius: 14,
+    background: "#fbfdfc",
+    flexWrap: "wrap",
+  },
+
+  planTitleRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+
+  planName: {
+    fontSize: 14,
+  },
+
+  planPrice: {
+    display: "block",
+    marginTop: 7,
+    color: "#16834f",
+    fontSize: 20,
+  },
+
+  planMeta: {
+    display: "block",
+    marginTop: 4,
+    color: "#65736a",
+    fontSize: 10.5,
+  },
+
+  planDescription: {
+    margin: "6px 0 0",
+    color: "#65736a",
+    fontSize: 10.5,
+  },
+
+  badgeActive: {
+    padding: "4px 8px",
+    borderRadius: 999,
+    background: "#dcfce7",
+    color: "#166534",
+    fontSize: 9,
+    fontWeight: 900,
+  },
+
+  badgeInactive: {
+    padding: "4px 8px",
+    borderRadius: 999,
+    background: "#fee2e2",
+    color: "#991b1b",
+    fontSize: 9,
+    fontWeight: 900,
+  },
+
+  actions: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+
+  actionsMobile: {
+    width: "100%",
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+  },
+
   counter: {
     minWidth: 33,
     height: 33,
@@ -1374,47 +2759,18 @@ const s = {
     color: "#16834f",
     fontWeight: 900,
   },
-  list: { display: "grid", gap: 9, marginTop: 10 },
-  planCard: {
-    padding: 14,
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 14,
-    flexWrap: "wrap",
-    border: "1px solid #e1e8e3",
-    borderRadius: 14,
-    background: "#fbfdfc",
-  },
-  titleRow: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  price: { display: "block", marginTop: 7, color: "#16834f", fontSize: 20 },
-  meta: { display: "block", marginTop: 3, color: "#65736a", fontSize: 10.5 },
-  description: { margin: "6px 0 0", color: "#65736a", fontSize: 10.5 },
-  activeBadge: {
-    padding: "4px 8px",
-    borderRadius: 999,
-    background: "#dcfce7",
-    color: "#166534",
-    fontSize: 9,
-    fontWeight: 900,
-  },
-  inactiveBadge: {
-    padding: "4px 8px",
-    borderRadius: 999,
-    background: "#fee2e2",
-    color: "#991b1b",
-    fontSize: 9,
-    fontWeight: 900,
-  },
-  actions: { display: "flex", gap: 8, flexWrap: "wrap" },
-  actionsMobile: { width: "100%", display: "grid", gridTemplateColumns: "1fr 1fr" },
+
   steps: {
     margin: "14px 0",
     display: "grid",
     gridTemplateColumns: "repeat(3,1fr)",
     gap: 8,
-    fontSize: 11,
   },
+
+  stepsMobile: {
+    fontSize: 10,
+  },
+
   step: {
     padding: "10px 8px",
     borderRadius: 10,
@@ -1423,6 +2779,7 @@ const s = {
     textAlign: "center",
     fontWeight: 850,
   },
+
   stepDone: {
     padding: "10px 8px",
     borderRadius: 10,
@@ -1431,27 +2788,40 @@ const s = {
     textAlign: "center",
     fontWeight: 850,
   },
+
   stepActive: {
     padding: "10px 8px",
     borderRadius: 10,
     background: "#16834f",
-    color: "#fff",
+    color: "#ffffff",
     textAlign: "center",
     fontWeight: 900,
   },
-  searchRow: { display: "grid", gridTemplateColumns: "1fr auto", gap: 9, marginTop: 12 },
+
+  searchRow: {
+    display: "grid",
+    gridTemplateColumns: "1fr auto",
+    gap: 9,
+  },
+
+  results: {
+    marginTop: 10,
+    display: "grid",
+    gap: 7,
+  },
+
   result: {
     padding: 11,
     display: "grid",
     gap: 3,
     border: "1px solid #e0e7e2",
     borderRadius: 10,
-    background: "#fff",
+    background: "#ffffff",
     textAlign: "left",
     cursor: "pointer",
   },
-  studentCard: {
-    marginTop: 12,
+
+  selectedStudent: {
     padding: 13,
     display: "grid",
     gridTemplateColumns: "48px minmax(0,1fr) auto",
@@ -1461,6 +2831,11 @@ const s = {
     borderRadius: 13,
     background: "#f7fbf8",
   },
+
+  selectedStudentMobile: {
+    gridTemplateColumns: "48px minmax(0,1fr)",
+  },
+
   avatar: {
     width: 48,
     height: 48,
@@ -1471,6 +2846,19 @@ const s = {
     color: "#16834f",
     fontWeight: 950,
   },
+
+  studentName: {
+    display: "block",
+    fontSize: 14,
+  },
+
+  studentData: {
+    display: "block",
+    marginTop: 3,
+    color: "#65736a",
+    fontSize: 10.5,
+  },
+
   noPlans: {
     padding: 18,
     display: "grid",
@@ -1479,32 +2867,9 @@ const s = {
     border: "1px dashed #b7cdbd",
     borderRadius: 13,
     background: "#f4fbf6",
+    color: "#385044",
   },
-  kpiGrid: {
-    marginTop: 14,
-    display: "grid",
-    gridTemplateColumns: "repeat(4,minmax(0,1fr))",
-    gap: 10,
-  },
-  kpiGridMobile: { gridTemplateColumns: "repeat(2,minmax(0,1fr))" },
-  kpi: { padding: 14, borderRadius: 14, border: "1px solid rgba(0,0,0,.04)" },
-  kpiLabel: { display: "block", color: "#65736a", fontSize: 9.5, fontWeight: 800 },
-  kpiValue: { display: "block", marginTop: 5, fontSize: 23 },
-  filters: { display: "grid", gridTemplateColumns: "1fr 210px", gap: 9 },
-  memberCard: {
-    padding: 13,
-    border: "1px solid #e1e8e3",
-    borderRadius: 13,
-    background: "#fff",
-  },
-  memberGrid: {
-    display: "grid",
-    gridTemplateColumns: "1.5fr 1fr auto",
-    gap: 12,
-    alignItems: "center",
-  },
-  memberActions: { marginTop: 10, display: "flex", gap: 7, flexWrap: "wrap" },
-  status: { padding: "6px 9px", borderRadius: 999, fontSize: 9, fontWeight: 900, whiteSpace: "nowrap" },
+
   empty: {
     padding: 22,
     border: "1px dashed #d3ddd6",
@@ -1514,6 +2879,14 @@ const s = {
     fontSize: 11,
     textAlign: "center",
   },
+
+  version: {
+    marginTop: 14,
+    color: "#87928b",
+    fontSize: 9,
+    textAlign: "center",
+  },
+
   loading: {
     minHeight: "100vh",
     display: "grid",
@@ -1522,7 +2895,12 @@ const s = {
     gap: 10,
     background: "#f4f7f5",
     color: "#173c2a",
-    fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    fontFamily:
+      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   },
-  loadingLogo: { width: 170, height: "auto" },
+
+  loadingLogo: {
+    width: 170,
+    height: "auto",
+  },
 };
