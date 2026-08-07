@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
+// KONAX Clientes · Responsive gimnasio · Versión 2026.08.06-M
 export default function ClientesPage() {
   const router = useRouter();
 
@@ -1360,19 +1361,278 @@ export default function ClientesPage() {
       saldoParaEstadoVisual
     );
 
+  const esGimnasioPerfil = [
+    "gimnasio",
+    "gym",
+    "fitness",
+  ].some((palabra) =>
+    normalizar(tipoNegocio).includes(palabra)
+  );
+
   return (
-    <main style={styles.pagina}>
-      <div style={styles.contenedor}>
-        <header style={styles.hero}>
+    <main
+      style={styles.pagina}
+      className={
+        esGimnasioPerfil
+          ? "clientes-page clientes-gym-mobile"
+          : "clientes-page"
+      }
+    >
+      <style>{`
+        @media (max-width: 900px), (max-device-width: 900px), (pointer: coarse) {
+          .clientes-gym-mobile {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            padding: 10px !important;
+            box-sizing: border-box !important;
+            overflow-x: hidden !important;
+          }
+
+          .clientes-gym-mobile .clientes-contenedor {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            margin: 0 auto !important;
+          }
+
+          .clientes-gym-mobile .clientes-hero {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            margin-bottom: 12px !important;
+            padding: 16px !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            align-items: stretch !important;
+            gap: 14px !important;
+            border-radius: 18px !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+          }
+
+          .clientes-gym-mobile .clientes-hero-principal {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            align-items: start !important;
+            gap: 12px !important;
+          }
+
+          .clientes-gym-mobile .clientes-logo-panel {
+            width: 160px !important;
+            min-width: 0 !important;
+            max-width: 58vw !important;
+            height: 70px !important;
+            padding: 8px !important;
+            border-radius: 14px !important;
+          }
+
+          .clientes-gym-mobile .clientes-hero-principal > div:last-child {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          .clientes-gym-mobile .clientes-hero-principal h1 {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 0 7px !important;
+            font-size: 30px !important;
+            line-height: 1.04 !important;
+            letter-spacing: -.5px !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .clientes-gym-mobile .clientes-hero-principal p {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            font-size: 12px !important;
+            line-height: 1.45 !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .clientes-gym-mobile .clientes-hero-acciones {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 9px !important;
+          }
+
+          .clientes-gym-mobile .clientes-hero-acciones button {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          .clientes-gym-mobile .clientes-resumen-grid {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            grid-template-columns: 1fr !important;
+            gap: 9px !important;
+            margin-bottom: 12px !important;
+          }
+
+          .clientes-gym-mobile .clientes-resumen-grid article {
+            width: 100% !important;
+            min-width: 0 !important;
+            box-sizing: border-box !important;
+          }
+
+          .clientes-gym-mobile .clientes-form-layout {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+
+          .clientes-gym-mobile .clientes-main-column,
+          .clientes-gym-mobile .clientes-side-column {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          .clientes-gym-mobile .clientes-side-column {
+            position: static !important;
+            top: auto !important;
+          }
+
+          .clientes-gym-mobile .clientes-card,
+          .clientes-gym-mobile .clientes-busqueda-card,
+          .clientes-gym-mobile .clientes-side-card,
+          .clientes-gym-mobile .clientes-sticky-actions {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            padding: 15px !important;
+            border-radius: 17px !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+          }
+
+          .clientes-gym-mobile .clientes-section-header {
+            width: 100% !important;
+            min-width: 0 !important;
+            align-items: flex-start !important;
+            gap: 10px !important;
+            margin-bottom: 16px !important;
+            padding-bottom: 14px !important;
+          }
+
+          .clientes-gym-mobile .clientes-section-header > div:last-child {
+            min-width: 0 !important;
+          }
+
+          .clientes-gym-mobile .clientes-section-header h2 {
+            font-size: 20px !important;
+            line-height: 1.1 !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .clientes-gym-mobile .clientes-section-header p {
+            font-size: 11px !important;
+            line-height: 1.4 !important;
+          }
+
+          .clientes-gym-mobile .clientes-grid {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            grid-template-columns: 1fr !important;
+            gap: 0 !important;
+          }
+
+          .clientes-gym-mobile .clientes-busqueda-fila {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            grid-template-columns: 1fr !important;
+            gap: 9px !important;
+          }
+
+          .clientes-gym-mobile .clientes-busqueda-fila button {
+            width: 100% !important;
+          }
+
+          .clientes-gym-mobile .clientes-resultado-fila {
+            width: 100% !important;
+            min-width: 0 !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            align-items: stretch !important;
+            gap: 10px !important;
+            box-sizing: border-box !important;
+          }
+
+          .clientes-gym-mobile .clientes-resultado-fila button {
+            width: 100% !important;
+          }
+
+          .clientes-gym-mobile .clientes-consentimiento {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            box-sizing: border-box !important;
+          }
+
+          .clientes-gym-mobile input,
+          .clientes-gym-mobile select,
+          .clientes-gym-mobile textarea,
+          .clientes-gym-mobile button {
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+          }
+
+          .clientes-gym-mobile input,
+          .clientes-gym-mobile select,
+          .clientes-gym-mobile textarea {
+            font-size: 16px !important;
+          }
+
+          .clientes-gym-mobile textarea {
+            min-height: 90px !important;
+          }
+
+          .clientes-gym-mobile .clientes-sticky-actions {
+            position: static !important;
+          }
+
+          .clientes-gym-mobile .clientes-sticky-actions button {
+            width: 100% !important;
+          }
+        }
+
+        @media (max-width: 390px), (max-device-width: 390px) {
+          .clientes-gym-mobile .clientes-hero-principal h1 {
+            font-size: 27px !important;
+          }
+
+          .clientes-gym-mobile .clientes-logo-panel {
+            width: 145px !important;
+          }
+        }
+      `}</style>
+      <div style={styles.contenedor} className="clientes-contenedor">
+        <header style={styles.hero} className="clientes-hero">
           <div
             style={
               styles.heroPrincipal
             }
+            className="clientes-hero-principal"
           >
             <div
               style={
                 styles.logoPanel
               }
+              className="clientes-logo-panel"
             >
               <img
                 src="/konax-logo.png"
@@ -1387,7 +1647,9 @@ export default function ClientesPage() {
                   styles.etiqueta
                 }
               >
-                {modoSoloCliente
+                {esGimnasioPerfil
+                  ? "GESTIÓN DE ALUMNOS"
+                  : modoSoloCliente
                   ? "GESTIÓN DE CLIENTES"
                   : "GESTIÓN DE CARTERA"}
               </span>
@@ -1395,7 +1657,9 @@ export default function ClientesPage() {
               <h1
                 style={styles.titulo}
               >
-                {modoSoloCliente
+                {esGimnasioPerfil
+                  ? "Registrar nuevo alumno"
+                  : modoSoloCliente
                   ? "Registrar nuevo cliente"
                   : "Nueva cuenta por cobrar"}
               </h1>
@@ -1405,7 +1669,9 @@ export default function ClientesPage() {
                   styles.subtitulo
                 }
               >
-                {modoSoloCliente
+                {esGimnasioPerfil
+                  ? "Registra los datos del alumno para luego asignar su membresía, cobrar y controlar sus accesos."
+                  : modoSoloCliente
                   ? esNegocioMembresias
                     ? "Registra miembros, visitas únicas y prospectos para utilizarlos después en Caja o Suscripciones."
                     : "Registra los datos del cliente. La modalidad de venta o pago se seleccionará después en Ventas, Caja o Cuentas por Cobrar."
@@ -1414,7 +1680,7 @@ export default function ClientesPage() {
             </div>
           </div>
 
-          <div style={styles.heroAcciones}>
+          <div style={styles.heroAcciones} className="clientes-hero-acciones">
             {!modoSoloCliente && (
               <button
                 type="button"
@@ -1443,6 +1709,7 @@ export default function ClientesPage() {
           style={
             styles.resumenGrid
           }
+          className="clientes-resumen-grid"
         >
 
           {esNegocioMembresias ? (
@@ -1508,14 +1775,16 @@ export default function ClientesPage() {
           style={
             styles.formLayout
           }
+          className="clientes-form-layout"
         >
           <div
             style={
               styles.mainColumn
             }
+            className="clientes-main-column"
           >
             {!modoSoloCliente && (
-              <article style={styles.cardBusquedaCliente}>
+              <article style={styles.cardBusquedaCliente} className="clientes-busqueda-card">
                 <div style={styles.busquedaClienteHeader}>
                   <div>
                     <span style={styles.sectionNumber}></span>
@@ -1526,7 +1795,7 @@ export default function ClientesPage() {
                     <span style={styles.clienteSeleccionadoBadge}>Cliente cargado: {clienteSeleccionadoNombre || nombre}</span>
                   )}
                 </div>
-                <div style={styles.busquedaClienteFila}>
+                <div style={styles.busquedaClienteFila} className="clientes-busqueda-fila">
                   <input
                     value={busquedaCliente}
                     onChange={(e) => setBusquedaCliente(e.target.value)}
@@ -1544,7 +1813,7 @@ export default function ClientesPage() {
                 {resultadosCliente.length > 0 && (
                   <div style={styles.resultadosCliente}>
                     {resultadosCliente.map((cliente) => (
-                      <div key={cliente.id} style={styles.resultadoClienteFila}>
+                      <div key={cliente.id} style={styles.resultadoClienteFila} className="clientes-resultado-fila">
                         <div>
                           <strong>{cliente.nombre || "Sin nombre"}</strong>
                           <div style={styles.resultadoClienteDetalle}>Cédula: {cliente.cedula || "-"} · Teléfono: {cliente.telefono || "-"}</div>
@@ -1559,12 +1828,19 @@ export default function ClientesPage() {
 
             <article
               style={styles.card}
+              className="clientes-card"
             >
               <SectionTitle
                 numero="01"
-                titulo="Información del cliente"
+                titulo={
+                  esGimnasioPerfil
+                    ? "Información del alumno"
+                    : "Información del cliente"
+                }
                 texto={
-                  esNegocioMembresias
+                  esGimnasioPerfil
+                    ? "Datos personales y de contacto del alumno."
+                    : esNegocioMembresias
                     ? "Datos personales, contacto y clasificación de membresía."
                     : "Datos personales y de contacto del cliente."
                 }
@@ -1599,7 +1875,11 @@ export default function ClientesPage() {
                     style={
                       styles.inputStyle
                     }
-                    placeholder="Nombre del cliente"
+                    placeholder={
+                      esGimnasioPerfil
+                        ? "Nombre del alumno"
+                        : "Nombre del cliente"
+                    }
                   />
                 </Campo>
 
@@ -1679,7 +1959,13 @@ export default function ClientesPage() {
                   />
                 </Campo>
 
-                <Campo label="Estado del cliente">
+                <Campo
+                  label={
+                    esGimnasioPerfil
+                      ? "Estado del alumno"
+                      : "Estado del cliente"
+                  }
+                >
                   <select
                     value={
                       estadoCliente
@@ -1749,7 +2035,13 @@ export default function ClientesPage() {
                 />
               </Campo>
 
-              <Campo label="Observaciones del cliente">
+              <Campo
+                label={
+                  esGimnasioPerfil
+                    ? "Observaciones del alumno"
+                    : "Observaciones del cliente"
+                }
+              >
                 <textarea
                   value={
                     observacionCliente
@@ -1762,7 +2054,11 @@ export default function ClientesPage() {
                   style={
                     styles.textarea
                   }
-                  placeholder="Agregue información útil sobre el cliente."
+                  placeholder={
+                    esGimnasioPerfil
+                      ? "Agregue información útil sobre el alumno."
+                      : "Agregue información útil sobre el cliente."
+                  }
                 />
               </Campo>
 
@@ -1770,6 +2066,7 @@ export default function ClientesPage() {
                 style={
                   styles.consentimientoBox
                 }
+                className="clientes-consentimiento"
               >
                 <span
                   style={
@@ -1864,6 +2161,7 @@ export default function ClientesPage() {
                   style={
                     styles.card
                   }
+                  className="clientes-card"
                 >
                   <SectionTitle
                     numero="02"
@@ -1875,6 +2173,7 @@ export default function ClientesPage() {
                     style={
                       styles.grid
                     }
+                    className="clientes-grid"
                   >
                     <Campo label="Número de cuenta">
                       <input
@@ -2120,6 +2419,7 @@ export default function ClientesPage() {
                   style={
                     styles.card
                   }
+                  className="clientes-card"
                 >
                   <SectionTitle
                     numero="03"
@@ -2131,6 +2431,7 @@ export default function ClientesPage() {
                     style={
                       styles.grid
                     }
+                    className="clientes-grid"
                   >
                     <Campo label="Estado de cobranza automático">
                       <input
@@ -2266,11 +2567,13 @@ export default function ClientesPage() {
             style={
               styles.sideColumn
             }
+            className="clientes-side-column"
           >
             <div
               style={
                 styles.sideCard
               }
+              className="clientes-side-card"
             >
               <span
                 style={
@@ -2289,7 +2592,11 @@ export default function ClientesPage() {
               </h3>
 
               <ResumenFila
-                label="Cliente"
+                label={
+                  esGimnasioPerfil
+                    ? "Alumno"
+                    : "Cliente"
+                }
                 value={
                   nombre ||
                   "Pendiente"
@@ -2395,6 +2702,7 @@ export default function ClientesPage() {
               style={
                 styles.stickyActions
               }
+              className="clientes-sticky-actions"
             >
               <button
                 type="button"
@@ -2408,6 +2716,8 @@ export default function ClientesPage() {
               >
                 {guardando
                   ? "Guardando..."
+                  : esGimnasioPerfil
+                  ? "Guardar alumno"
                   : modoSoloCliente
                   ? "Guardar cliente"
                   : "Guardar cliente y cuenta"}
@@ -2462,6 +2772,7 @@ function SectionTitle({
       style={
         styles.sectionHeader
       }
+      className="clientes-section-header"
     >
       <div
         style={
