@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { supabase } from "../lib/supabase";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -67,34 +68,110 @@ export default function KonaxMobileNav() {
   const [rolUsuario, setRolUsuario] = useState("");
 
   useEffect(() => {
-    const tipoNegocio =
-      localStorage.getItem("tipoNegocio") ||
-      localStorage.getItem("tipo_negocio") ||
-      "";
+    let activo = true;
 
-    const categoriaNegocio =
-      localStorage.getItem("categoriaNegocio") ||
-      localStorage.getItem("categoria_negocio") ||
-      "";
+    const rutasSinMenu = [
+      "/",
+      "/login",
+      "/admin",
+      "/registro",
+      "/recuperar-contrasena",
+      "/restablecer-contrasena",
+    ];
 
-    const rol =
-      localStorage.getItem("usuarioRol") ||
-      localStorage.getItem("rolUsuario") ||
-      "";
+    const esRutaSinMenu = rutasSinMenu.some((ruta) => {
+      if (ruta === "/") return pathname === "/";
+      return pathname === ruta || pathname.startsWith(`${ruta}/`);
+    });
 
-    const habilitado =
-      esGimnasio(tipoNegocio, categoriaNegocio) &&
-      (esAdministrador(rol) || esVendedor(rol));
+    async function validarNavegacion() {
+      setListo(false);
 
-    setMostrar(habilitado);
-    setEmpresaNombre(
-      localStorage.getItem("empresaNombre") || "KONAX Gimnasio"
+      if (esRutaSinMenu) {
+        if (!activo) return;
+        setMostrar(false);
+        setAbierto(false);
+        setListo(true);
+        return;
+      }
+
+      const { data, error } = await supabase.auth.getSession();
+
+      if (!activo) return;
+
+      if (error || !data?.session?.user) {
+        setMostrar(false);
+        setAbierto(false);
+        setRolUsuario("");
+        setListo(true);
+        return;
+      }
+
+      const tipoNegocio =
+        localStorage.getItem("tipoNegocio") ||
+        localStorage.getItem("tipo_negocio") ||
+        "";
+
+      const categoriaNegocio =
+        localStorage.getItem("categoriaNegocio") ||
+        localStorage.getItem("categoria_negocio") ||
+        "";
+
+      const rol =
+        localStorage.getItem("usuarioRol") ||
+        localStorage.getItem("rolUsuario") ||
+        "";
+
+      const empresaActiva =
+        localStorage.getItem("empresaId") ||
+        localStorage.getItem("empresa_id") ||
+        "";
+
+      const usuarioActivo =
+        localStorage.getItem("usuarioId") ||
+        localStorage.getItem("usuario_id") ||
+        data.session.user.id ||
+        "";
+
+      const habilitado =
+        Boolean(empresaActiva) &&
+        Boolean(usuarioActivo) &&
+        esGimnasio(tipoNegocio, categoriaNegocio) &&
+        (esAdministrador(rol) || esVendedor(rol));
+
+      setMostrar(habilitado);
+      setEmpresaNombre(
+        localStorage.getItem("empresaNombre") || "KONAX Gimnasio"
+      );
+      setUsuarioNombre(
+        localStorage.getItem("usuarioNombre") || "Usuario"
+      );
+      setRolUsuario(rol);
+      setListo(true);
+    }
+
+    validarNavegacion();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (!activo) return;
+
+        if (event === "SIGNED_OUT" || !session?.user) {
+          setMostrar(false);
+          setAbierto(false);
+          setRolUsuario("");
+          setListo(true);
+          return;
+        }
+
+        validarNavegacion();
+      }
     );
-    setUsuarioNombre(
-      localStorage.getItem("usuarioNombre") || "Usuario"
-    );
-    setRolUsuario(rol);
-    setListo(true);
+
+    return () => {
+      activo = false;
+      authListener?.subscription?.unsubscribe();
+    };
   }, [pathname]);
 
   useEffect(() => {
@@ -134,10 +211,19 @@ export default function KonaxMobileNav() {
     return pathname === ruta || pathname.startsWith(`${ruta}/`);
   }
 
-  function cerrarSesion() {
+  async function cerrarSesion() {
     setAbierto(false);
+    setMostrar(false);
+
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error("Error cerrando sesión:", error);
+    }
+
     localStorage.clear();
     router.replace("/login");
+    router.refresh();
   }
 
   if (!listo || !mostrar) return null;
