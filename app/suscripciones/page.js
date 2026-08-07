@@ -1,7 +1,7 @@
 "use client";
 
 // KONAX · Membresías · Versión Premium con filtro cerrado
-// VERSION 2026.08.07-X
+// VERSION 2026.08.07-Y
 //
 // PRINCIPAL:
 // - NO muestra lista de clientes.
@@ -32,7 +32,7 @@ import {
 } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.07-X";
+const VERSION = "2026.08.07-Y";
 const DIAS_AVISO_DEFAULT = 5;
 const DIAS_GRACIA_DEFAULT = 3;
 
@@ -435,6 +435,11 @@ function SuscripcionesContenido() {
   const [
     membresiaDetalle,
     setMembresiaDetalle,
+  ] = useState(null);
+
+  const [
+    membresiaACambiar,
+    setMembresiaACambiar,
   ] = useState(null);
 
   const [
@@ -1035,6 +1040,7 @@ function SuscripcionesContenido() {
 
   function abrirPrincipal() {
     setVista("principal");
+    setMembresiaACambiar(null);
     setClienteSeleccionado(null);
     setBuscarCliente("");
     setResultadosClientes([]);
@@ -1051,6 +1057,7 @@ function SuscripcionesContenido() {
 
   function abrirNueva() {
     setVista("nueva");
+    setMembresiaACambiar(null);
 
     setFormMembresia({
       ...FORM_MEMBRESIA_INICIAL,
@@ -1356,6 +1363,211 @@ function SuscripcionesContenido() {
     }
   }
 
+  function iniciarCambioPlan(item) {
+    if (!item?.cliente_id) {
+      alert("No se pudo identificar al alumno de esta membresía.");
+      return;
+    }
+
+    setMembresiaDetalle(null);
+    setMembresiaACambiar(item);
+
+    setClienteSeleccionado({
+      id: item.cliente_id,
+      nombre: item.cliente || "Alumno",
+      cedula: item.cedula || "",
+      telefono: item.telefono || "",
+      correo: item.correo || "",
+    });
+
+    setBuscarCliente(item.cliente || "");
+    setResultadosClientes([]);
+
+    setFormMembresia({
+      ...FORM_MEMBRESIA_INICIAL,
+      fechaInicio: fechaHoy(),
+      descripcion: `Cambio de plan desde ${item.plan || "membresía actual"}`,
+    });
+
+    setVista("nueva");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function procesarCambioPlan(existente) {
+    if (!existente?.id || !planSeleccionado) return;
+
+    if (
+      String(existente.plan_membresia_id || "") ===
+      String(planSeleccionado.id || "")
+    ) {
+      alert(
+        "El alumno ya tiene este mismo plan. Para renovarlo, abre su membresía y utiliza Ir a Caja."
+      );
+      return;
+    }
+
+    const confirmar = window.confirm(
+      `${clienteSeleccionado?.nombre || "El alumno"} tiene actualmente ${
+        existente.plan || "una membresía activa"
+      }.\n\n¿Deseas cambiarla a ${planSeleccionado.nombre}? El cambio quedará pendiente hasta completar el pago en Caja.`
+    );
+
+    if (!confirmar) return;
+
+    const precio = Number(planSeleccionado.precio || 0);
+
+    if (!Number.isFinite(precio) || precio <= 0) {
+      alert("El nuevo plan no tiene un precio válido.");
+      return;
+    }
+
+    setGuardando(true);
+
+    let cuentaAnterior = null;
+    let suscripcionAnterior = null;
+
+    try {
+      const { data: suscripcionActual, error: errorSuscripcionActual } =
+        await supabase
+          .from("suscripciones")
+          .select("*")
+          .eq("empresa_id", empresaId)
+          .eq("id", existente.id)
+          .single();
+
+      if (errorSuscripcionActual || !suscripcionActual) {
+        throw new Error(
+          "No se pudo cargar la membresía actual para realizar el cambio."
+        );
+      }
+
+      suscripcionAnterior = suscripcionActual;
+
+      const cuentaId =
+        suscripcionActual.informacion_comercial_id ||
+        existente.informacion_comercial_id ||
+        null;
+
+      if (!cuentaId) {
+        throw new Error(
+          "La membresía actual no tiene una cuenta comercial vinculada."
+        );
+      }
+
+      const { data: cuentaActual, error: errorCuentaActual } = await supabase
+        .from("informacion_comercial")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .eq("id", cuentaId)
+        .single();
+
+      if (errorCuentaActual || !cuentaActual) {
+        throw new Error(
+          "No se pudo cargar la cuenta actual de la membresía."
+        );
+      }
+
+      cuentaAnterior = cuentaActual;
+
+      const nuevaDescripcion =
+        formMembresia.descripcion.trim() ||
+        planSeleccionado.descripcion ||
+        `Cambio a ${planSeleccionado.nombre}`;
+
+      const { error: errorActualizarCuenta } = await supabase
+        .from("informacion_comercial")
+        .update({
+          plan_membresia_id: planSeleccionado.id,
+          tipo_producto: "Membresía",
+          descripcion: `${planSeleccionado.nombre} - ${nuevaDescripcion}`,
+          modalidad: planSeleccionado.periodicidad,
+          monto_total: precio,
+          saldo_actual: precio,
+          cuota: precio,
+          fecha_inicio: formMembresia.fechaInicio,
+          fecha_vencimiento: vencimientoNuevo,
+          estado: "Pendiente",
+          estado_servicio: "Pendiente",
+          observacion: nuevaDescripcion,
+        })
+        .eq("empresa_id", empresaId)
+        .eq("id", cuentaId);
+
+      if (errorActualizarCuenta) {
+        throw new Error(
+          "No se pudo preparar la cuenta para el cambio de plan: " +
+            errorActualizarCuenta.message
+        );
+      }
+
+      const { error: errorActualizarSuscripcion } = await supabase
+        .from("suscripciones")
+        .update({
+          plan_membresia_id: planSeleccionado.id,
+          plan: planSeleccionado.nombre,
+          descripcion: nuevaDescripcion,
+          precio,
+          forma_pago: "Pendiente",
+          fecha_inicio: formMembresia.fechaInicio,
+          fecha_vencimiento: vencimientoNuevo,
+          periodicidad: planSeleccionado.periodicidad,
+          duracion_cantidad: Number(
+            planSeleccionado.duracion_cantidad || 1
+          ),
+          duracion_unidad: planSeleccionado.duracion_unidad || "Meses",
+          dias_aviso: Number(
+            planSeleccionado.dias_aviso ?? DIAS_AVISO_DEFAULT
+          ),
+          dias_gracia: Number(
+            planSeleccionado.dias_gracia ?? DIAS_GRACIA_DEFAULT
+          ),
+          estado: "Pendiente",
+        })
+        .eq("empresa_id", empresaId)
+        .eq("id", existente.id);
+
+      if (errorActualizarSuscripcion) {
+        if (cuentaAnterior?.id) {
+          const restaurarCuenta = { ...cuentaAnterior };
+          delete restaurarCuenta.id;
+          delete restaurarCuenta.created_at;
+          delete restaurarCuenta.updated_at;
+
+          await supabase
+            .from("informacion_comercial")
+            .update(restaurarCuenta)
+            .eq("empresa_id", empresaId)
+            .eq("id", cuentaAnterior.id);
+        }
+
+        throw new Error(
+          "No se pudo cambiar el plan de la membresía: " +
+            errorActualizarSuscripcion.message
+        );
+      }
+
+      setMembresiaACambiar(null);
+
+      router.push(
+        `/caja?clienteId=${encodeURIComponent(
+          clienteSeleccionado.id
+        )}&suscripcionId=${encodeURIComponent(
+          existente.id
+        )}&cuentaId=${encodeURIComponent(
+          cuentaId
+        )}&flujo=nueva_membresia&cambioPlan=1`
+      );
+    } catch (error) {
+      if (suscripcionAnterior?.id && cuentaAnterior?.id) {
+        console.error("Cambio de plan no completado:", error);
+      }
+
+      alert(error.message || "No se pudo realizar el cambio de plan.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
   async function crearMembresia() {
     if (
       !empresaId ||
@@ -1420,14 +1632,7 @@ function SuscripcionesContenido() {
       );
 
     if (existente) {
-      alert(
-        `${
-          clienteSeleccionado.nombre
-        } ya tiene una membresía ${obtenerEstadoAutomatico(
-          existente
-        ).toLowerCase()}.`
-      );
-
+      await procesarCambioPlan(existente);
       return;
     }
 
@@ -2179,6 +2384,28 @@ function SuscripcionesContenido() {
             </span>
           </div>
 
+          {membresiaACambiar && (
+            <div style={s.changePlanNotice}>
+              <div>
+                <span style={s.sectionEyebrow}>CAMBIO DE PLAN</span>
+                <strong style={s.changePlanTitle}>
+                  Plan actual: {membresiaACambiar.plan || "Membresía"}
+                </strong>
+                <p style={s.changePlanText}>
+                  Selecciona el nuevo plan. El cambio se completa al registrar el pago en Caja.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setMembresiaACambiar(null)}
+                style={s.secondaryBtn}
+              >
+                Cancelar cambio
+              </button>
+            </div>
+          )}
+
           <section
             style={s.cardPremium}
           >
@@ -2586,6 +2813,8 @@ function SuscripcionesContenido() {
             >
               {guardando
                 ? "Guardando..."
+                : membresiaACambiar
+                ? "Cambiar plan y continuar a Caja →"
                 : "Guardar y continuar a Caja →"}
             </button>
           </section>
@@ -2976,6 +3205,11 @@ function SuscripcionesContenido() {
                 membresiaDetalle
               )
             }
+            onCambiarPlan={() =>
+              iniciarCambioPlan(
+                membresiaDetalle
+              )
+            }
             esMovil={esMovil}
           />
         </Modal>
@@ -3020,6 +3254,7 @@ function MembresiaDetalle({
   onClose,
   onFicha,
   onCaja,
+  onCambiarPlan,
   esMovil,
 }) {
   const estado =
@@ -3140,6 +3375,14 @@ function MembresiaDetalle({
           }
         >
           Ver ficha
+        </button>
+
+        <button
+          type="button"
+          onClick={onCambiarPlan}
+          style={s.secondaryBtn}
+        >
+          Cambiar plan
         </button>
 
         <button
@@ -3794,7 +4037,7 @@ const s = {
     marginTop: 16,
     display: "grid",
     gridTemplateColumns:
-      "1fr 1fr",
+      "repeat(3,minmax(0,1fr))",
     gap: 9,
   },
 
@@ -4668,6 +4911,33 @@ const s = {
     display: "block",
     marginTop: 6,
     color: "#6e7b74",
+    fontSize: 10.5,
+    lineHeight: 1.45,
+  },
+
+  changePlanNotice: {
+    margin: "14px 0 0",
+    padding: 15,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+    border: "1px solid #cde3d5",
+    borderRadius: 16,
+    background: "linear-gradient(135deg,#f2fbf5,#e9f7ef)",
+  },
+
+  changePlanTitle: {
+    display: "block",
+    marginTop: 4,
+    color: "#173c2a",
+    fontSize: 13,
+  },
+
+  changePlanText: {
+    margin: "5px 0 0",
+    color: "#637168",
     fontSize: 10.5,
     lineHeight: 1.45,
   },
