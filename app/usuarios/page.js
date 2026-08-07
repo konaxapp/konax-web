@@ -371,7 +371,7 @@ export default function Usuarios() {
         catalogo,
         obligatorios
       ),
-      cargarRoles(),
+      cargarRoles(perfilGimnasio),
       cargarUsuarios(id),
     ]);
 
@@ -427,7 +427,7 @@ export default function Usuarios() {
     setModulosEmpresa(mapa);
   }
 
-  async function cargarRoles() {
+  async function cargarRoles(perfilGimnasio = esGimnasio) {
     const { data, error } = await supabase
       .from("roles_konax")
       .select("*")
@@ -438,7 +438,18 @@ export default function Usuarios() {
       return;
     }
 
-    const lista = data || [];
+    let lista = data || [];
+
+    // En gimnasio / negocios por membresía no mostramos roles de
+    // cobranza, cajero ni supervisor. Solo Administrador y Vendedor.
+    if (perfilGimnasio) {
+      lista = lista.filter((rol) =>
+        ["administrador", "vendedor"].includes(
+          normalizar(rol.nombre)
+        )
+      );
+    }
+
     setRoles(lista);
 
     const administrador = lista.find(
@@ -572,6 +583,27 @@ export default function Usuarios() {
       return;
     }
 
+    if (esGimnasio) {
+      const rolUsuario = normalizar(usuarioSeleccionado.rol);
+
+      if (rolUsuario === "administrador") {
+        alert(
+          "El Administrador del gimnasio mantiene acceso a todos los módulos del perfil."
+        );
+        return;
+      }
+
+      if (
+        rolUsuario === "vendedor" &&
+        !["dashboard", "caja"].includes(modulo.codigo)
+      ) {
+        alert(
+          "El rol Vendedor del gimnasio está limitado a Panel y Caja."
+        );
+        return;
+      }
+    }
+
     if (!modulosPermitidos[modulo.codigo]) {
       alert(
         `"${modulo.nombre}" no está incluido en el plan.`
@@ -651,6 +683,42 @@ export default function Usuarios() {
     });
 
     setPermisosUsuario(mapa);
+  }
+
+  async function aplicarPermisosInicialesGimnasio(
+    usuario,
+    nombreRol
+  ) {
+    if (!esGimnasio || !usuario?.id) return;
+
+    const rol = normalizar(nombreRol);
+    const esAdmin = rol === "administrador";
+    const esVendedor = rol === "vendedor";
+
+    const registros = MODULOS_GIMNASIO.map((modulo) => ({
+      empresa_id: empresaId,
+      usuario_id: usuario.id,
+      permiso: modulo.codigo,
+      activo: esAdmin
+        ? true
+        : esVendedor
+        ? ["dashboard", "caja"].includes(modulo.codigo)
+        : false,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error } = await supabase
+      .from("permisos_usuarios_empresa")
+      .upsert(registros, {
+        onConflict: "empresa_id,usuario_id,permiso",
+      });
+
+    if (error) {
+      throw new Error(
+        "El usuario fue creado, pero no se pudieron aplicar sus permisos iniciales: " +
+          error.message
+      );
+    }
   }
 
   async function crearUsuario() {
@@ -750,6 +818,13 @@ export default function Usuarios() {
       await cargarUsuarios(empresaId);
 
       if (data.usuario) {
+        if (esGimnasio) {
+          await aplicarPermisosInicialesGimnasio(
+            data.usuario,
+            rolSeleccionado.nombre
+          );
+        }
+
         await seleccionarUsuario(data.usuario);
       }
     } catch (error) {
@@ -953,11 +1028,11 @@ export default function Usuarios() {
           <div>
             <strong>Configuración especializada para gimnasio</strong>
             <p>
-              El plan comercial continúa siendo KONAX Ventas y
-              Gestión, pero aquí solo se muestran Alumnos,
-              Membresías, Check-in, Caja, Historial y Reportes.
-              Créditos, Cobranza, Inventario y Ventas no se
-              activarán para esta empresa.
+              El perfil del gimnasio utiliza únicamente los módulos
+              operativos necesarios. Para crear usuarios se muestran
+              solo dos roles: Administrador y Vendedor. El Administrador
+              tiene acceso completo al perfil y el Vendedor queda con
+              acceso a Panel y Caja.
             </p>
           </div>
         </section>
