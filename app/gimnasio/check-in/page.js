@@ -8,7 +8,7 @@ import {
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION_CHECKIN = "2026.08.04-A";
+const VERSION_CHECKIN = "2026.08.06-B";
 const DIA_MS = 86400000;
 
 function normalizar(valor) {
@@ -860,10 +860,113 @@ export default function CheckInGimnasio() {
       : null;
 
   return (
-    <main style={s.pagina}>
-      <div style={s.contenedor}>
-        <header style={s.encabezado}>
-          <div style={s.marca}>
+    <main style={s.pagina} className="checkin-page">
+      <style>{`
+        @media (max-width: 900px) {
+          .checkin-page {
+            width: 100% !important;
+            max-width: 100vw !important;
+            padding: 12px !important;
+            box-sizing: border-box !important;
+            overflow-x: hidden !important;
+          }
+
+          .checkin-contenedor {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          .checkin-encabezado {
+            width: 100% !important;
+            padding: 16px !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            align-items: stretch !important;
+            gap: 14px !important;
+            box-sizing: border-box !important;
+          }
+
+          .checkin-marca {
+            min-width: 0 !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+
+          .checkin-marca img {
+            width: 145px !important;
+          }
+
+          .checkin-encabezado-acciones {
+            width: 100% !important;
+            display: grid !important;
+            grid-template-columns: minmax(0,1fr) auto !important;
+          }
+
+          .checkin-indicadores {
+            width: 100% !important;
+            grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+            gap: 9px !important;
+          }
+
+          .checkin-indicadores > article:last-child {
+            grid-column: 1 / -1;
+          }
+
+          .checkin-grid-principal {
+            width: 100% !important;
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+
+          .checkin-panel,
+          .checkin-actividad {
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 0 !important;
+            padding: 14px !important;
+            box-sizing: border-box !important;
+          }
+
+          .checkin-datos {
+            grid-template-columns: 1fr !important;
+          }
+
+          .checkin-resultado-item {
+            grid-template-columns: 38px minmax(0,1fr) !important;
+          }
+
+          .checkin-resultado-item > span:last-child {
+            grid-column: 2 !important;
+            max-width: 100% !important;
+            text-align: left !important;
+          }
+
+          .checkin-page input,
+          .checkin-page textarea,
+          .checkin-page button {
+            max-width: 100% !important;
+          }
+        }
+
+        @media (max-width: 390px) {
+          .checkin-encabezado-acciones {
+            grid-template-columns: 1fr !important;
+          }
+
+          .checkin-indicadores {
+            grid-template-columns: 1fr !important;
+          }
+
+          .checkin-indicadores > article:last-child {
+            grid-column: auto;
+          }
+        }
+      `}</style>
+      <div style={s.contenedor} className="checkin-contenedor">
+        <header style={s.encabezado} className="checkin-encabezado">
+          <div style={s.marca} className="checkin-marca">
             <img
               src="/konax-logo.png"
               alt="KONAX"
@@ -886,7 +989,7 @@ export default function CheckInGimnasio() {
             </div>
           </div>
 
-          <div style={s.encabezadoAcciones}>
+          <div style={s.encabezadoAcciones} className="checkin-encabezado-acciones">
             <div style={s.usuario}>
               <span>Recepción</span>
               <strong>
@@ -912,7 +1015,7 @@ export default function CheckInGimnasio() {
           </div>
         )}
 
-        <section style={s.indicadores}>
+        <section style={s.indicadores} className="checkin-indicadores">
           <Indicador
             titulo="Entradas hoy"
             valor={
@@ -941,8 +1044,8 @@ export default function CheckInGimnasio() {
           />
         </section>
 
-        <section style={s.gridPrincipal}>
-          <article style={s.panelCheckin}>
+        <section style={s.gridPrincipal} className="checkin-grid-principal">
+          <article style={s.panelCheckin} className="checkin-panel">
             <div style={s.panelTitulo}>
               <div>
                 <span style={s.miniEtiqueta}>
@@ -1021,6 +1124,7 @@ export default function CheckInGimnasio() {
                             style={
                               s.resultadoItem
                             }
+                            className="checkin-resultado-item"
                           >
                             <span
                               style={
@@ -1132,7 +1236,7 @@ export default function CheckInGimnasio() {
                   </div>
                 </div>
 
-                <div style={s.datos}>
+                <div style={s.datos} className="checkin-datos">
                   <Dato
                     etiqueta="Plan"
                     valor={
@@ -1276,7 +1380,7 @@ export default function CheckInGimnasio() {
             )}
           </article>
 
-          <aside style={s.panelActividad}>
+          <aside style={s.panelActividad} className="checkin-actividad">
             <div style={s.panelTitulo}>
               <div>
                 <span style={s.miniEtiqueta}>
@@ -2012,5 +2116,4 @@ const s = {
     textAlign: "right",
   },
 };
-
 
