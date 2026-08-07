@@ -1,5 +1,7 @@
 "use client";
 
+// KONAX Dashboard · Reportes gimnasio habilitados · Versión 2026.08.07-S
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -1197,6 +1199,26 @@ export default function Dashboard() {
     const modulo = normalizar(codigoModulo);
     const permiso = normalizar(codigoPermiso);
 
+    /*
+      GIMNASIO:
+      Reportes queda habilitado para administradores
+      tanto en escritorio como en la navegación móvil,
+      aunque la configuración antigua de empresa_modulos
+      todavía no tenga reportes/dashboard_cobros activo.
+    */
+    const gimnasioActual = esTipoGimnasio(
+      tipoNegocio,
+      categoriaNegocio
+    );
+
+    if (
+      gimnasioActual &&
+      modulo === "reportes" &&
+      esAdministrador()
+    ) {
+      return true;
+    }
+
     if (!Boolean(modulos?.[modulo])) {
       return false;
     }
@@ -1655,69 +1677,8 @@ export default function Dashboard() {
           ...(esMovil ? s.mainMobile : {}),
         }}
       >
-        {esMovil && (
-          <>
-            <div style={s.mobileBar}>
-              <img
-                src="/konax-logo.png"
-                alt="KONAX"
-                style={s.mobileLogo}
-              />
-
-              <button
-                type="button"
-                onClick={() =>
-                  setMenuMovilAbierto(
-                    (actual) => !actual
-                  )
-                }
-                style={s.mobileMenuButton}
-              >
-                <span style={s.hamburgerIcon}>
-                  {menuMovilAbierto ? "×" : "☰"}
-                </span>
-                <span>
-                  {menuMovilAbierto
-                    ? "Cerrar"
-                    : "Menú"}
-                </span>
-              </button>
-            </div>
-
-            {menuMovilAbierto && (
-              <div style={s.mobileMenu}>
-                {modulosMenu.map((item) => (
-                  <button
-                    key={`${item.ruta}-${item.nombre}`}
-                    type="button"
-                    onClick={() => {
-                      setMenuMovilAbierto(false);
-                      router.push(item.ruta);
-                    }}
-                    style={{
-                      ...s.mobileMenuItem,
-                      ...(item.codigo ===
-                      "dashboard"
-                        ? s.mobileMenuItemActivo
-                        : {}),
-                    }}
-                  >
-                    <span>{item.icono}</span>
-                    <span>{item.nombre}</span>
-                  </button>
-                ))}
-
-                <button
-                  type="button"
-                  onClick={cerrarSesion}
-                  style={s.mobileLogout}
-                >
-                  Cerrar sesión
-                </button>
-              </div>
-            )}
-          </>
-        )}
+        {/* El menú móvil global se renderiza desde app/layout.js mediante KonaxMobileNav.
+            Se eliminó el segundo menú interno del Dashboard para evitar duplicados. */}
 
         <header
           style={{
