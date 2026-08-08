@@ -1,7 +1,7 @@
 "use client";
 
 // KONAX · Membresías · Versión Premium con filtro cerrado
-// VERSION 2026.08.07-AB
+// VERSION 2026.08.07-AC
 //
 // PRINCIPAL:
 // - NO muestra lista de clientes.
@@ -32,7 +32,7 @@ import {
 } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.07-AB";
+const VERSION = "2026.08.07-AC";
 const DIAS_AVISO_DEFAULT = 5;
 const DIAS_GRACIA_DEFAULT = 3;
 
@@ -1404,7 +1404,12 @@ function SuscripcionesContenido() {
   }
 
   async function procesarCambioPlan(existente) {
-    if (!empresaId || !existente?.id || !planSeleccionado) {
+    if (
+      !empresaId ||
+      !existente?.id ||
+      !clienteSeleccionado?.id ||
+      !planSeleccionado
+    ) {
       return;
     }
 
@@ -1418,180 +1423,213 @@ function SuscripcionesContenido() {
       return;
     }
 
-    const precio = Number(planSeleccionado.precio || 0);
+    const precio =
+      Number(
+        planSeleccionado.precio ||
+          0
+      );
 
-    if (!Number.isFinite(precio) || precio <= 0) {
-      alert("El nuevo plan no tiene un precio válido.");
-      return;
-    }
-
-    const cuentaId =
-      existente.informacion_comercial_id || null;
-
-    if (!cuentaId) {
+    if (
+      !Number.isFinite(precio) ||
+      precio <= 0
+    ) {
       alert(
-        "La membresía actual no tiene una cuenta vinculada. No se puede preparar el cambio de plan."
+        "El nuevo plan no tiene un precio válido."
       );
       return;
     }
 
-    const confirmar = window.confirm(
-      `${clienteSeleccionado?.nombre || "El alumno"} tiene actualmente ${
-        existente.plan || "una membresía activa"
-      }.\n\n¿Deseas cambiarla a ${planSeleccionado.nombre} y continuar a Caja para cobrar el nuevo plan?`
-    );
+    const confirmar =
+      window.confirm(
+        `${
+          clienteSeleccionado.nombre ||
+          "El alumno"
+        } tiene actualmente ${
+          existente.plan ||
+          "una membresía activa"
+        }.\n\n¿Deseas cambiarla a ${
+          planSeleccionado.nombre
+        } por $${precio.toFixed(
+          2
+        )} y continuar a Caja para realizar el nuevo cobro?`
+      );
 
     if (!confirmar) return;
 
     setGuardando(true);
 
-    let cuentaAnterior = null;
-    let suscripcionAnterior = null;
+    let comercialNuevo = null;
+    let suscripcionNueva = null;
 
     try {
-      const {
-        data: cuentaActual,
-        error: errorCuentaActual,
-      } = await supabase
-        .from("informacion_comercial")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .eq("id", cuentaId)
-        .single();
-
-      if (errorCuentaActual || !cuentaActual) {
-        throw new Error(
-          "No se pudo cargar la cuenta actual de la membresía."
-        );
-      }
-
-      cuentaAnterior = cuentaActual;
-
-      const {
-        data: suscripcionActual,
-        error: errorSuscripcionActual,
-      } = await supabase
-        .from("suscripciones")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .eq("id", existente.id)
-        .single();
-
-      if (errorSuscripcionActual || !suscripcionActual) {
-        throw new Error(
-          "No se pudo cargar la membresía actual."
-        );
-      }
-
-      suscripcionAnterior = suscripcionActual;
+      const responsable =
+        localStorage.getItem(
+          "usuarioNombre"
+        ) ||
+        localStorage.getItem(
+          "adminKonaxNombre"
+        ) ||
+        "Administración";
 
       const descripcionNueva =
         formMembresia.descripcion.trim() ||
         planSeleccionado.descripcion ||
         `Cambio a ${planSeleccionado.nombre}`;
 
-      const payloadCuenta = {
-        plan_membresia_id: planSeleccionado.id,
-        tipo_producto: "Membresía",
-        descripcion: `${planSeleccionado.nombre} - ${descripcionNueva}`,
-        modalidad: planSeleccionado.periodicidad,
-        monto_total: precio,
-        saldo_actual: precio,
-        cuota: precio,
-        fecha_inicio: formMembresia.fechaInicio,
-        fecha_vencimiento: vencimientoNuevo,
-        estado: "Pendiente",
-        estado_servicio: "Pendiente",
-        observacion: descripcionNueva,
-      };
+      // IMPORTANTE:
+      // El cambio de plan crea una cuenta NUEVA.
+      // No se modifica ni se reutiliza la cuenta pagada
+      // de la membresía anterior.
+      const numeroCuenta =
+        `MEM-CAMBIO-${Date.now()}`;
 
       const {
-        error: errorActualizarCuenta,
+        data: comercial,
+        error: errorComercial,
       } = await supabase
-        .from("informacion_comercial")
-        .update(payloadCuenta)
-        .eq("empresa_id", empresaId)
-        .eq("id", cuentaId);
+        .from(
+          "informacion_comercial"
+        )
+        .insert([
+          {
+            empresa_id:
+              empresaId,
+            cliente_id:
+              clienteSeleccionado.id,
+            plan_membresia_id:
+              planSeleccionado.id,
+            numero_cuenta:
+              numeroCuenta,
+            tipo_producto:
+              "Membresía",
+            descripcion:
+              `${
+                planSeleccionado.nombre
+              } - ${descripcionNueva}`,
+            modalidad:
+              planSeleccionado.periodicidad,
+            monto_total:
+              precio,
+            saldo_actual:
+              precio,
+            cuota:
+              precio,
+            fecha_inicio:
+              formMembresia.fechaInicio,
+            fecha_vencimiento:
+              vencimientoNuevo,
+            responsable,
+            estado:
+              "Pendiente",
+            estado_servicio:
+              "Pendiente",
+            observacion:
+              descripcionNueva,
+          },
+        ])
+        .select()
+        .single();
 
-      if (errorActualizarCuenta) {
+      if (
+        errorComercial ||
+        !comercial?.id
+      ) {
         throw new Error(
-          "No se pudo preparar la cuenta para el cambio de plan: " +
-            errorActualizarCuenta.message
+          "No se pudo crear el nuevo cobro del plan: " +
+            (
+              errorComercial?.message ||
+              "No se recibió la nueva cuenta."
+            )
         );
       }
 
-      const payloadSuscripcion = {
-        plan_membresia_id: planSeleccionado.id,
-        plan: planSeleccionado.nombre,
-        descripcion: descripcionNueva,
-        precio,
-        forma_pago: "Pendiente",
-        fecha_inicio: formMembresia.fechaInicio,
-        fecha_vencimiento: vencimientoNuevo,
-        periodicidad: planSeleccionado.periodicidad,
-        duracion_cantidad: Number(
-          planSeleccionado.duracion_cantidad || 1
-        ),
-        duracion_unidad:
-          planSeleccionado.duracion_unidad || "Meses",
-        dias_aviso: Number(
-          planSeleccionado.dias_aviso ??
-            DIAS_AVISO_DEFAULT
-        ),
-        dias_gracia: Number(
-          planSeleccionado.dias_gracia ??
-            DIAS_GRACIA_DEFAULT
-        ),
-        estado: "Pendiente",
-      };
+      comercialNuevo =
+        comercial;
 
+      // También se crea una membresía NUEVA en estado Pendiente.
+      // membresia_anterior_id permite que Supabase cierre el plan
+      // viejo solamente DESPUÉS de confirmar el nuevo pago.
       const {
-        error: errorActualizarSuscripcion,
+        data: suscripcionCreada,
+        error: errorSuscripcion,
       } = await supabase
         .from("suscripciones")
-        .update(payloadSuscripcion)
-        .eq("empresa_id", empresaId)
-        .eq("id", existente.id);
+        .insert([
+          {
+            empresa_id:
+              empresaId,
+            cliente_id:
+              clienteSeleccionado.id,
+            informacion_comercial_id:
+              comercial.id,
+            membresia_anterior_id:
+              existente.id,
+            plan_membresia_id:
+              planSeleccionado.id,
+            cliente:
+              clienteSeleccionado.nombre,
+            cedula:
+              clienteSeleccionado.cedula ||
+              "",
+            plan:
+              planSeleccionado.nombre,
+            tipo_servicio:
+              "Membresía",
+            descripcion:
+              descripcionNueva,
+            precio,
+            vendedor:
+              responsable,
+            forma_pago:
+              "Pendiente",
+            fecha_inicio:
+              formMembresia.fechaInicio,
+            fecha_vencimiento:
+              vencimientoNuevo,
+            periodicidad:
+              planSeleccionado.periodicidad,
+            duracion_cantidad:
+              Number(
+                planSeleccionado.duracion_cantidad ||
+                  1
+              ),
+            duracion_unidad:
+              planSeleccionado.duracion_unidad ||
+              "Meses",
+            dias_aviso:
+              Number(
+                planSeleccionado.dias_aviso ??
+                  DIAS_AVISO_DEFAULT
+              ),
+            dias_gracia:
+              Number(
+                planSeleccionado.dias_gracia ??
+                  DIAS_GRACIA_DEFAULT
+              ),
+            estado:
+              "Pendiente",
+          },
+        ])
+        .select(
+          "id,cliente_id,informacion_comercial_id,membresia_anterior_id"
+        )
+        .single();
 
-      if (errorActualizarSuscripcion) {
-        const restaurarCuenta = {
-          plan_membresia_id:
-            cuentaAnterior.plan_membresia_id ?? null,
-          tipo_producto:
-            cuentaAnterior.tipo_producto ?? null,
-          descripcion:
-            cuentaAnterior.descripcion ?? null,
-          modalidad:
-            cuentaAnterior.modalidad ?? null,
-          monto_total:
-            cuentaAnterior.monto_total ?? 0,
-          saldo_actual:
-            cuentaAnterior.saldo_actual ?? 0,
-          cuota:
-            cuentaAnterior.cuota ?? 0,
-          fecha_inicio:
-            cuentaAnterior.fecha_inicio ?? null,
-          fecha_vencimiento:
-            cuentaAnterior.fecha_vencimiento ?? null,
-          estado:
-            cuentaAnterior.estado ?? null,
-          estado_servicio:
-            cuentaAnterior.estado_servicio ?? null,
-          observacion:
-            cuentaAnterior.observacion ?? null,
-        };
-
-        await supabase
-          .from("informacion_comercial")
-          .update(restaurarCuenta)
-          .eq("empresa_id", empresaId)
-          .eq("id", cuentaId);
-
+      if (
+        errorSuscripcion ||
+        !suscripcionCreada?.id
+      ) {
         throw new Error(
-          "No se pudo guardar el cambio de plan: " +
-            errorActualizarSuscripcion.message
+          "No se pudo crear la nueva membresía: " +
+            (
+              errorSuscripcion?.message ||
+              "No se recibió la nueva membresía."
+            )
         );
       }
+
+      suscripcionNueva =
+        suscripcionCreada;
 
       setMembresiaACambiar(null);
 
@@ -1599,24 +1637,53 @@ function SuscripcionesContenido() {
         `/caja?clienteId=${encodeURIComponent(
           clienteSeleccionado.id
         )}&suscripcionId=${encodeURIComponent(
-          existente.id
+          suscripcionCreada.id
         )}&cuentaId=${encodeURIComponent(
-          cuentaId
+          comercial.id
         )}&flujo=nueva_membresia&cambioPlan=1`
       );
     } catch (error) {
       console.error(
-        "Error en cambio de plan:",
-        error,
-        {
-          cuentaAnterior,
-          suscripcionAnterior,
-        }
+        "Error creando cambio de plan:",
+        error
       );
+
+      // Si falló después de crear la membresía nueva,
+      // limpiamos únicamente los registros NUEVOS.
+      // La membresía y el pago anteriores permanecen intactos.
+      if (suscripcionNueva?.id) {
+        await supabase
+          .from("suscripciones")
+          .delete()
+          .eq(
+            "id",
+            suscripcionNueva.id
+          )
+          .eq(
+            "empresa_id",
+            empresaId
+          );
+      }
+
+      if (comercialNuevo?.id) {
+        await supabase
+          .from(
+            "informacion_comercial"
+          )
+          .delete()
+          .eq(
+            "id",
+            comercialNuevo.id
+          )
+          .eq(
+            "empresa_id",
+            empresaId
+          );
+      }
 
       alert(
         error?.message ||
-          "No se pudo guardar el cambio de plan."
+          "No se pudo preparar el cambio de plan."
       );
     } finally {
       setGuardando(false);
@@ -1661,6 +1728,7 @@ function SuscripcionesContenido() {
     }
 
     const existente =
+      membresiaACambiar ||
       suscripciones.find(
         (item) => {
           if (
