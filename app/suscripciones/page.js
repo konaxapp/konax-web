@@ -1,7 +1,7 @@
 "use client";
 
 // KONAX · Membresías · Versión Premium con filtro cerrado
-// VERSION 2026.08.07-Y
+// VERSION 2026.08.07-AA
 //
 // PRINCIPAL:
 // - NO muestra lista de clientes.
@@ -32,7 +32,7 @@ import {
 } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.07-Z";
+const VERSION = "2026.08.07-AA";
 const DIAS_AVISO_DEFAULT = 5;
 const DIAS_GRACIA_DEFAULT = 3;
 
@@ -1409,7 +1409,7 @@ function SuscripcionesContenido() {
     const confirmar = window.confirm(
       `${clienteSeleccionado?.nombre || "El alumno"} tiene actualmente ${
         existente.plan || "una membresía activa"
-      }.\n\n¿Deseas cambiarla a ${planSeleccionado.nombre}? El cambio quedará pendiente hasta completar el pago en Caja.`
+      }.\n\nSe cambiará a ${planSeleccionado.nombre}, se guardará como pendiente y pasarás directamente a Caja para completar el pago.\n\n¿Deseas continuar?`
     );
 
     if (!confirmar) return;
