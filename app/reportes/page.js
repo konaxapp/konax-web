@@ -482,7 +482,7 @@ export default function ReportesPage() {
       ...movimientosSuscripciones,
     ]
       .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
-      .slice(0, 15);
+      .slice(0, 5);
   }, [
     comercialPeriodo,
     cajaPeriodo,
