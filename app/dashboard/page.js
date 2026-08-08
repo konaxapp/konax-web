@@ -1,5 +1,7 @@
 "use client";
 
+// DASHBOARD GIMNASIO - VERSION T - 2026-08-07
+
 // KONAX Dashboard · Reportes gimnasio habilitados · Versión 2026.08.07-S
 
 import { useEffect, useMemo, useState } from "react";
@@ -216,22 +218,115 @@ function leerModuloEmpresa(data, codigo) {
   return true;
 }
 
+function prioridadEstadoMembresia(estadoValor) {
+  const estado = normalizar(estadoValor);
+
+  if (["activo", "activa"].includes(estado)) return 0;
+
+  if (
+    [
+      "pendiente",
+      "pendiente_pago",
+      "pendiente de pago",
+      "proxima",
+      "próxima",
+    ].includes(estado)
+  ) {
+    return 1;
+  }
+
+  if (
+    [
+      "vencido",
+      "vencida",
+      "moroso",
+      "morosa",
+    ].includes(estado)
+  ) {
+    return 2;
+  }
+
+  if (
+    [
+      "suspendido",
+      "suspendida",
+      "inactivo",
+      "inactiva",
+    ].includes(estado)
+  ) {
+    return 3;
+  }
+
+  if (
+    [
+      "cancelado",
+      "cancelada",
+      "reemplazado",
+      "reemplazada",
+    ].includes(estado)
+  ) {
+    return 4;
+  }
+
+  return 2;
+}
+
+function timestampMembresia(membresia = {}) {
+  const candidatos = [
+    membresia.updated_at,
+    membresia.created_at,
+    membresia.fecha_inicio,
+    membresia.fecha_vencimiento,
+  ];
+
+  for (const valor of candidatos) {
+    const fecha = fechaLocal(valor);
+
+    if (fecha) {
+      return fecha.getTime();
+    }
+  }
+
+  return 0;
+}
+
 function obtenerMembresiaActualPorAlumno(registros = []) {
-  const ordenadas = [...registros].sort((a, b) => {
-    const fechaA =
-      fechaLocal(a.fecha_vencimiento)?.getTime() || 0;
-    const fechaB =
-      fechaLocal(b.fecha_vencimiento)?.getTime() || 0;
-
-    return fechaB - fechaA;
-  });
-
   const porAlumno = new Map();
 
-  ordenadas.forEach((membresia) => {
-    const clave = membresia.cliente_id || membresia.id;
+  registros.forEach((membresia) => {
+    const clave = String(
+      membresia.cliente_id || membresia.id || ""
+    );
 
-    if (!porAlumno.has(clave)) {
+    if (!clave) return;
+
+    const actual = porAlumno.get(clave);
+
+    if (!actual) {
+      porAlumno.set(clave, membresia);
+      return;
+    }
+
+    const prioridadNueva = prioridadEstadoMembresia(
+      membresia.estado
+    );
+    const prioridadActual = prioridadEstadoMembresia(
+      actual.estado
+    );
+
+    if (prioridadNueva < prioridadActual) {
+      porAlumno.set(clave, membresia);
+      return;
+    }
+
+    if (prioridadNueva > prioridadActual) {
+      return;
+    }
+
+    const fechaNueva = timestampMembresia(membresia);
+    const fechaActual = timestampMembresia(actual);
+
+    if (fechaNueva >= fechaActual) {
       porAlumno.set(clave, membresia);
     }
   });
@@ -428,8 +523,35 @@ function evaluarEstadoMembresia(
 
   if (
     [
+      "pendiente",
+      "pendiente_pago",
+      "pendiente de pago",
+      "proxima",
+      "próxima",
+    ].includes(estado)
+  ) {
+    return {
+      codigo: "pendiente",
+      etiqueta: "Membresía pendiente",
+    };
+  }
+
+  if (
+    [
       "cancelado",
       "cancelada",
+      "reemplazado",
+      "reemplazada",
+    ].includes(estado)
+  ) {
+    return {
+      codigo: "sin_membresia",
+      etiqueta: "Sin membresía vigente",
+    };
+  }
+
+  if (
+    [
       "suspendido",
       "suspendida",
       "inactivo",
@@ -592,7 +714,23 @@ function obtenerAccionInteligente(alumno) {
         2
       )}`,
       ruta: crearRutaAlumno("/caja", alumno.id, {
+        suscripcionId:
+          alumno.membresia?.id || "",
+        cuentaId:
+          alumno.membresia?.informacion_comercial_id || "",
+        flujo: "nueva_membresia",
         origen: "gimnasio",
+      }),
+      icono: "$",
+    };
+  }
+
+  if (alumno.estadoCodigo === "pendiente") {
+    return {
+      etiqueta: "Revisar pago",
+      detalle: "La nueva membresía está pendiente de activación",
+      ruta: crearRutaAlumno("/suscripciones", alumno.id, {
+        origen: "dashboard",
       }),
       icono: "$",
     };
@@ -2188,10 +2326,11 @@ function DashboardGimnasio({
 
   const alumnosAtencion = useMemo(() => {
     const prioridad = {
-      vencida: 0,
-      por_vencer: 1,
-      sin_membresia: 2,
-      suspendida: 3,
+      pendiente: 0,
+      vencida: 1,
+      por_vencer: 2,
+      sin_membresia: 3,
+      suspendida: 4,
     };
 
     return alumnos
@@ -2257,6 +2396,12 @@ function DashboardGimnasio({
   }
 
   function describirAtencion(alumno) {
+    if (alumno.estadoCodigo === "pendiente") {
+      return alumno.saldoPendiente > 0
+        ? `Pago pendiente: $${alumno.saldoPendiente.toFixed(2)}`
+        : "Membresía pendiente de activación";
+    }
+
     if (alumno.estadoCodigo === "vencida") {
       return alumno.fechaVencimiento
         ? `Venció el ${formatoFecha(
@@ -2539,15 +2684,6 @@ function DashboardGimnasio({
                     : {}),
                 }}
               >
-                <button
-                  type="button"
-                  onClick={() =>
-                    onNavigate("/clientes")
-                  }
-                  style={s.gymAccionNeutra}
-                >
-                  + Registrar alumno
-                </button>
 
                 <button
                   type="button"
@@ -2860,7 +2996,7 @@ function DashboardGimnasio({
             }
             style={s.gymVerTodas}
           >
-            Ver membresías activas
+            Ver membresías
           </button>
         </aside>
       </section>
