@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION_CAJA_GIMNASIO = "2026.08.04-H";
+const VERSION_CAJA_GIMNASIO = "2026.08.09-K-COMPACTA";
 
 function obtenerFechaPanama(fecha = new Date()) {
   const fechaObjeto =
@@ -171,6 +171,25 @@ export default function Caja() {
   const [suscripcionFlujoId, setSuscripcionFlujoId] =
     useState("");
   const [flujoCaja, setFlujoCaja] = useState("");
+  const [esEscritorioCompacto, setEsEscritorioCompacto] =
+    useState(false);
+
+  useEffect(() => {
+    const actualizarVista = () => {
+      setEsEscritorioCompacto(
+        typeof window !== "undefined" &&
+          window.innerWidth >= 900
+      );
+    };
+
+    actualizarVista();
+
+    window.addEventListener("resize", actualizarVista);
+
+    return () => {
+      window.removeEventListener("resize", actualizarVista);
+    };
+  }, []);
 
   useEffect(() => {
     iniciarCaja();
@@ -196,6 +215,12 @@ export default function Caja() {
     cuentaSeleccionada?.id,
     cuentaSeleccionada?.saldo_actual,
   ]);
+
+  function estiloResponsivo(base, compacto) {
+    return esEscritorioCompacto
+      ? { ...base, ...compacto }
+      : base;
+  }
 
   async function iniciarCaja() {
     const empresaId = obtenerEmpresaId();
@@ -2517,21 +2542,21 @@ export default function Caja() {
   return (
     <main style={estilos.pagina}>
       <div style={estilos.shell}>
-        <header style={estilos.topbar}>
-          <div style={estilos.topbarMarca}>
-            <div style={estilos.topbarLogoCard}><img src="/konax-logo.png" alt="KONAX" style={estilos.topbarLogo} /></div>
-            <div style={estilos.topbarSeparador} />
+        <header style={estiloResponsivo(estilos.topbar, estilosDesktop.topbar)}>
+          <div style={estiloResponsivo(estilos.topbarMarca, estilosDesktop.topbarMarca)}>
+            <div style={estiloResponsivo(estilos.topbarLogoCard, estilosDesktop.topbarLogoCard)}><img src="/konax-logo.png" alt="KONAX" style={estiloResponsivo(estilos.topbarLogo, estilosDesktop.topbarLogo)} /></div>
+            <div style={estiloResponsivo(estilos.topbarSeparador, estilosDesktop.topbarSeparador)} />
             <div>
-              <div style={estilos.topbarModulo}>
+              <div style={estiloResponsivo(estilos.topbarModulo, estilosDesktop.topbarModulo)}>
                 {esNegocioMembresia()
                   ? "💳 CAJA DEL GIMNASIO"
                   : "🧾 CAJA Y REGISTRO DE INGRESOS"}
               </div>
             </div>
-            <div style={estilos.topbarSeparador} />
+            <div style={estiloResponsivo(estilos.topbarSeparador, estilosDesktop.topbarSeparador)} />
             <div>
-              <h1 style={estilos.topbarEmpresa}>{empresaNombre}</h1>
-              <p style={estilos.topbarTexto}>
+              <h1 style={estiloResponsivo(estilos.topbarEmpresa, estilosDesktop.topbarEmpresa)}>{empresaNombre}</h1>
+              <p style={estiloResponsivo(estilos.topbarTexto, estilosDesktop.topbarTexto)}>
                 {esNegocioMembresia()
                   ? "Cobro de membresías, pases diarios y servicios."
                   : "Registro de pagos, ventas, servicios e ingresos."}
@@ -2539,28 +2564,28 @@ export default function Caja() {
             </div>
           </div>
 
-          <button onClick={volverDashboard} style={estilos.botonVolver}>← Centro de Operaciones</button>
+          <button onClick={volverDashboard} style={estiloResponsivo(estilos.botonVolver, estilosDesktop.botonVolver)}>← Centro de Operaciones</button>
         </header>
 
-        <div style={estilos.contenido}>
-          <section style={estilos.kpisGrid}>
-            <KpiCard titulo="Movimientos hoy" valor={movimientosHoy.length} detalle="Total de transacciones" icono="▤" />
-            <KpiCard titulo="Total de hoy" valor={`$${totalHoy.toFixed(2)}`} detalle="Ingresos registrados" icono="💰" destacado />
-            <KpiCard titulo="Efectivo hoy" valor={`$${totalEfectivoHoy.toFixed(2)}`} detalle="Pago en efectivo" icono="▣" />
-            <KpiCard titulo="Pagos digitales" valor={`$${totalDigitalHoy.toFixed(2)}`} detalle="Tarjetas y otros medios" icono="▤" digital />
+        <div style={estiloResponsivo(estilos.contenido, estilosDesktop.contenido)}>
+          <section style={estiloResponsivo(estilos.kpisGrid, estilosDesktop.kpisGrid)}>
+            <KpiCard titulo="Movimientos hoy" valor={movimientosHoy.length} detalle="Total de transacciones" icono="▤" compacto={esEscritorioCompacto} />
+            <KpiCard titulo="Total de hoy" valor={`$${totalHoy.toFixed(2)}`} detalle="Ingresos registrados" icono="💰" destacado compacto={esEscritorioCompacto} />
+            <KpiCard titulo="Efectivo hoy" valor={`$${totalEfectivoHoy.toFixed(2)}`} detalle="Pago en efectivo" icono="▣" compacto={esEscritorioCompacto} />
+            <KpiCard titulo="Pagos digitales" valor={`$${totalDigitalHoy.toFixed(2)}`} detalle="Tarjetas y otros medios" icono="▤" digital compacto={esEscritorioCompacto} />
           </section>
 
           {esNegocioMembresia() ? (
             <section style={estilos.gymCajaLayout}>
-              <article id="caja-gimnasio-formulario" style={estilos.gymCobroPanel}>
-                <div style={estilos.gymCobroEncabezado}>
+              <article id="caja-gimnasio-formulario" style={estiloResponsivo(estilos.gymCobroPanel, estilosDesktop.gymCobroPanel)}>
+                <div style={estiloResponsivo(estilos.gymCobroEncabezado, estilosDesktop.gymCobroEncabezado)}>
                   <div>
                     <span style={estilos.gymEyebrow}>
                       REGISTRAR COBRO
                     </span>
                   </div>
 
-                  <div style={estilos.gymFechaCompacta}>
+                  <div style={estiloResponsivo(estilos.gymFechaCompacta, estilosDesktop.gymFechaCompacta)}>
                     <span style={estilos.label}>Fecha</span>
                     <input
                       type="date"
@@ -2573,20 +2598,23 @@ export default function Caja() {
                   </div>
                 </div>
 
-                <div style={estilos.gymAccionesPrincipales}>
+                <div style={estiloResponsivo(estilos.gymAccionesPrincipales, estilosDesktop.gymAccionesPrincipales)}>
                   <button
                     type="button"
                     onClick={prepararCobroMembresia}
                     style={
-                      ["Membresía", "Renovación"].includes(
-                        tipoMovimiento
+                      estiloResponsivo(
+                        ["Membresía", "Renovación"].includes(
+                          tipoMovimiento
+                        )
+                          ? estilos.gymAccionActiva
+                          : estilos.gymAccion,
+                        estilosDesktop.gymAccion
                       )
-                        ? estilos.gymAccionActiva
-                        : estilos.gymAccion
                     }
                   >
-                    <span style={estilos.gymAccionIcono}>🔁</span>
-                    <span style={estilos.gymAccionTexto}>
+                    <span style={estiloResponsivo(estilos.gymAccionIcono, estilosDesktop.gymAccionIcono)}>🔁</span>
+                    <span style={estiloResponsivo(estilos.gymAccionTexto, estilosDesktop.gymAccionTexto)}>
                       <strong>{etiquetaAccionMembresia()}</strong>
                       <small>
                         {clienteSeleccionado
@@ -2604,13 +2632,16 @@ export default function Caja() {
                       seleccionarTipoGimnasio("Pase diario")
                     }
                     style={
-                      tipoMovimiento === "Pase diario"
-                        ? estilos.gymAccionActiva
-                        : estilos.gymAccion
+                      estiloResponsivo(
+                        tipoMovimiento === "Pase diario"
+                          ? estilos.gymAccionActiva
+                          : estilos.gymAccion,
+                        estilosDesktop.gymAccion
+                      )
                     }
                   >
-                    <span style={estilos.gymAccionIcono}>🎟️</span>
-                    <span style={estilos.gymAccionTexto}>
+                    <span style={estiloResponsivo(estilos.gymAccionIcono, estilosDesktop.gymAccionIcono)}>🎟️</span>
+                    <span style={estiloResponsivo(estilos.gymAccionTexto, estilosDesktop.gymAccionTexto)}>
                       <strong>Pase diario</strong>
                       <small>
                         Registra una entrada sin renovar membresía
@@ -2626,16 +2657,19 @@ export default function Caja() {
                       )
                     }
                     style={
-                      mostrarOtrosCobros ||
-                      obtenerOtrosCobrosGimnasio().includes(
-                        tipoMovimiento
+                      estiloResponsivo(
+                        mostrarOtrosCobros ||
+                        obtenerOtrosCobrosGimnasio().includes(
+                          tipoMovimiento
+                        )
+                          ? estilos.gymAccionActiva
+                          : estilos.gymAccion,
+                        estilosDesktop.gymAccion
                       )
-                        ? estilos.gymAccionActiva
-                        : estilos.gymAccion
                     }
                   >
-                    <span style={estilos.gymAccionIcono}>＋</span>
-                    <span style={estilos.gymAccionTexto}>
+                    <span style={estiloResponsivo(estilos.gymAccionIcono, estilosDesktop.gymAccionIcono)}>＋</span>
+                    <span style={estiloResponsivo(estilos.gymAccionTexto, estilosDesktop.gymAccionTexto)}>
                       <strong>Otro cobro</strong>
                       <small>
                         Inscripción, clase, servicio o producto
@@ -2645,7 +2679,7 @@ export default function Caja() {
                 </div>
 
                 {mostrarOtrosCobros && (
-                  <div style={estilos.gymOtrosCobros}>
+                  <div style={estiloResponsivo(estilos.gymOtrosCobros, estilosDesktop.gymOtrosCobros)}>
                     {obtenerOtrosCobrosGimnasio().map(
                       (opcion) => (
                         <button
@@ -2667,11 +2701,11 @@ export default function Caja() {
                   </div>
                 )}
 
-                <section style={estilos.gymBloque}>
-                  <div style={estilos.gymBloqueCabecera}>
+                <section style={estiloResponsivo(estilos.gymBloque, estilosDesktop.gymBloque)}>
+                  <div style={estiloResponsivo(estilos.gymBloqueCabecera, estilosDesktop.gymBloqueCabecera)}>
                     <div>
                       <span style={estilos.gymEyebrow}>ALUMNO</span>
-                      <h3 style={estilos.gymBloqueTitulo}>
+                      <h3 style={estiloResponsivo(estilos.gymBloqueTitulo, estilosDesktop.gymBloqueTitulo)}>
                         Buscar por nombre, teléfono o cédula
                       </h3>
                     </div>
@@ -2683,7 +2717,7 @@ export default function Caja() {
                     </span>
                   </div>
 
-                  <div style={estilos.gymBuscarFila}>
+                  <div style={estiloResponsivo(estilos.gymBuscarFila, estilosDesktop.gymBuscarFila)}>
                     <input
                       placeholder="Escriba mínimo 3 caracteres"
                       value={buscarCliente}
@@ -2700,7 +2734,7 @@ export default function Caja() {
                     <button
                       type="button"
                       onClick={buscarClientes}
-                      style={estilos.gymBuscarBoton}
+                      style={estiloResponsivo(estilos.gymBuscarBoton, estilosDesktop.gymBuscarBoton)}
                     >
                       Buscar
                     </button>
@@ -2746,10 +2780,10 @@ export default function Caja() {
                   )}
 
                   {clienteSeleccionado ? (
-                    <div style={estilos.gymAlumnoCard}>
-                      <div style={estilos.gymAlumnoSuperior}>
+                    <div style={estiloResponsivo(estilos.gymAlumnoCard, estilosDesktop.gymAlumnoCard)}>
+                      <div style={estiloResponsivo(estilos.gymAlumnoSuperior, estilosDesktop.gymAlumnoSuperior)}>
                         <div style={estilos.gymAlumnoIdentidad}>
-                          <span style={estilos.gymAlumnoAvatar}>
+                          <span style={estiloResponsivo(estilos.gymAlumnoAvatar, estilosDesktop.gymAlumnoAvatar)}>
                             {String(
                               clienteSeleccionado.nombre || "A"
                             )
@@ -2758,7 +2792,7 @@ export default function Caja() {
                           </span>
 
                           <div>
-                            <strong style={estilos.gymAlumnoNombre}>
+                            <strong style={estiloResponsivo(estilos.gymAlumnoNombre, estilosDesktop.gymAlumnoNombre)}>
                               {clienteSeleccionado.nombre}
                             </strong>
                             <span style={estilos.gymAlumnoDato}>
@@ -2859,7 +2893,7 @@ export default function Caja() {
                         </div>
                       )}
 
-                      <div style={estilos.gymAlumnoResumen}>
+                      <div style={estiloResponsivo(estilos.gymAlumnoResumen, estilosDesktop.gymAlumnoResumen)}>
                         <MiniStat
                           label="Plan"
                           value={
@@ -2911,8 +2945,8 @@ export default function Caja() {
                       )}
                     </div>
                   ) : (
-                    <div style={estilos.gymAlumnoVacio}>
-                      <span style={estilos.gymAlumnoVacioIcono}>
+                    <div style={estiloResponsivo(estilos.gymAlumnoVacio, estilosDesktop.gymAlumnoVacio)}>
+                      <span style={estiloResponsivo(estilos.gymAlumnoVacioIcono, estilosDesktop.gymAlumnoVacioIcono)}>
                         👤
                       </span>
                       <div>
@@ -2930,13 +2964,13 @@ export default function Caja() {
                 </section>
 
                 {esVentaConProducto() && (
-                  <section style={estilos.gymBloque}>
-                    <div style={estilos.gymBloqueCabecera}>
+                  <section style={estiloResponsivo(estilos.gymBloque, estilosDesktop.gymBloque)}>
+                    <div style={estiloResponsivo(estilos.gymBloqueCabecera, estilosDesktop.gymBloqueCabecera)}>
                       <div>
                         <span style={estilos.gymEyebrow}>
                           PRODUCTO
                         </span>
-                        <h3 style={estilos.gymBloqueTitulo}>
+                        <h3 style={estiloResponsivo(estilos.gymBloqueTitulo, estilosDesktop.gymBloqueTitulo)}>
                           Seleccione el artículo a vender
                         </h3>
                       </div>
@@ -2945,7 +2979,7 @@ export default function Caja() {
                       </span>
                     </div>
 
-                    <div style={estilos.gymProductoGrid}>
+                    <div style={estiloResponsivo(estilos.gymProductoGrid, estilosDesktop.gymProductoGrid)}>
                       <Campo label="Producto">
                         <select
                           value={
@@ -3001,19 +3035,19 @@ export default function Caja() {
                   </section>
                 )}
 
-                <section style={estilos.gymBloque}>
-                  <div style={estilos.gymBloqueCabecera}>
+                <section style={estiloResponsivo(estilos.gymBloque, estilosDesktop.gymBloque)}>
+                  <div style={estiloResponsivo(estilos.gymBloqueCabecera, estilosDesktop.gymBloqueCabecera)}>
                     <div>
                       <span style={estilos.gymEyebrow}>
                         DETALLE DEL PAGO
                       </span>
-                      <h3 style={estilos.gymBloqueTitulo}>
+                      <h3 style={estiloResponsivo(estilos.gymBloqueTitulo, estilosDesktop.gymBloqueTitulo)}>
                         Complete únicamente lo necesario
                       </h3>
                     </div>
                   </div>
 
-                  <div style={estilos.gymPagoGrid}>
+                  <div style={estiloResponsivo(estilos.gymPagoGrid, estilosDesktop.gymPagoGrid)}>
                     <Campo label="Método de pago">
                       <select
                         value={metodoPago}
@@ -3040,7 +3074,7 @@ export default function Caja() {
                         onChange={(e) =>
                           setMonto(e.target.value)
                         }
-                        style={estilos.gymMontoInput}
+                        style={estiloResponsivo(estilos.gymMontoInput, estilosDesktop.gymMontoInput)}
                         placeholder="0.00"
                       />
                     </Campo>
@@ -3076,12 +3110,12 @@ export default function Caja() {
                     </Campo>
                   </div>
 
-                  <div style={estilos.gymAccionesCobro}>
+                  <div style={estiloResponsivo(estilos.gymAccionesCobro, estilosDesktop.gymAccionesCobro)}>
                     <button
                       type="button"
                       onClick={guardarMovimiento}
                       disabled={guardando}
-                      style={estilos.gymRegistrarPago}
+                      style={estiloResponsivo(estilos.gymRegistrarPago, estilosDesktop.gymRegistrarPago)}
                     >
                       {guardando
                         ? "Procesando..."
@@ -3098,7 +3132,7 @@ export default function Caja() {
                       type="button"
                       onClick={limpiarFormulario}
                       disabled={guardando}
-                      style={estilos.gymLimpiar}
+                      style={estiloResponsivo(estilos.gymLimpiar, estilosDesktop.gymLimpiar)}
                     >
                       Limpiar
                     </button>
@@ -3303,8 +3337,8 @@ export default function Caja() {
 
           )}
           {esNegocioMembresia() ? (
-            <article style={estilos.gymMovimientosPanel}>
-              <div style={estilos.gymMovimientosHeader}>
+            <article style={estiloResponsivo(estilos.gymMovimientosPanel, estilosDesktop.gymMovimientosPanel)}>
+              <div style={estiloResponsivo(estilos.gymMovimientosHeader, estilosDesktop.gymMovimientosHeader)}>
                 <div>
                   <span style={estilos.gymEyebrow}>
                     MOVIMIENTOS DE CAJA
@@ -3368,7 +3402,7 @@ export default function Caja() {
                   movimientos.map((movimiento) => (
                     <article
                       key={movimiento.id}
-                      style={estilos.gymMovimientoItem}
+                      style={estiloResponsivo(estilos.gymMovimientoItem, estilosDesktop.gymMovimientoItem)}
                     >
                       <div style={estilos.gymMovimientoFecha}>
                         <strong>
@@ -3478,11 +3512,79 @@ function TituloPanel({icono,titulo}){
   return <div style={estilos.tituloPanel}><span style={estilos.tituloPanelIcono}>{icono}</span><h2 style={estilos.tituloPanelTexto}>{titulo}</h2></div>;
 }
 
-function KpiCard({titulo,valor,detalle,icono,destacado,digital}){
+function KpiCard({
+  titulo,
+  valor,
+  detalle,
+  icono,
+  destacado,
+  digital,
+  compacto = false,
+}){
+  const cardBase = destacado
+    ? estilos.kpiDestacado
+    : estilos.kpiCard;
+
+  const iconoBase = digital
+    ? estilos.kpiIconoDigital
+    : estilos.kpiIcono;
+
   return (
-    <article style={destacado?estilos.kpiDestacado:estilos.kpiCard}>
-      <div style={digital?estilos.kpiIconoDigital:estilos.kpiIcono}>{icono}</div>
-      <div><span style={estilos.kpiTitulo}>{titulo}</span><strong style={estilos.kpiValor}>{valor}</strong><small style={destacado?estilos.kpiDetalleClaro:estilos.kpiDetalle}>{detalle}</small></div>
+    <article
+      style={
+        compacto
+          ? { ...cardBase, ...estilosDesktop.kpiCard }
+          : cardBase
+      }
+    >
+      <div
+        style={
+          compacto
+            ? { ...iconoBase, ...estilosDesktop.kpiIcono }
+            : iconoBase
+        }
+      >
+        {icono}
+      </div>
+
+      <div>
+        <span
+          style={
+            compacto
+              ? { ...estilos.kpiTitulo, ...estilosDesktop.kpiTitulo }
+              : estilos.kpiTitulo
+          }
+        >
+          {titulo}
+        </span>
+
+        <strong
+          style={
+            compacto
+              ? { ...estilos.kpiValor, ...estilosDesktop.kpiValor }
+              : estilos.kpiValor
+          }
+        >
+          {valor}
+        </strong>
+
+        <small
+          style={
+            compacto
+              ? {
+                  ...(destacado
+                    ? estilos.kpiDetalleClaro
+                    : estilos.kpiDetalle),
+                  ...estilosDesktop.kpiDetalle,
+                }
+              : destacado
+              ? estilos.kpiDetalleClaro
+              : estilos.kpiDetalle
+          }
+        >
+          {detalle}
+        </small>
+      </div>
     </article>
   );
 }
@@ -3490,6 +3592,208 @@ function KpiCard({titulo,valor,detalle,icono,destacado,digital}){
 function MiniStat({label,value,resaltado,estado}){
   return <div style={resaltado?estilos.miniStatResaltado:estilos.miniStat}><span>{label}</span><strong style={estado?estilos.estadoActivo:undefined}>{estado?`● ${value}`:value}</strong></div>;
 }
+
+const estilosDesktop = {
+  topbar:{
+    minHeight:"68px",
+    padding:"8px 16px"
+  },
+  topbarMarca:{
+    gap:"11px"
+  },
+  topbarLogoCard:{
+    padding:"7px 12px",
+    minHeight:"52px",
+    borderRadius:"15px"
+  },
+  topbarLogo:{
+    width:"156px",
+    height:"42px"
+  },
+  topbarSeparador:{
+    height:"32px"
+  },
+  topbarModulo:{
+    fontSize:"10px"
+  },
+  topbarEmpresa:{
+    fontSize:"19px"
+  },
+  topbarTexto:{
+    margin:"2px 0 0",
+    fontSize:"10px"
+  },
+  botonVolver:{
+    minHeight:"36px",
+    padding:"0 13px",
+    fontSize:"11px"
+  },
+  contenido:{
+    padding:"10px 12px"
+  },
+  kpisGrid:{
+    gap:"8px",
+    marginBottom:"8px"
+  },
+  kpiCard:{
+    gridTemplateColumns:"46px 1fr",
+    gap:"9px",
+    padding:"10px 12px",
+    minHeight:"66px",
+    borderRadius:"12px"
+  },
+  kpiIcono:{
+    width:"40px",
+    height:"40px",
+    fontSize:"18px",
+    borderRadius:"12px"
+  },
+  kpiTitulo:{
+    fontSize:"10px"
+  },
+  kpiValor:{
+    marginTop:"2px",
+    fontSize:"21px"
+  },
+  kpiDetalle:{
+    marginTop:"2px",
+    fontSize:"9px"
+  },
+  gymCobroPanel:{
+    padding:"10px 12px",
+    borderRadius:"15px"
+  },
+  gymCobroEncabezado:{
+    marginBottom:"7px",
+    gap:"8px"
+  },
+  gymFechaCompacta:{
+    gap:"3px"
+  },
+  gymAccionesPrincipales:{
+    gap:"7px",
+    marginBottom:"7px"
+  },
+  gymAccion:{
+    minHeight:"62px",
+    padding:"8px 10px",
+    gridTemplateColumns:"34px minmax(0,1fr)",
+    gap:"8px",
+    borderRadius:"11px"
+  },
+  gymAccionIcono:{
+    width:"34px",
+    height:"34px",
+    borderRadius:"9px",
+    fontSize:"16px"
+  },
+  gymAccionTexto:{
+    gap:"1px",
+    fontSize:"11px"
+  },
+  gymOtrosCobros:{
+    gap:"5px",
+    padding:"7px",
+    marginBottom:"7px"
+  },
+  gymBloque:{
+    marginTop:"7px",
+    padding:"10px 12px",
+    borderRadius:"12px"
+  },
+  gymBloqueCabecera:{
+    marginBottom:"7px",
+    gap:"8px"
+  },
+  gymBloqueTitulo:{
+    margin:"3px 0 0",
+    fontSize:"15px"
+  },
+  gymBuscarFila:{
+    gap:"6px"
+  },
+  gymBuscarBoton:{
+    minWidth:"72px",
+    minHeight:"36px",
+    padding:"0 12px",
+    fontSize:"11px"
+  },
+  gymAlumnoCard:{
+    marginTop:"7px",
+    padding:"9px 10px",
+    borderRadius:"11px"
+  },
+  gymAlumnoSuperior:{
+    gap:"8px"
+  },
+  gymAlumnoAvatar:{
+    width:"38px",
+    height:"38px",
+    borderRadius:"10px",
+    fontSize:"16px"
+  },
+  gymAlumnoNombre:{
+    fontSize:"14px"
+  },
+  gymAlumnoResumen:{
+    marginTop:"7px",
+    gap:"6px"
+  },
+  gymAlumnoVacio:{
+    marginTop:"7px",
+    padding:"9px 10px",
+    gridTemplateColumns:"34px minmax(0,1fr)",
+    gap:"8px",
+    borderRadius:"10px"
+  },
+  gymAlumnoVacioIcono:{
+    width:"34px",
+    height:"34px",
+    borderRadius:"9px",
+    fontSize:"15px"
+  },
+  gymProductoGrid:{
+    gap:"7px"
+  },
+  gymPagoGrid:{
+    gridTemplateColumns:"repeat(5,minmax(0,1fr))",
+    gap:"7px"
+  },
+  gymMontoInput:{
+    minHeight:"38px",
+    padding:"7px 9px",
+    borderRadius:"9px",
+    fontSize:"18px"
+  },
+  gymAccionesCobro:{
+    marginTop:"8px",
+    gap:"7px"
+  },
+  gymRegistrarPago:{
+    minHeight:"38px",
+    borderRadius:"9px",
+    fontSize:"12px"
+  },
+  gymLimpiar:{
+    minHeight:"38px",
+    borderRadius:"9px",
+    fontSize:"11px"
+  },
+  gymMovimientosPanel:{
+    marginTop:"8px",
+    padding:"11px 12px",
+    borderRadius:"13px"
+  },
+  gymMovimientosHeader:{
+    marginBottom:"8px",
+    gap:"8px"
+  },
+  gymMovimientoItem:{
+    padding:"8px",
+    gap:"8px",
+    borderRadius:"9px"
+  }
+};
 
 const estilos={
   pagina:{minHeight:"100vh",background:"#f4f7f5",color:"#17211b",fontFamily:"Inter,Arial,system-ui,sans-serif"},
