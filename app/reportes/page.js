@@ -748,132 +748,93 @@ export default function ReportesPage() {
 
       {esReporteSuscripciones ? (
         <>
-          <section style={estilos.tarjetas}>
-            <Tarjeta
+          <section style={estilos.indicadoresEjecutivos}>
+            <TarjetaCompacta
               icono="🏋️"
               titulo="Miembros activos"
               valor={resumenGimnasio.miembrosActivos}
               detalle="Membresías vigentes"
+              tono="verde"
             />
 
-            <Tarjeta
+            <TarjetaCompacta
               icono="📅"
-              titulo="Próximas a vencer"
+              titulo="Por vencer"
               valor={resumenGimnasio.proximasVencer}
-              detalle="Vencen en los próximos 7 días"
+              detalle="Próximos 7 días"
+              tono="amarillo"
             />
 
-            <Tarjeta
+            <TarjetaCompacta
               icono="⚠️"
-              titulo="Membresías vencidas"
+              titulo="Vencidas"
               valor={resumenGimnasio.membresiasVencidas}
               detalle="Requieren seguimiento"
+              tono="rojo"
             />
 
-            <Tarjeta
-              icono="🔁"
-              titulo="Renovaciones"
-              valor={resumenGimnasio.renovaciones}
-              detalle="Registradas en el período"
-            />
-
-            <Tarjeta
+            <TarjetaCompacta
               icono="💳"
-              titulo="Ingresos por membresías"
+              titulo="Ingresos membresías"
               valor={moneda(resumenGimnasio.ingresosMembresias)}
               detalle="Mensualidades y renovaciones"
+              tono="azul"
             />
 
-            <Tarjeta
-              icono="🛒"
-              titulo="Ventas de productos"
-              valor={moneda(resumenGimnasio.ventasProductos)}
-              detalle="Bebidas, accesorios y otros"
-            />
-
-            <Tarjeta
+            <TarjetaCompacta
               icono="🏦"
-              titulo="Ingresos de caja"
-              valor={moneda(resumenGimnasio.ingresosCaja)}
-              detalle="Movimientos de entrada"
-            />
-
-            <Tarjeta
-              icono="📤"
-              titulo="Egresos de caja"
-              valor={moneda(resumenGimnasio.egresosCaja)}
-              detalle="Gastos, retiros y salidas"
-            />
-
-            <Tarjeta
-              icono="👥"
-              titulo="Clientes nuevos"
-              valor={resumenGimnasio.clientesNuevos}
-              detalle="Registrados en el período"
-            />
-
-            <Tarjeta
-              icono="📦"
-              titulo="Stock bajo"
-              valor={resumenGimnasio.productosBajoStock}
-              detalle="Productos que requieren reposición"
+              titulo="Balance de caja"
+              valor={moneda(resumenGimnasio.balance)}
+              detalle="Ingresos menos egresos"
+              tono="oscuro"
             />
           </section>
 
-          <section style={estilos.resumenes}>
-            <Panel titulo="Resumen de membresías" etiqueta="MEMBRESÍAS">
-              <Fila
-                nombre="Miembros activos"
-                valor={resumenGimnasio.miembrosActivos}
-              />
-              <Fila
-                nombre="Próximas a vencer"
-                valor={resumenGimnasio.proximasVencer}
-              />
-              <Fila
-                nombre="Membresías vencidas"
-                valor={resumenGimnasio.membresiasVencidas}
-              />
-              <Fila
-                nombre="Renovaciones"
+          <section style={estilos.actividadPeriodo}>
+            <div style={estilos.actividadEncabezado}>
+              <div>
+                <span style={estilos.miniEtiqueta}>ACTIVIDAD DEL PERÍODO</span>
+                <h2 style={estilos.actividadTitulo}>
+                  Resumen operativo
+                </h2>
+              </div>
+
+              <span style={estilos.actividadRango}>
+                {fechaDesde} → {fechaHasta}
+              </span>
+            </div>
+
+            <div style={estilos.actividadGrid}>
+              <ActividadItem
+                titulo="Renovaciones"
                 valor={resumenGimnasio.renovaciones}
               />
-            </Panel>
 
-            <Panel titulo="Resumen comercial" etiqueta="VENTAS">
-              <Fila
-                nombre="Ingresos por membresías"
-                valor={moneda(resumenGimnasio.ingresosMembresias)}
-              />
-              <Fila
-                nombre="Ventas de productos"
-                valor={moneda(resumenGimnasio.ventasProductos)}
-              />
-              <Fila
-                nombre="Clientes nuevos"
-                valor={resumenGimnasio.clientesNuevos}
-              />
-              <Fila
-                nombre="Productos con stock bajo"
-                valor={resumenGimnasio.productosBajoStock}
-              />
-            </Panel>
-
-            <Panel titulo="Resumen de caja" etiqueta="CAJA">
-              <Fila
-                nombre="Ingresos"
+              <ActividadItem
+                titulo="Ingresos caja"
                 valor={moneda(resumenGimnasio.ingresosCaja)}
               />
-              <Fila
-                nombre="Egresos"
+
+              <ActividadItem
+                titulo="Egresos caja"
                 valor={moneda(resumenGimnasio.egresosCaja)}
               />
-              <Fila
-                nombre="Balance"
-                valor={moneda(resumenGimnasio.balance)}
+
+              <ActividadItem
+                titulo="Clientes nuevos"
+                valor={resumenGimnasio.clientesNuevos}
               />
-              <Fila nombre="Movimientos" valor={cajaPeriodo.length} />
-            </Panel>
+
+              <ActividadItem
+                titulo="Ventas productos"
+                valor={moneda(resumenGimnasio.ventasProductos)}
+              />
+
+              <ActividadItem
+                titulo="Stock bajo"
+                valor={resumenGimnasio.productosBajoStock}
+              />
+            </div>
           </section>
 
           <section style={estilos.panelTabla}>
@@ -1165,6 +1126,81 @@ function Campo({ label, children }) {
   );
 }
 
+function TarjetaCompacta({
+  icono,
+  titulo,
+  valor,
+  detalle,
+  tono = "verde",
+}) {
+  const tonos = {
+    verde: {
+      fondo: "#eaf7f0",
+      color: "#16834f",
+    },
+    amarillo: {
+      fondo: "#fff7df",
+      color: "#956400",
+    },
+    rojo: {
+      fondo: "#fff0ee",
+      color: "#b42318",
+    },
+    azul: {
+      fondo: "#edf5ff",
+      color: "#2867a9",
+    },
+    oscuro: {
+      fondo: "#e9efec",
+      color: "#173c2a",
+    },
+  };
+
+  const tonoActual = tonos[tono] || tonos.verde;
+
+  return (
+    <article style={estilos.tarjetaCompacta}>
+      <div
+        style={{
+          ...estilos.iconoCompacto,
+          background: tonoActual.fondo,
+          color: tonoActual.color,
+        }}
+      >
+        {icono}
+      </div>
+
+      <div style={estilos.tarjetaCompactaContenido}>
+        <span style={estilos.tituloTarjetaCompacta}>
+          {titulo}
+        </span>
+
+        <strong style={estilos.valorTarjetaCompacta}>
+          {valor}
+        </strong>
+
+        <span style={estilos.detalleTarjetaCompacta}>
+          {detalle}
+        </span>
+      </div>
+    </article>
+  );
+}
+
+function ActividadItem({ titulo, valor }) {
+  return (
+    <div style={estilos.actividadItem}>
+      <span style={estilos.actividadItemTitulo}>
+        {titulo}
+      </span>
+
+      <strong style={estilos.actividadItemValor}>
+        {valor}
+      </strong>
+    </div>
+  );
+}
+
 function Tarjeta({ icono, titulo, valor, detalle }) {
   return (
     <article style={estilos.tarjeta}>
@@ -1224,7 +1260,7 @@ const estilos = {
   },
   encabezado: {
     maxWidth: 1500,
-    margin: "0 auto 26px",
+    margin: "0 auto 18px",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
@@ -1267,8 +1303,8 @@ const estilos = {
   },
   filtros: {
     maxWidth: 1500,
-    margin: "0 auto 22px",
-    padding: 18,
+    margin: "0 auto 16px",
+    padding: 14,
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
     gap: 13,
@@ -1344,6 +1380,129 @@ const estilos = {
     fontWeight: 800,
     cursor: "pointer",
   },
+  indicadoresEjecutivos: {
+    maxWidth: 1500,
+    margin: "0 auto 14px",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+    gap: 10,
+  },
+
+  tarjetaCompacta: {
+    minHeight: 92,
+    padding: "13px 14px",
+    display: "grid",
+    gridTemplateColumns: "38px minmax(0,1fr)",
+    alignItems: "center",
+    gap: 10,
+    border: "1px solid #dce5df",
+    borderRadius: 14,
+    background: "#fff",
+    boxShadow: "0 5px 16px rgba(15, 23, 42, 0.04)",
+  },
+
+  iconoCompacto: {
+    width: 38,
+    height: 38,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 11,
+    fontSize: 18,
+    fontWeight: 900,
+  },
+
+  tarjetaCompactaContenido: {
+    minWidth: 0,
+  },
+
+  tituloTarjetaCompacta: {
+    display: "block",
+    color: "#657169",
+    fontSize: 11,
+    fontWeight: 800,
+    lineHeight: 1.2,
+  },
+
+  valorTarjetaCompacta: {
+    display: "block",
+    marginTop: 4,
+    color: "#17211c",
+    fontSize: 20,
+    lineHeight: 1.05,
+  },
+
+  detalleTarjetaCompacta: {
+    display: "block",
+    marginTop: 4,
+    color: "#89938d",
+    fontSize: 9.5,
+    lineHeight: 1.3,
+  },
+
+  actividadPeriodo: {
+    maxWidth: 1500,
+    margin: "0 auto 16px",
+    padding: "13px 15px",
+    border: "1px solid #dce5df",
+    borderRadius: 14,
+    background: "#fff",
+    boxShadow: "0 5px 16px rgba(15, 23, 42, 0.035)",
+  },
+
+  actividadEncabezado: {
+    marginBottom: 10,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+
+  actividadTitulo: {
+    margin: 0,
+    color: "#17211c",
+    fontSize: 16,
+  },
+
+  actividadRango: {
+    padding: "5px 8px",
+    borderRadius: 999,
+    background: "#edf8f1",
+    color: "#16834f",
+    fontSize: 9,
+    fontWeight: 800,
+  },
+
+  actividadGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(135px, 1fr))",
+    gap: 7,
+  },
+
+  actividadItem: {
+    minHeight: 54,
+    padding: "8px 10px",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    gap: 3,
+    borderLeft: "3px solid #16834f",
+    borderRadius: 8,
+    background: "#f8faf9",
+  },
+
+  actividadItemTitulo: {
+    color: "#718078",
+    fontSize: 9.5,
+    fontWeight: 750,
+  },
+
+  actividadItemValor: {
+    color: "#17211c",
+    fontSize: 14,
+    lineHeight: 1.1,
+  },
+
   tarjetas: {
     maxWidth: 1500,
     margin: "0 auto 22px",
