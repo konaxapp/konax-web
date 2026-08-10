@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.09-AGENDA-G-PORTAL-CAJA";
+const VERSION = "2026.08.10-AGENDA-H-3-MODALIDADES";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -11,7 +11,7 @@ const SERVICIO_INICIAL = {
   tipo: "clase_grupal",
   duracion_minutos: 60,
   capacidad_default: 5,
-  requiere_membresia: false,
+  requiere_membresia: true,
   requiere_pago: false,
   precio: 0,
   activo: true,
@@ -403,7 +403,12 @@ export default function AgendaPage() {
       return "pago_local";
     }
 
-    return "abierta_gratis";
+    /*
+      Compatibilidad con servicios antiguos que estaban configurados
+      como reserva abierta sin costo. Esa modalidad ya no se ofrece.
+      Al editarlos, se muestran como "Incluida con membresía".
+    */
+    return "solo_miembros";
   }
 
   function aplicarModalidadServicio(modalidad) {
@@ -2325,17 +2330,14 @@ export default function AgendaPage() {
                   }
                   style={s.input}
                 >
-                  <option value="abierta_gratis">
-                    Reserva abierta · Sin costo
-                  </option>
                   <option value="solo_miembros">
-                    Solo miembros · Incluida en membresía
+                    Miembro activo · Incluida en membresía
                   </option>
                   <option value="pago_local">
-                    Reserva abierta · Pagar en el local
+                    Pago al llegar · No requiere membresía
                   </option>
                   <option value="miembros_pago">
-                    Solo miembros · Costo adicional
+                    Miembro activo · Servicio personalizado con costo
                   </option>
                 </select>
               </Campo>
@@ -2364,9 +2366,9 @@ export default function AgendaPage() {
                       Cobro en el local
                     </strong>
                     <span>
-                      El cliente reserva su cupo. La reserva queda
-                      pendiente de pago y recepción la cobra desde Caja
-                      cuando el cliente llegue.
+                      El cliente reserva su cupo. Si esta modalidad
+                      tiene precio, la reserva queda pendiente de pago y
+                      recepción la cobra desde Caja cuando el cliente llegue.
                     </span>
                   </div>
                 </>
