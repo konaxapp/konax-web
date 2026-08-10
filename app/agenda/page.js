@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.09-AGENDA-B-PRO";
+const VERSION = "2026.08.09-AGENDA-D-COMMAND";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -117,6 +117,8 @@ export default function AgendaPage() {
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [horarioSeleccionado, setHorarioSeleccionado] = useState("");
   const [observaciones, setObservaciones] = useState("");
+  const [busquedaReservas, setBusquedaReservas] = useState("");
+  const [estadoReservaFiltro, setEstadoReservaFiltro] = useState("Todos");
 
   useEffect(() => {
     inicializar();
@@ -302,6 +304,68 @@ export default function AgendaPage() {
     );
   }, [reservas]);
 
+  const reservasFechaOperativas = useMemo(() => {
+    return reservasFecha.filter(
+      (r) => normalizar(r.estado) !== "cancelada"
+    );
+  }, [reservasFecha]);
+
+  const reservasFiltradas = useMemo(() => {
+    const q = normalizar(busquedaReservas);
+    const estadoBuscado = normalizar(estadoReservaFiltro);
+
+    return reservas
+      .filter((reserva) => {
+        const estado = normalizar(reserva.estado);
+        const cliente = mapaClientes.get(String(reserva.cliente_id));
+        const servicio = mapaServicios.get(String(reserva.servicio_id));
+
+        const cumpleEstado =
+          estadoReservaFiltro === "Todos" ||
+          estado === estadoBuscado;
+
+        const texto = normalizar(
+          `${cliente?.nombre || ""} ${cliente?.cedula || ""} ${
+            cliente?.telefono || ""
+          } ${servicio?.nombre || ""} ${reserva.fecha_reserva || ""}`
+        );
+
+        const cumpleBusqueda = !q || texto.includes(q);
+
+        return cumpleEstado && cumpleBusqueda;
+      })
+      .sort((a, b) => {
+        const fechaA = `${a.fecha_reserva || ""} ${a.hora_inicio || ""}`;
+        const fechaB = `${b.fecha_reserva || ""} ${b.hora_inicio || ""}`;
+        return fechaB.localeCompare(fechaA);
+      });
+  }, [
+    reservas,
+    busquedaReservas,
+    estadoReservaFiltro,
+    mapaClientes,
+    mapaServicios,
+  ]);
+
+  const resumenReservas = useMemo(() => {
+    const base = reservasFechaOperativas;
+
+    return {
+      confirmadas: base.filter(
+        (r) => normalizar(r.estado) === "confirmada"
+      ).length,
+      pendientes: base.filter(
+        (r) => normalizar(r.estado) === "pendiente_pago"
+      ).length,
+      asistieron: base.filter(
+        (r) => normalizar(r.estado) === "asistio"
+      ).length,
+      noAsistieron: base.filter(
+        (r) => normalizar(r.estado) === "no_asistio"
+      ).length,
+    };
+  }, [reservasFechaOperativas]);
+
   const resumenAgenda = useMemo(() => {
     const capacidadTotal = disponibilidad.reduce(
       (total, item) => total + Number(item.capacidad || 0),
@@ -330,6 +394,54 @@ export default function AgendaPage() {
       ocupacion,
     };
   }, [disponibilidad]);
+
+  const semanaAgenda = useMemo(() => {
+    const base = new Date(`${fechaAgenda}T12:00:00`);
+
+    if (Number.isNaN(base.getTime())) return [];
+
+    const diaActual = base.getDay();
+    const desplazamientoLunes =
+      diaActual === 0 ? -6 : 1 - diaActual;
+
+    const lunes = new Date(base);
+    lunes.setDate(base.getDate() + desplazamientoLunes);
+
+    return Array.from({ length: 7 }, (_, indice) => {
+      const fecha = new Date(lunes);
+      fecha.setDate(lunes.getDate() + indice);
+
+      const offset = fecha.getTimezoneOffset();
+      const iso = new Date(
+        fecha.getTime() - offset * 60000
+      )
+        .toISOString()
+        .slice(0, 10);
+
+      const nombre = new Intl.DateTimeFormat("es-PA", {
+        weekday: "short",
+      })
+        .format(fecha)
+        .replace(".", "")
+        .toUpperCase();
+
+      const mes = new Intl.DateTimeFormat("es-PA", {
+        month: "short",
+      })
+        .format(fecha)
+        .replace(".", "")
+        .toUpperCase();
+
+      return {
+        fecha: iso,
+        dia: nombre,
+        numero: fecha.getDate(),
+        mes,
+        seleccionado: iso === fechaAgenda,
+        hoy: iso === fechaHoy(),
+      };
+    });
+  }, [fechaAgenda]);
 
   async function refrescarTodo() {
     setGuardando(true);
@@ -648,6 +760,29 @@ export default function AgendaPage() {
     return mapaServicios.get(String(id))?.nombre || "Servicio";
   }
 
+  function moverFechaAgenda(dias) {
+    const base = new Date(`${fechaAgenda}T12:00:00`);
+
+    if (Number.isNaN(base.getTime())) return;
+
+    base.setDate(base.getDate() + dias);
+
+    const offset = base.getTimezoneOffset();
+    const nuevaFecha = new Date(
+      base.getTime() - offset * 60000
+    )
+      .toISOString()
+      .slice(0, 10);
+
+    setFechaAgenda(nuevaFecha);
+    setHorarioSeleccionado("");
+  }
+
+  function irAgendaHoy() {
+    setFechaAgenda(fechaHoy());
+    setHorarioSeleccionado("");
+  }
+
   function detalleHorario(id) {
     const h = mapaHorarios.get(String(id));
     if (!h) return "";
@@ -664,256 +799,769 @@ export default function AgendaPage() {
   }
 
   return (
-    <main style={s.page}>
-      <header style={s.header}>
-        <div style={s.heroBrand}>
-          <div style={s.logoCard}>
-            <img
-              src="/konax-logo.png"
-              alt="KONAX"
-              style={s.logo}
-            />
+    <main style={s.page} className="agenda-page">
+      <style>{AGENDA_CSS}</style>
+
+      <header style={neo.hero} className="agenda-d-hero">
+        <div style={neo.heroMain}>
+          <div style={neo.brandRow}>
+            <div style={neo.logoCard}>
+              <img
+                src="/konax-logo.png"
+                alt="KONAX"
+                style={neo.logo}
+              />
+            </div>
+
+            <div>
+              <span style={neo.heroEyebrow}>
+                KONAX · RESERVAS Y CLASES
+              </span>
+              <h1 style={neo.heroTitle}>
+                Centro de Agenda
+              </h1>
+              <p style={neo.heroSubtitle}>
+                {empresaNombre || "KONAX"} · Controla horarios,
+                capacidad, reservas y asistencia desde una vista
+                operativa más clara.
+              </p>
+            </div>
           </div>
 
-          <div style={s.heroText}>
-            <span style={s.eyebrow}>AGENDA DEL GIMNASIO</span>
-            <h1 style={s.title}>Agenda y reservas</h1>
-            <p style={s.subtitle}>
-              {empresaNombre || "KONAX"} · Organiza clases, cupos y asistencia
-              desde un solo lugar.
-            </p>
+          <div style={neo.heroActions}>
+            <button
+              type="button"
+              style={neo.heroGhost}
+              onClick={() => (window.location.href = "/dashboard")}
+            >
+              ← Panel principal
+            </button>
+
+            <button
+              type="button"
+              style={neo.heroPrimary}
+              onClick={() => setVista("nueva")}
+            >
+              + Crear reserva
+            </button>
           </div>
         </div>
 
-        <div style={s.headerActions}>
-          <span style={s.roleBadge}>
+        <div style={neo.heroSide}>
+          <span style={neo.heroSideLabel}>
+            FECHA EN OPERACIÓN
+          </span>
+          <strong style={neo.heroSideDate}>
+            {formatoFecha(fechaAgenda)}
+          </strong>
+
+          <div style={neo.heroSideStats}>
+            <div>
+              <span style={neo.heroSideMini}>Ocupación</span>
+              <strong style={neo.heroSideValue}>
+                {resumenAgenda.ocupacion}%
+              </strong>
+            </div>
+
+            <div>
+              <span style={neo.heroSideMini}>Reservas</span>
+              <strong style={neo.heroSideValue}>
+                {reservasFechaOperativas.length}
+              </strong>
+            </div>
+          </div>
+
+          <span style={neo.roleBadge}>
             {esAdmin ? "Administrador" : rol || "Usuario"}
           </span>
-
-          <button
-            type="button"
-            style={s.secondaryButton}
-            onClick={() => (window.location.href = "/dashboard")}
-          >
-            ← Centro de Operaciones
-          </button>
-
-          <button
-            type="button"
-            style={s.heroButton}
-            onClick={refrescarTodo}
-            disabled={guardando}
-          >
-            {guardando ? "Actualizando..." : "Actualizar"}
-          </button>
         </div>
       </header>
 
       {error && <div style={s.error}>{error}</div>}
 
-      <section style={s.tabs}>
-        <Tab activo={vista === "hoy"} onClick={() => setVista("hoy")}>
-          Agenda de hoy
-        </Tab>
+      <section style={neo.nav} className="agenda-d-nav">
+        <button
+          type="button"
+          onClick={() => setVista("hoy")}
+          style={{
+            ...neo.navItem,
+            ...(vista === "hoy" ? neo.navItemActive : {}),
+          }}
+        >
+          <span>▦</span>
+          Agenda
+        </button>
 
-        <Tab activo={vista === "nueva"} onClick={() => setVista("nueva")}>
+        <button
+          type="button"
+          onClick={() => setVista("nueva")}
+          style={{
+            ...neo.navItem,
+            ...(vista === "nueva" ? neo.navItemActive : {}),
+          }}
+        >
+          <span>＋</span>
           Nueva reserva
-        </Tab>
+        </button>
 
-        <Tab activo={vista === "reservas"} onClick={() => setVista("reservas")}>
+        <button
+          type="button"
+          onClick={() => setVista("reservas")}
+          style={{
+            ...neo.navItem,
+            ...(vista === "reservas" ? neo.navItemActive : {}),
+          }}
+        >
+          <span>≡</span>
           Reservas
-        </Tab>
+        </button>
 
         {esAdmin && (
-          <Tab
-            activo={vista === "configuracion"}
+          <button
+            type="button"
             onClick={() => setVista("configuracion")}
+            style={{
+              ...neo.navItem,
+              ...(vista === "configuracion"
+                ? neo.navItemActive
+                : {}),
+            }}
           >
+            <span>⚙</span>
             Clases y horarios
-          </Tab>
+          </button>
         )}
+
+        <button
+          type="button"
+          onClick={refrescarTodo}
+          disabled={guardando}
+          style={neo.navRefresh}
+        >
+          {guardando ? "Actualizando..." : "↻ Actualizar"}
+        </button>
       </section>
 
       {vista === "hoy" && (
         <>
-          <section style={s.toolbar}>
-            <div style={s.dateCard}>
-              <Campo label="Fecha de la agenda">
-                <input
-                  type="date"
-                  value={fechaAgenda}
-                  onChange={(e) => setFechaAgenda(e.target.value)}
-                  style={s.input}
-                />
-              </Campo>
-              <span style={s.dateHuman}>{formatoFecha(fechaAgenda)}</span>
-            </div>
-
-            <div style={s.quickInfo}>
-              <span style={s.statIcon}>▣</span>
+          <section style={neo.weekShell} className="agenda-d-week-shell">
+            <div style={neo.weekHeader}>
               <div>
-                <span style={s.muted}>Clases disponibles</span>
-                <strong style={s.bigNumber}>{disponibilidad.length}</strong>
+                <span style={neo.sectionEyebrow}>
+                  SEMANA OPERATIVA
+                </span>
+                <h2 style={neo.sectionTitle}>
+                  Selecciona el día que deseas gestionar
+                </h2>
+              </div>
+
+              <div style={neo.weekControls}>
+                <button
+                  type="button"
+                  style={neo.roundButton}
+                  onClick={() => moverFechaAgenda(-7)}
+                >
+                  ←
+                </button>
+
+                <button
+                  type="button"
+                  style={neo.todayPill}
+                  onClick={irAgendaHoy}
+                >
+                  Hoy
+                </button>
+
+                <button
+                  type="button"
+                  style={neo.roundButton}
+                  onClick={() => moverFechaAgenda(7)}
+                >
+                  →
+                </button>
               </div>
             </div>
 
-            <div style={s.quickInfo}>
-              <span style={s.statIcon}>✓</span>
-              <div>
-                <span style={s.muted}>Reservas del día</span>
-                <strong style={s.bigNumber}>{reservasFecha.length}</strong>
-              </div>
-            </div>
+            <div style={neo.weekStrip} className="agenda-d-week-strip">
+              {semanaAgenda.map((dia) => (
+                <button
+                  key={dia.fecha}
+                  type="button"
+                  onClick={() => {
+                    setFechaAgenda(dia.fecha);
+                    setHorarioSeleccionado("");
+                  }}
+                  style={{
+                    ...neo.dayCard,
+                    ...(dia.seleccionado
+                      ? neo.dayCardActive
+                      : {}),
+                  }}
+                >
+                  <span
+                    style={{
+                      ...neo.dayName,
+                      ...(dia.seleccionado
+                        ? neo.dayTextActive
+                        : {}),
+                    }}
+                  >
+                    {dia.dia}
+                  </span>
 
-            <div style={s.quickInfo}>
-              <span style={s.statIcon}>◎</span>
-              <div>
-                <span style={s.muted}>Cupos disponibles</span>
-                <strong style={s.bigNumber}>{resumenAgenda.cuposDisponibles}</strong>
-              </div>
-            </div>
+                  <strong
+                    style={{
+                      ...neo.dayNumber,
+                      ...(dia.seleccionado
+                        ? neo.dayTextActive
+                        : {}),
+                    }}
+                  >
+                    {dia.numero}
+                  </strong>
 
-            <div style={s.quickInfo}>
-              <span style={s.statIcon}>%</span>
-              <div>
-                <span style={s.muted}>Ocupación</span>
-                <strong style={s.bigNumber}>{resumenAgenda.ocupacion}%</strong>
-              </div>
+                  <span
+                    style={{
+                      ...neo.dayMonth,
+                      ...(dia.seleccionado
+                        ? neo.dayTextActive
+                        : {}),
+                    }}
+                  >
+                    {dia.mes}
+                  </span>
+
+                  {dia.hoy && (
+                    <span
+                      style={{
+                        ...neo.todayDot,
+                        ...(dia.seleccionado
+                          ? neo.todayDotActive
+                          : {}),
+                      }}
+                    >
+                      HOY
+                    </span>
+                  )}
+                </button>
+              ))}
             </div>
           </section>
 
-          <section style={s.gridCards}>
-            {disponibilidad.length === 0 ? (
-              <Empty
-                titulo="No hay horarios disponibles"
-                texto="Configura una clase o selecciona otra fecha."
-              />
-            ) : (
-              disponibilidad.map((item) => (
-                <article key={item.horario_id} style={s.classCard}>
-                  <div style={s.classTop}>
-                    <div>
-                      <span style={s.badge}>
-                        {item.servicio_tipo === "cita_individual"
-                          ? "CITA"
-                          : "CLASE"}
-                      </span>
-                      <h3 style={s.cardTitle}>{item.servicio_nombre}</h3>
-                    </div>
+          <section style={neo.kpiGrid} className="agenda-d-kpis">
+            <article style={neo.kpiCard}>
+              <span style={neo.kpiCaption}>CLASES</span>
+              <div style={neo.kpiBody}>
+                <strong style={neo.kpiNumber}>
+                  {disponibilidad.length}
+                </strong>
+                <span style={neo.kpiHint}>
+                  programadas
+                </span>
+              </div>
+            </article>
 
-                    <strong
-                      style={
-                        Number(item.disponibles) > 0
-                          ? s.availabilityGood
-                          : s.availabilityFull
-                      }
-                    >
-                      {Number(item.disponibles) > 0
-                        ? `${item.disponibles} disponibles`
-                        : "Completo"}
-                    </strong>
-                  </div>
+            <article style={neo.kpiCard}>
+              <span style={neo.kpiCaption}>RESERVAS</span>
+              <div style={neo.kpiBody}>
+                <strong style={neo.kpiNumber}>
+                  {reservasFechaOperativas.length}
+                </strong>
+                <span style={neo.kpiHint}>
+                  activas hoy
+                </span>
+              </div>
+            </article>
 
-                  <div style={s.classData}>
-                    <Dato
-                      nombre="Horario"
-                      valor={`${formatoHora(item.hora_inicio)} – ${formatoHora(
-                        item.hora_fin
-                      )}`}
-                    />
-                    <Dato
-                      nombre="Instructor"
-                      valor={item.instructor || "Sin asignar"}
-                    />
-                    <Dato
-                      nombre="Cupos"
-                      valor={`${item.reservados}/${item.capacidad}`}
-                    />
-                    <Dato
-                      nombre="Acceso"
-                      valor={
-                        item.requiere_membresia
-                          ? "Membresía activa"
-                          : "Abierto"
-                      }
-                    />
-                  </div>
+            <article style={neo.kpiCard}>
+              <span style={neo.kpiCaption}>CUPOS LIBRES</span>
+              <div style={neo.kpiBody}>
+                <strong style={neo.kpiNumber}>
+                  {resumenAgenda.cuposDisponibles}
+                </strong>
+                <span style={neo.kpiHint}>
+                  disponibles
+                </span>
+              </div>
+            </article>
 
-                  <div style={s.capacityBlock}>
-                    <div style={s.capacityMeta}>
-                      <span>
-                        {Number(item.reservados || 0)} reservados
-                      </span>
-                      <span>
-                        {Number(item.disponibles || 0)} libres
-                      </span>
-                    </div>
+            <article style={neo.kpiCardAccent}>
+              <span style={neo.kpiCaptionAccent}>
+                OCUPACIÓN
+              </span>
+              <div style={neo.kpiBody}>
+                <strong style={neo.kpiNumberAccent}>
+                  {resumenAgenda.ocupacion}%
+                </strong>
+                <span style={neo.kpiHintAccent}>
+                  de la capacidad
+                </span>
+              </div>
+            </article>
+          </section>
 
-                    <div style={s.progressTrack}>
-                      <div
-                        style={{
-                          ...s.progressFill,
-                          width: `${
-                            Number(item.capacidad || 0) > 0
-                              ? Math.min(
-                                  100,
-                                  Math.round(
-                                    (Number(item.reservados || 0) /
-                                      Number(item.capacidad || 1)) *
-                                      100
-                                  )
-                                )
-                              : 0
-                          }%`,
-                        }}
-                      />
-                    </div>
-                  </div>
+          <section style={neo.commandGrid} className="agenda-d-command-grid">
+            <article style={neo.schedulePanel}>
+              <div style={neo.panelTop}>
+                <div>
+                  <span style={neo.sectionEyebrow}>
+                    PROGRAMACIÓN DEL DÍA
+                  </span>
+                  <h2 style={neo.panelHeading}>
+                    Horarios y capacidad
+                  </h2>
+                </div>
+
+                <div style={neo.dateInline}>
+                  <button
+                    type="button"
+                    onClick={() => moverFechaAgenda(-1)}
+                    style={neo.dateArrow}
+                  >
+                    ‹
+                  </button>
+
+                  <input
+                    type="date"
+                    value={fechaAgenda}
+                    onChange={(e) => {
+                      setFechaAgenda(e.target.value);
+                      setHorarioSeleccionado("");
+                    }}
+                    style={neo.dateInput}
+                  />
 
                   <button
                     type="button"
-                    style={s.cardButton}
-                    disabled={Number(item.disponibles) <= 0}
-                    onClick={() => {
-                      setFechaAgenda(fechaAgenda);
-                      setHorarioSeleccionado(item.horario_id);
-                      setVista("nueva");
-                    }}
+                    onClick={() => moverFechaAgenda(1)}
+                    style={neo.dateArrow}
                   >
-                    {Number(item.disponibles) > 0
-                      ? "Reservar alumno"
-                      : "Sin cupos"}
+                    ›
                   </button>
-                </article>
-              ))
-            )}
-          </section>
-
-          <section style={s.panel}>
-            <div style={s.panelHeader}>
-              <div>
-                <span style={s.eyebrowSmall}>HOY</span>
-                <h2 style={s.panelTitle}>Reservas del día</h2>
+                </div>
               </div>
-              <span style={s.counter}>{reservasFecha.length} reservas</span>
-            </div>
 
-            <ReservaLista
-              reservas={reservasFecha}
-              nombreCliente={nombreCliente}
-              nombreServicio={nombreServicio}
-              onCancelar={cancelarReserva}
-              onAsistencia={marcarAsistencia}
-            />
+              {disponibilidad.length === 0 ? (
+                <div style={neo.emptyLarge}>
+                  <div style={neo.emptyIcon}>◷</div>
+                  <strong style={neo.emptyTitle}>
+                    No hay clases programadas
+                  </strong>
+                  <span style={neo.emptyText}>
+                    Selecciona otra fecha o crea un horario
+                    desde Clases y horarios.
+                  </span>
+
+                  {esAdmin && (
+                    <button
+                      type="button"
+                      style={neo.emptyButton}
+                      onClick={() => setVista("configuracion")}
+                    >
+                      Configurar horario
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div style={neo.timeline}>
+                  {disponibilidad.map((item, index) => {
+                    const capacidad = Number(item.capacidad || 0);
+                    const reservados = Number(item.reservados || 0);
+                    const libres = Number(item.disponibles || 0);
+                    const porcentaje =
+                      capacidad > 0
+                        ? Math.min(
+                            100,
+                            Math.round(
+                              (reservados / capacidad) * 100
+                            )
+                          )
+                        : 0;
+
+                    const lleno = libres <= 0;
+
+                    return (
+                      <div
+                        key={item.horario_id}
+                        style={neo.timelineRow}
+                        className="agenda-d-timeline-row"
+                      >
+                        <div style={neo.timelineRail}>
+                          <span style={neo.timelineDot} />
+                          {index <
+                            disponibilidad.length - 1 && (
+                            <span style={neo.timelineLine} />
+                          )}
+                        </div>
+
+                        <div style={neo.timelineTime}>
+                          <strong>
+                            {formatoHora(item.hora_inicio)}
+                          </strong>
+                          <span>
+                            {formatoHora(item.hora_fin)}
+                          </span>
+                        </div>
+
+                        <div style={neo.timelineClass}>
+                          <div style={neo.classTopLine}>
+                            <span style={neo.classBadge}>
+                              {item.servicio_tipo ===
+                              "cita_individual"
+                                ? "CITA"
+                                : "CLASE"}
+                            </span>
+
+                            <span
+                              style={{
+                                ...neo.capacityStatus,
+                                ...(lleno
+                                  ? neo.capacityStatusFull
+                                  : {}),
+                              }}
+                            >
+                              {lleno
+                                ? "COMPLETO"
+                                : `${libres} CUPOS`}
+                            </span>
+                          </div>
+
+                          <strong style={neo.classTitle}>
+                            {item.servicio_nombre}
+                          </strong>
+
+                          <span style={neo.classMeta}>
+                            {item.instructor || "Sin instructor"}
+                            {" · "}
+                            {item.requiere_membresia
+                              ? "Membresía activa"
+                              : "Acceso abierto"}
+                          </span>
+
+                          <div style={neo.capacityBar}>
+                            <div
+                              style={{
+                                ...neo.capacityFill,
+                                width: `${porcentaje}%`,
+                              }}
+                            />
+                          </div>
+
+                          <div style={neo.capacityFooter}>
+                            <span>
+                              {reservados} reservados
+                            </span>
+                            <span>
+                              {capacidad} capacidad total
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={neo.timelineAction}>
+                          <button
+                            type="button"
+                            disabled={lleno}
+                            onClick={() => {
+                              setHorarioSeleccionado(
+                                item.horario_id
+                              );
+                              setVista("nueva");
+                            }}
+                            style={
+                              lleno
+                                ? neo.reserveDisabled
+                                : neo.reserveButton
+                            }
+                          >
+                            {lleno
+                              ? "Sin cupos"
+                              : "Reservar"}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </article>
+
+            <article style={neo.reservationsPanel}>
+              <div style={neo.panelTop}>
+                <div>
+                  <span style={neo.sectionEyebrow}>
+                    RESERVAS DE LA JORNADA
+                  </span>
+                  <h2 style={neo.panelHeading}>
+                    Alumnos reservados
+                  </h2>
+                </div>
+
+                <span style={neo.counterPill}>
+                  {reservasFechaOperativas.length}
+                </span>
+              </div>
+
+              {reservasFechaOperativas.length === 0 ? (
+                <div style={neo.emptySmall}>
+                  <span style={neo.emptySmallIcon}>◎</span>
+                  <strong>Sin reservas</strong>
+                  <span>
+                    Todavía no hay alumnos reservados
+                    para este día.
+                  </span>
+                </div>
+              ) : (
+                <div style={neo.reservationList}>
+                  {reservasFechaOperativas
+                    .slice(0, 8)
+                    .map((reserva) => {
+                      const estado = normalizar(
+                        reserva.estado
+                      );
+
+                      const esConfirmada =
+                        estado === "confirmada";
+                      const asistio =
+                        estado === "asistio";
+                      const noAsistio =
+                        estado === "no_asistio";
+                      const pendiente =
+                        estado === "pendiente_pago";
+
+                      return (
+                        <div
+                          key={reserva.id}
+                          style={neo.reservationRow}
+                          className="agenda-d-reservation-row"
+                        >
+                          <div style={neo.avatar}>
+                            {String(
+                              nombreCliente(
+                                reserva.cliente_id
+                              ) || "A"
+                            )
+                              .charAt(0)
+                              .toUpperCase()}
+                          </div>
+
+                          <div style={neo.reservationInfo}>
+                            <strong style={neo.reservationName}>
+                              {nombreCliente(
+                                reserva.cliente_id
+                              )}
+                            </strong>
+
+                            <span style={neo.reservationMeta}>
+                              {nombreServicio(
+                                reserva.servicio_id
+                              )}
+                              {" · "}
+                              {formatoHora(
+                                reserva.hora_inicio
+                              )}
+                            </span>
+                          </div>
+
+                          <span
+                            style={{
+                              ...neo.statusTag,
+                              ...(asistio
+                                ? neo.statusSuccess
+                                : noAsistio
+                                ? neo.statusNeutral
+                                : pendiente
+                                ? neo.statusPending
+                                : esConfirmada
+                                ? neo.statusConfirmed
+                                : {}),
+                            }}
+                          >
+                            {asistio
+                              ? "ASISTIÓ"
+                              : noAsistio
+                              ? "NO ASISTIÓ"
+                              : pendiente
+                              ? "PENDIENTE"
+                              : "CONFIRMADA"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+
+              {reservasFechaOperativas.length > 8 && (
+                <button
+                  type="button"
+                  style={neo.viewAllButton}
+                  onClick={() => setVista("reservas")}
+                >
+                  Ver todas las reservas
+                </button>
+              )}
+            </article>
+
+            <aside style={neo.controlPanel}>
+              <span style={neo.controlEyebrow}>
+                CONTROL OPERATIVO
+              </span>
+              <h3 style={neo.controlTitle}>
+                Estado del día
+              </h3>
+
+              <div style={neo.occupancyCircle}>
+                <div
+                  style={{
+                    ...neo.occupancyRing,
+                    background: `conic-gradient(#5BE39A ${resumenAgenda.ocupacion}%, rgba(255,255,255,.14) 0)`,
+                  }}
+                >
+                  <div style={neo.occupancyInner}>
+                    <strong>
+                      {resumenAgenda.ocupacion}%
+                    </strong>
+                    <span>ocupación</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={neo.controlStats}>
+                <div style={neo.controlRow}>
+                  <span>Capacidad</span>
+                  <strong>
+                    {resumenAgenda.capacidadTotal}
+                  </strong>
+                </div>
+
+                <div style={neo.controlRow}>
+                  <span>Reservados</span>
+                  <strong>
+                    {resumenAgenda.reservadosTotal}
+                  </strong>
+                </div>
+
+                <div style={neo.controlRow}>
+                  <span>Disponibles</span>
+                  <strong>
+                    {resumenAgenda.cuposDisponibles}
+                  </strong>
+                </div>
+              </div>
+
+              <div style={neo.controlDivider} />
+
+              <span style={neo.controlLabel}>
+                ESTADO DE RESERVAS
+              </span>
+
+              <div style={neo.stateGrid}>
+                <div style={neo.stateBox}>
+                  <span>Confirmadas</span>
+                  <strong>
+                    {resumenReservas.confirmadas}
+                  </strong>
+                </div>
+
+                <div style={neo.stateBox}>
+                  <span>Asistieron</span>
+                  <strong>
+                    {resumenReservas.asistieron}
+                  </strong>
+                </div>
+
+                <div style={neo.stateBox}>
+                  <span>Pendientes</span>
+                  <strong>
+                    {resumenReservas.pendientes}
+                  </strong>
+                </div>
+
+                <div style={neo.stateBox}>
+                  <span>No asistieron</span>
+                  <strong>
+                    {resumenReservas.noAsistieron}
+                  </strong>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                style={neo.controlPrimary}
+                onClick={() => setVista("nueva")}
+              >
+                + Nueva reserva
+              </button>
+
+              <button
+                type="button"
+                style={neo.controlSecondary}
+                onClick={() => setVista("reservas")}
+              >
+                Gestionar reservas
+              </button>
+
+              {esAdmin && (
+                <button
+                  type="button"
+                  style={neo.controlSecondary}
+                  onClick={() =>
+                    setVista("configuracion")
+                  }
+                >
+                  Configurar clases
+                </button>
+              )}
+            </aside>
           </section>
         </>
       )}
 
       {vista === "nueva" && (
-        <section style={s.twoColumns}>
+        <>
+          <section
+            style={pro.stepper}
+            className="agenda-stepper"
+          >
+            <div
+              style={{
+                ...pro.step,
+                ...(clienteSeleccionado ? pro.stepActive : {}),
+              }}
+            >
+              <span style={pro.stepNumber}>1</span>
+              Seleccionar alumno
+            </div>
+
+            <div
+              style={{
+                ...pro.step,
+                ...(horarioSeleccionado ? pro.stepActive : {}),
+              }}
+            >
+              <span style={pro.stepNumber}>2</span>
+              Elegir fecha y horario
+            </div>
+
+            <div
+              style={{
+                ...pro.step,
+                ...(clienteSeleccionado && horarioSeleccionado
+                  ? pro.stepActive
+                  : {}),
+              }}
+            >
+              <span style={pro.stepNumber}>3</span>
+              Confirmar reserva
+            </div>
+          </section>
+
+          <section style={s.twoColumns}>
           <article style={s.panel}>
-            <span style={s.eyebrowSmall}>ALUMNO</span>
-            <h2 style={s.panelTitle}>＋ Nueva reserva</h2>
+            <span style={pro.panelEyebrow}>NUEVA RESERVA</span>
+            <h2 style={pro.panelTitle}>Datos de la reserva</h2>
+            <p style={{ ...s.muted, margin: "6px 0 0" }}>
+              Selecciona al alumno, la fecha y uno de los horarios disponibles.
+            </p>
 
             <div style={{ marginTop: 16 }}>
               <Campo label="Buscar por nombre, cédula o teléfono">
@@ -1030,8 +1678,11 @@ export default function AgendaPage() {
           </article>
 
           <article style={s.panel}>
-            <span style={s.eyebrowSmall}>DISPONIBILIDAD</span>
-            <h2 style={s.panelTitle}>{formatoFecha(fechaAgenda)}</h2>
+            <span style={pro.panelEyebrow}>DISPONIBILIDAD EN TIEMPO REAL</span>
+            <h2 style={pro.panelTitle}>{formatoFecha(fechaAgenda)}</h2>
+            <p style={{ ...s.muted, margin: "6px 0 12px" }}>
+              Los cupos se actualizan automáticamente al confirmar o cancelar una reserva.
+            </p>
 
             <div style={s.slotList}>
               {disponibilidad.length === 0 ? (
@@ -1073,21 +1724,62 @@ export default function AgendaPage() {
             </div>
           </article>
         </section>
+        </>
       )}
 
       {vista === "reservas" && (
-        <section style={s.panel}>
-          <div style={s.panelHeader}>
+        <section
+          style={{
+            ...pro.panel,
+            maxWidth: 1450,
+            margin: "0 auto 18px",
+          }}
+        >
+          <div style={pro.panelHeader}>
             <div>
-              <span style={s.eyebrowSmall}>CONTROL</span>
-              <h2 style={s.panelTitle}>☷ Reservas</h2>
+              <span style={pro.panelEyebrow}>CONTROL Y SEGUIMIENTO</span>
+              <h2 style={pro.panelTitle}>Reservas</h2>
+              <p style={{ ...s.muted, margin: "6px 0 0" }}>
+                Consulta reservas, asistencia, pendientes de pago y cancelaciones.
+              </p>
             </div>
 
-            <span style={s.counter}>{reservasActivas.length} registros</span>
+            <span style={pro.counter}>
+              {reservasFiltradas.length} registros
+            </span>
+          </div>
+
+          <div style={pro.filters}>
+            <div className="agenda-reserva-filtros">
+              <Campo label="Buscar reserva">
+                <input
+                  type="text"
+                  value={busquedaReservas}
+                  onChange={(e) => setBusquedaReservas(e.target.value)}
+                  style={pro.input}
+                  placeholder="Alumno, cédula, teléfono, clase o fecha"
+                />
+              </Campo>
+
+              <Campo label="Estado">
+                <select
+                  value={estadoReservaFiltro}
+                  onChange={(e) => setEstadoReservaFiltro(e.target.value)}
+                  style={pro.input}
+                >
+                  <option value="Todos">Todos</option>
+                  <option value="confirmada">Confirmada</option>
+                  <option value="pendiente_pago">Pendiente de pago</option>
+                  <option value="asistio">Asistió</option>
+                  <option value="no_asistio">No asistió</option>
+                  <option value="cancelada">Cancelada</option>
+                </select>
+              </Campo>
+            </div>
           </div>
 
           <ReservaLista
-            reservas={reservasActivas}
+            reservas={reservasFiltradas}
             nombreCliente={nombreCliente}
             nombreServicio={nombreServicio}
             onCancelar={cancelarReserva}
@@ -2372,6 +3064,1618 @@ const sPro = {
     color: "#8b958f",
     fontSize: 9,
     textAlign: "right",
+  },
+};
+
+
+const AGENDA_CSS = `
+  .agenda-page * {
+    box-sizing: border-box;
+  }
+
+  .agenda-tabs::-webkit-scrollbar {
+    height: 5px;
+  }
+
+  .agenda-tabs::-webkit-scrollbar-thumb {
+    background: #c9d8cf;
+    border-radius: 999px;
+  }
+
+  .agenda-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .agenda-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.75fr) minmax(285px, .65fr);
+    gap: 16px;
+    align-items: start;
+  }
+
+  .agenda-schedule-row {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr) 160px 150px;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .agenda-reserva-filtros {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) minmax(180px, 240px);
+    gap: 10px;
+  }
+
+  .agenda-stepper {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0,1fr));
+    gap: 8px;
+  }
+
+  .agenda-status-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  @media (max-width: 1180px) {
+    .agenda-kpis {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .agenda-schedule-row {
+      grid-template-columns: 92px minmax(0, 1fr) 130px;
+    }
+
+    .agenda-schedule-action {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (max-width: 980px) {
+    .agenda-workspace {
+      grid-template-columns: 1fr;
+    }
+
+    .agenda-executive-aside {
+      position: static !important;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .agenda-page {
+      padding: 14px !important;
+    }
+
+    .agenda-header {
+      padding: 18px !important;
+      border-radius: 18px !important;
+    }
+
+    .agenda-kpis {
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .agenda-datebar {
+      align-items: stretch !important;
+    }
+
+    .agenda-date-controls {
+      width: 100%;
+      display: grid !important;
+      grid-template-columns: auto minmax(0,1fr) auto;
+    }
+
+    .agenda-date-today {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
+
+    .agenda-schedule-row {
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .agenda-time-block {
+      display: flex !important;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .agenda-reserva-filtros {
+      grid-template-columns: 1fr;
+    }
+
+    .agenda-stepper {
+      grid-template-columns: 1fr;
+    }
+
+    .agenda-status-strip {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .agenda-kpis {
+      grid-template-columns: 1fr;
+    }
+  }
+
+
+@media (max-width: 1180px) {
+  .agenda-d-command-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .agenda-d-command-grid > aside {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 820px) {
+  .agenda-d-hero {
+    grid-template-columns: 1fr !important;
+  }
+
+  .agenda-d-nav {
+    overflow-x: auto;
+  }
+
+  .agenda-d-week-strip {
+    grid-template-columns: repeat(7, minmax(86px, 1fr)) !important;
+    overflow-x: auto;
+  }
+
+  .agenda-d-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .agenda-d-command-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .agenda-d-timeline-row {
+    grid-template-columns: 24px 82px minmax(0, 1fr) !important;
+  }
+
+  .agenda-d-timeline-row > div:last-child {
+    grid-column: 2 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .agenda-d-kpis {
+    grid-template-columns: 1fr !important;
+  }
+
+  .agenda-d-timeline-row {
+    grid-template-columns: 20px 1fr !important;
+  }
+
+  .agenda-d-timeline-row > div:nth-child(2) {
+    grid-column: 2;
+  }
+
+  .agenda-d-timeline-row > div:nth-child(3) {
+    grid-column: 2;
+  }
+
+  .agenda-d-timeline-row > div:last-child {
+    grid-column: 2;
+  }
+
+  .agenda-d-reservation-row {
+    grid-template-columns: 42px minmax(0,1fr) !important;
+  }
+
+  .agenda-d-reservation-row > span:last-child {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+`;
+
+const neo = {
+  hero: {
+    maxWidth: 1480,
+    margin: "0 auto 16px",
+    padding: 24,
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) 320px",
+    gap: 18,
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg,#071b13 0%,#0b4a2b 58%,#0f7a42 100%)",
+    color: "#fff",
+    boxShadow: "0 18px 45px rgba(5,40,25,.18)",
+    overflow: "hidden",
+  },
+
+  heroMain: {
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    gap: 22,
+  },
+
+  brandRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 18,
+  },
+
+  logoCard: {
+    width: 138,
+    minHeight: 74,
+    display: "grid",
+    placeItems: "center",
+    padding: "8px 12px",
+    borderRadius: 18,
+    background: "#fff",
+    flex: "0 0 auto",
+  },
+
+  logo: {
+    width: 118,
+    height: 48,
+    objectFit: "contain",
+  },
+
+  heroEyebrow: {
+    display: "block",
+    marginBottom: 6,
+    color: "#6EE5A3",
+    fontSize: 10,
+    fontWeight: 900,
+    letterSpacing: 1.5,
+  },
+
+  heroTitle: {
+    margin: 0,
+    fontSize: "clamp(34px,5vw,58px)",
+    lineHeight: .98,
+    letterSpacing: -1.4,
+  },
+
+  heroSubtitle: {
+    maxWidth: 760,
+    margin: "10px 0 0",
+    color: "#DDEDE4",
+    fontSize: 13,
+    lineHeight: 1.55,
+  },
+
+  heroActions: {
+    display: "flex",
+    gap: 9,
+    flexWrap: "wrap",
+  },
+
+  heroGhost: {
+    minHeight: 42,
+    padding: "0 15px",
+    border: "1px solid rgba(255,255,255,.28)",
+    borderRadius: 11,
+    background: "rgba(255,255,255,.06)",
+    color: "#fff",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
+  heroPrimary: {
+    minHeight: 42,
+    padding: "0 16px",
+    border: 0,
+    borderRadius: 11,
+    background: "#fff",
+    color: "#0B6036",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  heroSide: {
+    padding: 18,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    border: "1px solid rgba(255,255,255,.16)",
+    borderRadius: 18,
+    background: "rgba(255,255,255,.08)",
+    backdropFilter: "blur(8px)",
+  },
+
+  heroSideLabel: {
+    color: "#9EEABF",
+    fontSize: 9,
+    fontWeight: 900,
+    letterSpacing: 1.2,
+  },
+
+  heroSideDate: {
+    display: "block",
+    marginTop: 6,
+    fontSize: 22,
+  },
+
+  heroSideStats: {
+    marginTop: 17,
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 10,
+  },
+
+  heroSideMini: {
+    display: "block",
+    color: "#CFE8D9",
+    fontSize: 9,
+  },
+
+  heroSideValue: {
+    display: "block",
+    marginTop: 3,
+    fontSize: 24,
+  },
+
+  roleBadge: {
+    alignSelf: "flex-start",
+    marginTop: 16,
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,.12)",
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: 900,
+  },
+
+  nav: {
+    maxWidth: 1480,
+    margin: "0 auto 14px",
+    padding: 7,
+    display: "flex",
+    gap: 6,
+    alignItems: "center",
+    border: "1px solid #DDE8E1",
+    borderRadius: 15,
+    background: "#fff",
+    boxShadow: "0 6px 18px rgba(15,50,31,.04)",
+  },
+
+  navItem: {
+    minHeight: 40,
+    padding: "0 13px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 7,
+    border: 0,
+    borderRadius: 10,
+    background: "transparent",
+    color: "#506057",
+    fontSize: 11,
+    fontWeight: 850,
+    whiteSpace: "nowrap",
+    cursor: "pointer",
+  },
+
+  navItemActive: {
+    background: "#0B7A43",
+    color: "#fff",
+    boxShadow: "0 7px 16px rgba(11,122,67,.18)",
+  },
+
+  navRefresh: {
+    marginLeft: "auto",
+    minHeight: 38,
+    padding: "0 12px",
+    border: "1px solid #D9E4DD",
+    borderRadius: 9,
+    background: "#F7FAF8",
+    color: "#0B7A43",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+
+  weekShell: {
+    maxWidth: 1480,
+    margin: "0 auto 14px",
+    padding: 16,
+    border: "1px solid #DCE6E0",
+    borderRadius: 18,
+    background: "#fff",
+  },
+
+  weekHeader: {
+    marginBottom: 12,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+
+  sectionEyebrow: {
+    display: "block",
+    color: "#0B7A43",
+    fontSize: 9,
+    fontWeight: 900,
+    letterSpacing: 1.2,
+  },
+
+  sectionTitle: {
+    margin: "4px 0 0",
+    fontSize: 18,
+  },
+
+  weekControls: {
+    display: "flex",
+    gap: 6,
+    alignItems: "center",
+  },
+
+  roundButton: {
+    width: 36,
+    height: 36,
+    border: "1px solid #D9E4DD",
+    borderRadius: 10,
+    background: "#fff",
+    color: "#1B3225",
+    fontSize: 16,
+    cursor: "pointer",
+  },
+
+  todayPill: {
+    minHeight: 36,
+    padding: "0 12px",
+    border: 0,
+    borderRadius: 10,
+    background: "#E9F7EF",
+    color: "#0B7A43",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  weekStrip: {
+    display: "grid",
+    gridTemplateColumns: "repeat(7,minmax(0,1fr))",
+    gap: 8,
+  },
+
+  dayCard: {
+    minHeight: 88,
+    padding: 10,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 1,
+    border: "1px solid #E0E8E3",
+    borderRadius: 13,
+    background: "#FAFCFB",
+    color: "#2D3C34",
+    cursor: "pointer",
+  },
+
+  dayCardActive: {
+    borderColor: "#0B7A43",
+    background:
+      "linear-gradient(145deg,#0B6A3B,#0E8A4C)",
+    boxShadow: "0 10px 20px rgba(11,122,67,.18)",
+  },
+
+  dayName: {
+    fontSize: 9,
+    fontWeight: 900,
+    color: "#78867E",
+  },
+
+  dayNumber: {
+    fontSize: 24,
+    lineHeight: 1,
+  },
+
+  dayMonth: {
+    fontSize: 8,
+    color: "#89958E",
+    fontWeight: 800,
+  },
+
+  dayTextActive: {
+    color: "#fff",
+  },
+
+  todayDot: {
+    marginTop: 4,
+    padding: "3px 5px",
+    borderRadius: 999,
+    background: "#E7F5ED",
+    color: "#0B7A43",
+    fontSize: 6,
+    fontWeight: 900,
+  },
+
+  todayDotActive: {
+    background: "rgba(255,255,255,.16)",
+    color: "#fff",
+  },
+
+  kpiGrid: {
+    maxWidth: 1480,
+    margin: "0 auto 14px",
+    display: "grid",
+    gridTemplateColumns: "repeat(4,minmax(0,1fr))",
+    gap: 10,
+  },
+
+  kpiCard: {
+    padding: 14,
+    border: "1px solid #DDE6E0",
+    borderRadius: 15,
+    background: "#fff",
+    boxShadow: "0 6px 18px rgba(14,52,32,.04)",
+  },
+
+  kpiCardAccent: {
+    padding: 14,
+    border: "1px solid #0B7A43",
+    borderRadius: 15,
+    background:
+      "linear-gradient(145deg,#0B6B3C,#0E8A4C)",
+    color: "#fff",
+    boxShadow: "0 10px 22px rgba(11,122,67,.17)",
+  },
+
+  kpiCaption: {
+    color: "#78867E",
+    fontSize: 8,
+    fontWeight: 900,
+    letterSpacing: 1,
+  },
+
+  kpiCaptionAccent: {
+    color: "#BAF0CF",
+    fontSize: 8,
+    fontWeight: 900,
+    letterSpacing: 1,
+  },
+
+  kpiBody: {
+    marginTop: 8,
+    display: "flex",
+    alignItems: "baseline",
+    gap: 7,
+  },
+
+  kpiNumber: {
+    fontSize: 27,
+    lineHeight: 1,
+  },
+
+  kpiNumberAccent: {
+    fontSize: 27,
+    lineHeight: 1,
+  },
+
+  kpiHint: {
+    color: "#7A867F",
+    fontSize: 9,
+  },
+
+  kpiHintAccent: {
+    color: "#DDF3E6",
+    fontSize: 9,
+  },
+
+  commandGrid: {
+    maxWidth: 1480,
+    margin: "0 auto 20px",
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1.35fr) minmax(330px,.82fr) 300px",
+    gap: 12,
+    alignItems: "start",
+  },
+
+  schedulePanel: {
+    padding: 16,
+    border: "1px solid #DCE6E0",
+    borderRadius: 18,
+    background: "#fff",
+    boxShadow: "0 8px 22px rgba(14,52,32,.045)",
+  },
+
+  reservationsPanel: {
+    padding: 16,
+    border: "1px solid #DCE6E0",
+    borderRadius: 18,
+    background: "#fff",
+    boxShadow: "0 8px 22px rgba(14,52,32,.045)",
+  },
+
+  panelTop: {
+    marginBottom: 13,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+
+  panelHeading: {
+    margin: "4px 0 0",
+    fontSize: 19,
+  },
+
+  dateInline: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+  },
+
+  dateArrow: {
+    width: 32,
+    height: 34,
+    border: "1px solid #D9E4DD",
+    borderRadius: 8,
+    background: "#F9FBFA",
+    color: "#244034",
+    fontSize: 17,
+    cursor: "pointer",
+  },
+
+  dateInput: {
+    minHeight: 34,
+    padding: "6px 8px",
+    border: "1px solid #D9E4DD",
+    borderRadius: 8,
+    background: "#fff",
+    color: "#1F3027",
+    fontSize: 10,
+  },
+
+  timeline: {
+    display: "grid",
+  },
+
+  timelineRow: {
+    minHeight: 126,
+    display: "grid",
+    gridTemplateColumns:
+      "26px 100px minmax(0,1fr) 110px",
+    gap: 12,
+    alignItems: "center",
+    padding: "10px 0",
+    borderBottom: "1px solid #EDF2EF",
+  },
+
+  timelineRail: {
+    position: "relative",
+    alignSelf: "stretch",
+    display: "flex",
+    justifyContent: "center",
+  },
+
+  timelineDot: {
+    position: "absolute",
+    top: 28,
+    width: 12,
+    height: 12,
+    border: "3px solid #BEE7CF",
+    borderRadius: "50%",
+    background: "#0B7A43",
+    zIndex: 2,
+  },
+
+  timelineLine: {
+    position: "absolute",
+    top: 40,
+    bottom: -22,
+    width: 2,
+    background: "#DCEBE3",
+  },
+
+  timelineTime: {
+    display: "grid",
+    gap: 3,
+  },
+
+  timelineClass: {
+    minWidth: 0,
+  },
+
+  classTopLine: {
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+    flexWrap: "wrap",
+  },
+
+  classBadge: {
+    padding: "4px 7px",
+    borderRadius: 999,
+    background: "#EAF7F0",
+    color: "#0B7A43",
+    fontSize: 7,
+    fontWeight: 900,
+  },
+
+  capacityStatus: {
+    padding: "4px 7px",
+    borderRadius: 999,
+    background: "#EEF7F2",
+    color: "#0B7A43",
+    fontSize: 7,
+    fontWeight: 900,
+  },
+
+  capacityStatusFull: {
+    background: "#FFF0EE",
+    color: "#B42318",
+  },
+
+  classTitle: {
+    display: "block",
+    marginTop: 7,
+    fontSize: 17,
+  },
+
+  classMeta: {
+    display: "block",
+    marginTop: 3,
+    color: "#6F7D75",
+    fontSize: 9,
+    lineHeight: 1.35,
+  },
+
+  capacityBar: {
+    height: 7,
+    marginTop: 10,
+    overflow: "hidden",
+    borderRadius: 999,
+    background: "#E8EFEA",
+  },
+
+  capacityFill: {
+    height: "100%",
+    borderRadius: 999,
+    background:
+      "linear-gradient(90deg,#0B7A43,#61D494)",
+  },
+
+  capacityFooter: {
+    marginTop: 5,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 8,
+    color: "#849088",
+    fontSize: 8,
+  },
+
+  timelineAction: {
+    display: "flex",
+    justifyContent: "flex-end",
+  },
+
+  reserveButton: {
+    minHeight: 38,
+    padding: "0 13px",
+    border: 0,
+    borderRadius: 10,
+    background: "#0B7A43",
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  reserveDisabled: {
+    minHeight: 38,
+    padding: "0 13px",
+    border: "1px solid #E0E5E2",
+    borderRadius: 10,
+    background: "#F2F4F3",
+    color: "#9AA39E",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "not-allowed",
+  },
+
+  emptyLarge: {
+    minHeight: 360,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 8,
+    border: "1px dashed #D3DED7",
+    borderRadius: 15,
+    background: "#FAFCFB",
+    textAlign: "center",
+  },
+
+  emptyIcon: {
+    width: 52,
+    height: 52,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 16,
+    background: "#EAF7F0",
+    color: "#0B7A43",
+    fontSize: 24,
+  },
+
+  emptyTitle: {
+    fontSize: 16,
+  },
+
+  emptyText: {
+    maxWidth: 360,
+    color: "#7A867F",
+    fontSize: 10,
+    lineHeight: 1.5,
+  },
+
+  emptyButton: {
+    minHeight: 36,
+    marginTop: 5,
+    padding: "0 12px",
+    border: 0,
+    borderRadius: 9,
+    background: "#0B7A43",
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  counterPill: {
+    minWidth: 30,
+    height: 30,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 999,
+    background: "#EAF7F0",
+    color: "#0B7A43",
+    fontSize: 11,
+    fontWeight: 900,
+  },
+
+  reservationList: {
+    display: "grid",
+    gap: 7,
+  },
+
+  reservationRow: {
+    minHeight: 62,
+    padding: 9,
+    display: "grid",
+    gridTemplateColumns: "40px minmax(0,1fr) auto",
+    gap: 9,
+    alignItems: "center",
+    border: "1px solid #E5ECE8",
+    borderRadius: 12,
+    background: "#FBFCFB",
+  },
+
+  avatar: {
+    width: 40,
+    height: 40,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 11,
+    background: "#0D3B28",
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: 900,
+  },
+
+  reservationInfo: {
+    minWidth: 0,
+  },
+
+  reservationName: {
+    display: "block",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    fontSize: 11,
+  },
+
+  reservationMeta: {
+    display: "block",
+    marginTop: 3,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    color: "#7A867F",
+    fontSize: 8,
+  },
+
+  statusTag: {
+    padding: "5px 7px",
+    borderRadius: 999,
+    fontSize: 6.5,
+    fontWeight: 900,
+  },
+
+  statusConfirmed: {
+    background: "#EAF7F0",
+    color: "#0B7A43",
+  },
+
+  statusSuccess: {
+    background: "#E8F7ED",
+    color: "#08743C",
+  },
+
+  statusNeutral: {
+    background: "#F1F3F2",
+    color: "#59655E",
+  },
+
+  statusPending: {
+    background: "#FFF7DD",
+    color: "#8A6400",
+  },
+
+  emptySmall: {
+    minHeight: 260,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 7,
+    color: "#7B8780",
+    textAlign: "center",
+    fontSize: 10,
+  },
+
+  emptySmallIcon: {
+    width: 44,
+    height: 44,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 13,
+    background: "#EDF6F1",
+    color: "#0B7A43",
+    fontSize: 20,
+  },
+
+  viewAllButton: {
+    width: "100%",
+    minHeight: 38,
+    marginTop: 10,
+    border: "1px solid #D9E4DD",
+    borderRadius: 10,
+    background: "#fff",
+    color: "#0B7A43",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  controlPanel: {
+    padding: 18,
+    borderRadius: 18,
+    background:
+      "linear-gradient(160deg,#071C14,#0B4A2B)",
+    color: "#fff",
+    boxShadow: "0 16px 34px rgba(6,40,25,.18)",
+  },
+
+  controlEyebrow: {
+    color: "#67D899",
+    fontSize: 8,
+    fontWeight: 900,
+    letterSpacing: 1.2,
+  },
+
+  controlTitle: {
+    margin: "5px 0 0",
+    fontSize: 20,
+  },
+
+  occupancyCircle: {
+    margin: "20px 0",
+    display: "grid",
+    placeItems: "center",
+  },
+
+  occupancyRing: {
+    width: 140,
+    height: 140,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+  },
+
+  occupancyInner: {
+    width: 104,
+    height: 104,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    borderRadius: "50%",
+    background: "#0A2A1D",
+  },
+
+  controlStats: {
+    display: "grid",
+    gap: 9,
+  },
+
+  controlRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    color: "#CFE7D9",
+    fontSize: 10,
+  },
+
+  controlDivider: {
+    height: 1,
+    margin: "16px 0",
+    background: "rgba(255,255,255,.12)",
+  },
+
+  controlLabel: {
+    display: "block",
+    marginBottom: 8,
+    color: "#9BDDB8",
+    fontSize: 8,
+    fontWeight: 900,
+    letterSpacing: 1,
+  },
+
+  stateGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 7,
+  },
+
+  stateBox: {
+    padding: 9,
+    display: "grid",
+    gap: 4,
+    borderRadius: 10,
+    background: "rgba(255,255,255,.08)",
+    color: "#DDEFE5",
+    fontSize: 8,
+  },
+
+  controlPrimary: {
+    width: "100%",
+    minHeight: 40,
+    marginTop: 16,
+    border: 0,
+    borderRadius: 10,
+    background: "#5CE19B",
+    color: "#06301E",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  controlSecondary: {
+    width: "100%",
+    minHeight: 38,
+    marginTop: 7,
+    border: "1px solid rgba(255,255,255,.18)",
+    borderRadius: 10,
+    background: "rgba(255,255,255,.06)",
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+};
+
+const pro = {
+  header:{
+    maxWidth:1450,
+    margin:"0 auto 14px",
+    padding:"24px 26px",
+    display:"flex",
+    justifyContent:"space-between",
+    alignItems:"center",
+    gap:18,
+    flexWrap:"wrap",
+    borderRadius:24,
+    background:
+      "radial-gradient(circle at 78% 18%, rgba(61,199,120,.20), transparent 32%), linear-gradient(120deg,#071d14 0%,#0b3524 54%,#0a6a3b 100%)",
+    color:"#fff",
+    boxShadow:"0 18px 45px rgba(8,53,34,.20)",
+    border:"1px solid rgba(255,255,255,.08)",
+  },
+  headerBrand:{
+    minWidth:0,
+    display:"flex",
+    alignItems:"center",
+    gap:16,
+  },
+  logoBox:{
+    width:126,
+    height:70,
+    padding:"8px 12px",
+    display:"grid",
+    placeItems:"center",
+    borderRadius:17,
+    background:"#fff",
+    boxShadow:"0 10px 24px rgba(0,0,0,.18)",
+    flex:"0 0 auto",
+  },
+  logo:{
+    width:"100%",
+    height:"100%",
+    objectFit:"contain",
+  },
+  headerEyebrow:{
+    display:"block",
+    marginBottom:5,
+    color:"#7de0a7",
+    fontSize:10,
+    fontWeight:900,
+    letterSpacing:1.3,
+  },
+  headerTitle:{
+    margin:0,
+    fontSize:"clamp(28px,3vw,40px)",
+    lineHeight:1,
+    letterSpacing:"-.8px",
+  },
+  headerSubtitle:{
+    margin:"7px 0 0",
+    maxWidth:620,
+    color:"#d9ece2",
+    fontSize:13,
+    lineHeight:1.5,
+  },
+  headerRight:{
+    display:"flex",
+    alignItems:"center",
+    gap:8,
+    flexWrap:"wrap",
+    justifyContent:"flex-end",
+  },
+  role:{
+    minHeight:38,
+    padding:"0 12px",
+    display:"inline-flex",
+    alignItems:"center",
+    gap:7,
+    border:"1px solid rgba(255,255,255,.18)",
+    borderRadius:999,
+    background:"rgba(255,255,255,.09)",
+    color:"#e9fff2",
+    fontSize:11,
+    fontWeight:850,
+  },
+  headerSecondary:{
+    minHeight:40,
+    padding:"0 14px",
+    border:"1px solid rgba(255,255,255,.24)",
+    borderRadius:11,
+    background:"rgba(0,0,0,.14)",
+    color:"#fff",
+    fontWeight:800,
+    cursor:"pointer",
+  },
+  headerPrimary:{
+    minHeight:40,
+    padding:"0 15px",
+    border:"none",
+    borderRadius:11,
+    background:"#fff",
+    color:"#0b5a35",
+    fontWeight:900,
+    cursor:"pointer",
+    boxShadow:"0 8px 18px rgba(0,0,0,.13)",
+  },
+  navShell:{
+    maxWidth:1450,
+    margin:"0 auto 14px",
+    padding:7,
+    display:"flex",
+    gap:6,
+    overflowX:"auto",
+    border:"1px solid #dbe6df",
+    borderRadius:14,
+    background:"#fff",
+    boxShadow:"0 8px 20px rgba(15,23,42,.035)",
+  },
+  datebar:{
+    maxWidth:1450,
+    margin:"0 auto 12px",
+    padding:"13px 15px",
+    display:"flex",
+    alignItems:"center",
+    justifyContent:"space-between",
+    gap:12,
+    flexWrap:"wrap",
+    border:"1px solid #dce6df",
+    borderRadius:16,
+    background:"#fff",
+    boxShadow:"0 7px 18px rgba(15,23,42,.035)",
+  },
+  dateLead:{
+    display:"grid",
+    gap:2,
+  },
+  dateEyebrow:{
+    color:"#15804d",
+    fontSize:9,
+    fontWeight:900,
+    letterSpacing:1.1,
+  },
+  dateTitle:{
+    fontSize:19,
+    fontWeight:900,
+    color:"#17251e",
+  },
+  dateControls:{
+    display:"flex",
+    alignItems:"center",
+    gap:7,
+  },
+  iconButton:{
+    width:38,
+    height:38,
+    display:"grid",
+    placeItems:"center",
+    border:"1px solid #d7e1db",
+    borderRadius:10,
+    background:"#fff",
+    color:"#244236",
+    fontSize:18,
+    fontWeight:900,
+    cursor:"pointer",
+  },
+  dateInput:{
+    minHeight:38,
+    padding:"7px 10px",
+    border:"1px solid #d7e1db",
+    borderRadius:10,
+    background:"#fff",
+    color:"#17251e",
+    fontWeight:800,
+  },
+  todayButton:{
+    minHeight:38,
+    padding:"0 13px",
+    border:"1px solid #16834f",
+    borderRadius:10,
+    background:"#eef9f2",
+    color:"#16834f",
+    fontWeight:900,
+    cursor:"pointer",
+  },
+  kpi:{
+    minHeight:98,
+    padding:14,
+    display:"flex",
+    alignItems:"center",
+    gap:12,
+    border:"1px solid #dce6df",
+    borderRadius:16,
+    background:"#fff",
+    boxShadow:"0 8px 20px rgba(15,23,42,.04)",
+  },
+  kpiIcon:{
+    width:44,
+    height:44,
+    flex:"0 0 auto",
+    display:"grid",
+    placeItems:"center",
+    borderRadius:13,
+    background:"#edf8f1",
+    color:"#16834f",
+    fontSize:14,
+    fontWeight:950,
+  },
+  kpiLabel:{
+    display:"block",
+    color:"#708078",
+    fontSize:10,
+    fontWeight:800,
+  },
+  kpiValue:{
+    display:"block",
+    marginTop:3,
+    color:"#17251e",
+    fontSize:24,
+    lineHeight:1,
+  },
+  workspace:{
+    maxWidth:1450,
+    margin:"12px auto 16px",
+  },
+  panel:{
+    padding:18,
+    border:"1px solid #dce6df",
+    borderRadius:18,
+    background:"#fff",
+    boxShadow:"0 10px 26px rgba(15,23,42,.045)",
+  },
+  panelHeader:{
+    marginBottom:13,
+    display:"flex",
+    justifyContent:"space-between",
+    alignItems:"center",
+    gap:12,
+    flexWrap:"wrap",
+  },
+  panelEyebrow:{
+    display:"block",
+    marginBottom:4,
+    color:"#16834f",
+    fontSize:9,
+    fontWeight:900,
+    letterSpacing:1.1,
+  },
+  panelTitle:{
+    margin:0,
+    color:"#17251e",
+    fontSize:21,
+    letterSpacing:"-.3px",
+  },
+  counter:{
+    padding:"6px 10px",
+    borderRadius:999,
+    background:"#edf8f1",
+    color:"#16834f",
+    fontSize:10,
+    fontWeight:900,
+  },
+  scheduleList:{
+    display:"grid",
+    gap:9,
+  },
+  scheduleRow:{
+    padding:"14px",
+    border:"1px solid #e1e8e4",
+    borderRadius:14,
+    background:"linear-gradient(180deg,#ffffff,#fbfdfc)",
+    transition:"transform .15s ease, box-shadow .15s ease",
+  },
+  time:{
+    display:"grid",
+    gap:3,
+  },
+  timeMain:{
+    fontSize:18,
+    fontWeight:950,
+    color:"#153b29",
+  },
+  timeEnd:{
+    color:"#7b8780",
+    fontSize:10,
+    fontWeight:700,
+  },
+  classMeta:{
+    minWidth:0,
+  },
+  classType:{
+    display:"inline-flex",
+    padding:"4px 7px",
+    borderRadius:999,
+    background:"#eef8f2",
+    color:"#16834f",
+    fontSize:8,
+    fontWeight:950,
+    letterSpacing:.8,
+  },
+  className:{
+    display:"block",
+    marginTop:5,
+    color:"#17251e",
+    fontSize:17,
+    fontWeight:950,
+  },
+  classInstructor:{
+    display:"block",
+    marginTop:3,
+    color:"#748178",
+    fontSize:10,
+  },
+  capacityWrap:{
+    display:"grid",
+    gap:6,
+  },
+  capacityTop:{
+    display:"flex",
+    justifyContent:"space-between",
+    gap:8,
+    color:"#607168",
+    fontSize:9,
+    fontWeight:800,
+  },
+  track:{
+    height:7,
+    overflow:"hidden",
+    borderRadius:999,
+    background:"#e7eee9",
+  },
+  fill:{
+    height:"100%",
+    borderRadius:999,
+    background:"linear-gradient(90deg,#16a45b,#08743c)",
+  },
+  actionButton:{
+    minHeight:40,
+    padding:"0 13px",
+    border:"none",
+    borderRadius:10,
+    background:"#16834f",
+    color:"#fff",
+    fontSize:11,
+    fontWeight:900,
+    cursor:"pointer",
+  },
+  actionDisabled:{
+    minHeight:40,
+    padding:"0 13px",
+    border:"1px solid #e3e8e5",
+    borderRadius:10,
+    background:"#f4f6f5",
+    color:"#9aa49e",
+    fontSize:11,
+    fontWeight:900,
+    cursor:"not-allowed",
+  },
+  aside:{
+    position:"sticky",
+    top:12,
+    padding:18,
+    border:"1px solid #dce6df",
+    borderRadius:18,
+    background:"linear-gradient(180deg,#0c3a27,#08291c)",
+    color:"#fff",
+    boxShadow:"0 14px 34px rgba(8,53,34,.17)",
+  },
+  asideEyebrow:{
+    display:"block",
+    color:"#76dfa3",
+    fontSize:9,
+    fontWeight:900,
+    letterSpacing:1.1,
+  },
+  asideTitle:{
+    margin:"5px 0 15px",
+    fontSize:20,
+  },
+  ringWrap:{
+    display:"grid",
+    placeItems:"center",
+    margin:"4px auto 16px",
+  },
+  ring:{
+    width:128,
+    height:128,
+    display:"grid",
+    placeItems:"center",
+    borderRadius:"50%",
+  },
+  ringInner:{
+    width:94,
+    height:94,
+    display:"grid",
+    placeItems:"center",
+    alignContent:"center",
+    borderRadius:"50%",
+    background:"#0b2e20",
+    boxShadow:"inset 0 0 0 1px rgba(255,255,255,.08)",
+  },
+  ringValue:{
+    fontSize:25,
+    lineHeight:1,
+    fontWeight:950,
+  },
+  ringLabel:{
+    marginTop:4,
+    color:"#bfd7ca",
+    fontSize:9,
+    fontWeight:800,
+  },
+  asideStats:{
+    display:"grid",
+    gap:8,
+  },
+  asideRow:{
+    padding:"9px 0",
+    display:"flex",
+    justifyContent:"space-between",
+    gap:12,
+    borderBottom:"1px solid rgba(255,255,255,.09)",
+    color:"#d5e8dd",
+    fontSize:10,
+  },
+  asideValue:{
+    color:"#fff",
+    fontWeight:950,
+  },
+  asideButton:{
+    width:"100%",
+    minHeight:42,
+    marginTop:14,
+    border:"none",
+    borderRadius:11,
+    background:"#fff",
+    color:"#0b5b35",
+    fontWeight:950,
+    cursor:"pointer",
+  },
+  statusStrip:{
+    marginTop:12,
+    display:"grid",
+    gap:8,
+  },
+  statusBox:{
+    padding:10,
+    border:"1px solid #e1e8e4",
+    borderRadius:12,
+    background:"#fafcfb",
+  },
+  statusLabel:{
+    display:"block",
+    color:"#77847d",
+    fontSize:9,
+    fontWeight:800,
+  },
+  statusValue:{
+    display:"block",
+    marginTop:3,
+    color:"#17251e",
+    fontSize:17,
+    fontWeight:950,
+  },
+  filters:{
+    marginBottom:13,
+    padding:11,
+    border:"1px solid #e0e8e3",
+    borderRadius:13,
+    background:"#f8fbf9",
+  },
+  input:{
+    width:"100%",
+    minHeight:42,
+    padding:"9px 11px",
+    border:"1px solid #cfdad3",
+    borderRadius:10,
+    background:"#fff",
+    color:"#17251e",
+    outline:"none",
+    fontSize:13,
+  },
+  stepper:{
+    maxWidth:1450,
+    margin:"0 auto 12px",
+  },
+  step:{
+    padding:"10px 12px",
+    display:"flex",
+    alignItems:"center",
+    gap:9,
+    border:"1px solid #dce6df",
+    borderRadius:12,
+    background:"#fff",
+    color:"#506158",
+    fontSize:10,
+    fontWeight:850,
+  },
+  stepActive:{
+    borderColor:"#9fd3b3",
+    background:"#edf8f1",
+    color:"#0d6f40",
+  },
+  stepNumber:{
+    width:27,
+    height:27,
+    display:"grid",
+    placeItems:"center",
+    borderRadius:9,
+    background:"#173c2a",
+    color:"#fff",
+    fontSize:10,
+    fontWeight:950,
   },
 };
 
