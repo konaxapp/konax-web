@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.07-AGENDA-A";
+const VERSION = "2026.08.09-AGENDA-B-PRO";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -301,6 +301,35 @@ export default function AgendaPage() {
       )
     );
   }, [reservas]);
+
+  const resumenAgenda = useMemo(() => {
+    const capacidadTotal = disponibilidad.reduce(
+      (total, item) => total + Number(item.capacidad || 0),
+      0
+    );
+
+    const reservadosTotal = disponibilidad.reduce(
+      (total, item) => total + Number(item.reservados || 0),
+      0
+    );
+
+    const cuposDisponibles = disponibilidad.reduce(
+      (total, item) => total + Number(item.disponibles || 0),
+      0
+    );
+
+    const ocupacion =
+      capacidadTotal > 0
+        ? Math.round((reservadosTotal / capacidadTotal) * 100)
+        : 0;
+
+    return {
+      capacidadTotal,
+      reservadosTotal,
+      cuposDisponibles,
+      ocupacion,
+    };
+  }, [disponibilidad]);
 
   async function refrescarTodo() {
     setGuardando(true);
@@ -637,30 +666,45 @@ export default function AgendaPage() {
   return (
     <main style={s.page}>
       <header style={s.header}>
-        <div>
-          <span style={s.eyebrow}>AGENDA Y CITAS</span>
-          <h1 style={s.title}>Agenda</h1>
-          <p style={s.subtitle}>
-            {empresaNombre || "KONAX"} · Clases, horarios, cupos y reservas.
-          </p>
+        <div style={s.heroBrand}>
+          <div style={s.logoCard}>
+            <img
+              src="/konax-logo.png"
+              alt="KONAX"
+              style={s.logo}
+            />
+          </div>
+
+          <div style={s.heroText}>
+            <span style={s.eyebrow}>AGENDA DEL GIMNASIO</span>
+            <h1 style={s.title}>Agenda y reservas</h1>
+            <p style={s.subtitle}>
+              {empresaNombre || "KONAX"} · Organiza clases, cupos y asistencia
+              desde un solo lugar.
+            </p>
+          </div>
         </div>
 
         <div style={s.headerActions}>
+          <span style={s.roleBadge}>
+            {esAdmin ? "Administrador" : rol || "Usuario"}
+          </span>
+
           <button
             type="button"
             style={s.secondaryButton}
             onClick={() => (window.location.href = "/dashboard")}
           >
-            ← Dashboard
+            ← Centro de Operaciones
           </button>
 
           <button
             type="button"
-            style={s.primaryButton}
+            style={s.heroButton}
             onClick={refrescarTodo}
             disabled={guardando}
           >
-            Actualizar
+            {guardando ? "Actualizando..." : "Actualizar"}
           </button>
         </div>
       </header>
@@ -693,23 +737,48 @@ export default function AgendaPage() {
       {vista === "hoy" && (
         <>
           <section style={s.toolbar}>
-            <Campo label="Fecha">
-              <input
-                type="date"
-                value={fechaAgenda}
-                onChange={(e) => setFechaAgenda(e.target.value)}
-                style={s.input}
-              />
-            </Campo>
-
-            <div style={s.quickInfo}>
-              <span style={s.muted}>Horarios disponibles</span>
-              <strong style={s.bigNumber}>{disponibilidad.length}</strong>
+            <div style={s.dateCard}>
+              <Campo label="Fecha de la agenda">
+                <input
+                  type="date"
+                  value={fechaAgenda}
+                  onChange={(e) => setFechaAgenda(e.target.value)}
+                  style={s.input}
+                />
+              </Campo>
+              <span style={s.dateHuman}>{formatoFecha(fechaAgenda)}</span>
             </div>
 
             <div style={s.quickInfo}>
-              <span style={s.muted}>Reservas del día</span>
-              <strong style={s.bigNumber}>{reservasFecha.length}</strong>
+              <span style={s.statIcon}>▣</span>
+              <div>
+                <span style={s.muted}>Clases disponibles</span>
+                <strong style={s.bigNumber}>{disponibilidad.length}</strong>
+              </div>
+            </div>
+
+            <div style={s.quickInfo}>
+              <span style={s.statIcon}>✓</span>
+              <div>
+                <span style={s.muted}>Reservas del día</span>
+                <strong style={s.bigNumber}>{reservasFecha.length}</strong>
+              </div>
+            </div>
+
+            <div style={s.quickInfo}>
+              <span style={s.statIcon}>◎</span>
+              <div>
+                <span style={s.muted}>Cupos disponibles</span>
+                <strong style={s.bigNumber}>{resumenAgenda.cuposDisponibles}</strong>
+              </div>
+            </div>
+
+            <div style={s.quickInfo}>
+              <span style={s.statIcon}>%</span>
+              <div>
+                <span style={s.muted}>Ocupación</span>
+                <strong style={s.bigNumber}>{resumenAgenda.ocupacion}%</strong>
+              </div>
             </div>
           </section>
 
@@ -770,6 +839,37 @@ export default function AgendaPage() {
                     />
                   </div>
 
+                  <div style={s.capacityBlock}>
+                    <div style={s.capacityMeta}>
+                      <span>
+                        {Number(item.reservados || 0)} reservados
+                      </span>
+                      <span>
+                        {Number(item.disponibles || 0)} libres
+                      </span>
+                    </div>
+
+                    <div style={s.progressTrack}>
+                      <div
+                        style={{
+                          ...s.progressFill,
+                          width: `${
+                            Number(item.capacidad || 0) > 0
+                              ? Math.min(
+                                  100,
+                                  Math.round(
+                                    (Number(item.reservados || 0) /
+                                      Number(item.capacidad || 1)) *
+                                      100
+                                  )
+                                )
+                              : 0
+                          }%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
                   <button
                     type="button"
                     style={s.cardButton}
@@ -813,7 +913,7 @@ export default function AgendaPage() {
         <section style={s.twoColumns}>
           <article style={s.panel}>
             <span style={s.eyebrowSmall}>ALUMNO</span>
-            <h2 style={s.panelTitle}>Nueva reserva</h2>
+            <h2 style={s.panelTitle}>＋ Nueva reserva</h2>
 
             <div style={{ marginTop: 16 }}>
               <Campo label="Buscar por nombre, cédula o teléfono">
@@ -980,7 +1080,7 @@ export default function AgendaPage() {
           <div style={s.panelHeader}>
             <div>
               <span style={s.eyebrowSmall}>CONTROL</span>
-              <h2 style={s.panelTitle}>Reservas</h2>
+              <h2 style={s.panelTitle}>☷ Reservas</h2>
             </div>
 
             <span style={s.counter}>{reservasActivas.length} registros</span>
@@ -1483,19 +1583,40 @@ function ReservaLista({
         const puedeGestionar =
           !["cancelada", "asistio"].includes(estado);
 
+        const nombre = nombreCliente(reserva.cliente_id);
+        const badgeEstado =
+          estado === "asistio"
+            ? s.badgeSuccess
+            : estado === "no_asistio"
+            ? s.badgeNeutral
+            : estado === "cancelada"
+            ? s.badgeDanger
+            : estado === "pendiente_pago"
+            ? s.badgeWarning
+            : s.badge;
+
         return (
           <article key={reserva.id} style={s.reservationCard}>
-            <div style={s.reservationMain}>
-              <span style={s.badge}>{reserva.estado || "confirmada"}</span>
-              <strong style={s.reservationName}>
-                {nombreCliente(reserva.cliente_id)}
-              </strong>
-              <span style={s.slotDetail}>
-                {nombreServicio(reserva.servicio_id)}
-                {mostrarFecha ? ` · ${formatoFecha(reserva.fecha_reserva)}` : ""}
-                {" · "}
-                {formatoHora(reserva.hora_inicio)}
-              </span>
+            <div style={s.reservationIdentity}>
+              <div style={s.avatar}>
+                {String(nombre || "A").charAt(0).toUpperCase()}
+              </div>
+
+              <div style={s.reservationMain}>
+                <div style={s.reservationTopLine}>
+                  <strong style={s.reservationName}>{nombre}</strong>
+                  <span style={badgeEstado}>
+                    {String(reserva.estado || "confirmada").replace(/_/g, " ")}
+                  </span>
+                </div>
+
+                <span style={s.slotDetail}>
+                  {nombreServicio(reserva.servicio_id)}
+                  {mostrarFecha ? ` · ${formatoFecha(reserva.fecha_reserva)}` : ""}
+                  {" · "}
+                  {formatoHora(reserva.hora_inicio)}
+                </span>
+              </div>
             </div>
 
             <div style={s.inlineActions}>
@@ -1535,6 +1656,724 @@ function ReservaLista({
     </div>
   );
 }
+
+
+const sPro = {
+  page: {
+    minHeight: "100vh",
+    padding: "clamp(12px, 2vw, 28px)",
+    background:
+      "radial-gradient(circle at top right, rgba(22,131,79,.08), transparent 28%), #f4f7f5",
+    color: "#14231b",
+    fontFamily: "Inter, Arial, system-ui, sans-serif",
+  },
+
+  header: {
+    maxWidth: 1450,
+    margin: "0 auto 14px",
+    minHeight: 118,
+    padding: "18px 20px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 18,
+    flexWrap: "wrap",
+    borderRadius: 22,
+    background:
+      "linear-gradient(120deg,#061f16 0%,#0b4b2e 58%,#11864d 100%)",
+    color: "#fff",
+    boxShadow: "0 18px 45px rgba(6,58,34,.18)",
+    border: "1px solid rgba(255,255,255,.08)",
+  },
+
+  heroBrand: {
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+    minWidth: 0,
+    flex: "1 1 560px",
+  },
+
+  logoCard: {
+    width: 118,
+    height: 78,
+    flex: "0 0 auto",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 17,
+    background: "#fff",
+    boxShadow: "0 10px 26px rgba(0,0,0,.16)",
+  },
+
+  logo: {
+    width: 100,
+    height: 54,
+    objectFit: "contain",
+    display: "block",
+  },
+
+  heroText: {
+    minWidth: 0,
+  },
+
+  eyebrow: {
+    display: "block",
+    marginBottom: 5,
+    color: "#86efac",
+    fontSize: 10,
+    fontWeight: 900,
+    letterSpacing: 1.6,
+  },
+
+  title: {
+    margin: "0 0 6px",
+    color: "#fff",
+    fontSize: "clamp(27px, 3vw, 39px)",
+    lineHeight: 1.02,
+    letterSpacing: "-.8px",
+  },
+
+  subtitle: {
+    margin: 0,
+    color: "#d9eee2",
+    fontSize: 13,
+    lineHeight: 1.45,
+  },
+
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+
+  roleBadge: {
+    minHeight: 36,
+    padding: "0 12px",
+    display: "inline-flex",
+    alignItems: "center",
+    borderRadius: 999,
+    background: "rgba(255,255,255,.10)",
+    border: "1px solid rgba(255,255,255,.16)",
+    color: "#eaf8ef",
+    fontSize: 10,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: ".7px",
+  },
+
+  secondaryButton: {
+    minHeight: 40,
+    padding: "9px 13px",
+    border: "1px solid #d6e1da",
+    borderRadius: 11,
+    background: "#fff",
+    color: "#20332a",
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  heroButton: {
+    minHeight: 40,
+    padding: "9px 14px",
+    border: "1px solid rgba(255,255,255,.24)",
+    borderRadius: 11,
+    background: "rgba(255,255,255,.10)",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  tabs: {
+    maxWidth: 1450,
+    margin: "0 auto 14px",
+    padding: 6,
+    display: "flex",
+    gap: 6,
+    overflowX: "auto",
+    border: "1px solid #dce7e0",
+    borderRadius: 15,
+    background: "#fff",
+    boxShadow: "0 7px 20px rgba(15,23,42,.04)",
+  },
+
+  tab: {
+    flex: "0 0 auto",
+    minHeight: 40,
+    padding: "8px 14px",
+    border: "1px solid transparent",
+    borderRadius: 10,
+    background: "transparent",
+    color: "#526158",
+    fontSize: 12,
+    fontWeight: 850,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+
+  tabActive: {
+    borderColor: "#0d7d47",
+    background: "linear-gradient(135deg,#139253,#08713b)",
+    color: "#fff",
+    boxShadow: "0 6px 14px rgba(8,113,59,.18)",
+  },
+
+  toolbar: {
+    maxWidth: 1450,
+    margin: "0 auto 14px",
+    padding: 12,
+    display: "grid",
+    gridTemplateColumns: "minmax(210px,1.45fr) repeat(4,minmax(135px,.65fr))",
+    gap: 9,
+    border: "1px solid #dce5df",
+    borderRadius: 17,
+    background: "#fff",
+    boxShadow: "0 8px 24px rgba(15,23,42,.045)",
+  },
+
+  dateCard: {
+    minWidth: 0,
+    padding: "10px 12px 5px",
+    borderRadius: 13,
+    background: "linear-gradient(180deg,#f8fbf9,#f2f7f4)",
+    border: "1px solid #e1e9e4",
+  },
+
+  dateHuman: {
+    display: "block",
+    marginTop: -5,
+    color: "#16834f",
+    fontSize: 10,
+    fontWeight: 850,
+  },
+
+  quickInfo: {
+    minHeight: 73,
+    padding: 11,
+    display: "grid",
+    gridTemplateColumns: "38px 1fr",
+    gap: 9,
+    alignItems: "center",
+    borderRadius: 13,
+    background: "#fbfdfc",
+    border: "1px solid #e2eae5",
+  },
+
+  statIcon: {
+    width: 36,
+    height: 36,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 11,
+    background: "#eaf7ef",
+    color: "#16834f",
+    fontSize: 16,
+    fontWeight: 900,
+  },
+
+  bigNumber: {
+    display: "block",
+    marginTop: 2,
+    fontSize: 22,
+    lineHeight: 1,
+    color: "#16251d",
+  },
+
+  gridCards: {
+    maxWidth: 1450,
+    margin: "0 auto 14px",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))",
+    gap: 12,
+  },
+
+  classCard: {
+    position: "relative",
+    overflow: "hidden",
+    padding: 17,
+    border: "1px solid #dbe6df",
+    borderRadius: 18,
+    background:
+      "linear-gradient(180deg,rgba(255,255,255,1),rgba(248,252,249,1))",
+    boxShadow: "0 10px 28px rgba(18,66,42,.07)",
+  },
+
+  classTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    paddingBottom: 12,
+    borderBottom: "1px solid #edf1ee",
+  },
+
+  badge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "#e8f7ed",
+    color: "#117a43",
+    fontSize: 9,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: ".5px",
+  },
+
+  badgeSuccess: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "#e8f7ed",
+    color: "#08743c",
+    fontSize: 9,
+    fontWeight: 900,
+    textTransform: "uppercase",
+  },
+
+  badgeNeutral: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "#eef2f0",
+    color: "#526158",
+    fontSize: 9,
+    fontWeight: 900,
+    textTransform: "uppercase",
+  },
+
+  badgeDanger: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "#fff0f0",
+    color: "#b42318",
+    fontSize: 9,
+    fontWeight: 900,
+    textTransform: "uppercase",
+  },
+
+  badgeWarning: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "#fff7dd",
+    color: "#956400",
+    fontSize: 9,
+    fontWeight: 900,
+    textTransform: "uppercase",
+  },
+
+  cardTitle: {
+    margin: "8px 0 0",
+    fontSize: 21,
+    letterSpacing: "-.3px",
+  },
+
+  availabilityGood: {
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#edf8f1",
+    color: "#16834f",
+    fontSize: 10,
+    fontWeight: 900,
+  },
+
+  availabilityFull: {
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#fff0f0",
+    color: "#be123c",
+    fontSize: 10,
+    fontWeight: 900,
+  },
+
+  classData: {
+    marginTop: 12,
+    display: "grid",
+    gap: 7,
+  },
+
+  dataRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingBottom: 7,
+    borderBottom: "1px solid #edf1ee",
+    fontSize: 12,
+  },
+
+  capacityBlock: {
+    marginTop: 11,
+  },
+
+  capacityMeta: {
+    marginBottom: 6,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    color: "#6d7b73",
+    fontSize: 10,
+    fontWeight: 750,
+  },
+
+  progressTrack: {
+    width: "100%",
+    height: 7,
+    overflow: "hidden",
+    borderRadius: 999,
+    background: "#e9efeb",
+  },
+
+  progressFill: {
+    height: "100%",
+    borderRadius: 999,
+    background: "linear-gradient(90deg,#18a45b,#08733c)",
+  },
+
+  cardButton: {
+    width: "100%",
+    minHeight: 40,
+    marginTop: 13,
+    border: "none",
+    borderRadius: 10,
+    background: "linear-gradient(135deg,#159552,#08743c)",
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 7px 16px rgba(8,116,60,.16)",
+  },
+
+  panel: {
+    maxWidth: 1450,
+    margin: "0 auto 14px",
+    padding: "17px",
+    border: "1px solid #dce5df",
+    borderRadius: 18,
+    background: "#fff",
+    boxShadow: "0 9px 26px rgba(15,23,42,.05)",
+  },
+
+  panelHeader: {
+    marginBottom: 13,
+    paddingBottom: 11,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    flexWrap: "wrap",
+    borderBottom: "1px solid #edf1ee",
+  },
+
+  panelTitle: {
+    margin: 0,
+    fontSize: 20,
+    letterSpacing: "-.3px",
+  },
+
+  counter: {
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#edf8f1",
+    color: "#16834f",
+    fontSize: 10,
+    fontWeight: 900,
+  },
+
+  twoColumns: {
+    maxWidth: 1450,
+    margin: "0 auto",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,390px),1fr))",
+    gap: 14,
+  },
+
+  field: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 5,
+    marginBottom: 10,
+  },
+
+  label: {
+    color: "#526158",
+    fontSize: 11,
+    fontWeight: 850,
+  },
+
+  input: {
+    width: "100%",
+    minHeight: 41,
+    padding: "9px 11px",
+    boxSizing: "border-box",
+    border: "1px solid #ccd8d1",
+    borderRadius: 10,
+    background: "#fff",
+    color: "#17211c",
+    outline: "none",
+    fontSize: 13,
+  },
+
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))",
+    gap: 9,
+  },
+
+  checkGrid: {
+    display: "grid",
+    gap: 8,
+    margin: "5px 0 12px",
+  },
+
+  checkLabel: {
+    minHeight: 39,
+    padding: "0 11px",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 10,
+    background: "#f7faf8",
+    border: "1px solid #e3eae6",
+    fontSize: 12,
+    fontWeight: 750,
+    color: "#526158",
+  },
+
+  formActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+
+  primaryButton: {
+    minHeight: 40,
+    padding: "9px 14px",
+    border: "none",
+    borderRadius: 10,
+    background: "linear-gradient(135deg,#159552,#08743c)",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  primaryWide: {
+    width: "100%",
+    minHeight: 44,
+    marginTop: 3,
+    border: "none",
+    borderRadius: 10,
+    background: "linear-gradient(135deg,#159552,#08743c)",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 8px 18px rgba(8,116,60,.16)",
+  },
+
+  searchResults: {
+    marginTop: -4,
+    marginBottom: 10,
+    display: "grid",
+    gap: 5,
+    padding: 7,
+    border: "1px solid #dce5df",
+    borderRadius: 11,
+    background: "#fff",
+    boxShadow: "0 9px 22px rgba(15,23,42,.06)",
+  },
+
+  searchItem: {
+    width: "100%",
+    padding: 10,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    border: "1px solid transparent",
+    borderRadius: 9,
+    background: "#f7faf8",
+    color: "#17211c",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  selectedClient: {
+    marginBottom: 12,
+    padding: 12,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    border: "1px solid #bfe0cb",
+    borderRadius: 12,
+    background: "linear-gradient(180deg,#f2fbf5,#eaf7ef)",
+  },
+
+  slotList: {
+    marginTop: 12,
+    display: "grid",
+    gap: 7,
+  },
+
+  slot: {
+    width: "100%",
+    padding: 11,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    border: "1px solid #dce5df",
+    borderRadius: 11,
+    background: "#fbfcfb",
+    color: "#17211c",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  slotSelected: {
+    borderColor: "#16834f",
+    background: "#edf9f1",
+    boxShadow: "0 5px 13px rgba(22,131,79,.10)",
+  },
+
+  listCard: {
+    padding: 11,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    border: "1px solid #e3e9e5",
+    borderRadius: 11,
+    background: "#fbfcfb",
+  },
+
+  reservationCard: {
+    padding: 12,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    border: "1px solid #e1e8e3",
+    borderRadius: 12,
+    background: "#fbfdfc",
+  },
+
+  reservationIdentity: {
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flex: "1 1 360px",
+  },
+
+  avatar: {
+    width: 40,
+    height: 40,
+    flex: "0 0 auto",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 12,
+    background: "linear-gradient(135deg,#123c29,#16834f)",
+    color: "#fff",
+    fontWeight: 900,
+  },
+
+  reservationMain: {
+    minWidth: 0,
+    flex: 1,
+  },
+
+  reservationTopLine: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+
+  reservationName: {
+    display: "block",
+    fontSize: 14,
+    overflowWrap: "anywhere",
+  },
+
+  inlineActions: {
+    display: "flex",
+    gap: 6,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+
+  smallButton: {
+    minHeight: 32,
+    padding: "6px 9px",
+    border: "1px solid #d4ddd7",
+    borderRadius: 8,
+    background: "#fff",
+    color: "#435047",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  smallSuccess: {
+    minHeight: 32,
+    padding: "6px 9px",
+    border: "1px solid #bfe0cb",
+    borderRadius: 8,
+    background: "#edf8f1",
+    color: "#16834f",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  smallDanger: {
+    minHeight: 32,
+    padding: "6px 9px",
+    border: "1px solid #fecaca",
+    borderRadius: 8,
+    background: "#fff5f5",
+    color: "#be123c",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  empty: {
+    gridColumn: "1 / -1",
+    minHeight: 130,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 7,
+    padding: 20,
+    border: "1px dashed #cbd9d0",
+    borderRadius: 15,
+    background:
+      "linear-gradient(180deg,rgba(250,252,251,1),rgba(246,250,247,1))",
+    textAlign: "center",
+  },
+
+  muted: {
+    color: "#748078",
+    fontSize: 11,
+  },
+
+  footer: {
+    maxWidth: 1450,
+    margin: "0 auto",
+    padding: "6px 2px 18px",
+    color: "#8b958f",
+    fontSize: 9,
+    textAlign: "right",
+  },
+};
 
 const s = {
   page: {
@@ -2077,4 +2916,5 @@ const s = {
     fontSize: 10,
     textAlign: "right",
   },
+  ...sPro,
 };
