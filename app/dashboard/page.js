@@ -1,6 +1,6 @@
 "use client";
 
-// DASHBOARD GIMNASIO - VERSION T - 2026-08-07
+// DASHBOARD GIMNASIO - VERSION U - AGENDA INTEGRADA - 2026-08-09
 
 // KONAX Dashboard · Reportes gimnasio habilitados · Versión 2026.08.07-S
 
@@ -100,6 +100,7 @@ function construirModulosPorPlan(codigoPlan) {
     gastos: false,
     recargos: false,
     suscripciones: false,
+    agenda: false,
 
     nuevo_pedido: false,
     pedidos_lavanderia: false,
@@ -155,6 +156,7 @@ function construirModulosPorPlan(codigoPlan) {
       gastos: true,
       recargos: true,
       suscripciones: true,
+      agenda: true,
     };
   }
 
@@ -1357,6 +1359,27 @@ export default function Dashboard() {
       return true;
     }
 
+    /*
+      GIMNASIO:
+      Agenda está disponible para Administrador y Vendedor/Recepción.
+      La configuración de clases y horarios continúa protegida dentro
+      del propio módulo mediante las reglas/RPC de Supabase.
+    */
+    if (
+      gimnasioActual &&
+      modulo === "agenda" &&
+      (
+        esAdministrador() ||
+        [
+          "vendedor",
+          "recepcion",
+          "recepcionista",
+        ].includes(normalizar(usuarioRol))
+      )
+    ) {
+      return true;
+    }
+
     if (!Boolean(modulos?.[modulo])) {
       return false;
     }
@@ -1439,6 +1462,13 @@ export default function Dashboard() {
         "suscripciones",
         "suscripciones",
         "▣",
+      ],
+      [
+        "Agenda",
+        "/agenda",
+        "agenda",
+        "agenda",
+        "📅",
       ],
       [
         "Caja",
