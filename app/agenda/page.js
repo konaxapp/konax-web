@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.09-AGENDA-F-NOMBRE-RESERVA";
+const VERSION = "2026.08.09-AGENDA-G-PORTAL-CAJA";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -120,6 +120,13 @@ export default function AgendaPage() {
   const [busquedaReservas, setBusquedaReservas] = useState("");
   const [estadoReservaFiltro, setEstadoReservaFiltro] = useState("Todos");
 
+  const [portalConfig, setPortalConfig] = useState({
+    activo: false,
+    slug: "",
+    titulo_publico: "",
+  });
+  const [guardandoPortal, setGuardandoPortal] = useState(false);
+
   useEffect(() => {
     inicializar();
   }, []);
@@ -183,10 +190,13 @@ export default function AgendaPage() {
         return;
       }
 
+      const adminLocal =
+        esRolAdministrador(rolLocal);
+
       setEmpresaId(empresaLocal);
       setEmpresaNombre(empresaNombreLocal);
       setRol(rolLocal);
-      setEsAdmin(esRolAdministrador(rolLocal));
+      setEsAdmin(adminLocal);
 
       await Promise.all([
         cargarServicios(empresaLocal),
@@ -194,6 +204,9 @@ export default function AgendaPage() {
         cargarClientes(empresaLocal),
         cargarReservas(empresaLocal),
         cargarDisponibilidad(fechaAgenda, empresaLocal),
+        adminLocal
+          ? cargarConfiguracionPortal(empresaLocal)
+          : Promise.resolve(),
       ]);
     } catch (err) {
       console.error(err);
@@ -201,6 +214,213 @@ export default function AgendaPage() {
     } finally {
       setCargando(false);
     }
+  }
+
+  async function cargarConfiguracionPortal(
+    idEmpresa = empresaId
+  ) {
+    if (!idEmpresa) return;
+
+    const { data, error } = await supabase.rpc(
+      "obtener_configuracion_portal_agenda",
+      {
+        p_empresa_id: idEmpresa,
+      }
+    );
+
+    if (error) {
+      console.error(
+        "No se pudo cargar el portal de reservas:",
+        error
+      );
+      return;
+    }
+
+    setPortalConfig({
+      activo: Boolean(data?.activo),
+      slug: data?.slug || "",
+      titulo_publico:
+        data?.titulo_publico || empresaNombre || "",
+    });
+  }
+
+  async function guardarConfiguracionPortal() {
+    if (!esAdmin) return;
+
+    if (!portalConfig.slug.trim()) {
+      alert("Escribe el enlace público del negocio.");
+      return;
+    }
+
+    setGuardandoPortal(true);
+
+    try {
+      const { data, error } = await supabase.rpc(
+        "configurar_portal_agenda",
+        {
+          p_empresa_id: empresaId,
+          p_activo: Boolean(portalConfig.activo),
+          p_slug: portalConfig.slug.trim(),
+          p_titulo_publico:
+            portalConfig.titulo_publico.trim() ||
+            empresaNombre ||
+            null,
+        }
+      );
+
+      if (error) throw error;
+
+      setPortalConfig({
+        activo: Boolean(data?.activo),
+        slug: data?.slug || portalConfig.slug,
+        titulo_publico:
+          data?.titulo_publico ||
+          portalConfig.titulo_publico ||
+          empresaNombre,
+      });
+
+      alert("Portal de reservas actualizado.");
+    } catch (err) {
+      alert(
+        err?.message ||
+          "No se pudo actualizar el portal de reservas."
+      );
+    } finally {
+      setGuardandoPortal(false);
+    }
+  }
+
+  function obtenerEnlacePortal() {
+    if (!portalConfig.slug) return "";
+
+    const ruta =
+      `/reservar/${portalConfig.slug}`;
+
+    if (typeof window === "undefined") {
+      return ruta;
+    }
+
+    return `${window.location.origin}${ruta}`;
+  }
+
+  async function copiarEnlacePortal() {
+    const enlace = obtenerEnlacePortal();
+
+    if (!enlace) return;
+
+    try {
+      await navigator.clipboard.writeText(enlace);
+      alert("Enlace de reservas copiado.");
+    } catch {
+      window.prompt(
+        "Copia este enlace de reservas:",
+        enlace
+      );
+    }
+  }
+
+  function compartirPortalWhatsApp() {
+    const enlace = obtenerEnlacePortal();
+
+    if (!enlace) return;
+
+    const texto =
+      `Reserva tu clase o servicio aquí:\n${enlace}`;
+
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(texto)}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  function abrirPortal() {
+    const enlace = obtenerEnlacePortal();
+
+    if (!enlace) return;
+
+    window.open(
+      enlace,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  function obtenerQrPortal() {
+    const enlace = obtenerEnlacePortal();
+
+    if (!enlace) return "";
+
+    return (
+      "https://api.qrserver.com/v1/create-qr-code/" +
+      `?size=700x700&margin=24&data=${encodeURIComponent(enlace)}`
+    );
+  }
+
+  async function descargarQrPortal() {
+    const qr = obtenerQrPortal();
+
+    if (!qr) return;
+
+    try {
+      const respuesta = await fetch(qr);
+      if (!respuesta.ok) throw new Error("QR no disponible.");
+
+      const blob = await respuesta.blob();
+      const url = URL.createObjectURL(blob);
+      const enlace = document.createElement("a");
+
+      enlace.href = url;
+      enlace.download =
+        `QR-reservas-${portalConfig.slug || "konax"}.png`;
+
+      document.body.appendChild(enlace);
+      enlace.click();
+      enlace.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      window.open(
+        qr,
+        "_blank",
+        "noopener,noreferrer"
+      );
+    }
+  }
+
+  function modalidadServicio(form = servicioForm) {
+    if (
+      form.requiere_membresia &&
+      form.requiere_pago
+    ) {
+      return "miembros_pago";
+    }
+
+    if (form.requiere_membresia) {
+      return "solo_miembros";
+    }
+
+    if (form.requiere_pago) {
+      return "pago_local";
+    }
+
+    return "abierta_gratis";
+  }
+
+  function aplicarModalidadServicio(modalidad) {
+    setServicioForm((actual) => ({
+      ...actual,
+      requiere_membresia:
+        modalidad === "solo_miembros" ||
+        modalidad === "miembros_pago",
+      requiere_pago:
+        modalidad === "pago_local" ||
+        modalidad === "miembros_pago",
+      precio:
+        modalidad === "pago_local" ||
+        modalidad === "miembros_pago"
+          ? actual.precio
+          : 0,
+    }));
   }
 
   async function cargarServicios(idEmpresa = empresaId) {
@@ -499,6 +719,16 @@ export default function AgendaPage() {
       return;
     }
 
+    if (
+      servicioForm.requiere_pago &&
+      Number(servicioForm.precio || 0) <= 0
+    ) {
+      alert(
+        "Coloca el precio que se cobrará en Caja."
+      );
+      return;
+    }
+
     setGuardando(true);
     setError("");
 
@@ -729,6 +959,32 @@ export default function AgendaPage() {
     } finally {
       setGuardando(false);
     }
+  }
+
+  function cobrarReserva(reserva) {
+    if (!reserva?.id || !reserva?.cliente_id) {
+      alert("No se pudo identificar la reserva.");
+      return;
+    }
+
+    if (
+      normalizar(reserva.estado) !==
+      "pendiente_pago"
+    ) {
+      alert(
+        "Esta reserva ya no se encuentra pendiente de pago."
+      );
+      return;
+    }
+
+    const parametros = new URLSearchParams({
+      clienteId: String(reserva.cliente_id),
+      agendaReservaId: String(reserva.id),
+      flujo: "agenda",
+    });
+
+    window.location.href =
+      `/caja?${parametros.toString()}`;
   }
 
   async function cancelarReserva(reserva) {
@@ -1819,10 +2075,11 @@ export default function AgendaPage() {
 
           <ReservaLista
             reservas={reservasFiltradas}
-            nombreCliente={nombreCliente}
+            nombreReserva={nombreDeReserva}
             nombreServicio={nombreServicio}
             onCancelar={cancelarReserva}
             onAsistencia={marcarAsistencia}
+            onCobrar={cobrarReserva}
             mostrarFecha
           />
         </section>
@@ -1830,6 +2087,153 @@ export default function AgendaPage() {
 
       {vista === "configuracion" && esAdmin && (
         <>
+          <section style={s.portalPanel} className="agenda-portal-responsive">
+            <div style={s.portalMain}>
+              <span style={s.eyebrowSmall}>
+                PORTAL DE RESERVAS
+              </span>
+
+              <h2 style={s.panelTitle}>
+                Comparte tus reservas
+              </h2>
+
+              <p style={s.portalText}>
+                Usa un solo enlace para Instagram, WhatsApp,
+                código QR o la página web del negocio.
+              </p>
+
+              <div style={s.portalFields}>
+                <Campo label="Nombre visible">
+                  <input
+                    value={portalConfig.titulo_publico}
+                    onChange={(e) =>
+                      setPortalConfig({
+                        ...portalConfig,
+                        titulo_publico: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                    placeholder={empresaNombre}
+                  />
+                </Campo>
+
+                <Campo label="Enlace del negocio">
+                  <div style={s.slugField}>
+                    <span style={s.slugPrefix}>
+                      /reservar/
+                    </span>
+                    <input
+                      value={portalConfig.slug}
+                      onChange={(e) =>
+                        setPortalConfig({
+                          ...portalConfig,
+                          slug: e.target.value,
+                        })
+                      }
+                      style={s.slugInput}
+                      placeholder="fitness-507"
+                    />
+                  </div>
+                </Campo>
+              </div>
+
+              <label style={s.portalToggle}>
+                <input
+                  type="checkbox"
+                  checked={portalConfig.activo}
+                  onChange={(e) =>
+                    setPortalConfig({
+                      ...portalConfig,
+                      activo: e.target.checked,
+                    })
+                  }
+                />
+                <span>
+                  <strong>Reservas online activas</strong>
+                  <small>
+                    Si se desactiva, el enlace público deja de aceptar reservas.
+                  </small>
+                </span>
+              </label>
+
+              <div style={s.portalLinkBox}>
+                <span>ENLACE PÚBLICO</span>
+                <strong>
+                  {obtenerEnlacePortal() || "Configura el enlace"}
+                </strong>
+              </div>
+
+              <div style={s.portalActions}>
+                <button
+                  type="button"
+                  style={s.primaryButton}
+                  onClick={guardarConfiguracionPortal}
+                  disabled={guardandoPortal}
+                >
+                  {guardandoPortal
+                    ? "Guardando..."
+                    : "Guardar portal"}
+                </button>
+
+                <button
+                  type="button"
+                  style={s.secondaryButton}
+                  onClick={copiarEnlacePortal}
+                  disabled={!portalConfig.slug}
+                >
+                  Copiar enlace
+                </button>
+
+                <button
+                  type="button"
+                  style={s.secondaryButton}
+                  onClick={compartirPortalWhatsApp}
+                  disabled={!portalConfig.slug}
+                >
+                  WhatsApp
+                </button>
+
+                <button
+                  type="button"
+                  style={s.secondaryButton}
+                  onClick={abrirPortal}
+                  disabled={!portalConfig.slug}
+                >
+                  Ver portal
+                </button>
+
+                <button
+                  type="button"
+                  style={s.secondaryButton}
+                  onClick={descargarQrPortal}
+                  disabled={!portalConfig.slug}
+                >
+                  Descargar QR
+                </button>
+              </div>
+            </div>
+
+            <div style={s.qrPanel}>
+              {portalConfig.slug ? (
+                <>
+                  <img
+                    src={obtenerQrPortal()}
+                    alt="QR del portal de reservas"
+                    style={s.qrImage}
+                  />
+                  <strong>Escanea para reservar</strong>
+                  <span>
+                    Ideal para recepción, volante o mostrador.
+                  </span>
+                </>
+              ) : (
+                <div style={s.qrEmpty}>
+                  QR disponible al configurar el enlace.
+                </div>
+              )}
+            </div>
+          </section>
+
           <section style={s.twoColumns}>
             <article style={s.panel}>
               <span style={s.eyebrowSmall}>CONFIGURACIÓN</span>
@@ -1913,52 +2317,59 @@ export default function AgendaPage() {
                 />
               </Campo>
 
-              <div style={s.checkGrid}>
-                <label style={s.checkLabel}>
-                  <input
-                    type="checkbox"
-                    checked={servicioForm.requiere_membresia}
-                    onChange={(e) =>
-                      setServicioForm({
-                        ...servicioForm,
-                        requiere_membresia: e.target.checked,
-                      })
-                    }
-                  />
-                  Solo clientes con membresía activa
-                </label>
-
-                <label style={s.checkLabel}>
-                  <input
-                    type="checkbox"
-                    checked={servicioForm.requiere_pago}
-                    onChange={(e) =>
-                      setServicioForm({
-                        ...servicioForm,
-                        requiere_pago: e.target.checked,
-                      })
-                    }
-                  />
-                  Tiene costo adicional
-                </label>
-              </div>
+              <Campo label="Modalidad de reserva">
+                <select
+                  value={modalidadServicio(servicioForm)}
+                  onChange={(e) =>
+                    aplicarModalidadServicio(e.target.value)
+                  }
+                  style={s.input}
+                >
+                  <option value="abierta_gratis">
+                    Reserva abierta · Sin costo
+                  </option>
+                  <option value="solo_miembros">
+                    Solo miembros · Incluida en membresía
+                  </option>
+                  <option value="pago_local">
+                    Reserva abierta · Pagar en el local
+                  </option>
+                  <option value="miembros_pago">
+                    Solo miembros · Costo adicional
+                  </option>
+                </select>
+              </Campo>
 
               {servicioForm.requiere_pago && (
-                <Campo label="Precio">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={servicioForm.precio}
-                    onChange={(e) =>
-                      setServicioForm({
-                        ...servicioForm,
-                        precio: e.target.value,
-                      })
-                    }
-                    style={s.input}
-                  />
-                </Campo>
+                <>
+                  <Campo label="Precio de la clase / servicio">
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={servicioForm.precio}
+                      onChange={(e) =>
+                        setServicioForm({
+                          ...servicioForm,
+                          precio: e.target.value,
+                        })
+                      }
+                      style={s.input}
+                      placeholder="6.00"
+                    />
+                  </Campo>
+
+                  <div style={s.paymentInfo}>
+                    <strong>
+                      Cobro en el local
+                    </strong>
+                    <span>
+                      El cliente reserva su cupo. La reserva queda
+                      pendiente de pago y recepción la cobra desde Caja
+                      cuando el cliente llegue.
+                    </span>
+                  </div>
+                </>
               )}
 
               <div style={s.formActions}>
@@ -2292,10 +2703,11 @@ function Empty({ titulo, texto }) {
 
 function ReservaLista({
   reservas,
-  nombreCliente,
+  nombreReserva,
   nombreServicio,
   onCancelar,
   onAsistencia,
+  onCobrar,
   mostrarFecha = false,
 }) {
   if (!reservas.length) {
@@ -2314,7 +2726,7 @@ function ReservaLista({
         const puedeGestionar =
           !["cancelada", "asistio"].includes(estado);
 
-        const nombre = nombreDeReserva(reserva);
+        const nombre = nombreReserva(reserva);
         const badgeEstado =
           estado === "asistio"
             ? s.badgeSuccess
@@ -2346,11 +2758,24 @@ function ReservaLista({
                   {mostrarFecha ? ` · ${formatoFecha(reserva.fecha_reserva)}` : ""}
                   {" · "}
                   {formatoHora(reserva.hora_inicio)}
+                  {reserva.requiere_pago
+                    ? ` · $${Number(reserva.monto || 0).toFixed(2)}`
+                    : ""}
                 </span>
               </div>
             </div>
 
             <div style={s.inlineActions}>
+              {puedeGestionar && estado === "pendiente_pago" && (
+                <button
+                  type="button"
+                  style={s.smallPay}
+                  onClick={() => onCobrar(reserva)}
+                >
+                  Cobrar ${Number(reserva.monto || 0).toFixed(2)}
+                </button>
+              )}
+
               {puedeGestionar && estado !== "pendiente_pago" && (
                 <>
                   <button
@@ -3311,6 +3736,13 @@ const AGENDA_CSS = `
   .agenda-d-reservation-row > span:last-child {
     grid-column: 2;
     justify-self: start;
+  }
+}
+
+
+@media (max-width: 760px) {
+  .agenda-portal-responsive {
+    grid-template-columns: 1fr !important;
   }
 }
 `;
@@ -5260,4 +5692,148 @@ const s = {
     textAlign: "right",
   },
   ...sPro,
+
+  portalPanel: {
+    maxWidth: 1450,
+    margin: "0 auto 14px",
+    padding: 18,
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) 250px",
+    gap: 16,
+    border: "1px solid #D8E6DE",
+    borderRadius: 18,
+    background:
+      "linear-gradient(135deg,#FFFFFF 0%,#F2FAF5 100%)",
+    boxShadow: "0 8px 24px rgba(18,61,39,.05)",
+  },
+
+  portalMain: {
+    minWidth: 0,
+  },
+
+  portalText: {
+    maxWidth: 700,
+    margin: "5px 0 14px",
+    color: "#718078",
+    fontSize: 11,
+    lineHeight: 1.5,
+  },
+
+  portalFields: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 10,
+  },
+
+  portalToggle: {
+    marginTop: 10,
+    padding: 11,
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 9,
+    border: "1px solid #D9E6DE",
+    borderRadius: 11,
+    background: "#FFFFFF",
+    color: "#244034",
+    fontSize: 10,
+  },
+
+  portalLinkBox: {
+    marginTop: 10,
+    padding: 11,
+    display: "grid",
+    gap: 4,
+    overflow: "hidden",
+    borderRadius: 11,
+    background: "#0B4B2C",
+    color: "#FFFFFF",
+    fontSize: 9,
+  },
+
+  portalActions: {
+    marginTop: 10,
+    display: "flex",
+    gap: 7,
+    flexWrap: "wrap",
+  },
+
+  slugField: {
+    minHeight: 42,
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0,1fr)",
+    alignItems: "center",
+    overflow: "hidden",
+    border: "1px solid #D6E1DA",
+    borderRadius: 10,
+    background: "#FFFFFF",
+  },
+
+  slugPrefix: {
+    padding: "0 0 0 10px",
+    color: "#6F7D75",
+    fontSize: 10,
+    fontWeight: 800,
+  },
+
+  slugInput: {
+    width: "100%",
+    minWidth: 0,
+    minHeight: 40,
+    padding: "8px 10px 8px 3px",
+    border: 0,
+    outline: "none",
+    background: "transparent",
+    color: "#142019",
+    fontFamily: "inherit",
+  },
+
+  qrPanel: {
+    minHeight: 220,
+    padding: 14,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 6,
+    borderRadius: 15,
+    background: "#FFFFFF",
+    textAlign: "center",
+  },
+
+  qrImage: {
+    width: 150,
+    height: 150,
+    objectFit: "contain",
+  },
+
+  qrEmpty: {
+    color: "#7A867F",
+    fontSize: 10,
+    lineHeight: 1.45,
+  },
+
+  paymentInfo: {
+    marginTop: 9,
+    padding: 11,
+    display: "grid",
+    gap: 4,
+    border: "1px solid #F1D28B",
+    borderRadius: 11,
+    background: "#FFF9E9",
+    color: "#785B09",
+    fontSize: 9,
+    lineHeight: 1.45,
+  },
+
+  smallPay: {
+    minHeight: 34,
+    padding: "7px 11px",
+    border: 0,
+    borderRadius: 9,
+    background: "#0B7A43",
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
 };
