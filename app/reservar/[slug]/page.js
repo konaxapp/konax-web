@@ -1,7 +1,7 @@
 "use client";
 
 // KONAX · PORTAL PUBLICO DE RESERVAS
-// VERSION D · RESPONSIVE + FINALIZACION · 2026-08-09
+// VERSION E · PRECIOS + PAGO EN LOCAL · 2026-08-09
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
@@ -497,7 +497,11 @@ export default function ReservaPublicaPage() {
           </h1>
 
           <p style={s.finishedText}>
-            Tu espacio quedó confirmado. Ya puedes cerrar esta ventana.
+            {reservaConfirmada?.requiere_pago
+              ? `Tu espacio quedó reservado. Realiza el pago de ${dinero(
+                  reservaConfirmada.monto
+                )} en Caja cuando llegues al local. Ya puedes cerrar esta ventana.`
+              : "Tu espacio quedó confirmado. Ya puedes cerrar esta ventana."}
           </p>
 
           <button
@@ -858,6 +862,8 @@ export default function ReservaPublicaPage() {
                             ? "Sin cupos"
                             : seleccionado
                             ? "Seleccionado ✓"
+                            : item.requiere_pago
+                            ? `Reservar · ${dinero(item.precio)}`
                             : "Reservar"}
                         </button>
                       </article>
@@ -904,7 +910,7 @@ export default function ReservaPublicaPage() {
 
                   {horarioSeleccionado.requiere_pago && (
                     <div style={s.priceBox}>
-                      <span>Costo adicional</span>
+                      <span>Total a pagar en el local</span>
                       <strong>
                         {dinero(horarioSeleccionado.precio)}
                       </strong>
@@ -1102,9 +1108,11 @@ export default function ReservaPublicaPage() {
 
             {reservaConfirmada.requiere_pago && (
               <div style={s.paymentNotice}>
-                Esta reserva requiere un pago adicional.
-                El gimnasio te indicará cómo completar
-                el pago.
+                Tu cupo quedó reservado. Paga{" "}
+                <strong>
+                  {dinero(reservaConfirmada.monto)}
+                </strong>{" "}
+                directamente en Caja cuando llegues al local.
               </div>
             )}
 
