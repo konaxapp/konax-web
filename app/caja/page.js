@@ -171,6 +171,8 @@ export default function Caja() {
   const [suscripcionFlujoId, setSuscripcionFlujoId] =
     useState("");
   const [flujoCaja, setFlujoCaja] = useState("");
+  const [agendaReservaFlujoId, setAgendaReservaFlujoId] =
+    useState("");
   const [esEscritorioCompacto, setEsEscritorioCompacto] =
     useState(false);
 
@@ -292,9 +294,20 @@ export default function Caja() {
       parametros.get("suscripcionId");
     const cuentaId = parametros.get("cuentaId");
     const flujo = parametros.get("flujo");
+    const agendaReservaId =
+      parametros.get("agendaReservaId");
 
     setSuscripcionFlujoId(suscripcionId || "");
     setFlujoCaja(flujo || "");
+    setAgendaReservaFlujoId(agendaReservaId || "");
+
+    if (agendaReservaId) {
+      await cargarReservaAgendaEnCaja(
+        empresaId,
+        agendaReservaId
+      );
+      return;
+    }
 
     if (!clienteId) return;
 
@@ -504,6 +517,167 @@ export default function Caja() {
         }
       }
     }
+
+    setTimeout(() => {
+      document
+        .getElementById("caja-gimnasio-formulario")
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    }, 150);
+  }
+
+  async function cargarReservaAgendaEnCaja(
+    empresaId,
+    reservaId
+  ) {
+    const {
+      data: reserva,
+      error: errorReserva,
+    } = await supabase
+      .from("agenda_reservas")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("id", reservaId)
+      .maybeSingle();
+
+    if (errorReserva || !reserva) {
+      throw new Error(
+        "No se pudo cargar la reserva enviada desde Agenda: " +
+          (errorReserva?.message || "Reserva no encontrada.")
+      );
+    }
+
+    if (
+      normalizar(reserva.estado) === "cancelada"
+    ) {
+      throw new Error(
+        "La reserva enviada a Caja está cancelada."
+      );
+    }
+
+    if (
+      normalizar(reserva.estado) !== "pendiente_pago"
+    ) {
+      throw new Error(
+        "La reserva ya no se encuentra pendiente de pago."
+      );
+    }
+
+    const [
+      respuestaCliente,
+      respuestaServicio,
+      respuestaPagoExistente,
+    ] = await Promise.all([
+      supabase
+        .from("clientes")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .eq("id", reserva.cliente_id)
+        .maybeSingle(),
+
+      supabase
+        .from("agenda_servicios")
+        .select("id,nombre,tipo")
+        .eq("empresa_id", empresaId)
+        .eq("id", reserva.servicio_id)
+        .maybeSingle(),
+
+      supabase
+        .from("caja")
+        .select("id,monto,estado")
+        .eq("empresa_id", empresaId)
+        .eq("agenda_reserva_id", reserva.id)
+        .eq("estado", "Procesado")
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    if (
+      respuestaCliente.error ||
+      !respuestaCliente.data
+    ) {
+      throw new Error(
+        "No se pudo cargar el cliente de la reserva: " +
+          (respuestaCliente.error?.message ||
+            "Cliente no encontrado.")
+      );
+    }
+
+    if (respuestaServicio.error) {
+      throw new Error(
+        "No se pudo cargar la clase o servicio: " +
+          respuestaServicio.error.message
+      );
+    }
+
+    if (respuestaPagoExistente.data?.id) {
+      const { error: errorConfirmar } =
+        await supabase.rpc(
+          "confirmar_pago_agenda_desde_caja",
+          {
+            p_empresa_id: empresaId,
+            p_reserva_id: reserva.id,
+            p_caja_id:
+              respuestaPagoExistente.data.id,
+          }
+        );
+
+      if (errorConfirmar) {
+        throw new Error(
+          "El pago ya existe, pero no se pudo confirmar la reserva: " +
+            errorConfirmar.message
+        );
+      }
+
+      alert(
+        `El pago de $${Number(
+          respuestaPagoExistente.data.monto || 0
+        ).toFixed(
+          2
+        )} ya estaba registrado. La reserva fue confirmada sin realizar otro cobro.`
+      );
+
+      window.location.replace("/agenda");
+      return;
+    }
+
+    const cliente = respuestaCliente.data;
+    const servicio = respuestaServicio.data;
+
+    setClienteSeleccionado(cliente);
+    setBuscarCliente(cliente.nombre || "");
+    setResultadosBusqueda([]);
+    setCuentasCliente([]);
+    setCuentaSeleccionada(null);
+
+    setTipoMovimiento("Clase / Sesión individual");
+    setMonto(
+      Number(reserva.monto || 0) > 0
+        ? Number(reserva.monto).toFixed(2)
+        : ""
+    );
+
+    setConcepto(
+      `${servicio?.nombre || "Clase / servicio"} · Reserva ${String(
+        reserva.fecha_reserva || ""
+      )} · ${String(
+        reserva.hora_inicio || ""
+      ).slice(0, 5)}`
+    );
+
+    setObservacion(
+      `Cobro asociado a reserva de Agenda ${reserva.id}.`
+    );
+
+    const cajeroActual =
+      localStorage.getItem("usuarioNombre") ||
+      localStorage.getItem("nombreUsuario") ||
+      localStorage.getItem("adminKonaxNombre") ||
+      "Caja";
+
+    setResponsable(cajeroActual);
 
     setTimeout(() => {
       document
@@ -2321,6 +2495,8 @@ export default function Caja() {
                 null,
               informacion_comercial_id:
                 cuentaSeleccionada?.id || null,
+              agenda_reserva_id:
+                agendaReservaFlujoId || null,
               numero_cuenta:
                 cuentaSeleccionada?.numero_cuenta ||
                 numeroVenta ||
@@ -2344,6 +2520,26 @@ export default function Caja() {
       }
 
       movimientoCajaCreado = movimientoCreado;
+
+      if (agendaReservaFlujoId) {
+        const { error: errorConfirmarReserva } =
+          await supabase.rpc(
+            "confirmar_pago_agenda_desde_caja",
+            {
+              p_empresa_id: empresaId,
+              p_reserva_id:
+                agendaReservaFlujoId,
+              p_caja_id: movimientoCreado.id,
+            }
+          );
+
+        if (errorConfirmarReserva) {
+          throw new Error(
+            "El pago se registró, pero no se pudo confirmar la reserva: " +
+              errorConfirmarReserva.message
+          );
+        }
+      }
 
       if (pagoPreparado) {
         cuentaActualizada = await aplicarPagoCuenta(
@@ -2378,7 +2574,16 @@ export default function Caja() {
         }
       }
 
-      alert(obtenerMensajeExito());
+      alert(
+        agendaReservaFlujoId
+          ? "Pago registrado y reserva confirmada correctamente."
+          : obtenerMensajeExito()
+      );
+
+      if (agendaReservaFlujoId) {
+        window.location.replace("/agenda");
+        return;
+      }
 
       if (typeof window !== "undefined") {
         window.history.replaceState(
@@ -2442,6 +2647,7 @@ export default function Caja() {
     setMostrarOtrosCobros(false);
     setSuscripcionFlujoId("");
     setFlujoCaja("");
+    setAgendaReservaFlujoId("");
 
     setBuscarCliente("");
     setResultadosBusqueda([]);
