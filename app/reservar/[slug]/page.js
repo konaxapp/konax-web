@@ -1,7 +1,7 @@
 "use client";
 
 // KONAX · PORTAL PUBLICO DE RESERVAS
-// VERSION C · RESPONSIVE + CONFIRMACION LIMPIA · 2026-08-09
+// VERSION D · RESPONSIVE + FINALIZACION · 2026-08-09
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
@@ -241,6 +241,7 @@ export default function ReservaPublicaPage() {
   const [observaciones, setObservaciones] = useState("");
 
   const [reservaConfirmada, setReservaConfirmada] = useState(null);
+  const [finalizado, setFinalizado] = useState(false);
 
   const dias = useMemo(() => {
     return Array.from({ length: 7 }, (_, indice) => {
@@ -410,6 +411,7 @@ export default function ReservaPublicaPage() {
   }
 
   function nuevaReserva() {
+    setFinalizado(false);
     setReservaConfirmada(null);
     setHorarioSeleccionado(null);
     setNombre("");
@@ -421,14 +423,12 @@ export default function ReservaPublicaPage() {
   }
 
   function finalizarReserva() {
-    setReservaConfirmada(null);
-    setHorarioSeleccionado(null);
     setNombre("");
     setTelefono("");
     setObservaciones("");
     setError("");
     setMensaje("");
-    setPaso(1);
+    setFinalizado(true);
 
     window.scrollTo({
       top: 0,
@@ -478,6 +478,42 @@ export default function ReservaPublicaPage() {
             Tecnología de reservas por KONAX
           </span>
         </div>
+      </main>
+    );
+  }
+
+  if (finalizado) {
+    return (
+      <main style={s.finishedPage}>
+        <section style={s.finishedCard}>
+          <div style={s.finishedCheck}>✓</div>
+
+          <span style={s.finishedEyebrow}>
+            KONAX · RESERVA FINALIZADA
+          </span>
+
+          <h1 style={s.finishedTitle}>
+            Reserva completada
+          </h1>
+
+          <p style={s.finishedText}>
+            Tu espacio quedó confirmado. Ya puedes cerrar esta ventana.
+          </p>
+
+          <button
+            type="button"
+            onClick={nuevaReserva}
+            style={s.finishedSecondary}
+          >
+            Hacer otra reserva
+          </button>
+
+          <img
+            src="/konax-logo.png"
+            alt="KONAX"
+            style={s.finishedLogo}
+          />
+        </section>
       </main>
     );
   }
@@ -1111,6 +1147,89 @@ export default function ReservaPublicaPage() {
 }
 
 const s = {
+  finishedPage: {
+    minHeight: "100vh",
+    padding: 18,
+    display: "grid",
+    placeItems: "center",
+    background:
+      "linear-gradient(180deg,#EFF7F2 0%,#F8FAF9 100%)",
+    color: "#15231B",
+    fontFamily:
+      'Inter, system-ui, "Segoe UI", sans-serif',
+  },
+
+  finishedCard: {
+    width: "min(470px,100%)",
+    padding: "36px 22px 26px",
+    display: "grid",
+    placeItems: "center",
+    border: "1px solid #D7E6DD",
+    borderRadius: 24,
+    background: "#FFFFFF",
+    textAlign: "center",
+    boxShadow:
+      "0 18px 45px rgba(13,72,42,.10)",
+  },
+
+  finishedCheck: {
+    width: 72,
+    height: 72,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background:
+      "linear-gradient(145deg,#0B7A43,#48C982)",
+    color: "#FFFFFF",
+    fontSize: 32,
+    fontWeight: 950,
+    boxShadow:
+      "0 12px 28px rgba(11,122,67,.22)",
+  },
+
+  finishedEyebrow: {
+    marginTop: 18,
+    color: "#0B7A43",
+    fontSize: 8,
+    fontWeight: 950,
+    letterSpacing: 1.15,
+  },
+
+  finishedTitle: {
+    margin: "8px 0 0",
+    fontSize: "clamp(28px,7vw,38px)",
+    lineHeight: 1.05,
+  },
+
+  finishedText: {
+    maxWidth: 360,
+    margin: "12px 0 0",
+    color: "#6F7E76",
+    fontSize: 12,
+    lineHeight: 1.55,
+  },
+
+  finishedSecondary: {
+    width: "100%",
+    minHeight: 46,
+    marginTop: 22,
+    border: "1px solid #BCD8C8",
+    borderRadius: 11,
+    background: "#F3FAF6",
+    color: "#0B7A43",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  finishedLogo: {
+    width: 100,
+    height: 38,
+    marginTop: 22,
+    objectFit: "contain",
+    opacity: .75,
+  },
+
   page: {
     minHeight: "100vh",
     padding: "20px 12px 42px",
