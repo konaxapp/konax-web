@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.09-AGENDA-D-COMMAND";
+const VERSION = "2026.08.09-AGENDA-E-ACCESO-FLEXIBLE";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -11,7 +11,7 @@ const SERVICIO_INICIAL = {
   tipo: "clase_grupal",
   duracion_minutos: 60,
   capacidad_default: 5,
-  requiere_membresia: true,
+  requiere_membresia: false,
   requiere_pago: false,
   precio: 0,
   activo: true,
@@ -1886,7 +1886,7 @@ export default function AgendaPage() {
                       })
                     }
                   />
-                  Requiere membresía activa
+                  Solo clientes con membresía activa
                 </label>
 
                 <label style={s.checkLabel}>
