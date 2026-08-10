@@ -1,11 +1,135 @@
 "use client";
 
 // KONAX · PORTAL PUBLICO DE RESERVAS
-// VERSION B · CLIENTE ORGANICO · 2026-08-09
+// VERSION C · RESPONSIVE + CONFIRMACION LIMPIA · 2026-08-09
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
+
+const RESPONSIVE_CSS = `
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  @media (max-width: 760px) {
+    .reserva-publica-page {
+      padding-left: 10px !important;
+      padding-right: 10px !important;
+      overflow-x: hidden !important;
+    }
+
+    .reserva-publica-shell {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+
+    .reserva-publica-hero {
+      padding: 18px 14px !important;
+      border-radius: 18px !important;
+    }
+
+    .reserva-publica-brand {
+      width: 100% !important;
+      align-items: flex-start !important;
+    }
+
+    .reserva-publica-secure {
+      display: none !important;
+    }
+
+    .reserva-publica-steps {
+      grid-template-columns:
+        minmax(0,1fr) 14px minmax(0,1fr) 14px minmax(0,1fr) !important;
+      gap: 4px !important;
+    }
+
+    .reserva-publica-step {
+      min-width: 0 !important;
+      font-size: 7px !important;
+      gap: 4px !important;
+      white-space: normal !important;
+      text-align: center !important;
+      justify-content: center !important;
+    }
+
+    .reserva-publica-card {
+      padding: 14px !important;
+      border-radius: 16px !important;
+    }
+
+    .reserva-publica-days {
+      grid-template-columns: repeat(7, 72px) !important;
+      overflow-x: auto !important;
+      padding-bottom: 6px !important;
+      scroll-snap-type: x proximity;
+    }
+
+    .reserva-publica-day {
+      scroll-snap-align: start;
+    }
+
+    .reserva-publica-class-card {
+      grid-template-columns: 1fr !important;
+      gap: 12px !important;
+    }
+
+    .reserva-publica-class-action {
+      width: 100% !important;
+      min-width: 0 !important;
+    }
+
+    .reserva-publica-identity {
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+
+    .reserva-publica-summary {
+      min-height: auto !important;
+      padding: 16px !important;
+    }
+
+    .reserva-publica-form {
+      width: 100% !important;
+      min-width: 0 !important;
+      padding: 16px !important;
+    }
+
+    .reserva-publica-form input,
+    .reserva-publica-form textarea,
+    .reserva-publica-form button {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+    }
+
+    .reserva-publica-ticket-grid {
+      grid-template-columns: 1fr !important;
+    }
+
+    .reserva-publica-ticket-top {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+    }
+
+    .reserva-publica-confirm-actions {
+      width: 100% !important;
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 8px !important;
+    }
+
+    .reserva-publica-confirm-actions button {
+      width: 100% !important;
+    }
+  }
+`;
 
 const DIA_MS = 86400000;
 
@@ -296,6 +420,22 @@ export default function ReservaPublicaPage() {
     setPaso(1);
   }
 
+  function finalizarReserva() {
+    setReservaConfirmada(null);
+    setHorarioSeleccionado(null);
+    setNombre("");
+    setTelefono("");
+    setObservaciones("");
+    setError("");
+    setMensaje("");
+    setPaso(1);
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }
+
   if (cargandoPortal) {
     return (
       <main style={s.loadingPage}>
@@ -343,11 +483,12 @@ export default function ReservaPublicaPage() {
   }
 
   return (
-    <main style={s.page}>
-      <section style={s.shell}>
-        <header style={s.hero}>
+    <main style={s.page} className="reserva-publica-page">
+      <style dangerouslySetInnerHTML={{ __html: RESPONSIVE_CSS }} />
+      <section style={s.shell} className="reserva-publica-shell">
+        <header style={s.hero} className="reserva-publica-hero">
           <div style={s.heroTop}>
-            <div style={s.brandWrap}>
+            <div style={s.brandWrap} className="reserva-publica-brand">
               <div style={s.brandLogo}>
                 <img
                   src="/konax-logo.png"
@@ -367,7 +508,7 @@ export default function ReservaPublicaPage() {
               </div>
             </div>
 
-            <span style={s.secureBadge}>
+            <span style={s.secureBadge} className="reserva-publica-secure">
               ● Reserva segura
             </span>
           </div>
@@ -377,12 +518,13 @@ export default function ReservaPublicaPage() {
             y confirma tu espacio en pocos segundos.
           </p>
 
-          <div style={s.steps}>
+          <div style={s.steps} className="reserva-publica-steps">
             <div
               style={{
                 ...s.step,
                 ...(paso >= 1 ? s.stepActive : {}),
               }}
+              className="reserva-publica-step"
             >
               <span style={s.stepCircle}>1</span>
               <span>Horario</span>
@@ -395,6 +537,7 @@ export default function ReservaPublicaPage() {
                 ...s.step,
                 ...(paso >= 2 ? s.stepActive : {}),
               }}
+              className="reserva-publica-step"
             >
               <span style={s.stepCircle}>2</span>
               <span>Tus datos</span>
@@ -407,6 +550,7 @@ export default function ReservaPublicaPage() {
                 ...s.step,
                 ...(paso >= 3 ? s.stepActive : {}),
               }}
+              className="reserva-publica-step"
             >
               <span style={s.stepCircle}>3</span>
               <span>Confirmación</span>
@@ -416,7 +560,7 @@ export default function ReservaPublicaPage() {
 
         {paso !== 3 && (
           <>
-            <section style={s.card}>
+            <section style={s.card} className="reserva-publica-card">
               <div style={s.sectionHead}>
                 <div>
                   <span style={s.sectionEyebrow}>
@@ -432,7 +576,7 @@ export default function ReservaPublicaPage() {
                 </span>
               </div>
 
-              <div style={s.daysGrid}>
+              <div style={s.daysGrid} className="reserva-publica-days">
                 {dias.map((dia) => {
                   const activo = dia.iso === fecha;
 
@@ -449,6 +593,7 @@ export default function ReservaPublicaPage() {
                         ...s.dayButton,
                         ...(activo ? s.dayButtonActive : {}),
                       }}
+                      className="reserva-publica-day"
                     >
                       <span
                         style={{
@@ -499,7 +644,7 @@ export default function ReservaPublicaPage() {
               </div>
             </section>
 
-            <section style={s.card}>
+            <section style={s.card} className="reserva-publica-card">
               <div style={s.sectionHead}>
                 <div>
                   <span style={s.sectionEyebrow}>
@@ -566,6 +711,7 @@ export default function ReservaPublicaPage() {
                             ? s.classCardSelected
                             : {}),
                         }}
+                        className="reserva-publica-class-card"
                       >
                         <div style={s.classMain}>
                           <div style={s.classTitleRow}>
@@ -670,6 +816,7 @@ export default function ReservaPublicaPage() {
                               ? s.selectButtonSelected
                               : s.selectButton
                           }
+                          className="reserva-publica-class-action"
                         >
                           {lleno
                             ? "Sin cupos"
@@ -688,8 +835,9 @@ export default function ReservaPublicaPage() {
               <section
                 id="datos-reserva"
                 style={s.identityCard}
+                className="reserva-publica-identity"
               >
-                <div style={s.summaryBox}>
+                <div style={s.summaryBox} className="reserva-publica-summary">
                   <span style={s.summaryEyebrow}>
                     TU SELECCIÓN
                   </span>
@@ -731,6 +879,7 @@ export default function ReservaPublicaPage() {
                 <form
                   onSubmit={confirmarReserva}
                   style={s.form}
+                  className="reserva-publica-form"
                 >
                   <div>
                     <span style={s.sectionEyebrow}>
@@ -849,17 +998,14 @@ export default function ReservaPublicaPage() {
             </h2>
 
             <p style={s.confirmText}>
-              {reservaConfirmada.cliente_nombre
-                ? `${reservaConfirmada.cliente_nombre}, `
-                : ""}
-              tu reserva fue registrada correctamente.
+              Tu reserva fue registrada correctamente.
               {reservaConfirmada.cliente_nuevo
                 ? " Además, tu ficha de cliente fue creada automáticamente."
                 : ""}
             </p>
 
             <div style={s.ticket}>
-              <div style={s.ticketTop}>
+              <div style={s.ticketTop} className="reserva-publica-ticket-top">
                 <div>
                   <span style={s.ticketLabel}>
                     CLASE / SERVICIO
@@ -877,7 +1023,7 @@ export default function ReservaPublicaPage() {
                 </span>
               </div>
 
-              <div style={s.ticketGrid}>
+              <div style={s.ticketGrid} className="reserva-publica-ticket-grid">
                 <div style={s.ticketItem}>
                   <span>Fecha</span>
                   <strong>
@@ -926,13 +1072,26 @@ export default function ReservaPublicaPage() {
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={nuevaReserva}
-              style={s.newReservationButton}
+            <div
+              style={s.confirmActions}
+              className="reserva-publica-confirm-actions"
             >
-              Hacer otra reserva
-            </button>
+              <button
+                type="button"
+                onClick={finalizarReserva}
+                style={s.doneButton}
+              >
+                Listo
+              </button>
+
+              <button
+                type="button"
+                onClick={nuevaReserva}
+                style={s.newReservationButton}
+              >
+                Hacer otra reserva
+              </button>
+            </div>
           </section>
         )}
 
@@ -1726,14 +1885,36 @@ const s = {
     lineHeight: 1.45,
   },
 
-  newReservationButton: {
-    minHeight: 43,
+  confirmActions: {
+    width: "min(560px,100%)",
     marginTop: 18,
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 9,
+  },
+
+  doneButton: {
+    minHeight: 45,
     padding: "0 15px",
     border: 0,
     borderRadius: 11,
     background: "#0B7A43",
     color: "#fff",
+    fontSize: 10,
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow:
+      "0 10px 22px rgba(11,122,67,.16)",
+  },
+
+  newReservationButton: {
+    minHeight: 45,
+    marginTop: 0,
+    padding: "0 15px",
+    border: "1px solid #BCD8C8",
+    borderRadius: 11,
+    background: "#F3FAF6",
+    color: "#0B7A43",
     fontSize: 10,
     fontWeight: 900,
     cursor: "pointer",
