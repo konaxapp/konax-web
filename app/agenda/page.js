@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.09-AGENDA-E-ACCESO-FLEXIBLE";
+const VERSION = "2026.08.09-AGENDA-F-NOMBRE-RESERVA";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -130,6 +130,32 @@ export default function AgendaPage() {
       cargarReservas();
     }
   }, [fechaAgenda, empresaId]);
+
+
+  useEffect(() => {
+    if (!empresaId) return;
+
+    const sincronizarAgenda = async () => {
+      try {
+        await Promise.all([
+          cargarClientes(empresaId),
+          cargarReservas(empresaId),
+          cargarDisponibilidad(fechaAgenda, empresaId),
+        ]);
+      } catch (err) {
+        console.error(
+          "No se pudo sincronizar Agenda al volver a la pestaña:",
+          err
+        );
+      }
+    };
+
+    window.addEventListener("focus", sincronizarAgenda);
+
+    return () => {
+      window.removeEventListener("focus", sincronizarAgenda);
+    };
+  }, [empresaId, fechaAgenda]);
 
   async function inicializar() {
     setCargando(true);
@@ -451,6 +477,7 @@ export default function AgendaPage() {
       await Promise.all([
         cargarServicios(),
         cargarHorarios(),
+        cargarClientes(),
         cargarReservas(),
         cargarDisponibilidad(),
       ]);
@@ -753,7 +780,19 @@ export default function AgendaPage() {
   }
 
   function nombreCliente(id) {
-    return mapaClientes.get(String(id))?.nombre || "Alumno";
+    return mapaClientes.get(String(id))?.nombre || "Cliente";
+  }
+
+  function nombreDeReserva(reserva) {
+    const nombreGuardado = String(
+      reserva?.nombre_reserva || ""
+    ).trim();
+
+    if (nombreGuardado) {
+      return nombreGuardado;
+    }
+
+    return nombreCliente(reserva?.cliente_id);
   }
 
   function nombreServicio(id) {
@@ -1336,9 +1375,9 @@ export default function AgendaPage() {
                         >
                           <div style={neo.avatar}>
                             {String(
-                              nombreCliente(
-                                reserva.cliente_id
-                              ) || "A"
+                              nombreDeReserva(
+                                reserva
+                              ) || "C"
                             )
                               .charAt(0)
                               .toUpperCase()}
@@ -1346,8 +1385,8 @@ export default function AgendaPage() {
 
                           <div style={neo.reservationInfo}>
                             <strong style={neo.reservationName}>
-                              {nombreCliente(
-                                reserva.cliente_id
+                              {nombreDeReserva(
+                                reserva
                               )}
                             </strong>
 
@@ -2275,7 +2314,7 @@ function ReservaLista({
         const puedeGestionar =
           !["cancelada", "asistio"].includes(estado);
 
-        const nombre = nombreCliente(reserva.cliente_id);
+        const nombre = nombreDeReserva(reserva);
         const badgeEstado =
           estado === "asistio"
             ? s.badgeSuccess
