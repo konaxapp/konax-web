@@ -1,14 +1,14 @@
 "use client";
 
-// KONAX · Membresías · Versión Premium con filtros operativos directos
-// VERSION 2026.08.11-AD
+// KONAX · Membresías · Versión Premium con filtros simples
+// VERSION 2026.08.11-AE
 //
 // PRINCIPAL:
-// - Muestra filtros directos por estado sin obligar a conocer el nombre.
-// - Todos / Activas / Próximas / Vencidas / Suspendidas / Canceladas / Pendientes.
-// - Filtro adicional por plan.
-// - Búsqueda opcional por nombre, cédula, teléfono o plan.
-// - La lista se actualiza automáticamente al tocar un estado.
+// - Filtros directos por estado.
+// - Activas / Por vencer / Vencidas / Suspendidas / Canceladas / Pendientes.
+// - Sin barra de búsqueda.
+// - Sin filtro por plan.
+// - Al tocar un estado aparecen automáticamente todos los clientes correspondientes.
 // - Cada membresía puede abrirse para ver ficha, cambiar plan o ir a Caja.
 // - Responsive para escritorio y móvil.
 //
@@ -31,7 +31,7 @@ import {
 } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.11-AD-FILTROS-DIRECTOS";
+const VERSION = "2026.08.11-AE-FILTROS-SIMPLES";
 const DIAS_AVISO_DEFAULT = 5;
 const DIAS_GRACIA_DEFAULT = 3;
 
@@ -439,17 +439,8 @@ function SuscripcionesContenido() {
   const [
     filtroEstadoDirecto,
     setFiltroEstadoDirecto,
-  ] = useState("Todos");
+  ] = useState("Activo");
 
-  const [
-    filtroPlanDirecto,
-    setFiltroPlanDirecto,
-  ] = useState("Todos");
-
-  const [
-    busquedaDirecta,
-    setBusquedaDirecta,
-  ] = useState("");
 
   const [
     membresiaACambiar,
@@ -936,74 +927,13 @@ function SuscripcionesContenido() {
     return r;
   }, [suscripciones]);
 
-  const opcionesPlanesFiltro =
-    useMemo(() => {
-      const nombres = [
-        ...new Set(
-          suscripciones
-            .map((item) =>
-              String(item.plan || "").trim()
-            )
-            .filter(Boolean)
-        ),
-      ];
-
-      return nombres.sort((a, b) =>
-        a.localeCompare(b, "es")
-      );
-    }, [suscripciones]);
-
   const membresiasVisibles =
     useMemo(() => {
-      const q = normalizar(
-        busquedaDirecta
-      );
-
       const lista =
         suscripciones.filter(
-          (item) => {
-            const estado =
-              obtenerEstadoAutomatico(
-                item
-              );
-
-            const cumpleEstado =
-              filtroEstadoDirecto ===
-                "Todos" ||
-              estado ===
-                filtroEstadoDirecto;
-
-            const cumplePlan =
-              filtroPlanDirecto ===
-                "Todos" ||
-              String(
-                item.plan || ""
-              ) ===
-                filtroPlanDirecto;
-
-            const bolsa =
-              normalizar(
-                `${
-                  item.cliente || ""
-                } ${
-                  item.cedula || ""
-                } ${
-                  item.telefono || ""
-                } ${
-                  item.plan || ""
-                } ${estado}`
-              );
-
-            const cumpleBusqueda =
-              !q ||
-              bolsa.includes(q);
-
-            return (
-              cumpleEstado &&
-              cumplePlan &&
-              cumpleBusqueda
-            );
-          }
+          (item) =>
+            obtenerEstadoAutomatico(item) ===
+            filtroEstadoDirecto
         );
 
       return lista.sort(
@@ -1037,8 +967,6 @@ function SuscripcionesContenido() {
     }, [
       suscripciones,
       filtroEstadoDirecto,
-      filtroPlanDirecto,
-      busquedaDirecta,
     ]);
 
   function seleccionarFiltroEstado(
@@ -1047,16 +975,6 @@ function SuscripcionesContenido() {
     setFiltroEstadoDirecto(
       estado
     );
-  }
-
-  function limpiarFiltrosDirectos() {
-    setFiltroEstadoDirecto(
-      "Todos"
-    );
-    setFiltroPlanDirecto(
-      "Todos"
-    );
-    setBusquedaDirecta("");
   }
 
   function abrirFiltro() {
@@ -3186,79 +3104,47 @@ function SuscripcionesContenido() {
 
         <section
           style={{
-            ...s.kpiGrid,
+            ...s.membershipSummaryStrip,
             ...(esMovil
-              ? s.kpiGridMobile
+              ? s.membershipSummaryStripMobile
               : {}),
           }}
         >
-          <button
-            type="button"
-            onClick={() =>
-              seleccionarFiltroEstado(
-                "Activo"
-              )
-            }
-            style={s.kpiFilterButton}
-          >
-            <KPI
-              titulo="Activas"
-              valor={resumen.activas}
-              tipo="verde"
-              icono="✓"
-            />
-          </button>
+          <div style={s.membershipSummaryItem}>
+            <span style={s.membershipSummaryLabel}>
+              Activas
+            </span>
+            <strong style={s.membershipSummaryValue}>
+              {resumen.activas}
+            </strong>
+          </div>
 
-          <button
-            type="button"
-            onClick={() =>
-              seleccionarFiltroEstado(
-                "Próxima a vencer"
-              )
-            }
-            style={s.kpiFilterButton}
-          >
-            <KPI
-              titulo="Próximas"
-              valor={resumen.proximas}
-              tipo="amarillo"
-              icono="!"
-            />
-          </button>
+          <div style={s.membershipSummaryItem}>
+            <span style={s.membershipSummaryLabel}>
+              Por vencer
+            </span>
+            <strong style={s.membershipSummaryValue}>
+              {resumen.proximas}
+            </strong>
+          </div>
 
-          <button
-            type="button"
-            onClick={() =>
-              seleccionarFiltroEstado(
-                "Vencida"
-              )
-            }
-            style={s.kpiFilterButton}
-          >
-            <KPI
-              titulo="Vencidas"
-              valor={resumen.vencidas}
-              tipo="naranja"
-              icono="↻"
-            />
-          </button>
+          <div style={s.membershipSummaryItem}>
+            <span style={s.membershipSummaryLabel}>
+              Vencidas
+            </span>
+            <strong style={s.membershipSummaryValue}>
+              {resumen.vencidas}
+            </strong>
+          </div>
 
-          <button
-            type="button"
-            onClick={() =>
-              seleccionarFiltroEstado(
-                "Suspendido"
-              )
-            }
-            style={s.kpiFilterButton}
-          >
-            <KPI
-              titulo="Suspendidas"
-              valor={resumen.suspendidas}
-              tipo="rojo"
-              icono="×"
-            />
-          </button>
+          <div style={s.membershipSummaryItem}>
+            <span style={s.membershipSummaryLabel}>
+              Suspendidas
+            </span>
+            <strong style={s.membershipSummaryValue}>
+              {resumen.suspendidas}
+            </strong>
+          </div>
         </section>
 
         <section style={s.membershipControlPanel}>
@@ -3269,13 +3155,12 @@ function SuscripcionesContenido() {
               </span>
 
               <h2 style={s.membershipControlTitle}>
-                Filtra por estado y revisa todos los alumnos
+                Membresías por estado
               </h2>
 
               <p style={s.membershipControlText}>
-                No necesitas conocer el nombre del cliente. Selecciona un estado
-                y KONAX mostrará automáticamente todas las membresías que
-                correspondan.
+                Selecciona un estado para ver automáticamente todos los clientes
+                que pertenecen a ese grupo.
               </p>
             </div>
 
@@ -3286,11 +3171,6 @@ function SuscripcionesContenido() {
 
           <div style={s.statusFilterBar}>
             {[
-              {
-                label: "Todos",
-                value: "Todos",
-                count: resumen.total,
-              },
               {
                 label: "Activos",
                 value: "Activo",
@@ -3358,63 +3238,6 @@ function SuscripcionesContenido() {
             })}
           </div>
 
-          <div
-            style={{
-              ...s.membershipFilters,
-              ...(esMovil
-                ? s.oneColumn
-                : {}),
-            }}
-          >
-            <Campo label="Buscar dentro del resultado">
-              <input
-                value={busquedaDirecta}
-                onChange={(e) =>
-                  setBusquedaDirecta(
-                    e.target.value
-                  )
-                }
-                placeholder="Nombre, cédula, teléfono o plan"
-                style={s.input}
-              />
-            </Campo>
-
-            <Campo label="Plan">
-              <select
-                value={filtroPlanDirecto}
-                onChange={(e) =>
-                  setFiltroPlanDirecto(
-                    e.target.value
-                  )
-                }
-                style={s.input}
-              >
-                <option value="Todos">
-                  Todos los planes
-                </option>
-
-                {opcionesPlanesFiltro.map(
-                  (plan) => (
-                    <option
-                      key={plan}
-                      value={plan}
-                    >
-                      {plan}
-                    </option>
-                  )
-                )}
-              </select>
-            </Campo>
-
-            <button
-              type="button"
-              onClick={limpiarFiltrosDirectos}
-              style={s.clearFiltersButton}
-            >
-              Limpiar filtros
-            </button>
-          </div>
-
           {membresiasVisibles.length ===
           0 ? (
             <div style={s.membershipEmpty}>
@@ -3423,7 +3246,7 @@ function SuscripcionesContenido() {
               </strong>
 
               <span>
-                Cambia el estado, el plan o limpia la búsqueda.
+                Selecciona otro estado para revisar un grupo diferente.
               </span>
             </div>
           ) : (
@@ -4212,6 +4035,45 @@ const s = {
     lineHeight: 1,
   },
 
+  membershipSummaryStrip: {
+    marginTop: 10,
+    padding: "10px 12px",
+    display: "grid",
+    gridTemplateColumns: "repeat(4,minmax(0,1fr))",
+    gap: 8,
+    border: "1px solid #DDE7E1",
+    borderRadius: 15,
+    background: "#FFFFFF",
+    boxShadow: "0 7px 20px rgba(15,23,42,.03)",
+  },
+
+  membershipSummaryStripMobile: {
+    gridTemplateColumns: "repeat(2,minmax(0,1fr))",
+  },
+
+  membershipSummaryItem: {
+    minHeight: 54,
+    padding: "8px 10px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 10,
+    background: "#F7FAF8",
+  },
+
+  membershipSummaryLabel: {
+    color: "#6F7D75",
+    fontSize: 9.5,
+    fontWeight: 850,
+  },
+
+  membershipSummaryValue: {
+    color: "#173C2A",
+    fontSize: 18,
+    lineHeight: 1,
+  },
+
   kpiFilterButton: {
     width: "100%",
     padding: 0,
@@ -4269,10 +4131,13 @@ const s = {
 
   statusFilterBar: {
     marginTop: 15,
+    padding: 6,
     display: "flex",
-    gap: 7,
+    gap: 6,
     overflowX: "auto",
-    paddingBottom: 4,
+    border: "1px solid #E0E8E3",
+    borderRadius: 13,
+    background: "#F7FAF8",
   },
 
   statusFilterButton: {
@@ -4318,27 +4183,6 @@ const s = {
     color: "#FFFFFF",
   },
 
-  membershipFilters: {
-    marginTop: 12,
-    display: "grid",
-    gridTemplateColumns:
-      "minmax(220px,1fr) minmax(190px,260px) auto",
-    gap: 9,
-    alignItems: "end",
-  },
-
-  clearFiltersButton: {
-    minHeight: 46,
-    marginBottom: 12,
-    padding: "9px 12px",
-    border: "1px solid #CBD8D0",
-    borderRadius: 12,
-    background: "#FFFFFF",
-    color: "#46544C",
-    fontSize: 10,
-    fontWeight: 850,
-    cursor: "pointer",
-  },
 
   membershipList: {
     marginTop: 4,
