@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.10-AGENDA-H-3-MODALIDADES";
+const VERSION = "2026.08.11-AGENDA-I-HORA-KONAX";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -826,6 +826,11 @@ export default function AgendaPage() {
 
     if (!horarioForm.hora_inicio || !horarioForm.hora_fin) {
       alert("Completa la hora de inicio y fin.");
+      return;
+    }
+
+    if (horarioForm.hora_fin <= horarioForm.hora_inicio) {
+      alert("La hora de finalización debe ser posterior a la hora de inicio.");
       return;
     }
 
@@ -2468,30 +2473,26 @@ export default function AgendaPage() {
                 </Campo>
 
                 <Campo label="Hora inicio">
-                  <input
-                    type="time"
+                  <SelectorHoraKonax
                     value={horarioForm.hora_inicio}
-                    onChange={(e) =>
-                      setHorarioForm({
-                        ...horarioForm,
-                        hora_inicio: e.target.value,
-                      })
+                    onApply={(hora) =>
+                      setHorarioForm((actual) => ({
+                        ...actual,
+                        hora_inicio: hora,
+                      }))
                     }
-                    style={s.input}
                   />
                 </Campo>
 
                 <Campo label="Hora fin">
-                  <input
-                    type="time"
+                  <SelectorHoraKonax
                     value={horarioForm.hora_fin}
-                    onChange={(e) =>
-                      setHorarioForm({
-                        ...horarioForm,
-                        hora_fin: e.target.value,
-                      })
+                    onApply={(hora) =>
+                      setHorarioForm((actual) => ({
+                        ...actual,
+                        hora_fin: hora,
+                      }))
                     }
-                    style={s.input}
                   />
                 </Campo>
 
@@ -2699,6 +2700,140 @@ function Empty({ titulo, texto }) {
     <div style={s.empty}>
       <strong>{titulo}</strong>
       <span style={s.muted}>{texto}</span>
+    </div>
+  );
+}
+
+function SelectorHoraKonax({
+  value = "09:00",
+  onApply,
+}) {
+  function descomponerHora(valor) {
+    const [hh = "09", mm = "00"] = String(
+      valor || "09:00"
+    ).split(":");
+
+    const hora24 = Number(hh);
+    const periodo = hora24 >= 12 ? "PM" : "AM";
+    const hora12 = hora24 % 12 || 12;
+
+    return {
+      hora: String(hora12).padStart(2, "0"),
+      minuto: String(mm || "00").padStart(2, "0"),
+      periodo,
+    };
+  }
+
+  const inicial = descomponerHora(value);
+
+  const [hora, setHora] = useState(inicial.hora);
+  const [minuto, setMinuto] = useState(inicial.minuto);
+  const [periodo, setPeriodo] = useState(inicial.periodo);
+  const [aplicado, setAplicado] = useState(value);
+
+  useEffect(() => {
+    const siguiente = descomponerHora(value);
+    setHora(siguiente.hora);
+    setMinuto(siguiente.minuto);
+    setPeriodo(siguiente.periodo);
+    setAplicado(value);
+  }, [value]);
+
+  function aplicarHora() {
+    let hora24 = Number(hora);
+
+    if (periodo === "AM") {
+      if (hora24 === 12) hora24 = 0;
+    } else if (hora24 !== 12) {
+      hora24 += 12;
+    }
+
+    const nuevaHora =
+      `${String(hora24).padStart(2, "0")}:${String(
+        minuto
+      ).padStart(2, "0")}`;
+
+    setAplicado(nuevaHora);
+
+    if (typeof onApply === "function") {
+      onApply(nuevaHora);
+    }
+  }
+
+  const minutos = [
+    "00",
+    "05",
+    "10",
+    "15",
+    "20",
+    "25",
+    "30",
+    "35",
+    "40",
+    "45",
+    "50",
+    "55",
+  ];
+
+  return (
+    <div style={s.timePicker}>
+      <div style={s.timePickerControls} className="agenda-time-picker-mobile">
+        <select
+          value={hora}
+          onChange={(e) => setHora(e.target.value)}
+          style={s.timeSelect}
+          aria-label="Hora"
+        >
+          {Array.from({ length: 12 }, (_, index) => {
+            const valor = String(index + 1).padStart(2, "0");
+
+            return (
+              <option key={valor} value={valor}>
+                {valor}
+              </option>
+            );
+          })}
+        </select>
+
+        <span style={s.timeColon}>:</span>
+
+        <select
+          value={minuto}
+          onChange={(e) => setMinuto(e.target.value)}
+          style={s.timeSelect}
+          aria-label="Minutos"
+        >
+          {minutos.map((valor) => (
+            <option key={valor} value={valor}>
+              {valor}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={periodo}
+          onChange={(e) => setPeriodo(e.target.value)}
+          style={s.timePeriodSelect}
+          aria-label="Período"
+        >
+          <option value="AM">a. m.</option>
+          <option value="PM">p. m.</option>
+        </select>
+      </div>
+
+      <div style={s.timePickerFooter}>
+        <span style={s.timeApplied}>
+          Seleccionada: {formatoHora(aplicado)}
+        </span>
+
+        <button
+          type="button"
+          style={s.timeApplyButton}
+          onClick={aplicarHora}
+        >
+          Aplicar hora
+        </button>
+      </div>
     </div>
   );
 }
@@ -3664,6 +3799,12 @@ const AGENDA_CSS = `
 
   @media (max-width: 480px) {
     .agenda-kpis {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .agenda-time-picker-mobile {
       grid-template-columns: 1fr;
     }
   }
@@ -5694,6 +5835,81 @@ const s = {
     textAlign: "right",
   },
   ...sPro,
+
+  timePicker: {
+    width: "100%",
+    padding: 9,
+    border: "1px solid #CCD7D0",
+    borderRadius: 11,
+    background: "#F9FBFA",
+  },
+
+  timePickerControls: {
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(64px,1fr) auto minmax(64px,1fr) minmax(78px,1fr)",
+    gap: 6,
+    alignItems: "center",
+  },
+
+  timeSelect: {
+    width: "100%",
+    minHeight: 40,
+    padding: "7px 8px",
+    border: "1px solid #D4DED8",
+    borderRadius: 9,
+    background: "#FFFFFF",
+    color: "#17211C",
+    fontSize: 13,
+    fontWeight: 800,
+    textAlign: "center",
+  },
+
+  timePeriodSelect: {
+    width: "100%",
+    minHeight: 40,
+    padding: "7px 8px",
+    border: "1px solid #D4DED8",
+    borderRadius: 9,
+    background: "#FFFFFF",
+    color: "#17211C",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+
+  timeColon: {
+    color: "#506057",
+    fontSize: 17,
+    fontWeight: 900,
+    textAlign: "center",
+  },
+
+  timePickerFooter: {
+    marginTop: 7,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 7,
+    flexWrap: "wrap",
+  },
+
+  timeApplied: {
+    color: "#6F7D75",
+    fontSize: 9,
+    fontWeight: 800,
+  },
+
+  timeApplyButton: {
+    minHeight: 34,
+    padding: "6px 10px",
+    border: "none",
+    borderRadius: 8,
+    background: "#16834F",
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
 
   portalPanel: {
     maxWidth: 1450,
