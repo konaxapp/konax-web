@@ -1,16 +1,15 @@
 "use client";
 
-// KONAX · Membresías · Versión Premium con filtro cerrado
-// VERSION 2026.08.07-AC
+// KONAX · Membresías · Versión Premium con filtros operativos directos
+// VERSION 2026.08.11-AD
 //
 // PRINCIPAL:
-// - NO muestra lista de clientes.
-// - NO muestra resultados en la pantalla principal.
-// - Solo muestra un botón "Filtrar membresía".
-// - Al tocarlo se abre una ventana de búsqueda.
-// - La búsqueda NO despliega tarjetas ni una lista interminable.
-// - Si hay coincidencias, se elige el alumno desde un selector compacto.
-// - Luego se abre UNA sola membresía para administrar.
+// - Muestra filtros directos por estado sin obligar a conocer el nombre.
+// - Todos / Activas / Próximas / Vencidas / Suspendidas / Canceladas / Pendientes.
+// - Filtro adicional por plan.
+// - Búsqueda opcional por nombre, cédula, teléfono o plan.
+// - La lista se actualiza automáticamente al tocar un estado.
+// - Cada membresía puede abrirse para ver ficha, cambiar plan o ir a Caja.
 // - Responsive para escritorio y móvil.
 //
 // También conserva:
@@ -32,7 +31,7 @@ import {
 } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.07-AC";
+const VERSION = "2026.08.11-AD-FILTROS-DIRECTOS";
 const DIAS_AVISO_DEFAULT = 5;
 const DIAS_GRACIA_DEFAULT = 3;
 
@@ -436,6 +435,21 @@ function SuscripcionesContenido() {
     membresiaDetalle,
     setMembresiaDetalle,
   ] = useState(null);
+
+  const [
+    filtroEstadoDirecto,
+    setFiltroEstadoDirecto,
+  ] = useState("Todos");
+
+  const [
+    filtroPlanDirecto,
+    setFiltroPlanDirecto,
+  ] = useState("Todos");
+
+  const [
+    busquedaDirecta,
+    setBusquedaDirecta,
+  ] = useState("");
 
   const [
     membresiaACambiar,
@@ -864,10 +878,12 @@ function SuscripcionesContenido() {
 
   const resumen = useMemo(() => {
     const r = {
+      total: suscripciones.length,
       activas: 0,
       proximas: 0,
       vencidas: 0,
       suspendidas: 0,
+      canceladas: 0,
       pendientes: 0,
     };
 
@@ -908,11 +924,140 @@ function SuscripcionesContenido() {
         ) {
           r.pendientes += 1;
         }
+
+        if (
+          estado === "Cancelado"
+        ) {
+          r.canceladas += 1;
+        }
       }
     );
 
     return r;
   }, [suscripciones]);
+
+  const opcionesPlanesFiltro =
+    useMemo(() => {
+      const nombres = [
+        ...new Set(
+          suscripciones
+            .map((item) =>
+              String(item.plan || "").trim()
+            )
+            .filter(Boolean)
+        ),
+      ];
+
+      return nombres.sort((a, b) =>
+        a.localeCompare(b, "es")
+      );
+    }, [suscripciones]);
+
+  const membresiasVisibles =
+    useMemo(() => {
+      const q = normalizar(
+        busquedaDirecta
+      );
+
+      const lista =
+        suscripciones.filter(
+          (item) => {
+            const estado =
+              obtenerEstadoAutomatico(
+                item
+              );
+
+            const cumpleEstado =
+              filtroEstadoDirecto ===
+                "Todos" ||
+              estado ===
+                filtroEstadoDirecto;
+
+            const cumplePlan =
+              filtroPlanDirecto ===
+                "Todos" ||
+              String(
+                item.plan || ""
+              ) ===
+                filtroPlanDirecto;
+
+            const bolsa =
+              normalizar(
+                `${
+                  item.cliente || ""
+                } ${
+                  item.cedula || ""
+                } ${
+                  item.telefono || ""
+                } ${
+                  item.plan || ""
+                } ${estado}`
+              );
+
+            const cumpleBusqueda =
+              !q ||
+              bolsa.includes(q);
+
+            return (
+              cumpleEstado &&
+              cumplePlan &&
+              cumpleBusqueda
+            );
+          }
+        );
+
+      return lista.sort(
+        (a, b) => {
+          const fechaA =
+            String(
+              a.fecha_vencimiento ||
+                ""
+            );
+
+          const fechaB =
+            String(
+              b.fecha_vencimiento ||
+                ""
+            );
+
+          if (
+            filtroEstadoDirecto ===
+            "Vencida"
+          ) {
+            return fechaB.localeCompare(
+              fechaA
+            );
+          }
+
+          return fechaA.localeCompare(
+            fechaB
+          );
+        }
+      );
+    }, [
+      suscripciones,
+      filtroEstadoDirecto,
+      filtroPlanDirecto,
+      busquedaDirecta,
+    ]);
+
+  function seleccionarFiltroEstado(
+    estado
+  ) {
+    setFiltroEstadoDirecto(
+      estado
+    );
+  }
+
+  function limpiarFiltrosDirectos() {
+    setFiltroEstadoDirecto(
+      "Todos"
+    );
+    setFiltroPlanDirecto(
+      "Todos"
+    );
+    setBusquedaDirecta("");
+  }
 
   function abrirFiltro() {
     setFiltroAbierto(true);
@@ -3047,270 +3192,373 @@ function SuscripcionesContenido() {
               : {}),
           }}
         >
-          <KPI
-            titulo="Activas"
-            valor={resumen.activas}
-            tipo="verde"
-            icono="✓"
-          />
-
-          <KPI
-            titulo="Próximas"
-            valor={resumen.proximas}
-            tipo="amarillo"
-            icono="!"
-          />
-
-          <KPI
-            titulo="Vencidas"
-            valor={resumen.vencidas}
-            tipo="naranja"
-            icono="↻"
-          />
-
-          <KPI
-            titulo="Suspendidas"
-            valor={resumen.suspendidas}
-            tipo="rojo"
-            icono="×"
-          />
-        </section>
-
-        <section
-          style={{
-            ...s.filterOnlyCard,
-            ...(esMovil ? s.filterOnlyCardMobile : {}),
-          }}
-        >
-          <div
-            style={
-              s.filterOnlyIcon
+          <button
+            type="button"
+            onClick={() =>
+              seleccionarFiltroEstado(
+                "Activo"
+              )
             }
+            style={s.kpiFilterButton}
           >
-            ⌕
-          </div>
-
-          <div
-            style={s.filterOnlyCopy}
-          >
-            <span
-              style={
-                s.sectionEyebrow
-              }
-            >
-              CONSULTAR MEMBRESÍA
-            </span>
-
-            <h2
-              style={
-                s.filterOnlyTitle
-              }
-            >
-              Busca únicamente cuando lo necesites
-            </h2>
-
-            <p
-              style={
-                s.filterOnlyText
-              }
-            >
-              La pantalla principal no muestra listas de alumnos.
-            </p>
-          </div>
+            <KPI
+              titulo="Activas"
+              valor={resumen.activas}
+              tipo="verde"
+              icono="✓"
+            />
+          </button>
 
           <button
             type="button"
-            onClick={abrirFiltro}
-            style={
-              s.filterOnlyButton
+            onClick={() =>
+              seleccionarFiltroEstado(
+                "Próxima a vencer"
+              )
             }
+            style={s.kpiFilterButton}
           >
-            Filtrar membresía
+            <KPI
+              titulo="Próximas"
+              valor={resumen.proximas}
+              tipo="amarillo"
+              icono="!"
+            />
           </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              seleccionarFiltroEstado(
+                "Vencida"
+              )
+            }
+            style={s.kpiFilterButton}
+          >
+            <KPI
+              titulo="Vencidas"
+              valor={resumen.vencidas}
+              tipo="naranja"
+              icono="↻"
+            />
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              seleccionarFiltroEstado(
+                "Suspendido"
+              )
+            }
+            style={s.kpiFilterButton}
+          >
+            <KPI
+              titulo="Suspendidas"
+              valor={resumen.suspendidas}
+              tipo="rojo"
+              icono="×"
+            />
+          </button>
+        </section>
+
+        <section style={s.membershipControlPanel}>
+          <div style={s.membershipControlHeader}>
+            <div>
+              <span style={s.sectionEyebrow}>
+                CONTROL DE MEMBRESÍAS
+              </span>
+
+              <h2 style={s.membershipControlTitle}>
+                Filtra por estado y revisa todos los alumnos
+              </h2>
+
+              <p style={s.membershipControlText}>
+                No necesitas conocer el nombre del cliente. Selecciona un estado
+                y KONAX mostrará automáticamente todas las membresías que
+                correspondan.
+              </p>
+            </div>
+
+            <span style={s.membershipResultCounter}>
+              {membresiasVisibles.length} resultados
+            </span>
+          </div>
+
+          <div style={s.statusFilterBar}>
+            {[
+              {
+                label: "Todos",
+                value: "Todos",
+                count: resumen.total,
+              },
+              {
+                label: "Activos",
+                value: "Activo",
+                count: resumen.activas,
+              },
+              {
+                label: "Por vencer",
+                value: "Próxima a vencer",
+                count: resumen.proximas,
+              },
+              {
+                label: "Vencidos",
+                value: "Vencida",
+                count: resumen.vencidas,
+              },
+              {
+                label: "Suspendidos",
+                value: "Suspendido",
+                count: resumen.suspendidas,
+              },
+              {
+                label: "Cancelados",
+                value: "Cancelado",
+                count: resumen.canceladas,
+              },
+              {
+                label: "Pendientes",
+                value: "Pendiente",
+                count: resumen.pendientes,
+              },
+            ].map((filtro) => {
+              const activo =
+                filtroEstadoDirecto ===
+                filtro.value;
+
+              return (
+                <button
+                  key={filtro.value}
+                  type="button"
+                  onClick={() =>
+                    seleccionarFiltroEstado(
+                      filtro.value
+                    )
+                  }
+                  style={{
+                    ...s.statusFilterButton,
+                    ...(activo
+                      ? s.statusFilterButtonActive
+                      : {}),
+                  }}
+                >
+                  <span>{filtro.label}</span>
+                  <strong
+                    style={{
+                      ...s.statusFilterCount,
+                      ...(activo
+                        ? s.statusFilterCountActive
+                        : {}),
+                    }}
+                  >
+                    {filtro.count}
+                  </strong>
+                </button>
+              );
+            })}
+          </div>
+
+          <div
+            style={{
+              ...s.membershipFilters,
+              ...(esMovil
+                ? s.oneColumn
+                : {}),
+            }}
+          >
+            <Campo label="Buscar dentro del resultado">
+              <input
+                value={busquedaDirecta}
+                onChange={(e) =>
+                  setBusquedaDirecta(
+                    e.target.value
+                  )
+                }
+                placeholder="Nombre, cédula, teléfono o plan"
+                style={s.input}
+              />
+            </Campo>
+
+            <Campo label="Plan">
+              <select
+                value={filtroPlanDirecto}
+                onChange={(e) =>
+                  setFiltroPlanDirecto(
+                    e.target.value
+                  )
+                }
+                style={s.input}
+              >
+                <option value="Todos">
+                  Todos los planes
+                </option>
+
+                {opcionesPlanesFiltro.map(
+                  (plan) => (
+                    <option
+                      key={plan}
+                      value={plan}
+                    >
+                      {plan}
+                    </option>
+                  )
+                )}
+              </select>
+            </Campo>
+
+            <button
+              type="button"
+              onClick={limpiarFiltrosDirectos}
+              style={s.clearFiltersButton}
+            >
+              Limpiar filtros
+            </button>
+          </div>
+
+          {membresiasVisibles.length ===
+          0 ? (
+            <div style={s.membershipEmpty}>
+              <strong>
+                No hay membresías para este filtro.
+              </strong>
+
+              <span>
+                Cambia el estado, el plan o limpia la búsqueda.
+              </span>
+            </div>
+          ) : (
+            <div style={s.membershipList}>
+              {membresiasVisibles.map(
+                (item) => {
+                  const estado =
+                    obtenerEstadoAutomatico(
+                      item
+                    );
+
+                  const colores =
+                    colorEstado(
+                      estado
+                    );
+
+                  const dias =
+                    calcularDiasParaVencer(
+                      item.fecha_vencimiento
+                    );
+
+                  return (
+                    <article
+                      key={item.id}
+                      style={{
+                        ...s.membershipRow,
+                        ...(esMovil
+                          ? s.membershipRowMobile
+                          : {}),
+                      }}
+                    >
+                      <div style={s.membershipIdentity}>
+                        <div style={s.membershipAvatar}>
+                          {String(
+                            item.cliente ||
+                              "A"
+                          )
+                            .charAt(0)
+                            .toUpperCase()}
+                        </div>
+
+                        <div style={{ minWidth: 0 }}>
+                          <strong style={s.membershipName}>
+                            {item.cliente ||
+                              "Alumno"}
+                          </strong>
+
+                          <span style={s.membershipContact}>
+                            {item.cedula ||
+                              item.telefono ||
+                              "Sin identificación"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={s.membershipPlanBlock}>
+                        <span style={s.membershipSmallLabel}>
+                          PLAN
+                        </span>
+
+                        <strong style={s.membershipPlanName}>
+                          {item.plan ||
+                            "Sin plan"}
+                        </strong>
+
+                        <span style={s.membershipPlanPrice}>
+                          B/.{" "}
+                          {Number(
+                            item.precio || 0
+                          ).toFixed(2)}
+                        </span>
+                      </div>
+
+                      <div style={s.membershipExpiryBlock}>
+                        <span style={s.membershipSmallLabel}>
+                          VENCIMIENTO
+                        </span>
+
+                        <strong style={s.membershipExpiryDate}>
+                          {formatearFecha(
+                            item.fecha_vencimiento
+                          )}
+                        </strong>
+
+                        <span style={s.membershipDays}>
+                          {estado ===
+                          "Cancelado"
+                            ? "Membresía cancelada"
+                            : dias > 0
+                            ? `${dias} días restantes`
+                            : dias === 0
+                            ? "Vence hoy"
+                            : `${Math.abs(
+                                dias
+                              )} días vencida`}
+                        </span>
+                      </div>
+
+                      <div style={s.membershipStatusActions}>
+                        <span
+                          style={{
+                            ...s.membershipStatus,
+                            background:
+                              colores.fondo,
+                            color:
+                              colores.color,
+                          }}
+                        >
+                          {estado}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setMembresiaDetalle(
+                              item
+                            )
+                          }
+                          style={s.membershipOpenButton}
+                        >
+                          Abrir
+                        </button>
+                      </div>
+                    </article>
+                  );
+                }
+              )}
+            </div>
+          )}
         </section>
 
         <div style={s.version}>
           Versión {VERSION}
         </div>
       </div>
-
-      {filtroAbierto && (
-        <Modal
-          esMovil={esMovil}
-          onClose={cerrarFiltro}
-        >
-          <div
-            style={s.modalHeader}
-          >
-            <div>
-              <span
-                style={
-                  s.sectionEyebrow
-                }
-              >
-                FILTRO
-              </span>
-
-              <h2
-                style={
-                  s.modalTitle
-                }
-              >
-                Buscar membresía
-              </h2>
-
-              <p
-                style={
-                  s.modalText
-                }
-              >
-                Busca por nombre, cédula, teléfono o plan.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={cerrarFiltro}
-              style={s.modalClose}
-            >
-              ×
-            </button>
-          </div>
-
-          <div
-            style={{
-              ...s.modalFields,
-              ...(esMovil ? s.oneColumn : {}),
-            }}
-          >
-            <Campo
-              label="Buscar"
-            >
-              <input
-                autoFocus
-                value={textoFiltro}
-                onChange={(e) =>
-                  setTextoFiltro(
-                    e.target.value
-                  )
-                }
-                onKeyDown={(e) => {
-                  if (
-                    e.key ===
-                    "Enter"
-                  ) {
-                    ejecutarFiltro();
-                  }
-                }}
-                placeholder="Nombre, cédula, teléfono o plan"
-                style={s.input}
-              />
-            </Campo>
-
-            <Campo
-              label="Estado"
-            >
-              <select
-                value={estadoFiltro}
-                onChange={(e) =>
-                  setEstadoFiltro(
-                    e.target.value
-                  )
-                }
-                style={s.input}
-              >
-                <option>
-                  Todos
-                </option>
-                <option>
-                  Activo
-                </option>
-                <option>
-                  Próxima a vencer
-                </option>
-                <option>
-                  Pendiente
-                </option>
-                <option>
-                  Vencida
-                </option>
-                <option>
-                  Suspendido
-                </option>
-                <option>
-                  Cancelado
-                </option>
-              </select>
-            </Campo>
-          </div>
-
-          <button
-            type="button"
-            onClick={
-              ejecutarFiltro
-            }
-            style={s.searchModalBtn}
-          >
-            Buscar
-          </button>
-
-          {coincidenciasFiltro.length >
-            0 && (
-            <div
-              style={s.compactSelectBox}
-            >
-              <Campo
-                label="Seleccionar alumno"
-              >
-                <select
-                  value={
-                    membresiaFiltroId
-                  }
-                  onChange={(e) =>
-                    setMembresiaFiltroId(
-                      e.target.value
-                    )
-                  }
-                  style={s.input}
-                >
-                  <option
-                    value=""
-                  >
-                    Seleccione una coincidencia
-                  </option>
-
-                  {coincidenciasFiltro.map(
-                    (item) => (
-                      <option
-                        key={item.id}
-                        value={item.id}
-                      >
-                        {item.cliente} ·{" "}
-                        {item.cedula ||
-                          item.telefono ||
-                          "Sin identificación"}{" "}
-                        ·{" "}
-                        {item.plan ||
-                          "Sin plan"}
-                      </option>
-                    )
-                  )}
-                </select>
-              </Campo>
-
-              <button
-                type="button"
-                onClick={
-                  abrirMembresiaFiltrada
-                }
-                style={s.primaryBtn}
-              >
-                Abrir membresía
-              </button>
-            </div>
-          )}
-        </Modal>
-      )}
 
       {membresiaDetalle && (
         <Modal
@@ -3962,6 +4210,284 @@ const s = {
     marginTop: 3,
     fontSize: 24,
     lineHeight: 1,
+  },
+
+  kpiFilterButton: {
+    width: "100%",
+    padding: 0,
+    border: "none",
+    borderRadius: 17,
+    background: "transparent",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  membershipControlPanel: {
+    marginTop: 16,
+    padding: 18,
+    border: "1px solid #D8E5DD",
+    borderRadius: 20,
+    background: "#FFFFFF",
+    boxShadow:
+      "0 14px 35px rgba(15,23,42,.045)",
+  },
+
+  membershipControlHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 14,
+    flexWrap: "wrap",
+  },
+
+  membershipControlTitle: {
+    margin: "5px 0 0",
+    color: "#17211C",
+    fontSize: 20,
+    lineHeight: 1.15,
+  },
+
+  membershipControlText: {
+    maxWidth: 720,
+    margin: "6px 0 0",
+    color: "#718078",
+    fontSize: 10.5,
+    lineHeight: 1.5,
+  },
+
+  membershipResultCounter: {
+    minHeight: 34,
+    padding: "7px 11px",
+    display: "inline-flex",
+    alignItems: "center",
+    borderRadius: 999,
+    background: "#EAF7EF",
+    color: "#16834F",
+    fontSize: 10,
+    fontWeight: 900,
+  },
+
+  statusFilterBar: {
+    marginTop: 15,
+    display: "flex",
+    gap: 7,
+    overflowX: "auto",
+    paddingBottom: 4,
+  },
+
+  statusFilterButton: {
+    minHeight: 40,
+    padding: "7px 10px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 7,
+    flex: "0 0 auto",
+    border: "1px solid #DCE5DF",
+    borderRadius: 11,
+    background: "#F8FAF9",
+    color: "#526158",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+
+  statusFilterButtonActive: {
+    borderColor: "#16834F",
+    background: "#16834F",
+    color: "#FFFFFF",
+    boxShadow:
+      "0 7px 16px rgba(22,131,79,.16)",
+  },
+
+  statusFilterCount: {
+    minWidth: 22,
+    height: 22,
+    padding: "0 6px",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 999,
+    background: "#E8EFEB",
+    color: "#46544C",
+    fontSize: 9,
+  },
+
+  statusFilterCountActive: {
+    background:
+      "rgba(255,255,255,.18)",
+    color: "#FFFFFF",
+  },
+
+  membershipFilters: {
+    marginTop: 12,
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(220px,1fr) minmax(190px,260px) auto",
+    gap: 9,
+    alignItems: "end",
+  },
+
+  clearFiltersButton: {
+    minHeight: 46,
+    marginBottom: 12,
+    padding: "9px 12px",
+    border: "1px solid #CBD8D0",
+    borderRadius: 12,
+    background: "#FFFFFF",
+    color: "#46544C",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  membershipList: {
+    marginTop: 4,
+    display: "grid",
+    gap: 8,
+  },
+
+  membershipRow: {
+    minHeight: 82,
+    padding: 12,
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(220px,1.4fr) minmax(145px,.8fr) minmax(150px,.8fr) auto",
+    gap: 12,
+    alignItems: "center",
+    border: "1px solid #E1E8E3",
+    borderRadius: 14,
+    background:
+      "linear-gradient(180deg,#FFFFFF,#FAFCFB)",
+  },
+
+  membershipRowMobile: {
+    gridTemplateColumns: "1fr",
+    gap: 9,
+    alignItems: "stretch",
+  },
+
+  membershipIdentity: {
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  membershipAvatar: {
+    width: 42,
+    height: 42,
+    flex: "0 0 auto",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 12,
+    background:
+      "linear-gradient(135deg,#173C2A,#16834F)",
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: 950,
+  },
+
+  membershipName: {
+    display: "block",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    color: "#17211C",
+    fontSize: 12,
+  },
+
+  membershipContact: {
+    display: "block",
+    marginTop: 4,
+    color: "#7A867F",
+    fontSize: 9.5,
+  },
+
+  membershipPlanBlock: {
+    minWidth: 0,
+    display: "grid",
+    gap: 3,
+  },
+
+  membershipSmallLabel: {
+    color: "#809087",
+    fontSize: 7.5,
+    fontWeight: 900,
+    letterSpacing: .8,
+  },
+
+  membershipPlanName: {
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    color: "#24342B",
+    fontSize: 11,
+  },
+
+  membershipPlanPrice: {
+    color: "#16834F",
+    fontSize: 9.5,
+    fontWeight: 850,
+  },
+
+  membershipExpiryBlock: {
+    minWidth: 0,
+    display: "grid",
+    gap: 3,
+  },
+
+  membershipExpiryDate: {
+    color: "#24342B",
+    fontSize: 11,
+  },
+
+  membershipDays: {
+    color: "#7A867F",
+    fontSize: 9,
+  },
+
+  membershipStatusActions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 7,
+    flexWrap: "wrap",
+  },
+
+  membershipStatus: {
+    padding: "6px 8px",
+    borderRadius: 999,
+    fontSize: 8,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  membershipOpenButton: {
+    minHeight: 34,
+    padding: "7px 11px",
+    border: "none",
+    borderRadius: 9,
+    background: "#173C2A",
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  membershipEmpty: {
+    minHeight: 120,
+    marginTop: 10,
+    padding: 20,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 5,
+    border: "1px dashed #D1DDD5",
+    borderRadius: 14,
+    background: "#F8FAF9",
+    color: "#718078",
+    fontSize: 10,
+    textAlign: "center",
   },
 
   filterOnlyCard: {
