@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { supabase } from "../../../lib/supabase";
+import { supabasePortalAlumno as supabase } from "../../../lib/supabasePortalAlumno";
+
+const VERSION = "2026.08.12-PORTAL-OTP-COMPACTO-A";
 
 export default function PortalAlumnoAccesoPage() {
   const params = useParams();
@@ -12,22 +14,37 @@ export default function PortalAlumnoAccesoPage() {
 
   const [cargando, setCargando] = useState(true);
   const [procesando, setProcesando] = useState(false);
-  const [modo, setModo] = useState("login");
 
   const [portal, setPortal] = useState(null);
+  const [paso, setPaso] = useState("correo");
+  const [modoPassword, setModoPassword] = useState(false);
+
+  const [correo, setCorreo] = useState("");
+  const [codigo, setCodigo] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordNueva, setPasswordNueva] = useState("");
+  const [passwordNueva2, setPasswordNueva2] = useState("");
+
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
-
-  const [nombre, setNombre] = useState("");
-  const [cedula, setCedula] = useState("");
-  const [telefono, setTelefono] = useState("");
-  const [correo, setCorreo] = useState("");
-  const [password, setPassword] = useState("");
-  const [password2, setPassword2] = useState("");
+  const [segundos, setSegundos] = useState(0);
 
   useEffect(() => {
     inicializar();
   }, [slug]);
+
+  useEffect(() => {
+    if (segundos <= 0) return;
+
+    const timer = window.setInterval(() => {
+      setSegundos((actual) =>
+        actual > 0 ? actual - 1 : 0
+      );
+    }, 1000);
+
+    return () =>
+      window.clearInterval(timer);
+  }, [segundos]);
 
   async function inicializar() {
     if (!slug) {
@@ -40,22 +57,21 @@ export default function PortalAlumnoAccesoPage() {
     setError("");
 
     try {
-      const { data, error: errorPortal } = await supabase.rpc(
-        "obtener_portal_alumno_publico",
-        {
-          p_slug: slug,
-        }
-      );
+      const { data, error: errorPortal } =
+        await supabase.rpc(
+          "obtener_portal_alumno_publico",
+          {
+            p_slug: slug,
+          }
+        );
 
       if (errorPortal) throw errorPortal;
 
       if (!data?.ok || !data?.activo) {
-        setError(
+        throw new Error(
           data?.mensaje ||
             "Este portal no está disponible."
         );
-        setCargando(false);
-        return;
       }
 
       setPortal(data);
@@ -70,19 +86,14 @@ export default function PortalAlumnoAccesoPage() {
 
           if (cuenta?.ok) {
             router.replace(
-              `/alumno/${encodeURIComponent(slug)}/inicio`
+              `/alumno/${encodeURIComponent(
+                slug
+              )}/inicio`
             );
             return;
           }
-        } catch (err) {
-          const texto = String(err?.message || "");
-
-          if (
-            texto.toLowerCase().includes("personal") ||
-            texto.toLowerCase().includes("administración")
-          ) {
-            setError(texto);
-          }
+        } catch {
+          await supabase.auth.signOut();
         }
       }
     } catch (err) {
@@ -96,19 +107,20 @@ export default function PortalAlumnoAccesoPage() {
   }
 
   async function vincularCuenta() {
-    const { data, error: errorVinculo } = await supabase.rpc(
-      "activar_mi_cuenta_alumno",
-      {
-        p_slug: slug,
-      }
-    );
+    const { data, error: errorVinculo } =
+      await supabase.rpc(
+        "activar_mi_cuenta_alumno",
+        {
+          p_slug: slug,
+        }
+      );
 
     if (errorVinculo) throw errorVinculo;
 
     if (!data?.ok) {
       throw new Error(
         data?.mensaje ||
-          "No se pudo activar la cuenta del alumno."
+          "No se pudo activar tu cuenta."
       );
     }
 
@@ -120,17 +132,177 @@ export default function PortalAlumnoAccesoPage() {
     setMensaje("");
   }
 
-  async function iniciarSesion(e) {
+  function correoValido() {
+    const valor =
+      correo.trim().toLowerCase();
+
+    return (
+      valor.length >= 5 &&
+      valor.includes("@")
+    );
+  }
+
+  async function validarCorreoRegistrado() {
+    const email =
+      correo.trim().toLowerCase();
+
+    const { data, error: errorValidar } =
+      await supabase.rpc(
+        "portal_alumno_correo_habilitado",
+        {
+          p_slug: slug,
+          p_correo: email,
+        }
+      );
+
+    if (errorValidar) throw errorValidar;
+
+    return Boolean(
+      data?.ok &&
+        data?.habilitado
+    );
+  }
+
+  async function enviarCodigo() {
+    if (procesando) return;
+
+    limpiarAvisos();
+
+    if (!correoValido()) {
+      setError(
+        "Escribe un correo electrónico válido."
+      );
+      return;
+    }
+
+    setProcesando(true);
+
+    try {
+      const habilitado =
+        await validarCorreoRegistrado();
+
+      if (!habilitado) {
+        throw new Error(
+          "Este correo todavía no está registrado en el centro. Solicita a recepción que revise tu ficha."
+        );
+      }
+
+      const email =
+        correo.trim().toLowerCase();
+
+      const { error: errorOtp } =
+        await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            shouldCreateUser: true,
+            data: {
+              konax_tipo_cuenta:
+                "alumno",
+              portal_slug: slug,
+            },
+          },
+        });
+
+      if (errorOtp) throw errorOtp;
+
+      setPaso("codigo");
+      setCodigo("");
+      setSegundos(30);
+
+      setMensaje(
+        `Enviamos un código de acceso a ${email}.`
+      );
+    } catch (err) {
+      setError(
+        err?.message ||
+          "No se pudo enviar el código."
+      );
+    } finally {
+      setProcesando(false);
+    }
+  }
+
+  async function verificarCodigo(e) {
     e?.preventDefault();
 
     if (procesando) return;
 
     limpiarAvisos();
 
-    const email = correo.trim().toLowerCase();
+    const token =
+      codigo.replace(/\D/g, "");
 
-    if (!email || !email.includes("@")) {
-      setError("Escribe un correo válido.");
+    if (token.length !== 6) {
+      setError(
+        "Escribe los 6 números del código."
+      );
+      return;
+    }
+
+    setProcesando(true);
+
+    try {
+      const email =
+        correo.trim().toLowerCase();
+
+      const {
+        data,
+        error: errorOtp,
+      } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: "email",
+      });
+
+      if (errorOtp) throw errorOtp;
+
+      if (!data?.session?.user?.id) {
+        throw new Error(
+          "No se pudo iniciar la sesión."
+        );
+      }
+
+      await vincularCuenta();
+
+      const passwordConfigurado =
+        Boolean(
+          data.user?.user_metadata
+            ?.konax_password_configurado
+        );
+
+      if (!passwordConfigurado) {
+        setPaso("crear-password");
+        setPasswordNueva("");
+        setPasswordNueva2("");
+        return;
+      }
+
+      router.replace(
+        `/alumno/${encodeURIComponent(
+          slug
+        )}/inicio`
+      );
+    } catch (err) {
+      setError(
+        err?.message ||
+          "El código no es válido o ya venció."
+      );
+    } finally {
+      setProcesando(false);
+    }
+  }
+
+  async function iniciarConPassword(e) {
+    e?.preventDefault();
+
+    if (procesando) return;
+
+    limpiarAvisos();
+
+    if (!correoValido()) {
+      setError(
+        "Escribe un correo electrónico válido."
+      );
       return;
     }
 
@@ -142,205 +314,111 @@ export default function PortalAlumnoAccesoPage() {
     setProcesando(true);
 
     try {
+      const habilitado =
+        await validarCorreoRegistrado();
+
+      if (!habilitado) {
+        throw new Error(
+          "Este correo todavía no está registrado en el centro."
+        );
+      }
+
       const { error: errorLogin } =
         await supabase.auth.signInWithPassword({
-          email,
+          email:
+            correo.trim().toLowerCase(),
           password,
         });
 
       if (errorLogin) throw errorLogin;
 
-      const cuenta = await vincularCuenta();
-
-      if (!cuenta?.ok) {
-        throw new Error(
-          "No se pudo vincular tu cuenta con este negocio."
-        );
-      }
+      await vincularCuenta();
 
       router.replace(
-        `/alumno/${encodeURIComponent(slug)}/inicio`
+        `/alumno/${encodeURIComponent(
+          slug
+        )}/inicio`
       );
     } catch (err) {
-      const texto =
+      setError(
         err?.message ||
-        "No se pudo iniciar sesión.";
-
-      if (
-        String(texto)
-          .toLowerCase()
-          .includes("email not confirmed")
-      ) {
-        setError(
-          "Confirma primero el correo que KONAX te envió y luego vuelve a iniciar sesión."
-        );
-      } else {
-        setError(texto);
-      }
+          "Correo o contraseña incorrectos."
+      );
     } finally {
       setProcesando(false);
     }
   }
 
-  async function crearCuenta(e) {
+  async function guardarPassword(e) {
     e?.preventDefault();
 
     if (procesando) return;
 
     limpiarAvisos();
 
-    const email = correo.trim().toLowerCase();
-    const nombreLimpio = nombre.trim();
-    const cedulaLimpia = cedula.trim();
-    const telefonoLimpio = telefono.trim();
-
-    if (!nombreLimpio) {
-      setError("Escribe tu nombre.");
-      return;
-    }
-
-    if (!cedulaLimpia) {
-      setError("Escribe tu identificación.");
-      return;
-    }
-
-    if (!telefonoLimpio) {
-      setError("Escribe tu teléfono.");
-      return;
-    }
-
-    if (!email || !email.includes("@")) {
-      setError("Escribe un correo válido.");
-      return;
-    }
-
-    if (password.length < 8) {
+    if (passwordNueva.length < 8) {
       setError(
         "La contraseña debe tener mínimo 8 caracteres."
       );
       return;
     }
 
-    if (password !== password2) {
-      setError("Las contraseñas no coinciden.");
+    if (
+      passwordNueva !==
+      passwordNueva2
+    ) {
+      setError(
+        "Las contraseñas no coinciden."
+      );
       return;
     }
 
     setProcesando(true);
 
     try {
-      const redirectTo =
-        `${window.location.origin}/alumno/` +
-        `${encodeURIComponent(slug)}`;
-
-      const { data, error: errorRegistro } =
-        await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: redirectTo,
-            data: {
-              konax_tipo_cuenta: "alumno",
-              portal_slug: slug,
-              nombre: nombreLimpio,
-              cedula: cedulaLimpia,
-              telefono: telefonoLimpio,
-            },
+      const { error: errorUpdate } =
+        await supabase.auth.updateUser({
+          password: passwordNueva,
+          data: {
+            konax_password_configurado:
+              true,
           },
         });
 
-      if (errorRegistro) throw errorRegistro;
+      if (errorUpdate) throw errorUpdate;
 
-      if (data?.session?.user?.id) {
-        const cuenta = await vincularCuenta();
-
-        if (cuenta?.ok) {
-          router.replace(
-            `/alumno/${encodeURIComponent(slug)}/inicio`
-          );
-          return;
-        }
-      }
-
-      setMensaje(
-        "Cuenta creada. Revisa tu correo y confirma el acceso. Después vuelve a esta pantalla e inicia sesión."
+      router.replace(
+        `/alumno/${encodeURIComponent(
+          slug
+        )}/inicio`
       );
-
-      setModo("login");
-      setPassword("");
-      setPassword2("");
     } catch (err) {
-      const texto = String(
+      setError(
         err?.message ||
-          "No se pudo crear la cuenta."
+          "No se pudo guardar la contraseña."
       );
-
-      if (
-        texto.toLowerCase().includes("already") ||
-        texto.toLowerCase().includes("registered")
-      ) {
-        setError(
-          "Ese correo ya tiene una cuenta KONAX. Usa Iniciar sesión con el mismo correo."
-        );
-        setModo("login");
-      } else {
-        setError(texto);
-      }
     } finally {
       setProcesando(false);
     }
   }
 
-  async function recuperarPassword() {
-    if (procesando) return;
-
-    limpiarAvisos();
-
-    const email = correo.trim().toLowerCase();
-
-    if (!email || !email.includes("@")) {
-      setError(
-        "Escribe primero tu correo y luego pulsa Recuperar contraseña."
-      );
+  async function reenviarCodigo() {
+    if (
+      procesando ||
+      segundos > 0
+    ) {
       return;
     }
 
-    setProcesando(true);
-
-    try {
-      const redirectTo =
-        `${window.location.origin}/alumno/` +
-        `${encodeURIComponent(slug)}/restablecer`;
-
-      const { error: errorReset } =
-        await supabase.auth.resetPasswordForEmail(
-          email,
-          {
-            redirectTo,
-          }
-        );
-
-      if (errorReset) throw errorReset;
-
-      setMensaje(
-        "Te enviamos un enlace para crear una nueva contraseña. Revisa también correo no deseado."
-      );
-    } catch (err) {
-      setError(
-        err?.message ||
-          "No se pudo enviar el enlace de recuperación."
-      );
-    } finally {
-      setProcesando(false);
-    }
+    await enviarCodigo();
   }
 
-  async function cerrarSesionActual() {
-    await supabase.auth.signOut();
-    setError("");
-    setMensaje(
-      "La sesión anterior fue cerrada. Ya puedes entrar como alumno."
-    );
+  function volverCorreo() {
+    limpiarAvisos();
+    setPaso("correo");
+    setModoPassword(false);
+    setCodigo("");
+    setPassword("");
   }
 
   const titulo =
@@ -348,18 +426,25 @@ export default function PortalAlumnoAccesoPage() {
     portal?.empresa_nombre ||
     "Portal del alumno";
 
-  const inicial = useMemo(() => {
-    return String(titulo || "K")
-      .trim()
-      .charAt(0)
-      .toUpperCase();
-  }, [titulo]);
+  const inicial =
+    useMemo(
+      () =>
+        String(titulo || "K")
+          .trim()
+          .charAt(0)
+          .toUpperCase(),
+      [titulo]
+    );
 
   if (cargando) {
     return (
       <main style={s.loading}>
-        <div style={s.loadingMark}>K</div>
-        <strong>Cargando tu acceso...</strong>
+        <div style={s.loadingMark}>
+          K
+        </div>
+        <strong>
+          Cargando acceso...
+        </strong>
       </main>
     );
   }
@@ -367,171 +452,163 @@ export default function PortalAlumnoAccesoPage() {
   if (!portal?.ok) {
     return (
       <main style={s.loading}>
-        <div style={s.errorCard}>
-          <strong>Portal no disponible</strong>
-          <span>{error || "Revisa el enlace."}</span>
-        </div>
+        <section style={s.card}>
+          <strong>
+            Portal no disponible
+          </strong>
+          <span style={s.muted}>
+            {error ||
+              "Revisa el enlace."}
+          </span>
+        </section>
       </main>
     );
   }
 
   return (
     <main style={s.page}>
-      <style>{`
-        @media (max-width: 760px) {
-          .portal-alumno-shell {
-            grid-template-columns: 1fr !important;
-          }
+      <section style={s.card}>
+        <div style={s.logoWrap}>
+          <img
+            src="/konax-logo.png"
+            alt="KONAX"
+            style={s.logo}
+          />
+        </div>
 
-          .portal-alumno-brand {
-            min-height: 250px !important;
-            padding: 20px !important;
-          }
+        <div style={s.businessRow}>
+          <div style={s.businessAvatar}>
+            {inicial}
+          </div>
 
-          .portal-alumno-access {
-            padding: 20px !important;
-          }
-
-          .portal-alumno-two {
-            grid-template-columns: 1fr !important;
-          }
-        }
-      `}</style>
-
-      <section style={s.shell} className="portal-alumno-shell">
-        <div style={s.brandPanel} className="portal-alumno-brand">
-          <div style={s.brandTop}>
-            <div style={s.brandLogo}>
-              <img
-                src="/konax-logo.png"
-                alt="KONAX"
-                style={s.logo}
-              />
-            </div>
-
-            <span style={s.brandBadge}>
+          <div>
+            <span style={s.portalLabel}>
               PORTAL DEL ALUMNO
             </span>
-          </div>
 
-          <div style={s.brandMiddle}>
-            <div style={s.businessAvatar}>
-              {inicial}
-            </div>
-
-            <span style={s.businessLabel}>
-              TU CENTRO
-            </span>
-
-            <h1 style={s.businessTitle}>
+            <strong style={s.businessName}>
               {titulo}
-            </h1>
-
-            <p style={s.businessText}>
-              Tu acceso personal para consultar y gestionar
-              tu experiencia con el negocio.
-            </p>
-          </div>
-
-          <div style={s.brandBottom}>
-            <span>Acceso protegido por KONAX</span>
+            </strong>
           </div>
         </div>
 
-        <div style={s.accessPanel} className="portal-alumno-access">
-          <div style={s.tabs}>
-            <button
-              type="button"
-              onClick={() => {
-                limpiarAvisos();
-                setModo("login");
-              }}
-              style={{
-                ...s.tab,
-                ...(modo === "login"
-                  ? s.tabActive
-                  : {}),
-              }}
-            >
-              Iniciar sesión
-            </button>
+        {paso === "correo" &&
+          !modoPassword && (
+            <>
+              <div style={s.heading}>
+                <h1 style={s.title}>
+                  Iniciar sesión
+                </h1>
 
-            <button
-              type="button"
-              onClick={() => {
-                limpiarAvisos();
-                setModo("registro");
-              }}
-              style={{
-                ...s.tab,
-                ...(modo === "registro"
-                  ? s.tabActive
-                  : {}),
-              }}
-            >
-              Crear cuenta
-            </button>
-          </div>
+                <p style={s.text}>
+                  Introduce tu correo y
+                  te enviaremos un código
+                  de acceso.
+                </p>
+              </div>
 
-          <div style={s.formHeader}>
-            <span style={s.eyebrow}>
-              {modo === "login"
-                ? "BIENVENIDO"
-                : "NUEVO ALUMNO"}
-            </span>
+              {error && (
+                <Aviso
+                  tipo="error"
+                  texto={error}
+                />
+              )}
 
-            <h2 style={s.formTitle}>
-              {modo === "login"
-                ? "Entra a tu cuenta"
-                : "Crea tu acceso personal"}
-            </h2>
+              {mensaje && (
+                <Aviso
+                  tipo="ok"
+                  texto={mensaje}
+                />
+              )}
 
-            <p style={s.formText}>
-              {modo === "login"
-                ? "Usa el correo y la contraseña que registraste."
-                : "Tus datos quedarán vinculados con la ficha del negocio."}
-            </p>
-          </div>
+              <Campo label="Correo electrónico">
+                <input
+                  autoFocus
+                  type="email"
+                  autoComplete="email"
+                  value={correo}
+                  onChange={(e) =>
+                    setCorreo(
+                      e.target.value
+                    )
+                  }
+                  onKeyDown={(e) => {
+                    if (
+                      e.key === "Enter"
+                    ) {
+                      enviarCodigo();
+                    }
+                  }}
+                  placeholder="tu@correo.com"
+                  style={s.input}
+                />
+              </Campo>
 
-          {error && (
-            <div style={s.errorBox}>
-              <span>{error}</span>
+              <button
+                type="button"
+                onClick={enviarCodigo}
+                disabled={procesando}
+                style={s.primaryButton}
+              >
+                {procesando
+                  ? "Enviando..."
+                  : "Continuar"}
+              </button>
 
-              {error
-                .toLowerCase()
-                .includes("personal") && (
+              <div style={s.bottomLinks}>
                 <button
                   type="button"
-                  onClick={cerrarSesionActual}
-                  style={s.inlineButton}
+                  onClick={() => {
+                    limpiarAvisos();
+                    setModoPassword(
+                      true
+                    );
+                  }}
+                  style={s.linkButton}
                 >
-                  Cerrar sesión anterior
+                  Usar contraseña
                 </button>
-              )}
-            </div>
+              </div>
+            </>
           )}
 
-          {mensaje && (
-            <div style={s.successBox}>
-              {mensaje}
-            </div>
-          )}
-
-          {modo === "login" ? (
+        {paso === "correo" &&
+          modoPassword && (
             <form
-              onSubmit={iniciarSesion}
-              style={s.form}
+              onSubmit={
+                iniciarConPassword
+              }
             >
+              <div style={s.heading}>
+                <h1 style={s.title}>
+                  Entrar con contraseña
+                </h1>
+
+                <p style={s.text}>
+                  Usa tu correo y tu
+                  contraseña personal.
+                </p>
+              </div>
+
+              {error && (
+                <Aviso
+                  tipo="error"
+                  texto={error}
+                />
+              )}
+
               <Campo label="Correo electrónico">
                 <input
                   type="email"
                   autoComplete="email"
                   value={correo}
                   onChange={(e) =>
-                    setCorreo(e.target.value)
+                    setCorreo(
+                      e.target.value
+                    )
                   }
-                  style={s.input}
                   placeholder="tu@correo.com"
+                  style={s.input}
                 />
               </Campo>
 
@@ -541,10 +618,12 @@ export default function PortalAlumnoAccesoPage() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) =>
-                    setPassword(e.target.value)
+                    setPassword(
+                      e.target.value
+                    )
                   }
-                  style={s.input}
                   placeholder="Tu contraseña"
+                  style={s.input}
                 />
               </Campo>
 
@@ -555,140 +634,277 @@ export default function PortalAlumnoAccesoPage() {
               >
                 {procesando
                   ? "Ingresando..."
-                  : "Entrar a mi cuenta"}
+                  : "Iniciar sesión"}
               </button>
+
+              <div style={s.bottomLinks}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    limpiarAvisos();
+                    setModoPassword(
+                      false
+                    );
+                    setPassword("");
+                  }}
+                  style={s.linkButton}
+                >
+                  Recibir código
+                </button>
+              </div>
+            </form>
+          )}
+
+        {paso === "codigo" && (
+          <form
+            onSubmit={
+              verificarCodigo
+            }
+          >
+            <div style={s.heading}>
+              <h1 style={s.title}>
+                Revisa tu correo
+              </h1>
+
+              <p style={s.text}>
+                Escribe el código de
+                6 números enviado a{" "}
+                <strong>
+                  {correo
+                    .trim()
+                    .toLowerCase()}
+                </strong>
+                .
+              </p>
+            </div>
+
+            {error && (
+              <Aviso
+                tipo="error"
+                texto={error}
+              />
+            )}
+
+            {mensaje && (
+              <Aviso
+                tipo="ok"
+                texto={mensaje}
+              />
+            )}
+
+            <input
+              autoFocus
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              value={codigo}
+              onChange={(e) =>
+                setCodigo(
+                  e.target.value
+                    .replace(
+                      /\D/g,
+                      ""
+                    )
+                    .slice(0, 6)
+                )
+              }
+              placeholder="000000"
+              style={s.otpInput}
+            />
+
+            <button
+              type="submit"
+              disabled={procesando}
+              style={s.primaryButton}
+            >
+              {procesando
+                ? "Validando..."
+                : "Iniciar sesión"}
+            </button>
+
+            <div style={s.bottomLinks}>
+              <button
+                type="button"
+                disabled={
+                  segundos > 0 ||
+                  procesando
+                }
+                onClick={
+                  reenviarCodigo
+                }
+                style={{
+                  ...s.linkButton,
+                  opacity:
+                    segundos > 0
+                      ? 0.5
+                      : 1,
+                }}
+              >
+                {segundos > 0
+                  ? `Reenviar (${segundos}s)`
+                  : "Reenviar código"}
+              </button>
+
+              <span style={s.dot}>
+                ·
+              </span>
 
               <button
                 type="button"
-                disabled={procesando}
-                onClick={recuperarPassword}
-                style={s.forgotButton}
+                onClick={() => {
+                  setPaso("correo");
+                  setModoPassword(
+                    true
+                  );
+                  limpiarAvisos();
+                }}
+                style={s.linkButton}
               >
-                ¿Olvidaste tu contraseña?
+                Usar contraseña
               </button>
+            </div>
 
-              <p style={s.helperText}>
-                ¿Ya usas KONAX en otro centro? Inicia sesión
-                con el mismo correo. No necesitas crear otra
-                contraseña.
-              </p>
-            </form>
-          ) : (
-            <form
-              onSubmit={crearCuenta}
-              style={s.form}
+            <button
+              type="button"
+              onClick={volverCorreo}
+              style={s.backButton}
             >
-              <Campo label="Nombre completo">
-                <input
-                  value={nombre}
-                  onChange={(e) =>
-                    setNombre(e.target.value)
-                  }
-                  style={s.input}
-                  placeholder="Nombre y apellido"
-                />
-              </Campo>
+              ← Volver
+            </button>
+          </form>
+        )}
 
-              <div style={s.twoColumns} className="portal-alumno-two">
-                <Campo label="Identificación">
-                  <input
-                    value={cedula}
-                    onChange={(e) =>
-                      setCedula(e.target.value)
-                    }
-                    style={s.input}
-                    placeholder="Cédula / documento"
-                  />
-                </Campo>
+        {paso ===
+          "crear-password" && (
+          <form
+            onSubmit={
+              guardarPassword
+            }
+          >
+            <div style={s.heading}>
+              <span style={s.successIcon}>
+                ✓
+              </span>
 
-                <Campo label="Teléfono">
-                  <input
-                    type="tel"
-                    value={telefono}
-                    onChange={(e) =>
-                      setTelefono(e.target.value)
-                    }
-                    style={s.input}
-                    placeholder="Teléfono"
-                  />
-                </Campo>
-              </div>
+              <h1 style={s.title}>
+                Crea tu contraseña
+              </h1>
 
-              <Campo label="Correo electrónico">
-                <input
-                  type="email"
-                  autoComplete="email"
-                  value={correo}
-                  onChange={(e) =>
-                    setCorreo(e.target.value)
-                  }
-                  style={s.input}
-                  placeholder="tu@correo.com"
-                />
-              </Campo>
+              <p style={s.text}>
+                Tu correo ya fue
+                verificado. Ahora crea
+                la contraseña que usarás
+                en KONAX.
+              </p>
+            </div>
 
-              <div style={s.twoColumns} className="portal-alumno-two">
-                <Campo label="Contraseña">
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    value={password}
-                    onChange={(e) =>
-                      setPassword(e.target.value)
-                    }
-                    style={s.input}
-                    placeholder="Mínimo 8 caracteres"
-                  />
-                </Campo>
+            {error && (
+              <Aviso
+                tipo="error"
+                texto={error}
+              />
+            )}
 
-                <Campo label="Confirmar contraseña">
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    value={password2}
-                    onChange={(e) =>
-                      setPassword2(e.target.value)
-                    }
-                    style={s.input}
-                    placeholder="Repite la contraseña"
-                  />
-                </Campo>
-              </div>
+            <Campo label="Nueva contraseña">
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={
+                  passwordNueva
+                }
+                onChange={(e) =>
+                  setPasswordNueva(
+                    e.target.value
+                  )
+                }
+                placeholder="Mínimo 8 caracteres"
+                style={s.input}
+              />
+            </Campo>
 
-              <button
-                type="submit"
-                disabled={procesando}
-                style={s.primaryButton}
-              >
-                {procesando
-                  ? "Creando cuenta..."
-                  : "Crear mi cuenta"}
-              </button>
-            </form>
-          )}
+            <Campo label="Confirmar contraseña">
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={
+                  passwordNueva2
+                }
+                onChange={(e) =>
+                  setPasswordNueva2(
+                    e.target.value
+                  )
+                }
+                placeholder="Repite la contraseña"
+                style={s.input}
+              />
+            </Campo>
+
+            <button
+              type="submit"
+              disabled={procesando}
+              style={s.primaryButton}
+            >
+              {procesando
+                ? "Guardando..."
+                : "Guardar y entrar"}
+            </button>
+          </form>
+        )}
+
+        <div style={s.footer}>
+          Acceso seguro · KONAX
+        </div>
+
+        <div style={s.version}>
+          {VERSION}
         </div>
       </section>
     </main>
   );
 }
 
-function Campo({ label, children }) {
+function Campo({
+  label,
+  children,
+}) {
   return (
     <label style={s.field}>
-      <span style={s.label}>{label}</span>
+      <span style={s.label}>
+        {label}
+      </span>
       {children}
     </label>
+  );
+}
+
+function Aviso({
+  tipo,
+  texto,
+}) {
+  const esError =
+    tipo === "error";
+
+  return (
+    <div
+      style={{
+        ...s.notice,
+        ...(esError
+          ? s.noticeError
+          : s.noticeOk),
+      }}
+    >
+      {texto}
+    </div>
   );
 }
 
 const s = {
   page: {
     minHeight: "100vh",
-    padding: 18,
+    padding: "22px 14px",
     display: "grid",
     placeItems: "center",
     background:
-      "radial-gradient(circle at top right, rgba(22,131,79,.12), transparent 30%), #F2F6F3",
+      "linear-gradient(180deg,#F5F8F6 0%,#EDF3EF 100%)",
     color: "#17211C",
     fontFamily:
       'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
@@ -696,6 +912,7 @@ const s = {
 
   loading: {
     minHeight: "100vh",
+    padding: 18,
     display: "grid",
     placeItems: "center",
     alignContent: "center",
@@ -707,299 +924,255 @@ const s = {
   },
 
   loadingMark: {
-    width: 54,
-    height: 54,
+    width: 46,
+    height: 46,
     display: "grid",
     placeItems: "center",
-    borderRadius: 16,
+    borderRadius: 13,
     background: "#173C2A",
     color: "#FFFFFF",
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: 950,
   },
 
-  errorCard: {
+  card: {
     width: "min(430px,100%)",
-    padding: 22,
-    display: "grid",
-    gap: 7,
-    border: "1px solid #F4C7C7",
-    borderRadius: 18,
-    background: "#FFFFFF",
-    color: "#8A2D2D",
-    boxShadow:
-      "0 16px 40px rgba(15,23,42,.08)",
-  },
-
-  shell: {
-    width: "min(980px,100%)",
-    minHeight: 610,
-    display: "grid",
-    gridTemplateColumns:
-      "minmax(300px,.82fr) minmax(420px,1.18fr)",
-    overflow: "hidden",
-    border: "1px solid #D6E3DA",
-    borderRadius: 26,
+    padding: "24px 24px 18px",
+    boxSizing: "border-box",
+    border:
+      "1px solid #DCE5DF",
+    borderRadius: 20,
     background: "#FFFFFF",
     boxShadow:
-      "0 25px 65px rgba(16,57,36,.13)",
+      "0 18px 48px rgba(15,23,42,.09)",
   },
 
-  brandPanel: {
-    minHeight: 610,
-    padding: 28,
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-between",
-    background:
-      "radial-gradient(circle at 20% 20%, rgba(93,225,157,.17), transparent 30%), linear-gradient(155deg,#071C14,#0B4A2B 70%,#0B7A43)",
-    color: "#FFFFFF",
-  },
-
-  brandTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap",
-  },
-
-  brandLogo: {
+  logoWrap: {
     width: 112,
-    height: 62,
-    padding: "7px 10px",
+    height: 52,
+    margin: "0 auto 18px",
     display: "grid",
     placeItems: "center",
-    borderRadius: 15,
-    background: "#FFFFFF",
   },
 
   logo: {
-    width: "100%",
-    height: "100%",
+    maxWidth: "100%",
+    maxHeight: "100%",
     objectFit: "contain",
   },
 
-  brandBadge: {
-    padding: "6px 9px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,.11)",
-    border: "1px solid rgba(255,255,255,.13)",
-    color: "#CBEAD7",
-    fontSize: 8,
-    fontWeight: 900,
-    letterSpacing: .8,
-  },
-
-  brandMiddle: {
-    maxWidth: 330,
-  },
-
-  businessAvatar: {
-    width: 58,
-    height: 58,
-    marginBottom: 16,
+  businessRow: {
+    marginBottom: 22,
+    padding: "10px 11px",
     display: "grid",
-    placeItems: "center",
-    borderRadius: 18,
-    background: "#5CE19B",
-    color: "#07301F",
-    fontSize: 22,
-    fontWeight: 950,
-  },
-
-  businessLabel: {
-    color: "#83E5AD",
-    fontSize: 9,
-    fontWeight: 900,
-    letterSpacing: 1.2,
-  },
-
-  businessTitle: {
-    margin: "6px 0 0",
-    fontSize: 31,
-    lineHeight: 1.04,
-    letterSpacing: -.7,
-  },
-
-  businessText: {
-    margin: "10px 0 0",
-    color: "#D2E8DB",
-    fontSize: 11,
-    lineHeight: 1.55,
-  },
-
-  brandBottom: {
-    color: "#A9CCB8",
-    fontSize: 8.5,
-  },
-
-  accessPanel: {
-    padding: 30,
-  },
-
-  tabs: {
-    padding: 5,
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 5,
-    border: "1px solid #DFE8E2",
-    borderRadius: 13,
+    gridTemplateColumns:
+      "36px minmax(0,1fr)",
+    alignItems: "center",
+    gap: 9,
+    borderRadius: 12,
     background: "#F5F8F6",
   },
 
-  tab: {
-    minHeight: 39,
-    border: 0,
-    borderRadius: 9,
-    background: "transparent",
-    color: "#65736B",
-    fontSize: 10,
-    fontWeight: 850,
-    cursor: "pointer",
-  },
-
-  tabActive: {
+  businessAvatar: {
+    width: 36,
+    height: 36,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 10,
     background: "#173C2A",
     color: "#FFFFFF",
-    boxShadow:
-      "0 6px 15px rgba(23,60,42,.15)",
+    fontSize: 13,
+    fontWeight: 950,
   },
 
-  formHeader: {
-    margin: "25px 0 18px",
-  },
-
-  eyebrow: {
+  portalLabel: {
     display: "block",
     color: "#16834F",
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: 950,
-    letterSpacing: 1.1,
+    letterSpacing: .9,
   },
 
-  formTitle: {
-    margin: "5px 0 0",
-    color: "#17211C",
-    fontSize: 25,
-    lineHeight: 1.08,
-  },
-
-  formText: {
-    margin: "7px 0 0",
-    color: "#718078",
+  businessName: {
+    display: "block",
+    marginTop: 2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    color: "#243229",
     fontSize: 10.5,
+  },
+
+  heading: {
+    marginBottom: 18,
+    textAlign: "center",
+  },
+
+  title: {
+    margin: 0,
+    color: "#17211C",
+    fontSize: 27,
+    lineHeight: 1.08,
+    letterSpacing: -.45,
+  },
+
+  text: {
+    margin: "8px auto 0",
+    maxWidth: 330,
+    color: "#6D7972",
+    fontSize: 11,
     lineHeight: 1.5,
-  },
-
-  form: {
-    display: "grid",
-    gap: 2,
-  },
-
-  twoColumns: {
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(2,minmax(0,1fr))",
-    gap: 9,
   },
 
   field: {
     display: "grid",
-    gap: 5,
-    marginBottom: 10,
+    gap: 6,
+    marginBottom: 12,
   },
 
   label: {
-    color: "#405047",
+    color: "#35443B",
     fontSize: 9.5,
     fontWeight: 850,
   },
 
   input: {
     width: "100%",
-    minHeight: 44,
-    padding: "9px 11px",
+    minHeight: 48,
+    padding: "10px 12px",
     boxSizing: "border-box",
-    border: "1px solid #CCD8D0",
+    border:
+      "1px solid #CDD8D1",
     borderRadius: 11,
     background: "#FFFFFF",
     color: "#17211C",
-    fontSize: 13,
+    fontSize: 14,
+    outline: "none",
+  },
+
+  otpInput: {
+    width: "100%",
+    minHeight: 62,
+    margin: "4px 0 14px",
+    padding: "8px 14px",
+    boxSizing: "border-box",
+    border:
+      "1px solid #C9D6CE",
+    borderRadius: 13,
+    background: "#FFFFFF",
+    color: "#17211C",
+    textAlign: "center",
+    fontSize: 29,
+    fontWeight: 850,
+    letterSpacing: 10,
     outline: "none",
   },
 
   primaryButton: {
-    minHeight: 46,
-    marginTop: 3,
+    width: "100%",
+    minHeight: 48,
     border: 0,
     borderRadius: 11,
     background:
-      "linear-gradient(135deg,#16834F,#0C6E3F)",
+      "linear-gradient(135deg,#16834F,#0E6A3D)",
     color: "#FFFFFF",
     fontSize: 11,
     fontWeight: 900,
     cursor: "pointer",
     boxShadow:
-      "0 9px 20px rgba(22,131,79,.17)",
+      "0 8px 18px rgba(22,131,79,.16)",
   },
 
-  forgotButton: {
-    minHeight: 37,
+  bottomLinks: {
+    minHeight: 38,
+    marginTop: 11,
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 7,
+    flexWrap: "wrap",
+  },
+
+  linkButton: {
+    padding: "5px 2px",
+    border: 0,
+    background: "transparent",
+    color: "#16704A",
+    fontSize: 9.5,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  dot: {
+    color: "#A4ADA7",
+  },
+
+  backButton: {
+    width: "100%",
+    minHeight: 34,
     marginTop: 3,
     border: 0,
     background: "transparent",
-    color: "#16834F",
+    color: "#77837C",
     fontSize: 9.5,
-    fontWeight: 850,
+    fontWeight: 800,
     cursor: "pointer",
   },
 
-  helperText: {
-    margin: "7px 0 0",
-    padding: 10,
-    borderRadius: 10,
-    background: "#F4F8F5",
-    color: "#718078",
-    fontSize: 8.5,
-    lineHeight: 1.5,
+  notice: {
+    marginBottom: 12,
+    padding: "9px 10px",
+    borderRadius: 9,
+    fontSize: 9,
+    lineHeight: 1.45,
   },
 
-  errorBox: {
-    marginBottom: 12,
-    padding: 11,
-    display: "grid",
-    gap: 7,
-    border: "1px solid #F2CACA",
-    borderRadius: 10,
+  noticeError: {
+    border:
+      "1px solid #F0CACA",
     background: "#FFF5F5",
-    color: "#9B3030",
-    fontSize: 9.5,
-    lineHeight: 1.45,
+    color: "#963434",
   },
 
-  successBox: {
-    marginBottom: 12,
-    padding: 11,
-    border: "1px solid #BFE0CB",
-    borderRadius: 10,
-    background: "#F0FAF4",
+  noticeOk: {
+    border:
+      "1px solid #C2E0CD",
+    background: "#F1FAF4",
     color: "#17663D",
-    fontSize: 9.5,
-    lineHeight: 1.45,
   },
 
-  inlineButton: {
-    justifySelf: "start",
-    minHeight: 32,
-    padding: "6px 9px",
-    border: "1px solid #D9B0B0",
-    borderRadius: 8,
-    background: "#FFFFFF",
-    color: "#8F2F2F",
-    fontSize: 8.5,
-    fontWeight: 850,
-    cursor: "pointer",
+  successIcon: {
+    width: 38,
+    height: 38,
+    margin: "0 auto 10px",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 999,
+    background: "#E8F7EE",
+    color: "#16834F",
+    fontSize: 18,
+    fontWeight: 950,
+  },
+
+  footer: {
+    marginTop: 18,
+    paddingTop: 13,
+    borderTop:
+      "1px solid #EDF1EE",
+    color: "#9AA39E",
+    fontSize: 8,
+    textAlign: "center",
+  },
+
+  version: {
+    marginTop: 5,
+    color: "#C1C7C3",
+    fontSize: 6.5,
+    textAlign: "center",
+  },
+
+  muted: {
+    color: "#738078",
+    fontSize: 10,
   },
 };
-
