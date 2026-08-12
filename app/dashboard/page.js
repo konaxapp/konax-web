@@ -1,6 +1,6 @@
 "use client";
 
-// DASHBOARD GIMNASIO - VERSION U - AGENDA INTEGRADA - 2026-08-09
+// DASHBOARD KONAX - GIMNASIO + SALÓN DE BELLEZA - 2026-08-12
 
 // KONAX Dashboard · Reportes gimnasio habilitados · Versión 2026.08.07-S
 
@@ -32,6 +32,22 @@ function esTipoGimnasio(tipoNegocio, categoriaNegocio = "") {
     "fitness",
     "academia",
     "club",
+  ].some((palabra) => texto.includes(palabra));
+}
+
+function esTipoSalonBelleza(tipoNegocio, categoriaNegocio = "") {
+  const texto = normalizar(
+    `${tipoNegocio || ""} ${categoriaNegocio || ""}`
+  );
+
+  return [
+    "belleza",
+    "salon",
+    "salon_de_belleza",
+    "peluqueria",
+    "estetica",
+    "barberia",
+    "spa",
   ].some((palabra) => texto.includes(palabra));
 }
 
@@ -1416,6 +1432,11 @@ export default function Dashboard() {
     categoriaNegocio
   );
 
+  const esSalonBelleza = esTipoSalonBelleza(
+    tipoNegocio,
+    categoriaNegocio
+  );
+
   const modulosMenu = useMemo(() => {
     const listaLavanderia = [
       [
@@ -1490,6 +1511,44 @@ export default function Dashboard() {
         "usuarios",
         "usuarios",
         "🔐",
+      ],
+      [
+        "Configuración",
+        "/admin-configuracion",
+        "configuracion",
+        "configuracion",
+        "⚙",
+      ],
+    ];
+
+    const listaSalonBelleza = [
+      [
+        "Panel",
+        "/dashboard",
+        "dashboard",
+        "dashboard",
+        "▦",
+      ],
+      [
+        "Clientes",
+        "/clientes",
+        "clientes",
+        "clientes",
+        "👥",
+      ],
+      [
+        "Agenda",
+        "/agenda",
+        "agenda",
+        "agenda",
+        "📅",
+      ],
+      [
+        "Caja",
+        "/caja",
+        "caja",
+        "caja",
+        "$",
       ],
       [
         "Configuración",
@@ -1634,10 +1693,12 @@ export default function Dashboard() {
       ? listaLavanderia
       : esGimnasio
       ? listaGimnasio
+      : esSalonBelleza
+      ? listaSalonBelleza
       : listaGeneral;
 
     const lista =
-      (esLavanderia || esGimnasio) &&
+      (esLavanderia || esGimnasio || esSalonBelleza) &&
       !esAdministrador()
         ? listaBase.filter(
             ([, , codigo]) =>
@@ -1670,6 +1731,7 @@ export default function Dashboard() {
     bloqueado,
     esLavanderia,
     esGimnasio,
+    esSalonBelleza,
   ]);
 
   const accesosRapidos = useMemo(() => {
@@ -1816,12 +1878,16 @@ export default function Dashboard() {
     ? "KONAX LAVANDERÍA"
     : esGimnasio
     ? "KONAX GIMNASIOS"
+    : esSalonBelleza
+    ? "KONAX SALÓN DE BELLEZA"
     : "PANEL EMPRESARIAL";
 
   const subtituloPanel = esLavanderia
     ? `Operación diaria · ${fechaPanel}`
     : esGimnasio
     ? `Control de alumnos y membresías · ${fechaPanel}`
+    : esSalonBelleza
+    ? `Clientes, agenda y caja · ${fechaPanel}`
     : `Panel general · ${fechaPanel}`;
 
   return (
@@ -2176,7 +2242,9 @@ export default function Dashboard() {
 
                 <div style={s.heroContent}>
                   <span style={s.heroTag}>
-                    RESUMEN GENERAL
+                    {esSalonBelleza
+                      ? "OPERACIÓN DEL SALÓN"
+                      : "RESUMEN GENERAL"}
                   </span>
 
                   <h2
@@ -2187,15 +2255,15 @@ export default function Dashboard() {
                         : {}),
                     }}
                   >
-                    Control total de tu negocio
+                    {esSalonBelleza
+                      ? "Control diario de tu salón"
+                      : "Control total de tu negocio"}
                   </h2>
 
                   <p style={s.heroText}>
-                    Consulta la información
-                    principal de {empresaNombre},
-                    organiza el acceso por
-                    funciones y mantén cada área
-                    bajo control.
+                    {esSalonBelleza
+                      ? `Gestiona clientes, agenda, caja y configuración de ${empresaNombre} desde un solo lugar.`
+                      : `Consulta la información principal de ${empresaNombre}, organiza el acceso por funciones y mantén cada área bajo control.`}
                   </p>
                 </div>
 
