@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.13-AGENDA-BELLEZA-ADAPTATIVA";
+const VERSION = "2026.08.13-AGENDA-BELLEZA-AUTOSERVICIO-REALTIME";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -162,6 +162,7 @@ export default function AgendaPage() {
     titulo_publico: "",
   });
   const [guardandoPortal, setGuardandoPortal] = useState(false);
+  const [alertaCancelacionCliente, setAlertaCancelacionCliente] = useState(null);
 
   useEffect(() => {
     inicializar();
@@ -199,6 +200,87 @@ export default function AgendaPage() {
       window.removeEventListener("focus", sincronizarAgenda);
     };
   }, [empresaId, fechaAgenda]);
+
+  // Cancelaciones del portal público en tiempo real.
+  // El cliente libera el horario y el administrador recibe la alerta
+  // sin tener que actualizar manualmente la pantalla.
+  useEffect(() => {
+    if (!empresaId || !esAdmin) return;
+
+    const canal = supabase
+      .channel(`agenda-cancelaciones-${empresaId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "agenda_reservas",
+          filter: `empresa_id=eq.${empresaId}`,
+        },
+        async (payload) => {
+          const anterior = payload?.old || {};
+          const actual = payload?.new || {};
+
+          if (
+            normalizar(actual.estado) !== "cancelada" ||
+            normalizar(anterior.estado) === "cancelada"
+          ) {
+            return;
+          }
+
+          try {
+            const [clienteResp, servicioResp] = await Promise.all([
+              actual.cliente_id
+                ? supabase
+                    .from("clientes")
+                    .select("id,nombre,telefono")
+                    .eq("empresa_id", empresaId)
+                    .eq("id", actual.cliente_id)
+                    .maybeSingle()
+                : Promise.resolve({ data: null, error: null }),
+              actual.servicio_id
+                ? supabase
+                    .from("agenda_servicios")
+                    .select("id,nombre")
+                    .eq("empresa_id", empresaId)
+                    .eq("id", actual.servicio_id)
+                    .maybeSingle()
+                : Promise.resolve({ data: null, error: null }),
+            ]);
+
+            setAlertaCancelacionCliente({
+              reservaId: actual.id,
+              cliente:
+                clienteResp?.data?.nombre ||
+                actual.nombre_reserva ||
+                "Cliente",
+              telefono: clienteResp?.data?.telefono || "",
+              servicio:
+                servicioResp?.data?.nombre || "Servicio",
+              fecha: actual.fecha_reserva || fechaAgenda,
+              hora: actual.hora_inicio || "",
+              motivo: actual.motivo_cancelacion || "",
+              canceladoPor: actual.cancelado_por || "cliente",
+            });
+
+            await Promise.all([
+              cargarReservas(empresaId),
+              cargarDisponibilidad(fechaAgenda, empresaId),
+            ]);
+          } catch (err) {
+            console.error(
+              "No se pudo procesar la alerta de cancelación:",
+              err
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canal);
+    };
+  }, [empresaId, esAdmin, fechaAgenda]);
 
   async function inicializar() {
     setCargando(true);
@@ -1270,6 +1352,83 @@ export default function AgendaPage() {
       </header>
 
       {error && <div style={s.error}>{error}</div>}
+
+      {alertaCancelacionCliente && (
+        <section
+          style={{
+            margin: "0 auto 14px",
+            maxWidth: 1450,
+            padding: "14px 16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 14,
+            flexWrap: "wrap",
+            border: "1px solid #F2C7C2",
+            borderRadius: 16,
+            background: "#FFF4F2",
+            color: "#7A271A",
+          }}
+        >
+          <div>
+            <strong style={{ display: "block", marginBottom: 4 }}>
+              ⚠ Cita cancelada por el cliente · horario liberado
+            </strong>
+            <span style={{ fontSize: 12 }}>
+              {alertaCancelacionCliente.cliente} · {alertaCancelacionCliente.servicio}
+              {" · "}
+              {formatoFecha(alertaCancelacionCliente.fecha)}
+              {" · "}
+              {formatoHora(alertaCancelacionCliente.hora)}
+              {alertaCancelacionCliente.motivo
+                ? ` · Motivo: ${alertaCancelacionCliente.motivo}`
+                : ""}
+            </span>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => {
+                setFechaAgenda(
+                  alertaCancelacionCliente.fecha || fechaHoy()
+                );
+                setHorarioSeleccionado("");
+                setVista("nueva");
+              }}
+              style={{
+                minHeight: 38,
+                padding: "0 14px",
+                border: 0,
+                borderRadius: 10,
+                background: "#111827",
+                color: "#FFFFFF",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              Agendar otro cliente
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAlertaCancelacionCliente(null)}
+              style={{
+                minHeight: 38,
+                padding: "0 12px",
+                border: "1px solid #E5A59D",
+                borderRadius: 10,
+                background: "#FFFFFF",
+                color: "#7A271A",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              Cerrar
+            </button>
+          </div>
+        </section>
+      )}
 
       <section style={neo.nav} className="agenda-d-nav">
         <button
