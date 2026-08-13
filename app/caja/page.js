@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION_CAJA_GIMNASIO = "2026.08.09-K-COMPACTA";
+const VERSION_CAJA_GIMNASIO = "2026.08.12-L-GIMNASIO-SALON";
 
 function obtenerFechaPanama(fecha = new Date()) {
   const fechaObjeto =
@@ -311,6 +311,43 @@ export default function Caja() {
 
     if (!clienteId) return;
 
+    // Para Salón de Belleza, si se abre Caja con un cliente directo
+    // no se consultan cuentas por cobrar ni membresías.
+    if (esNegocioSalon()) {
+      const { data: cliente, error: errorCliente } =
+        await supabase
+          .from("clientes")
+          .select("*")
+          .eq("empresa_id", empresaId)
+          .eq("id", clienteId)
+          .maybeSingle();
+
+      if (errorCliente || !cliente) {
+        alert(
+          "No se pudo cargar el cliente enviado a Caja: " +
+            (errorCliente?.message || "Cliente no encontrado.")
+        );
+        return;
+      }
+
+      setClienteSeleccionado(cliente);
+      setBuscarCliente(cliente.nombre || "");
+      setResultadosBusqueda([]);
+      setCuentasCliente([]);
+      setCuentaSeleccionada(null);
+      setTipoMovimiento("Servicio de salón");
+      setConcepto("Servicio de salón");
+
+      const cajeroActual =
+        localStorage.getItem("usuarioNombre") ||
+        localStorage.getItem("nombreUsuario") ||
+        localStorage.getItem("adminKonaxNombre") ||
+        "Caja";
+
+      setResponsable(cajeroActual);
+      return;
+    }
+
     const [
       respuestaCliente,
       respuestaCuentas,
@@ -520,7 +557,7 @@ export default function Caja() {
 
     setTimeout(() => {
       document
-        .getElementById("caja-gimnasio-formulario")
+        .getElementById("caja-operativa-formulario")
         ?.scrollIntoView({
           behavior: "smooth",
           block: "start",
@@ -652,7 +689,11 @@ export default function Caja() {
     setCuentasCliente([]);
     setCuentaSeleccionada(null);
 
-    setTipoMovimiento("Clase / Sesión individual");
+    setTipoMovimiento(
+      esNegocioSalon()
+        ? "Servicio de salón"
+        : "Clase / Sesión individual"
+    );
     setMonto(
       Number(reserva.monto || 0) > 0
         ? Number(reserva.monto).toFixed(2)
@@ -660,7 +701,10 @@ export default function Caja() {
     );
 
     setConcepto(
-      `${servicio?.nombre || "Clase / servicio"} · Reserva ${String(
+      `${
+        servicio?.nombre ||
+        (esNegocioSalon() ? "Servicio del salón" : "Clase / servicio")
+      } · Reserva ${String(
         reserva.fecha_reserva || ""
       )} · ${String(
         reserva.hora_inicio || ""
@@ -681,7 +725,7 @@ export default function Caja() {
 
     setTimeout(() => {
       document
-        .getElementById("caja-gimnasio-formulario")
+        .getElementById("caja-operativa-formulario")
         ?.scrollIntoView({
           behavior: "smooth",
           block: "start",
@@ -776,6 +820,29 @@ export default function Caja() {
     );
   }
 
+  function esNegocioSalon() {
+    const tipoLocal =
+      typeof window !== "undefined"
+        ? `${localStorage.getItem("categoriaNegocio") || ""} ${
+            localStorage.getItem("tipoNegocio") || ""
+          }`
+        : "";
+
+    const tipo = normalizar(
+      `${categoriaNegocio} ${tipoNegocioEmpresa} ${tipoLocal}`
+    );
+
+    return (
+      tipo.includes("salon de belleza") ||
+      tipo.includes("salon belleza") ||
+      tipo.includes("belleza") ||
+      tipo.includes("peluqueria") ||
+      tipo.includes("estetica") ||
+      tipo.includes("barberia") ||
+      tipo.includes("spa")
+    );
+  }
+
   function esMovimientoMembresia() {
     return [
       "Membresía",
@@ -846,6 +913,10 @@ export default function Caja() {
       return esMovimientoMembresia();
     }
 
+    if (esNegocioSalon()) {
+      return tipoMovimiento === "Servicio de salón";
+    }
+
     return ![
       "Venta Contado",
       "Servicio Contado",
@@ -854,6 +925,10 @@ export default function Caja() {
   }
 
   function clienteEsOpcional() {
+    if (esNegocioSalon()) {
+      return tipoMovimiento === "Otro ingreso";
+    }
+
     return (
       esNegocioMembresia() &&
       (esMovimientoLibreMembresia() ||
@@ -894,6 +969,19 @@ export default function Caja() {
       "Inscripción / Matrícula":
         "Inscripción o matrícula",
       "Venta de producto": "Venta de producto",
+    };
+
+    setConcepto(conceptos[nuevoTipo] || nuevoTipo);
+  }
+
+  function seleccionarTipoSalon(nuevoTipo) {
+    limpiarSeleccionGimnasio({ conservarCliente: true });
+    setTipoMovimiento(nuevoTipo);
+    setMostrarOtrosCobros(false);
+
+    const conceptos = {
+      "Servicio de salón": "Servicio de salón",
+      "Otro ingreso": "Otro ingreso",
     };
 
     setConcepto(conceptos[nuevoTipo] || nuevoTipo);
@@ -1082,8 +1170,19 @@ export default function Caja() {
     setTipoNegocioEmpresa(tipo);
 
     localStorage.setItem("empresaNombre", nombreFinal);
+    localStorage.setItem("categoriaNegocio", categoria);
+    localStorage.setItem("tipoNegocio", tipo);
 
     const opciones = obtenerOpcionesMovimiento(tipoCompleto);
+    const esPerfilSalon =
+      normalizar(tipoCompleto).includes("salon de belleza") ||
+      normalizar(tipoCompleto).includes("salon belleza") ||
+      normalizar(tipoCompleto).includes("belleza") ||
+      normalizar(tipoCompleto).includes("peluqueria") ||
+      normalizar(tipoCompleto).includes("estetica") ||
+      normalizar(tipoCompleto).includes("barberia") ||
+      normalizar(tipoCompleto).includes("spa");
+
     const esPerfilMembresia =
       normalizar(tipoCompleto).includes("gimnasio") ||
       normalizar(tipoCompleto).includes("club") ||
@@ -1101,11 +1200,28 @@ export default function Caja() {
 
     if (esPerfilMembresia) {
       setConcepto("Pase diario");
+    } else if (esPerfilSalon) {
+      setConcepto("Servicio de salón");
     }
   }
 
   function obtenerOpcionesMovimiento(tipoNegocio) {
     const tipo = normalizar(tipoNegocio);
+
+    if (
+      tipo.includes("salon de belleza") ||
+      tipo.includes("salon belleza") ||
+      tipo.includes("belleza") ||
+      tipo.includes("peluqueria") ||
+      tipo.includes("estetica") ||
+      tipo.includes("barberia") ||
+      tipo.includes("spa")
+    ) {
+      return [
+        "Servicio de salón",
+        "Otro ingreso",
+      ];
+    }
 
     if (
       tipo.includes("gimnasio") ||
@@ -1422,6 +1538,25 @@ export default function Caja() {
       }));
     }
 
+    // Salón de belleza trabaja con la ficha simple del cliente.
+    // No consulta cuentas por cobrar ni membresías.
+    if (esNegocioSalon()) {
+      const unicos = [];
+      const ids = new Set();
+
+      resultados.forEach((resultado) => {
+        const clave = String(resultado.cliente.id);
+
+        if (!ids.has(clave)) {
+          ids.add(clave);
+          unicos.push(resultado);
+        }
+      });
+
+      setResultadosBusqueda(unicos);
+      return;
+    }
+
     const {
       data: cuentasData,
       error: errorCuentas,
@@ -1489,6 +1624,20 @@ export default function Caja() {
     setClienteSeleccionado(cliente);
     setBuscarCliente(cliente.nombre);
     setResultadosBusqueda([]);
+
+    if (esNegocioSalon()) {
+      setCuentasCliente([]);
+      setCuentaSeleccionada(null);
+
+      const cajeroActual =
+        localStorage.getItem("usuarioNombre") ||
+        localStorage.getItem("nombreUsuario") ||
+        localStorage.getItem("adminKonaxNombre") ||
+        "Caja";
+
+      setResponsable(cajeroActual);
+      return;
+    }
 
     const solicitudes = [
       supabase
@@ -2241,6 +2390,8 @@ export default function Caja() {
         "Servicio adicional registrado correctamente.",
       "Otro ingreso":
         "Ingreso registrado correctamente.",
+      "Servicio de salón":
+        "Servicio del salón cobrado correctamente.",
       "Servicio Contado":
         "Servicio cobrado correctamente.",
       "Venta de producto":
@@ -2641,6 +2792,8 @@ export default function Caja() {
     setTipoMovimiento(
       esNegocioMembresia()
         ? "Pase diario"
+        : esNegocioSalon()
+        ? "Servicio de salón"
         : opciones[0] || ""
     );
     setFechaPago(obtenerFechaPanama());
@@ -2669,7 +2822,11 @@ export default function Caja() {
     setMetodoPago("Efectivo");
     setMonto("");
     setConcepto(
-      esNegocioMembresia() ? "Pase diario" : ""
+      esNegocioMembresia()
+        ? "Pase diario"
+        : esNegocioSalon()
+        ? "Servicio de salón"
+        : ""
     );
     setObservacion("");
 
@@ -2756,6 +2913,8 @@ export default function Caja() {
               <div style={estiloResponsivo(estilos.topbarModulo, estilosDesktop.topbarModulo)}>
                 {esNegocioMembresia()
                   ? "💳 CAJA DEL GIMNASIO"
+                  : esNegocioSalon()
+                  ? "✂️ CAJA DEL SALÓN"
                   : "🧾 CAJA Y REGISTRO DE INGRESOS"}
               </div>
             </div>
@@ -2765,6 +2924,8 @@ export default function Caja() {
               <p style={estiloResponsivo(estilos.topbarTexto, estilosDesktop.topbarTexto)}>
                 {esNegocioMembresia()
                   ? "Cobro de membresías, pases diarios y servicios."
+                  : esNegocioSalon()
+                  ? "Cobro de citas, servicios de belleza e ingresos."
                   : "Registro de pagos, ventas, servicios e ingresos."}
               </p>
             </div>
@@ -2781,9 +2942,9 @@ export default function Caja() {
             <KpiCard titulo="Pagos digitales" valor={`$${totalDigitalHoy.toFixed(2)}`} detalle="Tarjetas y otros medios" icono="▤" digital compacto={esEscritorioCompacto} />
           </section>
 
-          {esNegocioMembresia() ? (
+          {(esNegocioMembresia() || esNegocioSalon()) ? (
             <section style={estilos.gymCajaLayout}>
-              <article id="caja-gimnasio-formulario" style={estiloResponsivo(estilos.gymCobroPanel, estilosDesktop.gymCobroPanel)}>
+              <article id="caja-operativa-formulario" style={estiloResponsivo(estilos.gymCobroPanel, estilosDesktop.gymCobroPanel)}>
                 <div style={estiloResponsivo(estilos.gymCobroEncabezado, estilosDesktop.gymCobroEncabezado)}>
                   <div>
                     <span style={estilos.gymEyebrow}>
@@ -2804,6 +2965,51 @@ export default function Caja() {
                   </div>
                 </div>
 
+                {esNegocioSalon() ? (
+                  <div style={estiloResponsivo(estilos.gymAccionesPrincipales, estilosDesktop.gymAccionesPrincipales)}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        seleccionarTipoSalon("Servicio de salón")
+                      }
+                      style={estiloResponsivo(
+                        tipoMovimiento === "Servicio de salón"
+                          ? estilos.gymAccionActiva
+                          : estilos.gymAccion,
+                        estilosDesktop.gymAccion
+                      )}
+                    >
+                      <span style={estiloResponsivo(estilos.gymAccionIcono, estilosDesktop.gymAccionIcono)}>✂️</span>
+                      <span style={estiloResponsivo(estilos.gymAccionTexto, estilosDesktop.gymAccionTexto)}>
+                        <strong>Cobrar cita / servicio</strong>
+                        <small>
+                          Cobra el servicio realizado al cliente
+                        </small>
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        seleccionarTipoSalon("Otro ingreso")
+                      }
+                      style={estiloResponsivo(
+                        tipoMovimiento === "Otro ingreso"
+                          ? estilos.gymAccionActiva
+                          : estilos.gymAccion,
+                        estilosDesktop.gymAccion
+                      )}
+                    >
+                      <span style={estiloResponsivo(estilos.gymAccionIcono, estilosDesktop.gymAccionIcono)}>＋</span>
+                      <span style={estiloResponsivo(estilos.gymAccionTexto, estilosDesktop.gymAccionTexto)}>
+                        <strong>Otro ingreso</strong>
+                        <small>
+                          Registra un cobro adicional del salón
+                        </small>
+                      </span>
+                    </button>
+                  </div>
+                ) : (
                 <div style={estiloResponsivo(estilos.gymAccionesPrincipales, estilosDesktop.gymAccionesPrincipales)}>
                   <button
                     type="button"
@@ -2884,7 +3090,9 @@ export default function Caja() {
                   </button>
                 </div>
 
-                {mostrarOtrosCobros && (
+                )}
+
+                {!esNegocioSalon() && mostrarOtrosCobros && (
                   <div style={estiloResponsivo(estilos.gymOtrosCobros, estilosDesktop.gymOtrosCobros)}>
                     {obtenerOtrosCobrosGimnasio().map(
                       (opcion) => (
@@ -2910,9 +3118,13 @@ export default function Caja() {
                 <section style={estiloResponsivo(estilos.gymBloque, estilosDesktop.gymBloque)}>
                   <div style={estiloResponsivo(estilos.gymBloqueCabecera, estilosDesktop.gymBloqueCabecera)}>
                     <div>
-                      <span style={estilos.gymEyebrow}>ALUMNO</span>
+                      <span style={estilos.gymEyebrow}>
+                        {esNegocioSalon() ? "CLIENTE" : "ALUMNO"}
+                      </span>
                       <h3 style={estiloResponsivo(estilos.gymBloqueTitulo, estilosDesktop.gymBloqueTitulo)}>
-                        Buscar por nombre, teléfono o cédula
+                        {esNegocioSalon()
+                          ? "Buscar por nombre o teléfono"
+                          : "Buscar por nombre, teléfono o cédula"}
                       </h3>
                     </div>
 
@@ -3013,34 +3225,42 @@ export default function Caja() {
                         </div>
 
                         <div style={estilos.gymAlumnoAcciones}>
-                          <span
-                            style={{
-                              ...estilos.gymEstadoMembresia,
-                              color:
+                          {esNegocioSalon() ? (
+                            <span style={estilos.gymEstadoMembresia}>
+                              Cliente seleccionado
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                ...estilos.gymEstadoMembresia,
+                                color:
+                                  obtenerEstadoMembresiaVisual()
+                                    .color,
+                                background:
+                                  obtenerEstadoMembresiaVisual()
+                                    .fondo,
+                              }}
+                            >
+                              {
                                 obtenerEstadoMembresiaVisual()
-                                  .color,
-                              background:
-                                obtenerEstadoMembresiaVisual()
-                                  .fondo,
-                            }}
-                          >
-                            {
-                              obtenerEstadoMembresiaVisual()
-                                .etiqueta
-                            }
-                          </span>
+                                  .etiqueta
+                              }
+                            </span>
+                          )}
 
                           <button
                             type="button"
                             onClick={limpiarAlumnoGimnasio}
                             style={estilos.gymQuitarAlumno}
                           >
-                            Cambiar alumno
+                            {esNegocioSalon()
+                              ? "Cambiar cliente"
+                              : "Cambiar alumno"}
                           </button>
                         </div>
                       </div>
 
-                      {cuentasCliente.length > 1 && (
+                      {!esNegocioSalon() && cuentasCliente.length > 1 && (
                         <div style={estilos.gymCuentaSelector}>
                           <span style={estilos.label}>
                             Membresía o cuenta
@@ -3099,7 +3319,9 @@ export default function Caja() {
                         </div>
                       )}
 
-                      <div style={estiloResponsivo(estilos.gymAlumnoResumen, estilosDesktop.gymAlumnoResumen)}>
+                      {!esNegocioSalon() && (
+                        <>
+                          <div style={estiloResponsivo(estilos.gymAlumnoResumen, estilosDesktop.gymAlumnoResumen)}>
                         <MiniStat
                           label="Plan"
                           value={
@@ -3149,6 +3371,9 @@ export default function Caja() {
                           </button>
                         </div>
                       )}
+                        </>
+                      )}
+
                     </div>
                   ) : (
                     <div style={estiloResponsivo(estilos.gymAlumnoVacio, estilosDesktop.gymAlumnoVacio)}>
@@ -3157,12 +3382,16 @@ export default function Caja() {
                       </span>
                       <div>
                         <strong>
-                          No hay un alumno seleccionado
+                          {esNegocioSalon()
+                            ? "No hay un cliente seleccionado"
+                            : "No hay un alumno seleccionado"}
                         </strong>
                         <p>
-                          Para pases diarios y otros ingresos puede
-                          continuar sin alumno. Para membresías e
-                          inscripciones debe seleccionarlo.
+                          {esNegocioSalon()
+                            ? tipoMovimiento === "Servicio de salón"
+                              ? "Busca y selecciona al cliente para cobrar el servicio. Si la cita viene desde Agenda se cargará automáticamente."
+                              : "Para otro ingreso puedes continuar sin seleccionar un cliente."
+                            : "Para pases diarios y otros ingresos puede continuar sin alumno. Para membresías e inscripciones debe seleccionarlo."}
                         </p>
                       </div>
                     </div>
@@ -3292,7 +3521,7 @@ export default function Caja() {
                           setConcepto(e.target.value)
                         }
                         style={estilos.input}
-                        placeholder="Ej. Pase diario"
+                        placeholder={esNegocioSalon() ? "Ej. Corte, manicure o pedicure" : "Ej. Pase diario"}
                       />
                     </Campo>
 
@@ -3385,10 +3614,21 @@ export default function Caja() {
 
               {(requiereCliente() || clienteEsOpcional() || esVentaContado()) && (
                 <article style={estilos.panel}>
-                  <TituloPanel icono="👤" titulo="B. Cliente y cuenta" />
+                  <TituloPanel
+                    icono="👤"
+                    titulo={
+                      esNegocioSalon()
+                        ? "B. Cliente de la cita"
+                        : "B. Cliente y cuenta"
+                    }
+                  />
                   <div style={estilos.buscarClienteFila}>
                     <input
-                      placeholder="Buscar cliente"
+                      placeholder={
+                        esNegocioSalon()
+                          ? "Buscar cliente por nombre o teléfono"
+                          : "Buscar cliente"
+                      }
                       value={buscarCliente}
                       onChange={(e)=>setBuscarCliente(e.target.value)}
                       style={estilos.input}
@@ -3508,7 +3748,14 @@ export default function Caja() {
               )}
 
               <article style={estilos.panel}>
-                <TituloPanel icono="💳" titulo="D. Detalle del cobro" />
+                <TituloPanel
+                  icono="💳"
+                  titulo={
+                    esNegocioSalon()
+                      ? "D. Cobro del servicio"
+                      : "D. Detalle del cobro"
+                  }
+                />
                 <div style={estilos.cobroGrid}>
                   <Campo label="Método de pago">
                     <select value={metodoPago} onChange={(e)=>setMetodoPago(e.target.value)} style={estilos.input}>
@@ -3542,7 +3789,7 @@ export default function Caja() {
           </section>
 
           )}
-          {esNegocioMembresia() ? (
+          {(esNegocioMembresia() || esNegocioSalon()) ? (
             <article style={estiloResponsivo(estilos.gymMovimientosPanel, estilosDesktop.gymMovimientosPanel)}>
               <div style={estiloResponsivo(estilos.gymMovimientosHeader, estilosDesktop.gymMovimientosHeader)}>
                 <div>
@@ -3630,7 +3877,9 @@ export default function Caja() {
                       <div style={estilos.gymMovimientoPrincipal}>
                         <strong>
                           {movimiento.cliente_nombre ||
-                            "Ingreso sin alumno"}
+                            (esNegocioSalon()
+                              ? "Ingreso sin cliente"
+                              : "Ingreso sin alumno")}
                         </strong>
                         <span>
                           {movimiento.tipo} ·{" "}
