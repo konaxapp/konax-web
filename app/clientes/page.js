@@ -330,6 +330,15 @@ export default function ClientesPage() {
         "club"
       );
 
+    const negocioBelleza =
+      tipoNegocioNormalizado.includes("belleza") ||
+      tipoNegocioNormalizado.includes("salon") ||
+      tipoNegocioNormalizado.includes("peluqueria") ||
+      tipoNegocioNormalizado.includes("estetica") ||
+      tipoNegocioNormalizado.includes("barberia") ||
+      tipoNegocioNormalizado.includes("spa") ||
+      categoriaNormalizada.includes("belleza");
+
     /*
       Solo los negocios de membresías registran primero
       una ficha neutral del cliente.
@@ -339,7 +348,7 @@ export default function ClientesPage() {
       cobranza inicial desde Clientes.
     */
     const soloCliente =
-      negocioDeMembresias;
+      negocioDeMembresias || negocioBelleza;
 
     setTipoNegocio(
       empresa.tipo_negocio || ""
@@ -1367,6 +1376,21 @@ export default function ClientesPage() {
     "fitness",
   ].some((palabra) =>
     normalizar(tipoNegocio).includes(palabra)
+  );
+
+  const textoPerfilNegocio = normalizar(
+    `${tipoNegocio} ${categoriaNegocio}`
+  );
+
+  const esBellezaPerfil = [
+    "belleza",
+    "salon",
+    "peluqueria",
+    "estetica",
+    "barberia",
+    "spa",
+  ].some((palabra) =>
+    textoPerfilNegocio.includes(palabra)
   );
 
   return (
@@ -2611,20 +2635,22 @@ export default function ClientesPage() {
                 }
               />
 
-              {esNegocioMembresias ? (
-                <ResumenFila
-                  label="Tipo de cliente"
-                  value={
-                    tipoCliente
-                  }
-                />
-              ) : (
-                <ResumenFila
-                  label="Estado del cliente"
-                  value={
-                    estadoCliente
-                  }
-                />
+              {!esBellezaPerfil && (
+                esNegocioMembresias ? (
+                  <ResumenFila
+                    label="Tipo de cliente"
+                    value={
+                      tipoCliente
+                    }
+                  />
+                ) : (
+                  <ResumenFila
+                    label="Estado del cliente"
+                    value={
+                      estadoCliente
+                    }
+                  />
+                )
               )}
 
               <ResumenFila
