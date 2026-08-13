@@ -224,21 +224,6 @@ export default function ReservaPublicaAutoservicioPage() {
     );
   }, [horarios, servicioFiltro]);
 
-  const dias = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => {
-      const iso = sumarDias(fechaISO(), i);
-      const d = new Date(`${iso}T12:00:00`);
-      return {
-        iso,
-        dia: new Intl.DateTimeFormat("es-PA", { weekday: "short" })
-          .format(d)
-          .replace(".", "")
-          .toUpperCase(),
-        numero: d.getDate(),
-      };
-    });
-  }, []);
-
   async function confirmarReserva(e) {
     e.preventDefault();
 
@@ -469,41 +454,29 @@ export default function ReservaPublicaAutoservicioPage() {
         {(!tokenUrl || mostrarNuevaCita) && (
           <>
         <section id="nueva-cita-publica" style={s.card}>
-          <span style={s.eyebrowDark}>1 · FECHA</span>
-          <h2 style={s.sectionTitle}>Selecciona el día</h2>
-          <div style={s.days}>
-            {dias.map((dia) => (
-              <button
-                key={dia.iso}
-                type="button"
-                onClick={() => setFecha(dia.iso)}
-                style={{
-                  ...s.day,
-                  ...(fecha === dia.iso ? s.dayActive : {}),
-                }}
-              >
-                <span>{dia.dia}</span>
-                <strong>{dia.numero}</strong>
-              </button>
-            ))}
-          </div>
+          <span style={s.eyebrowDark}>RESERVAR CITA</span>
+          <h2 style={s.sectionTitle}>Selecciona fecha y servicio</h2>
+
           <label style={s.field}>
-            <span>Otra fecha</span>
+            <span>Seleccionar fecha</span>
             <input
               type="date"
               min={fechaISO()}
               value={fecha}
-              onChange={(e) => setFecha(e.target.value)}
+              onChange={(e) => {
+                setFecha(e.target.value);
+                setHorarioSeleccionado(null);
+              }}
               style={s.input}
             />
           </label>
-        </section>
 
-        <section style={s.card}>
-          <span style={s.eyebrowDark}>2 · SERVICIO</span>
-          <h2 style={s.sectionTitle}>
+          <div style={s.compactDivider} />
+
+          <span style={s.eyebrowDark}>SERVICIO</span>
+          <h3 style={s.compactTitle}>
             {perfilBelleza ? "Servicios disponibles" : "Servicios y clases disponibles"}
-          </h2>
+          </h3>
 
           <div style={s.serviceChips}>
             <button
@@ -728,7 +701,7 @@ const s = {
   eyebrowDark: { display: "block", color: "#0B7041", fontSize: 10, fontWeight: 900, letterSpacing: 1.1 },
   title: { margin: "6px 0", fontSize: "clamp(28px,6vw,46px)" },
   subtitle: { maxWidth: 620, margin: 0, color: "#D9E9E0", lineHeight: 1.5 },
-  card: { marginBottom: 14, padding: 20, border: "1px solid #DCE6E0", borderRadius: 20, background: "#FFF" },
+  card: { marginBottom: 10, padding: 16, border: "1px solid #DCE6E0", borderRadius: 18, background: "#FFF" },
   manageCard: { marginBottom: 14, padding: 20, border: "2px solid #A7D7BA", borderRadius: 20, background: "#F0FAF4" },
   reserveAnotherButton: {
     width: "100%",
@@ -742,13 +715,15 @@ const s = {
     fontSize: 16,
     cursor: "pointer",
   },
-  sectionTitle: { margin: "5px 0 14px", fontSize: "clamp(22px,5vw,30px)" },
+  sectionTitle: { margin: "4px 0 12px", fontSize: "clamp(22px,5vw,28px)" },
   days: { display: "grid", gridTemplateColumns: "repeat(7,minmax(72px,1fr))", gap: 8, overflowX: "auto", marginBottom: 14 },
   day: { minHeight: 76, border: "1px solid #DDE5E0", borderRadius: 14, background: "#FFF", cursor: "pointer", display: "grid", placeItems: "center", gap: 2 },
   dayActive: { background: "#10251B", color: "#FFF", borderColor: "#10251B" },
   field: { display: "grid", gap: 6, fontWeight: 700 },
+  compactDivider: { height: 1, margin: "16px 0 14px", background: "#E4ECE7" },
+  compactTitle: { margin: "4px 0 10px", fontSize: "20px" },
   input: { width: "100%", minHeight: 44, padding: "10px 12px", border: "1px solid #CEDBD3", borderRadius: 11, background: "#FFF", fontSize: 16 },
-  textarea: { width: "100%", minHeight: 90, padding: 12, border: "1px solid #CEDBD3", borderRadius: 11, resize: "vertical", fontSize: 16 },
+  textarea: { width: "100%", minHeight: 68, padding: 10, border: "1px solid #CEDBD3", borderRadius: 11, resize: "vertical", fontSize: 16 },
   serviceChips: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 },
   chip: { padding: "9px 12px", border: "1px solid #D4E0D9", borderRadius: 999, background: "#FFF", cursor: "pointer", fontWeight: 800 },
   chipActive: { background: "#0D7042", color: "#FFF", borderColor: "#0D7042" },
