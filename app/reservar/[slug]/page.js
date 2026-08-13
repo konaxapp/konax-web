@@ -113,6 +113,7 @@ export default function ReservaPublicaAutoservicioPage() {
   const [telefonoGestion, setTelefonoGestion] = useState("");
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
   const [cancelando, setCancelando] = useState(false);
+  const [mostrarNuevaCita, setMostrarNuevaCita] = useState(false);
 
   const perfilBelleza = esBelleza(portal);
 
@@ -339,6 +340,26 @@ export default function ReservaPublicaAutoservicioPage() {
     setCancelando(false);
   }
 
+  function reservarOtraCita() {
+    setMostrarNuevaCita(true);
+    setReservaConfirmada(null);
+    setTokenGestion("");
+    setHorarioSeleccionado(null);
+    setServicioFiltro("todos");
+    setFecha(fechaISO());
+    setNombre(miCita?.cliente || "");
+    setTelefono("");
+    setObservaciones("");
+    setError("");
+
+    setTimeout(() => {
+      document.getElementById("nueva-cita-publica")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 80);
+  }
+
   function enlaceGestion() {
     if (!tokenGestion || typeof window === "undefined") return "";
     return `${window.location.origin}/reservar/${slug}?cita=${tokenGestion}`;
@@ -434,10 +455,20 @@ export default function ReservaPublicaAutoservicioPage() {
             ) : (
               <div style={s.infoBox}>Esta cita ya no puede cancelarse desde autoservicio.</div>
             )}
+
+            <button
+              type="button"
+              onClick={reservarOtraCita}
+              style={s.reserveAnotherButton}
+            >
+              + Reservar otra cita
+            </button>
           </section>
         )}
 
-        <section style={s.card}>
+        {(!tokenUrl || mostrarNuevaCita) && (
+          <>
+        <section id="nueva-cita-publica" style={s.card}>
           <span style={s.eyebrowDark}>1 · FECHA</span>
           <h2 style={s.sectionTitle}>Selecciona el día</h2>
           <div style={s.days}>
@@ -643,6 +674,8 @@ export default function ReservaPublicaAutoservicioPage() {
             </small>
           </section>
         )}
+          </>
+        )}
 
         <footer style={s.footer}>
           <img src="/konax-logo.png" alt="KONAX" style={s.footerLogo} />
@@ -697,6 +730,18 @@ const s = {
   subtitle: { maxWidth: 620, margin: 0, color: "#D9E9E0", lineHeight: 1.5 },
   card: { marginBottom: 14, padding: 20, border: "1px solid #DCE6E0", borderRadius: 20, background: "#FFF" },
   manageCard: { marginBottom: 14, padding: 20, border: "2px solid #A7D7BA", borderRadius: 20, background: "#F0FAF4" },
+  reserveAnotherButton: {
+    width: "100%",
+    minHeight: 52,
+    marginTop: 14,
+    border: "1px solid #0B7041",
+    borderRadius: 12,
+    background: "#FFFFFF",
+    color: "#0B7041",
+    fontWeight: 900,
+    fontSize: 16,
+    cursor: "pointer",
+  },
   sectionTitle: { margin: "5px 0 14px", fontSize: "clamp(22px,5vw,30px)" },
   days: { display: "grid", gridTemplateColumns: "repeat(7,minmax(72px,1fr))", gap: 8, overflowX: "auto", marginBottom: 14 },
   day: { minHeight: 76, border: "1px solid #DDE5E0", borderRadius: 14, background: "#FFF", cursor: "pointer", display: "grid", placeItems: "center", gap: 2 },
