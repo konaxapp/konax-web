@@ -1,271 +1,120 @@
 "use client";
 
-// KONAX · PORTAL PUBLICO DE RESERVAS
-// VERSION E · PRECIOS + PAGO EN LOCAL · 2026-08-09
-
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const RESPONSIVE_CSS = `
-  * {
-    box-sizing: border-box;
-  }
+const VERSION = "2026.08.13-PORTAL-AUTOSERVICIO-CITAS";
 
-  html,
-  body {
-    max-width: 100%;
-    overflow-x: hidden;
-  }
+function normalizar(valor) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
 
-  @media (max-width: 760px) {
-    .reserva-publica-page {
-      padding-left: 10px !important;
-      padding-right: 10px !important;
-      overflow-x: hidden !important;
-    }
+function esBelleza(portal) {
+  const texto = normalizar(
+    `${portal?.tipo_negocio || ""} ${portal?.categoria_negocio || ""}`
+  );
 
-    .reserva-publica-shell {
-      width: 100% !important;
-      max-width: 100% !important;
-    }
+  return [
+    "belleza",
+    "salon",
+    "peluqueria",
+    "estetica",
+    "barberia",
+    "spa",
+    "beauty",
+  ].some((item) => texto.includes(item));
+}
 
-    .reserva-publica-hero {
-      padding: 18px 14px !important;
-      border-radius: 18px !important;
-    }
-
-    .reserva-publica-brand {
-      width: 100% !important;
-      align-items: flex-start !important;
-    }
-
-    .reserva-publica-secure {
-      display: none !important;
-    }
-
-    .reserva-publica-steps {
-      grid-template-columns:
-        minmax(0,1fr) 14px minmax(0,1fr) 14px minmax(0,1fr) !important;
-      gap: 4px !important;
-    }
-
-    .reserva-publica-step {
-      min-width: 0 !important;
-      font-size: 7px !important;
-      gap: 4px !important;
-      white-space: normal !important;
-      text-align: center !important;
-      justify-content: center !important;
-    }
-
-    .reserva-publica-card {
-      padding: 14px !important;
-      border-radius: 16px !important;
-    }
-
-    .reserva-publica-days {
-      grid-template-columns: repeat(7, 72px) !important;
-      overflow-x: auto !important;
-      padding-bottom: 6px !important;
-      scroll-snap-type: x proximity;
-    }
-
-    .reserva-publica-day {
-      scroll-snap-align: start;
-    }
-
-    .reserva-publica-class-card {
-      grid-template-columns: 1fr !important;
-      gap: 12px !important;
-    }
-
-    .reserva-publica-class-action {
-      width: 100% !important;
-      min-width: 0 !important;
-    }
-
-    .reserva-publica-identity {
-      grid-template-columns: 1fr !important;
-      gap: 10px !important;
-    }
-
-    .reserva-publica-summary {
-      min-height: auto !important;
-      padding: 16px !important;
-    }
-
-    .reserva-publica-form {
-      width: 100% !important;
-      min-width: 0 !important;
-      padding: 16px !important;
-    }
-
-    .reserva-publica-form input,
-    .reserva-publica-form textarea,
-    .reserva-publica-form button {
-      width: 100% !important;
-      max-width: 100% !important;
-      min-width: 0 !important;
-    }
-
-    .reserva-publica-ticket-grid {
-      grid-template-columns: 1fr !important;
-    }
-
-    .reserva-publica-ticket-top {
-      flex-direction: column !important;
-      align-items: flex-start !important;
-    }
-
-    .reserva-publica-confirm-actions {
-      width: 100% !important;
-      display: grid !important;
-      grid-template-columns: 1fr !important;
-      gap: 8px !important;
-    }
-
-    .reserva-publica-confirm-actions button {
-      width: 100% !important;
-    }
-  }
-`;
-
-const DIA_MS = 86400000;
-
-function fechaLocalISO(fecha) {
-  const d = new Date(fecha);
+function fechaISO(fecha = new Date()) {
+  const d = fecha instanceof Date ? fecha : new Date(fecha);
   const offset = d.getTimezoneOffset();
   return new Date(d.getTime() - offset * 60000)
     .toISOString()
     .slice(0, 10);
 }
 
-function hoyISO() {
-  return fechaLocalISO(new Date());
+function sumarDias(iso, dias) {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + dias);
+  return fechaISO(d);
 }
 
-function sumarDias(fechaISO, cantidad) {
-  const fecha = new Date(`${fechaISO}T12:00:00`);
-  fecha.setDate(fecha.getDate() + cantidad);
-  return fechaLocalISO(fecha);
-}
-
-function formatoDia(fechaISO) {
-  const fecha = new Date(`${fechaISO}T12:00:00`);
-  return new Intl.DateTimeFormat("es-PA", {
-    weekday: "long",
-  }).format(fecha);
-}
-
-function formatoFechaCorta(fechaISO) {
-  const fecha = new Date(`${fechaISO}T12:00:00`);
-  return new Intl.DateTimeFormat("es-PA", {
-    day: "numeric",
-    month: "short",
-  }).format(fecha);
-}
-
-function formatoFechaLarga(fechaISO) {
-  const fecha = new Date(`${fechaISO}T12:00:00`);
+function formatoFecha(iso) {
+  if (!iso) return "-";
   return new Intl.DateTimeFormat("es-PA", {
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
-  }).format(fecha);
+  }).format(new Date(`${String(iso).slice(0, 10)}T12:00:00`));
 }
 
 function formatoHora(hora) {
   if (!hora) return "-";
-
-  const partes = String(hora).split(":");
-  const h = Number(partes[0] || 0);
-  const m = Number(partes[1] || 0);
-
-  const fecha = new Date();
-  fecha.setHours(h, m, 0, 0);
-
+  const [h = "0", m = "0"] = String(hora).split(":");
+  const d = new Date();
+  d.setHours(Number(h), Number(m), 0, 0);
   return new Intl.DateTimeFormat("es-PA", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
-  }).format(fecha);
+  }).format(d);
 }
 
 function dinero(valor) {
-  const numero = Number(valor || 0);
   return new Intl.NumberFormat("es-PA", {
     style: "currency",
     currency: "USD",
-  }).format(Number.isFinite(numero) ? numero : 0);
+  }).format(Number(valor || 0));
 }
 
-function obtenerMensajeError(error) {
-  if (!error) return "Ocurrió un error inesperado.";
-
-  const texto =
-    error.message ||
-    error.details ||
-    error.hint ||
-    String(error);
-
-  return texto
+function mensajeError(error) {
+  return String(
+    error?.message || error?.details || error?.hint || error || "Error inesperado"
+  )
     .replace("P0001:", "")
     .replace("Error:", "")
     .trim();
 }
 
-export default function ReservaPublicaPage() {
+export default function ReservaPublicaAutoservicioPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
+
   const slug = Array.isArray(params?.slug)
     ? params.slug[0]
     : params?.slug || "";
 
-  const [cargandoPortal, setCargandoPortal] = useState(true);
-  const [cargandoHorarios, setCargandoHorarios] = useState(false);
-  const [guardando, setGuardando] = useState(false);
+  const tokenUrl = searchParams?.get("cita") || "";
 
   const [portal, setPortal] = useState(null);
-  const [errorPortal, setErrorPortal] = useState("");
+  const [cargando, setCargando] = useState(true);
+  const [cargandoHorarios, setCargandoHorarios] = useState(false);
+  const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
-  const [mensaje, setMensaje] = useState("");
 
-  const [fecha, setFecha] = useState(hoyISO());
+  const [fecha, setFecha] = useState(fechaISO());
   const [horarios, setHorarios] = useState([]);
+  const [servicioFiltro, setServicioFiltro] = useState("todos");
   const [horarioSeleccionado, setHorarioSeleccionado] = useState(null);
 
-  const [paso, setPaso] = useState(1);
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
   const [observaciones, setObservaciones] = useState("");
-
   const [reservaConfirmada, setReservaConfirmada] = useState(null);
-  const [finalizado, setFinalizado] = useState(false);
+  const [tokenGestion, setTokenGestion] = useState("");
 
-  const dias = useMemo(() => {
-    return Array.from({ length: 7 }, (_, indice) => {
-      const iso = sumarDias(hoyISO(), indice);
-      const fechaObj = new Date(`${iso}T12:00:00`);
+  const [miCita, setMiCita] = useState(null);
+  const [telefonoGestion, setTelefonoGestion] = useState("");
+  const [motivoCancelacion, setMotivoCancelacion] = useState("");
+  const [cancelando, setCancelando] = useState(false);
 
-      return {
-        iso,
-        dia: new Intl.DateTimeFormat("es-PA", {
-          weekday: "short",
-        })
-          .format(fechaObj)
-          .replace(".", "")
-          .toUpperCase(),
-        numero: fechaObj.getDate(),
-        mes: new Intl.DateTimeFormat("es-PA", {
-          month: "short",
-        })
-          .format(fechaObj)
-          .replace(".", "")
-          .toUpperCase(),
-      };
-    });
-  }, []);
+  const perfilBelleza = esBelleza(portal);
 
   useEffect(() => {
     if (!slug) return;
@@ -275,43 +124,40 @@ export default function ReservaPublicaPage() {
   useEffect(() => {
     if (!portal?.ok || !fecha) return;
     cargarDisponibilidad(fecha);
-  }, [portal, fecha]);
+  }, [portal?.ok, fecha]);
+
+  useEffect(() => {
+    if (!portal?.ok || !tokenUrl) return;
+    cargarMiCita(tokenUrl);
+  }, [portal?.ok, tokenUrl]);
 
   async function cargarPortal() {
-    setCargandoPortal(true);
-    setErrorPortal("");
-    setPortal(null);
+    setCargando(true);
+    setError("");
 
     const { data, error: rpcError } = await supabase.rpc(
       "obtener_agenda_publica",
-      {
-        p_slug: slug,
-      }
+      { p_slug: slug }
     );
 
-    if (rpcError) {
-      setErrorPortal(obtenerMensajeError(rpcError));
-      setCargandoPortal(false);
-      return;
-    }
-
-    if (!data?.ok) {
-      setErrorPortal(
-        data?.mensaje ||
+    if (rpcError || !data?.ok) {
+      setError(
+        mensajeError(rpcError) ||
+          data?.mensaje ||
           "Este portal de reservas no está disponible."
       );
-      setCargandoPortal(false);
+      setPortal(null);
+      setCargando(false);
       return;
     }
 
     setPortal(data);
-    setCargandoPortal(false);
+    setCargando(false);
   }
 
   async function cargarDisponibilidad(fechaSeleccionada) {
     setCargandoHorarios(true);
     setError("");
-    setMensaje("");
     setHorarioSeleccionado(null);
 
     const { data, error: rpcError } = await supabase.rpc(
@@ -323,39 +169,80 @@ export default function ReservaPublicaPage() {
     );
 
     if (rpcError) {
-      setError(obtenerMensajeError(rpcError));
       setHorarios([]);
+      setError(mensajeError(rpcError));
       setCargandoHorarios(false);
       return;
     }
 
-    setHorarios(data || []);
+    setHorarios(Array.isArray(data) ? data : []);
     setCargandoHorarios(false);
   }
 
-  function seleccionarHorario(item) {
-    if (Number(item.disponibles || 0) <= 0) return;
+  async function cargarMiCita(token = tokenUrl) {
+    if (!token) return;
 
-    setHorarioSeleccionado(item);
-    setError("");
-    setMensaje("");
-    setPaso(2);
+    const { data, error: rpcError } = await supabase.rpc(
+      "obtener_reserva_agenda_publica",
+      {
+        p_slug: slug,
+        p_token: token,
+      }
+    );
 
-    setTimeout(() => {
-      document
-        .getElementById("datos-reserva")
-        ?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-    }, 80);
+    if (rpcError || !data?.ok) {
+      setMiCita(null);
+      setError(mensajeError(rpcError) || data?.mensaje || "No se pudo cargar la cita.");
+      return;
+    }
+
+    setMiCita(data);
+    if (data.fecha) setFecha(String(data.fecha).slice(0, 10));
   }
 
-  async function confirmarReserva(event) {
-    event.preventDefault();
+  const servicios = useMemo(() => {
+    const mapa = new Map();
+    horarios.forEach((item) => {
+      if (!mapa.has(String(item.servicio_id))) {
+        mapa.set(String(item.servicio_id), {
+          id: String(item.servicio_id),
+          nombre: item.servicio_nombre,
+          descripcion: item.descripcion || "",
+          precio: Number(item.precio || 0),
+          requierePago: Boolean(item.requiere_pago),
+        });
+      }
+    });
+    return Array.from(mapa.values());
+  }, [horarios]);
+
+  const horariosVisibles = useMemo(() => {
+    if (servicioFiltro === "todos") return horarios;
+    return horarios.filter(
+      (item) => String(item.servicio_id) === String(servicioFiltro)
+    );
+  }, [horarios, servicioFiltro]);
+
+  const dias = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => {
+      const iso = sumarDias(fechaISO(), i);
+      const d = new Date(`${iso}T12:00:00`);
+      return {
+        iso,
+        dia: new Intl.DateTimeFormat("es-PA", { weekday: "short" })
+          .format(d)
+          .replace(".", "")
+          .toUpperCase(),
+        numero: d.getDate(),
+      };
+    });
+  }, []);
+
+  async function confirmarReserva(e) {
+    e.preventDefault();
 
     if (!horarioSeleccionado) {
-      setError("Selecciona una clase u horario.");
+      setError("Selecciona un servicio y un horario disponible.");
       return;
     }
 
@@ -366,7 +253,6 @@ export default function ReservaPublicaPage() {
 
     setGuardando(true);
     setError("");
-    setMensaje("");
 
     const { data, error: rpcError } = await supabase.rpc(
       "crear_reserva_agenda_publica",
@@ -380,1787 +266,474 @@ export default function ReservaPublicaPage() {
       }
     );
 
-    if (rpcError) {
-      setError(obtenerMensajeError(rpcError));
-      setGuardando(false);
-      return;
-    }
-
-    if (!data?.ok) {
-      setError(
-        data?.mensaje || "No se pudo completar la reserva."
-      );
+    if (rpcError || !data?.ok) {
+      setError(mensajeError(rpcError) || data?.mensaje || "No se pudo reservar.");
       setGuardando(false);
       return;
     }
 
     setReservaConfirmada(data);
-    setPaso(3);
-    setGuardando(false);
+
+    const { data: gestion } = await supabase.rpc(
+      "obtener_token_gestion_reserva_publica",
+      {
+        p_slug: slug,
+        p_reserva_id: data.reserva_id,
+        p_telefono: telefono.trim(),
+      }
+    );
+
+    if (gestion?.ok && gestion?.token) {
+      setTokenGestion(String(gestion.token));
+    }
 
     await cargarDisponibilidad(fecha);
+    setGuardando(false);
 
     setTimeout(() => {
-      document
-        .getElementById("reserva-confirmada")
-        ?.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
+      document.getElementById("confirmacion-cita")?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
     }, 80);
   }
 
-  function nuevaReserva() {
-    setFinalizado(false);
-    setReservaConfirmada(null);
-    setHorarioSeleccionado(null);
-    setNombre("");
-    setTelefono("");
-    setObservaciones("");
-    setError("");
-    setMensaje("");
-    setPaso(1);
-  }
+  async function cancelarMiCita() {
+    if (!miCita?.puede_cancelar) return;
 
-  function finalizarReserva() {
-    setNombre("");
-    setTelefono("");
-    setObservaciones("");
-    setError("");
-    setMensaje("");
-    setFinalizado(true);
+    if (!telefonoGestion.trim()) {
+      setError("Escribe el teléfono utilizado en la cita para confirmar la cancelación.");
+      return;
+    }
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-  }
-
-  if (cargandoPortal) {
-    return (
-      <main style={s.loadingPage}>
-        <div style={s.loadingCard}>
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            style={s.loadingLogo}
-          />
-          <div style={s.spinner} />
-          <strong style={s.loadingTitle}>
-            Preparando reservas
-          </strong>
-          <span style={s.loadingText}>
-            Estamos consultando los horarios disponibles.
-          </span>
-        </div>
-      </main>
+    const confirmar = window.confirm(
+      "¿Seguro que deseas cancelar esta cita? El horario quedará disponible inmediatamente."
     );
-  }
 
-  if (errorPortal || !portal?.ok) {
-    return (
-      <main style={s.loadingPage}>
-        <div style={s.errorPortalCard}>
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            style={s.loadingLogo}
-          />
-          <div style={s.errorIcon}>!</div>
-          <h1 style={s.errorPortalTitle}>
-            Reservas no disponibles
-          </h1>
-          <p style={s.errorPortalText}>
-            {errorPortal ||
-              "Este portal de reservas no está disponible."}
-          </p>
-          <span style={s.powered}>
-            Tecnología de reservas por KONAX
-          </span>
-        </div>
-      </main>
+    if (!confirmar) return;
+
+    setCancelando(true);
+    setError("");
+
+    const { data, error: rpcError } = await supabase.rpc(
+      "cancelar_reserva_agenda_publica",
+      {
+        p_slug: slug,
+        p_token: tokenUrl,
+        p_telefono: telefonoGestion.trim(),
+        p_motivo: motivoCancelacion.trim() || null,
+      }
     );
+
+    if (rpcError || !data?.ok) {
+      setError(mensajeError(rpcError) || data?.mensaje || "No se pudo cancelar la cita.");
+      setCancelando(false);
+      return;
+    }
+
+    await Promise.all([
+      cargarMiCita(tokenUrl),
+      cargarDisponibilidad(miCita.fecha || fecha),
+    ]);
+
+    setCancelando(false);
   }
 
-  if (finalizado) {
+  function enlaceGestion() {
+    if (!tokenGestion || typeof window === "undefined") return "";
+    return `${window.location.origin}/reservar/${slug}?cita=${tokenGestion}`;
+  }
+
+  if (cargando) {
+    return <main style={s.loading}>Preparando agenda...</main>;
+  }
+
+  if (!portal?.ok) {
     return (
-      <main style={s.finishedPage}>
-        <section style={s.finishedCard}>
-          <div style={s.finishedCheck}>✓</div>
-
-          <span style={s.finishedEyebrow}>
-            KONAX · RESERVA FINALIZADA
-          </span>
-
-          <h1 style={s.finishedTitle}>
-            Reserva completada
-          </h1>
-
-          <p style={s.finishedText}>
-            {reservaConfirmada?.requiere_pago
-              ? `Tu espacio quedó reservado. Realiza el pago de ${dinero(
-                  reservaConfirmada.monto
-                )} en Caja cuando llegues al local. Ya puedes cerrar esta ventana.`
-              : "Tu espacio quedó confirmado. Ya puedes cerrar esta ventana."}
-          </p>
-
-          <button
-            type="button"
-            onClick={nuevaReserva}
-            style={s.finishedSecondary}
-          >
-            Hacer otra reserva
-          </button>
-
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            style={s.finishedLogo}
-          />
-        </section>
+      <main style={s.loading}>
+        <div style={s.errorCard}>
+          <strong>Reservas no disponibles</strong>
+          <span>{error}</span>
+        </div>
       </main>
     );
   }
 
   return (
-    <main style={s.page} className="reserva-publica-page">
-      <style dangerouslySetInnerHTML={{ __html: RESPONSIVE_CSS }} />
-      <section style={s.shell} className="reserva-publica-shell">
-        <header style={s.hero} className="reserva-publica-hero">
-          <div style={s.heroTop}>
-            <div style={s.brandWrap} className="reserva-publica-brand">
-              <div style={s.brandLogo}>
-                <img
-                  src="/konax-logo.png"
-                  alt="KONAX"
-                  style={s.logo}
-                />
-              </div>
-
-              <div>
-                <span style={s.eyebrow}>
-                  RESERVAS EN LÍNEA
-                </span>
-                <h1 style={s.businessName}>
-                  {portal.titulo_publico ||
-                    portal.empresa_nombre}
-                </h1>
-              </div>
-            </div>
-
-            <span style={s.secureBadge} className="reserva-publica-secure">
-              ● Reserva segura
-            </span>
+    <main style={s.page}>
+      <div style={s.shell}>
+        <header style={s.hero}>
+          <div>
+            <span style={s.eyebrow}>KONAX · AUTOSERVICIO DE CITAS</span>
+            <h1 style={s.title}>{portal.titulo_publico || portal.empresa_nombre}</h1>
+            <p style={s.subtitle}>
+              {perfilBelleza
+                ? "Consulta servicios y horarios disponibles, reserva tu cita y gestiona cambios o cancelaciones desde aquí."
+                : "Consulta disponibilidad, reserva tu espacio y gestiona tu reserva desde aquí."}
+            </p>
           </div>
-
-          <p style={s.heroText}>
-            Elige tu clase, selecciona un horario disponible
-            y confirma tu espacio en pocos segundos.
-          </p>
-
-          <div style={s.steps} className="reserva-publica-steps">
-            <div
-              style={{
-                ...s.step,
-                ...(paso >= 1 ? s.stepActive : {}),
-              }}
-              className="reserva-publica-step"
-            >
-              <span style={s.stepCircle}>1</span>
-              <span>Horario</span>
-            </div>
-
-            <span style={s.stepLine} />
-
-            <div
-              style={{
-                ...s.step,
-                ...(paso >= 2 ? s.stepActive : {}),
-              }}
-              className="reserva-publica-step"
-            >
-              <span style={s.stepCircle}>2</span>
-              <span>Tus datos</span>
-            </div>
-
-            <span style={s.stepLine} />
-
-            <div
-              style={{
-                ...s.step,
-                ...(paso >= 3 ? s.stepActive : {}),
-              }}
-              className="reserva-publica-step"
-            >
-              <span style={s.stepCircle}>3</span>
-              <span>Confirmación</span>
-            </div>
-          </div>
+          <img src="/konax-logo.png" alt="KONAX" style={s.logo} />
         </header>
 
-        {paso !== 3 && (
-          <>
-            <section style={s.card} className="reserva-publica-card">
-              <div style={s.sectionHead}>
-                <div>
-                  <span style={s.sectionEyebrow}>
-                    PASO 1
-                  </span>
-                  <h2 style={s.sectionTitle}>
-                    Selecciona el día
-                  </h2>
-                </div>
+        {error && <div style={s.errorBox}>{error}</div>}
 
-                <span style={s.dateBadge}>
-                  {formatoFechaLarga(fecha)}
-                </span>
+        {tokenUrl && miCita && (
+          <section style={s.manageCard}>
+            <span style={s.eyebrowDark}>GESTIONAR MI CITA</span>
+            <h2 style={s.sectionTitle}>{miCita.servicio}</h2>
+            <div style={s.manageGrid}>
+              <Dato label="Cliente" value={miCita.cliente} />
+              <Dato label="Fecha" value={formatoFecha(miCita.fecha)} />
+              <Dato
+                label="Horario"
+                value={`${formatoHora(miCita.hora_inicio)} – ${formatoHora(miCita.hora_fin)}`}
+              />
+              <Dato
+                label={perfilBelleza ? "Profesional" : "Instructor"}
+                value={miCita.profesional || "Por confirmar"}
+              />
+              <Dato label="Estado" value={String(miCita.estado || "").toUpperCase()} />
+            </div>
+
+            {miCita.estado === "cancelada" ? (
+              <div style={s.cancelledBox}>
+                Esta cita está cancelada. El horario quedó disponible nuevamente.
               </div>
-
-              <div style={s.daysGrid} className="reserva-publica-days">
-                {dias.map((dia) => {
-                  const activo = dia.iso === fecha;
-
-                  return (
-                    <button
-                      key={dia.iso}
-                      type="button"
-                      onClick={() => {
-                        setFecha(dia.iso);
-                        setPaso(1);
-                        setHorarioSeleccionado(null);
-                      }}
-                      style={{
-                        ...s.dayButton,
-                        ...(activo ? s.dayButtonActive : {}),
-                      }}
-                      className="reserva-publica-day"
-                    >
-                      <span
-                        style={{
-                          ...s.dayName,
-                          ...(activo ? s.dayTextActive : {}),
-                        }}
-                      >
-                        {dia.dia}
-                      </span>
-
-                      <strong
-                        style={{
-                          ...s.dayNumber,
-                          ...(activo ? s.dayTextActive : {}),
-                        }}
-                      >
-                        {dia.numero}
-                      </strong>
-
-                      <span
-                        style={{
-                          ...s.dayMonth,
-                          ...(activo ? s.dayTextActive : {}),
-                        }}
-                      >
-                        {dia.mes}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div style={s.dateFieldWrap}>
-                <label style={s.label}>
-                  Otra fecha
+            ) : miCita.puede_cancelar ? (
+              <div style={s.cancelBox}>
+                <label style={s.field}>
+                  <span>Teléfono de la cita</span>
+                  <input
+                    value={telefonoGestion}
+                    onChange={(e) => setTelefonoGestion(e.target.value)}
+                    placeholder="Ej. 6000-0000"
+                    style={s.input}
+                  />
                 </label>
-                <input
-                  type="date"
-                  min={hoyISO()}
-                  value={fecha}
-                  onChange={(e) => {
-                    setFecha(e.target.value);
-                    setPaso(1);
-                    setHorarioSeleccionado(null);
-                  }}
-                  style={s.input}
-                />
-              </div>
-            </section>
-
-            <section style={s.card} className="reserva-publica-card">
-              <div style={s.sectionHead}>
-                <div>
-                  <span style={s.sectionEyebrow}>
-                    HORARIOS
-                  </span>
-                  <h2 style={s.sectionTitle}>
-                    Clases disponibles
-                  </h2>
-                </div>
-
-                <span style={s.counter}>
-                  {horarios.length}
-                </span>
-              </div>
-
-              {cargandoHorarios ? (
-                <div style={s.empty}>
-                  <div style={s.spinnerSmall} />
-                  <strong>Consultando horarios...</strong>
-                </div>
-              ) : horarios.length === 0 ? (
-                <div style={s.empty}>
-                  <div style={s.emptyIcon}>◷</div>
-                  <strong style={s.emptyTitle}>
-                    No hay clases disponibles
-                  </strong>
-                  <span style={s.emptyText}>
-                    Selecciona otro día para consultar
-                    la programación.
-                  </span>
-                </div>
-              ) : (
-                <div style={s.classList}>
-                  {horarios.map((item) => {
-                    const disponibles = Number(
-                      item.disponibles || 0
-                    );
-                    const capacidad = Number(
-                      item.capacidad || 0
-                    );
-                    const reservados = Number(
-                      item.reservados || 0
-                    );
-                    const lleno = disponibles <= 0;
-                    const seleccionado =
-                      horarioSeleccionado?.horario_id ===
-                      item.horario_id;
-                    const ocupacion =
-                      capacidad > 0
-                        ? Math.min(
-                            100,
-                            Math.round(
-                              (reservados / capacidad) * 100
-                            )
-                          )
-                        : 0;
-
-                    return (
-                      <article
-                        key={item.horario_id}
-                        style={{
-                          ...s.classCard,
-                          ...(seleccionado
-                            ? s.classCardSelected
-                            : {}),
-                        }}
-                        className="reserva-publica-class-card"
-                      >
-                        <div style={s.classMain}>
-                          <div style={s.classTitleRow}>
-                            <div>
-                              <span style={s.classType}>
-                                {item.servicio_tipo ===
-                                "cita_individual"
-                                  ? "CITA INDIVIDUAL"
-                                  : "CLASE GRUPAL"}
-                              </span>
-
-                              <h3 style={s.classTitle}>
-                                {item.servicio_nombre}
-                              </h3>
-                            </div>
-
-                            <span
-                              style={{
-                                ...s.availabilityBadge,
-                                ...(lleno
-                                  ? s.availabilityFull
-                                  : {}),
-                              }}
-                            >
-                              {lleno
-                                ? "COMPLETO"
-                                : `${disponibles} ${
-                                    disponibles === 1
-                                      ? "CUPO"
-                                      : "CUPOS"
-                                  }`}
-                            </span>
-                          </div>
-
-                          {item.descripcion && (
-                            <p style={s.classDescription}>
-                              {item.descripcion}
-                            </p>
-                          )}
-
-                          <div style={s.classDetails}>
-                            <span style={s.detailPill}>
-                              ◷ {formatoHora(item.hora_inicio)}
-                              {" – "}
-                              {formatoHora(item.hora_fin)}
-                            </span>
-
-                            <span style={s.detailPill}>
-                              👤{" "}
-                              {item.instructor ||
-                                "Instructor por confirmar"}
-                            </span>
-
-                            <span
-                              style={
-                                item.requiere_membresia
-                                  ? s.detailPillMember
-                                  : s.detailPillOpen
-                              }
-                            >
-                              {item.requiere_membresia
-                                ? "🔒 Solo miembros"
-                                : "✓ Reserva abierta"}
-                            </span>
-
-                            {item.requiere_pago && (
-                              <span style={s.detailPillPrice}>
-                                {dinero(item.precio)}
-                              </span>
-                            )}
-                          </div>
-
-                          <div style={s.progressWrap}>
-                            <div style={s.progressTrack}>
-                              <div
-                                style={{
-                                  ...s.progressFill,
-                                  width: `${ocupacion}%`,
-                                }}
-                              />
-                            </div>
-
-                            <div style={s.progressText}>
-                              <span>
-                                {reservados} reservados
-                              </span>
-                              <span>
-                                {capacidad} capacidad
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          disabled={lleno}
-                          onClick={() => seleccionarHorario(item)}
-                          style={
-                            lleno
-                              ? s.selectButtonDisabled
-                              : seleccionado
-                              ? s.selectButtonSelected
-                              : s.selectButton
-                          }
-                          className="reserva-publica-class-action"
-                        >
-                          {lleno
-                            ? "Sin cupos"
-                            : seleccionado
-                            ? "Seleccionado ✓"
-                            : item.requiere_pago
-                            ? `Reservar · ${dinero(item.precio)}`
-                            : "Reservar"}
-                        </button>
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-            {horarioSeleccionado && (
-              <section
-                id="datos-reserva"
-                style={s.identityCard}
-                className="reserva-publica-identity"
-              >
-                <div style={s.summaryBox} className="reserva-publica-summary">
-                  <span style={s.summaryEyebrow}>
-                    TU SELECCIÓN
-                  </span>
-
-                  <strong style={s.summaryClass}>
-                    {horarioSeleccionado.servicio_nombre}
-                  </strong>
-
-                  <span style={s.summaryDate}>
-                    {formatoFechaLarga(fecha)}
-                  </span>
-
-                  <span style={s.summaryTime}>
-                    {formatoHora(
-                      horarioSeleccionado.hora_inicio
-                    )}
-                    {" – "}
-                    {formatoHora(
-                      horarioSeleccionado.hora_fin
-                    )}
-                  </span>
-
-                  <span style={s.summaryInstructor}>
-                    {horarioSeleccionado.instructor
-                      ? `Instructor: ${horarioSeleccionado.instructor}`
-                      : "Instructor por confirmar"}
-                  </span>
-
-                  {horarioSeleccionado.requiere_pago && (
-                    <div style={s.priceBox}>
-                      <span>Total a pagar en el local</span>
-                      <strong>
-                        {dinero(horarioSeleccionado.precio)}
-                      </strong>
-                    </div>
-                  )}
-                </div>
-
-                <form
-                  onSubmit={confirmarReserva}
-                  style={s.form}
-                  className="reserva-publica-form"
+                <label style={s.field}>
+                  <span>Motivo de cancelación (opcional)</span>
+                  <input
+                    value={motivoCancelacion}
+                    onChange={(e) => setMotivoCancelacion(e.target.value)}
+                    placeholder="Ej. No podré llegar a tiempo"
+                    style={s.input}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={cancelarMiCita}
+                  disabled={cancelando}
+                  style={s.dangerButton}
                 >
-                  <div>
-                    <span style={s.sectionEyebrow}>
-                      PASO 2
-                    </span>
-                    <h2 style={s.formTitle}>
-                      Confirma tus datos
-                    </h2>
-                    <p style={s.formText}>
-                      Ingresa tu nombre y teléfono. Si ya eres cliente,
-                      KONAX vinculará la reserva a tu ficha. Si eres nuevo
-                      y la clase es abierta, tu registro se creará
-                      automáticamente.
-                    </p>
-                  </div>
-
-                  <label style={s.field}>
-                    <span style={s.label}>Nombre completo</span>
-                    <input
-                      value={nombre}
-                      onChange={(e) =>
-                        setNombre(e.target.value)
-                      }
-                      placeholder="Ej. María González"
-                      autoComplete="name"
-                      style={s.inputLarge}
-                    />
-                  </label>
-
-                  <label style={s.field}>
-                    <span style={s.label}>
-                      Teléfono
-                    </span>
-                    <input
-                      value={telefono}
-                      onChange={(e) =>
-                        setTelefono(e.target.value)
-                      }
-                      placeholder="Ej. 6000-0000"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      style={s.inputLarge}
-                    />
-                  </label>
-
-                  <label style={s.field}>
-                    <span style={s.label}>
-                      Observación{" "}
-                      <small style={s.optional}>
-                        (opcional)
-                      </small>
-                    </span>
-                    <textarea
-                      value={observaciones}
-                      onChange={(e) =>
-                        setObservaciones(e.target.value)
-                      }
-                      placeholder="Alguna indicación para el gimnasio..."
-                      rows={3}
-                      style={s.textarea}
-                    />
-                  </label>
-
-                  {error && (
-                    <div style={s.errorBox}>
-                      <strong>No se pudo reservar</strong>
-                      <span>{error}</span>
-                    </div>
-                  )}
-
-                  {mensaje && (
-                    <div style={s.successBox}>
-                      {mensaje}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={guardando}
-                    style={{
-                      ...s.confirmButton,
-                      ...(guardando
-                        ? s.confirmButtonDisabled
-                        : {}),
-                    }}
-                  >
-                    {guardando
-                      ? "Confirmando..."
-                      : "Confirmar mi reserva"}
-                  </button>
-
-                  <span style={s.privacyText}>
-                    Tu nombre y teléfono se utilizan para gestionar
-                    la reserva con este negocio. Si el servicio exige
-                    membresía, KONAX la validará automáticamente.
-                  </span>
-                </form>
-              </section>
+                  {cancelando ? "Cancelando..." : "Cancelar mi cita"}
+                </button>
+                <small style={s.helpText}>
+                  Puedes cancelar incluso el mismo día, siempre que la hora de la cita todavía no haya pasado.
+                </small>
+              </div>
+            ) : (
+              <div style={s.infoBox}>Esta cita ya no puede cancelarse desde autoservicio.</div>
             )}
-          </>
+          </section>
         )}
 
-        {paso === 3 && reservaConfirmada && (
-          <section
-            id="reserva-confirmada"
-            style={s.confirmationCard}
-          >
-            <div style={s.checkCircle}>✓</div>
+        <section style={s.card}>
+          <span style={s.eyebrowDark}>1 · FECHA</span>
+          <h2 style={s.sectionTitle}>Selecciona el día</h2>
+          <div style={s.days}>
+            {dias.map((dia) => (
+              <button
+                key={dia.iso}
+                type="button"
+                onClick={() => setFecha(dia.iso)}
+                style={{
+                  ...s.day,
+                  ...(fecha === dia.iso ? s.dayActive : {}),
+                }}
+              >
+                <span>{dia.dia}</span>
+                <strong>{dia.numero}</strong>
+              </button>
+            ))}
+          </div>
+          <label style={s.field}>
+            <span>Otra fecha</span>
+            <input
+              type="date"
+              min={fechaISO()}
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              style={s.input}
+            />
+          </label>
+        </section>
 
-            <span style={s.confirmEyebrow}>
-              RESERVA REGISTRADA
-            </span>
+        <section style={s.card}>
+          <span style={s.eyebrowDark}>2 · SERVICIO</span>
+          <h2 style={s.sectionTitle}>
+            {perfilBelleza ? "Servicios disponibles" : "Servicios y clases disponibles"}
+          </h2>
 
-            <h2 style={s.confirmTitle}>
-              ¡Tu espacio está reservado!
-            </h2>
+          <div style={s.serviceChips}>
+            <button
+              type="button"
+              onClick={() => setServicioFiltro("todos")}
+              style={{
+                ...s.chip,
+                ...(servicioFiltro === "todos" ? s.chipActive : {}),
+              }}
+            >
+              Todos
+            </button>
+            {servicios.map((servicio) => (
+              <button
+                key={servicio.id}
+                type="button"
+                onClick={() => setServicioFiltro(servicio.id)}
+                style={{
+                  ...s.chip,
+                  ...(servicioFiltro === servicio.id ? s.chipActive : {}),
+                }}
+              >
+                {servicio.nombre}
+              </button>
+            ))}
+          </div>
 
-            <p style={s.confirmText}>
-              Tu reserva fue registrada correctamente.
-              {reservaConfirmada.cliente_nuevo
-                ? " Además, tu ficha de cliente fue creada automáticamente."
-                : ""}
-            </p>
+          {cargandoHorarios ? (
+            <div style={s.empty}>Consultando horarios...</div>
+          ) : horariosVisibles.length === 0 ? (
+            <div style={s.empty}>No hay horarios disponibles para esta fecha.</div>
+          ) : (
+            <div style={s.slots}>
+              {horariosVisibles.map((item) => {
+                const disponible = Number(item.disponibles || 0) > 0;
+                const seleccionado =
+                  horarioSeleccionado?.horario_id === item.horario_id;
 
-            <div style={s.ticket}>
-              <div style={s.ticketTop} className="reserva-publica-ticket-top">
-                <div>
-                  <span style={s.ticketLabel}>
-                    CLASE / SERVICIO
-                  </span>
-                  <strong style={s.ticketClass}>
-                    {reservaConfirmada.servicio}
-                  </strong>
-                </div>
+                return (
+                  <article key={item.horario_id} style={s.slotCard}>
+                    <div>
+                      <strong style={s.slotTitle}>{item.servicio_nombre}</strong>
+                      <span style={s.slotMeta}>
+                        {formatoHora(item.hora_inicio)} – {formatoHora(item.hora_fin)}
+                      </span>
+                      <span style={s.slotMeta}>
+                        {perfilBelleza ? "Profesional" : "Instructor"}: {item.instructor || "Por confirmar"}
+                      </span>
+                      {item.descripcion && (
+                        <p style={s.description}>{item.descripcion}</p>
+                      )}
+                      {item.requiere_pago && (
+                        <strong style={s.price}>{dinero(item.precio)}</strong>
+                      )}
+                    </div>
 
-                <span style={s.confirmedBadge}>
-                  {reservaConfirmada.estado ===
-                  "pendiente_pago"
-                    ? "PENDIENTE DE PAGO"
-                    : "CONFIRMADA"}
-                </span>
-              </div>
+                    <button
+                      type="button"
+                      disabled={!disponible}
+                      onClick={() => setHorarioSeleccionado(item)}
+                      style={{
+                        ...s.slotButton,
+                        ...(!disponible ? s.slotButtonDisabled : {}),
+                        ...(seleccionado ? s.slotButtonSelected : {}),
+                      }}
+                    >
+                      {!disponible
+                        ? perfilBelleza
+                          ? "Ocupado"
+                          : "Sin cupos"
+                        : seleccionado
+                        ? "Seleccionado ✓"
+                        : perfilBelleza
+                        ? "Elegir horario"
+                        : "Reservar"}
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
-              <div style={s.ticketGrid} className="reserva-publica-ticket-grid">
-                <div style={s.ticketItem}>
-                  <span>Fecha</span>
-                  <strong>
-                    {formatoFechaLarga(
-                      reservaConfirmada.fecha
-                    )}
-                  </strong>
-                </div>
+        {horarioSeleccionado && !reservaConfirmada && (
+          <section style={s.card}>
+            <span style={s.eyebrowDark}>3 · TUS DATOS</span>
+            <h2 style={s.sectionTitle}>Confirmar cita</h2>
 
-                <div style={s.ticketItem}>
-                  <span>Horario</span>
-                  <strong>
-                    {formatoHora(
-                      reservaConfirmada.hora_inicio
-                    )}
-                    {" – "}
-                    {formatoHora(
-                      reservaConfirmada.hora_fin
-                    )}
-                  </strong>
-                </div>
-
-                <div style={s.ticketItem}>
-                  <span>Cupos restantes</span>
-                  <strong>
-                    {reservaConfirmada.disponibles}
-                  </strong>
-                </div>
-
-                {reservaConfirmada.requiere_pago && (
-                  <div style={s.ticketItem}>
-                    <span>Pago pendiente</span>
-                    <strong>
-                      {dinero(reservaConfirmada.monto)}
-                    </strong>
-                  </div>
-                )}
-              </div>
+            <div style={s.selectionBox}>
+              <strong>{horarioSeleccionado.servicio_nombre}</strong>
+              <span>{formatoFecha(fecha)}</span>
+              <span>
+                {formatoHora(horarioSeleccionado.hora_inicio)} – {formatoHora(horarioSeleccionado.hora_fin)}
+              </span>
             </div>
 
+            <form onSubmit={confirmarReserva} style={s.form}>
+              <label style={s.field}>
+                <span>Nombre completo</span>
+                <input
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  style={s.input}
+                  placeholder="Nombre del cliente"
+                />
+              </label>
+
+              <label style={s.field}>
+                <span>Teléfono</span>
+                <input
+                  value={telefono}
+                  onChange={(e) => setTelefono(e.target.value)}
+                  style={s.input}
+                  placeholder="6000-0000"
+                />
+              </label>
+
+              <label style={s.field}>
+                <span>Observaciones (opcional)</span>
+                <textarea
+                  value={observaciones}
+                  onChange={(e) => setObservaciones(e.target.value)}
+                  style={s.textarea}
+                  placeholder="Alguna indicación para el negocio"
+                />
+              </label>
+
+              <button disabled={guardando} style={s.primaryButton}>
+                {guardando ? "Confirmando..." : "Confirmar mi cita"}
+              </button>
+            </form>
+          </section>
+        )}
+
+        {reservaConfirmada && (
+          <section id="confirmacion-cita" style={s.confirmCard}>
+            <div style={s.check}>✓</div>
+            <span style={s.eyebrowDark}>CONFIRMACIÓN INMEDIATA</span>
+            <h2 style={s.sectionTitle}>Tu cita quedó registrada</h2>
+            <p style={s.confirmText}>
+              {reservaConfirmada.servicio} · {formatoFecha(reservaConfirmada.fecha)} · {formatoHora(reservaConfirmada.hora_inicio)}
+            </p>
+
             {reservaConfirmada.requiere_pago && (
-              <div style={s.paymentNotice}>
-                Tu cupo quedó reservado. Paga{" "}
-                <strong>
-                  {dinero(reservaConfirmada.monto)}
-                </strong>{" "}
-                directamente en Caja cuando llegues al local.
+              <div style={s.infoBox}>
+                Pago pendiente: {dinero(reservaConfirmada.monto)}
               </div>
             )}
 
-            <div
-              style={s.confirmActions}
-              className="reserva-publica-confirm-actions"
-            >
-              <button
-                type="button"
-                onClick={finalizarReserva}
-                style={s.doneButton}
-              >
-                Listo
-              </button>
+            {tokenGestion && (
+              <div style={s.manageLinkBox}>
+                <strong>Guarda este enlace para gestionar o cancelar tu cita:</strong>
+                <input readOnly value={enlaceGestion()} style={s.input} />
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = `/reservar/${slug}?cita=${tokenGestion}`;
+                  }}
+                  style={s.secondaryButton}
+                >
+                  Gestionar mi cita
+                </button>
+              </div>
+            )}
 
-              <button
-                type="button"
-                onClick={nuevaReserva}
-                style={s.newReservationButton}
-              >
-                Hacer otra reserva
-              </button>
-            </div>
+            <small style={s.helpText}>
+              La confirmación queda registrada al instante. El motor de notificaciones puede enviar además el mensaje automático y el recordatorio del día anterior.
+            </small>
           </section>
         )}
 
         <footer style={s.footer}>
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            style={s.footerLogo}
-          />
-          <span>
-            Reservas digitales para negocios
-          </span>
+          <img src="/konax-logo.png" alt="KONAX" style={s.footerLogo} />
+          <span>Reservas y citas por KONAX · {VERSION}</span>
         </footer>
-      </section>
+      </div>
     </main>
   );
 }
 
+function Dato({ label, value }) {
+  return (
+    <div style={s.dataBox}>
+      <span>{label}</span>
+      <strong>{value || "-"}</strong>
+    </div>
+  );
+}
+
 const s = {
-  finishedPage: {
-    minHeight: "100vh",
-    padding: 18,
-    display: "grid",
-    placeItems: "center",
-    background:
-      "linear-gradient(180deg,#EFF7F2 0%,#F8FAF9 100%)",
-    color: "#15231B",
-    fontFamily:
-      'Inter, system-ui, "Segoe UI", sans-serif',
-  },
-
-  finishedCard: {
-    width: "min(470px,100%)",
-    padding: "36px 22px 26px",
-    display: "grid",
-    placeItems: "center",
-    border: "1px solid #D7E6DD",
-    borderRadius: 24,
-    background: "#FFFFFF",
-    textAlign: "center",
-    boxShadow:
-      "0 18px 45px rgba(13,72,42,.10)",
-  },
-
-  finishedCheck: {
-    width: 72,
-    height: 72,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "50%",
-    background:
-      "linear-gradient(145deg,#0B7A43,#48C982)",
-    color: "#FFFFFF",
-    fontSize: 32,
-    fontWeight: 950,
-    boxShadow:
-      "0 12px 28px rgba(11,122,67,.22)",
-  },
-
-  finishedEyebrow: {
-    marginTop: 18,
-    color: "#0B7A43",
-    fontSize: 8,
-    fontWeight: 950,
-    letterSpacing: 1.15,
-  },
-
-  finishedTitle: {
-    margin: "8px 0 0",
-    fontSize: "clamp(28px,7vw,38px)",
-    lineHeight: 1.05,
-  },
-
-  finishedText: {
-    maxWidth: 360,
-    margin: "12px 0 0",
-    color: "#6F7E76",
-    fontSize: 12,
-    lineHeight: 1.55,
-  },
-
-  finishedSecondary: {
-    width: "100%",
-    minHeight: 46,
-    marginTop: 22,
-    border: "1px solid #BCD8C8",
-    borderRadius: 11,
-    background: "#F3FAF6",
-    color: "#0B7A43",
-    fontSize: 10,
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-
-  finishedLogo: {
-    width: 100,
-    height: 38,
-    marginTop: 22,
-    objectFit: "contain",
-    opacity: .75,
-  },
-
   page: {
     minHeight: "100vh",
-    padding: "20px 12px 42px",
-    background:
-      "linear-gradient(180deg,#eff7f2 0%,#f8faf9 42%,#edf4f0 100%)",
-    color: "#15231b",
-    fontFamily:
-      'Inter, system-ui, "Segoe UI", sans-serif',
+    padding: "18px 12px 42px",
+    background: "#F4F7F5",
+    color: "#13221A",
+    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
   },
-
-  shell: {
-    width: "min(880px,100%)",
-    margin: "0 auto",
+  loading: {
+    minHeight: "100vh",
+    display: "grid",
+    placeItems: "center",
+    background: "#F4F7F5",
+    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
   },
-
+  shell: { width: "min(920px,100%)", margin: "0 auto" },
   hero: {
     marginBottom: 14,
-    padding: "22px 20px 20px",
+    padding: 22,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 18,
+    alignItems: "center",
+    flexWrap: "wrap",
     borderRadius: 24,
-    background:
-      "linear-gradient(135deg,#081c13 0%,#0c4b2c 60%,#0f7b43 100%)",
-    color: "#fff",
-    boxShadow:
-      "0 18px 44px rgba(8,50,29,.17)",
-  },
-
-  heroTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 14,
-    flexWrap: "wrap",
-  },
-
-  brandWrap: {
-    display: "flex",
-    alignItems: "center",
-    gap: 13,
-    minWidth: 0,
-  },
-
-  brandLogo: {
-    width: 106,
-    minHeight: 58,
-    padding: "5px 8px",
-    display: "grid",
-    placeItems: "center",
-    borderRadius: 15,
-    background: "#fff",
-    flex: "0 0 auto",
-  },
-
-  logo: {
-    width: 92,
-    height: 42,
-    objectFit: "contain",
-  },
-
-  eyebrow: {
-    display: "block",
-    color: "#7EE6AA",
-    fontSize: 8,
-    fontWeight: 950,
-    letterSpacing: 1.25,
-  },
-
-  businessName: {
-    margin: "4px 0 0",
-    fontSize: "clamp(20px,5vw,30px)",
-    lineHeight: 1.08,
-  },
-
-  secureBadge: {
-    padding: "7px 10px",
-    border: "1px solid rgba(255,255,255,.16)",
-    borderRadius: 999,
-    background: "rgba(255,255,255,.08)",
-    color: "#D8F1E2",
-    fontSize: 8,
-    fontWeight: 850,
-  },
-
-  heroText: {
-    maxWidth: 620,
-    margin: "17px 0 0",
-    color: "#D6E8DE",
-    fontSize: 12,
-    lineHeight: 1.55,
-  },
-
-  steps: {
-    marginTop: 19,
-    display: "grid",
-    gridTemplateColumns:
-      "auto minmax(24px,1fr) auto minmax(24px,1fr) auto",
-    alignItems: "center",
-    gap: 8,
-  },
-
-  step: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    color: "#94AEA0",
-    fontSize: 8,
-    fontWeight: 850,
-    whiteSpace: "nowrap",
-  },
-
-  stepActive: {
-    color: "#fff",
-  },
-
-  stepCircle: {
-    width: 22,
-    height: 22,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "50%",
-    background: "rgba(255,255,255,.12)",
-    fontSize: 8,
-    fontWeight: 950,
-  },
-
-  stepLine: {
-    height: 1,
-    background: "rgba(255,255,255,.16)",
-  },
-
-  card: {
-    marginBottom: 12,
-    padding: 17,
-    border: "1px solid #DDE7E1",
-    borderRadius: 19,
-    background: "#fff",
-    boxShadow:
-      "0 7px 22px rgba(20,55,35,.045)",
-  },
-
-  sectionHead: {
-    marginBottom: 13,
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-
-  sectionEyebrow: {
-    display: "block",
-    color: "#0B7A43",
-    fontSize: 8,
-    fontWeight: 950,
-    letterSpacing: 1.15,
-  },
-
-  sectionTitle: {
-    margin: "3px 0 0",
-    fontSize: 18,
-  },
-
-  dateBadge: {
-    maxWidth: "100%",
-    padding: "7px 9px",
-    borderRadius: 9,
-    background: "#F0F7F3",
-    color: "#466054",
-    fontSize: 8,
-    fontWeight: 800,
-    textTransform: "capitalize",
-  },
-
-  daysGrid: {
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(7,minmax(66px,1fr))",
-    gap: 6,
-    overflowX: "auto",
-    paddingBottom: 2,
-  },
-
-  dayButton: {
-    minWidth: 66,
-    minHeight: 78,
-    padding: "8px 5px",
-    display: "grid",
-    placeItems: "center",
-    alignContent: "center",
-    gap: 1,
-    border: "1px solid #E0E8E3",
-    borderRadius: 12,
-    background: "#FAFCFB",
-    color: "#26352D",
-    cursor: "pointer",
-  },
-
-  dayButtonActive: {
-    borderColor: "#0B7A43",
-    background:
-      "linear-gradient(145deg,#0B6A3B,#0E8A4C)",
-    boxShadow:
-      "0 9px 18px rgba(11,122,67,.18)",
-  },
-
-  dayName: {
-    color: "#79867F",
-    fontSize: 7,
-    fontWeight: 900,
-  },
-
-  dayNumber: {
-    fontSize: 21,
-    lineHeight: 1.05,
-  },
-
-  dayMonth: {
-    color: "#89958E",
-    fontSize: 7,
-    fontWeight: 850,
-  },
-
-  dayTextActive: {
-    color: "#fff",
-  },
-
-  dateFieldWrap: {
-    marginTop: 12,
-  },
-
-  label: {
-    display: "block",
-    marginBottom: 6,
-    color: "#4F6057",
-    fontSize: 9,
-    fontWeight: 850,
-  },
-
-  input: {
-    width: "100%",
-    minHeight: 40,
-    boxSizing: "border-box",
-    padding: "9px 11px",
-    border: "1px solid #D8E2DC",
-    borderRadius: 10,
-    background: "#fff",
-    color: "#1A2B22",
-    outline: "none",
-    fontFamily: "inherit",
-    fontSize: 12,
-  },
-
-  counter: {
-    minWidth: 31,
-    height: 31,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "50%",
-    background: "#EAF7F0",
-    color: "#0B7A43",
-    fontSize: 10,
-    fontWeight: 950,
-  },
-
-  classList: {
-    display: "grid",
-    gap: 9,
-  },
-
-  classCard: {
-    padding: 13,
-    display: "grid",
-    gridTemplateColumns: "minmax(0,1fr) auto",
-    gap: 12,
-    alignItems: "center",
-    border: "1px solid #E0E8E3",
-    borderRadius: 15,
-    background: "#FBFCFB",
-  },
-
-  classCardSelected: {
-    borderColor: "#80C99F",
-    background: "#F3FBF6",
-    boxShadow:
-      "0 0 0 2px rgba(11,122,67,.06)",
-  },
-
-  classMain: {
-    minWidth: 0,
-  },
-
-  classTitleRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 9,
-    alignItems: "flex-start",
-  },
-
-  classType: {
-    display: "block",
-    color: "#0B7A43",
-    fontSize: 7,
-    fontWeight: 950,
-    letterSpacing: .8,
-  },
-
-  classTitle: {
-    margin: "3px 0 0",
-    fontSize: 17,
-  },
-
-  availabilityBadge: {
-    flex: "0 0 auto",
-    padding: "5px 7px",
-    borderRadius: 999,
-    background: "#EAF7F0",
-    color: "#0B7A43",
-    fontSize: 7,
-    fontWeight: 950,
-  },
-
-  availabilityFull: {
-    background: "#FFF0EE",
-    color: "#B42318",
-  },
-
-  classDescription: {
-    margin: "6px 0 0",
-    color: "#748078",
-    fontSize: 9,
-    lineHeight: 1.45,
-  },
-
-  classDetails: {
-    marginTop: 9,
-    display: "flex",
-    gap: 5,
-    flexWrap: "wrap",
-  },
-
-  detailPill: {
-    padding: "5px 7px",
-    borderRadius: 8,
-    background: "#EEF4F1",
-    color: "#54665C",
-    fontSize: 8,
-    fontWeight: 750,
-  },
-
-  detailPillOpen: {
-    padding: "5px 7px",
-    borderRadius: 8,
-    background: "#EAF7F0",
-    color: "#0B7A43",
-    fontSize: 8,
-    fontWeight: 900,
-  },
-
-  detailPillMember: {
-    padding: "5px 7px",
-    borderRadius: 8,
-    background: "#EEF1F8",
-    color: "#334A68",
-    fontSize: 8,
-    fontWeight: 900,
-  },
-
-  detailPillPrice: {
-    padding: "5px 7px",
-    borderRadius: 8,
-    background: "#FFF4D9",
-    color: "#805C00",
-    fontSize: 8,
-    fontWeight: 900,
-  },
-
-  progressWrap: {
-    marginTop: 9,
-  },
-
-  progressTrack: {
-    height: 6,
-    overflow: "hidden",
-    borderRadius: 999,
-    background: "#E4ECE7",
-  },
-
-  progressFill: {
-    height: "100%",
-    borderRadius: 999,
-    background:
-      "linear-gradient(90deg,#0B7A43,#5ED393)",
-  },
-
-  progressText: {
-    marginTop: 4,
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 8,
-    color: "#86928B",
-    fontSize: 7,
-  },
-
-  selectButton: {
-    minWidth: 88,
-    minHeight: 39,
-    padding: "0 11px",
-    border: 0,
-    borderRadius: 10,
-    background: "#0B7A43",
-    color: "#fff",
-    fontSize: 9,
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-
-  selectButtonSelected: {
-    minWidth: 88,
-    minHeight: 39,
-    padding: "0 11px",
-    border: "1px solid #0B7A43",
-    borderRadius: 10,
-    background: "#EAF7F0",
-    color: "#0B7A43",
-    fontSize: 9,
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-
-  selectButtonDisabled: {
-    minWidth: 88,
-    minHeight: 39,
-    padding: "0 11px",
-    border: "1px solid #E1E5E3",
-    borderRadius: 10,
-    background: "#F1F3F2",
-    color: "#9BA49F",
-    fontSize: 9,
-    fontWeight: 850,
-    cursor: "not-allowed",
-  },
-
-  empty: {
-    minHeight: 180,
-    padding: 20,
-    display: "grid",
-    placeItems: "center",
-    alignContent: "center",
-    gap: 7,
-    border: "1px dashed #D3DED7",
-    borderRadius: 14,
-    background: "#FAFCFB",
-    textAlign: "center",
-  },
-
-  emptyIcon: {
-    width: 45,
-    height: 45,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: 13,
-    background: "#EAF7F0",
-    color: "#0B7A43",
-    fontSize: 20,
-  },
-
-  emptyTitle: {
-    fontSize: 14,
-  },
-
-  emptyText: {
-    maxWidth: 350,
-    color: "#7B8780",
-    fontSize: 9,
-    lineHeight: 1.45,
-  },
-
-  identityCard: {
-    marginBottom: 12,
-    display: "grid",
-    gridTemplateColumns:
-      "minmax(240px,.72fr) minmax(0,1.28fr)",
-    gap: 12,
-    scrollMarginTop: 16,
-  },
-
-  summaryBox: {
-    padding: 18,
-    borderRadius: 18,
-    background:
-      "linear-gradient(155deg,#071D14,#0B4B2C)",
-    color: "#fff",
-    boxShadow:
-      "0 13px 30px rgba(8,50,29,.15)",
-  },
-
-  summaryEyebrow: {
-    display: "block",
-    color: "#71DCA0",
-    fontSize: 8,
-    fontWeight: 950,
-    letterSpacing: 1.1,
-  },
-
-  summaryClass: {
-    display: "block",
-    marginTop: 8,
-    fontSize: 23,
-    lineHeight: 1.08,
-  },
-
-  summaryDate: {
-    display: "block",
-    marginTop: 16,
-    color: "#D2E9DC",
-    fontSize: 10,
-    textTransform: "capitalize",
-  },
-
-  summaryTime: {
-    display: "block",
-    marginTop: 5,
-    fontSize: 17,
-    fontWeight: 850,
-  },
-
-  summaryInstructor: {
-    display: "block",
-    marginTop: 7,
-    color: "#B9D7C7",
-    fontSize: 9,
-  },
-
-  priceBox: {
-    marginTop: 17,
-    padding: 11,
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 8,
-    border: "1px solid rgba(255,255,255,.12)",
-    borderRadius: 11,
-    background: "rgba(255,255,255,.07)",
-    color: "#D7EADF",
-    fontSize: 9,
-  },
-
-  form: {
-    padding: 18,
-    display: "grid",
-    gap: 12,
-    border: "1px solid #DDE7E1",
-    borderRadius: 18,
-    background: "#fff",
-  },
-
-  formTitle: {
-    margin: "4px 0 0",
-    fontSize: 19,
-  },
-
-  formText: {
-    margin: "7px 0 0",
-    color: "#718078",
-    fontSize: 10,
-    lineHeight: 1.5,
-  },
-
-  field: {
-    display: "block",
-  },
-
-  inputLarge: {
-    width: "100%",
-    minHeight: 46,
-    boxSizing: "border-box",
-    padding: "10px 12px",
-    border: "1px solid #D4DFD8",
-    borderRadius: 11,
-    background: "#FBFCFB",
-    color: "#16271D",
-    outline: "none",
-    fontFamily: "inherit",
-    fontSize: 13,
-  },
-
-  textarea: {
-    width: "100%",
-    boxSizing: "border-box",
-    padding: "10px 12px",
-    resize: "vertical",
-    border: "1px solid #D4DFD8",
-    borderRadius: 11,
-    background: "#FBFCFB",
-    color: "#16271D",
-    outline: "none",
-    fontFamily: "inherit",
-    fontSize: 12,
-  },
-
-  optional: {
-    color: "#87928C",
-    fontWeight: 600,
-  },
-
-  errorBox: {
-    padding: 11,
-    display: "grid",
-    gap: 3,
-    border: "1px solid #F2B7B0",
-    borderRadius: 10,
-    background: "#FFF3F1",
-    color: "#A62D24",
-    fontSize: 9,
-    lineHeight: 1.4,
-  },
-
-  successBox: {
-    padding: 11,
-    border: "1px solid #A8D9BA",
-    borderRadius: 10,
-    background: "#EFFAF3",
-    color: "#17673E",
-    fontSize: 9,
-  },
-
-  confirmButton: {
-    width: "100%",
-    minHeight: 48,
-    border: 0,
-    borderRadius: 12,
-    background:
-      "linear-gradient(135deg,#0B7A43,#0E8D4E)",
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: 950,
-    cursor: "pointer",
-    boxShadow:
-      "0 10px 22px rgba(11,122,67,.18)",
-  },
-
-  confirmButtonDisabled: {
-    opacity: .6,
-    cursor: "not-allowed",
-  },
-
-  privacyText: {
-    color: "#89958E",
-    fontSize: 7.5,
-    lineHeight: 1.45,
-    textAlign: "center",
-  },
-
-  confirmationCard: {
-    padding: "34px 20px",
-    display: "grid",
-    placeItems: "center",
-    border: "1px solid #CFE5D8",
-    borderRadius: 24,
-    background:
-      "linear-gradient(180deg,#FFFFFF,#F1FAF5)",
-    textAlign: "center",
-    boxShadow:
-      "0 14px 34px rgba(13,72,42,.08)",
-    scrollMarginTop: 20,
-  },
-
-  checkCircle: {
-    width: 68,
-    height: 68,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "50%",
-    background:
-      "linear-gradient(145deg,#0B7A43,#45C77F)",
-    color: "#fff",
-    fontSize: 30,
-    fontWeight: 950,
-    boxShadow:
-      "0 12px 26px rgba(11,122,67,.22)",
-  },
-
-  confirmEyebrow: {
-    marginTop: 16,
-    color: "#0B7A43",
-    fontSize: 8,
-    fontWeight: 950,
-    letterSpacing: 1.2,
-  },
-
-  confirmTitle: {
-    margin: "7px 0 0",
-    fontSize: "clamp(26px,6vw,36px)",
-  },
-
-  confirmText: {
-    maxWidth: 520,
-    margin: "9px auto 0",
-    color: "#718078",
-    fontSize: 11,
-    lineHeight: 1.5,
-  },
-
-  ticket: {
-    width: "min(560px,100%)",
-    marginTop: 21,
-    padding: 16,
-    boxSizing: "border-box",
-    border: "1px solid #D9E5DE",
-    borderRadius: 16,
-    background: "#fff",
-    textAlign: "left",
-  },
-
-  ticketTop: {
-    paddingBottom: 13,
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 10,
-    alignItems: "flex-start",
-    borderBottom: "1px solid #E7EDE9",
-  },
-
-  ticketLabel: {
-    display: "block",
-    color: "#7B8780",
-    fontSize: 7,
-    fontWeight: 900,
-  },
-
-  ticketClass: {
-    display: "block",
-    marginTop: 4,
-    fontSize: 18,
-  },
-
-  confirmedBadge: {
-    padding: "6px 8px",
-    borderRadius: 999,
-    background: "#EAF7F0",
-    color: "#0B7A43",
-    fontSize: 7,
-    fontWeight: 950,
-  },
-
-  ticketGrid: {
-    marginTop: 13,
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(2,minmax(0,1fr))",
-    gap: 9,
-  },
-
-  ticketItem: {
-    padding: 10,
-    display: "grid",
-    gap: 4,
-    borderRadius: 10,
-    background: "#F6F9F7",
-    color: "#6F7D75",
-    fontSize: 8,
-  },
-
-  paymentNotice: {
-    width: "min(560px,100%)",
-    marginTop: 12,
-    boxSizing: "border-box",
-    padding: 11,
-    border: "1px solid #E9D18B",
-    borderRadius: 11,
-    background: "#FFF9E8",
-    color: "#765A06",
-    fontSize: 9,
-    lineHeight: 1.45,
-  },
-
-  confirmActions: {
-    width: "min(560px,100%)",
-    marginTop: 18,
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 9,
-  },
-
-  doneButton: {
-    minHeight: 45,
-    padding: "0 15px",
-    border: 0,
-    borderRadius: 11,
-    background: "#0B7A43",
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: 950,
-    cursor: "pointer",
-    boxShadow:
-      "0 10px 22px rgba(11,122,67,.16)",
-  },
-
-  newReservationButton: {
-    minHeight: 45,
-    marginTop: 0,
-    padding: "0 15px",
-    border: "1px solid #BCD8C8",
-    borderRadius: 11,
-    background: "#F3FAF6",
-    color: "#0B7A43",
-    fontSize: 10,
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-
-  footer: {
-    marginTop: 18,
-    display: "grid",
-    placeItems: "center",
-    gap: 5,
-    color: "#89958E",
-    fontSize: 8,
-  },
-
-  footerLogo: {
-    width: 94,
-    height: 38,
-    objectFit: "contain",
-    opacity: .82,
-  },
-
-  loadingPage: {
-    minHeight: "100vh",
-    padding: 20,
-    display: "grid",
-    placeItems: "center",
-    background:
-      "linear-gradient(180deg,#EFF7F2,#F8FAF9)",
-    fontFamily:
-      'Inter, system-ui, "Segoe UI", sans-serif',
-  },
-
-  loadingCard: {
-    width: "min(390px,100%)",
-    padding: 30,
-    display: "grid",
-    placeItems: "center",
-    gap: 9,
-    border: "1px solid #DCE7E0",
-    borderRadius: 22,
-    background: "#fff",
-    textAlign: "center",
-  },
-
-  errorPortalCard: {
-    width: "min(430px,100%)",
-    padding: 30,
-    display: "grid",
-    placeItems: "center",
-    gap: 8,
-    border: "1px solid #DCE7E0",
-    borderRadius: 22,
-    background: "#fff",
-    textAlign: "center",
-  },
-
-  loadingLogo: {
-    width: 135,
-    height: 58,
-    objectFit: "contain",
-  },
-
-  spinner: {
-    width: 34,
-    height: 34,
-    marginTop: 8,
-    border: "3px solid #DCE9E1",
-    borderTopColor: "#0B7A43",
-    borderRadius: "50%",
-    animation: "spin 1s linear infinite",
-  },
-
-  spinnerSmall: {
-    width: 27,
-    height: 27,
-    border: "3px solid #DCE9E1",
-    borderTopColor: "#0B7A43",
-    borderRadius: "50%",
-  },
-
-  loadingTitle: {
-    marginTop: 5,
-    fontSize: 16,
-  },
-
-  loadingText: {
-    color: "#7C8881",
-    fontSize: 9,
-  },
-
-  errorIcon: {
-    width: 52,
-    height: 52,
-    marginTop: 6,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "50%",
-    background: "#FFF0EE",
-    color: "#B42318",
-    fontSize: 22,
-    fontWeight: 950,
-  },
-
-  errorPortalTitle: {
-    margin: "8px 0 0",
-    fontSize: 23,
-  },
-
-  errorPortalText: {
-    margin: "2px 0 0",
-    color: "#78867E",
-    fontSize: 10,
-    lineHeight: 1.5,
-  },
-
-  powered: {
-    marginTop: 10,
-    color: "#0B7A43",
-    fontSize: 8,
-    fontWeight: 850,
-  },
+    background: "linear-gradient(135deg,#071B13,#0E7042)",
+    color: "#FFF",
+  },
+  logo: { width: 115, height: 54, objectFit: "contain", background: "#FFF", borderRadius: 14, padding: 7 },
+  eyebrow: { display: "block", color: "#74E1A5", fontSize: 10, fontWeight: 900, letterSpacing: 1.1 },
+  eyebrowDark: { display: "block", color: "#0B7041", fontSize: 10, fontWeight: 900, letterSpacing: 1.1 },
+  title: { margin: "6px 0", fontSize: "clamp(28px,6vw,46px)" },
+  subtitle: { maxWidth: 620, margin: 0, color: "#D9E9E0", lineHeight: 1.5 },
+  card: { marginBottom: 14, padding: 20, border: "1px solid #DCE6E0", borderRadius: 20, background: "#FFF" },
+  manageCard: { marginBottom: 14, padding: 20, border: "2px solid #A7D7BA", borderRadius: 20, background: "#F0FAF4" },
+  sectionTitle: { margin: "5px 0 14px", fontSize: "clamp(22px,5vw,30px)" },
+  days: { display: "grid", gridTemplateColumns: "repeat(7,minmax(72px,1fr))", gap: 8, overflowX: "auto", marginBottom: 14 },
+  day: { minHeight: 76, border: "1px solid #DDE5E0", borderRadius: 14, background: "#FFF", cursor: "pointer", display: "grid", placeItems: "center", gap: 2 },
+  dayActive: { background: "#10251B", color: "#FFF", borderColor: "#10251B" },
+  field: { display: "grid", gap: 6, fontWeight: 700 },
+  input: { width: "100%", minHeight: 44, padding: "10px 12px", border: "1px solid #CEDBD3", borderRadius: 11, background: "#FFF", fontSize: 16 },
+  textarea: { width: "100%", minHeight: 90, padding: 12, border: "1px solid #CEDBD3", borderRadius: 11, resize: "vertical", fontSize: 16 },
+  serviceChips: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 },
+  chip: { padding: "9px 12px", border: "1px solid #D4E0D9", borderRadius: 999, background: "#FFF", cursor: "pointer", fontWeight: 800 },
+  chipActive: { background: "#0D7042", color: "#FFF", borderColor: "#0D7042" },
+  slots: { display: "grid", gap: 10 },
+  slotCard: { padding: 14, display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 12, alignItems: "center", border: "1px solid #E0E7E3", borderRadius: 15 },
+  slotTitle: { display: "block", fontSize: 17 },
+  slotMeta: { display: "block", marginTop: 4, color: "#66766D", fontSize: 13 },
+  description: { margin: "7px 0 0", color: "#67766E", fontSize: 13 },
+  price: { display: "block", marginTop: 7, color: "#0B7041" },
+  slotButton: { minHeight: 40, padding: "0 14px", border: 0, borderRadius: 10, background: "#111827", color: "#FFF", fontWeight: 800, cursor: "pointer" },
+  slotButtonSelected: { background: "#0D7042" },
+  slotButtonDisabled: { background: "#D6DDD9", color: "#7B8780", cursor: "not-allowed" },
+  empty: { padding: 26, textAlign: "center", color: "#6D7972" },
+  selectionBox: { marginBottom: 14, padding: 14, display: "grid", gap: 4, borderRadius: 14, background: "#F2F7F4" },
+  form: { display: "grid", gap: 12 },
+  primaryButton: { minHeight: 48, border: 0, borderRadius: 12, background: "#0D7042", color: "#FFF", fontWeight: 900, cursor: "pointer" },
+  secondaryButton: { minHeight: 43, border: "1px solid #AACCB8", borderRadius: 11, background: "#FFF", color: "#0B7041", fontWeight: 900, cursor: "pointer" },
+  dangerButton: { minHeight: 43, border: 0, borderRadius: 11, background: "#B42318", color: "#FFF", fontWeight: 900, cursor: "pointer" },
+  errorBox: { marginBottom: 14, padding: 13, border: "1px solid #F2B8B3", borderRadius: 12, background: "#FFF1EF", color: "#8A1C12" },
+  errorCard: { display: "grid", gap: 8, padding: 20, borderRadius: 16, background: "#FFF" },
+  confirmCard: { marginBottom: 14, padding: 24, border: "2px solid #9AD2B2", borderRadius: 22, background: "#F3FBF6", textAlign: "center" },
+  check: { width: 58, height: 58, margin: "0 auto 12px", display: "grid", placeItems: "center", borderRadius: "50%", background: "#0D7042", color: "#FFF", fontSize: 28, fontWeight: 900 },
+  confirmText: { fontSize: 16, lineHeight: 1.5 },
+  manageLinkBox: { marginTop: 16, display: "grid", gap: 9, textAlign: "left" },
+  manageGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 9 },
+  dataBox: { padding: 11, display: "grid", gap: 4, border: "1px solid #DCE6E0", borderRadius: 12, background: "#FFF" },
+  cancelBox: { marginTop: 14, display: "grid", gap: 10 },
+  cancelledBox: { marginTop: 12, padding: 13, borderRadius: 12, background: "#FFEDEC", color: "#8A1C12", fontWeight: 800 },
+  infoBox: { marginTop: 12, padding: 13, borderRadius: 12, background: "#EEF5F1", color: "#405147" },
+  helpText: { display: "block", marginTop: 10, color: "#69776F", lineHeight: 1.5 },
+  footer: { padding: "16px 4px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", color: "#68766E", fontSize: 12 },
+  footerLogo: { width: 85, height: 32, objectFit: "contain" },
 };
