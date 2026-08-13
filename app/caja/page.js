@@ -565,6 +565,83 @@ export default function Caja() {
     }, 150);
   }
 
+  async function resolverClienteReservaAgenda(
+    empresaId,
+    reserva
+  ) {
+    /*
+      Primero usamos cliente_id, que es el flujo correcto.
+      Si la reserva es antigua y no quedó vinculada, hacemos
+      una recuperación por teléfono/nombre sin tildes.
+    */
+
+    if (reserva?.cliente_id) {
+      const respuesta = await supabase
+        .from("clientes")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .eq("id", reserva.cliente_id)
+        .maybeSingle();
+
+      if (!respuesta.error && respuesta.data) {
+        return respuesta;
+      }
+    }
+
+    const {
+      data: clientesEmpresa,
+      error,
+    } = await supabase
+      .from("clientes")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .limit(5000);
+
+    if (error) {
+      return {
+        data: null,
+        error,
+      };
+    }
+
+    const telefonoReserva = String(
+      reserva?.telefono_reserva || ""
+    ).replace(/\D/g, "");
+
+    const nombreReserva = normalizar(
+      reserva?.nombre_reserva || ""
+    );
+
+    const clienteEncontrado = (clientesEmpresa || []).find(
+      (cliente) => {
+        const telefonoCliente = String(
+          cliente.telefono || ""
+        ).replace(/\D/g, "");
+
+        const nombreCliente = normalizar(
+          cliente.nombre || ""
+        );
+
+        const coincideTelefono =
+          telefonoReserva.length >= 7 &&
+          telefonoCliente.length >= 7 &&
+          telefonoCliente.slice(-8) ===
+            telefonoReserva.slice(-8);
+
+        const coincideNombre =
+          nombreReserva &&
+          nombreCliente === nombreReserva;
+
+        return coincideTelefono || coincideNombre;
+      }
+    );
+
+    return {
+      data: clienteEncontrado || null,
+      error: null,
+    };
+  }
+
   async function cargarReservaAgendaEnCaja(
     empresaId,
     reservaId
@@ -607,12 +684,10 @@ export default function Caja() {
       respuestaServicio,
       respuestaPagoExistente,
     ] = await Promise.all([
-      supabase
-        .from("clientes")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .eq("id", reserva.cliente_id)
-        .maybeSingle(),
+      resolverClienteReservaAgenda(
+        empresaId,
+        reserva
+      ),
 
       supabase
         .from("agenda_servicios")
@@ -1513,6 +1588,88 @@ export default function Caja() {
 
     const textoSeguro = texto.replace(/[%_,()]/g, "");
 
+    /*
+      SALÓN / BELLEZA
+      --------------------------------------------------------
+      El ILIKE normal de PostgreSQL distingue los acentos:
+      "LIA" puede no encontrar "Lía".
+
+      Para el salón cargamos las fichas de ESTA empresa y
+      comparamos con normalizar(), que ya elimina tildes.
+      Así:
+        LIA = Lía = lía = LÍA
+    */
+    if (esNegocioSalon()) {
+      const {
+        data: clientesSalon,
+        error: errorClientesSalon,
+      } = await supabase
+        .from("clientes")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .order("nombre", { ascending: true })
+        .limit(5000);
+
+      if (errorClientesSalon) {
+        alert(
+          "Error buscando cliente: " +
+            errorClientesSalon.message
+        );
+        return;
+      }
+
+      const terminoNormalizado = normalizar(textoSeguro);
+      const terminoNumerico = String(textoSeguro).replace(
+        /\D/g,
+        ""
+      );
+
+      const coincidencias = (clientesSalon || [])
+        .filter((cliente) => {
+          const nombreNormalizado = normalizar(
+            cliente.nombre || ""
+          );
+
+          const cedulaNormalizada = normalizar(
+            cliente.cedula || ""
+          );
+
+          const telefonoNormalizado = String(
+            cliente.telefono || ""
+          ).replace(/\D/g, "");
+
+          const coincideTexto =
+            nombreNormalizado.includes(terminoNormalizado) ||
+            cedulaNormalizada.includes(terminoNormalizado);
+
+          const coincideTelefono =
+            terminoNumerico.length >= 3 &&
+            telefonoNormalizado.includes(terminoNumerico);
+
+          return coincideTexto || coincideTelefono;
+        })
+        .slice(0, 30)
+        .map((cliente) => ({
+          cliente,
+          cuenta: null,
+        }));
+
+      setResultadosBusqueda(coincidencias);
+
+      if (coincidencias.length === 0) {
+        alert(
+          "No se encontró ningún cliente con ese nombre o teléfono."
+        );
+      }
+
+      return;
+    }
+
+    // --------------------------------------------------------
+    // RESTO DE NEGOCIOS:
+    // Se conserva la lógica original.
+    // --------------------------------------------------------
+
     let resultados = [];
 
     const {
@@ -1536,25 +1693,6 @@ export default function Caja() {
         cliente,
         cuenta: null,
       }));
-    }
-
-    // Salón de belleza trabaja con la ficha simple del cliente.
-    // No consulta cuentas por cobrar ni membresías.
-    if (esNegocioSalon()) {
-      const unicos = [];
-      const ids = new Set();
-
-      resultados.forEach((resultado) => {
-        const clave = String(resultado.cliente.id);
-
-        if (!ids.has(clave)) {
-          ids.add(clave);
-          unicos.push(resultado);
-        }
-      });
-
-      setResultadosBusqueda(unicos);
-      return;
     }
 
     const {
