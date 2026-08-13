@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.11-AGENDA-I-HORA-KONAX";
+const VERSION = "2026.08.13-AGENDA-BELLEZA-ADAPTATIVA";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -29,6 +29,23 @@ const HORARIO_INICIAL = {
   activo: true,
 };
 
+const SERVICIO_SALON_INICIAL = {
+  ...SERVICIO_INICIAL,
+  tipo: "cita_individual",
+  duracion_minutos: 45,
+  capacidad_default: 1,
+  requiere_membresia: false,
+  requiere_pago: true,
+  precio: 0,
+};
+
+const HORARIO_SALON_INICIAL = {
+  ...HORARIO_INICIAL,
+  hora_inicio: "09:00",
+  hora_fin: "10:00",
+  capacidad: 1,
+};
+
 function fechaHoy() {
   const d = new Date();
   const offset = d.getTimezoneOffset();
@@ -43,6 +60,24 @@ function normalizar(valor) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function esTipoSalonBelleza(tipoNegocio, categoriaNegocio = "") {
+  const texto = normalizar(
+    `${tipoNegocio || ""} ${categoriaNegocio || ""}`
+  );
+
+  return [
+    "salon de belleza",
+    "salon belleza",
+    "salon",
+    "belleza",
+    "beauty",
+    "peluqueria",
+    "estetica",
+    "barberia",
+    "spa",
+  ].some((palabra) => texto.includes(palabra));
 }
 
 function formatoHora(hora) {
@@ -97,6 +132,7 @@ export default function AgendaPage() {
   const [empresaNombre, setEmpresaNombre] = useState("");
   const [rol, setRol] = useState("");
   const [esAdmin, setEsAdmin] = useState(false);
+  const [esSalonBelleza, setEsSalonBelleza] = useState(false);
 
   const [vista, setVista] = useState("hoy");
   const [fechaAgenda, setFechaAgenda] = useState(fechaHoy());
@@ -180,6 +216,9 @@ export default function AgendaPage() {
 
       const empresaLocal = localStorage.getItem("empresaId") || "";
       const empresaNombreLocal = localStorage.getItem("empresaNombre") || "";
+      const tipoNegocioLocal = localStorage.getItem("tipoNegocio") || "";
+      const categoriaNegocioLocal =
+        localStorage.getItem("categoriaNegocio") || "";
       const rolLocal = localStorage.getItem("usuarioRol") ||
         localStorage.getItem("rol") ||
         "";
@@ -193,10 +232,31 @@ export default function AgendaPage() {
       const adminLocal =
         esRolAdministrador(rolLocal);
 
+      const salonLocal = esTipoSalonBelleza(
+        tipoNegocioLocal,
+        categoriaNegocioLocal
+      );
+
       setEmpresaId(empresaLocal);
       setEmpresaNombre(empresaNombreLocal);
       setRol(rolLocal);
       setEsAdmin(adminLocal);
+      setEsSalonBelleza(salonLocal);
+
+      if (salonLocal) {
+        setServicioForm(SERVICIO_SALON_INICIAL);
+        setHorarioForm(HORARIO_SALON_INICIAL);
+      }
+
+      if (typeof window !== "undefined") {
+        const vistaUrl = new URLSearchParams(
+          window.location.search
+        ).get("vista");
+
+        if (["hoy", "nueva", "reservas", "configuracion"].includes(vistaUrl)) {
+          setVista(vistaUrl);
+        }
+      }
 
       await Promise.all([
         cargarServicios(empresaLocal),
@@ -324,8 +384,9 @@ export default function AgendaPage() {
 
     if (!enlace) return;
 
-    const texto =
-      `Reserva tu clase o servicio aquí:\n${enlace}`;
+    const texto = esSalonBelleza
+      ? `Reserva tu cita en el salón aquí:\n${enlace}`
+      : `Reserva tu clase o servicio aquí:\n${enlace}`;
 
     window.open(
       `https://wa.me/?text=${encodeURIComponent(texto)}`,
@@ -715,12 +776,20 @@ export default function AgendaPage() {
 
   async function guardarServicio() {
     if (!esAdmin) {
-      alert("Solo el administrador puede configurar servicios o clases.");
+      alert(
+        esSalonBelleza
+          ? "Solo el administrador puede configurar los servicios del salón."
+          : "Solo el administrador puede configurar servicios o clases."
+      );
       return;
     }
 
     if (!servicioForm.nombre.trim()) {
-      alert("Escribe el nombre del servicio o clase.");
+      alert(
+        esSalonBelleza
+          ? "Escribe el nombre del servicio del salón."
+          : "Escribe el nombre del servicio o clase."
+      );
       return;
     }
 
@@ -769,7 +838,11 @@ export default function AgendaPage() {
 
       if (respuesta.error) throw respuesta.error;
 
-      setServicioForm(SERVICIO_INICIAL);
+      setServicioForm(
+        esSalonBelleza
+          ? SERVICIO_SALON_INICIAL
+          : SERVICIO_INICIAL
+      );
       setServicioEditandoId(null);
       await cargarServicios();
       alert(servicioEditandoId ? "Servicio actualizado." : "Servicio creado.");
@@ -867,7 +940,11 @@ export default function AgendaPage() {
 
       if (respuesta.error) throw respuesta.error;
 
-      setHorarioForm(HORARIO_INICIAL);
+      setHorarioForm(
+        esSalonBelleza
+          ? HORARIO_SALON_INICIAL
+          : HORARIO_INICIAL
+      );
       setHorarioEditandoId(null);
       await cargarHorarios();
       await cargarDisponibilidad();
@@ -915,7 +992,11 @@ export default function AgendaPage() {
 
   async function crearReserva() {
     if (!clienteSeleccionado?.id) {
-      alert("Selecciona un alumno.");
+      alert(
+        esSalonBelleza
+          ? "Selecciona un cliente."
+          : "Selecciona un alumno."
+      );
       return;
     }
 
@@ -958,7 +1039,9 @@ export default function AgendaPage() {
         );
       } else {
         alert(
-          `Reserva confirmada. Quedan ${resultado.disponibles ?? 0} cupos disponibles.`
+          esSalonBelleza
+            ? "Cita confirmada correctamente."
+            : `Reserva confirmada. Quedan ${resultado.disponibles ?? 0} cupos disponibles.`
         );
       }
 
@@ -1120,15 +1203,19 @@ export default function AgendaPage() {
 
             <div>
               <span style={neo.heroEyebrow}>
-                KONAX · RESERVAS Y CLASES
+                {esSalonBelleza
+                  ? "KONAX · CITAS Y SERVICIOS"
+                  : "KONAX · RESERVAS Y CLASES"}
               </span>
               <h1 style={neo.heroTitle}>
-                Centro de Agenda
+                {esSalonBelleza
+                  ? "Agenda de Servicios"
+                  : "Centro de Agenda"}
               </h1>
               <p style={neo.heroSubtitle}>
-                {empresaNombre || "KONAX"} · Controla horarios,
-                capacidad, reservas y asistencia desde una vista
-                operativa más clara.
+                {empresaNombre || "KONAX"} · {esSalonBelleza
+                  ? "Controla servicios, profesionales, horarios, citas y cobros desde una sola agenda."
+                  : "Controla horarios, capacidad, reservas y asistencia desde una vista operativa más clara."}
               </p>
             </div>
           </div>
@@ -1233,7 +1320,9 @@ export default function AgendaPage() {
             }}
           >
             <span>⚙</span>
-            Clases y horarios
+            {esSalonBelleza
+            ? "Servicios y horarios"
+            : "Clases y horarios"}
           </button>
         )}
 
@@ -1355,13 +1444,15 @@ export default function AgendaPage() {
 
           <section style={neo.kpiGrid} className="agenda-d-kpis">
             <article style={neo.kpiCard}>
-              <span style={neo.kpiCaption}>CLASES</span>
+              <span style={neo.kpiCaption}>
+                {esSalonBelleza ? "SERVICIOS" : "CLASES"}
+              </span>
               <div style={neo.kpiBody}>
                 <strong style={neo.kpiNumber}>
                   {disponibilidad.length}
                 </strong>
                 <span style={neo.kpiHint}>
-                  programadas
+                  {esSalonBelleza ? "programados hoy" : "programadas"}
                 </span>
               </div>
             </article>
@@ -1379,7 +1470,9 @@ export default function AgendaPage() {
             </article>
 
             <article style={neo.kpiCard}>
-              <span style={neo.kpiCaption}>CUPOS LIBRES</span>
+              <span style={neo.kpiCaption}>
+                {esSalonBelleza ? "HORARIOS LIBRES" : "CUPOS LIBRES"}
+              </span>
               <div style={neo.kpiBody}>
                 <strong style={neo.kpiNumber}>
                   {resumenAgenda.cuposDisponibles}
@@ -1399,7 +1492,7 @@ export default function AgendaPage() {
                   {resumenAgenda.ocupacion}%
                 </strong>
                 <span style={neo.kpiHintAccent}>
-                  de la capacidad
+                  {esSalonBelleza ? "de la agenda" : "de la capacidad"}
                 </span>
               </div>
             </article>
@@ -1413,7 +1506,9 @@ export default function AgendaPage() {
                     PROGRAMACIÓN DEL DÍA
                   </span>
                   <h2 style={neo.panelHeading}>
-                    Horarios y capacidad
+                    {esSalonBelleza
+                      ? "Servicios y horarios"
+                      : "Horarios y capacidad"}
                   </h2>
                 </div>
 
@@ -1450,11 +1545,14 @@ export default function AgendaPage() {
                 <div style={neo.emptyLarge}>
                   <div style={neo.emptyIcon}>◷</div>
                   <strong style={neo.emptyTitle}>
-                    No hay clases programadas
+                    {esSalonBelleza
+                      ? "No hay servicios programados"
+                      : "No hay clases programadas"}
                   </strong>
                   <span style={neo.emptyText}>
-                    Selecciona otra fecha o crea un horario
-                    desde Clases y horarios.
+                    {esSalonBelleza
+                      ? "Selecciona otra fecha o configura los servicios y horarios disponibles."
+                      : "Selecciona otra fecha o crea un horario desde Clases y horarios."}
                   </span>
 
                   {esAdmin && (
@@ -1463,7 +1561,9 @@ export default function AgendaPage() {
                       style={neo.emptyButton}
                       onClick={() => setVista("configuracion")}
                     >
-                      Configurar horario
+                      {esSalonBelleza
+                        ? "Configurar servicios y horarios"
+                        : "Configurar horario"}
                     </button>
                   )}
                 </div>
@@ -1511,10 +1611,11 @@ export default function AgendaPage() {
                         <div style={neo.timelineClass}>
                           <div style={neo.classTopLine}>
                             <span style={neo.classBadge}>
-                              {item.servicio_tipo ===
-                              "cita_individual"
-                                ? "CITA"
-                                : "CLASE"}
+                              {esSalonBelleza
+                              ? "SERVICIO"
+                              : item.servicio_tipo === "cita_individual"
+                              ? "CITA"
+                              : "CLASE"}
                             </span>
 
                             <span
@@ -1525,7 +1626,13 @@ export default function AgendaPage() {
                                   : {}),
                               }}
                             >
-                              {lleno
+                              {esSalonBelleza
+                                ? lleno
+                                  ? "OCUPADO"
+                                  : libres === 1
+                                  ? "DISPONIBLE"
+                                  : `${libres} DISPONIBLES`
+                                : lleno
                                 ? "COMPLETO"
                                 : `${libres} CUPOS`}
                             </span>
@@ -1536,11 +1643,21 @@ export default function AgendaPage() {
                           </strong>
 
                           <span style={neo.classMeta}>
-                            {item.instructor || "Sin instructor"}
-                            {" · "}
-                            {item.requiere_membresia
-                              ? "Membresía activa"
-                              : "Acceso abierto"}
+                            {esSalonBelleza ? (
+                              <>
+                                {item.instructor || "Profesional por asignar"}
+                                {" · "}
+                                {item.requiere_pago ? "Cobro en Caja" : "Sin cobro pendiente"}
+                              </>
+                            ) : (
+                              <>
+                                {item.instructor || (esSalonBelleza ? "Profesional por asignar" : "Sin instructor")}
+                                {" · "}
+                                {item.requiere_membresia
+                                  ? "Membresía activa"
+                                  : "Acceso abierto"}
+                              </>
+                            )}
                           </span>
 
                           <div style={neo.capacityBar}>
@@ -1554,10 +1671,14 @@ export default function AgendaPage() {
 
                           <div style={neo.capacityFooter}>
                             <span>
-                              {reservados} reservados
+                              {esSalonBelleza
+                                ? `${reservados} reserva${reservados === 1 ? "" : "s"}`
+                                : `${reservados} reservados`}
                             </span>
                             <span>
-                              {capacidad} capacidad total
+                              {esSalonBelleza
+                                ? `${libres} disponible${libres === 1 ? "" : "s"}`
+                                : `${capacidad} capacidad total`}
                             </span>
                           </div>
                         </div>
@@ -1579,7 +1700,11 @@ export default function AgendaPage() {
                             }
                           >
                             {lleno
-                              ? "Sin cupos"
+                              ? esSalonBelleza
+                                ? "Horario ocupado"
+                                : "Sin cupos"
+                              : esSalonBelleza
+                              ? "Reservar cita"
                               : "Reservar"}
                           </button>
                         </div>
@@ -1594,10 +1719,12 @@ export default function AgendaPage() {
               <div style={neo.panelTop}>
                 <div>
                   <span style={neo.sectionEyebrow}>
-                    RESERVAS DE LA JORNADA
+                    {esSalonBelleza ? "CITAS DE LA JORNADA" : "RESERVAS DE LA JORNADA"}
                   </span>
                   <h2 style={neo.panelHeading}>
-                    Alumnos reservados
+                    {esSalonBelleza
+                      ? "Clientes con cita"
+                      : "Alumnos reservados"}
                   </h2>
                 </div>
 
@@ -1609,10 +1736,11 @@ export default function AgendaPage() {
               {reservasFechaOperativas.length === 0 ? (
                 <div style={neo.emptySmall}>
                   <span style={neo.emptySmallIcon}>◎</span>
-                  <strong>Sin reservas</strong>
+                  <strong>{esSalonBelleza ? "Sin citas" : "Sin reservas"}</strong>
                   <span>
-                    Todavía no hay alumnos reservados
-                    para este día.
+                    {esSalonBelleza
+                      ? "Todavía no hay clientes con cita para este día."
+                      : "Todavía no hay alumnos reservados para este día."}
                   </span>
                 </div>
               ) : (
@@ -1732,14 +1860,14 @@ export default function AgendaPage() {
 
               <div style={neo.controlStats}>
                 <div style={neo.controlRow}>
-                  <span>Capacidad</span>
+                  <span>{esSalonBelleza ? "Espacios" : "Capacidad"}</span>
                   <strong>
                     {resumenAgenda.capacidadTotal}
                   </strong>
                 </div>
 
                 <div style={neo.controlRow}>
-                  <span>Reservados</span>
+                  <span>{esSalonBelleza ? "Reservas" : "Reservados"}</span>
                   <strong>
                     {resumenAgenda.reservadosTotal}
                   </strong>
@@ -1813,7 +1941,7 @@ export default function AgendaPage() {
                     setVista("configuracion")
                   }
                 >
-                  Configurar clases
+                  {esSalonBelleza ? "Configurar servicios" : "Configurar clases"}
                 </button>
               )}
             </aside>
@@ -1834,7 +1962,9 @@ export default function AgendaPage() {
               }}
             >
               <span style={pro.stepNumber}>1</span>
-              Seleccionar alumno
+              {esSalonBelleza
+                ? "Seleccionar cliente"
+                : "Seleccionar alumno"}
             </div>
 
             <div
@@ -1844,7 +1974,9 @@ export default function AgendaPage() {
               }}
             >
               <span style={pro.stepNumber}>2</span>
-              Elegir fecha y horario
+              {esSalonBelleza
+                ? "Elegir servicio y hora"
+                : "Elegir fecha y horario"}
             </div>
 
             <div
@@ -1856,20 +1988,34 @@ export default function AgendaPage() {
               }}
             >
               <span style={pro.stepNumber}>3</span>
-              Confirmar reserva
+              {esSalonBelleza
+                ? "Confirmar cita"
+                : "Confirmar reserva"}
             </div>
           </section>
 
           <section style={s.twoColumns}>
           <article style={s.panel}>
-            <span style={pro.panelEyebrow}>NUEVA RESERVA</span>
-            <h2 style={pro.panelTitle}>Datos de la reserva</h2>
+            <span style={pro.panelEyebrow}>
+              {esSalonBelleza ? "NUEVA CITA" : "NUEVA RESERVA"}
+            </span>
+            <h2 style={pro.panelTitle}>
+              {esSalonBelleza ? "Datos de la cita" : "Datos de la reserva"}
+            </h2>
             <p style={{ ...s.muted, margin: "6px 0 0" }}>
-              Selecciona al alumno, la fecha y uno de los horarios disponibles.
+              {esSalonBelleza
+                ? "Selecciona el cliente, la fecha y el horario del servicio."
+                : "Selecciona al alumno, la fecha y uno de los horarios disponibles."}
             </p>
 
             <div style={{ marginTop: 16 }}>
-              <Campo label="Buscar por nombre, cédula o teléfono">
+              <Campo
+                label={
+                  esSalonBelleza
+                    ? "Buscar cliente por nombre, cédula o teléfono"
+                    : "Buscar por nombre, cédula o teléfono"
+                }
+              >
                 <input
                   type="text"
                   value={busquedaCliente}
@@ -1878,7 +2024,7 @@ export default function AgendaPage() {
                     setClienteSeleccionado(null);
                   }}
                   style={s.input}
-                  placeholder="Ej. LIA SAMANIEGO"
+                  placeholder={esSalonBelleza ? "Ej. María González" : "Ej. LIA SAMANIEGO"}
                 />
               </Campo>
 
@@ -1896,7 +2042,7 @@ export default function AgendaPage() {
                           setBusquedaCliente(cliente.nombre || "");
                         }}
                       >
-                        <strong>{cliente.nombre || "Alumno"}</strong>
+                        <strong>{cliente.nombre || (esSalonBelleza ? "Cliente" : "Alumno")}</strong>
                         <span style={s.muted}>
                           {cliente.cedula || cliente.telefono || "Sin identificación"}
                         </span>
@@ -1908,7 +2054,11 @@ export default function AgendaPage() {
               {clienteSeleccionado && (
                 <div style={s.selectedClient}>
                   <div>
-                    <span style={s.muted}>Alumno seleccionado</span>
+                    <span style={s.muted}>
+                      {esSalonBelleza
+                        ? "Cliente seleccionado"
+                        : "Alumno seleccionado"}
+                    </span>
                     <strong style={{ display: "block", marginTop: 4 }}>
                       {clienteSeleccionado.nombre}
                     </strong>
@@ -1942,7 +2092,13 @@ export default function AgendaPage() {
                 />
               </Campo>
 
-              <Campo label="Clase / horario disponible">
+              <Campo
+                label={
+                  esSalonBelleza
+                    ? "Servicio y horario disponible"
+                    : "Clase / horario disponible"
+                }
+              >
                 <select
                   value={horarioSeleccionado}
                   onChange={(e) => setHorarioSeleccionado(e.target.value)}
@@ -1956,7 +2112,11 @@ export default function AgendaPage() {
                       disabled={Number(item.disponibles) <= 0}
                     >
                       {item.servicio_nombre} · {formatoHora(item.hora_inicio)} ·{" "}
-                      {item.disponibles} cupos
+                      {esSalonBelleza
+                        ? item.disponibles > 0
+                          ? `${item.disponibles} disponible${Number(item.disponibles) === 1 ? "" : "s"}`
+                          : "ocupado"
+                        : `${item.disponibles} cupos`}
                     </option>
                   ))}
                 </select>
@@ -1978,7 +2138,11 @@ export default function AgendaPage() {
               onClick={crearReserva}
               disabled={guardando}
             >
-              {guardando ? "Guardando..." : "Confirmar reserva"}
+              {guardando
+                ? "Guardando..."
+                : esSalonBelleza
+                ? "Confirmar cita"
+                : "Confirmar reserva"}
             </button>
           </article>
 
@@ -1986,7 +2150,9 @@ export default function AgendaPage() {
             <span style={pro.panelEyebrow}>DISPONIBILIDAD EN TIEMPO REAL</span>
             <h2 style={pro.panelTitle}>{formatoFecha(fechaAgenda)}</h2>
             <p style={{ ...s.muted, margin: "6px 0 12px" }}>
-              Los cupos se actualizan automáticamente al confirmar o cancelar una reserva.
+              {esSalonBelleza
+                ? "Los horarios se actualizan automáticamente al confirmar o cancelar una cita."
+                : "Los cupos se actualizan automáticamente al confirmar o cancelar una reserva."}
             </p>
 
             <div style={s.slotList}>
@@ -2010,7 +2176,7 @@ export default function AgendaPage() {
                       <strong>{item.servicio_nombre}</strong>
                       <span style={s.slotDetail}>
                         {formatoHora(item.hora_inicio)} ·{" "}
-                        {item.instructor || "Sin instructor"}
+                        {item.instructor || (esSalonBelleza ? "Profesional por asignar" : "Sin instructor")}
                       </span>
                     </div>
 
@@ -2021,7 +2187,11 @@ export default function AgendaPage() {
                           : s.smallFull
                       }
                     >
-                      {item.disponibles}/{item.capacidad}
+                      {esSalonBelleza
+                        ? Number(item.disponibles) > 0
+                          ? "Disponible"
+                          : "Ocupado"
+                        : `${item.disponibles}/${item.capacidad}`}
                     </span>
                   </button>
                 ))
@@ -2062,7 +2232,11 @@ export default function AgendaPage() {
                   value={busquedaReservas}
                   onChange={(e) => setBusquedaReservas(e.target.value)}
                   style={pro.input}
-                  placeholder="Alumno, cédula, teléfono, clase o fecha"
+                  placeholder={
+                    esSalonBelleza
+                      ? "Cliente, teléfono, servicio o fecha"
+                      : "Alumno, cédula, teléfono, clase o fecha"
+                  }
                 />
               </Campo>
 
@@ -2248,7 +2422,11 @@ export default function AgendaPage() {
             <article style={s.panel}>
               <span style={s.eyebrowSmall}>CONFIGURACIÓN</span>
               <h2 style={s.panelTitle}>
-                {servicioEditandoId ? "Editar servicio" : "Nueva clase o servicio"}
+                {servicioEditandoId
+                  ? "Editar servicio"
+                  : esSalonBelleza
+                  ? "Nuevo servicio del salón"
+                  : "Nueva clase o servicio"}
               </h2>
 
               <div style={s.formGrid}>
@@ -2262,7 +2440,7 @@ export default function AgendaPage() {
                       })
                     }
                     style={s.input}
-                    placeholder="Spinning"
+                    placeholder={esSalonBelleza ? "Ej. Corte, manicure o masaje" : "Spinning"}
                   />
                 </Campo>
 
@@ -2277,8 +2455,12 @@ export default function AgendaPage() {
                     }
                     style={s.input}
                   >
-                    <option value="clase_grupal">Clase grupal</option>
-                    <option value="cita_individual">Cita individual</option>
+                    <option value="clase_grupal">
+                      {esSalonBelleza ? "Servicio grupal" : "Clase grupal"}
+                    </option>
+                    <option value="cita_individual">
+                      {esSalonBelleza ? "Servicio individual" : "Cita individual"}
+                    </option>
                   </select>
                 </Campo>
 
@@ -2297,7 +2479,13 @@ export default function AgendaPage() {
                   />
                 </Campo>
 
-                <Campo label="Capacidad sugerida">
+                <Campo
+                  label={
+                    esSalonBelleza
+                      ? "Citas simultáneas"
+                      : "Capacidad sugerida"
+                  }
+                >
                   <input
                     type="number"
                     min="1"
@@ -2323,33 +2511,51 @@ export default function AgendaPage() {
                     })
                   }
                   style={{ ...s.input, minHeight: 82, resize: "vertical" }}
-                  placeholder="Clase grupal de spinning"
+                  placeholder={
+                    esSalonBelleza
+                      ? "Ej. Manicure semipermanente"
+                      : "Clase grupal de spinning"
+                  }
                 />
               </Campo>
 
               <Campo label="Modalidad de reserva">
-                <select
-                  value={modalidadServicio(servicioForm)}
-                  onChange={(e) =>
-                    aplicarModalidadServicio(e.target.value)
-                  }
-                  style={s.input}
-                >
-                  <option value="solo_miembros">
-                    Miembro activo · Incluida en membresía
-                  </option>
-                  <option value="pago_local">
-                    Pago al llegar · No requiere membresía
-                  </option>
-                  <option value="miembros_pago">
-                    Miembro activo · Servicio personalizado con costo
-                  </option>
-                </select>
+                {esSalonBelleza ? (
+                  <select value="pago_local" disabled style={s.input}>
+                    <option value="pago_local">
+                      Servicio del salón · Cobro en Caja
+                    </option>
+                  </select>
+                ) : (
+                  <select
+                    value={modalidadServicio(servicioForm)}
+                    onChange={(e) =>
+                      aplicarModalidadServicio(e.target.value)
+                    }
+                    style={s.input}
+                  >
+                    <option value="solo_miembros">
+                      Miembro activo · Incluida en membresía
+                    </option>
+                    <option value="pago_local">
+                      Pago al llegar · No requiere membresía
+                    </option>
+                    <option value="miembros_pago">
+                      Miembro activo · Servicio personalizado con costo
+                    </option>
+                  </select>
+                )}
               </Campo>
 
               {servicioForm.requiere_pago && (
                 <>
-                  <Campo label="Precio de la clase / servicio">
+                  <Campo
+                    label={
+                      esSalonBelleza
+                        ? "Precio del servicio"
+                        : "Precio de la clase / servicio"
+                    }
+                  >
                     <input
                       type="number"
                       min="0.01"
@@ -2371,9 +2577,9 @@ export default function AgendaPage() {
                       Cobro en el local
                     </strong>
                     <span>
-                      El cliente reserva su cupo. Si esta modalidad
-                      tiene precio, la reserva queda pendiente de pago y
-                      recepción la cobra desde Caja cuando el cliente llegue.
+                      {esSalonBelleza
+                        ? "La cita queda pendiente de pago y recepción la cobra desde Caja al finalizar el servicio."
+                        : "El cliente reserva su cupo. Si esta modalidad tiene precio, la reserva queda pendiente de pago y recepción la cobra desde Caja cuando el cliente llegue."}
                     </span>
                   </div>
                 </>
@@ -2386,7 +2592,11 @@ export default function AgendaPage() {
                     style={s.secondaryButton}
                     onClick={() => {
                       setServicioEditandoId(null);
-                      setServicioForm(SERVICIO_INICIAL);
+                      setServicioForm(
+                        esSalonBelleza
+                          ? SERVICIO_SALON_INICIAL
+                          : SERVICIO_INICIAL
+                      );
                     }}
                   >
                     Cancelar
@@ -2410,7 +2620,7 @@ export default function AgendaPage() {
                 {horarioEditandoId ? "Editar horario" : "Nuevo horario"}
               </h2>
 
-              <Campo label="Clase / servicio">
+              <Campo label={esSalonBelleza ? "Servicio" : "Clase / servicio"}>
                 <select
                   value={horarioForm.servicio_id}
                   onChange={(e) => {
@@ -2458,7 +2668,7 @@ export default function AgendaPage() {
                   </select>
                 </Campo>
 
-                <Campo label="Instructor">
+                <Campo label={esSalonBelleza ? "Profesional" : "Instructor"}>
                   <input
                     value={horarioForm.instructor}
                     onChange={(e) =>
@@ -2468,7 +2678,7 @@ export default function AgendaPage() {
                       })
                     }
                     style={s.input}
-                    placeholder="Carlos"
+                    placeholder={esSalonBelleza ? "Ana" : "Carlos"}
                   />
                 </Campo>
 
@@ -2496,7 +2706,13 @@ export default function AgendaPage() {
                   />
                 </Campo>
 
-                <Campo label="Cupos">
+                <Campo
+                  label={
+                    esSalonBelleza
+                      ? "Disponibilidad por horario"
+                      : "Cupos"
+                  }
+                >
                   <input
                     type="number"
                     min="1"
@@ -2533,7 +2749,11 @@ export default function AgendaPage() {
                     style={s.secondaryButton}
                     onClick={() => {
                       setHorarioEditandoId(null);
-                      setHorarioForm(HORARIO_INICIAL);
+                      setHorarioForm(
+                        esSalonBelleza
+                          ? HORARIO_SALON_INICIAL
+                          : HORARIO_INICIAL
+                      );
                     }}
                   >
                     Cancelar
@@ -2557,7 +2777,11 @@ export default function AgendaPage() {
               <div style={s.panelHeader}>
                 <div>
                   <span style={s.eyebrowSmall}>SERVICIOS</span>
-                  <h2 style={s.panelTitle}>Clases y servicios</h2>
+                  <h2 style={s.panelTitle}>
+                    {esSalonBelleza
+                      ? "Servicios del salón"
+                      : "Clases y servicios"}
+                  </h2>
                 </div>
                 <span style={s.counter}>{servicios.length}</span>
               </div>
@@ -2571,7 +2795,11 @@ export default function AgendaPage() {
                       <div>
                         <strong>{servicio.nombre}</strong>
                         <span style={s.slotDetail}>
-                          {servicio.tipo === "cita_individual"
+                          {esSalonBelleza
+                            ? servicio.tipo === "cita_individual"
+                              ? "Servicio individual"
+                              : "Servicio grupal"
+                            : servicio.tipo === "cita_individual"
                             ? "Cita individual"
                             : "Clase grupal"}{" "}
                           · {servicio.duracion_minutos} min
@@ -2623,7 +2851,10 @@ export default function AgendaPage() {
                         <span style={s.slotDetail}>
                           {nombreDia(horario.dia_semana)} ·{" "}
                           {formatoHora(horario.hora_inicio)} ·{" "}
-                          {horario.capacidad} cupos
+                          {horario.capacidad}{" "}
+                          {esSalonBelleza
+                            ? "espacio(s) por horario"
+                            : "cupos"}
                         </span>
                       </div>
 
@@ -2656,7 +2887,7 @@ export default function AgendaPage() {
       )}
 
       <footer style={s.footer}>
-        KONAX Agenda · {VERSION} · Rol: {rol || "Usuario"}
+        {esSalonBelleza ? "KONAX Salón · Agenda" : "KONAX Agenda"} · {VERSION} · Rol: {rol || "Usuario"}
       </footer>
     </main>
   );
