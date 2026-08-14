@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.13-AGENDA-BELLEZA-AUTOSERVICIO-REALTIME";
+const VERSION = "2026.08.14-AGENDA-MOBILE-B";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -1273,8 +1273,8 @@ export default function AgendaPage() {
       <style>{AGENDA_CSS}</style>
 
       <header style={neo.hero} className="agenda-d-hero">
-        <div style={neo.heroMain}>
-          <div style={neo.brandRow}>
+        <div style={neo.heroMain} className="agenda-d-hero-main">
+          <div style={neo.brandRow} className="agenda-d-brand-row">
             <div style={neo.logoCard}>
               <img
                 src="/konax-logo.png"
@@ -1311,17 +1311,10 @@ export default function AgendaPage() {
               ← Panel principal
             </button>
 
-            <button
-              type="button"
-              style={neo.heroPrimary}
-              onClick={() => setVista("nueva")}
-            >
-              + Crear reserva
-            </button>
           </div>
         </div>
 
-        <div style={neo.heroSide}>
+        <div style={neo.heroSide} className="agenda-d-hero-side">
           <span style={neo.heroSideLabel}>
             FECHA EN OPERACIÓN
           </span>
@@ -1498,7 +1491,7 @@ export default function AgendaPage() {
       {vista === "hoy" && (
         <>
           <section style={neo.weekShell} className="agenda-d-week-shell">
-            <div style={neo.weekHeader}>
+            <div style={neo.weekHeader} className="agenda-d-week-header">
               <div>
                 <span style={neo.sectionEyebrow}>
                   SEMANA OPERATIVA
@@ -1508,7 +1501,7 @@ export default function AgendaPage() {
                 </h2>
               </div>
 
-              <div style={neo.weekControls}>
+              <div style={neo.weekControls} className="agenda-d-week-controls">
                 <button
                   type="button"
                   style={neo.roundButton}
@@ -4278,6 +4271,181 @@ const AGENDA_CSS = `
     grid-template-columns: 1fr !important;
   }
 }
+
+/* ==========================================================
+   KONAX · CORRECCIÓN MÓVIL 2026-08-14
+   Evita recortes horizontales y compacta el Hero de Agenda.
+   ========================================================== */
+
+.agenda-page {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.agenda-page img,
+.agenda-page svg {
+  max-width: 100%;
+}
+
+.agenda-page button,
+.agenda-page input,
+.agenda-page select,
+.agenda-page textarea {
+  max-width: 100%;
+}
+
+@media (max-width: 820px) {
+  .agenda-d-hero {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding: 16px !important;
+    gap: 12px !important;
+    border-radius: 19px !important;
+  }
+
+  .agenda-d-hero-main,
+  .agenda-d-hero-side {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .agenda-d-brand-row {
+    width: 100% !important;
+    min-width: 0 !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .agenda-d-brand-row > div:last-child {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .agenda-d-brand-row h1 {
+    max-width: 100% !important;
+    font-size: clamp(29px, 9vw, 38px) !important;
+    line-height: 1.02 !important;
+    letter-spacing: -0.8px !important;
+    overflow-wrap: anywhere;
+  }
+
+  .agenda-d-brand-row p {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-top: 8px !important;
+    font-size: 11.5px !important;
+    line-height: 1.45 !important;
+    overflow-wrap: anywhere;
+  }
+
+  .agenda-d-hero-side {
+    padding: 14px !important;
+  }
+
+  .agenda-d-nav {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .agenda-d-nav > button {
+    flex: 0 0 auto !important;
+  }
+
+  .agenda-d-nav > button:last-child {
+    margin-left: 0 !important;
+  }
+
+  .agenda-d-week-shell {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 14px 12px !important;
+    overflow: hidden !important;
+  }
+
+  .agenda-d-week-header {
+    align-items: flex-start !important;
+  }
+
+  .agenda-d-week-controls {
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+
+  .agenda-d-week-strip {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: flex !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    padding: 2px 0 6px !important;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .agenda-d-week-strip > button {
+    flex: 0 0 78px !important;
+    width: 78px !important;
+    min-width: 78px !important;
+    scroll-snap-align: start;
+  }
+
+  .agenda-d-command-grid,
+  .agenda-d-kpis,
+  .agenda-stepper,
+  .agenda-reserva-filtros,
+  .agenda-portal-responsive {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .agenda-page {
+    padding: 10px !important;
+  }
+
+  .agenda-d-hero {
+    padding: 14px !important;
+  }
+
+  .agenda-d-brand-row > div:first-child {
+    width: 116px !important;
+    min-height: 62px !important;
+    padding: 6px 10px !important;
+    border-radius: 14px !important;
+  }
+
+  .agenda-d-brand-row > div:first-child img {
+    width: 98px !important;
+    height: auto !important;
+  }
+
+  .agenda-d-hero-side {
+    border-radius: 14px !important;
+  }
+
+  .agenda-d-week-header h2 {
+    font-size: 17px !important;
+    line-height: 1.15 !important;
+  }
+
+  .agenda-d-week-strip > button {
+    flex-basis: 74px !important;
+    width: 74px !important;
+    min-width: 74px !important;
+  }
+}
+
 `;
 
 const neo = {
