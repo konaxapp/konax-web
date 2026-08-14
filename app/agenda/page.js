@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.14-AGENDA-MOBILE-B";
+const VERSION = "2026.08.14-AGENDA-FECHA-UNICA-C";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -1490,107 +1490,69 @@ export default function AgendaPage() {
 
       {vista === "hoy" && (
         <>
-          <section style={neo.weekShell} className="agenda-d-week-shell">
-            <div style={neo.weekHeader} className="agenda-d-week-header">
-              <div>
-                <span style={neo.sectionEyebrow}>
-                  SEMANA OPERATIVA
-                </span>
-                <h2 style={neo.sectionTitle}>
-                  Selecciona el día que deseas gestionar
-                </h2>
-              </div>
+          <section
+            style={neo.dateSelectorShell}
+            className="agenda-date-selector-shell"
+          >
+            <div style={neo.dateSelectorInfo}>
+              <span style={neo.sectionEyebrow}>
+                FECHA DE OPERACIÓN
+              </span>
 
-              <div style={neo.weekControls} className="agenda-d-week-controls">
-                <button
-                  type="button"
-                  style={neo.roundButton}
-                  onClick={() => moverFechaAgenda(-7)}
-                >
-                  ←
-                </button>
+              <strong style={neo.dateSelectorTitle}>
+                {formatoFecha(fechaAgenda)}
+              </strong>
 
-                <button
-                  type="button"
-                  style={neo.todayPill}
-                  onClick={irAgendaHoy}
-                >
-                  Hoy
-                </button>
-
-                <button
-                  type="button"
-                  style={neo.roundButton}
-                  onClick={() => moverFechaAgenda(7)}
-                >
-                  →
-                </button>
-              </div>
+              <span style={neo.dateSelectorHint}>
+                Selecciona la fecha que deseas gestionar.
+              </span>
             </div>
 
-            <div style={neo.weekStrip} className="agenda-d-week-strip">
-              {semanaAgenda.map((dia) => (
-                <button
-                  key={dia.fecha}
-                  type="button"
-                  onClick={() => {
-                    setFechaAgenda(dia.fecha);
+            <div
+              style={neo.dateSelectorControls}
+              className="agenda-date-selector-controls"
+            >
+              <button
+                type="button"
+                style={neo.dateSelectorArrow}
+                onClick={() => moverFechaAgenda(-1)}
+                aria-label="Día anterior"
+              >
+                ←
+              </button>
+
+              <label style={neo.dateSelectorCalendar}>
+                <span style={neo.dateSelectorCalendarLabel}>
+                  Calendario
+                </span>
+
+                <input
+                  type="date"
+                  value={fechaAgenda}
+                  onChange={(e) => {
+                    setFechaAgenda(e.target.value);
                     setHorarioSeleccionado("");
                   }}
-                  style={{
-                    ...neo.dayCard,
-                    ...(dia.seleccionado
-                      ? neo.dayCardActive
-                      : {}),
-                  }}
-                >
-                  <span
-                    style={{
-                      ...neo.dayName,
-                      ...(dia.seleccionado
-                        ? neo.dayTextActive
-                        : {}),
-                    }}
-                  >
-                    {dia.dia}
-                  </span>
+                  style={neo.dateSelectorInput}
+                />
+              </label>
 
-                  <strong
-                    style={{
-                      ...neo.dayNumber,
-                      ...(dia.seleccionado
-                        ? neo.dayTextActive
-                        : {}),
-                    }}
-                  >
-                    {dia.numero}
-                  </strong>
+              <button
+                type="button"
+                style={neo.dateSelectorArrow}
+                onClick={() => moverFechaAgenda(1)}
+                aria-label="Día siguiente"
+              >
+                →
+              </button>
 
-                  <span
-                    style={{
-                      ...neo.dayMonth,
-                      ...(dia.seleccionado
-                        ? neo.dayTextActive
-                        : {}),
-                    }}
-                  >
-                    {dia.mes}
-                  </span>
-
-                  {dia.hoy && (
-                    <span
-                      style={{
-                        ...neo.todayDot,
-                        ...(dia.seleccionado
-                          ? neo.todayDotActive
-                          : {}),
-                      }}
-                    >
-                      HOY
-                    </span>
-                  )}
-                </button>
-              ))}
+              <button
+                type="button"
+                style={neo.dateSelectorToday}
+                onClick={irAgendaHoy}
+              >
+                Hoy
+              </button>
             </div>
           </section>
 
@@ -1651,7 +1613,7 @@ export default function AgendaPage() {
           </section>
 
           <section style={neo.commandGrid} className="agenda-d-command-grid">
-            <article style={neo.schedulePanel}>
+            <article style={neo.schedulePanel} className="agenda-main-schedule">
               <div style={neo.panelTop}>
                 <div>
                   <span style={neo.sectionEyebrow}>
@@ -1664,33 +1626,6 @@ export default function AgendaPage() {
                   </h2>
                 </div>
 
-                <div style={neo.dateInline}>
-                  <button
-                    type="button"
-                    onClick={() => moverFechaAgenda(-1)}
-                    style={neo.dateArrow}
-                  >
-                    ‹
-                  </button>
-
-                  <input
-                    type="date"
-                    value={fechaAgenda}
-                    onChange={(e) => {
-                      setFechaAgenda(e.target.value);
-                      setHorarioSeleccionado("");
-                    }}
-                    style={neo.dateInput}
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => moverFechaAgenda(1)}
-                    style={neo.dateArrow}
-                  >
-                    ›
-                  </button>
-                </div>
               </div>
 
               {disponibilidad.length === 0 ? (
@@ -1867,7 +1802,7 @@ export default function AgendaPage() {
               )}
             </article>
 
-            <article style={neo.reservationsPanel}>
+            <article style={neo.reservationsPanel} className="agenda-main-reservations">
               <div style={neo.panelTop}>
                 <div>
                   <span style={neo.sectionEyebrow}>
@@ -1986,7 +1921,7 @@ export default function AgendaPage() {
               )}
             </article>
 
-            <aside style={neo.controlPanel}>
+            <aside style={neo.controlPanel} className="agenda-main-control">
               <span style={neo.controlEyebrow}>
                 CONTROL OPERATIVO
               </span>
@@ -4195,15 +4130,48 @@ const AGENDA_CSS = `
 
 @media (max-width: 1180px) {
   .agenda-d-command-grid {
-    grid-template-columns: 1fr 1fr !important;
+    grid-template-columns: minmax(0,1.25fr) minmax(300px,.75fr) !important;
+    grid-template-rows: auto auto !important;
   }
 
-  .agenda-d-command-grid > aside {
-    grid-column: 1 / -1;
+  .agenda-main-schedule {
+    grid-column: 1 !important;
+    grid-row: 1 / span 2 !important;
+  }
+
+  .agenda-main-reservations {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+  }
+
+  .agenda-main-control {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
   }
 }
 
 @media (max-width: 820px) {
+
+  .agenda-date-selector-shell {
+    align-items: stretch !important;
+  }
+
+  .agenda-date-selector-controls {
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+
+  .agenda-date-selector-controls label {
+    flex: 1 1 180px !important;
+  }
+
+  .agenda-main-schedule,
+  .agenda-main-reservations,
+  .agenda-main-control {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+  }
+
   .agenda-d-hero {
     grid-template-columns: 1fr !important;
   }
@@ -4410,6 +4378,27 @@ const AGENDA_CSS = `
 }
 
 @media (max-width: 560px) {
+
+  .agenda-date-selector-shell {
+    padding: 13px !important;
+  }
+
+  .agenda-date-selector-controls {
+    display: grid !important;
+    grid-template-columns: 40px minmax(0,1fr) 40px !important;
+    gap: 6px !important;
+  }
+
+  .agenda-date-selector-controls label {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .agenda-date-selector-controls > button:last-child {
+    grid-column: 1 / -1;
+    width: 100% !important;
+  }
+
   .agenda-page {
     padding: 10px !important;
   }
@@ -4650,6 +4639,101 @@ const neo = {
     whiteSpace: "nowrap",
   },
 
+  dateSelectorShell: {
+    maxWidth: 1480,
+    margin: "0 auto 14px",
+    padding: "14px 16px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    flexWrap: "wrap",
+    border: "1px solid #DCE6E0",
+    borderRadius: 18,
+    background: "#FFFFFF",
+    boxShadow: "0 7px 20px rgba(14,52,32,.04)",
+  },
+
+  dateSelectorInfo: {
+    minWidth: 0,
+    display: "grid",
+    gap: 3,
+  },
+
+  dateSelectorTitle: {
+    color: "#16261D",
+    fontSize: 24,
+    lineHeight: 1.05,
+  },
+
+  dateSelectorHint: {
+    color: "#78867E",
+    fontSize: 10,
+  },
+
+  dateSelectorControls: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 7,
+    flexWrap: "wrap",
+  },
+
+  dateSelectorArrow: {
+    width: 40,
+    height: 40,
+    flex: "0 0 auto",
+    border: "1px solid #D8E2DC",
+    borderRadius: 11,
+    background: "#FFFFFF",
+    color: "#173C2A",
+    fontSize: 17,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  dateSelectorCalendar: {
+    minWidth: 190,
+    padding: "7px 10px",
+    display: "grid",
+    gap: 2,
+    border: "1px solid #D8E2DC",
+    borderRadius: 11,
+    background: "#F8FBF9",
+  },
+
+  dateSelectorCalendarLabel: {
+    color: "#728077",
+    fontSize: 7,
+    fontWeight: 900,
+    letterSpacing: .8,
+  },
+
+  dateSelectorInput: {
+    width: "100%",
+    minWidth: 0,
+    border: 0,
+    outline: "none",
+    background: "transparent",
+    color: "#173C2A",
+    fontSize: 12,
+    fontWeight: 850,
+    fontFamily: "inherit",
+    cursor: "pointer",
+  },
+
+  dateSelectorToday: {
+    minHeight: 40,
+    padding: "0 14px",
+    border: 0,
+    borderRadius: 11,
+    background: "#E9F7EF",
+    color: "#0B7A43",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
   weekShell: {
     maxWidth: 1480,
     margin: "0 auto 14px",
@@ -4844,12 +4928,16 @@ const neo = {
     maxWidth: 1480,
     margin: "0 auto 20px",
     display: "grid",
-    gridTemplateColumns: "minmax(0,1.35fr) minmax(330px,.82fr) 300px",
+    gridTemplateColumns: "minmax(0,1.55fr) minmax(340px,.72fr)",
+    gridTemplateRows: "auto auto",
     gap: 12,
-    alignItems: "start",
+    alignItems: "stretch",
   },
 
   schedulePanel: {
+    gridColumn: "1",
+    gridRow: "1 / span 2",
+    minWidth: 0,
     padding: 16,
     border: "1px solid #DCE6E0",
     borderRadius: 18,
@@ -4858,6 +4946,9 @@ const neo = {
   },
 
   reservationsPanel: {
+    gridColumn: "2",
+    gridRow: "1",
+    minWidth: 0,
     padding: 16,
     border: "1px solid #DCE6E0",
     borderRadius: 18,
@@ -5226,6 +5317,9 @@ const neo = {
   },
 
   controlPanel: {
+    gridColumn: "2",
+    gridRow: "2",
+    minWidth: 0,
     padding: 18,
     borderRadius: 18,
     background:
