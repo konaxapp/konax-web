@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.14-AGENDA-FECHA-UNICA-C";
+const VERSION = "2026.08.14-AGENDA-COMPACTA-D";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -1318,9 +1318,22 @@ export default function AgendaPage() {
           <span style={neo.heroSideLabel}>
             FECHA EN OPERACIÓN
           </span>
-          <strong style={neo.heroSideDate}>
-            {formatoFecha(fechaAgenda)}
-          </strong>
+
+          <label style={neo.heroCalendar}>
+            <span style={neo.heroCalendarLabel}>
+              Calendario
+            </span>
+
+            <input
+              type="date"
+              value={fechaAgenda}
+              onChange={(e) => {
+                setFechaAgenda(e.target.value);
+                setHorarioSeleccionado("");
+              }}
+              style={neo.heroCalendarInput}
+            />
+          </label>
 
           <div style={neo.heroSideStats}>
             <div>
@@ -1490,72 +1503,6 @@ export default function AgendaPage() {
 
       {vista === "hoy" && (
         <>
-          <section
-            style={neo.dateSelectorShell}
-            className="agenda-date-selector-shell"
-          >
-            <div style={neo.dateSelectorInfo}>
-              <span style={neo.sectionEyebrow}>
-                FECHA DE OPERACIÓN
-              </span>
-
-              <strong style={neo.dateSelectorTitle}>
-                {formatoFecha(fechaAgenda)}
-              </strong>
-
-              <span style={neo.dateSelectorHint}>
-                Selecciona la fecha que deseas gestionar.
-              </span>
-            </div>
-
-            <div
-              style={neo.dateSelectorControls}
-              className="agenda-date-selector-controls"
-            >
-              <button
-                type="button"
-                style={neo.dateSelectorArrow}
-                onClick={() => moverFechaAgenda(-1)}
-                aria-label="Día anterior"
-              >
-                ←
-              </button>
-
-              <label style={neo.dateSelectorCalendar}>
-                <span style={neo.dateSelectorCalendarLabel}>
-                  Calendario
-                </span>
-
-                <input
-                  type="date"
-                  value={fechaAgenda}
-                  onChange={(e) => {
-                    setFechaAgenda(e.target.value);
-                    setHorarioSeleccionado("");
-                  }}
-                  style={neo.dateSelectorInput}
-                />
-              </label>
-
-              <button
-                type="button"
-                style={neo.dateSelectorArrow}
-                onClick={() => moverFechaAgenda(1)}
-                aria-label="Día siguiente"
-              >
-                →
-              </button>
-
-              <button
-                type="button"
-                style={neo.dateSelectorToday}
-                onClick={irAgendaHoy}
-              >
-                Hoy
-              </button>
-            </div>
-          </section>
-
           <section style={neo.kpiGrid} className="agenda-d-kpis">
             <article style={neo.kpiCard}>
               <span style={neo.kpiCaption}>
@@ -4152,24 +4099,22 @@ const AGENDA_CSS = `
 
 @media (max-width: 820px) {
 
-  .agenda-date-selector-shell {
-    align-items: stretch !important;
-  }
-
-  .agenda-date-selector-controls {
-    width: 100% !important;
-    justify-content: flex-start !important;
-  }
-
-  .agenda-date-selector-controls label {
-    flex: 1 1 180px !important;
-  }
-
   .agenda-main-schedule,
   .agenda-main-reservations,
   .agenda-main-control {
     grid-column: 1 !important;
     grid-row: auto !important;
+  }
+
+  .agenda-d-timeline-row {
+    grid-template-columns: 16px 76px minmax(0,1fr) !important;
+    gap: 8px !important;
+  }
+
+  .agenda-d-timeline-row > div:last-child {
+    grid-column: 2 / -1 !important;
+    justify-content: flex-start !important;
+    padding-top: 4px !important;
   }
 
   .agenda-d-hero {
@@ -4379,26 +4324,6 @@ const AGENDA_CSS = `
 
 @media (max-width: 560px) {
 
-  .agenda-date-selector-shell {
-    padding: 13px !important;
-  }
-
-  .agenda-date-selector-controls {
-    display: grid !important;
-    grid-template-columns: 40px minmax(0,1fr) 40px !important;
-    gap: 6px !important;
-  }
-
-  .agenda-date-selector-controls label {
-    min-width: 0 !important;
-    width: 100% !important;
-  }
-
-  .agenda-date-selector-controls > button:last-child {
-    grid-column: 1 / -1;
-    width: 100% !important;
-  }
-
   .agenda-page {
     padding: 10px !important;
   }
@@ -4553,6 +4478,39 @@ const neo = {
     fontWeight: 900,
     letterSpacing: 1.2,
   },
+
+  heroCalendar: {
+    width: "100%",
+    marginTop: 7,
+    padding: "8px 10px",
+    display: "grid",
+    gap: 2,
+    border: "1px solid rgba(255,255,255,.18)",
+    borderRadius: 10,
+    background: "rgba(255,255,255,.09)",
+  },
+
+  heroCalendarLabel: {
+    color: "#A8DDBD",
+    fontSize: 7,
+    fontWeight: 900,
+    letterSpacing: .8,
+  },
+
+  heroCalendarInput: {
+    width: "100%",
+    minWidth: 0,
+    border: 0,
+    outline: "none",
+    background: "transparent",
+    color: "#FFFFFF",
+    colorScheme: "dark",
+    fontFamily: "inherit",
+    fontSize: 12,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
 
   heroSideDate: {
     display: "block",
@@ -4928,17 +4886,17 @@ const neo = {
     maxWidth: 1480,
     margin: "0 auto 20px",
     display: "grid",
-    gridTemplateColumns: "minmax(0,1.55fr) minmax(340px,.72fr)",
+    gridTemplateColumns: "minmax(0,1.62fr) minmax(310px,.62fr)",
     gridTemplateRows: "auto auto",
     gap: 12,
-    alignItems: "stretch",
+    alignItems: "start",
   },
 
   schedulePanel: {
     gridColumn: "1",
     gridRow: "1 / span 2",
     minWidth: 0,
-    padding: 16,
+    padding: 14,
     border: "1px solid #DCE6E0",
     borderRadius: 18,
     background: "#fff",
@@ -5002,13 +4960,13 @@ const neo = {
   },
 
   timelineRow: {
-    minHeight: 126,
+    minHeight: 92,
     display: "grid",
     gridTemplateColumns:
-      "26px 100px minmax(0,1fr) 110px",
-    gap: 12,
+      "18px 82px minmax(0,1fr) 104px",
+    gap: 10,
     alignItems: "center",
-    padding: "10px 0",
+    padding: "8px 0",
     borderBottom: "1px solid #EDF2EF",
   },
 
@@ -5021,10 +4979,10 @@ const neo = {
 
   timelineDot: {
     position: "absolute",
-    top: 28,
-    width: 12,
-    height: 12,
-    border: "3px solid #BEE7CF",
+    top: 22,
+    width: 10,
+    height: 10,
+    border: "2px solid #BEE7CF",
     borderRadius: "50%",
     background: "#0B7A43",
     zIndex: 2,
@@ -5032,8 +4990,8 @@ const neo = {
 
   timelineLine: {
     position: "absolute",
-    top: 40,
-    bottom: -22,
+    top: 32,
+    bottom: -18,
     width: 2,
     background: "#DCEBE3",
   },
@@ -5079,21 +5037,23 @@ const neo = {
 
   classTitle: {
     display: "block",
-    marginTop: 7,
-    fontSize: 17,
+    marginTop: 5,
+    fontSize: 15,
+    lineHeight: 1.15,
   },
 
   classMeta: {
     display: "block",
-    marginTop: 3,
+    marginTop: 2,
     color: "#6F7D75",
-    fontSize: 9,
-    lineHeight: 1.35,
+    fontSize: 8.5,
+    lineHeight: 1.3,
   },
 
   capacityBar: {
-    height: 7,
-    marginTop: 10,
+    width: "min(100%,260px)",
+    height: 6,
+    marginTop: 7,
     overflow: "hidden",
     borderRadius: 999,
     background: "#E8EFEA",
@@ -5107,7 +5067,8 @@ const neo = {
   },
 
   capacityFooter: {
-    marginTop: 5,
+    width: "min(100%,260px)",
+    marginTop: 4,
     display: "flex",
     justifyContent: "space-between",
     gap: 8,
@@ -5121,8 +5082,8 @@ const neo = {
   },
 
   reserveButton: {
-    minHeight: 38,
-    padding: "0 13px",
+    minHeight: 34,
+    padding: "0 11px",
     border: 0,
     borderRadius: 10,
     background: "#0B7A43",
@@ -5133,8 +5094,8 @@ const neo = {
   },
 
   reserveDisabled: {
-    minHeight: 38,
-    padding: "0 13px",
+    minHeight: 34,
+    padding: "0 10px",
     border: "1px solid #E0E5E2",
     borderRadius: 10,
     background: "#F2F4F3",
@@ -5320,7 +5281,7 @@ const neo = {
     gridColumn: "2",
     gridRow: "2",
     minWidth: 0,
-    padding: 18,
+    padding: 14,
     borderRadius: 18,
     background:
       "linear-gradient(160deg,#071C14,#0B4A2B)",
@@ -5336,27 +5297,27 @@ const neo = {
   },
 
   controlTitle: {
-    margin: "5px 0 0",
-    fontSize: 20,
+    margin: "4px 0 0",
+    fontSize: 17,
   },
 
   occupancyCircle: {
-    margin: "20px 0",
+    margin: "12px 0",
     display: "grid",
     placeItems: "center",
   },
 
   occupancyRing: {
-    width: 140,
-    height: 140,
+    width: 96,
+    height: 96,
     display: "grid",
     placeItems: "center",
     borderRadius: "50%",
   },
 
   occupancyInner: {
-    width: 104,
-    height: 104,
+    width: 70,
+    height: 70,
     display: "grid",
     placeItems: "center",
     alignContent: "center",
@@ -5366,7 +5327,7 @@ const neo = {
 
   controlStats: {
     display: "grid",
-    gap: 9,
+    gap: 6,
   },
 
   controlRow: {
@@ -5379,7 +5340,7 @@ const neo = {
 
   controlDivider: {
     height: 1,
-    margin: "16px 0",
+    margin: "10px 0",
     background: "rgba(255,255,255,.12)",
   },
 
@@ -5399,7 +5360,7 @@ const neo = {
   },
 
   stateBox: {
-    padding: 9,
+    padding: 7,
     display: "grid",
     gap: 4,
     borderRadius: 10,
@@ -5410,8 +5371,8 @@ const neo = {
 
   controlPrimary: {
     width: "100%",
-    minHeight: 40,
-    marginTop: 16,
+    minHeight: 35,
+    marginTop: 10,
     border: 0,
     borderRadius: 10,
     background: "#5CE19B",
@@ -5423,8 +5384,8 @@ const neo = {
 
   controlSecondary: {
     width: "100%",
-    minHeight: 38,
-    marginTop: 7,
+    minHeight: 34,
+    marginTop: 5,
     border: "1px solid rgba(255,255,255,.18)",
     borderRadius: 10,
     background: "rgba(255,255,255,.06)",
