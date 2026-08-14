@@ -1,6 +1,6 @@
 "use client";
 
-// DASHBOARD KONAX - GIMNASIO + SALÓN DE BELLEZA - 2026-08-12
+// DASHBOARD KONAX - GIMNASIO + SALÓN DE BELLEZA - MOBILE FIX - 2026-08-14
 
 // KONAX Dashboard · Reportes gimnasio habilitados · Versión 2026.08.07-S
 
@@ -1892,11 +1892,13 @@ export default function Dashboard() {
 
   return (
     <div
+      className="dashboard-konax-page"
       style={{
         ...s.layout,
         ...(esMovil ? s.layoutMobile : {}),
       }}
     >
+      <style>{DASHBOARD_RESPONSIVE_CSS}</style>
       {!esMovil && (
         <SidebarKonax
           items={modulosMenu}
@@ -2046,6 +2048,7 @@ export default function Dashboard() {
         )}
 
         <header
+          className="dashboard-topbar"
           style={{
             ...s.topbar,
             ...(esMovil
@@ -2354,6 +2357,7 @@ export default function Dashboard() {
         ) : (
           <>
             <section
+              className="dashboard-hero-grid"
               style={{
                 ...s.heroGrid,
                 ...(esMovil
@@ -2362,6 +2366,7 @@ export default function Dashboard() {
               }}
             >
               <article
+                className="dashboard-hero-main"
                 style={{
                   ...s.heroMain,
                   ...(esMovil
@@ -2418,6 +2423,7 @@ export default function Dashboard() {
               </article>
 
               <article
+                className="dashboard-plan-panel"
                 style={{
                   ...s.planPanel,
                   ...(esMovil
@@ -2707,6 +2713,7 @@ function DashboardGimnasio({
       )}
 
       <section
+        className="dashboard-gym-indicators"
         style={{
           ...s.gymIndicadores,
           ...(esMovil
@@ -2753,6 +2760,7 @@ function DashboardGimnasio({
       </section>
 
       <section
+        className="dashboard-gym-tools"
         style={{
           ...s.gymHerramientaGrid,
           ...(esMovil
@@ -2929,7 +2937,7 @@ function DashboardGimnasio({
             </div>
           ) : (
             <div style={s.gymFichaAlumno}>
-              <div style={s.gymFichaSuperior}>
+              <div style={s.gymFichaSuperior} className="dashboard-gym-student-head">
                 <div style={s.gymAlumnoIdentidad}>
                   <span style={s.gymAlumnoAvatar}>
                     {alumnoSeleccionado.nombre
@@ -2964,7 +2972,7 @@ function DashboardGimnasio({
                 />
               </div>
 
-              <div style={s.gymDatosMembresia}>
+              <div style={s.gymDatosMembresia} className="dashboard-gym-membership-data">
                 <DatoAlumno
                   etiqueta="Plan"
                   valor={
@@ -3507,6 +3515,97 @@ function Info({
     </article>
   );
 }
+
+
+const DASHBOARD_RESPONSIVE_CSS = `
+  .dashboard-konax-page,
+  .dashboard-konax-page * {
+    box-sizing: border-box;
+  }
+
+  .dashboard-konax-page {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  .dashboard-konax-page img,
+  .dashboard-konax-page svg {
+    max-width: 100%;
+  }
+
+  @media (max-width: 900px) {
+    .dashboard-konax-page {
+      min-width: 0;
+    }
+
+    .dashboard-konax-page main,
+    .dashboard-topbar,
+    .dashboard-hero-grid,
+    .dashboard-hero-main,
+    .dashboard-plan-panel,
+    .dashboard-gym-indicators,
+    .dashboard-gym-tools {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+    }
+
+    .dashboard-konax-page h1,
+    .dashboard-konax-page h2,
+    .dashboard-konax-page h3,
+    .dashboard-konax-page h4,
+    .dashboard-konax-page p,
+    .dashboard-konax-page strong,
+    .dashboard-konax-page span {
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+
+    .dashboard-konax-page button,
+    .dashboard-konax-page input,
+    .dashboard-konax-page select,
+    .dashboard-konax-page textarea {
+      max-width: 100%;
+    }
+
+    .dashboard-hero-main {
+      overflow: hidden !important;
+    }
+
+    .dashboard-gym-membership-data {
+      grid-template-columns: 1fr !important;
+    }
+
+    .dashboard-gym-student-head {
+      align-items: flex-start !important;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .dashboard-gym-indicators {
+      grid-template-columns: 1fr !important;
+    }
+
+    .dashboard-gym-tools {
+      grid-template-columns: 1fr !important;
+    }
+
+    .dashboard-topbar {
+      gap: 10px !important;
+    }
+
+    .dashboard-hero-main {
+      padding: 20px 16px 18px !important;
+      gap: 14px !important;
+    }
+
+    .dashboard-plan-panel {
+      min-height: 0 !important;
+      padding: 18px !important;
+    }
+  }
+`;
 
 const s = {
   layout: {
@@ -4262,6 +4361,7 @@ const s = {
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 14,
+    flexWrap: "wrap",
   },
 
   gymAlumnoIdentidad: {
@@ -4689,6 +4789,7 @@ const s = {
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
+    flexWrap: "wrap",
   },
 
   planLabel: {
@@ -4848,16 +4949,16 @@ const s = {
   },
 
   mobileLogo: {
-    width: 145,
-    maxWidth: "52vw",
+    width: 120,
+    maxWidth: "44vw",
     height: "auto",
     display: "block",
   },
 
   mobileMenuButton: {
-    minWidth: 110,
-    minHeight: 44,
-    padding: "9px 16px",
+    minWidth: 92,
+    minHeight: 42,
+    padding: "8px 12px",
     border:
       "1px solid rgba(255,255,255,.18)",
     borderRadius: 14,
@@ -5144,8 +5245,9 @@ const s = {
   },
 
   heroTitleMobile: {
-    fontSize: 36,
-    lineHeight: 1.04,
+    fontSize: 29,
+    lineHeight: 1.06,
+    letterSpacing: "-0.7px",
   },
 
   heroBadgeMobile: {
