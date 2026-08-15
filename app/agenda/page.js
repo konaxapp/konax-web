@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.14-AGENDA-DIAS-MULTIPLES-RESERVAS-COMPACTAS-E";
+const VERSION = "2026.08.14-AGENDA-RESERVA-MANUAL-PRO-G";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -1363,13 +1363,13 @@ export default function AgendaPage() {
               </span>
               <h1 style={neo.heroTitle}>
                 {esSalonBelleza
-                  ? "Agenda de Servicios"
-                  : "Centro de Agenda"}
+                  ? "Agenda Operativa"
+                  : "Agenda Operativa"}
               </h1>
               <p style={neo.heroSubtitle}>
                 {empresaNombre || "KONAX"} · {esSalonBelleza
-                  ? "Controla servicios, profesionales, horarios, citas y cobros desde una sola agenda."
-                  : "Controla horarios, capacidad, reservas y asistencia desde una vista operativa más clara."}
+                  ? "Citas, horarios y disponibilidad del día en una sola vista."
+                  : "Reservas, horarios y capacidad del día en una sola vista."}
               </p>
             </div>
           </div>
@@ -1485,7 +1485,7 @@ export default function AgendaPage() {
                 cursor: "pointer",
               }}
             >
-              Agendar otro cliente
+              Reserva manual
             </button>
 
             <button
@@ -1530,7 +1530,7 @@ export default function AgendaPage() {
           }}
         >
           <span>＋</span>
-          Nueva reserva
+          Reserva manual
         </button>
 
         <button
@@ -1920,7 +1920,7 @@ export default function AgendaPage() {
                               : noAsistio
                               ? "NO ASISTIÓ"
                               : pendiente
-                              ? "PENDIENTE"
+                              ? "PENDIENTE DE PAGO"
                               : "CONFIRMADA"}
                           </span>
                         </div>
@@ -1940,116 +1940,36 @@ export default function AgendaPage() {
               )}
             </article>
 
-            <aside style={neo.controlPanel} className="agenda-main-control">
+            <aside
+              style={neo.controlPanelCompact}
+              className="agenda-main-control agenda-main-control-compact"
+            >
               <span style={neo.controlEyebrow}>
-                CONTROL OPERATIVO
+                OCUPACIÓN DEL DÍA
               </span>
-              <h3 style={neo.controlTitle}>
-                Estado del día
-              </h3>
 
-              <div style={neo.occupancyCircle}>
+              <div style={neo.occupancyCompactRow}>
                 <div
                   style={{
-                    ...neo.occupancyRing,
+                    ...neo.occupancyRingCompact,
                     background: `conic-gradient(#5BE39A ${resumenAgenda.ocupacion}%, rgba(255,255,255,.14) 0)`,
                   }}
                 >
-                  <div style={neo.occupancyInner}>
-                    <strong>
-                      {resumenAgenda.ocupacion}%
-                    </strong>
-                    <span>ocupación</span>
+                  <div style={neo.occupancyInnerCompact}>
+                    <strong>{resumenAgenda.ocupacion}%</strong>
                   </div>
                 </div>
-              </div>
 
-              <div style={neo.controlStats}>
-                <div style={neo.controlRow}>
-                  <span>{esSalonBelleza ? "Espacios" : "Capacidad"}</span>
-                  <strong>
-                    {resumenAgenda.capacidadTotal}
-                  </strong>
-                </div>
-
-                <div style={neo.controlRow}>
-                  <span>{esSalonBelleza ? "Reservas" : "Reservados"}</span>
-                  <strong>
-                    {resumenAgenda.reservadosTotal}
-                  </strong>
-                </div>
-
-                <div style={neo.controlRow}>
-                  <span>Disponibles</span>
-                  <strong>
-                    {resumenAgenda.cuposDisponibles}
-                  </strong>
+                <div style={neo.occupancyCompactText}>
+                  <strong>{resumenAgenda.ocupacion}% ocupado</strong>
+                  <span>
+                    {resumenAgenda.reservadosTotal} reserva
+                    {resumenAgenda.reservadosTotal === 1 ? "" : "s"} de{" "}
+                    {resumenAgenda.capacidadTotal} espacio
+                    {resumenAgenda.capacidadTotal === 1 ? "" : "s"}.
+                  </span>
                 </div>
               </div>
-
-              <div style={neo.controlDivider} />
-
-              <span style={neo.controlLabel}>
-                ESTADO DE RESERVAS
-              </span>
-
-              <div style={neo.stateGrid}>
-                <div style={neo.stateBox}>
-                  <span>Confirmadas</span>
-                  <strong>
-                    {resumenReservas.confirmadas}
-                  </strong>
-                </div>
-
-                <div style={neo.stateBox}>
-                  <span>Asistieron</span>
-                  <strong>
-                    {resumenReservas.asistieron}
-                  </strong>
-                </div>
-
-                <div style={neo.stateBox}>
-                  <span>Pendientes</span>
-                  <strong>
-                    {resumenReservas.pendientes}
-                  </strong>
-                </div>
-
-                <div style={neo.stateBox}>
-                  <span>No asistieron</span>
-                  <strong>
-                    {resumenReservas.noAsistieron}
-                  </strong>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                style={neo.controlPrimary}
-                onClick={() => setVista("nueva")}
-              >
-                + Nueva reserva
-              </button>
-
-              <button
-                type="button"
-                style={neo.controlSecondary}
-                onClick={() => setVista("reservas")}
-              >
-                Gestionar reservas
-              </button>
-
-              {esAdmin && (
-                <button
-                  type="button"
-                  style={neo.controlSecondary}
-                  onClick={() =>
-                    setVista("configuracion")
-                  }
-                >
-                  {esSalonBelleza ? "Configurar servicios" : "Configurar clases"}
-                </button>
-              )}
             </aside>
           </section>
         </>
@@ -2103,7 +2023,7 @@ export default function AgendaPage() {
           <section style={s.twoColumns}>
           <article style={s.panel}>
             <span style={pro.panelEyebrow}>
-              {esSalonBelleza ? "NUEVA CITA" : "NUEVA RESERVA"}
+              {esSalonBelleza ? "RESERVA MANUAL" : "RESERVA MANUAL"}
             </span>
             <h2 style={pro.panelTitle}>
               {esSalonBelleza ? "Datos de la cita" : "Datos de la reserva"}
@@ -4370,6 +4290,10 @@ const AGENDA_CSS = `
     grid-row: auto !important;
   }
 
+  .agenda-main-control-compact {
+    padding: 10px !important;
+  }
+
   .agenda-d-timeline-row {
     grid-template-columns: 16px 76px minmax(0,1fr) !important;
     gap: 8px !important;
@@ -4449,14 +4373,42 @@ const AGENDA_CSS = `
   }
 }
 
+
+.agenda-d-command-grid,
+.agenda-main-schedule,
+.agenda-main-reservations,
+.agenda-main-control,
+.agenda-d-timeline-row,
+.agenda-d-timeline-row > * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.agenda-main-control-compact {
+  overflow: hidden !important;
+}
+
+@media (min-width: 821px) {
+  .agenda-d-command-grid {
+    width: min(1180px, 100%) !important;
+  }
+}
+
 /* ==========================================================
    KONAX · CORRECCIÓN MÓVIL 2026-08-14
    Evita recortes horizontales y compacta el Hero de Agenda.
    ========================================================== */
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 .agenda-page {
   width: 100%;
   max-width: 100vw;
+  min-width: 0;
   overflow-x: hidden;
 }
 
@@ -4624,21 +4576,59 @@ const AGENDA_CSS = `
   }
 }
 
+@media (max-width: 560px) {
+  .agenda-d-hero {
+    max-width: 100% !important;
+    padding: 12px !important;
+    border-radius: 16px !important;
+  }
+
+  .agenda-d-brand-row {
+    gap: 10px !important;
+  }
+
+  .agenda-d-brand-row > div:first-child {
+    width: 96px !important;
+    min-width: 96px !important;
+    min-height: 56px !important;
+  }
+
+  .agenda-d-brand-row h1 {
+    font-size: 27px !important;
+    line-height: 1.02 !important;
+  }
+
+  .agenda-d-brand-row p {
+    font-size: 10px !important;
+  }
+
+  .agenda-d-nav {
+    padding: 4px !important;
+    gap: 3px !important;
+  }
+
+  .agenda-d-nav > button {
+    min-height: 32px !important;
+    padding: 0 8px !important;
+    font-size: 9px !important;
+  }
+}
+
 `;
 
 const neo = {
   hero: {
-    maxWidth: 1480,
-    margin: "0 auto 16px",
-    padding: 24,
+    maxWidth: 1180,
+    margin: "0 auto 12px",
+    padding: "16px 18px",
     display: "grid",
-    gridTemplateColumns: "minmax(0,1fr) 320px",
-    gap: 18,
-    borderRadius: 24,
+    gridTemplateColumns: "minmax(0,1fr) 270px",
+    gap: 14,
+    borderRadius: 18,
     background:
-      "linear-gradient(135deg,#071b13 0%,#0b4a2b 58%,#0f7a42 100%)",
+      "linear-gradient(135deg,#071b13 0%,#0b4a2b 60%,#0f7a42 100%)",
     color: "#fff",
-    boxShadow: "0 18px 45px rgba(5,40,25,.18)",
+    boxShadow: "0 12px 28px rgba(5,40,25,.14)",
     overflow: "hidden",
   },
 
@@ -4647,54 +4637,54 @@ const neo = {
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
-    gap: 22,
+    gap: 12,
   },
 
   brandRow: {
     display: "flex",
     alignItems: "center",
-    gap: 18,
+    gap: 13,
   },
 
   logoCard: {
-    width: 138,
-    minHeight: 74,
+    width: 112,
+    minHeight: 62,
     display: "grid",
     placeItems: "center",
-    padding: "8px 12px",
-    borderRadius: 18,
+    padding: "6px 10px",
+    borderRadius: 14,
     background: "#fff",
     flex: "0 0 auto",
   },
 
   logo: {
-    width: 118,
-    height: 48,
+    width: 94,
+    height: 38,
     objectFit: "contain",
   },
 
   heroEyebrow: {
     display: "block",
-    marginBottom: 6,
+    marginBottom: 4,
     color: "#6EE5A3",
-    fontSize: 10,
+    fontSize: 8.5,
     fontWeight: 900,
-    letterSpacing: 1.5,
+    letterSpacing: 1.2,
   },
 
   heroTitle: {
     margin: 0,
-    fontSize: "clamp(34px,5vw,58px)",
-    lineHeight: .98,
-    letterSpacing: -1.4,
+    fontSize: "clamp(28px,3.2vw,42px)",
+    lineHeight: 1,
+    letterSpacing: -1,
   },
 
   heroSubtitle: {
-    maxWidth: 760,
-    margin: "10px 0 0",
+    maxWidth: 620,
+    margin: "6px 0 0",
     color: "#DDEDE4",
-    fontSize: 13,
-    lineHeight: 1.55,
+    fontSize: 10.5,
+    lineHeight: 1.4,
   },
 
   heroActions: {
@@ -4704,12 +4694,13 @@ const neo = {
   },
 
   heroGhost: {
-    minHeight: 42,
-    padding: "0 15px",
-    border: "1px solid rgba(255,255,255,.28)",
-    borderRadius: 11,
-    background: "rgba(255,255,255,.06)",
+    minHeight: 36,
+    padding: "0 12px",
+    border: "1px solid rgba(255,255,255,.24)",
+    borderRadius: 9,
+    background: "rgba(255,255,255,.05)",
     color: "#fff",
+    fontSize: 9.5,
     fontWeight: 800,
     cursor: "pointer",
   },
@@ -4726,7 +4717,7 @@ const neo = {
   },
 
   heroSide: {
-    padding: 18,
+    padding: 13,
     display: "flex",
     flexDirection: "column",
     justifyContent: "center",
@@ -4813,29 +4804,29 @@ const neo = {
   },
 
   nav: {
-    maxWidth: 1480,
-    margin: "0 auto 14px",
-    padding: 7,
+    maxWidth: 1180,
+    margin: "0 auto 12px",
+    padding: 5,
     display: "flex",
-    gap: 6,
+    gap: 4,
     alignItems: "center",
     border: "1px solid #DDE8E1",
-    borderRadius: 15,
+    borderRadius: 12,
     background: "#fff",
-    boxShadow: "0 6px 18px rgba(15,50,31,.04)",
+    boxShadow: "0 5px 14px rgba(15,50,31,.035)",
   },
 
   navItem: {
-    minHeight: 40,
-    padding: "0 13px",
+    minHeight: 34,
+    padding: "0 10px",
     display: "inline-flex",
     alignItems: "center",
-    gap: 7,
+    gap: 5,
     border: 0,
-    borderRadius: 10,
+    borderRadius: 9,
     background: "transparent",
     color: "#506057",
-    fontSize: 11,
+    fontSize: 9.5,
     fontWeight: 850,
     whiteSpace: "nowrap",
     cursor: "pointer",
@@ -4849,8 +4840,8 @@ const neo = {
 
   navRefresh: {
     marginLeft: "auto",
-    minHeight: 38,
-    padding: "0 12px",
+    minHeight: 34,
+    padding: "0 10px",
     border: "1px solid #D9E4DD",
     borderRadius: 9,
     background: "#F7FAF8",
@@ -5147,20 +5138,24 @@ const neo = {
   },
 
   commandGrid: {
-    maxWidth: 1480,
-    margin: "0 auto 20px",
+    width: "100%",
+    maxWidth: 1180,
+    margin: "0 auto 18px",
     display: "grid",
-    gridTemplateColumns: "minmax(0,1.62fr) minmax(310px,.62fr)",
+    gridTemplateColumns: "minmax(0,1.62fr) minmax(280px,.68fr)",
     gridTemplateRows: "auto auto",
-    gap: 12,
+    gap: 10,
     alignItems: "start",
+    overflow: "hidden",
   },
 
   schedulePanel: {
     gridColumn: "1",
     gridRow: "1 / span 2",
     minWidth: 0,
-    padding: 14,
+    width: "100%",
+    maxWidth: "100%",
+    padding: 12,
     border: "1px solid #DCE6E0",
     borderRadius: 18,
     background: "#fff",
@@ -5171,7 +5166,9 @@ const neo = {
     gridColumn: "2",
     gridRow: "1",
     minWidth: 0,
-    padding: 16,
+    width: "100%",
+    maxWidth: "100%",
+    padding: 12,
     border: "1px solid #DCE6E0",
     borderRadius: 18,
     background: "#fff",
@@ -5224,13 +5221,13 @@ const neo = {
   },
 
   timelineRow: {
-    minHeight: 92,
+    minHeight: 74,
     display: "grid",
     gridTemplateColumns:
-      "18px 82px minmax(0,1fr) 104px",
-    gap: 10,
+      "12px 66px minmax(0,1fr) 88px",
+    gap: 7,
     alignItems: "center",
-    padding: "8px 0",
+    padding: "5px 0",
     borderBottom: "1px solid #EDF2EF",
   },
 
@@ -5262,7 +5259,9 @@ const neo = {
 
   timelineTime: {
     display: "grid",
-    gap: 3,
+    gap: 1,
+    color: "#536158",
+    fontSize: 9,
   },
 
   timelineClass: {
@@ -5301,23 +5300,23 @@ const neo = {
 
   classTitle: {
     display: "block",
-    marginTop: 5,
-    fontSize: 15,
-    lineHeight: 1.15,
+    marginTop: 3,
+    fontSize: 13,
+    lineHeight: 1.12,
   },
 
   classMeta: {
     display: "block",
     marginTop: 2,
     color: "#6F7D75",
-    fontSize: 8.5,
-    lineHeight: 1.3,
+    fontSize: 7.8,
+    lineHeight: 1.2,
   },
 
   capacityBar: {
-    width: "min(100%,260px)",
-    height: 6,
-    marginTop: 7,
+    width: "min(100%,170px)",
+    height: 5,
+    marginTop: 4,
     overflow: "hidden",
     borderRadius: 999,
     background: "#E8EFEA",
@@ -5331,8 +5330,8 @@ const neo = {
   },
 
   capacityFooter: {
-    width: "min(100%,260px)",
-    marginTop: 4,
+    width: "min(100%,170px)",
+    marginTop: 3,
     display: "flex",
     justifyContent: "space-between",
     gap: 8,
@@ -5346,8 +5345,8 @@ const neo = {
   },
 
   reserveButton: {
-    minHeight: 34,
-    padding: "0 11px",
+    minHeight: 30,
+    padding: "0 8px",
     border: 0,
     borderRadius: 10,
     background: "#0B7A43",
@@ -5358,8 +5357,8 @@ const neo = {
   },
 
   reserveDisabled: {
-    minHeight: 34,
-    padding: "0 10px",
+    minHeight: 30,
+    padding: "0 8px",
     border: "1px solid #E0E5E2",
     borderRadius: 10,
     background: "#F2F4F3",
@@ -5539,6 +5538,55 @@ const neo = {
     fontSize: 10,
     fontWeight: 900,
     cursor: "pointer",
+  },
+
+  controlPanelCompact: {
+    gridColumn: "2",
+    gridRow: "2",
+    minWidth: 0,
+    width: "100%",
+    maxWidth: "100%",
+    padding: "11px 12px",
+    borderRadius: 14,
+    background: "linear-gradient(145deg,#082017,#0B4A2B)",
+    color: "#FFFFFF",
+    boxShadow: "0 8px 20px rgba(6,40,25,.12)",
+  },
+
+  occupancyCompactRow: {
+    marginTop: 8,
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  occupancyRingCompact: {
+    width: 58,
+    height: 58,
+    flex: "0 0 auto",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+  },
+
+  occupancyInnerCompact: {
+    width: 44,
+    height: 44,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background: "#0A261B",
+    color: "#FFFFFF",
+    fontSize: 11,
+  },
+
+  occupancyCompactText: {
+    minWidth: 0,
+    display: "grid",
+    gap: 2,
+    color: "#DCEDE4",
+    fontSize: 8.5,
+    lineHeight: 1.3,
   },
 
   controlPanel: {
