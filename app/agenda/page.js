@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.14-AGENDA-COMPACTA-D";
+const VERSION = "2026.08.14-AGENDA-DIAS-MULTIPLES-RESERVAS-COMPACTAS-E";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -148,6 +148,7 @@ export default function AgendaPage() {
 
   const [horarioForm, setHorarioForm] = useState(HORARIO_INICIAL);
   const [horarioEditandoId, setHorarioEditandoId] = useState(null);
+  const [diasHorarioSeleccionados, setDiasHorarioSeleccionados] = useState([5]);
 
   const [busquedaCliente, setBusquedaCliente] = useState("");
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
@@ -328,6 +329,9 @@ export default function AgendaPage() {
       if (salonLocal) {
         setServicioForm(SERVICIO_SALON_INICIAL);
         setHorarioForm(HORARIO_SALON_INICIAL);
+        setDiasHorarioSeleccionados([1, 2, 3, 4, 5, 6, 0]);
+      } else {
+        setDiasHorarioSeleccionados([5]);
       }
 
       if (typeof window !== "undefined") {
@@ -968,6 +972,21 @@ export default function AgendaPage() {
     await cargarServicios();
   }
 
+  function alternarDiaHorario(dia) {
+    setDiasHorarioSeleccionados((actuales) => {
+      const existe = actuales.includes(dia);
+      const orden = [1, 2, 3, 4, 5, 6, 0];
+
+      if (existe) {
+        return actuales.filter((item) => item !== dia);
+      }
+
+      return [...actuales, dia].sort(
+        (a, b) => orden.indexOf(a) - orden.indexOf(b)
+      );
+    });
+  }
+
   async function guardarHorario() {
     if (!esAdmin) {
       alert("Solo el administrador puede configurar horarios.");
@@ -976,6 +995,11 @@ export default function AgendaPage() {
 
     if (!horarioForm.servicio_id) {
       alert("Selecciona un servicio o clase.");
+      return;
+    }
+
+    if (!diasHorarioSeleccionados.length) {
+      alert("Selecciona por lo menos un día disponible.");
       return;
     }
 
@@ -993,10 +1017,9 @@ export default function AgendaPage() {
     setError("");
 
     try {
-      const payload = {
+      const basePayload = {
         empresa_id: empresaId,
         servicio_id: horarioForm.servicio_id,
-        dia_semana: Number(horarioForm.dia_semana),
         hora_inicio: horarioForm.hora_inicio,
         hora_fin: horarioForm.hora_fin,
         instructor: horarioForm.instructor.trim() || null,
@@ -1006,31 +1029,77 @@ export default function AgendaPage() {
         activo: Boolean(horarioForm.activo),
       };
 
-      let respuesta;
-
       if (horarioEditandoId) {
-        respuesta = await supabase
+        const [primerDia, ...diasAdicionales] =
+          diasHorarioSeleccionados;
+
+        const actualizacion = await supabase
           .from("agenda_horarios")
-          .update(payload)
+          .update({
+            ...basePayload,
+            dia_semana: Number(primerDia),
+          })
           .eq("empresa_id", empresaId)
           .eq("id", horarioEditandoId);
-      } else {
-        respuesta = await supabase
-          .from("agenda_horarios")
-          .insert([payload]);
-      }
 
-      if (respuesta.error) throw respuesta.error;
+        if (actualizacion.error) {
+          throw actualizacion.error;
+        }
+
+        if (diasAdicionales.length > 0) {
+          const adicionales = diasAdicionales.map((dia) => ({
+            ...basePayload,
+            dia_semana: Number(dia),
+          }));
+
+          const insercion = await supabase
+            .from("agenda_horarios")
+            .insert(adicionales);
+
+          if (insercion.error) {
+            throw insercion.error;
+          }
+        }
+      } else {
+        const horariosNuevos =
+          diasHorarioSeleccionados.map((dia) => ({
+            ...basePayload,
+            dia_semana: Number(dia),
+          }));
+
+        const insercion = await supabase
+          .from("agenda_horarios")
+          .insert(horariosNuevos);
+
+        if (insercion.error) {
+          throw insercion.error;
+        }
+      }
 
       setHorarioForm(
         esSalonBelleza
           ? HORARIO_SALON_INICIAL
           : HORARIO_INICIAL
       );
+
+      setDiasHorarioSeleccionados(
+        esSalonBelleza
+          ? [1, 2, 3, 4, 5, 6, 0]
+          : [5]
+      );
+
       setHorarioEditandoId(null);
+
       await cargarHorarios();
       await cargarDisponibilidad();
-      alert(horarioEditandoId ? "Horario actualizado." : "Horario creado.");
+
+      alert(
+        horarioEditandoId
+          ? "Horario actualizado."
+          : diasHorarioSeleccionados.length > 1
+          ? "Horarios creados para los días seleccionados."
+          : "Horario creado."
+      );
     } catch (err) {
       console.error(err);
       setError(err?.message || "No se pudo guardar el horario.");
@@ -1041,6 +1110,9 @@ export default function AgendaPage() {
 
   function editarHorario(horario) {
     setHorarioEditandoId(horario.id);
+    setDiasHorarioSeleccionados([
+      Number(horario.dia_semana ?? 5),
+    ]);
     setHorarioForm({
       servicio_id: horario.servicio_id || "",
       dia_semana: Number(horario.dia_semana ?? 5),
@@ -2238,18 +2310,15 @@ export default function AgendaPage() {
 
       {vista === "reservas" && (
         <section
-          style={{
-            ...pro.panel,
-            maxWidth: 1450,
-            margin: "0 auto 18px",
-          }}
+          style={pro.reservasPanelCompacto}
+          className="agenda-reservas-compactas"
         >
-          <div style={pro.panelHeader}>
+          <div style={pro.reservasHeaderCompacto}>
             <div>
               <span style={pro.panelEyebrow}>CONTROL Y SEGUIMIENTO</span>
               <h2 style={pro.panelTitle}>Reservas</h2>
-              <p style={{ ...s.muted, margin: "6px 0 0" }}>
-                Consulta reservas, asistencia, pendientes de pago y cancelaciones.
+              <p style={{ ...s.muted, margin: "4px 0 0" }}>
+                Consulta y gestiona las reservas del negocio.
               </p>
             </div>
 
@@ -2258,8 +2327,8 @@ export default function AgendaPage() {
             </span>
           </div>
 
-          <div style={pro.filters}>
-            <div className="agenda-reserva-filtros">
+          <div style={pro.reservasFiltersCompacto}>
+            <div className="agenda-reserva-filtros agenda-reserva-filtros-compactos">
               <Campo label="Buscar reserva">
                 <input
                   type="text"
@@ -2299,6 +2368,7 @@ export default function AgendaPage() {
             onAsistencia={marcarAsistencia}
             onCobrar={cobrarReserva}
             mostrarFecha
+            compacto
           />
         </section>
       )}
@@ -2683,24 +2753,43 @@ export default function AgendaPage() {
               </Campo>
 
               <div style={s.formGrid}>
-                <Campo label="Día">
-                  <select
-                    value={horarioForm.dia_semana}
-                    onChange={(e) =>
-                      setHorarioForm({
-                        ...horarioForm,
-                        dia_semana: Number(e.target.value),
-                      })
-                    }
-                    style={s.input}
+                <div style={s.daysField}>
+                  <span style={s.label}>
+                    {esSalonBelleza
+                      ? "Días disponibles"
+                      : "Días de la semana"}
+                  </span>
+
+                  <div
+                    style={s.daysGrid}
+                    className="agenda-days-grid"
                   >
-                    {[1, 2, 3, 4, 5, 6, 0].map((dia) => (
-                      <option key={dia} value={dia}>
-                        {nombreDia(dia)}
-                      </option>
-                    ))}
-                  </select>
-                </Campo>
+                    {[1, 2, 3, 4, 5, 6, 0].map((dia) => {
+                      const activo =
+                        diasHorarioSeleccionados.includes(dia);
+
+                      return (
+                        <button
+                          key={dia}
+                          type="button"
+                          onClick={() => alternarDiaHorario(dia)}
+                          style={{
+                            ...s.dayToggle,
+                            ...(activo ? s.dayToggleActive : {}),
+                          }}
+                        >
+                          {nombreDia(dia).slice(0, 3)}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <span style={s.daysHint}>
+                    Marca todos los días en que estará disponible.
+                    Si sábado o domingo manejan otro horario,
+                    crea un segundo horario para esos días.
+                  </span>
+                </div>
 
                 <Campo label={esSalonBelleza ? "Profesional" : "Instructor"}>
                   <input
@@ -2787,6 +2876,11 @@ export default function AgendaPage() {
                         esSalonBelleza
                           ? HORARIO_SALON_INICIAL
                           : HORARIO_INICIAL
+                      );
+                      setDiasHorarioSeleccionados(
+                        esSalonBelleza
+                          ? [1, 2, 3, 4, 5, 6, 0]
+                          : [5]
                       );
                     }}
                   >
@@ -3111,6 +3205,7 @@ function ReservaLista({
   onAsistencia,
   onCobrar,
   mostrarFecha = false,
+  compacto = false,
 }) {
   if (!reservas.length) {
     return (
@@ -3141,21 +3236,53 @@ function ReservaLista({
             : s.badge;
 
         return (
-          <article key={reserva.id} style={s.reservationCard}>
-            <div style={s.reservationIdentity}>
-              <div style={s.avatar}>
+          <article
+            key={reserva.id}
+            style={
+              compacto
+                ? s.reservationCardCompact
+                : s.reservationCard
+            }
+            className={
+              compacto
+                ? "agenda-reservation-row-compact"
+                : ""
+            }
+          >
+            <div
+              style={
+                compacto
+                  ? s.reservationIdentityCompact
+                  : s.reservationIdentity
+              }
+            >
+              <div style={compacto ? s.avatarCompact : s.avatar}>
                 {String(nombre || "A").charAt(0).toUpperCase()}
               </div>
 
               <div style={s.reservationMain}>
                 <div style={s.reservationTopLine}>
-                  <strong style={s.reservationName}>{nombre}</strong>
+                  <strong
+                    style={
+                      compacto
+                        ? s.reservationNameCompact
+                        : s.reservationName
+                    }
+                  >
+                    {nombre}
+                  </strong>
                   <span style={badgeEstado}>
                     {String(reserva.estado || "confirmada").replace(/_/g, " ")}
                   </span>
                 </div>
 
-                <span style={s.slotDetail}>
+                <span
+                  style={
+                    compacto
+                      ? s.reservationDetailCompact
+                      : s.slotDetail
+                  }
+                >
                   {nombreServicio(reserva.servicio_id)}
                   {mostrarFecha ? ` · ${formatoFecha(reserva.fecha_reserva)}` : ""}
                   {" · "}
@@ -3167,7 +3294,13 @@ function ReservaLista({
               </div>
             </div>
 
-            <div style={s.inlineActions}>
+            <div
+              style={
+                compacto
+                  ? s.inlineActionsCompact
+                  : s.inlineActions
+              }
+            >
               {puedeGestionar && estado === "pendiente_pago" && (
                 <button
                   type="button"
@@ -3684,6 +3817,45 @@ const sPro = {
     gap: 9,
   },
 
+  daysField: {
+    display: "grid",
+    gap: 7,
+    marginBottom: 10,
+  },
+
+  daysGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(7,minmax(0,1fr))",
+    gap: 6,
+  },
+
+  dayToggle: {
+    minHeight: 38,
+    padding: "6px 4px",
+    border: "1px solid #D4DED8",
+    borderRadius: 9,
+    background: "#FFFFFF",
+    color: "#5A675F",
+    fontSize: 9,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    cursor: "pointer",
+  },
+
+  dayToggleActive: {
+    borderColor: "#16834F",
+    background: "#EAF8EF",
+    color: "#0B7542",
+    boxShadow: "0 4px 10px rgba(22,131,79,.10)",
+  },
+
+  daysHint: {
+    color: "#7B8880",
+    fontSize: 8.5,
+    lineHeight: 1.4,
+  },
+
+
   checkGrid: {
     display: "grid",
     gap: 8,
@@ -3821,6 +3993,63 @@ const sPro = {
     borderRadius: 12,
     background: "#fbfdfc",
   },
+
+  reservationCardCompact: {
+    minHeight: 52,
+    padding: "7px 9px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+    border: "1px solid #E3EAE6",
+    borderRadius: 9,
+    background: "#FFFFFF",
+  },
+
+  reservationIdentityCompact: {
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flex: "1 1 420px",
+  },
+
+  avatarCompact: {
+    width: 30,
+    height: 30,
+    flex: "0 0 auto",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 8,
+    background: "#173C2A",
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: 900,
+  },
+
+  reservationNameCompact: {
+    display: "block",
+    fontSize: 11,
+    lineHeight: 1.15,
+    overflowWrap: "anywhere",
+  },
+
+  reservationDetailCompact: {
+    display: "block",
+    marginTop: 2,
+    color: "#78847D",
+    fontSize: 8.2,
+    lineHeight: 1.3,
+    overflowWrap: "anywhere",
+  },
+
+  inlineActionsCompact: {
+    display: "flex",
+    gap: 4,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+
 
   reservationIdentity: {
     minWidth: 0,
@@ -3974,6 +4203,23 @@ const AGENDA_CSS = `
     gap: 10px;
   }
 
+  .agenda-reserva-filtros-compactos {
+    grid-template-columns: minmax(220px,1fr) 180px;
+    gap: 7px;
+  }
+
+  .agenda-reservas-compactas {
+    width: min(1080px,100%);
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .agenda-reservation-row-compact {
+    width: 100%;
+    max-width: 100%;
+  }
+
+
   .agenda-stepper {
     display: grid;
     grid-template-columns: repeat(3, minmax(0,1fr));
@@ -4053,6 +4299,20 @@ const AGENDA_CSS = `
       grid-template-columns: 1fr;
     }
 
+    .agenda-days-grid {
+      grid-template-columns: repeat(4,minmax(0,1fr)) !important;
+    }
+
+    .agenda-reservation-row-compact {
+      align-items: flex-start !important;
+      flex-direction: column !important;
+    }
+
+    .agenda-reservation-row-compact > div:last-child {
+      width: 100% !important;
+      justify-content: flex-start !important;
+    }
+
     .agenda-stepper {
       grid-template-columns: 1fr;
     }
@@ -4065,6 +4325,10 @@ const AGENDA_CSS = `
   @media (max-width: 480px) {
     .agenda-kpis {
       grid-template-columns: 1fr;
+    }
+
+    .agenda-days-grid {
+      grid-template-columns: repeat(2,minmax(0,1fr)) !important;
     }
   }
 
@@ -5397,6 +5661,32 @@ const neo = {
 };
 
 const pro = {
+  reservasPanelCompacto:{
+    maxWidth:1080,
+    margin:"0 auto 16px",
+    padding:12,
+    border:"1px solid #DCE5DF",
+    borderRadius:15,
+    background:"#FFFFFF",
+    boxShadow:"0 7px 20px rgba(15,23,42,.04)",
+  },
+  reservasHeaderCompacto:{
+    marginBottom:9,
+    paddingBottom:8,
+    display:"flex",
+    alignItems:"center",
+    justifyContent:"space-between",
+    gap:10,
+    flexWrap:"wrap",
+    borderBottom:"1px solid #EDF1EE",
+  },
+  reservasFiltersCompacto:{
+    marginBottom:8,
+    padding:8,
+    borderRadius:11,
+    background:"#F7FAF8",
+    border:"1px solid #E4EAE6",
+  },
   header:{
     maxWidth:1450,
     margin:"0 auto 14px",
