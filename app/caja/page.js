@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION_CAJA_GIMNASIO = "2026.08.12-L-GIMNASIO-SALON";
+const VERSION_CAJA_GIMNASIO = "2026.08.14-M-SYNC-AGENDA-CAJA";
 
 function obtenerFechaPanama(fecha = new Date()) {
   const fechaObjeto =
@@ -173,6 +173,10 @@ export default function Caja() {
   const [flujoCaja, setFlujoCaja] = useState("");
   const [agendaReservaFlujoId, setAgendaReservaFlujoId] =
     useState("");
+  const [reservasPendientesSalon, setReservasPendientesSalon] =
+    useState([]);
+  const [reservaSalonSeleccionada, setReservaSalonSeleccionada] =
+    useState(null);
   const [esEscritorioCompacto, setEsEscritorioCompacto] =
     useState(false);
 
@@ -1191,6 +1195,9 @@ export default function Caja() {
     setClienteSeleccionado(null);
     setCuentasCliente([]);
     setCuentaSeleccionada(null);
+    setReservasPendientesSalon([]);
+    setReservaSalonSeleccionada(null);
+    setAgendaReservaFlujoId("");
 
     if (
       ["Membresía", "Renovación"].includes(tipoMovimiento)
@@ -1753,6 +1760,258 @@ export default function Caja() {
     setResultadosBusqueda(unicos);
   }
 
+  function prepararReservaSalonParaCobro(reserva) {
+    if (!reserva?.id) return;
+
+    setReservaSalonSeleccionada(reserva);
+    setAgendaReservaFlujoId(String(reserva.id));
+    setTipoMovimiento("Servicio de salón");
+
+    const montoReserva = Number(reserva.monto || 0);
+    setMonto(montoReserva > 0 ? montoReserva.toFixed(2) : "");
+
+    const nombreServicio =
+      reserva.servicio_nombre ||
+      reserva.nombre_servicio ||
+      "Servicio del salón";
+
+    setConcepto(
+      `${nombreServicio} · Reserva ${String(
+        reserva.fecha_reserva || ""
+      ).slice(0, 10)} · ${String(
+        reserva.hora_inicio || ""
+      ).slice(0, 5)}`
+    );
+
+    setObservacion(
+      `Cobro asociado a reserva de Agenda ${reserva.id}.`
+    );
+  }
+
+  async function cargarReservasPendientesClienteSalon(
+    empresaId,
+    clienteId
+  ) {
+    setReservasPendientesSalon([]);
+    setReservaSalonSeleccionada(null);
+    setAgendaReservaFlujoId("");
+
+    if (!empresaId || !clienteId) return [];
+
+    const { data: reservasData, error: errorReservas } =
+      await supabase
+        .from("agenda_reservas")
+        .select(
+          "id,cliente_id,servicio_id,fecha_reserva,hora_inicio,hora_fin,monto,estado,requiere_pago"
+        )
+        .eq("empresa_id", empresaId)
+        .eq("cliente_id", clienteId)
+        .eq("estado", "pendiente_pago")
+        .order("fecha_reserva", { ascending: true })
+        .order("hora_inicio", { ascending: true });
+
+    if (errorReservas) {
+      throw new Error(
+        "No se pudieron consultar las citas pendientes de pago: " +
+          errorReservas.message
+      );
+    }
+
+    const reservasBase = reservasData || [];
+    if (!reservasBase.length) {
+      return [];
+    }
+
+    const idsReservas = reservasBase.map((r) => r.id);
+
+    /*
+      Si por una falla anterior existe un movimiento YA vinculado
+      a una reserva que todavía figura pendiente, se repara el
+      estado antes de ofrecer un segundo cobro.
+    */
+    const { data: pagosVinculados, error: errorPagos } =
+      await supabase
+        .from("caja")
+        .select("id,agenda_reserva_id,monto,estado")
+        .eq("empresa_id", empresaId)
+        .in("agenda_reserva_id", idsReservas)
+        .eq("estado", "Procesado");
+
+    if (errorPagos) {
+      throw new Error(
+        "No se pudieron validar los pagos existentes: " +
+          errorPagos.message
+      );
+    }
+
+    const pagosPorReserva = new Map(
+      (pagosVinculados || []).map((pago) => [
+        String(pago.agenda_reserva_id),
+        pago,
+      ])
+    );
+
+    const reservasSinPago = [];
+
+    for (const reserva of reservasBase) {
+      const pago = pagosPorReserva.get(String(reserva.id));
+
+      if (pago?.id) {
+        const { error: errorReconciliar } =
+          await supabase.rpc(
+            "confirmar_pago_agenda_desde_caja",
+            {
+              p_empresa_id: empresaId,
+              p_reserva_id: reserva.id,
+              p_caja_id: pago.id,
+            }
+          );
+
+        if (errorReconciliar) {
+          throw new Error(
+            "Existe un pago para una cita, pero no se pudo sincronizar con Agenda: " +
+              errorReconciliar.message
+          );
+        }
+
+        continue;
+      }
+
+      reservasSinPago.push(reserva);
+    }
+
+    if (!reservasSinPago.length) {
+      return [];
+    }
+
+    const idsServicios = [
+      ...new Set(
+        reservasSinPago.map((r) => r.servicio_id).filter(Boolean)
+      ),
+    ];
+
+    let serviciosPorId = new Map();
+
+    if (idsServicios.length) {
+      const { data: serviciosData, error: errorServicios } =
+        await supabase
+          .from("agenda_servicios")
+          .select("id,nombre")
+          .eq("empresa_id", empresaId)
+          .in("id", idsServicios);
+
+      if (errorServicios) {
+        throw new Error(
+          "No se pudieron cargar los servicios de las citas: " +
+            errorServicios.message
+        );
+      }
+
+      serviciosPorId = new Map(
+        (serviciosData || []).map((servicio) => [
+          String(servicio.id),
+          servicio.nombre,
+        ])
+      );
+    }
+
+    const reservasPreparadas = reservasSinPago.map((reserva) => ({
+      ...reserva,
+      servicio_nombre:
+        serviciosPorId.get(String(reserva.servicio_id)) ||
+        "Servicio del salón",
+    }));
+
+    setReservasPendientesSalon(reservasPreparadas);
+
+    /*
+      Si hay una sola cita pendiente, la seleccionamos
+      automáticamente. Si hay varias, Caja obliga a escoger
+      cuál se está cobrando.
+    */
+    if (reservasPreparadas.length === 1) {
+      prepararReservaSalonParaCobro(reservasPreparadas[0]);
+    } else {
+      setMonto("");
+      setConcepto("Servicio de salón");
+      setObservacion("");
+    }
+
+    return reservasPreparadas;
+  }
+
+  async function verificarReservaAntesDeCobrar(empresaId) {
+    if (!agendaReservaFlujoId) return true;
+
+    const { data: reservaActual, error: errorReserva } =
+      await supabase
+        .from("agenda_reservas")
+        .select("id,estado,monto")
+        .eq("empresa_id", empresaId)
+        .eq("id", agendaReservaFlujoId)
+        .maybeSingle();
+
+    if (errorReserva || !reservaActual) {
+      throw new Error(
+        "No se pudo validar la reserva antes del cobro: " +
+          (errorReserva?.message || "Reserva no encontrada.")
+      );
+    }
+
+    const { data: pagoExistente, error: errorPago } =
+      await supabase
+        .from("caja")
+        .select("id,monto,estado")
+        .eq("empresa_id", empresaId)
+        .eq("agenda_reserva_id", agendaReservaFlujoId)
+        .eq("estado", "Procesado")
+        .limit(1)
+        .maybeSingle();
+
+    if (errorPago) {
+      throw new Error(
+        "No se pudo validar si la reserva ya fue pagada: " +
+          errorPago.message
+      );
+    }
+
+    if (pagoExistente?.id) {
+      const { error: errorConfirmar } =
+        await supabase.rpc(
+          "confirmar_pago_agenda_desde_caja",
+          {
+            p_empresa_id: empresaId,
+            p_reserva_id: agendaReservaFlujoId,
+            p_caja_id: pagoExistente.id,
+          }
+        );
+
+      if (errorConfirmar) {
+        throw new Error(
+          "La reserva ya tiene un pago, pero no se pudo sincronizar con Agenda: " +
+            errorConfirmar.message
+        );
+      }
+
+      alert(
+        `Esta reserva ya estaba pagada por $${Number(
+          pagoExistente.monto || 0
+        ).toFixed(2)}. No se registró un segundo cobro.`
+      );
+
+      return false;
+    }
+
+    if (normalizar(reservaActual.estado) !== "pendiente_pago") {
+      alert(
+        "Esta reserva ya no está pendiente de pago. No se registrará otro cobro."
+      );
+      return false;
+    }
+
+    return true;
+  }
+
   async function seleccionarResultado(resultado) {
     const empresaId = obtenerEmpresaId();
     if (!empresaId) return;
@@ -1774,6 +2033,19 @@ export default function Caja() {
         "Caja";
 
       setResponsable(cajeroActual);
+
+      try {
+        await cargarReservasPendientesClienteSalon(
+          empresaId,
+          cliente.id
+        );
+      } catch (errorReservasSalon) {
+        alert(
+          errorReservasSalon?.message ||
+            "No se pudieron consultar las citas pendientes del cliente."
+        );
+      }
+
       return;
     }
 
@@ -2619,6 +2891,29 @@ export default function Caja() {
 
     setGuardando(true);
 
+    if (esNegocioSalon() && agendaReservaFlujoId) {
+      try {
+        const puedeCobrarReserva =
+          await verificarReservaAntesDeCobrar(empresaId);
+
+        if (!puedeCobrarReserva) {
+          setGuardando(false);
+          await cargarReservasPendientesClienteSalon(
+            empresaId,
+            clienteSeleccionado?.id
+          );
+          return;
+        }
+      } catch (errorValidacionReserva) {
+        setGuardando(false);
+        alert(
+          errorValidacionReserva?.message ||
+            "No se pudo validar la reserva antes del cobro."
+        );
+        return;
+      }
+    }
+
     let movimientoCajaCreado = null;
     let pagoPreparado = null;
     let cuentaActualizada = cuentaSeleccionada;
@@ -2939,6 +3234,8 @@ export default function Caja() {
     setSuscripcionFlujoId("");
     setFlujoCaja("");
     setAgendaReservaFlujoId("");
+    setReservasPendientesSalon([]);
+    setReservaSalonSeleccionada(null);
 
     setBuscarCliente("");
     setResultadosBusqueda([]);
@@ -3454,6 +3751,76 @@ export default function Caja() {
                               </option>
                             ))}
                           </select>
+                        </div>
+                      )}
+
+                      {esNegocioSalon() && (
+                        <div style={estilos.agendaCobroBloque}>
+                          <div style={estilos.agendaCobroHeader}>
+                            <div>
+                              <span style={estilos.gymEyebrow}>
+                                CITAS PENDIENTES DE PAGO
+                              </span>
+                              <strong style={estilos.agendaCobroTitulo}>
+                                {reservasPendientesSalon.length
+                                  ? "Selecciona la cita que vas a cobrar"
+                                  : "Este cliente no tiene citas pendientes de pago"}
+                              </strong>
+                            </div>
+
+                            {reservaSalonSeleccionada?.id && (
+                              <span style={estilos.agendaCobroSeleccionada}>
+                                Cita seleccionada
+                              </span>
+                            )}
+                          </div>
+
+                          {reservasPendientesSalon.length > 0 && (
+                            <div style={estilos.agendaCobroLista}>
+                              {reservasPendientesSalon.map((reserva) => {
+                                const activa =
+                                  String(reservaSalonSeleccionada?.id || "") ===
+                                  String(reserva.id);
+
+                                return (
+                                  <button
+                                    key={reserva.id}
+                                    type="button"
+                                    onClick={() =>
+                                      prepararReservaSalonParaCobro(reserva)
+                                    }
+                                    style={{
+                                      ...estilos.agendaCobroItem,
+                                      ...(activa
+                                        ? estilos.agendaCobroItemActivo
+                                        : {}),
+                                    }}
+                                  >
+                                    <span>
+                                      <strong>
+                                        {reserva.servicio_nombre}
+                                      </strong>
+                                      <small>
+                                        {String(
+                                          reserva.fecha_reserva || ""
+                                        ).slice(0, 10)}
+                                        {" · "}
+                                        {String(
+                                          reserva.hora_inicio || ""
+                                        ).slice(0, 5)}
+                                      </small>
+                                    </span>
+
+                                    <strong>
+                                      ${Number(
+                                        reserva.monto || 0
+                                      ).toFixed(2)}
+                                    </strong>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -4389,6 +4756,59 @@ const estilosDesktop = {
 };
 
 const estilos={
+  agendaCobroBloque:{
+    marginTop:"12px",
+    padding:"12px",
+    border:"1px solid #dce8e1",
+    borderRadius:"12px",
+    background:"#f8fbf9"
+  },
+  agendaCobroHeader:{
+    display:"flex",
+    justifyContent:"space-between",
+    gap:"10px",
+    alignItems:"center",
+    flexWrap:"wrap",
+    marginBottom:"9px"
+  },
+  agendaCobroTitulo:{
+    display:"block",
+    marginTop:"3px",
+    fontSize:"13px",
+    color:"#17211b"
+  },
+  agendaCobroSeleccionada:{
+    padding:"5px 8px",
+    borderRadius:"999px",
+    background:"#e8f7ed",
+    color:"#08743c",
+    fontSize:"9px",
+    fontWeight:900
+  },
+  agendaCobroLista:{
+    display:"grid",
+    gap:"7px"
+  },
+  agendaCobroItem:{
+    width:"100%",
+    padding:"9px 10px",
+    display:"flex",
+    justifyContent:"space-between",
+    gap:"10px",
+    alignItems:"center",
+    border:"1px solid #d9e2dc",
+    borderRadius:"10px",
+    background:"#fff",
+    color:"#17211b",
+    textAlign:"left",
+    cursor:"pointer"
+  },
+  agendaCobroItemActivo:{
+    borderColor:"#16834f",
+    background:"#eaf8ef",
+    boxShadow:"0 0 0 2px rgba(22,131,79,.08)"
+  },
+
   pagina:{minHeight:"100vh",background:"#f4f7f5",color:"#17211b",fontFamily:"Inter,Arial,system-ui,sans-serif"},
   shell:{minHeight:"100vh"},
   loading:{minHeight:"100vh",display:"grid",placeItems:"center",alignContent:"center",gap:"10px",background:"#f4f7f5"},
