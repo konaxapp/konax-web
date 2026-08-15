@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.14-AGENDA-GRUPOS-J";
+const VERSION = "2026.08.14-AGENDA-SYNC-CAJA-K";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -2009,6 +2009,8 @@ export default function AgendaPage() {
                               ? "NO ASISTIÓ"
                               : pendiente
                               ? "PENDIENTE DE PAGO"
+                              : esSalonBelleza
+                              ? "PAGADA"
                               : "CONFIRMADA"}
                           </span>
                         </div>
@@ -3305,7 +3307,11 @@ function ReservaLista({
                     {nombre}
                   </strong>
                   <span style={badgeEstado}>
-                    {String(reserva.estado || "confirmada").replace(/_/g, " ")}
+                    {estado === "confirmada" && reserva.requiere_pago
+                      ? "pagada"
+                      : String(
+                          reserva.estado || "confirmada"
+                        ).replace(/_/g, " ")}
                   </span>
                 </div>
 
