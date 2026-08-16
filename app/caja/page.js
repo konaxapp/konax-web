@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION_CAJA_GIMNASIO = "2026.08.14-M-SYNC-AGENDA-CAJA";
+const VERSION_CAJA_GIMNASIO = "2026.08.15-N-PAGO-AGENDA-ATOMICO";
 
 function obtenerFechaPanama(fecha = new Date()) {
   const fechaObjeto =
@@ -2824,6 +2824,49 @@ export default function Caja() {
     );
   }
 
+  async function procesarPagoReservaSalonAtomico(empresaId) {
+    if (!agendaReservaFlujoId) {
+      throw new Error(
+        "No se pudo identificar la reserva que se desea cobrar."
+      );
+    }
+
+    const usuarioRegistro =
+      localStorage.getItem("usuarioNombre") ||
+      localStorage.getItem("adminKonaxNombre") ||
+      "Caja";
+
+    const { data: resultado, error: errorPago } =
+      await supabase.rpc(
+        "registrar_pago_reserva_agenda_en_caja",
+        {
+          p_empresa_id: empresaId,
+          p_reserva_id: agendaReservaFlujoId,
+          p_fecha_pago: fechaPago,
+          p_metodo_pago: metodoPago,
+          p_usuario: usuarioRegistro,
+          p_responsable: responsable || usuarioRegistro,
+          p_observacion: observacion.trim() || null,
+        }
+      );
+
+    if (errorPago) {
+      throw new Error(
+        "No se pudo completar el pago de la reserva: " +
+          errorPago.message
+      );
+    }
+
+    if (!resultado?.ok) {
+      throw new Error(
+        resultado?.mensaje ||
+          "Supabase no confirmó el pago de la reserva."
+      );
+    }
+
+    return resultado;
+  }
+
   async function guardarMovimiento() {
     const empresaId = obtenerEmpresaId();
 
@@ -2891,26 +2934,52 @@ export default function Caja() {
 
     setGuardando(true);
 
+    /*
+      RESERVAS DE AGENDA / SALÓN
+      --------------------------------------------------------
+      Este flujo ya NO hace:
+        1) insert en caja
+        2) RPC separado para confirmar agenda
+
+      Ahora todo ocurre dentro de UNA sola función SQL
+      transaccional. O se guardan Caja + Agenda juntas,
+      o no se guarda ninguna de las dos.
+
+      Esto evita exactamente el caso:
+        Agenda = PAGADA
+        Caja   = sin movimiento
+    */
     if (esNegocioSalon() && agendaReservaFlujoId) {
       try {
-        const puedeCobrarReserva =
-          await verificarReservaAntesDeCobrar(empresaId);
+        const resultadoPago =
+          await procesarPagoReservaSalonAtomico(empresaId);
 
-        if (!puedeCobrarReserva) {
-          setGuardando(false);
-          await cargarReservasPendientesClienteSalon(
-            empresaId,
-            clienteSeleccionado?.id
-          );
-          return;
-        }
-      } catch (errorValidacionReserva) {
-        setGuardando(false);
         alert(
-          errorValidacionReserva?.message ||
-            "No se pudo validar la reserva antes del cobro."
+          resultadoPago?.ya_existia
+            ? `Esta reserva ya tenía un pago procesado de $${Number(
+                resultadoPago.monto || 0
+              ).toFixed(2)}. No se registró un segundo cobro.`
+            : `Pago de $${Number(
+                resultadoPago.monto || 0
+              ).toFixed(2)} registrado y reserva confirmada correctamente.`
+        );
+
+        await cargarMovimientos(
+          empresaId,
+          fechaDesde,
+          fechaHasta
+        );
+
+        window.location.replace("/agenda");
+        return;
+      } catch (errorPagoReserva) {
+        alert(
+          errorPagoReserva?.message ||
+            "No se pudo completar el pago de la reserva."
         );
         return;
+      } finally {
+        setGuardando(false);
       }
     }
 
