@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.17-AGENDA-SIMPLE-K-V6";
+const VERSION = "2026.08.17-AGENDA-SIMPLE-K-V7";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -4221,8 +4221,8 @@ const sPro = {
 
   scheduleGroupMeta: {
     color: "#748078",
-    fontSize: 8.5,
-    lineHeight: 1.3,
+    fontSize: 10.5,
+    lineHeight: 1.4,
   },
 
 
@@ -4589,7 +4589,7 @@ const AGENDA_CSS = `
 @media (max-width: 980px) and (min-width: 821px) {
   .agenda-d-command-grid {
     grid-template-columns:
-      minmax(0,1.35fr) minmax(270px,.95fr) minmax(165px,.42fr) !important;
+      minmax(0,1fr) minmax(260px,.92fr) minmax(230px,.72fr) !important;
     grid-template-rows: auto !important;
     gap: 8px !important;
   }
@@ -4983,7 +4983,7 @@ body {
 @media (min-width: 981px) {
   .agenda-d-command-grid {
     grid-template-columns:
-      minmax(0,1.65fr) minmax(320px,.95fr) minmax(165px,.38fr) !important;
+      minmax(0,1.10fr) minmax(320px,.95fr) minmax(280px,.72fr) !important;
     grid-template-rows: auto !important;
   }
 
@@ -5551,7 +5551,7 @@ const neo = {
     margin: "0 auto 18px",
     display: "grid",
     gridTemplateColumns:
-      "minmax(0,1.65fr) minmax(320px,.95fr) minmax(165px,.38fr)",
+      "minmax(0,1.10fr) minmax(320px,.95fr) minmax(280px,.72fr)",
     gridTemplateRows: "auto",
     gap: 10,
     alignItems: "stretch",
@@ -5961,7 +5961,7 @@ const neo = {
     minWidth: 0,
     width: "100%",
     maxWidth: "100%",
-    padding: "11px 12px",
+    padding: "16px 17px",
     borderRadius: 14,
     background: "linear-gradient(145deg,#082017,#0B4A2B)",
     color: "#FFFFFF",
@@ -5976,8 +5976,8 @@ const neo = {
   },
 
   occupancyRingCompact: {
-    width: 58,
-    height: 58,
+    width: 78,
+    height: 78,
     flex: "0 0 auto",
     display: "grid",
     placeItems: "center",
@@ -5985,14 +5985,14 @@ const neo = {
   },
 
   occupancyInnerCompact: {
-    width: 44,
-    height: 44,
+    width: 58,
+    height: 58,
     display: "grid",
     placeItems: "center",
     borderRadius: "50%",
     background: "#0A261B",
     color: "#FFFFFF",
-    fontSize: 11,
+    fontSize: 14,
   },
 
   occupancyCompactText: {
