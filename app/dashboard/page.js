@@ -106,6 +106,7 @@ function construirModulosPorPlan(codigoPlan) {
     control_caja: false,
 
     reportes: false,
+    reporte_financiero: false,
 
     inventario: false,
     movimientos_inventario: false,
@@ -135,6 +136,7 @@ function construirModulosPorPlan(codigoPlan) {
       clientes: true,
       caja: true,
       historial_lavanderia: true,
+      reporte_financiero: true,
       usuarios: true,
       configuracion: true,
     };
@@ -165,6 +167,7 @@ function construirModulosPorPlan(codigoPlan) {
       dashboard_cobros: true,
       gestor_cobros: true,
       reportes: true,
+      reporte_financiero: true,
       inventario: true,
       movimientos_inventario: true,
       ventas: true,
@@ -205,6 +208,7 @@ function leerModuloEmpresa(data, codigo) {
     dashboard_cobros: "dashboard_cobros",
     gestor_cobros: "cobranza",
     reportes: "dashboard_cobros",
+    reporte_financiero: "egresos",
     inventario: "inventario",
     movimientos_inventario: "inventario",
     ventas: "venta_credito",
@@ -1245,6 +1249,7 @@ export default function Dashboard() {
             "nuevo_pedido",
             "pedidos_lavanderia",
             "historial_lavanderia",
+            "reporte_financiero",
             "usuarios",
             "configuracion",
           ].includes(codigoModulo)
@@ -1367,6 +1372,29 @@ export default function Dashboard() {
       categoriaNegocio
     );
 
+    const salonActual = esTipoSalonBelleza(
+      tipoNegocio,
+      categoriaNegocio
+    );
+
+    const lavanderiaActual =
+      normalizar(planCodigo) === "lavanderia_piloto" ||
+      normalizar(tipoNegocio) === "lavanderia";
+
+    /*
+      REPORTE FINANCIERO:
+      Disponible para los perfiles operativos que lo necesitan.
+      La página sigue filtrando por empresa_id, por lo que cada
+      negocio ve únicamente su propia información.
+    */
+    if (
+      modulo === "reporte_financiero" &&
+      (gimnasioActual || salonActual || lavanderiaActual) &&
+      esAdministrador()
+    ) {
+      return true;
+    }
+
     if (
       gimnasioActual &&
       modulo === "reportes" &&
@@ -1447,6 +1475,13 @@ export default function Dashboard() {
         "▦",
       ],
       [
+        "Reporte Financiero",
+        "/reporte-financiero",
+        "reporte_financiero",
+        "reporte_financiero",
+        "📊",
+      ],
+      [
         "Usuarios y Roles",
         "/usuarios",
         "usuarios",
@@ -1506,6 +1541,13 @@ export default function Dashboard() {
         "▥",
       ],
       [
+        "Reporte Financiero",
+        "/reporte-financiero",
+        "reporte_financiero",
+        "reporte_financiero",
+        "📊",
+      ],
+      [
         "Usuarios y Roles",
         "/usuarios",
         "usuarios",
@@ -1549,6 +1591,13 @@ export default function Dashboard() {
         "caja",
         "caja",
         "$",
+      ],
+      [
+        "Reporte Financiero",
+        "/reporte-financiero",
+        "reporte_financiero",
+        "reporte_financiero",
+        "📊",
       ],
       [
         "Configuración",
@@ -1651,6 +1700,13 @@ export default function Dashboard() {
         "gastos",
         "gastos",
         "🧮",
+      ],
+      [
+        "Reporte Financiero",
+        "/reporte-financiero",
+        "reporte_financiero",
+        "reporte_financiero",
+        "📊",
       ],
       [
         "Suscripciones",
