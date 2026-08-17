@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.17-AGENDA-SIMPLE-K";
+const VERSION = "2026.08.17-AGENDA-SIMPLE-K-V2";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -2785,7 +2785,7 @@ export default function AgendaPage() {
               </Campo>
 
               <div style={s.formGrid}>
-                <div style={s.daysField}>
+                <div style={{ ...s.daysField, ...(esSalonBelleza ? { gridColumn: "1 / -1" } : {}) }}>
                   <span style={s.label}>
                     {esSalonBelleza
                       ? "Días disponibles"
@@ -3925,12 +3925,15 @@ const sPro = {
   },
 
   daysGroupedGrid: {
+    width: "100%",
     display: "grid",
-    gridTemplateColumns: "minmax(150px,1.5fr) minmax(95px,.75fr) minmax(95px,.75fr)",
-    gap: 7,
+    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+    gap: 8,
   },
 
   dayGroupToggle: {
+    width: "100%",
+    minWidth: 0,
     minHeight: 40,
     padding: "8px 10px",
     border: "1px solid #D4DED8",
@@ -3941,6 +3944,8 @@ const sPro = {
     fontWeight: 850,
     cursor: "pointer",
     whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   },
 
   dayToggle: {
@@ -4623,6 +4628,10 @@ const AGENDA_CSS = `
 
 @media (max-width: 760px) {
   .agenda-portal-responsive {
+    grid-template-columns: 1fr !important;
+  }
+
+  .agenda-days-grouped-grid {
     grid-template-columns: 1fr !important;
   }
 }
