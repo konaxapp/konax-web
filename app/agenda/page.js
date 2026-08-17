@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.17-AGENDA-SIMPLE-K-V7";
+const VERSION = "2026.08.17-AGENDA-SIMPLE-K-V8-MOVIL";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -4250,11 +4250,12 @@ const sPro = {
   },
 
   reservationIdentityCompact: {
+    width: "100%",
     minWidth: 0,
     display: "flex",
     alignItems: "center",
     gap: 8,
-    flex: "1 1 420px",
+    flex: "1 1 auto",
   },
 
   avatarCompact: {
@@ -4551,13 +4552,26 @@ const AGENDA_CSS = `
     }
 
     .agenda-reservation-row-compact {
+      width: 100% !important;
+      min-height: 0 !important;
+      height: auto !important;
+      padding: 10px !important;
       align-items: flex-start !important;
       flex-direction: column !important;
+      gap: 8px !important;
+    }
+
+    .agenda-reservation-row-compact > div:first-child {
+      width: 100% !important;
+      min-height: 0 !important;
+      flex: 0 1 auto !important;
     }
 
     .agenda-reservation-row-compact > div:last-child {
       width: 100% !important;
+      min-height: 0 !important;
       justify-content: flex-start !important;
+      flex: 0 1 auto !important;
     }
 
     .agenda-stepper {
@@ -4756,6 +4770,17 @@ const AGENDA_CSS = `
   .agenda-d-reservation-row > div:first-child {
     width: 44px !important;
     height: 44px !important;
+  }
+}
+
+
+@media (max-width: 720px) {
+  .agenda-reservas-compactas > div:last-child {
+    gap: 7px !important;
+  }
+
+  .agenda-reservation-row-compact + .agenda-reservation-row-compact {
+    margin-top: 0 !important;
   }
 }
 
