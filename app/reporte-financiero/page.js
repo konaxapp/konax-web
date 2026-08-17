@@ -14,18 +14,15 @@ import { supabase } from "../../lib/supabase";
   Este componente intenta leer ingresos desde tablas operativas existentes
   sin romper si alguna tabla todavía no existe en un módulo.
 
-  Tablas/fuentes contempladas:
-  - caja_movimientos
-  - gastos
-  - agenda_reservas
-  - pedidos
-  - ventas
-  - membresias
+  Fuentes reales usadas:
+  - caja   -> ingresos procesados
+  - gastos -> egresos activos
 
-  Si una fuente no existe, simplemente se omite.
+  No suma Agenda, Membresías, Ventas ni Pedidos por separado
+  para evitar duplicar cobros que ya fueron registrados en Caja.
 */
 
-const VERSION = "2026.08.17-REPORTE-FINANCIERO-KONAX-V1";
+const VERSION = "2026.08.17-REPORTE-FINANCIERO-KONAX-REAL-V2";
 
 function fechaHoy() {
   const d = new Date();
@@ -292,73 +289,42 @@ export default function ReporteFinanciero() {
   } = {}) {
     if (!idEmpresa || !fechaDesde || !fechaHasta) return;
 
+    if (fechaDesde > fechaHasta) {
+      setError("La fecha desde no puede ser mayor que la fecha hasta.");
+      return;
+    }
+
     setCargando(true);
     setError("");
 
     try {
-      const [
-        cajaResp,
-        gastosResp,
-        agendaResp,
-        pedidosResp,
-        ventasResp,
-        membresiasResp,
-      ] = await Promise.all([
+      const [cajaResp, gastosResp] = await Promise.all([
         consultaSegura("Caja", () =>
           supabase
-            .from("caja_movimientos")
-            .select("*")
+            .from("caja")
+            .select(
+              "id,empresa_id,tipo,descripcion,monto,metodo_pago,usuario,vendedor_responsable,numero_transaccion,fecha_pago,estado,cliente_nombre,agenda_reserva_id,created_at"
+            )
             .eq("empresa_id", idEmpresa)
-            .gte("fecha", fechaDesde)
-            .lte("fecha", fechaHasta)
-            .order("fecha", { ascending: false })
+            .eq("estado", "Procesado")
+            .gte("fecha_pago", fechaDesde)
+            .lte("fecha_pago", fechaHasta)
+            .order("fecha_pago", { ascending: false })
+            .order("created_at", { ascending: false })
         ),
 
         consultaSegura("Gastos", () =>
           supabase
             .from("gastos")
-            .select("*")
+            .select(
+              "id,empresa_id,fecha,categoria,descripcion,monto,metodo_pago,responsable,observacion,estado,created_at"
+            )
             .eq("empresa_id", idEmpresa)
+            .neq("estado", "Anulado")
             .gte("fecha", fechaDesde)
             .lte("fecha", fechaHasta)
             .order("fecha", { ascending: false })
-        ),
-
-        consultaSegura("Agenda", () =>
-          supabase
-            .from("agenda_reservas")
-            .select("*")
-            .eq("empresa_id", idEmpresa)
-            .gte("fecha_reserva", fechaDesde)
-            .lte("fecha_reserva", fechaHasta)
-            .order("fecha_reserva", { ascending: false })
-        ),
-
-        consultaSegura("Pedidos", () =>
-          supabase
-            .from("pedidos")
-            .select("*")
-            .eq("empresa_id", idEmpresa)
-            .gte("fecha", fechaDesde)
-            .lte("fecha", fechaHasta)
-            .order("fecha", { ascending: false })
-        ),
-
-        consultaSegura("Ventas", () =>
-          supabase
-            .from("ventas")
-            .select("*")
-            .eq("empresa_id", idEmpresa)
-            .gte("fecha", fechaDesde)
-            .lte("fecha", fechaHasta)
-            .order("fecha", { ascending: false })
-        ),
-
-        consultaSegura("Membresías", () =>
-          supabase
-            .from("membresias")
-            .select("*")
-            .eq("empresa_id", idEmpresa)
+            .order("created_at", { ascending: false })
         ),
       ]);
 
@@ -367,253 +333,67 @@ export default function ReporteFinanciero() {
 
       if (cajaResp.disponible) nuevasFuentes.push("Caja");
       if (gastosResp.disponible) nuevasFuentes.push("Gastos");
-      if (agendaResp.disponible) nuevasFuentes.push("Agenda");
-      if (pedidosResp.disponible) nuevasFuentes.push("Pedidos");
-      if (ventasResp.disponible) nuevasFuentes.push("Ventas");
-      if (membresiasResp.disponible) nuevasFuentes.push("Membresías");
 
-      /*
-        1) CAJA
-        Fuente prioritaria. Si un cobro ya está en Caja,
-        no queremos duplicarlo agregando otra vez Agenda/Pedido/Venta.
-      */
       cajaResp.data.forEach((mov) => {
-        const texto = normalizar(
-          `${mov.tipo || ""} ${mov.categoria || ""} ${mov.descripcion || ""}`
-        );
+        const monto = Number(mov.monto || 0);
 
-        const esGasto =
-          texto.includes("gasto") ||
-          texto.includes("egreso") ||
-          texto.includes("salida");
-
-        const monto =
-          Number(
-            mov.monto ??
-              mov.total ??
-              mov.importe ??
-              mov.valor ??
-              0
-          ) || 0;
+        if (!Number.isFinite(monto) || monto <= 0) return;
 
         agregarMovimiento(lista, {
           id: `caja-${mov.id}`,
           fecha:
-            mov.fecha ||
-            mov.created_at ||
+            mov.fecha_pago ||
+            String(mov.created_at || "").slice(0, 10) ||
             fechaHoy(),
-          tipo: esGasto ? "Gasto" : "Ingreso",
-          categoria:
-            mov.categoria ||
-            (esGasto ? "Gastos" : "Caja"),
+          tipo: "Ingreso",
+          categoria: categoriaIngresoCaja(mov, tipo),
           descripcion:
             mov.descripcion ||
-            mov.concepto ||
-            mov.detalle ||
-            (esGasto ? "Egreso de caja" : "Ingreso de caja"),
+            mov.tipo ||
+            "Ingreso registrado en Caja",
           monto,
-          metodo:
-            mov.metodo_pago ||
-            mov.forma_pago ||
-            mov.metodo ||
-            "",
+          metodo: mov.metodo_pago || "",
           fuente: "Caja",
-          referencia: mov.id,
+          referencia:
+            mov.numero_transaccion ||
+            mov.id,
         });
       });
 
-      /*
-        2) GASTOS
-        Si existe tabla Gastos, se registra como egreso.
-        Para evitar duplicados simples, se ignoran registros
-        que ya indiquen explícitamente que fueron contabilizados en caja.
-      */
       gastosResp.data.forEach((gasto) => {
-        const contabilizadoEnCaja =
-          Boolean(gasto.caja_movimiento_id) ||
-          Boolean(gasto.movimiento_caja_id);
+        const monto = Number(gasto.monto || 0);
 
-        if (contabilizadoEnCaja) return;
-
-        const monto =
-          Number(
-            gasto.monto ??
-              gasto.total ??
-              gasto.importe ??
-              gasto.valor ??
-              0
-          ) || 0;
+        if (!Number.isFinite(monto) || monto <= 0) return;
 
         agregarMovimiento(lista, {
           id: `gasto-${gasto.id}`,
           fecha:
             gasto.fecha ||
-            gasto.created_at ||
+            String(gasto.created_at || "").slice(0, 10) ||
             fechaHoy(),
           tipo: "Gasto",
           categoria:
             gasto.categoria ||
-            gasto.tipo_gasto ||
-            "Gastos",
+            "Otros",
           descripcion:
             gasto.descripcion ||
-            gasto.concepto ||
-            gasto.detalle ||
             "Gasto del negocio",
           monto,
-          metodo:
-            gasto.metodo_pago ||
-            gasto.forma_pago ||
-            "",
+          metodo: gasto.metodo_pago || "",
           fuente: "Gastos",
           referencia: gasto.id,
         });
       });
 
-      /*
-        3) FUENTES OPERATIVAS
-        Solo agregamos movimientos que NO tengan referencia a Caja,
-        para no contar dos veces el mismo dinero.
-      */
-
-      if (tipo === "belleza") {
-        agendaResp.data.forEach((reserva) => {
-          const estado = normalizar(reserva.estado);
-
-          const cobrada =
-            ["confirmada", "pagada", "asistio", "atendida"].includes(estado) &&
-            Number(reserva.monto || reserva.precio || 0) > 0;
-
-          const yaEnCaja =
-            Boolean(reserva.caja_movimiento_id) ||
-            Boolean(reserva.movimiento_caja_id);
-
-          if (!cobrada || yaEnCaja) return;
-
-          agregarMovimiento(lista, {
-            id: `agenda-${reserva.id}`,
-            fecha: reserva.fecha_reserva || reserva.created_at,
-            tipo: "Ingreso",
-            categoria: "Servicios",
-            descripcion:
-              reserva.nombre_reserva ||
-              reserva.servicio_nombre ||
-              "Servicio cobrado",
-            monto:
-              reserva.monto ||
-              reserva.precio ||
-              0,
-            metodo:
-              reserva.metodo_pago ||
-              reserva.forma_pago ||
-              "",
-            fuente: "Agenda",
-            referencia: reserva.id,
-          });
-        });
-      }
-
-      if (tipo === "lavanderia") {
-        pedidosResp.data.forEach((pedido) => {
-          const estado = normalizar(
-            `${pedido.estado || ""} ${pedido.estado_pago || ""}`
-          );
-
-          const cobrado =
-            estado.includes("pag") ||
-            estado.includes("cobrado") ||
-            estado.includes("entregado");
-
-          const yaEnCaja =
-            Boolean(pedido.caja_movimiento_id) ||
-            Boolean(pedido.movimiento_caja_id);
-
-          if (!cobrado || yaEnCaja) return;
-
-          agregarMovimiento(lista, {
-            id: `pedido-${pedido.id}`,
-            fecha:
-              pedido.fecha ||
-              pedido.fecha_pedido ||
-              pedido.created_at,
-            tipo: "Ingreso",
-            categoria: "Pedidos",
-            descripcion:
-              pedido.descripcion ||
-              pedido.numero_pedido ||
-              pedido.nombre_cliente ||
-              "Pedido cobrado",
-            monto:
-              pedido.total ||
-              pedido.monto ||
-              pedido.importe ||
-              0,
-            metodo:
-              pedido.metodo_pago ||
-              pedido.forma_pago ||
-              "",
-            fuente: "Pedidos",
-            referencia: pedido.id,
-          });
-        });
-      }
-
-      ventasResp.data.forEach((venta) => {
-        const yaEnCaja =
-          Boolean(venta.caja_movimiento_id) ||
-          Boolean(venta.movimiento_caja_id);
-
-        if (yaEnCaja) return;
-
-        const estado = normalizar(
-          `${venta.estado || ""} ${venta.estado_pago || ""}`
+      lista.sort((a, b) => {
+        const porFecha = String(b.fecha || "").localeCompare(
+          String(a.fecha || "")
         );
 
-        const cobrada =
-          !estado ||
-          estado.includes("pag") ||
-          estado.includes("complet") ||
-          estado.includes("final");
+        if (porFecha !== 0) return porFecha;
 
-        if (!cobrada) return;
-
-        agregarMovimiento(lista, {
-          id: `venta-${venta.id}`,
-          fecha:
-            venta.fecha ||
-            venta.fecha_venta ||
-            venta.created_at,
-          tipo: "Ingreso",
-          categoria: "Ventas",
-          descripcion:
-            venta.descripcion ||
-            venta.numero_venta ||
-            "Venta",
-          monto:
-            venta.total ||
-            venta.monto ||
-            venta.importe ||
-            0,
-          metodo:
-            venta.metodo_pago ||
-            venta.forma_pago ||
-            "",
-          fuente: "Ventas",
-          referencia: venta.id,
-        });
+        return String(b.id || "").localeCompare(String(a.id || ""));
       });
-
-      /*
-        Membresías:
-        se muestran como ingreso recurrente estimado en KPI,
-        pero NO se agregan automáticamente como ingreso real
-        salvo que ya exista un cobro/venta/caja.
-        Así evitamos inflar utilidad con membresías aún no cobradas.
-      */
-
-      lista.sort((a, b) =>
-        String(b.fecha || "").localeCompare(String(a.fecha || ""))
-      );
 
       setMovimientos(lista);
       setFuentesActivas(nuevasFuentes);
@@ -623,6 +403,62 @@ export default function ReporteFinanciero() {
     } finally {
       setCargando(false);
     }
+  }
+
+  function categoriaIngresoCaja(movimiento, tipo) {
+    const texto = normalizar(
+      `${movimiento?.tipo || ""} ${movimiento?.descripcion || ""}`
+    );
+
+    if (tipo === "belleza") {
+      if (
+        texto.includes("servicio de salon") ||
+        texto.includes("servicio del salon") ||
+        texto.includes("reserva")
+      ) {
+        return "Servicios";
+      }
+
+      if (texto.includes("producto") || texto.includes("venta")) {
+        return "Productos";
+      }
+
+      return "Otros ingresos";
+    }
+
+    if (tipo === "gimnasio") {
+      if (texto.includes("membres")) return "Membresías";
+      if (texto.includes("renovacion")) return "Renovaciones";
+      if (texto.includes("inscripcion") || texto.includes("matricula")) {
+        return "Inscripciones";
+      }
+      if (texto.includes("pase diario")) return "Pases diarios";
+      if (texto.includes("clase") || texto.includes("sesion")) {
+        return "Clases / Sesiones";
+      }
+      if (texto.includes("producto") || texto.includes("venta")) {
+        return "Productos";
+      }
+
+      return "Otros ingresos";
+    }
+
+    if (tipo === "lavanderia") {
+      if (texto.includes("pedido")) return "Pedidos";
+      if (texto.includes("delivery")) return "Delivery";
+      return "Otros ingresos";
+    }
+
+    if (texto.includes("venta")) return "Ventas";
+    if (
+      texto.includes("abono") ||
+      texto.includes("cuota") ||
+      texto.includes("cancelacion")
+    ) {
+      return "Cobranza";
+    }
+
+    return movimiento?.tipo || "Ingresos";
   }
 
   const resumen = useMemo(() => {
@@ -825,7 +661,7 @@ export default function ReporteFinanciero() {
               {dinero(resumen.ingresos)}
             </strong>
             <span style={styles.kpiHint}>
-              Cobros registrados
+              Ingresos procesados en Caja
             </span>
           </article>
 
