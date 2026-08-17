@@ -3589,16 +3589,29 @@ function Info({
   detalle,
 }) {
   return (
-    <article style={s.infoCard}>
-      <div style={s.infoTop}>
+    <article
+      className="dashboard-info-card"
+      style={s.infoCard}
+    >
+      <div className="dashboard-info-top" style={s.infoTop}>
         <div style={s.infoIcon}>{icono}</div>
         <span style={s.infoLabel}>
           {titulo}
         </span>
       </div>
 
-      <h3 style={s.infoTitle}>{valor}</h3>
-      <p style={s.infoText}>{detalle}</p>
+      <h3
+        className="dashboard-info-title"
+        style={s.infoTitle}
+      >
+        {valor}
+      </h3>
+      <p
+        className="dashboard-info-text"
+        style={s.infoText}
+      >
+        {detalle}
+      </p>
     </article>
   );
 }
@@ -3672,6 +3685,45 @@ const DASHBOARD_RESPONSIVE_CSS = `
   @media (max-width: 520px) {
     .dashboard-gym-indicators {
       grid-template-columns: 1fr !important;
+    }
+
+    .dashboard-info-card {
+      min-height: 0 !important;
+      padding: 13px 14px !important;
+      border-radius: 14px !important;
+      display: grid !important;
+      grid-template-columns: 46px minmax(0,1fr) !important;
+      column-gap: 11px !important;
+      row-gap: 2px !important;
+      align-items: center !important;
+    }
+
+    .dashboard-info-top {
+      display: contents !important;
+    }
+
+    .dashboard-info-card > .dashboard-info-title {
+      grid-column: 2 !important;
+      margin: 0 !important;
+      font-size: 19px !important;
+      line-height: 1.1 !important;
+    }
+
+    .dashboard-info-card > .dashboard-info-text {
+      grid-column: 2 !important;
+      margin: 3px 0 0 !important;
+      font-size: 10.5px !important;
+      line-height: 1.35 !important;
+    }
+
+    .dashboard-info-card .dashboard-info-top > div {
+      grid-row: 1 / span 3 !important;
+      align-self: center !important;
+    }
+
+    .dashboard-info-card .dashboard-info-top > span {
+      grid-column: 2 !important;
+      font-size: 8px !important;
     }
 
     .dashboard-gym-tools {
@@ -5343,12 +5395,13 @@ const s = {
   },
 
   planPanelMobile: {
-    minHeight: 210,
-    padding: 21,
+    minHeight: 145,
+    padding: 16,
   },
 
   bottomGridMobile: {
     gridTemplateColumns: "1fr",
+    gap: 9,
   },
 
   bloqueoPagina: {
