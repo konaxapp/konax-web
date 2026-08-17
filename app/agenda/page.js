@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.17-AGENDA-SIMPLE-K-V8-MOVIL";
+const VERSION = "2026.08.17-AGENDA-V9-RESERVA-MANUAL";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -154,6 +154,7 @@ export default function AgendaPage() {
   const [busquedaCliente, setBusquedaCliente] = useState("");
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [horarioSeleccionado, setHorarioSeleccionado] = useState("");
+  const [servicioReservaSeleccionado, setServicioReservaSeleccionado] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [busquedaReservas, setBusquedaReservas] = useState("");
   const [estadoReservaFiltro, setEstadoReservaFiltro] = useState("Todos");
@@ -741,6 +742,44 @@ export default function AgendaPage() {
         String(a.hora_inicio || "").localeCompare(String(b.hora_inicio || ""))
       );
   }, [reservas, fechaAgenda]);
+
+  const serviciosDisponiblesReserva = useMemo(() => {
+    const ids = new Set();
+
+    disponibilidad.forEach((item) => {
+      const horario = mapaHorarios.get(String(item.horario_id));
+      const servicioId =
+        item.servicio_id ||
+        horario?.servicio_id ||
+        "";
+
+      if (servicioId) ids.add(String(servicioId));
+    });
+
+    return servicios
+      .filter((servicio) => ids.has(String(servicio.id)))
+      .sort((a, b) =>
+        String(a.nombre || "").localeCompare(String(b.nombre || ""))
+      );
+  }, [disponibilidad, mapaHorarios, servicios]);
+
+  const disponibilidadReservaFiltrada = useMemo(() => {
+    if (!servicioReservaSeleccionado) return [];
+
+    return disponibilidad.filter((item) => {
+      const horario = mapaHorarios.get(String(item.horario_id));
+      const servicioId =
+        item.servicio_id ||
+        horario?.servicio_id ||
+        "";
+
+      return String(servicioId) === String(servicioReservaSeleccionado);
+    });
+  }, [
+    disponibilidad,
+    servicioReservaSeleccionado,
+    mapaHorarios,
+  ]);
 
   const reservasActivas = useMemo(() => {
     return reservas.filter((r) =>
@@ -1357,6 +1396,7 @@ export default function AgendaPage() {
 
       setClienteSeleccionado(null);
       setBusquedaCliente("");
+      setServicioReservaSeleccionado("");
       setHorarioSeleccionado("");
       setObservaciones("");
 
@@ -2294,41 +2334,87 @@ export default function AgendaPage() {
                   min={fechaHoy()}
                   onChange={(e) => {
                     setFechaAgenda(e.target.value);
+                    setServicioReservaSeleccionado("");
                     setHorarioSeleccionado("");
                   }}
                   style={s.input}
                 />
               </Campo>
 
-              <Campo
-                label={
-                  esSalonBelleza
-                    ? "Servicio y horario disponible"
-                    : "Clase / horario disponible"
-                }
-              >
-                <select
-                  value={horarioSeleccionado}
-                  onChange={(e) => setHorarioSeleccionado(e.target.value)}
-                  style={s.input}
-                >
-                  <option value="">Seleccionar</option>
-                  {disponibilidad.map((item) => (
-                    <option
-                      key={item.horario_id}
-                      value={item.horario_id}
-                      disabled={Number(item.disponibles) <= 0}
+              {esSalonBelleza ? (
+                <>
+                  <Campo label="Servicio">
+                    <select
+                      value={servicioReservaSeleccionado}
+                      onChange={(e) => {
+                        setServicioReservaSeleccionado(e.target.value);
+                        setHorarioSeleccionado("");
+                      }}
+                      style={s.input}
                     >
-                      {item.servicio_nombre} · {formatoHora(item.hora_inicio)} ·{" "}
-                      {esSalonBelleza
-                        ? item.disponibles > 0
-                          ? `${item.disponibles} disponible${Number(item.disponibles) === 1 ? "" : "s"}`
-                          : "ocupado"
-                        : `${item.disponibles} cupos`}
-                    </option>
-                  ))}
-                </select>
-              </Campo>
+                      <option value="">Seleccionar servicio</option>
+                      {serviciosDisponiblesReserva.map((servicio) => (
+                        <option key={servicio.id} value={servicio.id}>
+                          {servicio.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </Campo>
+
+                  <Campo label="Horario disponible">
+                    <select
+                      value={horarioSeleccionado}
+                      onChange={(e) => setHorarioSeleccionado(e.target.value)}
+                      style={s.input}
+                      disabled={!servicioReservaSeleccionado}
+                    >
+                      <option value="">
+                        {servicioReservaSeleccionado
+                          ? "Seleccionar horario"
+                          : "Primero selecciona un servicio"}
+                      </option>
+
+                      {disponibilidadReservaFiltrada.map((item) => (
+                        <option
+                          key={item.horario_id}
+                          value={item.horario_id}
+                          disabled={Number(item.disponibles) <= 0}
+                        >
+                          {formatoHora(item.hora_inicio)}
+                          {" – "}
+                          {formatoHora(item.hora_fin)}
+                          {" · "}
+                          {item.instructor || "Profesional por asignar"}
+                          {" · "}
+                          {Number(item.disponibles) > 0
+                            ? "Disponible"
+                            : "Ocupado"}
+                        </option>
+                      ))}
+                    </select>
+                  </Campo>
+                </>
+              ) : (
+                <Campo label="Clase / horario disponible">
+                  <select
+                    value={horarioSeleccionado}
+                    onChange={(e) => setHorarioSeleccionado(e.target.value)}
+                    style={s.input}
+                  >
+                    <option value="">Seleccionar</option>
+                    {disponibilidad.map((item) => (
+                      <option
+                        key={item.horario_id}
+                        value={item.horario_id}
+                        disabled={Number(item.disponibles) <= 0}
+                      >
+                        {item.servicio_nombre} · {formatoHora(item.hora_inicio)} ·{" "}
+                        {`${item.disponibles} cupos`}
+                      </option>
+                    ))}
+                  </select>
+                </Campo>
+              )}
             </div>
 
             <Campo label="Observaciones">
@@ -2366,8 +2452,15 @@ export default function AgendaPage() {
             <div style={s.slotList}>
               {disponibilidad.length === 0 ? (
                 <p style={s.muted}>No hay horarios para esta fecha.</p>
+              ) : esSalonBelleza && !servicioReservaSeleccionado ? (
+                <p style={s.muted}>
+                  Selecciona un servicio para ver sus horarios disponibles.
+                </p>
               ) : (
-                disponibilidad.map((item) => (
+                (esSalonBelleza
+                  ? disponibilidadReservaFiltrada
+                  : disponibilidad
+                ).map((item) => (
                   <button
                     key={item.horario_id}
                     type="button"
@@ -2378,7 +2471,13 @@ export default function AgendaPage() {
                         : {}),
                     }}
                     disabled={Number(item.disponibles) <= 0}
-                    onClick={() => setHorarioSeleccionado(item.horario_id)}
+                    onClick={() => {
+                      const horario = mapaHorarios.get(String(item.horario_id));
+                      setServicioReservaSeleccionado(
+                        String(item.servicio_id || horario?.servicio_id || "")
+                      );
+                      setHorarioSeleccionado(item.horario_id);
+                    }}
                   >
                     <div>
                       <strong>{item.servicio_nombre}</strong>
