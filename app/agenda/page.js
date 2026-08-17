@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.17-AGENDA-SIMPLE-K-V3";
+const VERSION = "2026.08.17-AGENDA-SIMPLE-K-V4";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -1106,28 +1106,94 @@ export default function AgendaPage() {
             ? horarioEditandoIds
             : [horarioEditandoId];
 
-        const eliminacion = await supabase
+        /*
+          IMPORTANTE:
+          Antes se borraban los horarios y luego se volvían a insertar.
+          Eso puede fallar si una reserva histórica apunta al horario por ID.
+          Ahora se conservan los IDs existentes y se actualizan en su lugar.
+        */
+        const { data: filasActuales, error: errorFilas } = await supabase
           .from("agenda_horarios")
-          .delete()
+          .select("id,dia_semana")
           .eq("empresa_id", empresaId)
           .in("id", idsAnteriores);
 
-        if (eliminacion.error) {
-          throw eliminacion.error;
+        if (errorFilas) throw errorFilas;
+
+        const actuales = Array.isArray(filasActuales) ? filasActuales : [];
+        const diasDeseados = [...diasHorarioSeleccionados].map(Number);
+        const filasPorDia = new Map(
+          actuales.map((fila) => [Number(fila.dia_semana), fila])
+        );
+
+        // 1. Actualizar los días que ya existían, manteniendo exactamente su ID.
+        for (const dia of diasDeseados) {
+          const filaExistente = filasPorDia.get(dia);
+
+          if (filaExistente?.id) {
+            const { error: errorActualizar } = await supabase
+              .from("agenda_horarios")
+              .update({
+                ...basePayload,
+                dia_semana: dia,
+              })
+              .eq("empresa_id", empresaId)
+              .eq("id", filaExistente.id);
+
+            if (errorActualizar) throw errorActualizar;
+          }
         }
 
-        const horariosActualizados =
-          diasHorarioSeleccionados.map((dia) => ({
-            ...basePayload,
-            dia_semana: Number(dia),
-          }));
+        // 2. Insertar únicamente días nuevos.
+        const diasNuevos = diasDeseados.filter(
+          (dia) => !filasPorDia.has(dia)
+        );
 
-        const insercion = await supabase
-          .from("agenda_horarios")
-          .insert(horariosActualizados);
+        if (diasNuevos.length > 0) {
+          const { error: errorInsertar } = await supabase
+            .from("agenda_horarios")
+            .insert(
+              diasNuevos.map((dia) => ({
+                ...basePayload,
+                dia_semana: dia,
+              }))
+            );
 
-        if (insercion.error) {
-          throw insercion.error;
+          if (errorInsertar) throw errorInsertar;
+        }
+
+        // 3. Quitar únicamente días que el usuario desmarcó.
+        // Si tienen reservas relacionadas, se desactivan para conservar historial.
+        const filasRemovidas = actuales.filter(
+          (fila) => !diasDeseados.includes(Number(fila.dia_semana))
+        );
+
+        for (const fila of filasRemovidas) {
+          const { count, error: errorConteo } = await supabase
+            .from("agenda_reservas")
+            .select("id", { count: "exact", head: true })
+            .eq("empresa_id", empresaId)
+            .eq("horario_id", fila.id);
+
+          if (errorConteo) throw errorConteo;
+
+          if (Number(count || 0) > 0) {
+            const { error: errorDesactivar } = await supabase
+              .from("agenda_horarios")
+              .update({ activo: false })
+              .eq("empresa_id", empresaId)
+              .eq("id", fila.id);
+
+            if (errorDesactivar) throw errorDesactivar;
+          } else {
+            const { error: errorEliminar } = await supabase
+              .from("agenda_horarios")
+              .delete()
+              .eq("empresa_id", empresaId)
+              .eq("id", fila.id);
+
+            if (errorEliminar) throw errorEliminar;
+          }
         }
       } else {
         const horariosNuevos =
@@ -1172,7 +1238,10 @@ export default function AgendaPage() {
       );
     } catch (err) {
       console.error(err);
-      setError(err?.message || "No se pudo guardar el horario.");
+      const mensaje =
+        err?.message || "No se pudo guardar el horario.";
+      setError(mensaje);
+      alert(`No se pudo guardar el cambio: ${mensaje}`);
     } finally {
       setGuardando(false);
     }
