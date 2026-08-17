@@ -1019,7 +1019,7 @@ export default function ClientesPage() {
     ].some((palabra) => texto.includes(palabra));
   }
 
-  async function guardarRegistro() {
+  async function guardarRegistro(destinoDespues = "ninguno") {
     if (guardando) return;
 
     const sesion =
@@ -1093,6 +1093,28 @@ export default function ClientesPage() {
       );
 
       if (modoSoloCliente) {
+        const irAgenda =
+          destinoDespues === "agenda" &&
+          esNegocioBellezaActual();
+
+        if (irAgenda) {
+          localStorage.setItem(
+            "konaxAgendaClientePendiente",
+            JSON.stringify({
+              empresaId,
+              clienteId: clienteCreado.id,
+              nombre: clienteCreado.nombre || nombre.trim(),
+              cedula: clienteCreado.cedula || cedula.trim(),
+              telefono: clienteCreado.telefono || telefono.trim(),
+              creadoEn: Date.now(),
+            })
+          );
+
+          limpiarFormulario();
+          router.push("/agenda?modo=nueva");
+          return;
+        }
+
         alert(
           clienteCreado.fueActualizado
             ? "El cliente ya estaba registrado. Sus datos fueron actualizados correctamente."
@@ -2791,11 +2813,22 @@ export default function ClientesPage() {
               }
               className="clientes-sticky-actions"
             >
+              {esBellezaPerfil && modoSoloCliente && (
+                <button
+                  type="button"
+                  onClick={() => guardarRegistro("agenda")}
+                  style={styles.botonGuardarAgenda}
+                  disabled={guardando}
+                >
+                  {guardando
+                    ? "Guardando..."
+                    : "Guardar y crear cita"}
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={
-                  guardarRegistro
-                }
+                onClick={() => guardarRegistro("ninguno")}
                 style={
                   styles.botonGuardar
                 }
@@ -3408,6 +3441,18 @@ const styles = {
     border: "1px solid #dfe7e2",
     borderRadius: 18,
     background: "#fff",
+  },
+
+  botonGuardarAgenda: {
+    minHeight: 50,
+    border: "none",
+    borderRadius: 12,
+    background: "linear-gradient(135deg,#0B6F40,#15945A)",
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 8px 18px rgba(11,122,67,.16)",
   },
 
   botonGuardar: {
