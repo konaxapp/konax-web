@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.17-AGENDA-SIMPLE-K-V2";
+const VERSION = "2026.08.17-AGENDA-SIMPLE-K-V3";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -2784,7 +2784,10 @@ export default function AgendaPage() {
                 </select>
               </Campo>
 
-              <div style={s.formGrid}>
+              <div
+                style={s.formGrid}
+                className={esSalonBelleza ? "agenda-salon-horario-grid" : ""}
+              >
                 <div style={{ ...s.daysField, ...(esSalonBelleza ? { gridColumn: "1 / -1" } : {}) }}>
                   <span style={s.label}>
                     {esSalonBelleza
@@ -3250,8 +3253,6 @@ function SelectorHoraKonax({
             );
           })}
         </select>
-
-        <span style={s.timeColon}>:</span>
 
         <select
           value={minuto}
@@ -4654,6 +4655,24 @@ const AGENDA_CSS = `
 @media (min-width: 821px) {
   .agenda-d-command-grid {
     width: min(1180px, 100%) !important;
+  }
+}
+
+
+@media (max-width: 980px) {
+  .agenda-salon-horario-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .agenda-salon-horario-grid > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+}
+
+@media (min-width: 981px) {
+  .agenda-salon-horario-grid {
+    grid-template-columns: repeat(2,minmax(0,1fr)) !important;
   }
 }
 
@@ -7096,24 +7115,30 @@ const s = {
 
   timePicker: {
     width: "100%",
-    padding: 9,
+    maxWidth: "100%",
+    minWidth: 0,
+    overflow: "hidden",
+    padding: 8,
     border: "1px solid #CCD7D0",
     borderRadius: 11,
     background: "#F9FBFA",
   },
 
   timePickerControls: {
+    width: "100%",
+    minWidth: 0,
     display: "grid",
-    gridTemplateColumns:
-      "minmax(64px,1fr) auto minmax(64px,1fr) minmax(78px,1fr)",
-    gap: 6,
+    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+    gap: 5,
     alignItems: "center",
+    overflow: "hidden",
   },
 
   timeSelect: {
     width: "100%",
+    minWidth: 0,
     minHeight: 40,
-    padding: "7px 8px",
+    padding: "7px 5px",
     border: "1px solid #D4DED8",
     borderRadius: 9,
     background: "#FFFFFF",
@@ -7125,8 +7150,9 @@ const s = {
 
   timePeriodSelect: {
     width: "100%",
+    minWidth: 0,
     minHeight: 40,
-    padding: "7px 8px",
+    padding: "7px 5px",
     border: "1px solid #D4DED8",
     borderRadius: 9,
     background: "#FFFFFF",
