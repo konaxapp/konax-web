@@ -173,11 +173,120 @@ export default function Gastos() {
   );
 
   return (
-    <div style={pagina}>
+    <div style={pagina} className="gastos-page">
+      <style>{`
+        * { box-sizing: border-box; }
+
+        @media (max-width: 720px) {
+          .gastos-page {
+            padding: 12px !important;
+          }
+
+          .gastos-hero {
+            padding: 14px !important;
+            border-radius: 16px !important;
+            margin-bottom: 12px !important;
+            gap: 10px !important;
+          }
+
+          .gastos-hero-info {
+            width: 100% !important;
+            display: grid !important;
+            grid-template-columns: 64px minmax(0,1fr) !important;
+            gap: 10px !important;
+            align-items: center !important;
+          }
+
+          .gastos-logo {
+            width: 64px !important;
+            border-radius: 12px !important;
+            padding: 6px !important;
+          }
+
+          .gastos-hero h1 {
+            font-size: 24px !important;
+            margin: 1px 0 !important;
+          }
+
+          .gastos-hero p {
+            margin: 2px 0 !important;
+            font-size: 11px !important;
+            line-height: 1.3 !important;
+          }
+
+          .gastos-hero .gastos-volver {
+            width: 100% !important;
+            min-height: 42px !important;
+            padding: 9px 12px !important;
+          }
+
+          .gastos-resumen-grid {
+            grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+            gap: 8px !important;
+            margin-bottom: 12px !important;
+          }
+
+          .gastos-kpi {
+            padding: 12px !important;
+            border-radius: 14px !important;
+            gap: 3px !important;
+          }
+
+          .gastos-kpi-icon {
+            font-size: 18px !important;
+          }
+
+          .gastos-kpi-label {
+            font-size: 10px !important;
+          }
+
+          .gastos-kpi-value {
+            font-size: 19px !important;
+          }
+
+          .gastos-card {
+            padding: 14px !important;
+            border-radius: 15px !important;
+            margin-bottom: 12px !important;
+          }
+
+          .gastos-card h2 {
+            font-size: 18px !important;
+          }
+
+          .gastos-card p {
+            font-size: 11px !important;
+            line-height: 1.35 !important;
+          }
+
+          .gastos-form-grid {
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+
+          .gastos-actions {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 8px !important;
+          }
+
+          .gastos-actions button {
+            width: 100% !important;
+            min-height: 42px !important;
+            padding: 9px 10px !important;
+          }
+        }
+
+        @media (max-width: 420px) {
+          .gastos-resumen-grid {
+            grid-template-columns: 1fr 1fr !important;
+          }
+        }
+      `}</style>
       <div style={contenedor}>
-        <div style={hero}>
-          <div style={heroInfo}>
-            <img src="/konax-logo.png" alt="KONAX" style={logo} />
+        <div style={hero} className="gastos-hero">
+          <div style={heroInfo} className="gastos-hero-info">
+            <img src="/konax-logo.png" alt="KONAX" style={logo} className="gastos-logo" />
 
             <div>
               <p style={etiqueta}>Control Operativo</p>
@@ -189,12 +298,12 @@ export default function Gastos() {
             </div>
           </div>
 
-          <button onClick={volverCentroOperaciones} style={botonVolver}>
+          <button onClick={volverCentroOperaciones} style={botonVolver} className="gastos-volver">
             ← Centro de Operaciones
           </button>
         </div>
 
-        <div style={resumenGrid}>
+        <div style={resumenGrid} className="gastos-resumen-grid">
           <KPI titulo="Gastos hoy" valor={`$${totalHoy.toFixed(2)}`} icono="📅" />
           <KPI titulo="Gastos del mes" valor={`$${totalMes.toFixed(2)}`} icono="📆" />
           <KPI titulo="Total acumulado" valor={`$${totalGeneral.toFixed(2)}`} icono="💸" />
@@ -202,7 +311,7 @@ export default function Gastos() {
           <KPI titulo="Anulados" valor={gastosAnulados} icono="⛔" />
         </div>
 
-        <div style={card}>
+        <div style={card} className="gastos-card">
           <div style={cardHeader}>
             <div>
               <h2 style={tituloSeccion}>Registrar Gasto</h2>
@@ -213,7 +322,7 @@ export default function Gastos() {
             </div>
           </div>
 
-          <div style={grid}>
+          <div style={grid} className="gastos-form-grid">
             <Campo label="Fecha">
               <input
                 type="date"
@@ -302,7 +411,7 @@ export default function Gastos() {
             />
           </Campo>
 
-          <div style={acciones}>
+          <div style={acciones} className="gastos-actions">
             <button onClick={guardarGasto} disabled={cargando} style={boton}>
               {cargando ? "Guardando..." : "Registrar Gasto"}
             </button>
@@ -408,10 +517,10 @@ function Campo({ label, children }) {
 
 function KPI({ titulo, valor, icono }) {
   return (
-    <div style={resumenCard}>
-      <div style={kpiIcono}>{icono}</div>
-      <span style={resumenLabel}>{titulo}</span>
-      <strong style={resumenValor}>{valor}</strong>
+    <div style={resumenCard} className="gastos-kpi">
+      <div style={kpiIcono} className="gastos-kpi-icon">{icono}</div>
+      <span style={resumenLabel} className="gastos-kpi-label">{titulo}</span>
+      <strong style={resumenValor} className="gastos-kpi-value">{valor}</strong>
     </div>
   );
 }
