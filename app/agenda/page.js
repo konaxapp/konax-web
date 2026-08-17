@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.14-AGENDA-SYNC-CAJA-K";
+const VERSION = "2026.08.17-AGENDA-SIMPLE-K";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -1035,6 +1035,29 @@ export default function AgendaPage() {
     });
   }
 
+  function alternarGrupoDias(diasGrupo) {
+    const grupo = diasGrupo.map(Number);
+
+    setDiasHorarioSeleccionados((actuales) => {
+      const todosActivos = grupo.every((dia) => actuales.includes(dia));
+      const orden = [1, 2, 3, 4, 5, 6, 0];
+
+      if (todosActivos) {
+        return actuales.filter((dia) => !grupo.includes(dia));
+      }
+
+      return Array.from(new Set([...actuales, ...grupo])).sort(
+        (a, b) => orden.indexOf(a) - orden.indexOf(b)
+      );
+    });
+  }
+
+  function grupoDiasActivo(diasGrupo) {
+    return diasGrupo.every((dia) =>
+      diasHorarioSeleccionados.includes(Number(dia))
+    );
+  }
+
   async function guardarHorario() {
     if (!esAdmin) {
       alert("Solo el administrador puede configurar horarios.");
@@ -1573,7 +1596,7 @@ export default function AgendaPage() {
                 cursor: "pointer",
               }}
             >
-              Reserva manual
+              Nueva reserva
             </button>
 
             <button
@@ -1618,7 +1641,7 @@ export default function AgendaPage() {
           }}
         >
           <span>＋</span>
-          Reserva manual
+          Nueva reserva
         </button>
 
         <button
@@ -2113,7 +2136,7 @@ export default function AgendaPage() {
           <section style={s.twoColumns}>
           <article style={s.panel}>
             <span style={pro.panelEyebrow}>
-              {esSalonBelleza ? "RESERVA MANUAL" : "RESERVA MANUAL"}
+              {esSalonBelleza ? "NUEVA RESERVA" : "NUEVA RESERVA"}
             </span>
             <h2 style={pro.panelTitle}>
               {esSalonBelleza ? "Datos de la cita" : "Datos de la reserva"}
@@ -2396,8 +2419,7 @@ export default function AgendaPage() {
               </h2>
 
               <p style={s.portalText}>
-                Usa un solo enlace para Instagram, WhatsApp,
-                código QR o la página web del negocio.
+                Comparte tu enlace por WhatsApp, Instagram o código QR.
               </p>
 
               <div style={s.portalFields}>
@@ -2449,7 +2471,7 @@ export default function AgendaPage() {
                 <span>
                   <strong>Reservas online activas</strong>
                   <small>
-                    Si se desactiva, el enlace público deja de aceptar reservas.
+                    Activa o pausa las reservas desde tu enlace.
                   </small>
                 </span>
               </label>
@@ -2519,9 +2541,9 @@ export default function AgendaPage() {
                     alt="QR del portal de reservas"
                     style={s.qrImage}
                   />
-                  <strong>Escanea para reservar</strong>
+                  <strong>QR de reservas</strong>
                   <span>
-                    Ideal para recepción, volante o mostrador.
+                    Listo para compartir.
                   </span>
                 </>
               ) : (
@@ -2770,35 +2792,71 @@ export default function AgendaPage() {
                       : "Días de la semana"}
                   </span>
 
-                  <div
-                    style={s.daysGrid}
-                    className="agenda-days-grid"
-                  >
-                    {[1, 2, 3, 4, 5, 6, 0].map((dia) => {
-                      const activo =
-                        diasHorarioSeleccionados.includes(dia);
+                  {esSalonBelleza ? (
+                    <>
+                      <div
+                        style={s.daysGroupedGrid}
+                        className="agenda-days-grouped-grid"
+                      >
+                        {[
+                          { etiqueta: "Lunes a viernes", dias: [1, 2, 3, 4, 5] },
+                          { etiqueta: "Sábado", dias: [6] },
+                          { etiqueta: "Domingo", dias: [0] },
+                        ].map((grupo) => {
+                          const activo = grupoDiasActivo(grupo.dias);
 
-                      return (
-                        <button
-                          key={dia}
-                          type="button"
-                          onClick={() => alternarDiaHorario(dia)}
-                          style={{
-                            ...s.dayToggle,
-                            ...(activo ? s.dayToggleActive : {}),
-                          }}
-                        >
-                          {nombreDia(dia).slice(0, 3)}
-                        </button>
-                      );
-                    })}
-                  </div>
+                          return (
+                            <button
+                              key={grupo.etiqueta}
+                              type="button"
+                              onClick={() => alternarGrupoDias(grupo.dias)}
+                              style={{
+                                ...s.dayGroupToggle,
+                                ...(activo ? s.dayToggleActive : {}),
+                              }}
+                            >
+                              {grupo.etiqueta}
+                            </button>
+                          );
+                        })}
+                      </div>
 
-                  <span style={s.daysHint}>
-                    Marca todos los días en que estará disponible.
-                    Si sábado o domingo manejan otro horario,
-                    crea un segundo horario para esos días.
-                  </span>
+                      <span style={s.daysHint}>
+                        Elige cuándo atiende este profesional. Si el fin de semana
+                        tiene otro horario, guárdalo por separado.
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        style={s.daysGrid}
+                        className="agenda-days-grid"
+                      >
+                        {[1, 2, 3, 4, 5, 6, 0].map((dia) => {
+                          const activo =
+                            diasHorarioSeleccionados.includes(dia);
+
+                          return (
+                            <button
+                              key={dia}
+                              type="button"
+                              onClick={() => alternarDiaHorario(dia)}
+                              style={{
+                                ...s.dayToggle,
+                                ...(activo ? s.dayToggleActive : {}),
+                              }}
+                            >
+                              {nombreDia(dia).slice(0, 3)}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <span style={s.daysHint}>
+                        Marca los días en que estará disponible.
+                      </span>
+                    </>
+                  )}
                 </div>
 
                 <Campo label={esSalonBelleza ? "Profesional" : "Instructor"}>
@@ -2842,7 +2900,7 @@ export default function AgendaPage() {
                 <Campo
                   label={
                     esSalonBelleza
-                      ? "Disponibilidad por horario"
+                      ? "Cupos por horario"
                       : "Cupos"
                   }
                 >
@@ -2905,7 +2963,7 @@ export default function AgendaPage() {
                   onClick={guardarHorario}
                   disabled={guardando}
                 >
-                  {horarioEditandoId ? "Guardar cambios" : "Crear horario"}
+                  {horarioEditandoId ? "Guardar cambios" : esSalonBelleza ? "Guardar horario" : "Crear horario"}
                 </button>
               </div>
             </article>
@@ -3123,20 +3181,22 @@ function SelectorHoraKonax({
   const [hora, setHora] = useState(inicial.hora);
   const [minuto, setMinuto] = useState(inicial.minuto);
   const [periodo, setPeriodo] = useState(inicial.periodo);
-  const [aplicado, setAplicado] = useState(value);
 
   useEffect(() => {
     const siguiente = descomponerHora(value);
     setHora(siguiente.hora);
     setMinuto(siguiente.minuto);
     setPeriodo(siguiente.periodo);
-    setAplicado(value);
   }, [value]);
 
-  function aplicarHora() {
-    let hora24 = Number(hora);
+  function emitirHora(
+    siguienteHora = hora,
+    siguienteMinuto = minuto,
+    siguientePeriodo = periodo
+  ) {
+    let hora24 = Number(siguienteHora);
 
-    if (periodo === "AM") {
+    if (siguientePeriodo === "AM") {
       if (hora24 === 12) hora24 = 0;
     } else if (hora24 !== 12) {
       hora24 += 12;
@@ -3144,10 +3204,8 @@ function SelectorHoraKonax({
 
     const nuevaHora =
       `${String(hora24).padStart(2, "0")}:${String(
-        minuto
+        siguienteMinuto
       ).padStart(2, "0")}`;
-
-    setAplicado(nuevaHora);
 
     if (typeof onApply === "function") {
       onApply(nuevaHora);
@@ -3174,7 +3232,11 @@ function SelectorHoraKonax({
       <div style={s.timePickerControls} className="agenda-time-picker-mobile">
         <select
           value={hora}
-          onChange={(e) => setHora(e.target.value)}
+          onChange={(e) => {
+            const valor = e.target.value;
+            setHora(valor);
+            emitirHora(valor, minuto, periodo);
+          }}
           style={s.timeSelect}
           aria-label="Hora"
         >
@@ -3193,7 +3255,11 @@ function SelectorHoraKonax({
 
         <select
           value={minuto}
-          onChange={(e) => setMinuto(e.target.value)}
+          onChange={(e) => {
+            const valor = e.target.value;
+            setMinuto(valor);
+            emitirHora(hora, valor, periodo);
+          }}
           style={s.timeSelect}
           aria-label="Minutos"
         >
@@ -3206,27 +3272,17 @@ function SelectorHoraKonax({
 
         <select
           value={periodo}
-          onChange={(e) => setPeriodo(e.target.value)}
+          onChange={(e) => {
+            const valor = e.target.value;
+            setPeriodo(valor);
+            emitirHora(hora, minuto, valor);
+          }}
           style={s.timePeriodSelect}
           aria-label="Período"
         >
           <option value="AM">a. m.</option>
           <option value="PM">p. m.</option>
         </select>
-      </div>
-
-      <div style={s.timePickerFooter}>
-        <span style={s.timeApplied}>
-          Seleccionada: {formatoHora(aplicado)}
-        </span>
-
-        <button
-          type="button"
-          style={s.timeApplyButton}
-          onClick={aplicarHora}
-        >
-          Aplicar hora
-        </button>
       </div>
     </div>
   );
@@ -3868,6 +3924,25 @@ const sPro = {
     gap: 6,
   },
 
+  daysGroupedGrid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(150px,1.5fr) minmax(95px,.75fr) minmax(95px,.75fr)",
+    gap: 7,
+  },
+
+  dayGroupToggle: {
+    minHeight: 40,
+    padding: "8px 10px",
+    border: "1px solid #D4DED8",
+    borderRadius: 10,
+    background: "#FFFFFF",
+    color: "#48574F",
+    fontSize: 10.5,
+    fontWeight: 850,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+
   dayToggle: {
     minHeight: 38,
     padding: "6px 4px",
@@ -4352,6 +4427,10 @@ const AGENDA_CSS = `
       padding: 14px !important;
     }
 
+    .agenda-days-grouped-grid {
+      grid-template-columns: 1fr !important;
+    }
+
     .agenda-header {
       padding: 18px !important;
       border-radius: 18px !important;
@@ -4783,9 +4862,10 @@ body {
   }
 
   .agenda-d-nav > button {
-    min-height: 32px !important;
-    padding: 0 8px !important;
-    font-size: 9px !important;
+    min-height: 38px !important;
+    padding: 0 11px !important;
+    font-size: 10.5px !important;
+    font-weight: 800 !important;
   }
 }
 
@@ -4837,9 +4917,9 @@ const neo = {
   hero: {
     maxWidth: 1180,
     margin: "0 auto 12px",
-    padding: "16px 18px",
+    padding: "12px 14px",
     display: "grid",
-    gridTemplateColumns: "minmax(0,1fr) 270px",
+    gridTemplateColumns: "minmax(0,1fr) 238px",
     gap: 14,
     borderRadius: 18,
     background:
@@ -4864,8 +4944,8 @@ const neo = {
   },
 
   logoCard: {
-    width: 112,
-    minHeight: 62,
+    width: 100,
+    minHeight: 54,
     display: "grid",
     placeItems: "center",
     padding: "6px 10px",
@@ -4875,8 +4955,8 @@ const neo = {
   },
 
   logo: {
-    width: 94,
-    height: 38,
+    width: 84,
+    height: 34,
     objectFit: "contain",
   },
 
@@ -4891,7 +4971,7 @@ const neo = {
 
   heroTitle: {
     margin: 0,
-    fontSize: "clamp(28px,3.2vw,42px)",
+    fontSize: "clamp(25px,2.8vw,36px)",
     lineHeight: 1,
     letterSpacing: -1,
   },
@@ -4991,7 +5071,7 @@ const neo = {
   },
 
   heroSideStats: {
-    marginTop: 17,
+    marginTop: 10,
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: 10,
@@ -5006,13 +5086,13 @@ const neo = {
   heroSideValue: {
     display: "block",
     marginTop: 3,
-    fontSize: 24,
+    fontSize: 20,
   },
 
   roleBadge: {
     alignSelf: "flex-start",
-    marginTop: 16,
-    padding: "7px 10px",
+    marginTop: 9,
+    padding: "5px 9px",
     borderRadius: 999,
     background: "rgba(255,255,255,.12)",
     color: "#fff",
@@ -5034,8 +5114,8 @@ const neo = {
   },
 
   navItem: {
-    minHeight: 34,
-    padding: "0 10px",
+    minHeight: 40,
+    padding: "0 13px",
     display: "inline-flex",
     alignItems: "center",
     gap: 5,
@@ -5043,16 +5123,16 @@ const neo = {
     borderRadius: 9,
     background: "transparent",
     color: "#506057",
-    fontSize: 9.5,
-    fontWeight: 850,
+    fontSize: 11.5,
+    fontWeight: 800,
     whiteSpace: "nowrap",
     cursor: "pointer",
   },
 
   navItemActive: {
-    background: "#0B7A43",
+    background: "linear-gradient(135deg,#0B6F40,#15945A)",
     color: "#fff",
-    boxShadow: "0 7px 16px rgba(11,122,67,.18)",
+    boxShadow: "0 6px 14px rgba(11,122,67,.16)",
   },
 
   navRefresh: {
@@ -7081,12 +7161,12 @@ const s = {
   },
 
   portalPanel: {
-    maxWidth: 1450,
-    margin: "0 auto 14px",
-    padding: 18,
+    maxWidth: 1180,
+    margin: "0 auto 12px",
+    padding: 12,
     display: "grid",
-    gridTemplateColumns: "minmax(0,1fr) 250px",
-    gap: 16,
+    gridTemplateColumns: "minmax(0,1fr) 155px",
+    gap: 10,
     border: "1px solid #D8E6DE",
     borderRadius: 18,
     background:
@@ -7099,10 +7179,10 @@ const s = {
   },
 
   portalText: {
-    maxWidth: 700,
-    margin: "5px 0 14px",
+    maxWidth: 620,
+    margin: "3px 0 9px",
     color: "#718078",
-    fontSize: 11,
+    fontSize: 10,
     lineHeight: 1.5,
   },
 
@@ -7113,8 +7193,8 @@ const s = {
   },
 
   portalToggle: {
-    marginTop: 10,
-    padding: 11,
+    marginTop: 6,
+    padding: 8,
     display: "flex",
     alignItems: "flex-start",
     gap: 9,
@@ -7175,8 +7255,8 @@ const s = {
   },
 
   qrPanel: {
-    minHeight: 220,
-    padding: 14,
+    minHeight: 150,
+    padding: 8,
     display: "grid",
     placeItems: "center",
     alignContent: "center",
@@ -7187,8 +7267,8 @@ const s = {
   },
 
   qrImage: {
-    width: 150,
-    height: 150,
+    width: 92,
+    height: 92,
     objectFit: "contain",
   },
 
