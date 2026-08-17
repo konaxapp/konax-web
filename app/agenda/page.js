@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.17-AGENDA-V12-SERVICIOS-COMPACTOS";
+const VERSION = "2026.08.17-AGENDA-V13-DISPONIBILIDAD-ACORDEON";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -155,6 +155,7 @@ export default function AgendaPage() {
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [horarioSeleccionado, setHorarioSeleccionado] = useState("");
   const [horaReservaSeleccionada, setHoraReservaSeleccionada] = useState("");
+  const [horarioDisponibilidadAbierto, setHorarioDisponibilidadAbierto] = useState("");
   const [servicioReservaSeleccionado, setServicioReservaSeleccionado] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [busquedaReservas, setBusquedaReservas] = useState("");
@@ -2516,6 +2517,7 @@ export default function AgendaPage() {
                     setServicioReservaSeleccionado("");
                     setHorarioSeleccionado("");
                     setHoraReservaSeleccionada("");
+                    setHorarioDisponibilidadAbierto("");
                   }}
                   style={s.input}
                 />
@@ -2643,15 +2645,131 @@ export default function AgendaPage() {
             <div style={s.slotList}>
               {disponibilidad.length === 0 ? (
                 <p style={s.muted}>No hay horarios para esta fecha.</p>
-              ) : esSalonBelleza && !servicioReservaSeleccionado ? (
-                <p style={s.muted}>
-                  Selecciona un servicio para ver sus horarios disponibles.
-                </p>
+              ) : esSalonBelleza ? (
+                disponibilidadCompacta.map((grupo) => {
+                  const abierto =
+                    String(horarioDisponibilidadAbierto) ===
+                    String(grupo.horario_id);
+
+                  const horasLibres = grupo.slots.filter(
+                    (slot) => Number(slot.disponibles || 0) > 0
+                  );
+
+                  const horaElegidaEnGrupo =
+                    String(horarioSeleccionado) ===
+                    String(grupo.horario_id);
+
+                  return (
+                    <div
+                      key={grupo.horario_id}
+                      style={{
+                        ...s.availabilityGroup,
+                        ...(horaElegidaEnGrupo
+                          ? s.availabilityGroupSelected
+                          : {}),
+                      }}
+                    >
+                      <button
+                        type="button"
+                        style={s.availabilityGroupHeader}
+                        onClick={() =>
+                          setHorarioDisponibilidadAbierto(
+                            abierto ? "" : grupo.horario_id
+                          )
+                        }
+                      >
+                        <div style={s.availabilityGroupInfo}>
+                          <strong style={s.availabilityServiceName}>
+                            {grupo.servicio_nombre}
+                          </strong>
+
+                          <span style={s.availabilityProfessional}>
+                            {grupo.instructor || "Profesional por asignar"}
+                            {" · "}
+                            {horasLibres.length} horario
+                            {horasLibres.length === 1 ? "" : "s"} disponible
+                            {horasLibres.length === 1 ? "" : "s"}
+                          </span>
+                        </div>
+
+                        <span style={s.availabilityToggle}>
+                          {abierto ? "Ocultar horarios" : "Ver horarios"}
+                          <span
+                            style={{
+                              ...s.availabilityChevron,
+                              transform: abierto
+                                ? "rotate(180deg)"
+                                : "rotate(0deg)",
+                            }}
+                          >
+                            ▾
+                          </span>
+                        </span>
+                      </button>
+
+                      {abierto && (
+                        <div style={s.availabilityTimes}>
+                          {grupo.slots.map((slot) => {
+                            const disponible =
+                              Number(slot.disponibles || 0) > 0;
+
+                            const seleccionado =
+                              String(horarioSeleccionado) ===
+                                String(grupo.horario_id) &&
+                              String(horaReservaSeleccionada).slice(0, 5) ===
+                                String(slot.hora_inicio || "").slice(0, 5);
+
+                            return (
+                              <button
+                                key={`${grupo.horario_id}-${slot.hora_inicio}`}
+                                type="button"
+                                disabled={!disponible}
+                                style={{
+                                  ...s.availabilityTimeButton,
+                                  ...(seleccionado
+                                    ? s.availabilityTimeButtonSelected
+                                    : {}),
+                                  ...(!disponible
+                                    ? s.availabilityTimeButtonDisabled
+                                    : {}),
+                                }}
+                                onClick={() => {
+                                  const horario = mapaHorarios.get(
+                                    String(grupo.horario_id)
+                                  );
+
+                                  setServicioReservaSeleccionado(
+                                    String(
+                                      grupo.servicio_id ||
+                                        horario?.servicio_id ||
+                                        ""
+                                    )
+                                  );
+                                  setHorarioSeleccionado(grupo.horario_id);
+                                  setHoraReservaSeleccionada(
+                                    String(slot.hora_inicio || "").slice(0, 8)
+                                  );
+                                }}
+                              >
+                                <span>
+                                  {formatoHora(slot.hora_inicio)}
+                                </span>
+
+                                {!disponible && (
+                                  <small style={s.availabilityOccupied}>
+                                    Ocupado
+                                  </small>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               ) : (
-                (esSalonBelleza
-                  ? disponibilidadReservaFiltrada
-                  : disponibilidad
-                ).map((item) => (
+                disponibilidad.map((item) => (
                   <button
                     key={item.horario_id}
                     type="button"
@@ -2663,21 +2781,14 @@ export default function AgendaPage() {
                     }}
                     disabled={Number(item.disponibles) <= 0}
                     onClick={() => {
-                      const horario = mapaHorarios.get(String(item.horario_id));
-                      setServicioReservaSeleccionado(
-                        String(item.servicio_id || horario?.servicio_id || "")
-                      );
                       setHorarioSeleccionado(item.horario_id);
-                      setHoraReservaSeleccionada(
-                        String(item.hora_inicio || "").slice(0, 8)
-                      );
                     }}
                   >
                     <div>
                       <strong>{item.servicio_nombre}</strong>
                       <span style={s.slotDetail}>
                         {formatoHora(item.hora_inicio)} ·{" "}
-                        {item.instructor || (esSalonBelleza ? "Profesional por asignar" : "Sin instructor")}
+                        {item.instructor || "Sin instructor"}
                       </span>
                     </div>
 
@@ -2688,11 +2799,7 @@ export default function AgendaPage() {
                           : s.smallFull
                       }
                     >
-                      {esSalonBelleza
-                        ? Number(item.disponibles) > 0
-                          ? "Disponible"
-                          : "Ocupado"
-                        : `${item.disponibles}/${item.capacidad}`}
+                      {`${item.disponibles}/${item.capacidad}`}
                     </span>
                   </button>
                 ))
@@ -4430,7 +4537,118 @@ const sPro = {
   slotList: {
     marginTop: 12,
     display: "grid",
+    gap: 8,
+  },
+
+  availabilityGroup: {
+    width: "100%",
+    overflow: "hidden",
+    border: "1px solid #DCE5DF",
+    borderRadius: 13,
+    background: "#FFFFFF",
+    transition: "border-color .18s ease, box-shadow .18s ease",
+  },
+
+  availabilityGroupSelected: {
+    borderColor: "#16834F",
+    boxShadow: "0 6px 16px rgba(22,131,79,.10)",
+  },
+
+  availabilityGroupHeader: {
+    width: "100%",
+    minHeight: 66,
+    padding: "11px 12px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    border: "none",
+    background: "#FFFFFF",
+    color: "#17211C",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  availabilityGroupInfo: {
+    minWidth: 0,
+    display: "grid",
+    gap: 4,
+  },
+
+  availabilityServiceName: {
+    color: "#17211C",
+    fontSize: 14,
+    lineHeight: 1.15,
+  },
+
+  availabilityProfessional: {
+    color: "#758078",
+    fontSize: 10,
+    lineHeight: 1.35,
+  },
+
+  availabilityToggle: {
+    flex: "0 0 auto",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    color: "#16834F",
+    fontSize: 9.5,
+    fontWeight: 900,
+    whiteSpace: "nowrap",
+  },
+
+  availabilityChevron: {
+    display: "inline-block",
+    fontSize: 13,
+    lineHeight: 1,
+    transition: "transform .18s ease",
+  },
+
+  availabilityTimes: {
+    padding: "10px 12px 12px",
+    display: "flex",
+    flexWrap: "wrap",
     gap: 7,
+    borderTop: "1px solid #EDF1EE",
+    background: "#FAFCFB",
+  },
+
+  availabilityTimeButton: {
+    minWidth: 74,
+    minHeight: 38,
+    padding: "7px 10px",
+    display: "grid",
+    placeItems: "center",
+    gap: 2,
+    border: "1px solid #BFD8C9",
+    borderRadius: 10,
+    background: "#FFFFFF",
+    color: "#17623C",
+    fontSize: 10.5,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  availabilityTimeButtonSelected: {
+    borderColor: "#16834F",
+    background: "#16834F",
+    color: "#FFFFFF",
+    boxShadow: "0 5px 12px rgba(22,131,79,.15)",
+  },
+
+  availabilityTimeButtonDisabled: {
+    borderColor: "#E5E7EB",
+    background: "#F3F4F6",
+    color: "#9CA3AF",
+    cursor: "not-allowed",
+    textDecoration: "line-through",
+  },
+
+  availabilityOccupied: {
+    fontSize: 7.5,
+    fontWeight: 800,
+    textDecoration: "none",
   },
 
   slot: {
