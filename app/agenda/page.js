@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.17-AGENDA-V10-SLOTS-REALES";
+const VERSION = "2026.08.17-AGENDA-V11-CLIENTE-DIRECTO";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -178,6 +178,53 @@ export default function AgendaPage() {
       cargarReservas();
     }
   }, [fechaAgenda, empresaId]);
+
+
+  useEffect(() => {
+    if (!empresaId || clientes.length === 0) return;
+
+    const raw = localStorage.getItem("konaxAgendaClientePendiente");
+    if (!raw) return;
+
+    try {
+      const pendiente = JSON.parse(raw);
+
+      if (
+        String(pendiente?.empresaId || "") !== String(empresaId)
+      ) {
+        localStorage.removeItem("konaxAgendaClientePendiente");
+        return;
+      }
+
+      // Evita arrastrar una selección vieja si quedó guardada por accidente.
+      if (
+        pendiente?.creadoEn &&
+        Date.now() - Number(pendiente.creadoEn) > 30 * 60 * 1000
+      ) {
+        localStorage.removeItem("konaxAgendaClientePendiente");
+        return;
+      }
+
+      const cliente = clientes.find(
+        (item) => String(item.id) === String(pendiente?.clienteId)
+      );
+
+      if (!cliente) return;
+
+      setClienteSeleccionado(cliente);
+      setBusquedaCliente(cliente.nombre || pendiente.nombre || "");
+      setServicioReservaSeleccionado("");
+      setHorarioSeleccionado("");
+      setHoraReservaSeleccionada("");
+      setObservaciones("");
+      setVista("nueva");
+
+      localStorage.removeItem("konaxAgendaClientePendiente");
+    } catch (err) {
+      console.error("No se pudo recuperar el cliente para Agenda:", err);
+      localStorage.removeItem("konaxAgendaClientePendiente");
+    }
+  }, [empresaId, clientes]);
 
 
   useEffect(() => {
