@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.17-AGENDA-SIMPLE-K-V4";
+const VERSION = "2026.08.17-AGENDA-SIMPLE-K-V5";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -4303,8 +4303,8 @@ const sPro = {
   },
 
   avatar: {
-    width: 40,
-    height: 40,
+    width: 48,
+    height: 48,
     flex: "0 0 auto",
     display: "grid",
     placeItems: "center",
@@ -4589,7 +4589,7 @@ const AGENDA_CSS = `
 @media (max-width: 980px) and (min-width: 821px) {
   .agenda-d-command-grid {
     grid-template-columns:
-      minmax(0,1.35fr) minmax(220px,.72fr) minmax(195px,.60fr) !important;
+      minmax(0,1.35fr) minmax(270px,.95fr) minmax(165px,.42fr) !important;
     grid-template-rows: auto !important;
     gap: 8px !important;
   }
@@ -4742,6 +4742,19 @@ const AGENDA_CSS = `
 @media (min-width: 981px) {
   .agenda-salon-horario-grid {
     grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+  }
+}
+
+
+@media (max-width: 820px) {
+  .agenda-d-reservation-row {
+    min-height: 70px !important;
+    padding: 10px !important;
+  }
+
+  .agenda-d-reservation-row > div:first-child {
+    width: 44px !important;
+    height: 44px !important;
   }
 }
 
@@ -4969,7 +4982,7 @@ body {
 @media (min-width: 981px) {
   .agenda-d-command-grid {
     grid-template-columns:
-      minmax(0,1.45fr) minmax(230px,.72fr) minmax(210px,.60fr) !important;
+      minmax(0,1.55fr) minmax(310px,1fr) minmax(175px,.45fr) !important;
     grid-template-rows: auto !important;
   }
 
@@ -5533,11 +5546,11 @@ const neo = {
 
   commandGrid: {
     width: "100%",
-    maxWidth: 1240,
+    maxWidth: 1380,
     margin: "0 auto 18px",
     display: "grid",
     gridTemplateColumns:
-      "minmax(0,1.45fr) minmax(230px,.72fr) minmax(210px,.60fr)",
+      "minmax(0,1.55fr) minmax(310px,1fr) minmax(175px,.45fr)",
     gridTemplateRows: "auto",
     gap: 10,
     alignItems: "stretch",
@@ -5581,7 +5594,8 @@ const neo = {
 
   panelHeading: {
     margin: "4px 0 0",
-    fontSize: 19,
+    fontSize: 21,
+    lineHeight: 1.1,
   },
 
   dateInline: {
@@ -5828,11 +5842,11 @@ const neo = {
   },
 
   reservationRow: {
-    minHeight: 62,
-    padding: 9,
+    minHeight: 78,
+    padding: 12,
     display: "grid",
-    gridTemplateColumns: "40px minmax(0,1fr) auto",
-    gap: 9,
+    gridTemplateColumns: "48px minmax(0,1fr) auto",
+    gap: 11,
     alignItems: "center",
     border: "1px solid #E5ECE8",
     borderRadius: 12,
@@ -5847,7 +5861,7 @@ const neo = {
     borderRadius: 11,
     background: "#0D3B28",
     color: "#fff",
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 900,
   },
 
@@ -5860,24 +5874,29 @@ const neo = {
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
-    fontSize: 11,
+    fontSize: 14,
+    lineHeight: 1.2,
+    fontWeight: 900,
   },
 
   reservationMeta: {
     display: "block",
-    marginTop: 3,
+    marginTop: 5,
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
-    color: "#7A867F",
-    fontSize: 8,
+    color: "#6C7A72",
+    fontSize: 10.5,
+    lineHeight: 1.3,
+    fontWeight: 700,
   },
 
   statusTag: {
-    padding: "5px 7px",
+    padding: "6px 9px",
     borderRadius: 999,
-    fontSize: 6.5,
+    fontSize: 8.5,
     fontWeight: 900,
+    whiteSpace: "nowrap",
   },
 
   statusConfirmed: {
