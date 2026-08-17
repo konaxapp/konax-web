@@ -135,6 +135,7 @@ function construirModulosPorPlan(codigoPlan) {
       pedidos_lavanderia: true,
       clientes: true,
       caja: true,
+      gastos: true,
       historial_lavanderia: true,
       reporte_financiero: true,
       usuarios: true,
@@ -1249,6 +1250,7 @@ export default function Dashboard() {
             "nuevo_pedido",
             "pedidos_lavanderia",
             "historial_lavanderia",
+            "gastos",
             "reporte_financiero",
             "usuarios",
             "configuracion",
@@ -1396,6 +1398,14 @@ export default function Dashboard() {
     }
 
     if (
+      modulo === "gastos" &&
+      (gimnasioActual || salonActual || lavanderiaActual) &&
+      esAdministrador()
+    ) {
+      return true;
+    }
+
+    if (
       gimnasioActual &&
       modulo === "reportes" &&
       esAdministrador()
@@ -1475,6 +1485,13 @@ export default function Dashboard() {
         "▦",
       ],
       [
+        "Gastos",
+        "/gastos",
+        "gastos",
+        "gastos",
+        "🧮",
+      ],
+      [
         "Reporte Financiero",
         "/reporte-financiero",
         "reporte_financiero",
@@ -1534,6 +1551,13 @@ export default function Dashboard() {
         "$",
       ],
       [
+        "Gastos",
+        "/gastos",
+        "gastos",
+        "gastos",
+        "🧮",
+      ],
+      [
         "Reportes",
         "/reportes",
         "reportes",
@@ -1591,6 +1615,13 @@ export default function Dashboard() {
         "caja",
         "caja",
         "$",
+      ],
+      [
+        "Gastos",
+        "/gastos",
+        "gastos",
+        "gastos",
+        "🧮",
       ],
       [
         "Reporte Financiero",
