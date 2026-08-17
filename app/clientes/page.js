@@ -1004,6 +1004,21 @@ export default function ClientesPage() {
     };
   }
 
+  function esNegocioBellezaActual() {
+    const texto = normalizar(
+      `${tipoNegocio || ""} ${categoriaNegocio || ""}`
+    );
+
+    return [
+      "belleza",
+      "salon",
+      "peluqueria",
+      "estetica",
+      "barberia",
+      "spa",
+    ].some((palabra) => texto.includes(palabra));
+  }
+
   async function guardarRegistro() {
     if (guardando) return;
 
@@ -1083,6 +1098,8 @@ export default function ClientesPage() {
             ? "El cliente ya estaba registrado. Sus datos fueron actualizados correctamente."
             : esNegocioMembresias
             ? "Cliente registrado correctamente. Ahora puede buscarlo en Caja o Suscripciones."
+            : esNegocioBellezaActual()
+            ? "Cliente registrado correctamente. Ya puede utilizarlo en Agenda y Caja."
             : "Cliente registrado correctamente. Ahora puede utilizarlo en Ventas, Caja o Cuentas por Cobrar."
         );
 
