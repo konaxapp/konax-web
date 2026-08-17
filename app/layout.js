@@ -1,15 +1,35 @@
 import KonaxMobileNav from "../components/KonaxMobileNav";
 
 export const metadata = {
-  title: "KONAX",
+  title: {
+    default: "KONAX",
+    template: "%s | KONAX",
+  },
   description:
-    "Plataforma SaaS de gestión comercial, crédito, cobranza, ventas e inventario",
+    "Plataforma de gestión para negocios: agenda, clientes, caja, gastos, membresías, pedidos y reportes.",
+  applicationName: "KONAX",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/konax-logo.png",
+    shortcut: "/konax-logo.png",
+    apple: "/konax-logo.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "KONAX",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export const viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
   viewportFit: "cover",
+  themeColor: "#083B2A",
 };
 
 export default function RootLayout({ children }) {
