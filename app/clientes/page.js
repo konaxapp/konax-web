@@ -1397,7 +1397,7 @@ export default function ClientesPage() {
     <main
       style={styles.pagina}
       className={
-        esGimnasioPerfil
+        esGimnasioPerfil || esBellezaPerfil
           ? "clientes-page clientes-gym-mobile"
           : "clientes-page"
       }
@@ -1631,6 +1631,50 @@ export default function ClientesPage() {
 
           .clientes-gym-mobile .clientes-sticky-actions button {
             width: 100% !important;
+          }
+
+          .clientes-gym-mobile * {
+            box-sizing: border-box !important;
+          }
+
+          .clientes-gym-mobile .clientes-side-card {
+            overflow: visible !important;
+          }
+
+          .clientes-gym-mobile .clientes-side-card > div {
+            min-width: 0 !important;
+          }
+
+          .clientes-gym-mobile .clientes-resumen-fila {
+            width: 100% !important;
+            min-width: 0 !important;
+            gap: 10px !important;
+          }
+
+          .clientes-gym-mobile .clientes-resumen-fila > span,
+          .clientes-gym-mobile .clientes-resumen-fila > strong {
+            min-width: 0 !important;
+          }
+
+          .clientes-gym-mobile .clientes-resumen-fila > strong {
+            max-width: 55% !important;
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .clientes-gym-mobile .clientes-consentimiento label {
+            width: 100% !important;
+            min-width: 0 !important;
+            align-items: flex-start !important;
+            line-height: 1.35 !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .clientes-gym-mobile .clientes-consentimiento input[type="checkbox"] {
+            flex: 0 0 auto !important;
+            margin-top: 2px !important;
           }
         }
 
@@ -2902,6 +2946,7 @@ function ResumenFila({
       style={
         styles.resumenFila
       }
+      className="clientes-resumen-fila"
     >
       <span
         style={
