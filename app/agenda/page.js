@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.17-AGENDA-V11-CLIENTE-DIRECTO";
+const VERSION = "2026.08.17-AGENDA-V12-SERVICIOS-COMPACTOS";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -828,6 +828,70 @@ export default function AgendaPage() {
     servicioReservaSeleccionado,
     mapaHorarios,
   ]);
+
+  const disponibilidadCompacta = useMemo(() => {
+    if (!esSalonBelleza) return disponibilidad;
+
+    const grupos = new Map();
+
+    disponibilidad.forEach((item) => {
+      const clave = String(item.horario_id);
+
+      if (!grupos.has(clave)) {
+        grupos.set(clave, {
+          ...item,
+          slots: [],
+          reservadosTotal: 0,
+          disponiblesTotal: 0,
+          slotsDisponibles: 0,
+        });
+      }
+
+      const grupo = grupos.get(clave);
+
+      grupo.slots.push({
+        hora_inicio: item.hora_inicio,
+        hora_fin: item.hora_fin,
+        disponibles: Number(item.disponibles || 0),
+        reservados: Number(item.reservados || 0),
+      });
+
+      grupo.reservadosTotal += Number(item.reservados || 0);
+      grupo.disponiblesTotal += Number(item.disponibles || 0);
+
+      if (Number(item.disponibles || 0) > 0) {
+        grupo.slotsDisponibles += 1;
+      }
+    });
+
+    return Array.from(grupos.values())
+      .map((grupo) => ({
+        ...grupo,
+        slots: [...grupo.slots].sort((a, b) =>
+          String(a.hora_inicio || "").localeCompare(
+            String(b.hora_inicio || "")
+          )
+        ),
+      }))
+      .sort((a, b) =>
+        String(a.servicio_nombre || "").localeCompare(
+          String(b.servicio_nombre || "")
+        )
+      );
+  }, [disponibilidad, esSalonBelleza]);
+
+  const horariosLibresReales = useMemo(() => {
+    if (esSalonBelleza) {
+      return disponibilidad.filter(
+        (item) => Number(item.disponibles || 0) > 0
+      ).length;
+    }
+
+    return disponibilidad.reduce(
+      (total, item) => total + Number(item.disponibles || 0),
+      0
+    );
+  }, [disponibilidad, esSalonBelleza]);
 
   const reservasActivas = useMemo(() => {
     return reservas.filter((r) =>
@@ -1864,7 +1928,9 @@ export default function AgendaPage() {
               </span>
               <div style={neo.kpiBody}>
                 <strong style={neo.kpiNumber}>
-                  {disponibilidad.length}
+                  {esSalonBelleza
+                    ? disponibilidadCompacta.length
+                    : disponibilidad.length}
                 </strong>
                 <span style={neo.kpiHint}>
                   {esSalonBelleza ? "programados hoy" : "programadas"}
@@ -1890,7 +1956,9 @@ export default function AgendaPage() {
               </span>
               <div style={neo.kpiBody}>
                 <strong style={neo.kpiNumber}>
-                  {resumenAgenda.cuposDisponibles}
+                  {esSalonBelleza
+                    ? horariosLibresReales
+                    : resumenAgenda.cuposDisponibles}
                 </strong>
                 <span style={neo.kpiHint}>
                   disponibles
@@ -1957,12 +2025,20 @@ export default function AgendaPage() {
                 </div>
               ) : (
                 <div style={neo.timeline}>
-                  {disponibilidad.map((item, index) => {
+                  {(esSalonBelleza
+                    ? disponibilidadCompacta
+                    : disponibilidad
+                  ).map((item, index) => {
                     const capacidad = Number(item.capacidad || 0);
-                    const reservados = Number(item.reservados || 0);
-                    const libres = Number(item.disponibles || 0);
+                    const reservados = esSalonBelleza
+                      ? Number(item.reservadosTotal || 0)
+                      : Number(item.reservados || 0);
+
+                    const libres = esSalonBelleza
+                      ? Number(item.slotsDisponibles || 0)
+                      : Number(item.disponibles || 0);
                     const porcentaje =
-                      capacidad > 0
+                      capacidad > 0 && !esSalonBelleza
                         ? Math.min(
                             100,
                             Math.round(
@@ -1976,25 +2052,35 @@ export default function AgendaPage() {
                     return (
                       <div
                         key={item.horario_id}
-                        style={neo.timelineRow}
+                        style={{
+                          ...neo.timelineRow,
+                          ...(esSalonBelleza
+                            ? neo.timelineRowBeautyCompact
+                            : {}),
+                        }}
                         className="agenda-d-timeline-row"
                       >
                         <div style={neo.timelineRail}>
                           <span style={neo.timelineDot} />
                           {index <
-                            disponibilidad.length - 1 && (
+                            (esSalonBelleza
+                              ? disponibilidadCompacta.length
+                              : disponibilidad.length) -
+                              1 && (
                             <span style={neo.timelineLine} />
                           )}
                         </div>
 
-                        <div style={neo.timelineTime}>
-                          <strong>
-                            {formatoHora(item.hora_inicio)}
-                          </strong>
-                          <span>
-                            {formatoHora(item.hora_fin)}
-                          </span>
-                        </div>
+                        {!esSalonBelleza && (
+                          <div style={neo.timelineTime}>
+                            <strong>
+                              {formatoHora(item.hora_inicio)}
+                            </strong>
+                            <span>
+                              {formatoHora(item.hora_fin)}
+                            </span>
+                          </div>
+                        )}
 
                         <div style={neo.timelineClass}>
                           <div style={neo.classTopLine}>
@@ -2016,10 +2102,8 @@ export default function AgendaPage() {
                             >
                               {esSalonBelleza
                                 ? lleno
-                                  ? "OCUPADO"
-                                  : libres === 1
-                                  ? "DISPONIBLE"
-                                  : `${libres} DISPONIBLES`
+                                  ? "SIN HORAS LIBRES"
+                                  : `${libres} HORA${libres === 1 ? "" : "S"} LIBRE${libres === 1 ? "" : "S"}`
                                 : lleno
                                 ? "COMPLETO"
                                 : `${libres} CUPOS`}
@@ -2048,27 +2132,45 @@ export default function AgendaPage() {
                             )}
                           </span>
 
-                          <div style={neo.capacityBar}>
-                            <div
-                              style={{
-                                ...neo.capacityFill,
-                                width: `${porcentaje}%`,
-                              }}
-                            />
-                          </div>
+                          {esSalonBelleza ? (
+                            <div style={neo.hoursSingleLine}>
+                              <span style={neo.hoursSingleLabel}>
+                                Horarios:
+                              </span>
 
-                          <div style={neo.capacityFooter}>
-                            <span>
-                              {esSalonBelleza
-                                ? `${reservados} reserva${reservados === 1 ? "" : "s"}`
-                                : `${reservados} reservados`}
-                            </span>
-                            <span>
-                              {esSalonBelleza
-                                ? `${libres} disponible${libres === 1 ? "" : "s"}`
-                                : `${capacidad} capacidad total`}
-                            </span>
-                          </div>
+                              <span style={neo.hoursSingleText}>
+                                {item.slots
+                                  .map((slot) =>
+                                    `${formatoHora(slot.hora_inicio)}${
+                                      Number(slot.disponibles || 0) <= 0
+                                        ? " (ocupado)"
+                                        : ""
+                                    }`
+                                  )
+                                  .join("  ·  ")}
+                              </span>
+                            </div>
+                          ) : (
+                            <>
+                              <div style={neo.capacityBar}>
+                                <div
+                                  style={{
+                                    ...neo.capacityFill,
+                                    width: `${porcentaje}%`,
+                                  }}
+                                />
+                              </div>
+
+                              <div style={neo.capacityFooter}>
+                                <span>
+                                  {reservados} reservados
+                                </span>
+                                <span>
+                                  {capacidad} capacidad total
+                                </span>
+                              </div>
+                            </>
+                          )}
                         </div>
 
                         <div style={neo.timelineAction}>
@@ -2076,9 +2178,24 @@ export default function AgendaPage() {
                             type="button"
                             disabled={lleno}
                             onClick={() => {
-                              setHorarioSeleccionado(
-                                item.horario_id
-                              );
+                              if (esSalonBelleza) {
+                                const horario = mapaHorarios.get(
+                                  String(item.horario_id)
+                                );
+
+                                setServicioReservaSeleccionado(
+                                  String(
+                                    item.servicio_id ||
+                                      horario?.servicio_id ||
+                                      ""
+                                  )
+                                );
+                                setHorarioSeleccionado("");
+                                setHoraReservaSeleccionada("");
+                              } else {
+                                setHorarioSeleccionado(item.horario_id);
+                              }
+
                               setVista("nueva");
                             }}
                             style={
@@ -2089,7 +2206,7 @@ export default function AgendaPage() {
                           >
                             {lleno
                               ? esSalonBelleza
-                                ? "Horario ocupado"
+                                ? "Sin horarios"
                                 : "Sin cupos"
                               : esSalonBelleza
                               ? "Reservar cita"
@@ -5948,6 +6065,44 @@ const neo = {
     gap: 8,
     color: "#849088",
     fontSize: 8,
+  },
+
+  timelineRowBeautyCompact: {
+    minHeight: 94,
+    gridTemplateColumns:
+      "10px minmax(0,1fr) 80px",
+    gap: 8,
+    padding: "7px 0",
+  },
+
+  hoursSingleLine: {
+    width: "100%",
+    minWidth: 0,
+    marginTop: 6,
+    padding: "6px 8px",
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+    overflowX: "auto",
+    border: "1px solid #E3EBE6",
+    borderRadius: 9,
+    background: "#FAFCFB",
+    scrollbarWidth: "thin",
+  },
+
+  hoursSingleLabel: {
+    flex: "0 0 auto",
+    color: "#587066",
+    fontSize: 8.5,
+    fontWeight: 900,
+  },
+
+  hoursSingleText: {
+    minWidth: "max-content",
+    color: "#24352D",
+    fontSize: 9.5,
+    fontWeight: 750,
+    whiteSpace: "nowrap",
   },
 
   timelineAction: {
