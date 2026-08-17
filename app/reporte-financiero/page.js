@@ -22,7 +22,7 @@ import { supabase } from "../../lib/supabase";
   para evitar duplicar cobros que ya fueron registrados en Caja.
 */
 
-const VERSION = "2026.08.17-REPORTE-FINANCIERO-KONAX-REAL-V3-GASTOS";
+const VERSION = "2026.08.17-REPORTE-FINANCIERO-KONAX-V4-FILTRO-MOVIMIENTOS";
 
 const CATEGORIAS_GASTOS = [
   "Compras",
@@ -213,6 +213,7 @@ export default function ReporteFinanciero() {
   const [desde, setDesde] = useState(primerDiaMes());
   const [hasta, setHasta] = useState(fechaHoy());
   const [rangoActivo, setRangoActivo] = useState("mes");
+  const [vistaMovimientos, setVistaMovimientos] = useState("dia");
 
   const [movimientos, setMovimientos] = useState([]);
   const [fuentesActivas, setFuentesActivas] = useState([]);
@@ -590,6 +591,58 @@ export default function ReporteFinanciero() {
       });
   }, [movimientos]);
 
+  const movimientosAgrupados = useMemo(() => {
+    if (vistaMovimientos === "dia") {
+      const mapa = new Map();
+
+      movimientos.forEach((item) => {
+        const clave = String(item.fecha || "").slice(0, 10);
+        if (!mapa.has(clave)) mapa.set(clave, []);
+        mapa.get(clave).push(item);
+      });
+
+      return Array.from(mapa.entries()).map(([clave, items]) => ({
+        clave,
+        titulo: fechaVisual(clave),
+        items,
+      }));
+    }
+
+    if (vistaMovimientos === "mes") {
+      const mapa = new Map();
+
+      movimientos.forEach((item) => {
+        const clave = String(item.fecha || "").slice(0, 7);
+        if (!mapa.has(clave)) mapa.set(clave, []);
+        mapa.get(clave).push(item);
+      });
+
+      return Array.from(mapa.entries()).map(([clave, items]) => {
+        const [anio, mes] = clave.split("-").map(Number);
+        const titulo = new Intl.DateTimeFormat("es-PA", {
+          month: "long",
+          year: "numeric",
+        }).format(new Date(anio, (mes || 1) - 1, 1));
+
+        return { clave, titulo, items };
+      });
+    }
+
+    const mapa = new Map();
+
+    movimientos.forEach((item) => {
+      const clave = String(item.fecha || "").slice(0, 4);
+      if (!mapa.has(clave)) mapa.set(clave, []);
+      mapa.get(clave).push(item);
+    });
+
+    return Array.from(mapa.entries()).map(([clave, items]) => ({
+      clave,
+      titulo: clave,
+      items,
+    }));
+  }, [movimientos, vistaMovimientos]);
+
   function aplicarRango(tipo) {
     const rango = rangoRapido(tipo);
     setRangoActivo(tipo);
@@ -848,100 +901,161 @@ export default function ReporteFinanciero() {
               </h2>
             </div>
 
-            <div style={styles.sourceBox}>
-              <span>Fuentes</span>
-              <strong>
-                {fuentesActivas.length
-                  ? fuentesActivas.join(" · ")
-                  : "Sin fuentes disponibles"}
-              </strong>
+            <div style={styles.movementControls}>
+              {[
+                ["dia", "Día"],
+                ["mes", "Mes"],
+                ["anio", "Año"],
+              ].map(([valor, label]) => (
+                <button
+                  key={valor}
+                  type="button"
+                  onClick={() => setVistaMovimientos(valor)}
+                  style={{
+                    ...styles.movementFilterButton,
+                    ...(vistaMovimientos === valor
+                      ? styles.movementFilterButtonActive
+                      : {}),
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div style={styles.tableWrap}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>Fecha</th>
-                  <th style={styles.th}>Tipo</th>
-                  <th style={styles.th}>Categoría</th>
-                  <th style={styles.th}>Descripción</th>
-                  <th style={styles.th}>Método</th>
-                  <th style={{ ...styles.th, textAlign: "right" }}>
-                    Monto
-                  </th>
-                </tr>
-              </thead>
+          {movimientosAgrupados.length === 0 ? (
+            <div style={styles.empty}>
+              No hay movimientos financieros para mostrar.
+            </div>
+          ) : (
+            <div style={styles.movementGroups}>
+              {movimientosAgrupados.map((grupo) => {
+                const ingresosGrupo = grupo.items
+                  .filter((item) => item.tipo === "Ingreso")
+                  .reduce(
+                    (total, item) =>
+                      total + Number(item.monto || 0),
+                    0
+                  );
 
-              <tbody>
-                {movimientos.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      style={styles.emptyCell}
-                    >
-                      No hay movimientos financieros para mostrar.
-                    </td>
-                  </tr>
-                ) : (
-                  movimientos.map((item) => (
-                    <tr key={item.id}>
-                      <td style={styles.td}>
-                        {fechaVisual(item.fecha)}
-                      </td>
+                const gastosGrupo = grupo.items
+                  .filter((item) => item.tipo === "Gasto")
+                  .reduce(
+                    (total, item) =>
+                      total + Number(item.monto || 0),
+                    0
+                  );
 
-                      <td style={styles.td}>
-                        <span
-                          style={{
-                            ...styles.typeBadge,
-                            ...(item.tipo === "Gasto"
-                              ? styles.typeExpense
-                              : styles.typeIncome),
-                          }}
-                        >
-                          {item.tipo}
-                        </span>
-                      </td>
-
-                      <td style={styles.td}>
-                        {item.categoria}
-                      </td>
-
-                      <td style={styles.td}>
-                        <strong style={styles.description}>
-                          {item.descripcion}
+                return (
+                  <div
+                    key={grupo.clave}
+                    style={styles.movementGroup}
+                  >
+                    <div style={styles.movementGroupHeader}>
+                      <div>
+                        <strong style={styles.movementGroupTitle}>
+                          {grupo.titulo}
                         </strong>
-                        {item.fuente && (
-                          <span style={styles.sourceMini}>
-                            {item.fuente}
-                          </span>
-                        )}
-                      </td>
+                        <span style={styles.movementGroupCount}>
+                          {grupo.items.length} movimiento
+                          {grupo.items.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
 
-                      <td style={styles.td}>
-                        {item.metodo || "—"}
-                      </td>
+                      <div style={styles.movementGroupTotals}>
+                        <span>
+                          Ingresos {dinero(ingresosGrupo)}
+                        </span>
+                        <span>
+                          Gastos {dinero(gastosGrupo)}
+                        </span>
+                      </div>
+                    </div>
 
-                      <td
-                        style={{
-                          ...styles.td,
-                          textAlign: "right",
-                          fontWeight: 900,
-                          color:
-                            item.tipo === "Gasto"
-                              ? "#B42318"
-                              : "#08743C",
-                        }}
-                      >
-                        {item.tipo === "Gasto" ? "− " : "+ "}
-                        {dinero(item.monto)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                    <div style={styles.tableWrap}>
+                      <table style={styles.table}>
+                        <thead>
+                          <tr>
+                            <th style={styles.th}>Fecha</th>
+                            <th style={styles.th}>Tipo</th>
+                            <th style={styles.th}>Categoría</th>
+                            <th style={styles.th}>Descripción</th>
+                            <th style={styles.th}>Método</th>
+                            <th
+                              style={{
+                                ...styles.th,
+                                textAlign: "right",
+                              }}
+                            >
+                              Monto
+                            </th>
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {grupo.items.map((item) => (
+                            <tr key={item.id}>
+                              <td style={styles.td}>
+                                {fechaVisual(item.fecha)}
+                              </td>
+
+                              <td style={styles.td}>
+                                <span
+                                  style={{
+                                    ...styles.typeBadge,
+                                    ...(item.tipo === "Gasto"
+                                      ? styles.typeExpense
+                                      : styles.typeIncome),
+                                  }}
+                                >
+                                  {item.tipo}
+                                </span>
+                              </td>
+
+                              <td style={styles.td}>
+                                {item.categoria}
+                              </td>
+
+                              <td style={styles.td}>
+                                <strong style={styles.description}>
+                                  {item.descripcion}
+                                </strong>
+                                {item.fuente && (
+                                  <span style={styles.sourceMini}>
+                                    {item.fuente}
+                                  </span>
+                                )}
+                              </td>
+
+                              <td style={styles.td}>
+                                {item.metodo || "—"}
+                              </td>
+
+                              <td
+                                style={{
+                                  ...styles.td,
+                                  textAlign: "right",
+                                  fontWeight: 900,
+                                  color:
+                                    item.tipo === "Gasto"
+                                      ? "#B42318"
+                                      : "#08743C",
+                                }}
+                              >
+                                {item.tipo === "Gasto" ? "− " : "+ "}
+                                {dinero(item.monto)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         <footer style={styles.footer}>
@@ -1396,6 +1510,75 @@ const styles = {
     textAlign: "center",
     color: "#7A867F",
     fontSize: 11,
+  },
+
+  movementControls: {
+    display: "flex",
+    gap: 6,
+    flexWrap: "wrap",
+  },
+
+  movementFilterButton: {
+    minHeight: 34,
+    padding: "0 11px",
+    border: "1px solid #D6E1DA",
+    borderRadius: 9,
+    background: "#F8FBF9",
+    color: "#435047",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  movementFilterButtonActive: {
+    borderColor: "#16834F",
+    background: "#EAF8EF",
+    color: "#0B7542",
+  },
+
+  movementGroups: {
+    display: "grid",
+    gap: 12,
+  },
+
+  movementGroup: {
+    border: "1px solid #E3EAE5",
+    borderRadius: 13,
+    overflow: "hidden",
+    background: "#FFFFFF",
+  },
+
+  movementGroupHeader: {
+    padding: "10px 12px",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    flexWrap: "wrap",
+    background: "#F8FBF9",
+    borderBottom: "1px solid #E5EBE7",
+  },
+
+  movementGroupTitle: {
+    display: "block",
+    color: "#17211C",
+    fontSize: 12,
+  },
+
+  movementGroupCount: {
+    display: "block",
+    marginTop: 2,
+    color: "#78847D",
+    fontSize: 8.5,
+  },
+
+  movementGroupTotals: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    color: "#506057",
+    fontSize: 9,
+    fontWeight: 800,
   },
 
   footer: {
