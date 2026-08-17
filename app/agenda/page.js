@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.17-AGENDA-V9-RESERVA-MANUAL";
+const VERSION = "2026.08.17-AGENDA-V10-SLOTS-REALES";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -154,6 +154,7 @@ export default function AgendaPage() {
   const [busquedaCliente, setBusquedaCliente] = useState("");
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [horarioSeleccionado, setHorarioSeleccionado] = useState("");
+  const [horaReservaSeleccionada, setHoraReservaSeleccionada] = useState("");
   const [servicioReservaSeleccionado, setServicioReservaSeleccionado] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [busquedaReservas, setBusquedaReservas] = useState("");
@@ -1378,17 +1379,30 @@ export default function AgendaPage() {
       return;
     }
 
+    if (esSalonBelleza && !horaReservaSeleccionada) {
+      alert("Selecciona la hora exacta de la cita.");
+      return;
+    }
+
     setGuardando(true);
     setError("");
 
     try {
-      const { data, error } = await supabase.rpc("crear_reserva_agenda", {
+      const parametrosReserva = {
         p_empresa_id: empresaId,
         p_horario_id: horarioSeleccionado,
         p_cliente_id: clienteSeleccionado.id,
         p_fecha_reserva: fechaAgenda,
         p_observaciones: observaciones.trim() || null,
-      });
+        ...(esSalonBelleza
+          ? { p_hora_inicio: horaReservaSeleccionada }
+          : {}),
+      };
+
+      const { data, error } = await supabase.rpc(
+        "crear_reserva_agenda",
+        parametrosReserva
+      );
 
       if (error) throw error;
 
@@ -1398,6 +1412,7 @@ export default function AgendaPage() {
       setBusquedaCliente("");
       setServicioReservaSeleccionado("");
       setHorarioSeleccionado("");
+      setHoraReservaSeleccionada("");
       setObservaciones("");
 
       await Promise.all([
@@ -2336,6 +2351,7 @@ export default function AgendaPage() {
                     setFechaAgenda(e.target.value);
                     setServicioReservaSeleccionado("");
                     setHorarioSeleccionado("");
+                    setHoraReservaSeleccionada("");
                   }}
                   style={s.input}
                 />
@@ -2349,6 +2365,7 @@ export default function AgendaPage() {
                       onChange={(e) => {
                         setServicioReservaSeleccionado(e.target.value);
                         setHorarioSeleccionado("");
+                        setHoraReservaSeleccionada("");
                       }}
                       style={s.input}
                     >
@@ -2363,8 +2380,18 @@ export default function AgendaPage() {
 
                   <Campo label="Horario disponible">
                     <select
-                      value={horarioSeleccionado}
-                      onChange={(e) => setHorarioSeleccionado(e.target.value)}
+                      value={
+                        horarioSeleccionado && horaReservaSeleccionada
+                          ? `${horarioSeleccionado}|${horaReservaSeleccionada}`
+                          : ""
+                      }
+                      onChange={(e) => {
+                        const [horarioId = "", horaInicio = ""] =
+                          String(e.target.value || "").split("|");
+
+                        setHorarioSeleccionado(horarioId);
+                        setHoraReservaSeleccionada(horaInicio);
+                      }}
                       style={s.input}
                       disabled={!servicioReservaSeleccionado}
                     >
@@ -2376,8 +2403,8 @@ export default function AgendaPage() {
 
                       {disponibilidadReservaFiltrada.map((item) => (
                         <option
-                          key={item.horario_id}
-                          value={item.horario_id}
+                          key={`${item.horario_id}-${item.hora_inicio}`}
+                          value={`${item.horario_id}|${String(item.hora_inicio || "").slice(0, 8)}`}
                           disabled={Number(item.disponibles) <= 0}
                         >
                           {formatoHora(item.hora_inicio)}
@@ -2387,7 +2414,7 @@ export default function AgendaPage() {
                           {item.instructor || "Profesional por asignar"}
                           {" · "}
                           {Number(item.disponibles) > 0
-                            ? "Disponible"
+                            ? `${item.disponibles} disponible${Number(item.disponibles) === 1 ? "" : "s"}`
                             : "Ocupado"}
                         </option>
                       ))}
@@ -2477,6 +2504,9 @@ export default function AgendaPage() {
                         String(item.servicio_id || horario?.servicio_id || "")
                       );
                       setHorarioSeleccionado(item.horario_id);
+                      setHoraReservaSeleccionada(
+                        String(item.hora_inicio || "").slice(0, 8)
+                      );
                     }}
                   >
                     <div>
