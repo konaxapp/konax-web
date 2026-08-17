@@ -22,7 +22,37 @@ import { supabase } from "../../lib/supabase";
   para evitar duplicar cobros que ya fueron registrados en Caja.
 */
 
-const VERSION = "2026.08.17-REPORTE-FINANCIERO-KONAX-REAL-V2";
+const VERSION = "2026.08.17-REPORTE-FINANCIERO-KONAX-REAL-V3-GASTOS";
+
+const CATEGORIAS_GASTOS = [
+  "Compras",
+  "Alquiler",
+  "Planilla",
+  "Luz",
+  "Agua",
+  "Internet",
+  "Teléfono",
+  "Publicidad",
+  "Combustible",
+  "Transporte",
+  "Mantenimiento",
+  "Limpieza",
+  "Papelería y Oficina",
+  "Software y Sistemas",
+  "Honorarios Profesionales",
+  "Comisiones",
+  "Impuestos",
+  "Herramientas y Equipos",
+  "Otros",
+];
+
+const ORDEN_CATEGORIAS_GASTOS = new Map(
+  CATEGORIAS_GASTOS.map((categoria, index) => [
+    categoria,
+    index,
+  ])
+);
+
 
 function fechaHoy() {
   const d = new Date();
@@ -157,6 +187,19 @@ function rangoRapido(tipo) {
     desde: primerDiaMes(),
     hasta: iso(hoy),
   };
+}
+
+function categoriaGastoCanonica(valor) {
+  const original = String(valor || "").trim();
+  if (!original) return "Otros";
+
+  const clave = normalizar(original);
+
+  const encontrada = CATEGORIAS_GASTOS.find(
+    (categoria) => normalizar(categoria) === clave
+  );
+
+  return encontrada || original;
 }
 
 export default function ReporteFinanciero() {
@@ -320,7 +363,6 @@ export default function ReporteFinanciero() {
               "id,empresa_id,fecha,categoria,descripcion,monto,metodo_pago,responsable,observacion,estado,created_at"
             )
             .eq("empresa_id", idEmpresa)
-            .neq("estado", "Anulado")
             .gte("fecha", fechaDesde)
             .lte("fecha", fechaHasta)
             .order("fecha", { ascending: false })
@@ -361,6 +403,8 @@ export default function ReporteFinanciero() {
       });
 
       gastosResp.data.forEach((gasto) => {
+        if (normalizar(gasto.estado) === "anulado") return;
+
         const monto = Number(gasto.monto || 0);
 
         if (!Number.isFinite(monto) || monto <= 0) return;
@@ -372,9 +416,9 @@ export default function ReporteFinanciero() {
             String(gasto.created_at || "").slice(0, 10) ||
             fechaHoy(),
           tipo: "Gasto",
-          categoria:
-            gasto.categoria ||
-            "Otros",
+          categoria: categoriaGastoCanonica(
+            gasto.categoria
+          ),
           descripcion:
             gasto.descripcion ||
             "Gasto del negocio",
@@ -508,16 +552,42 @@ export default function ReporteFinanciero() {
     movimientos
       .filter((m) => m.tipo === "Gasto")
       .forEach((m) => {
-        const categoria = m.categoria || "Otros";
+        const categoria = categoriaGastoCanonica(
+          m.categoria
+        );
+
         mapa.set(
           categoria,
-          Number(mapa.get(categoria) || 0) + Number(m.monto || 0)
+          Number(mapa.get(categoria) || 0) +
+            Number(m.monto || 0)
         );
       });
 
     return Array.from(mapa.entries())
-      .map(([categoria, monto]) => ({ categoria, monto }))
-      .sort((a, b) => b.monto - a.monto);
+      .map(([categoria, monto]) => ({
+        categoria,
+        monto,
+      }))
+      .sort((a, b) => {
+        const ordenA =
+          ORDEN_CATEGORIAS_GASTOS.has(a.categoria)
+            ? ORDEN_CATEGORIAS_GASTOS.get(a.categoria)
+            : 999;
+
+        const ordenB =
+          ORDEN_CATEGORIAS_GASTOS.has(b.categoria)
+            ? ORDEN_CATEGORIAS_GASTOS.get(b.categoria)
+            : 999;
+
+        if (ordenA !== ordenB) {
+          return ordenA - ordenB;
+        }
+
+        return a.categoria.localeCompare(
+          b.categoria,
+          "es"
+        );
+      });
   }, [movimientos]);
 
   function aplicarRango(tipo) {
