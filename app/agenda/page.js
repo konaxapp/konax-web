@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.17-AGENDA-SIMPLE-K-V5";
+const VERSION = "2026.08.17-AGENDA-SIMPLE-K-V6";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -4723,7 +4723,8 @@ const AGENDA_CSS = `
 
 @media (min-width: 821px) {
   .agenda-d-command-grid {
-    width: min(1180px, 100%) !important;
+    width: 100% !important;
+    max-width: 1480px !important;
   }
 }
 
@@ -4982,7 +4983,7 @@ body {
 @media (min-width: 981px) {
   .agenda-d-command-grid {
     grid-template-columns:
-      minmax(0,1.55fr) minmax(310px,1fr) minmax(175px,.45fr) !important;
+      minmax(0,1.65fr) minmax(320px,.95fr) minmax(165px,.38fr) !important;
     grid-template-rows: auto !important;
   }
 
@@ -5546,11 +5547,11 @@ const neo = {
 
   commandGrid: {
     width: "100%",
-    maxWidth: 1380,
+    maxWidth: 1480,
     margin: "0 auto 18px",
     display: "grid",
     gridTemplateColumns:
-      "minmax(0,1.55fr) minmax(310px,1fr) minmax(175px,.45fr)",
+      "minmax(0,1.65fr) minmax(320px,.95fr) minmax(165px,.38fr)",
     gridTemplateRows: "auto",
     gap: 10,
     alignItems: "stretch",
