@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-// KONAX Configuracion - Planes de membresia - Version 2026.08.07-Q
+// KONAX Configuración - Perfil empresarial + Logo - Version 2026.08.17-R
 
 const PLAN_INICIAL = {
   nombre: "",
@@ -38,12 +38,28 @@ function esNegocioGimnasio(empresa) {
   );
 }
 
+function extensionArchivo(archivo) {
+  const nombre = String(archivo?.name || "");
+  const extension = nombre.split(".").pop()?.toLowerCase();
+
+  if (["png", "jpg", "jpeg", "webp"].includes(extension)) {
+    return extension === "jpeg" ? "jpg" : extension;
+  }
+
+  if (archivo?.type === "image/png") return "png";
+  if (archivo?.type === "image/webp") return "webp";
+  return "jpg";
+}
+
 export default function AdminConfiguracion() {
   const [seccion, setSeccion] = useState("perfil");
   const [empresa, setEmpresa] = useState(null);
   const [usuario, setUsuario] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+
+  const [subiendoLogo, setSubiendoLogo] = useState(false);
+  const [eliminandoLogo, setEliminandoLogo] = useState(false);
 
   const [planes, setPlanes] = useState([]);
   const [cargandoPlanes, setCargandoPlanes] = useState(false);
@@ -176,6 +192,127 @@ export default function AdminConfiguracion() {
       ...prev,
       [campo]: valor,
     }));
+  }
+
+  async function subirLogoEmpresa(evento) {
+    const archivo = evento.target.files?.[0];
+    const empresaId = obtenerEmpresaId();
+
+    evento.target.value = "";
+
+    if (!archivo || !empresaId || !empresa?.id) return;
+
+    if (!archivo.type?.startsWith("image/")) {
+      alert("Seleccione una imagen PNG, JPG o WEBP.");
+      return;
+    }
+
+    if (archivo.size > 5 * 1024 * 1024) {
+      alert("El logo no puede pesar más de 5 MB.");
+      return;
+    }
+
+    setSubiendoLogo(true);
+
+    try {
+      const extension = extensionArchivo(archivo);
+      const ruta = `empresas/${empresaId}/logo.${extension}`;
+
+      const { error: errorUpload } = await supabase.storage
+        .from("logos-empresas")
+        .upload(ruta, archivo, {
+          upsert: true,
+          cacheControl: "3600",
+          contentType: archivo.type || undefined,
+        });
+
+      if (errorUpload) {
+        throw errorUpload;
+      }
+
+      const { data: publicData } = supabase.storage
+        .from("logos-empresas")
+        .getPublicUrl(ruta);
+
+      const logoUrl = `${publicData.publicUrl}?v=${Date.now()}`;
+
+      const { error: errorEmpresa } = await supabase
+        .from("empresas")
+        .update({
+          logo_url: logoUrl,
+        })
+        .eq("id", empresaId);
+
+      if (errorEmpresa) {
+        throw errorEmpresa;
+      }
+
+      setEmpresa((prev) => ({
+        ...prev,
+        logo_url: logoUrl,
+      }));
+
+      alert("Logo del negocio actualizado correctamente.");
+    } catch (error) {
+      alert(
+        "No se pudo subir el logo: " +
+          (error?.message || "Error inesperado")
+      );
+    } finally {
+      setSubiendoLogo(false);
+    }
+  }
+
+  async function quitarLogoEmpresa() {
+    const empresaId = obtenerEmpresaId();
+
+    if (!empresaId || !empresa?.logo_url || eliminandoLogo) return;
+
+    if (
+      !window.confirm(
+        "¿Desea quitar el logo actual del negocio?"
+      )
+    ) {
+      return;
+    }
+
+    setEliminandoLogo(true);
+
+    try {
+      const url = String(empresa.logo_url || "");
+      const match = url.match(
+        /logos-empresas\/(.+?)(?:\?|$)/
+      );
+
+      if (match?.[1]) {
+        await supabase.storage
+          .from("logos-empresas")
+          .remove([decodeURIComponent(match[1])]);
+      }
+
+      const { error } = await supabase
+        .from("empresas")
+        .update({
+          logo_url: null,
+        })
+        .eq("id", empresaId);
+
+      if (error) throw error;
+
+      setEmpresa((prev) => ({
+        ...prev,
+        logo_url: null,
+      }));
+
+      alert("Logo eliminado correctamente.");
+    } catch (error) {
+      alert(
+        "No se pudo quitar el logo: " +
+          (error?.message || "Error inesperado")
+      );
+    } finally {
+      setEliminandoLogo(false);
+    }
   }
 
   async function guardarPerfil() {
@@ -477,6 +614,15 @@ export default function AdminConfiguracion() {
             justify-content: flex-start !important;
           }
 
+          .logo-negocio-box {
+            grid-template-columns: 1fr !important;
+          }
+
+          .logo-negocio-preview {
+            width: 100px !important;
+            height: 100px !important;
+          }
+
           .config-page input,
           .config-page select,
           .config-page textarea,
@@ -655,6 +801,69 @@ export default function AdminConfiguracion() {
                 descripcion="Información administrativa del negocio."
                 icono="🏢"
               >
+                <div
+                  className="logo-negocio-box"
+                  style={logoNegocioBox}
+                >
+                  <div
+                    className="logo-negocio-preview"
+                    style={logoNegocioPreview}
+                  >
+                    {empresa?.logo_url ? (
+                      <img
+                        src={empresa.logo_url}
+                        alt={empresa?.nombre || "Logo del negocio"}
+                        style={logoNegocioImg}
+                      />
+                    ) : (
+                      <span style={logoPlaceholder}>🏢</span>
+                    )}
+                  </div>
+
+                  <div style={logoNegocioInfo}>
+                    <strong style={logoNegocioTitulo}>
+                      Logo del negocio
+                    </strong>
+
+                    <p style={logoNegocioTexto}>
+                      Este logo se mostrará en el portal público de
+                      reservas de tu negocio. Recomendado: imagen
+                      cuadrada PNG, JPG o WEBP.
+                    </p>
+
+                    <div style={logoAcciones}>
+                      <label style={botonSubirLogo}>
+                        {subiendoLogo
+                          ? "Subiendo..."
+                          : empresa?.logo_url
+                          ? "Cambiar logo"
+                          : "Subir logo"}
+
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          onChange={subirLogoEmpresa}
+                          disabled={subiendoLogo || eliminandoLogo}
+                          style={{ display: "none" }}
+                        />
+                      </label>
+
+                      {empresa?.logo_url && (
+                        <button
+                          type="button"
+                          style={botonQuitarLogo}
+                          onClick={quitarLogoEmpresa}
+                          disabled={subiendoLogo || eliminandoLogo}
+                        >
+                          {eliminandoLogo
+                            ? "Quitando..."
+                            : "Quitar logo"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 <Campo labelTexto="Nombre del negocio">
                   <input
                     value={empresa?.nombre || ""}
@@ -1372,6 +1581,88 @@ const botonVolver = {
   padding: "12px 18px",
   borderRadius: "12px",
   fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const logoNegocioBox = {
+  marginBottom: "22px",
+  padding: "16px",
+  display: "grid",
+  gridTemplateColumns: "120px minmax(0,1fr)",
+  gap: "18px",
+  alignItems: "center",
+  border: "1px solid #dfe6e2",
+  borderRadius: "18px",
+  background: "#f9fbfa",
+};
+
+const logoNegocioPreview = {
+  width: "120px",
+  height: "120px",
+  display: "grid",
+  placeItems: "center",
+  border: "1px solid #d9e2dd",
+  borderRadius: "18px",
+  background: "#ffffff",
+  overflow: "hidden",
+};
+
+const logoNegocioImg = {
+  width: "100%",
+  height: "100%",
+  objectFit: "contain",
+};
+
+const logoPlaceholder = {
+  fontSize: "42px",
+};
+
+const logoNegocioInfo = {
+  minWidth: 0,
+};
+
+const logoNegocioTitulo = {
+  display: "block",
+  color: "#111827",
+  fontSize: "17px",
+  marginBottom: "5px",
+};
+
+const logoNegocioTexto = {
+  margin: "0 0 12px",
+  color: "#6b7280",
+  fontSize: "13px",
+  lineHeight: 1.5,
+};
+
+const logoAcciones = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap",
+};
+
+const botonSubirLogo = {
+  minHeight: "40px",
+  padding: "0 14px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: "11px",
+  background: "#0b7041",
+  color: "#ffffff",
+  fontWeight: 900,
+  fontSize: "13px",
+  cursor: "pointer",
+};
+
+const botonQuitarLogo = {
+  minHeight: "40px",
+  padding: "0 14px",
+  border: "1px solid #fecaca",
+  borderRadius: "11px",
+  background: "#fff5f5",
+  color: "#b42318",
+  fontWeight: 900,
   cursor: "pointer",
 };
 
