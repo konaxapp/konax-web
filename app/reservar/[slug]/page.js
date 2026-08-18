@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.17-PORTAL-MOVIL-FLUJO-V5-FECHA-HORA";
+const VERSION = "2026.08.17-PORTAL-MOVIL-FLUJO-V7-NEGOCIO-HEADER";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -874,6 +874,21 @@ export default function ReservaPublicaAutoservicioPage() {
             id="flujo-reserva"
             className="kp-flow"
           >
+            <div className="kp-business-window">
+              <div className="kp-business-logo-box">
+                <img
+                  src="/konax-logo.png"
+                  alt="KONAX"
+                  className="kp-business-logo"
+                />
+              </div>
+
+              <div className="kp-business-window-info">
+                <strong>{nombreNegocio}</strong>
+                <span>Reserva en línea</span>
+              </div>
+            </div>
+
             <Stepper paso={paso} />
 
             {paso === 1 && (
@@ -1153,13 +1168,17 @@ export default function ReservaPublicaAutoservicioPage() {
                     className="kp-continue kp-continue-fixed"
                     onClick={continuarFechaHora}
                   >
-                    <span>
+                    <span className="kp-continue-detail">
                       {servicioSeleccionado.requierePago
-                        ? dinero(servicioSeleccionado.precio)
+                        ? `${dinero(
+                            servicioSeleccionado.precio
+                          )} · ${servicioSeleccionado.duracion} min`
                         : `${servicioSeleccionado.duracion} min`}
                     </span>
 
-                    <strong>Continuar →</strong>
+                    <strong className="kp-continue-action">
+                      Continuar <b>›</b>
+                    </strong>
                   </button>
                 )}
               </div>
@@ -1369,6 +1388,7 @@ export default function ReservaPublicaAutoservicioPage() {
           </button>
         )}
 
+        {!(paso === 3 && horarioSeleccionado) && (
         <nav className="kp-bottom-nav">
           <button
             type="button"
@@ -1413,6 +1433,7 @@ export default function ReservaPublicaAutoservicioPage() {
             <small>Mi cita</small>
           </button>
         </nav>
+        )}
 
         <footer className="kp-footer">
           <img src="/konax-logo.png" alt="KONAX" />
@@ -1688,6 +1709,53 @@ const CSS = `
     margin: 0 0 14px;
     color: #6b7770;
     font-size: 13px;
+  }
+
+  .kp-business-window {
+    margin: -2px 0 16px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid #dfe6e2;
+    border-radius: 17px;
+    background: #ffffff;
+    box-shadow: 0 5px 14px rgba(20,38,28,.04);
+  }
+
+  .kp-business-logo-box {
+    width: 58px;
+    height: 58px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border: 1px solid #e5ebe7;
+    border-radius: 14px;
+    background: #ffffff;
+    overflow: hidden;
+  }
+
+  .kp-business-logo {
+    width: 50px;
+    height: 44px;
+    object-fit: contain;
+  }
+
+  .kp-business-window-info {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+
+  .kp-business-window-info strong {
+    color: #17211c;
+    font-size: 16px;
+    line-height: 1.2;
+  }
+
+  .kp-business-window-info span {
+    color: #6f7c74;
+    font-size: 12px;
   }
 
   .kp-stepper {
@@ -1975,6 +2043,7 @@ const CSS = `
   .kp-time-cards {
     display: grid;
     gap: 12px;
+    padding-bottom: 92px;
   }
 
   .kp-time-card {
@@ -2000,10 +2069,40 @@ const CSS = `
   }
 
   .kp-continue-fixed {
-    position: sticky;
-    bottom: 156px;
-    z-index: 45;
-    margin-top: 14px;
+    position: fixed;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%);
+    z-index: 95;
+    width: min(620px, calc(100% - 34px));
+    min-height: 66px;
+    margin: 0;
+    padding: 0 20px;
+    border-radius: 18px;
+    background: #171817;
+    color: #ffffff;
+    box-shadow: 0 12px 30px rgba(0,0,0,.24);
+  }
+
+  .kp-continue-detail {
+    color: #d3d3d3;
+    font-size: 15px;
+    font-weight: 800;
+  }
+
+  .kp-continue-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  .kp-continue-action b {
+    font-size: 29px;
+    line-height: 1;
+    font-weight: 400;
   }
 
   .kp-available-note {
@@ -2398,6 +2497,8 @@ const CSS = `
   }
 
 
+  .kp-dark .kp-business-window,
+  .kp-dark .kp-business-logo-box,
   .kp-dark .kp-booking-business,
   .kp-dark .kp-date-pill,
   .kp-dark .kp-time-card {
@@ -2406,8 +2507,13 @@ const CSS = `
     border-color: #2b3931;
   }
 
+  .kp-dark .kp-business-window-info strong,
   .kp-dark .kp-booking-business strong {
     color: #f3f7f4;
+  }
+
+  .kp-dark .kp-business-window-info span {
+    color: #aab8b0;
   }
 
   .kp-dark .kp-booking-business small {
@@ -2449,6 +2555,21 @@ const CSS = `
   }
 
   @media (max-width: 520px) {
+    .kp-continue-fixed {
+      width: calc(100% - 28px);
+      bottom: 12px;
+      min-height: 64px;
+      padding: 0 18px;
+    }
+
+    .kp-continue-detail {
+      font-size: 14px;
+    }
+
+    .kp-continue-action {
+      font-size: 17px;
+    }
+
     .kp-hero {
       grid-template-columns: 1fr;
     }
