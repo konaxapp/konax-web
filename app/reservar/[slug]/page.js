@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.17-PORTAL-MOVIL-FLUJO-V2";
+const VERSION = "2026.08.17-PORTAL-MOVIL-FLUJO-V3-BOTONES";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -128,6 +128,9 @@ export default function ReservaPublicaAutoservicioPage() {
   const [cargandoHorarios, setCargandoHorarios] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+
+  const [tema, setTema] = useState("claro");
+  const [menuAbierto, setMenuAbierto] = useState(false);
 
   const [paso, setPaso] = useState(1);
 
@@ -563,7 +566,7 @@ export default function ReservaPublicaAutoservicioPage() {
     portal.titulo_publico || portal.empresa_nombre || "KONAX";
 
   return (
-    <main className="kp-page">
+    <main className={`kp-page ${tema === "oscuro" ? "kp-dark" : ""}`}>
       <style>{CSS}</style>
 
       <div className="kp-shell">
@@ -596,10 +599,90 @@ export default function ReservaPublicaAutoservicioPage() {
           />
 
           <div className="kp-top-icons">
-            <span>☾</span>
-            <span>☀</span>
-            <span>☰</span>
+            <button
+              type="button"
+              className={tema === "oscuro" ? "active" : ""}
+              onClick={() => {
+                setTema("oscuro");
+                setMenuAbierto(false);
+              }}
+              aria-label="Modo oscuro"
+              title="Modo oscuro"
+            >
+              ☾
+            </button>
+
+            <button
+              type="button"
+              className={tema === "claro" ? "active" : ""}
+              onClick={() => {
+                setTema("claro");
+                setMenuAbierto(false);
+              }}
+              aria-label="Modo claro"
+              title="Modo claro"
+            >
+              ☀
+            </button>
+
+            <button
+              type="button"
+              className={menuAbierto ? "active" : ""}
+              onClick={() => setMenuAbierto((actual) => !actual)}
+              aria-label="Abrir menú"
+              title="Menú"
+            >
+              ☰
+            </button>
           </div>
+
+          {menuAbierto && (
+            <div className="kp-menu">
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuAbierto(false);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              >
+                ⌂ Inicio
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuAbierto(false);
+                  document
+                    .getElementById("flujo-reserva")
+                    ?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    });
+                }}
+              >
+                ▣ Reservar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuAbierto(false);
+
+                  if (tokenGestion) {
+                    window.location.href =
+                      `/reservar/${slug}?cita=${tokenGestion}`;
+                    return;
+                  }
+
+                  alert(
+                    "Cuando confirmes una reserva podrás gestionar tu cita desde aquí."
+                  );
+                }}
+              >
+                ▤ Mi cita
+              </button>
+            </div>
+          )}
         </header>
 
         {!tokenUrl && (
@@ -1367,14 +1450,54 @@ const CSS = `
     gap: 4px;
   }
 
-  .kp-top-icons span {
-    width: 30px;
-    height: 30px;
+  .kp-top-icons button {
+    width: 34px;
+    height: 34px;
     display: grid;
     place-items: center;
+    border: 1px solid transparent;
     border-radius: 999px;
     background: #f1f4f2;
-    font-size: 13px;
+    color: #17211c;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .kp-top-icons button.active {
+    border-color: #0b7041;
+    background: #e8f5ed;
+    color: #0b7041;
+  }
+
+  .kp-menu {
+    position: absolute;
+    top: 58px;
+    right: 14px;
+    z-index: 90;
+    width: 190px;
+    padding: 8px;
+    display: grid;
+    gap: 5px;
+    border: 1px solid #dfe6e2;
+    border-radius: 15px;
+    background: #ffffff;
+    box-shadow: 0 14px 34px rgba(20,38,28,.16);
+  }
+
+  .kp-menu button {
+    min-height: 42px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #17211c;
+    text-align: left;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .kp-menu button:hover {
+    background: #f1f7f3;
   }
 
   .kp-hero {
@@ -1971,6 +2094,76 @@ const CSS = `
 
   .kp-loading img {
     width: 115px;
+  }
+
+
+  .kp-dark {
+    background: #0f1512;
+    color: #f3f7f4;
+  }
+
+  .kp-dark .kp-topbar,
+  .kp-dark .kp-flow,
+  .kp-dark .kp-manage,
+  .kp-dark .kp-service,
+  .kp-dark .kp-prof,
+  .kp-dark .kp-selected-service,
+  .kp-dark .kp-prof-summary,
+  .kp-dark .kp-days button,
+  .kp-dark .kp-times button,
+  .kp-dark .kp-summary,
+  .kp-dark .kp-data,
+  .kp-dark .kp-menu,
+  .kp-dark .kp-bottom-nav {
+    background: #17201b;
+    color: #f3f7f4;
+    border-color: #2b3931;
+  }
+
+  .kp-dark .kp-top-icons button,
+  .kp-dark .kp-back {
+    background: #212c26;
+    color: #f3f7f4;
+  }
+
+  .kp-dark .kp-top-icons button.active {
+    background: #153c29;
+    border-color: #4aca7e;
+    color: #75e5a5;
+  }
+
+  .kp-dark .kp-service-info strong,
+  .kp-dark .kp-prof,
+  .kp-dark .kp-summary-row strong,
+  .kp-dark .kp-menu button {
+    color: #f3f7f4;
+  }
+
+  .kp-dark .kp-muted,
+  .kp-dark .kp-service-info span,
+  .kp-dark .kp-service-info small,
+  .kp-dark .kp-prof-info small,
+  .kp-dark .kp-summary-row,
+  .kp-dark .kp-footer {
+    color: #aab8b0;
+  }
+
+  .kp-dark .kp-form input,
+  .kp-dark .kp-form textarea,
+  .kp-dark .kp-cancel-box input {
+    background: #111814;
+    color: #ffffff;
+    border-color: #34443a;
+  }
+
+  .kp-dark .kp-empty {
+    background: #151d18;
+    color: #aab8b0;
+    border-color: #34443a;
+  }
+
+  .kp-dark .kp-menu button:hover {
+    background: #223029;
   }
 
   @media (max-width: 520px) {
