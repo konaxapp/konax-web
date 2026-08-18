@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.17-PORTAL-MOVIL-FLUJO-V10-LOGO-NEGOCIO";
+const VERSION = "2026.08.17-PORTAL-MOVIL-FLUJO-V11-DARK-PRO";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -1007,7 +1007,14 @@ export default function ReservaPublicaAutoservicioPage() {
                         key={servicio.id}
                         className="kp-service"
                       >
-                        <div className="kp-service-icon">✂</div>
+                        <div className="kp-service-icon">
+                          {normalizar(servicio.nombre).includes("manicure") ||
+                          normalizar(servicio.nombre).includes("uña")
+                            ? "💅"
+                            : normalizar(servicio.nombre).includes("color")
+                            ? "👩"
+                            : "✂"}
+                        </div>
 
                         <div className="kp-service-info">
                           <strong>{servicio.nombre}</strong>
@@ -1547,19 +1554,35 @@ function Stepper({ paso }) {
 
   return (
     <div className="kp-stepper">
-      {pasos.map(([numero, label]) => (
-        <div key={numero}>
-          <span
-            className={[
-              "kp-step-circle",
-              paso === numero ? "active" : "",
-              paso > numero ? "done" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          >
-            {paso > numero ? "✓" : numero}
-          </span>
+      {pasos.map(([numero, label], index) => (
+        <div
+          key={numero}
+          className="kp-step-item"
+        >
+          <div className="kp-step-top">
+            <span
+              className={[
+                "kp-step-circle",
+                paso === numero ? "active" : "",
+                paso > numero ? "done" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              {paso > numero ? "✓" : numero}
+            </span>
+
+            {index < pasos.length - 1 && (
+              <span
+                className={[
+                  "kp-step-line",
+                  paso > numero ? "done" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              />
+            )}
+          </div>
 
           <small
             className={
@@ -1858,35 +1881,63 @@ const CSS = `
 
   .kp-stepper {
     margin-bottom: 22px;
-    padding: 10px 6px;
+    padding: 18px 16px 14px;
     display: grid;
     grid-template-columns: repeat(4,minmax(0,1fr));
-    gap: 4px;
-    border-radius: 16px;
-    background: #f7f9f8;
+    gap: 0;
+    border: 1px solid #e1e7e3;
+    border-radius: 18px;
+    background: #f8faf9;
   }
 
-  .kp-stepper > div {
+  .kp-step-item {
+    min-width: 0;
     display: grid;
     justify-items: center;
-    gap: 5px;
+    gap: 7px;
+  }
+
+  .kp-step-top {
+    width: 100%;
+    display: flex;
+    align-items: center;
   }
 
   .kp-step-circle {
-    width: 30px;
-    height: 30px;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
     display: grid;
     place-items: center;
     border-radius: 50%;
-    background: #e5eae7;
-    color: #59645e;
-    font-size: 12px;
+    background: #e7ece9;
+    color: #5e6963;
+    font-size: 13px;
     font-weight: 900;
+    position: relative;
+    z-index: 2;
+  }
+
+  .kp-step-line {
+    height: 3px;
+    flex: 1;
+    margin: 0 8px;
+    border-radius: 999px;
+    background:
+      radial-gradient(circle, #9aa59f 1.4px, transparent 1.6px)
+      center / 9px 3px repeat-x;
+    opacity: .7;
+  }
+
+  .kp-step-line.done {
+    background: #0b7041;
+    opacity: 1;
   }
 
   .kp-step-circle.active {
-    background: #0b7041;
+    background: linear-gradient(145deg,#0b7041,#14a35f);
     color: #fff;
+    box-shadow: 0 6px 14px rgba(11,112,65,.24);
   }
 
   .kp-step-circle.done {
@@ -1896,9 +1947,10 @@ const CSS = `
 
   .kp-stepper small {
     color: #7d8882;
-    font-size: 8px;
-    font-weight: 800;
+    font-size: 9px;
+    font-weight: 850;
     text-align: center;
+    line-height: 1.2;
   }
 
   .kp-stepper small.active {
@@ -1915,14 +1967,15 @@ const CSS = `
   }
 
   .kp-service {
-    padding: 13px;
+    padding: 14px;
     display: grid;
-    grid-template-columns: 50px minmax(0,1fr) auto;
-    gap: 11px;
+    grid-template-columns: 56px minmax(0,1fr) auto;
+    gap: 12px;
     align-items: center;
-    border: 1px solid #dee5e1;
+    border: 1px solid #dbe4df;
     border-radius: 18px;
-    background: #fff;
+    background: #ffffff;
+    box-shadow: 0 5px 14px rgba(20,38,28,.04);
   }
 
   .kp-service-icon,
@@ -1937,11 +1990,12 @@ const CSS = `
   }
 
   .kp-service-icon {
-    width: 46px;
-    height: 46px;
+    width: 54px;
+    height: 54px;
     color: #fff;
-    background: linear-gradient(145deg,#0b7041,#128b53);
-    font-size: 22px;
+    background: linear-gradient(145deg,#07834b,#13a95f);
+    box-shadow: 0 7px 16px rgba(11,112,65,.22);
+    font-size: 24px;
   }
 
   .kp-service-info {
@@ -1950,16 +2004,22 @@ const CSS = `
     gap: 3px;
   }
 
-  .kp-service-info strong { font-size: 16px; }
+  .kp-service-info strong {
+    color: #17211c;
+    font-size: 17px;
+    line-height: 1.15;
+  }
+
   .kp-service-info span,
   .kp-service-info small {
-    color: #748078;
-    font-size: 11px;
+    color: #6f7b74;
+    font-size: 12px;
   }
 
   .kp-service-info b {
-    color: #111827;
-    font-size: 13px;
+    color: #0b7041;
+    font-size: 14px;
+    font-weight: 900;
   }
 
   .kp-service > button,
@@ -2599,114 +2659,179 @@ const CSS = `
 
 
   .kp-dark {
-    background: #0f1512;
-    color: #f3f7f4;
+    background:
+      radial-gradient(circle at top right, rgba(20,163,95,.08), transparent 30%),
+      #08100c;
+    color: #f5f7f6;
   }
 
-  .kp-dark .kp-topbar,
+  .kp-dark .kp-topbar {
+    background: rgba(8,16,12,.97);
+    border-color: #26332c;
+  }
+
   .kp-dark .kp-flow,
-  .kp-dark .kp-manage,
-  .kp-dark .kp-service,
-  .kp-dark .kp-prof,
-  .kp-dark .kp-selected-service,
-  .kp-dark .kp-prof-summary,
-  .kp-dark .kp-days button,
-  .kp-dark .kp-times button,
-  .kp-dark .kp-summary,
-  .kp-dark .kp-data,
-  .kp-dark .kp-menu,
-  .kp-dark .kp-bottom-nav {
-    background: #17201b;
-    color: #f3f7f4;
-    border-color: #2b3931;
+  .kp-dark .kp-manage {
+    background: #0f1713;
+    color: #f5f7f6;
+    border-color: #2a3931;
+    box-shadow: 0 12px 30px rgba(0,0,0,.22);
   }
-
-  .kp-dark .kp-top-icons button,
-  .kp-dark .kp-back {
-    background: #212c26;
-    color: #f3f7f4;
-  }
-
-  .kp-dark .kp-top-icons button.active {
-    background: #153c29;
-    border-color: #4aca7e;
-    color: #75e5a5;
-  }
-
-  .kp-dark .kp-service-info strong,
-  .kp-dark .kp-prof,
-  .kp-dark .kp-summary-row strong,
-  .kp-dark .kp-menu button {
-    color: #f3f7f4;
-  }
-
 
   .kp-dark .kp-business-window,
   .kp-dark .kp-business-logo-box,
   .kp-dark .kp-booking-business,
   .kp-dark .kp-date-pill,
-  .kp-dark .kp-time-card {
-    background: #17201b;
-    color: #f3f7f4;
-    border-color: #2b3931;
+  .kp-dark .kp-time-card,
+  .kp-dark .kp-prof,
+  .kp-dark .kp-service,
+  .kp-dark .kp-data,
+  .kp-dark .kp-summary,
+  .kp-dark .kp-menu,
+  .kp-dark .kp-bottom-nav {
+    background: #111b16;
+    color: #f5f7f6;
+    border-color: #2b3a32;
+  }
+
+  .kp-dark .kp-stepper {
+    background: #121a16;
+    border-color: #2d3b34;
+  }
+
+  .kp-dark .kp-step-circle {
+    background: #313a35;
+    color: #d7ded9;
+  }
+
+  .kp-dark .kp-step-circle.active {
+    background: linear-gradient(145deg,#0b7041,#15b466);
+    color: #ffffff;
+  }
+
+  .kp-dark .kp-step-circle.done {
+    background: #173c29;
+    color: #78e7aa;
+  }
+
+  .kp-dark .kp-step-line {
+    background:
+      radial-gradient(circle, #647169 1.4px, transparent 1.6px)
+      center / 9px 3px repeat-x;
+    opacity: 1;
+  }
+
+  .kp-dark .kp-step-line.done {
+    background: #17a25e;
+  }
+
+  .kp-dark .kp-stepper small {
+    color: #aab4ae;
+  }
+
+  .kp-dark .kp-stepper small.active {
+    color: #48d889;
+  }
+
+  .kp-dark .kp-top-icons button,
+  .kp-dark .kp-back {
+    background: #17221c;
+    color: #eef4f0;
+    border-color: #26342d;
+  }
+
+  .kp-dark .kp-top-icons button.active {
+    background: #143c29;
+    border-color: #43d483;
+    color: #77e9aa;
   }
 
   .kp-dark .kp-business-window-info strong,
-  .kp-dark .kp-booking-business strong {
-    color: #f3f7f4;
+  .kp-dark .kp-booking-business strong,
+  .kp-dark .kp-service-info strong,
+  .kp-dark .kp-prof-info strong,
+  .kp-dark .kp-summary-row strong,
+  .kp-dark .kp-menu button,
+  .kp-dark .kp-flow h2,
+  .kp-dark .kp-flow h3,
+  .kp-dark .kp-time-title {
+    color: #ffffff;
   }
 
-  .kp-dark .kp-business-window-info span {
-    color: #aab8b0;
-  }
-
-  .kp-dark .kp-booking-business small {
-    color: #aab8b0;
-  }
-
-  .kp-dark .kp-date-pill.active,
-  .kp-dark .kp-time-card.active {
-    background: #153c29;
-    color: #75e5a5;
-    border-color: #4aca7e;
-  }
-
+  .kp-dark .kp-business-window-info span,
+  .kp-dark .kp-booking-business small,
   .kp-dark .kp-muted,
   .kp-dark .kp-service-info span,
   .kp-dark .kp-service-info small,
   .kp-dark .kp-prof-info small,
   .kp-dark .kp-summary-row,
-  .kp-dark .kp-footer {
-    color: #aab8b0;
+  .kp-dark .kp-footer,
+  .kp-dark .kp-available-note {
+    color: #aeb9b2;
+  }
+
+  .kp-dark .kp-service-info b,
+  .kp-dark .kp-eyebrow-dark {
+    color: #45d987;
+  }
+
+  .kp-dark .kp-service > button,
+  .kp-dark .kp-select,
+  .kp-dark .kp-confirm,
+  .kp-dark .kp-empty-action {
+    background: linear-gradient(145deg,#0b7041,#14a55f);
+    color: #ffffff;
+    border-color: transparent;
+  }
+
+  .kp-dark .kp-date-pill.active,
+  .kp-dark .kp-time-card.active {
+    background: #153c29;
+    color: #7be7aa;
+    border-color: #42d47f;
   }
 
   .kp-dark .kp-form input,
   .kp-dark .kp-form textarea,
   .kp-dark .kp-cancel-box input {
-    background: #111814;
+    background: #0b120e;
     color: #ffffff;
-    border-color: #34443a;
+    border-color: #33433a;
+  }
+
+  .kp-dark .kp-form input::placeholder,
+  .kp-dark .kp-form textarea::placeholder,
+  .kp-dark .kp-cancel-box input::placeholder {
+    color: #7f8b84;
   }
 
   .kp-dark .kp-empty {
-    background: #151d18;
-    color: #aab8b0;
+    background: #101813;
+    color: #aeb9b2;
     border-color: #34443a;
   }
 
   .kp-dark .kp-menu button:hover {
-    background: #223029;
+    background: #1b2922;
   }
 
   .kp-dark .kp-modal {
-    background: #17201b;
-    color: #f3f7f4;
+    background: #111b16;
+    color: #f5f7f6;
   }
 
   .kp-dark .kp-modal p {
-    color: #aab8b0;
+    color: #aeb9b2;
   }
 
+  .kp-dark .kp-bottom-nav button {
+    color: #b5c0ba;
+  }
+
+  .kp-dark .kp-bottom-nav button:hover,
+  .kp-dark .kp-bottom-nav button:focus {
+    color: #49d98a;
+  }
 
   @media (max-width: 520px) {
     .kp-continue-fixed {
