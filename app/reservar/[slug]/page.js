@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.15-PORTAL-SLOTS-D";
+const VERSION = "2026.08.17-PORTAL-MOVIL-FLUJO-V2";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -86,6 +86,33 @@ function claveSlot(item) {
   ).slice(0, 5)}`;
 }
 
+
+function proximosDias(cantidad = 8) {
+  const lista = [];
+  const hoy = new Date();
+
+  for (let i = 0; i < cantidad; i += 1) {
+    const d = new Date(hoy);
+    d.setDate(hoy.getDate() + i);
+    lista.push(fechaISO(d));
+  }
+
+  return lista;
+}
+
+function fechaCorta(iso) {
+  if (!iso) return "";
+  return new Intl.DateTimeFormat("es-PA", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(new Date(`${iso}T12:00:00`));
+}
+
+function inicialNombre(nombre) {
+  return String(nombre || "?").trim().charAt(0).toUpperCase();
+}
+
 export default function ReservaPublicaAutoservicioPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -102,9 +129,14 @@ export default function ReservaPublicaAutoservicioPage() {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
 
+  const [paso, setPaso] = useState(1);
+
   const [fecha, setFecha] = useState(fechaISO());
   const [horarios, setHorarios] = useState([]);
   const [servicioFiltro, setServicioFiltro] = useState("todos");
+  const [servicioSeleccionado, setServicioSeleccionado] = useState(null);
+  const [profesionalSeleccionado, setProfesionalSeleccionado] =
+    useState("sin-preferencia");
   const [horarioSeleccionado, setHorarioSeleccionado] = useState(null);
 
   const [nombre, setNombre] = useState("");
@@ -120,6 +152,7 @@ export default function ReservaPublicaAutoservicioPage() {
   const [mostrarNuevaCita, setMostrarNuevaCita] = useState(false);
 
   const perfilBelleza = esBelleza(portal);
+  const dias = useMemo(() => proximosDias(8), []);
 
   useEffect(() => {
     if (!slug) return;
@@ -228,6 +261,72 @@ export default function ReservaPublicaAutoservicioPage() {
     return Array.from(mapa.values());
   }, [horarios]);
 
+  const profesionales = useMemo(() => {
+    if (!servicioSeleccionado) return [];
+
+    const mapa = new Map();
+
+    horarios
+      .filter(
+        (item) =>
+          String(item.servicio_id) ===
+          String(servicioSeleccionado.id)
+      )
+      .forEach((item) => {
+        const nombreProfesional = String(
+          item.instructor || ""
+        ).trim();
+
+        if (!nombreProfesional) return;
+
+        const clave = normalizar(nombreProfesional);
+
+        if (!mapa.has(clave)) {
+          mapa.set(clave, {
+            id: clave,
+            nombre: nombreProfesional,
+          });
+        }
+      });
+
+    return Array.from(mapa.values());
+  }, [horarios, servicioSeleccionado]);
+
+  const slotsDisponibles = useMemo(() => {
+    if (!servicioSeleccionado) return [];
+
+    return horarios.filter((item) => {
+      const mismoServicio =
+        String(item.servicio_id) ===
+        String(servicioSeleccionado.id);
+
+      const disponible = Number(item.disponibles || 0) > 0;
+
+      const coincideProfesional =
+        profesionalSeleccionado === "sin-preferencia" ||
+        normalizar(item.instructor || "") ===
+          normalizar(profesionalSeleccionado);
+
+      return mismoServicio && disponible && coincideProfesional;
+    });
+  }, [
+    horarios,
+    servicioSeleccionado,
+    profesionalSeleccionado,
+  ]);
+
+  const profesionalResumen = useMemo(() => {
+    if (profesionalSeleccionado === "sin-preferencia") {
+      return "Sin preferencia";
+    }
+
+    return (
+      profesionales.find(
+        (p) => p.id === profesionalSeleccionado
+      )?.nombre || "Sin preferencia"
+    );
+  }, [profesionalSeleccionado, profesionales]);
+
   const horariosVisibles = useMemo(() => {
     if (servicioFiltro === "todos") return horarios;
 
@@ -261,6 +360,60 @@ export default function ReservaPublicaAutoservicioPage() {
 
     return Array.from(grupos.values());
   }, [horariosVisibles]);
+
+  function elegirServicio(servicio) {
+    setServicioSeleccionado(servicio);
+    setServicioFiltro(servicio.id);
+    setProfesionalSeleccionado("sin-preferencia");
+    setHorarioSeleccionado(null);
+    setError("");
+    setPaso(2);
+  }
+
+  function elegirProfesional(valor) {
+    setProfesionalSeleccionado(valor);
+    setHorarioSeleccionado(null);
+    setError("");
+    setPaso(3);
+  }
+
+  function elegirFecha(valor) {
+    setFecha(valor);
+    setHorarioSeleccionado(null);
+    setError("");
+  }
+
+  function continuarFechaHora() {
+    if (!horarioSeleccionado) {
+      setError("Selecciona una hora disponible.");
+      return;
+    }
+
+    setError("");
+    setPaso(4);
+  }
+
+  function reiniciarFlujo() {
+    setPaso(1);
+    setServicioSeleccionado(null);
+    setServicioFiltro("todos");
+    setProfesionalSeleccionado("sin-preferencia");
+    setHorarioSeleccionado(null);
+    setReservaConfirmada(null);
+    setTokenGestion("");
+    setFecha(fechaISO());
+    setNombre("");
+    setTelefono("");
+    setObservaciones("");
+    setError("");
+
+    setTimeout(() => {
+      document.getElementById("flujo-reserva")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 60);
+  }
 
   async function confirmarReserva(e) {
     e.preventDefault();
@@ -318,6 +471,7 @@ export default function ReservaPublicaAutoservicioPage() {
 
     await cargarDisponibilidad(fecha);
     setGuardando(false);
+    setPaso(5);
 
     setTimeout(() => {
       document.getElementById("confirmacion-cita")?.scrollIntoView({
@@ -376,22 +530,8 @@ export default function ReservaPublicaAutoservicioPage() {
 
   function reservarOtraCita() {
     setMostrarNuevaCita(true);
-    setReservaConfirmada(null);
-    setTokenGestion("");
-    setHorarioSeleccionado(null);
-    setServicioFiltro("todos");
-    setFecha(fechaISO());
-    setNombre(miCita?.cliente || "");
-    setTelefono("");
-    setObservaciones("");
-    setError("");
-
-    setTimeout(() => {
-      document.getElementById("nueva-cita-publica")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 80);
+    setMiCita(null);
+    reiniciarFlujo();
   }
 
   function enlaceGestion() {
@@ -400,13 +540,18 @@ export default function ReservaPublicaAutoservicioPage() {
   }
 
   if (cargando) {
-    return <main style={s.loading}>Preparando agenda...</main>;
+    return (
+      <main className="kp-loading">
+        <img src="/konax-logo.png" alt="KONAX" />
+        <strong>Preparando agenda...</strong>
+      </main>
+    );
   }
 
   if (!portal?.ok) {
     return (
-      <main style={s.loading}>
-        <div style={s.errorCard}>
+      <main className="kp-loading">
+        <div className="kp-error-card">
           <strong>Reservas no disponibles</strong>
           <span>{error}</span>
         </div>
@@ -414,39 +559,84 @@ export default function ReservaPublicaAutoservicioPage() {
     );
   }
 
+  const nombreNegocio =
+    portal.titulo_publico || portal.empresa_nombre || "KONAX";
+
   return (
-    <main style={s.page}>
-      <div style={s.shell}>
-        <header style={s.hero}>
-          <div>
-            <span style={s.eyebrow}>
-              KONAX · AUTOSERVICIO DE CITAS
-            </span>
-            <h1 style={s.title}>
-              {portal.titulo_publico || portal.empresa_nombre}
-            </h1>
-            <p style={s.subtitle}>
-              {perfilBelleza
-                ? "Selecciona tu servicio, fecha y hora disponible. Tu cita queda registrada al instante."
-                : "Selecciona el servicio, fecha y hora disponible para reservar tu espacio."}
-            </p>
-          </div>
+    <main className="kp-page">
+      <style>{CSS}</style>
+
+      <div className="kp-shell">
+        <header className="kp-topbar">
+          <button
+            type="button"
+            className="kp-back"
+            onClick={() => {
+              if (tokenUrl) {
+                window.location.href = `/reservar/${slug}`;
+                return;
+              }
+
+              if (paso > 1 && paso < 5) {
+                setPaso((actual) => actual - 1);
+                setError("");
+                return;
+              }
+
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          >
+            ‹
+          </button>
 
           <img
             src="/konax-logo.png"
             alt="KONAX"
-            style={s.logo}
+            className="kp-top-logo"
           />
+
+          <div className="kp-top-icons">
+            <span>☾</span>
+            <span>☀</span>
+            <span>☰</span>
+          </div>
         </header>
 
-        {error && <div style={s.errorBox}>{error}</div>}
+        {!tokenUrl && (
+          <section className="kp-hero">
+            <div>
+              <span className="kp-eyebrow">
+                KONAX · RESERVAS ONLINE
+              </span>
 
-        {tokenUrl && miCita && (
-          <section style={s.manageCard}>
-            <span style={s.eyebrowDark}>GESTIONAR MI CITA</span>
-            <h2 style={s.sectionTitle}>{miCita.servicio}</h2>
+              <h1>{nombreNegocio}</h1>
 
-            <div style={s.manageGrid}>
+              <p>
+                Reserva tu cita en minutos.
+                <br />
+                Rápido · Fácil · Sin llamadas.
+              </p>
+            </div>
+
+            <img src="/konax-logo.png" alt="KONAX" />
+          </section>
+        )}
+
+        {error && (
+          <div className="kp-error">
+            {error}
+          </div>
+        )}
+
+        {tokenUrl && miCita ? (
+          <section className="kp-manage">
+            <span className="kp-eyebrow-dark">
+              GESTIONAR MI CITA
+            </span>
+
+            <h2>{miCita.servicio}</h2>
+
+            <div className="kp-data-grid">
               <Dato label="Cliente" value={miCita.cliente} />
               <Dato label="Fecha" value={formatoFecha(miCita.fecha)} />
               <Dato
@@ -461,18 +651,20 @@ export default function ReservaPublicaAutoservicioPage() {
               />
               <Dato
                 label="Estado"
-                value={String(miCita.estado || "").toUpperCase()}
+                value={String(miCita.estado || "")
+                  .replaceAll("_", " ")
+                  .toUpperCase()}
               />
             </div>
 
             {miCita.estado === "cancelada" ? (
-              <div style={s.cancelledBox}>
-                Esta cita está cancelada. El horario quedó disponible
-                nuevamente.
+              <div className="kp-cancelled">
+                Esta cita está cancelada. El horario quedó
+                disponible nuevamente.
               </div>
             ) : miCita.puede_cancelar ? (
-              <div style={s.cancelBox}>
-                <label style={s.field}>
+              <div className="kp-cancel-box">
+                <label>
                   <span>Teléfono de la cita</span>
                   <input
                     value={telefonoGestion}
@@ -480,815 +672,1332 @@ export default function ReservaPublicaAutoservicioPage() {
                       setTelefonoGestion(e.target.value)
                     }
                     placeholder="Ej. 6000-0000"
-                    style={s.input}
                   />
                 </label>
 
-                <label style={s.field}>
+                <label>
                   <span>Motivo de cancelación (opcional)</span>
                   <input
                     value={motivoCancelacion}
                     onChange={(e) =>
                       setMotivoCancelacion(e.target.value)
                     }
-                    placeholder="Ej. No podré llegar a tiempo"
-                    style={s.input}
+                    placeholder="Ej. No podré llegar"
                   />
                 </label>
 
                 <button
                   type="button"
+                  className="kp-danger"
                   onClick={cancelarMiCita}
                   disabled={cancelando}
-                  style={s.dangerButton}
                 >
-                  {cancelando
-                    ? "Cancelando..."
-                    : "Cancelar mi cita"}
+                  {cancelando ? "Cancelando..." : "Cancelar mi cita"}
                 </button>
-
-                <small style={s.helpText}>
-                  Puedes cancelar incluso el mismo día, siempre que la
-                  hora de la cita todavía no haya pasado.
-                </small>
               </div>
             ) : (
-              <div style={s.infoBox}>
+              <div className="kp-info">
                 Esta cita ya no puede cancelarse desde autoservicio.
               </div>
             )}
 
             <button
               type="button"
+              className="kp-secondary"
               onClick={reservarOtraCita}
-              style={s.reserveAnotherButton}
             >
               + Reservar otra cita
             </button>
+
+            <button
+              type="button"
+              className="kp-link"
+              onClick={() =>
+                (window.location.href = `/reservar/${slug}`)
+              }
+            >
+              Volver al portal
+            </button>
           </section>
-        )}
+        ) : (
+          <section
+            id="flujo-reserva"
+            className="kp-flow"
+          >
+            <Stepper paso={paso} />
 
-        {(!tokenUrl || mostrarNuevaCita) && (
-          <>
-            <section id="nueva-cita-publica" style={s.card}>
-              <span style={s.step}>1</span>
-              <span style={s.eyebrowDark}>FECHA</span>
-              <h2 style={s.sectionTitle}>
-                ¿Qué día deseas reservar?
-              </h2>
+            {paso === 1 && (
+              <div>
+                <span className="kp-eyebrow-dark">
+                  PASO 1 DE 4
+                </span>
+                <h2>Servicios</h2>
+                <p className="kp-muted">
+                  Selecciona el servicio que deseas.
+                </p>
 
-              <label style={s.field}>
-                <span>Seleccionar fecha</span>
-                <input
-                  type="date"
-                  min={fechaISO()}
-                  value={fecha}
-                  onChange={(e) => {
-                    setFecha(e.target.value);
-                    setHorarioSeleccionado(null);
-                  }}
-                  style={s.input}
-                />
-              </label>
-            </section>
+                {cargandoHorarios ? (
+                  <div className="kp-empty">
+                    Consultando servicios...
+                  </div>
+                ) : servicios.length === 0 ? (
+                  <div className="kp-empty">
+                    No hay servicios disponibles para esta fecha.
+                  </div>
+                ) : (
+                  <div className="kp-service-list">
+                    {servicios.map((servicio) => (
+                      <article
+                        key={servicio.id}
+                        className="kp-service"
+                      >
+                        <div className="kp-service-icon">✂</div>
 
-            <section style={s.card}>
-              <span style={s.step}>2</span>
-              <span style={s.eyebrowDark}>SERVICIO Y HORA</span>
-              <h2 style={s.sectionTitle}>
-                Selecciona tu servicio
-              </h2>
+                        <div className="kp-service-info">
+                          <strong>{servicio.nombre}</strong>
+                          <span>{servicio.duracion} min</span>
 
-              <div style={s.serviceChips}>
+                          {servicio.descripcion && (
+                            <small>{servicio.descripcion}</small>
+                          )}
+
+                          {servicio.requierePago && (
+                            <b>
+                              desde {dinero(servicio.precio)}
+                            </b>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => elegirServicio(servicio)}
+                        >
+                          Reservar
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {paso === 2 && servicioSeleccionado && (
+              <div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setServicioFiltro("todos");
-                    setHorarioSeleccionado(null);
-                  }}
-                  style={{
-                    ...s.chip,
-                    ...(servicioFiltro === "todos"
-                      ? s.chipActive
-                      : {}),
-                  }}
+                  className="kp-blue-link"
+                  onClick={() => setPaso(1)}
                 >
-                  Todos
+                  ‹ Cambiar servicio
                 </button>
 
-                {servicios.map((servicio) => (
-                  <button
-                    key={servicio.id}
-                    type="button"
-                    onClick={() => {
-                      setServicioFiltro(servicio.id);
-                      setHorarioSeleccionado(null);
-                    }}
-                    style={{
-                      ...s.chip,
-                      ...(servicioFiltro === servicio.id
-                        ? s.chipActive
-                        : {}),
-                    }}
-                  >
-                    {servicio.nombre}
-                  </button>
-                ))}
-              </div>
+                <span className="kp-eyebrow-dark">
+                  PASO 2 DE 4
+                </span>
 
-              {cargandoHorarios ? (
-                <div style={s.empty}>
-                  Consultando horarios...
+                <h2>Seleccionar profesional</h2>
+
+                <ServicioResumen servicio={servicioSeleccionado} />
+
+                <div className="kp-prof-list">
+                  <button
+                    type="button"
+                    className="kp-prof"
+                    onClick={() =>
+                      elegirProfesional("sin-preferencia")
+                    }
+                  >
+                    <span className="kp-avatar">↝</span>
+
+                    <span className="kp-prof-info">
+                      <strong>Sin preferencia</strong>
+                      <small>Máxima disponibilidad</small>
+                    </span>
+
+                    <span className="kp-select">
+                      Seleccionar
+                    </span>
+                  </button>
+
+                  {profesionales.map((profesional) => (
+                    <button
+                      key={profesional.id}
+                      type="button"
+                      className="kp-prof"
+                      onClick={() =>
+                        elegirProfesional(profesional.id)
+                      }
+                    >
+                      <span className="kp-avatar">
+                        {inicialNombre(profesional.nombre)}
+                      </span>
+
+                      <span className="kp-prof-info">
+                        <strong>{profesional.nombre}</strong>
+                        <small>
+                          {perfilBelleza
+                            ? "Profesional"
+                            : "Instructor"}
+                        </small>
+                      </span>
+
+                      <span className="kp-select">
+                        Seleccionar
+                      </span>
+                    </button>
+                  ))}
                 </div>
-              ) : serviciosConSlots.length === 0 ? (
-                <div style={s.empty}>
-                  No hay horarios disponibles para esta fecha.
+              </div>
+            )}
+
+            {paso === 3 && servicioSeleccionado && (
+              <div>
+                <button
+                  type="button"
+                  className="kp-blue-link"
+                  onClick={() => setPaso(2)}
+                >
+                  ‹ Cambiar profesional
+                </button>
+
+                <span className="kp-eyebrow-dark">
+                  PASO 3 DE 4
+                </span>
+
+                <h2>Seleccionar fecha y hora</h2>
+
+                <div className="kp-prof-summary">
+                  <span className="kp-mini-avatar">
+                    {profesionalSeleccionado === "sin-preferencia"
+                      ? "↝"
+                      : inicialNombre(profesionalResumen)}
+                  </span>
+                  <strong>{profesionalResumen}</strong>
                 </div>
-              ) : (
-                <div style={s.serviceList}>
-                  {serviciosConSlots.map((grupo) => {
-                    const slotsDisponibles = grupo.slots.filter(
-                      (slot) => Number(slot.disponibles || 0) > 0
-                    );
+
+                <ServicioResumen servicio={servicioSeleccionado} />
+
+                <h3>Selecciona una fecha</h3>
+
+                <div className="kp-days">
+                  {dias.map((dia) => {
+                    const activo = dia === fecha;
+                    const d = new Date(`${dia}T12:00:00`);
 
                     return (
-                      <article
-                        key={String(grupo.servicio_id)}
-                        style={s.serviceCard}
+                      <button
+                        key={dia}
+                        type="button"
+                        className={activo ? "active" : ""}
+                        onClick={() => elegirFecha(dia)}
                       >
-                        <div style={s.serviceHeader}>
-                          <div>
-                            <strong style={s.slotTitle}>
-                              {grupo.servicio_nombre}
-                            </strong>
+                        <span>
+                          {new Intl.DateTimeFormat("es-PA", {
+                            weekday: "short",
+                          }).format(d)}
+                        </span>
 
-                            <span style={s.slotMeta}>
-                              Duración: {grupo.duracion_minutos} min
-                            </span>
+                        <strong>{d.getDate()}</strong>
 
-                            <span style={s.slotMeta}>
-                              {perfilBelleza
-                                ? "Profesional"
-                                : "Instructor"}
-                              : {grupo.instructor || "Por confirmar"}
-                            </span>
-
-                            {grupo.descripcion && (
-                              <p style={s.description}>
-                                {grupo.descripcion}
-                              </p>
-                            )}
-                          </div>
-
-                          {grupo.requiere_pago && (
-                            <strong style={s.price}>
-                              {dinero(grupo.precio)}
-                            </strong>
-                          )}
-                        </div>
-
-                        <div style={s.timeSection}>
-                          <span style={s.timeLabel}>
-                            Horas disponibles
-                          </span>
-
-                          {slotsDisponibles.length === 0 ? (
-                            <div style={s.noSlots}>
-                              Sin horas disponibles
-                            </div>
-                          ) : (
-                            <div style={s.timeGrid}>
-                              {slotsDisponibles.map((item) => {
-                                const seleccionado =
-                                  claveSlot(
-                                    horarioSeleccionado
-                                  ) === claveSlot(item);
-
-                                return (
-                                  <button
-                                    key={claveSlot(item)}
-                                    type="button"
-                                    onClick={() =>
-                                      setHorarioSeleccionado(item)
-                                    }
-                                    style={{
-                                      ...s.timeButton,
-                                      ...(seleccionado
-                                        ? s.timeButtonActive
-                                        : {}),
-                                    }}
-                                  >
-                                    {formatoHora(item.hora_inicio)}
-                                    {seleccionado ? " ✓" : ""}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </article>
+                        <span>
+                          {new Intl.DateTimeFormat("es-PA", {
+                            month: "short",
+                          }).format(d)}
+                        </span>
+                      </button>
                     );
                   })}
                 </div>
-              )}
-            </section>
 
-            {horarioSeleccionado && !reservaConfirmada && (
-              <section style={s.card}>
-                <span style={s.step}>3</span>
-                <span style={s.eyebrowDark}>TUS DATOS</span>
-                <h2 style={s.sectionTitle}>
-                  Confirmar cita
-                </h2>
+                <h3>Escoge una hora</h3>
 
-                <div style={s.selectionBox}>
-                  <strong>
-                    {horarioSeleccionado.servicio_nombre}
-                  </strong>
-                  <span>{formatoFecha(fecha)}</span>
-                  <span style={s.selectedTime}>
-                    {formatoHora(
-                      horarioSeleccionado.hora_inicio
-                    )}{" "}
-                    –{" "}
-                    {formatoHora(
-                      horarioSeleccionado.hora_fin
-                    )}
-                  </span>
+                {cargandoHorarios ? (
+                  <div className="kp-empty">
+                    Consultando horarios...
+                  </div>
+                ) : slotsDisponibles.length === 0 ? (
+                  <div className="kp-empty">
+                    No hay horas disponibles para esta selección.
+                  </div>
+                ) : (
+                  <div className="kp-times">
+                    {slotsDisponibles.map((slot) => {
+                      const activo =
+                        claveSlot(horarioSeleccionado) ===
+                        claveSlot(slot);
 
-                  {horarioSeleccionado.requiere_pago && (
-                    <strong style={s.price}>
-                      {dinero(horarioSeleccionado.precio)} · Pago en
-                      el local
-                    </strong>
-                  )}
-                </div>
+                      return (
+                        <button
+                          key={claveSlot(slot)}
+                          type="button"
+                          className={activo ? "active" : ""}
+                          onClick={() =>
+                            setHorarioSeleccionado(slot)
+                          }
+                        >
+                          {formatoHora(slot.hora_inicio)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
-                <form
-                  onSubmit={confirmarReserva}
-                  style={s.form}
-                >
-                  <label style={s.field}>
-                    <span>Nombre completo</span>
-                    <input
-                      value={nombre}
-                      onChange={(e) => setNombre(e.target.value)}
-                      style={s.input}
-                      placeholder="Nombre del cliente"
-                    />
-                  </label>
-
-                  <label style={s.field}>
-                    <span>Teléfono</span>
-                    <input
-                      value={telefono}
-                      onChange={(e) =>
-                        setTelefono(e.target.value)
-                      }
-                      style={s.input}
-                      placeholder="6000-0000"
-                    />
-                  </label>
-
-                  <label style={s.field}>
-                    <span>Observaciones (opcional)</span>
-                    <textarea
-                      value={observaciones}
-                      onChange={(e) =>
-                        setObservaciones(e.target.value)
-                      }
-                      style={s.textarea}
-                      placeholder="Alguna indicación para el negocio"
-                    />
-                  </label>
-
+                {horarioSeleccionado && (
                   <button
-                    disabled={guardando}
-                    style={s.primaryButton}
+                    type="button"
+                    className="kp-continue"
+                    onClick={continuarFechaHora}
                   >
-                    {guardando
-                      ? "Confirmando..."
-                      : "Confirmar mi cita"}
+                    <span>
+                      {servicioSeleccionado.requierePago
+                        ? dinero(servicioSeleccionado.precio)
+                        : `${servicioSeleccionado.duracion} min`}
+                    </span>
+                    <strong>Continuar →</strong>
                   </button>
-                </form>
-              </section>
+                )}
+              </div>
             )}
 
-            {reservaConfirmada && (
-              <section
+            {paso === 4 &&
+              servicioSeleccionado &&
+              horarioSeleccionado && (
+                <div>
+                  <button
+                    type="button"
+                    className="kp-blue-link"
+                    onClick={() => setPaso(3)}
+                  >
+                    ‹ Cambiar fecha u hora
+                  </button>
+
+                  <span className="kp-eyebrow-dark">
+                    PASO 4 DE 4
+                  </span>
+
+                  <h2>Resumen de tu reserva</h2>
+
+                  <div className="kp-summary">
+                    <ResumenFila
+                      label="Negocio"
+                      value={nombreNegocio}
+                    />
+                    <ResumenFila
+                      label="Servicio"
+                      value={servicioSeleccionado.nombre}
+                    />
+                    <ResumenFila
+                      label="Profesional"
+                      value={profesionalResumen}
+                    />
+                    <ResumenFila
+                      label="Duración"
+                      value={`${servicioSeleccionado.duracion} min`}
+                    />
+                    <ResumenFila
+                      label="Fecha"
+                      value={formatoFecha(fecha)}
+                    />
+                    <ResumenFila
+                      label="Hora"
+                      value={formatoHora(
+                        horarioSeleccionado.hora_inicio
+                      )}
+                    />
+
+                    {servicioSeleccionado.requierePago && (
+                      <ResumenFila
+                        label="Precio"
+                        value={dinero(servicioSeleccionado.precio)}
+                        destacado
+                      />
+                    )}
+                  </div>
+
+                  <div className="kp-note">
+                    Completa tus datos para finalizar la reserva.
+                  </div>
+
+                  <form
+                    className="kp-form"
+                    onSubmit={confirmarReserva}
+                  >
+                    <label>
+                      <span>Nombre completo</span>
+                      <input
+                        value={nombre}
+                        onChange={(e) =>
+                          setNombre(e.target.value)
+                        }
+                        placeholder="Nombre del cliente"
+                      />
+                    </label>
+
+                    <label>
+                      <span>WhatsApp / teléfono</span>
+                      <input
+                        value={telefono}
+                        onChange={(e) =>
+                          setTelefono(e.target.value)
+                        }
+                        placeholder="6000-0000"
+                      />
+                    </label>
+
+                    <label>
+                      <span>Observaciones (opcional)</span>
+                      <textarea
+                        value={observaciones}
+                        onChange={(e) =>
+                          setObservaciones(e.target.value)
+                        }
+                        placeholder="Alguna indicación para el negocio"
+                      />
+                    </label>
+
+                    <button
+                      className="kp-confirm"
+                      disabled={guardando}
+                    >
+                      {guardando
+                        ? "Confirmando..."
+                        : "Confirmar reserva →"}
+                    </button>
+                  </form>
+                </div>
+              )}
+
+            {paso === 5 && reservaConfirmada && (
+              <div
                 id="confirmacion-cita"
-                style={s.confirmCard}
+                className="kp-success"
               >
-                <div style={s.check}>✓</div>
-                <span style={s.eyebrowDark}>
+                <div className="kp-check">✓</div>
+
+                <span className="kp-eyebrow-dark">
                   RESERVA CONFIRMADA
                 </span>
-                <h2 style={s.sectionTitle}>
-                  Tu cita quedó registrada
-                </h2>
 
-                <p style={s.confirmText}>
-                  {reservaConfirmada.servicio} ·{" "}
-                  {formatoFecha(reservaConfirmada.fecha)} ·{" "}
+                <h2>Tu cita quedó registrada</h2>
+
+                <p>
+                  {reservaConfirmada.servicio}
+                  <br />
+                  {formatoFecha(reservaConfirmada.fecha)}
+                  <br />
                   {formatoHora(
                     reservaConfirmada.hora_inicio
                   )}{" "}
                   –{" "}
-                  {formatoHora(reservaConfirmada.hora_fin)}
+                  {formatoHora(
+                    reservaConfirmada.hora_fin
+                  )}
                 </p>
 
                 {reservaConfirmada.requiere_pago && (
-                  <div style={s.infoBox}>
+                  <div className="kp-info">
                     Pago en el local:{" "}
                     {dinero(reservaConfirmada.monto)}
                   </div>
                 )}
 
                 {tokenGestion && (
-                  <div style={s.manageLinkBox}>
-                    <strong>
-                      Guarda este enlace para gestionar o cancelar tu
-                      cita:
-                    </strong>
-
-                    <input
-                      readOnly
-                      value={enlaceGestion()}
-                      style={s.input}
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        window.location.href = `/reservar/${slug}?cita=${tokenGestion}`;
-                      }}
-                      style={s.secondaryButton}
-                    >
-                      Gestionar mi cita
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className="kp-confirm"
+                    onClick={() =>
+                      (window.location.href =
+                        `/reservar/${slug}?cita=${tokenGestion}`)
+                    }
+                  >
+                    Ver mi cita
+                  </button>
                 )}
 
-                <small style={s.helpText}>
-                  La cita quedó registrada inmediatamente en KONAX.
-                </small>
-              </section>
+                <button
+                  type="button"
+                  className="kp-secondary"
+                  onClick={reiniciarFlujo}
+                >
+                  + Reservar otra cita
+                </button>
+
+                <button
+                  type="button"
+                  className="kp-link"
+                  onClick={() =>
+                    (window.location.href = `/reservar/${slug}`)
+                  }
+                >
+                  Volver al portal
+                </button>
+              </div>
             )}
-          </>
+          </section>
         )}
 
-        <footer style={s.footer}>
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            style={s.footerLogo}
-          />
-          <span>
-            Reservas y citas por KONAX · {VERSION}
-          </span>
+        {!tokenUrl && paso < 5 && (
+          <button
+            type="button"
+            className="kp-reserve-now"
+            onClick={() => {
+              document
+                .getElementById("flujo-reserva")
+                ?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+
+              if (paso === 3 && horarioSeleccionado) {
+                continuarFechaHora();
+              }
+            }}
+          >
+            <span>ϟ</span>
+            <strong>
+              {paso === 3 && horarioSeleccionado
+                ? "Continuar"
+                : "Reservar ahora"}
+            </strong>
+            <span>→</span>
+          </button>
+        )}
+
+        <nav className="kp-bottom-nav">
+          <button
+            type="button"
+            onClick={() =>
+              window.scrollTo({ top: 0, behavior: "smooth" })
+            }
+          >
+            <span>⌂</span>
+            <small>Inicio</small>
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              document
+                .getElementById("flujo-reserva")
+                ?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                })
+            }
+          >
+            <span>▣</span>
+            <small>Reservar</small>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (tokenGestion) {
+                window.location.href =
+                  `/reservar/${slug}?cita=${tokenGestion}`;
+                return;
+              }
+
+              alert(
+                "Cuando confirmes una reserva podrás gestionar tu cita desde aquí."
+              );
+            }}
+          >
+            <span>▤</span>
+            <small>Mi cita</small>
+          </button>
+        </nav>
+
+        <footer className="kp-footer">
+          <img src="/konax-logo.png" alt="KONAX" />
+          <span>Reservas por KONAX · {VERSION}</span>
         </footer>
       </div>
     </main>
   );
 }
 
+function Stepper({ paso }) {
+  const pasos = [
+    [1, "Servicio"],
+    [2, "Profesional"],
+    [3, "Fecha y hora"],
+    [4, "Confirmación"],
+  ];
+
+  return (
+    <div className="kp-stepper">
+      {pasos.map(([numero, label]) => (
+        <div key={numero}>
+          <span
+            className={[
+              "kp-step-circle",
+              paso === numero ? "active" : "",
+              paso > numero ? "done" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            {paso > numero ? "✓" : numero}
+          </span>
+
+          <small
+            className={
+              paso >= numero ? "active" : ""
+            }
+          >
+            {label}
+          </small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ServicioResumen({ servicio }) {
+  if (!servicio) return null;
+
+  return (
+    <div className="kp-selected-service">
+      <strong>{servicio.nombre}</strong>
+      <span>
+        {servicio.duracion} min
+        {servicio.requierePago
+          ? ` · ${dinero(servicio.precio)}`
+          : ""}
+      </span>
+    </div>
+  );
+}
+
+function ResumenFila({
+  label,
+  value,
+  destacado = false,
+}) {
+  return (
+    <div className="kp-summary-row">
+      <span>{label}</span>
+      <strong className={destacado ? "accent" : ""}>
+        {value || "-"}
+      </strong>
+    </div>
+  );
+}
+
 function Dato({ label, value }) {
   return (
-    <div style={s.dataBox}>
+    <div className="kp-data">
       <span>{label}</span>
       <strong>{value || "-"}</strong>
     </div>
   );
 }
 
-const s = {
-  page: {
-    minHeight: "100vh",
-    padding: "18px 12px 42px",
-    background: "#F4F7F5",
-    color: "#13221A",
-    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
-  },
+const CSS = `
+  * { box-sizing: border-box; }
 
-  loading: {
-    minHeight: "100vh",
-    display: "grid",
-    placeItems: "center",
-    background: "#F4F7F5",
-    fontFamily: 'Inter, system-ui, "Segoe UI", sans-serif',
-  },
+  html, body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
 
-  shell: {
-    width: "min(920px,100%)",
-    margin: "0 auto",
-  },
+  body {
+    margin: 0;
+  }
 
-  hero: {
-    marginBottom: 12,
-    padding: "18px 20px",
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 18,
-    alignItems: "center",
-    flexWrap: "wrap",
-    borderRadius: 20,
-    background: "linear-gradient(135deg,#071B13,#0E7042)",
-    color: "#FFF",
-  },
+  button, input, textarea {
+    font: inherit;
+  }
 
-  logo: {
-    width: 105,
-    height: 48,
-    objectFit: "contain",
-    background: "#FFF",
-    borderRadius: 13,
-    padding: 7,
-  },
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
 
-  eyebrow: {
-    display: "block",
-    color: "#74E1A5",
-    fontSize: 9,
-    fontWeight: 900,
-    letterSpacing: 1.1,
-  },
+  .kp-page {
+    min-height: 100vh;
+    padding-bottom: 150px;
+    background: #f5f7f6;
+    color: #152019;
+    font-family: Inter, system-ui, "Segoe UI", sans-serif;
+  }
 
-  eyebrowDark: {
-    display: "block",
-    color: "#0B7041",
-    fontSize: 9,
-    fontWeight: 900,
-    letterSpacing: 1.1,
-  },
+  .kp-shell {
+    width: min(760px, 100%);
+    margin: 0 auto;
+    padding: 0 14px 28px;
+  }
 
-  title: {
-    margin: "5px 0",
-    fontSize: "clamp(26px,6vw,42px)",
-  },
+  .kp-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    min-height: 66px;
+    margin: 0 -14px 14px;
+    padding: 10px 14px;
+    display: grid;
+    grid-template-columns: 42px 1fr auto;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #e1e7e3;
+    background: rgba(255,255,255,.97);
+    backdrop-filter: blur(12px);
+  }
 
-  subtitle: {
-    maxWidth: 620,
-    margin: 0,
-    color: "#D9E9E0",
-    lineHeight: 1.45,
-    fontSize: 14,
-  },
+  .kp-back {
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 12px;
+    background: #fff;
+    font-size: 34px;
+    line-height: 1;
+    cursor: pointer;
+  }
 
-  card: {
-    marginBottom: 10,
-    padding: 16,
-    border: "1px solid #DCE6E0",
-    borderRadius: 18,
-    background: "#FFF",
-  },
+  .kp-top-logo {
+    width: 104px;
+    height: 34px;
+    object-fit: contain;
+    justify-self: center;
+  }
 
-  step: {
-    width: 26,
-    height: 26,
-    marginBottom: 7,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "50%",
-    background: "#E9F7EF",
-    color: "#0B7041",
-    fontSize: 12,
-    fontWeight: 900,
-  },
+  .kp-top-icons {
+    display: flex;
+    gap: 4px;
+  }
 
-  manageCard: {
-    marginBottom: 14,
-    padding: 20,
-    border: "2px solid #A7D7BA",
-    borderRadius: 20,
-    background: "#F0FAF4",
-  },
+  .kp-top-icons span {
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: #f1f4f2;
+    font-size: 13px;
+  }
 
-  reserveAnotherButton: {
-    width: "100%",
-    minHeight: 48,
-    marginTop: 14,
-    border: "1px solid #0B7041",
-    borderRadius: 12,
-    background: "#FFFFFF",
-    color: "#0B7041",
-    fontWeight: 900,
-    fontSize: 15,
-    cursor: "pointer",
-  },
+  .kp-hero {
+    margin-bottom: 14px;
+    padding: 20px;
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto;
+    align-items: center;
+    gap: 14px;
+    border-radius: 22px;
+    color: #fff;
+    background: linear-gradient(135deg,#073a29,#0e7042);
+  }
 
-  sectionTitle: {
-    margin: "4px 0 12px",
-    fontSize: "clamp(21px,5vw,27px)",
-  },
+  .kp-hero h1 {
+    margin: 7px 0;
+    font-size: clamp(27px,7vw,42px);
+    line-height: 1.03;
+  }
 
-  field: {
-    display: "grid",
-    gap: 6,
-    fontWeight: 700,
-  },
+  .kp-hero p {
+    margin: 0;
+    color: #d9ede2;
+    font-size: 14px;
+    line-height: 1.45;
+  }
 
-  input: {
-    width: "100%",
-    minHeight: 44,
-    padding: "10px 12px",
-    border: "1px solid #CEDBD3",
-    borderRadius: 11,
-    background: "#FFF",
-    fontSize: 16,
-    boxSizing: "border-box",
-  },
+  .kp-hero img {
+    width: 106px;
+    min-height: 72px;
+    padding: 9px;
+    object-fit: contain;
+    border-radius: 18px;
+    background: #fff;
+  }
 
-  textarea: {
-    width: "100%",
-    minHeight: 68,
-    padding: 10,
-    border: "1px solid #CEDBD3",
-    borderRadius: 11,
-    resize: "vertical",
-    fontSize: 16,
-    boxSizing: "border-box",
-  },
+  .kp-eyebrow,
+  .kp-eyebrow-dark {
+    display: block;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 1.2px;
+  }
 
-  serviceChips: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-    marginBottom: 14,
-  },
+  .kp-eyebrow { color: #74e1a5; }
+  .kp-eyebrow-dark { color: #0b7041; }
 
-  chip: {
-    padding: "9px 12px",
-    border: "1px solid #D4E0D9",
-    borderRadius: 999,
-    background: "#FFF",
-    cursor: "pointer",
-    fontWeight: 800,
-  },
+  .kp-flow,
+  .kp-manage {
+    padding: 16px;
+    border: 1px solid #dfe6e2;
+    border-radius: 22px;
+    background: #fff;
+    box-shadow: 0 10px 24px rgba(20,38,28,.05);
+  }
 
-  chipActive: {
-    background: "#0D7042",
-    color: "#FFF",
-    borderColor: "#0D7042",
-  },
+  .kp-flow h2,
+  .kp-manage h2 {
+    margin: 5px 0 8px;
+    font-size: clamp(24px,6vw,32px);
+    line-height: 1.08;
+  }
 
-  serviceList: {
-    display: "grid",
-    gap: 12,
-  },
+  .kp-muted {
+    margin: 0 0 14px;
+    color: #6b7770;
+    font-size: 13px;
+  }
 
-  serviceCard: {
-    padding: 15,
-    border: "1px solid #DEE7E1",
-    borderRadius: 16,
-    background: "#FBFDFC",
-  },
+  .kp-stepper {
+    margin-bottom: 22px;
+    padding: 10px 6px;
+    display: grid;
+    grid-template-columns: repeat(4,minmax(0,1fr));
+    gap: 4px;
+    border-radius: 16px;
+    background: #f7f9f8;
+  }
 
-  serviceHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 14,
-  },
+  .kp-stepper > div {
+    display: grid;
+    justify-items: center;
+    gap: 5px;
+  }
 
-  slotTitle: {
-    display: "block",
-    fontSize: 18,
-  },
+  .kp-step-circle {
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #e5eae7;
+    color: #59645e;
+    font-size: 12px;
+    font-weight: 900;
+  }
 
-  slotMeta: {
-    display: "block",
-    marginTop: 4,
-    color: "#66766D",
-    fontSize: 13,
-  },
+  .kp-step-circle.active {
+    background: #0b7041;
+    color: #fff;
+  }
 
-  description: {
-    margin: "7px 0 0",
-    color: "#67766E",
-    fontSize: 13,
-  },
+  .kp-step-circle.done {
+    background: #dff3e7;
+    color: #0b7041;
+  }
 
-  price: {
-    display: "block",
-    color: "#0B7041",
-    whiteSpace: "nowrap",
-  },
+  .kp-stepper small {
+    color: #7d8882;
+    font-size: 8px;
+    font-weight: 800;
+    text-align: center;
+  }
 
-  timeSection: {
-    marginTop: 13,
-    paddingTop: 12,
-    borderTop: "1px solid #E3EAE6",
-  },
+  .kp-stepper small.active {
+    color: #0b7041;
+  }
 
-  timeLabel: {
-    display: "block",
-    marginBottom: 8,
-    color: "#526159",
-    fontSize: 12,
-    fontWeight: 850,
-  },
+  .kp-service-list,
+  .kp-prof-list,
+  .kp-times,
+  .kp-form,
+  .kp-cancel-box {
+    display: grid;
+    gap: 11px;
+  }
 
-  timeGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(110px,1fr))",
-    gap: 8,
-  },
+  .kp-service {
+    padding: 13px;
+    display: grid;
+    grid-template-columns: 50px minmax(0,1fr) auto;
+    gap: 11px;
+    align-items: center;
+    border: 1px solid #dee5e1;
+    border-radius: 18px;
+    background: #fff;
+  }
 
-  timeButton: {
-    minHeight: 42,
-    padding: "0 10px",
-    border: "1px solid #C9D9CF",
-    borderRadius: 11,
-    background: "#FFF",
-    color: "#15231B",
-    fontWeight: 850,
-    cursor: "pointer",
-  },
+  .kp-service-icon,
+  .kp-avatar,
+  .kp-mini-avatar {
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #eaf5ef;
+    color: #0b7041;
+    font-weight: 900;
+  }
 
-  timeButtonActive: {
-    borderColor: "#0D7042",
-    background: "#0D7042",
-    color: "#FFF",
-    boxShadow: "0 6px 16px rgba(13,112,66,.15)",
-  },
+  .kp-service-icon {
+    width: 46px;
+    height: 46px;
+    color: #fff;
+    background: linear-gradient(145deg,#0b7041,#128b53);
+    font-size: 22px;
+  }
 
-  noSlots: {
-    padding: 12,
-    borderRadius: 10,
-    background: "#F0F3F1",
-    color: "#7B8780",
-    textAlign: "center",
-    fontSize: 13,
-  },
+  .kp-service-info {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
 
-  empty: {
-    padding: 26,
-    textAlign: "center",
-    color: "#6D7972",
-  },
+  .kp-service-info strong { font-size: 16px; }
+  .kp-service-info span,
+  .kp-service-info small {
+    color: #748078;
+    font-size: 11px;
+  }
 
-  selectionBox: {
-    marginBottom: 14,
-    padding: 14,
-    display: "grid",
-    gap: 4,
-    borderRadius: 14,
-    background: "#F2F7F4",
-  },
+  .kp-service-info b {
+    color: #111827;
+    font-size: 13px;
+  }
 
-  selectedTime: {
-    marginTop: 3,
-    color: "#0B7041",
-    fontSize: 18,
-    fontWeight: 900,
-  },
+  .kp-service > button,
+  .kp-select {
+    min-width: 86px;
+    min-height: 38px;
+    padding: 0 12px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 999px;
+    background: #0b7041;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 900;
+    cursor: pointer;
+  }
 
-  form: {
-    display: "grid",
-    gap: 12,
-  },
+  .kp-blue-link,
+  .kp-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #3564c4;
+    font-weight: 800;
+    cursor: pointer;
+  }
 
-  primaryButton: {
-    minHeight: 48,
-    border: 0,
-    borderRadius: 12,
-    background: "#0D7042",
-    color: "#FFF",
-    fontWeight: 900,
-    cursor: "pointer",
-  },
+  .kp-selected-service,
+  .kp-prof-summary {
+    margin: 12px 0 15px;
+    padding: 13px;
+    display: grid;
+    gap: 4px;
+    border-radius: 15px;
+    background: #f8faf9;
+  }
 
-  secondaryButton: {
-    minHeight: 43,
-    border: "1px solid #AACCB8",
-    borderRadius: 11,
-    background: "#FFF",
-    color: "#0B7041",
-    fontWeight: 900,
-    cursor: "pointer",
-  },
+  .kp-prof {
+    width: 100%;
+    padding: 13px;
+    display: grid;
+    grid-template-columns: 52px minmax(0,1fr) auto;
+    gap: 11px;
+    align-items: center;
+    border: 1px solid #dfe5e2;
+    border-radius: 18px;
+    background: #fff;
+    color: #17211c;
+    text-align: left;
+    cursor: pointer;
+  }
 
-  dangerButton: {
-    minHeight: 43,
-    border: 0,
-    borderRadius: 11,
-    background: "#B42318",
-    color: "#FFF",
-    fontWeight: 900,
-    cursor: "pointer",
-  },
+  .kp-avatar {
+    width: 50px;
+    height: 50px;
+    font-size: 18px;
+  }
 
-  errorBox: {
-    marginBottom: 14,
-    padding: 13,
-    border: "1px solid #F2B8B3",
-    borderRadius: 12,
-    background: "#FFF1EF",
-    color: "#8A1C12",
-  },
+  .kp-prof-info {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
 
-  errorCard: {
-    display: "grid",
-    gap: 8,
-    padding: 20,
-    borderRadius: 16,
-    background: "#FFF",
-  },
+  .kp-prof-info small {
+    color: #6c7871;
+  }
 
-  confirmCard: {
-    marginBottom: 14,
-    padding: 24,
-    border: "2px solid #9AD2B2",
-    borderRadius: 22,
-    background: "#F3FBF6",
-    textAlign: "center",
-  },
+  .kp-select {
+    min-width: 88px;
+    min-height: 34px;
+    border: 1px solid #d7deda;
+    background: #fff;
+    color: #303b35;
+  }
 
-  check: {
-    width: 58,
-    height: 58,
-    margin: "0 auto 12px",
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "50%",
-    background: "#0D7042",
-    color: "#FFF",
-    fontSize: 28,
-    fontWeight: 900,
-  },
+  .kp-prof-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #e0e6e3;
+    background: #fff;
+  }
 
-  confirmText: {
-    fontSize: 16,
-    lineHeight: 1.5,
-  },
+  .kp-mini-avatar {
+    width: 30px;
+    height: 30px;
+  }
 
-  manageLinkBox: {
-    marginTop: 16,
-    display: "grid",
-    gap: 9,
-    textAlign: "left",
-  },
+  .kp-flow h3 {
+    margin: 18px 0 10px;
+    font-size: 17px;
+  }
 
-  manageGrid: {
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit,minmax(150px,1fr))",
-    gap: 9,
-  },
+  .kp-days {
+    padding-bottom: 6px;
+    display: flex;
+    gap: 9px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
 
-  dataBox: {
-    padding: 11,
-    display: "grid",
-    gap: 4,
-    border: "1px solid #DCE6E0",
-    borderRadius: 12,
-    background: "#FFF",
-  },
+  .kp-days button {
+    min-width: 72px;
+    min-height: 100px;
+    padding: 9px 7px;
+    display: grid;
+    place-items: center;
+    gap: 3px;
+    border: 1px solid #dce3df;
+    border-radius: 18px;
+    background: #fff;
+    color: #59645e;
+    cursor: pointer;
+  }
 
-  cancelBox: {
-    marginTop: 14,
-    display: "grid",
-    gap: 10,
-  },
+  .kp-days button strong {
+    font-size: 24px;
+  }
 
-  cancelledBox: {
-    marginTop: 12,
-    padding: 13,
-    borderRadius: 12,
-    background: "#FFEDEC",
-    color: "#8A1C12",
-    fontWeight: 800,
-  },
+  .kp-days button.active {
+    border-color: #171817;
+    background: #171817;
+    color: #fff;
+  }
 
-  infoBox: {
-    marginTop: 12,
-    padding: 13,
-    borderRadius: 12,
-    background: "#EEF5F1",
-    color: "#405147",
-  },
+  .kp-times button {
+    min-height: 68px;
+    padding: 0 18px;
+    display: flex;
+    align-items: center;
+    border: 1px solid #dfe4e1;
+    border-radius: 17px;
+    background: #fff;
+    color: #1b231f;
+    font-size: 18px;
+    cursor: pointer;
+  }
 
-  helpText: {
-    display: "block",
-    marginTop: 10,
-    color: "#69776F",
-    lineHeight: 1.5,
-  },
+  .kp-times button.active {
+    border: 2px solid #2f65c8;
+    background: #f3f6ff;
+    color: #2f65c8;
+    font-weight: 900;
+  }
 
-  footer: {
-    padding: "16px 4px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    flexWrap: "wrap",
-    color: "#68766E",
-    fontSize: 12,
-  },
+  .kp-continue {
+    width: 100%;
+    min-height: 58px;
+    margin-top: 15px;
+    padding: 0 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 0;
+    border-radius: 18px;
+    background: #171817;
+    color: #fff;
+    cursor: pointer;
+  }
 
-  footerLogo: {
-    width: 85,
-    height: 32,
-    objectFit: "contain",
-  },
-};
+  .kp-summary {
+    margin: 13px 0;
+    padding: 15px;
+    display: grid;
+    gap: 10px;
+    border: 1px solid #edf0ee;
+    border-radius: 18px;
+    background: #fafbfa;
+  }
+
+  .kp-summary-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: #6c7771;
+    font-size: 13px;
+  }
+
+  .kp-summary-row strong {
+    color: #17211c;
+    text-align: right;
+  }
+
+  .kp-summary-row strong.accent {
+    color: #0b7041;
+  }
+
+  .kp-note,
+  .kp-info,
+  .kp-cancelled {
+    margin: 12px 0;
+    padding: 12px;
+    border-radius: 13px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .kp-note {
+    background: #fff8e7;
+    color: #8a6414;
+  }
+
+  .kp-info {
+    background: #eef5f1;
+    color: #405147;
+  }
+
+  .kp-cancelled {
+    background: #ffedec;
+    color: #8a1c12;
+  }
+
+  .kp-form label,
+  .kp-cancel-box label {
+    display: grid;
+    gap: 6px;
+    color: #263129;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .kp-form input,
+  .kp-form textarea,
+  .kp-cancel-box input {
+    width: 100%;
+    min-height: 48px;
+    padding: 10px 12px;
+    border: 1px solid #cfd9d3;
+    border-radius: 13px;
+    background: #fff;
+    color: #17211c;
+    font-size: 16px;
+  }
+
+  .kp-form textarea {
+    min-height: 82px;
+    resize: vertical;
+  }
+
+  .kp-confirm,
+  .kp-secondary,
+  .kp-danger {
+    width: 100%;
+    min-height: 50px;
+    border-radius: 14px;
+    font-weight: 900;
+    cursor: pointer;
+  }
+
+  .kp-confirm {
+    border: 0;
+    color: #fff;
+    background: linear-gradient(180deg,#168c54,#0b7041);
+  }
+
+  .kp-secondary {
+    margin-top: 10px;
+    border: 1px solid #0b7041;
+    background: #fff;
+    color: #0b7041;
+  }
+
+  .kp-danger {
+    border: 0;
+    background: #b42318;
+    color: #fff;
+  }
+
+  .kp-link {
+    width: 100%;
+    min-height: 42px;
+    margin-top: 6px;
+    color: #5d6962;
+  }
+
+  .kp-success {
+    text-align: center;
+  }
+
+  .kp-check {
+    width: 62px;
+    height: 62px;
+    margin: 6px auto 13px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #0b7041;
+    color: #fff;
+    font-size: 30px;
+    font-weight: 900;
+  }
+
+  .kp-success p {
+    color: #536159;
+    line-height: 1.6;
+  }
+
+  .kp-manage {
+    border: 2px solid #a7d7ba;
+    background: #f0faf4;
+  }
+
+  .kp-data-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(150px,1fr));
+    gap: 9px;
+  }
+
+  .kp-data {
+    padding: 11px;
+    display: grid;
+    gap: 4px;
+    border: 1px solid #dce6e0;
+    border-radius: 13px;
+    background: #fff;
+  }
+
+  .kp-error,
+  .kp-error-card {
+    margin-bottom: 12px;
+    padding: 12px;
+    border: 1px solid #f2b8b3;
+    border-radius: 13px;
+    background: #fff1ef;
+    color: #8a1c12;
+  }
+
+  .kp-empty {
+    padding: 24px;
+    border: 1px dashed #d5ddd8;
+    border-radius: 15px;
+    background: #fafcfb;
+    color: #748078;
+    text-align: center;
+    font-size: 13px;
+  }
+
+  .kp-reserve-now {
+    position: fixed;
+    z-index: 80;
+    left: 50%;
+    bottom: 82px;
+    transform: translateX(-50%);
+    width: min(620px,calc(100% - 30px));
+    min-height: 58px;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 0;
+    border-radius: 18px;
+    color: #fff;
+    background: linear-gradient(180deg,#2871f5,#0647d8);
+    box-shadow: 0 12px 30px rgba(20,80,210,.30);
+    font-size: 18px;
+    cursor: pointer;
+  }
+
+  .kp-bottom-nav {
+    position: fixed;
+    z-index: 70;
+    left: 50%;
+    bottom: 8px;
+    transform: translateX(-50%);
+    width: min(620px,calc(100% - 20px));
+    min-height: 68px;
+    padding: 8px 12px;
+    display: grid;
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 6px;
+    border: 1px solid #e2e7e4;
+    border-radius: 22px;
+    background: rgba(255,255,255,.98);
+    box-shadow: 0 8px 28px rgba(20,38,28,.10);
+  }
+
+  .kp-bottom-nav button {
+    display: grid;
+    place-items: center;
+    gap: 2px;
+    border: 0;
+    background: transparent;
+    color: #56625b;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .kp-bottom-nav button span {
+    font-size: 20px;
+  }
+
+  .kp-footer {
+    padding: 18px 2px 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    color: #829088;
+    font-size: 9px;
+  }
+
+  .kp-footer img {
+    width: 74px;
+    height: 28px;
+    object-fit: contain;
+  }
+
+  .kp-loading {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 12px;
+    background: #f5f7f6;
+    color: #0b7041;
+    font-family: Inter, system-ui, "Segoe UI", sans-serif;
+  }
+
+  .kp-loading img {
+    width: 115px;
+  }
+
+  @media (max-width: 520px) {
+    .kp-hero {
+      grid-template-columns: 1fr;
+    }
+
+    .kp-hero img {
+      width: 104px;
+    }
+
+    .kp-service {
+      grid-template-columns: 46px minmax(0,1fr);
+    }
+
+    .kp-service > button {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
+
+    .kp-prof {
+      grid-template-columns: 50px minmax(0,1fr);
+    }
+
+    .kp-select {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
+  }
+`;
