@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.17-PORTAL-MOVIL-FLUJO-V3-BOTONES";
+const VERSION = "2026.08.17-PORTAL-MOVIL-FLUJO-V5-FECHA-HORA";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -317,6 +317,73 @@ export default function ReservaPublicaAutoservicioPage() {
     servicioSeleccionado,
     profesionalSeleccionado,
   ]);
+
+  const serviciosFechaActual = useMemo(() => {
+    const mapa = new Map();
+
+    horarios.forEach((item) => {
+      const id = String(item.servicio_id);
+
+      if (!mapa.has(id)) {
+        mapa.set(id, {
+          id,
+          nombre: item.servicio_nombre,
+          descripcion: item.descripcion || "",
+          precio: Number(item.precio || 0),
+          requierePago: Boolean(item.requiere_pago),
+          duracion: Number(item.duracion_minutos || 60),
+        });
+      }
+    });
+
+    return Array.from(mapa.values());
+  }, [horarios]);
+
+  const [fechasConDisponibilidad, setFechasConDisponibilidad] = useState([]);
+  const [buscandoFechas, setBuscandoFechas] = useState(false);
+
+  async function buscarFechasDisponibles() {
+    if (!portal?.ok) return;
+
+    setBuscandoFechas(true);
+
+    try {
+      const candidatos = proximosDias(14);
+      const resultados = [];
+
+      for (const dia of candidatos) {
+        const { data, error: rpcError } = await supabase.rpc(
+          "obtener_disponibilidad_agenda_publica",
+          {
+            p_slug: slug,
+            p_fecha: dia,
+          }
+        );
+
+        if (!rpcError && Array.isArray(data) && data.length > 0) {
+          resultados.push(dia);
+        }
+
+        if (resultados.length >= 8) break;
+      }
+
+      setFechasConDisponibilidad(resultados);
+
+      if (
+        resultados.length > 0 &&
+        !resultados.includes(fecha)
+      ) {
+        setFecha(resultados[0]);
+      }
+    } finally {
+      setBuscandoFechas(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!portal?.ok) return;
+    buscarFechasDisponibles();
+  }, [portal?.ok]);
 
   const profesionalResumen = useMemo(() => {
     if (profesionalSeleccionado === "sin-preferencia") {
@@ -825,7 +892,45 @@ export default function ReservaPublicaAutoservicioPage() {
                   </div>
                 ) : servicios.length === 0 ? (
                   <div className="kp-empty">
-                    No hay servicios disponibles para esta fecha.
+                    <strong>No hay servicios disponibles hoy.</strong>
+                    <span>
+                      {buscandoFechas
+                        ? " Buscando próximas fechas..."
+                        : fechasConDisponibilidad.length > 0
+                        ? ` Próxima fecha disponible: ${formatoFecha(
+                            fechasConDisponibilidad[0]
+                          )}.`
+                        : " No hay fechas disponibles en los próximos días."}
+                    </span>
+
+                    {fechasConDisponibilidad.length > 0 && (
+                      <button
+                        type="button"
+                        className="kp-empty-action"
+                        onClick={async () => {
+                          const proxima = fechasConDisponibilidad[0];
+                          setFecha(proxima);
+                          setError("");
+
+                          const { data, error: rpcError } = await supabase.rpc(
+                            "obtener_disponibilidad_agenda_publica",
+                            {
+                              p_slug: slug,
+                              p_fecha: proxima,
+                            }
+                          );
+
+                          if (rpcError) {
+                            setError(mensajeError(rpcError));
+                            return;
+                          }
+
+                          setHorarios(Array.isArray(data) ? data : []);
+                        }}
+                      >
+                        Ver próxima fecha
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="kp-service-list">
@@ -949,50 +1054,65 @@ export default function ReservaPublicaAutoservicioPage() {
 
                 <h2>Seleccionar fecha y hora</h2>
 
-                <div className="kp-prof-summary">
-                  <span className="kp-mini-avatar">
-                    {profesionalSeleccionado === "sin-preferencia"
-                      ? "↝"
-                      : inicialNombre(profesionalResumen)}
-                  </span>
-                  <strong>{profesionalResumen}</strong>
+                <div className="kp-booking-head">
+                  <div className="kp-booking-business">
+                    <div className="kp-mini-avatar">
+                      {profesionalSeleccionado === "sin-preferencia"
+                        ? "↝"
+                        : inicialNombre(profesionalResumen)}
+                    </div>
+
+                    <div>
+                      <strong>{profesionalResumen}</strong>
+                      <small>
+                        {servicioSeleccionado.nombre} ·{" "}
+                        {servicioSeleccionado.duracion} min
+                        {servicioSeleccionado.requierePago
+                          ? ` · ${dinero(servicioSeleccionado.precio)}`
+                          : ""}
+                      </small>
+                    </div>
+                  </div>
                 </div>
 
-                <ServicioResumen servicio={servicioSeleccionado} />
+                <div className="kp-date-strip-wrap">
+                  <div className="kp-date-strip">
+                    {(fechasConDisponibilidad.length > 0
+                      ? fechasConDisponibilidad
+                      : dias
+                    ).map((dia) => {
+                      const activo = dia === fecha;
+                      const d = new Date(`${dia}T12:00:00`);
 
-                <h3>Selecciona una fecha</h3>
+                      return (
+                        <button
+                          key={dia}
+                          type="button"
+                          className={`kp-date-pill ${
+                            activo ? "active" : ""
+                          }`}
+                          onClick={() => elegirFecha(dia)}
+                        >
+                          <span>
+                            {new Intl.DateTimeFormat("es-PA", {
+                              weekday: "short",
+                            }).format(d)}
+                          </span>
 
-                <div className="kp-days">
-                  {dias.map((dia) => {
-                    const activo = dia === fecha;
-                    const d = new Date(`${dia}T12:00:00`);
+                          <strong>{d.getDate()}</strong>
 
-                    return (
-                      <button
-                        key={dia}
-                        type="button"
-                        className={activo ? "active" : ""}
-                        onClick={() => elegirFecha(dia)}
-                      >
-                        <span>
-                          {new Intl.DateTimeFormat("es-PA", {
-                            weekday: "short",
-                          }).format(d)}
-                        </span>
-
-                        <strong>{d.getDate()}</strong>
-
-                        <span>
-                          {new Intl.DateTimeFormat("es-PA", {
-                            month: "short",
-                          }).format(d)}
-                        </span>
-                      </button>
-                    );
-                  })}
+                          <span>
+                            {new Intl.DateTimeFormat("es-PA", {
+                              month: "short",
+                            }).format(d)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                <h3>Escoge una hora</h3>
+                <h3 className="kp-time-title">Escoge una hora</h3>
 
                 {cargandoHorarios ? (
                   <div className="kp-empty">
@@ -1000,10 +1120,10 @@ export default function ReservaPublicaAutoservicioPage() {
                   </div>
                 ) : slotsDisponibles.length === 0 ? (
                   <div className="kp-empty">
-                    No hay horas disponibles para esta selección.
+                    No hay horas disponibles para esta fecha.
                   </div>
                 ) : (
-                  <div className="kp-times">
+                  <div className="kp-time-cards">
                     {slotsDisponibles.map((slot) => {
                       const activo =
                         claveSlot(horarioSeleccionado) ===
@@ -1013,7 +1133,9 @@ export default function ReservaPublicaAutoservicioPage() {
                         <button
                           key={claveSlot(slot)}
                           type="button"
-                          className={activo ? "active" : ""}
+                          className={`kp-time-card ${
+                            activo ? "active" : ""
+                          }`}
                           onClick={() =>
                             setHorarioSeleccionado(slot)
                           }
@@ -1028,7 +1150,7 @@ export default function ReservaPublicaAutoservicioPage() {
                 {horarioSeleccionado && (
                   <button
                     type="button"
-                    className="kp-continue"
+                    className="kp-continue kp-continue-fixed"
                     onClick={continuarFechaHora}
                   >
                     <span>
@@ -1036,6 +1158,7 @@ export default function ReservaPublicaAutoservicioPage() {
                         ? dinero(servicioSeleccionado.precio)
                         : `${servicioSeleccionado.duracion} min`}
                     </span>
+
                     <strong>Continuar →</strong>
                   </button>
                 )}
@@ -1219,7 +1342,7 @@ export default function ReservaPublicaAutoservicioPage() {
           </section>
         )}
 
-        {!tokenUrl && paso < 5 && (
+        {!tokenUrl && paso < 5 && paso !== 3 && (
           <button
             type="button"
             className="kp-reserve-now"
@@ -1766,6 +1889,129 @@ const CSS = `
     font-size: 17px;
   }
 
+
+  .kp-booking-head {
+    margin: 12px 0 14px;
+  }
+
+  .kp-booking-business {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid #e0e6e3;
+    border-radius: 16px;
+    background: #ffffff;
+  }
+
+  .kp-booking-business > div:last-child {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  .kp-booking-business strong {
+    color: #17211c;
+    font-size: 14px;
+  }
+
+  .kp-booking-business small {
+    color: #6e7a73;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .kp-date-strip-wrap {
+    margin: 12px -16px 0;
+    padding: 0 16px 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .kp-date-strip {
+    display: flex;
+    gap: 8px;
+    width: max-content;
+  }
+
+  .kp-date-pill {
+    min-width: 78px;
+    height: 104px;
+    padding: 8px 6px;
+    display: grid;
+    place-items: center;
+    gap: 2px;
+    border: 1px solid #dfe5e1;
+    border-radius: 18px;
+    background: #ffffff;
+    color: #526058;
+    cursor: pointer;
+  }
+
+  .kp-date-pill strong {
+    font-size: 27px;
+    line-height: 1;
+    color: inherit;
+  }
+
+  .kp-date-pill span {
+    font-size: 12px;
+    text-transform: lowercase;
+  }
+
+  .kp-date-pill.active {
+    border-color: #0b7041;
+    background: #0b7041;
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(11,112,65,.18);
+  }
+
+  .kp-time-title {
+    margin: 24px 0 12px !important;
+    font-size: 20px !important;
+    font-weight: 800;
+  }
+
+  .kp-time-cards {
+    display: grid;
+    gap: 12px;
+  }
+
+  .kp-time-card {
+    width: 100%;
+    min-height: 78px;
+    padding: 0 18px;
+    display: flex;
+    align-items: center;
+    border: 1px solid #dfe4e1;
+    border-radius: 18px;
+    background: #ffffff;
+    color: #17211c;
+    font-size: 19px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .kp-time-card.active {
+    border: 2px solid #0b7041;
+    background: #eef8f2;
+    color: #0b7041;
+    font-weight: 900;
+  }
+
+  .kp-continue-fixed {
+    position: sticky;
+    bottom: 156px;
+    z-index: 45;
+    margin-top: 14px;
+  }
+
+  .kp-available-note {
+    margin: -2px 0 10px;
+    color: #6b7770;
+    font-size: 11px;
+  }
+
   .kp-days {
     padding-bottom: 6px;
     display: flex;
@@ -2000,6 +2246,18 @@ const CSS = `
     color: #8a1c12;
   }
 
+  .kp-empty-action {
+    margin-top: 12px;
+    min-height: 42px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 12px;
+    background: #0b7041;
+    color: #ffffff;
+    font-weight: 900;
+    cursor: pointer;
+  }
+
   .kp-empty {
     padding: 24px;
     border: 1px dashed #d5ddd8;
@@ -2026,8 +2284,8 @@ const CSS = `
     border: 0;
     border-radius: 18px;
     color: #fff;
-    background: linear-gradient(180deg,#2871f5,#0647d8);
-    box-shadow: 0 12px 30px rgba(20,80,210,.30);
+    background: linear-gradient(180deg,#168c54,#0b7041);
+    box-shadow: 0 12px 30px rgba(11,112,65,.28);
     font-size: 18px;
     cursor: pointer;
   }
@@ -2137,6 +2395,30 @@ const CSS = `
   .kp-dark .kp-summary-row strong,
   .kp-dark .kp-menu button {
     color: #f3f7f4;
+  }
+
+
+  .kp-dark .kp-booking-business,
+  .kp-dark .kp-date-pill,
+  .kp-dark .kp-time-card {
+    background: #17201b;
+    color: #f3f7f4;
+    border-color: #2b3931;
+  }
+
+  .kp-dark .kp-booking-business strong {
+    color: #f3f7f4;
+  }
+
+  .kp-dark .kp-booking-business small {
+    color: #aab8b0;
+  }
+
+  .kp-dark .kp-date-pill.active,
+  .kp-dark .kp-time-card.active {
+    background: #153c29;
+    color: #75e5a5;
+    border-color: #4aca7e;
   }
 
   .kp-dark .kp-muted,
