@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.17-PORTAL-MOVIL-FLUJO-V9-MI-CITA-PERSISTENTE";
+const VERSION = "2026.08.17-PORTAL-MOVIL-FLUJO-V10-LOGO-NEGOCIO";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -124,6 +124,7 @@ export default function ReservaPublicaAutoservicioPage() {
   const tokenUrl = searchParams?.get("cita") || "";
 
   const [portal, setPortal] = useState(null);
+  const [identidadEmpresa, setIdentidadEmpresa] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [cargandoHorarios, setCargandoHorarios] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -218,6 +219,19 @@ export default function ReservaPublicaAutoservicioPage() {
     }
 
     setPortal(data);
+
+    const { data: identidadData } = await supabase.rpc(
+      "obtener_identidad_empresa_publica",
+      {
+        p_slug: slug,
+      }
+    );
+
+    const identidad = Array.isArray(identidadData)
+      ? identidadData[0]
+      : identidadData;
+
+    setIdentidadEmpresa(identidad || null);
     setCargando(false);
   }
 
@@ -687,7 +701,13 @@ export default function ReservaPublicaAutoservicioPage() {
   }
 
   const nombreNegocio =
-    portal.titulo_publico || portal.empresa_nombre || "KONAX";
+    identidadEmpresa?.empresa_nombre ||
+    portal.titulo_publico ||
+    portal.empresa_nombre ||
+    "Negocio";
+
+  const logoNegocio =
+    identidadEmpresa?.logo_url || "";
 
   return (
     <main className={`kp-page ${tema === "oscuro" ? "kp-dark" : ""}`}>
@@ -800,25 +820,6 @@ export default function ReservaPublicaAutoservicioPage() {
           )}
         </header>
 
-        {!tokenUrl && (
-          <section className="kp-hero">
-            <div>
-              <span className="kp-eyebrow">
-                KONAX · RESERVAS ONLINE
-              </span>
-
-              <h1>{nombreNegocio}</h1>
-
-              <p>
-                Reserva tu cita en minutos.
-                <br />
-                Rápido · Fácil · Sin llamadas.
-              </p>
-            </div>
-
-            <img src="/konax-logo.png" alt="KONAX" />
-          </section>
-        )}
 
         {error && (
           <div className="kp-error">
@@ -924,11 +925,15 @@ export default function ReservaPublicaAutoservicioPage() {
           >
             <div className="kp-business-window">
               <div className="kp-business-logo-box">
-                <img
-                  src="/konax-logo.png"
-                  alt="KONAX"
-                  className="kp-business-logo"
-                />
+                {logoNegocio ? (
+                  <img
+                    src={logoNegocio}
+                    alt={nombreNegocio}
+                    className="kp-business-logo"
+                  />
+                ) : (
+                  <span className="kp-business-placeholder">🏢</span>
+                )}
               </div>
 
               <div className="kp-business-window-info">
@@ -1671,7 +1676,7 @@ const CSS = `
   }
 
   .kp-top-logo {
-    width: 104px;
+    width: 92px;
     height: 34px;
     object-fit: contain;
     justify-self: center;
@@ -1800,8 +1805,8 @@ const CSS = `
   }
 
   .kp-business-window {
-    margin: -2px 0 16px;
-    padding: 12px 14px;
+    margin: 4px 0 18px;
+    padding: 15px 16px;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -1829,6 +1834,11 @@ const CSS = `
     object-fit: contain;
   }
 
+  .kp-business-placeholder {
+    font-size: 27px;
+    line-height: 1;
+  }
+
   .kp-business-window-info {
     min-width: 0;
     display: grid;
@@ -1837,13 +1847,13 @@ const CSS = `
 
   .kp-business-window-info strong {
     color: #17211c;
-    font-size: 16px;
+    font-size: 19px;
     line-height: 1.2;
   }
 
   .kp-business-window-info span {
     color: #6f7c74;
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .kp-stepper {
