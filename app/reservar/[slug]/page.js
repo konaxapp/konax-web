@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.17-PORTAL-MOVIL-FLUJO-V7-NEGOCIO-HEADER";
+const VERSION = "2026.08.17-PORTAL-MOVIL-FLUJO-V8-CTA-UNICA";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -1285,8 +1285,8 @@ export default function ReservaPublicaAutoservicioPage() {
                       disabled={guardando}
                     >
                       {guardando
-                        ? "Confirmando..."
-                        : "Confirmar reserva →"}
+                        ? "Reservando..."
+                        : "Reservar ahora →"}
                     </button>
                   </form>
                 </div>
@@ -1361,7 +1361,7 @@ export default function ReservaPublicaAutoservicioPage() {
           </section>
         )}
 
-        {!tokenUrl && paso < 5 && paso !== 3 && (
+        {!tokenUrl && paso < 5 && paso !== 3 && paso !== 4 && (
           <button
             type="button"
             className="kp-reserve-now"
