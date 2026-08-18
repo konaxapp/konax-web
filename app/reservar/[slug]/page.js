@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.17-PORTAL-MOVIL-FLUJO-V8-CTA-UNICA";
+const VERSION = "2026.08.17-PORTAL-MOVIL-FLUJO-V9-MI-CITA-PERSISTENTE";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -131,6 +131,7 @@ export default function ReservaPublicaAutoservicioPage() {
 
   const [tema, setTema] = useState("claro");
   const [menuAbierto, setMenuAbierto] = useState(false);
+  const [mostrarAvisoMiCita, setMostrarAvisoMiCita] = useState(false);
 
   const [paso, setPaso] = useState(1);
 
@@ -159,7 +160,20 @@ export default function ReservaPublicaAutoservicioPage() {
 
   useEffect(() => {
     if (!slug) return;
+
     cargarPortal();
+
+    try {
+      const tokenGuardado = localStorage.getItem(
+        `konax_reserva_token_${slug}`
+      );
+
+      if (tokenGuardado) {
+        setTokenGestion(tokenGuardado);
+      }
+    } catch (err) {
+      console.warn("No se pudo leer la cita guardada:", err);
+    }
   }, [slug]);
 
   useEffect(() => {
@@ -169,8 +183,19 @@ export default function ReservaPublicaAutoservicioPage() {
 
   useEffect(() => {
     if (!portal?.ok || !tokenUrl) return;
+
     cargarMiCita(tokenUrl);
-  }, [portal?.ok, tokenUrl]);
+
+    try {
+      localStorage.setItem(
+        `konax_reserva_token_${slug}`,
+        tokenUrl
+      );
+      setTokenGestion(tokenUrl);
+    } catch (err) {
+      console.warn("No se pudo guardar la cita:", err);
+    }
+  }, [portal?.ok, tokenUrl, slug]);
 
   async function cargarPortal() {
     setCargando(true);
@@ -536,7 +561,18 @@ export default function ReservaPublicaAutoservicioPage() {
     );
 
     if (gestion?.ok && gestion?.token) {
-      setTokenGestion(String(gestion.token));
+      const tokenNuevo = String(gestion.token);
+
+      setTokenGestion(tokenNuevo);
+
+      try {
+        localStorage.setItem(
+          `konax_reserva_token_${slug}`,
+          tokenNuevo
+        );
+      } catch (err) {
+        console.warn("No se pudo guardar la cita:", err);
+      }
     }
 
     await cargarDisponibilidad(fecha);
@@ -549,6 +585,27 @@ export default function ReservaPublicaAutoservicioPage() {
         block: "center",
       });
     }, 80);
+  }
+
+  function abrirMiCita() {
+    let token = tokenGestion;
+
+    if (!token) {
+      try {
+        token = localStorage.getItem(
+          `konax_reserva_token_${slug}`
+        );
+      } catch (err) {
+        console.warn("No se pudo leer la cita guardada:", err);
+      }
+    }
+
+    if (token) {
+      window.location.href = `/reservar/${slug}?cita=${token}`;
+      return;
+    }
+
+    setMostrarAvisoMiCita(true);
   }
 
   async function cancelarMiCita() {
@@ -734,16 +791,7 @@ export default function ReservaPublicaAutoservicioPage() {
                 type="button"
                 onClick={() => {
                   setMenuAbierto(false);
-
-                  if (tokenGestion) {
-                    window.location.href =
-                      `/reservar/${slug}?cita=${tokenGestion}`;
-                    return;
-                  }
-
-                  alert(
-                    "Cuando confirmes una reserva podrás gestionar tu cita desde aquí."
-                  );
+                  abrirMiCita();
                 }}
               >
                 ▤ Mi cita
@@ -1417,22 +1465,62 @@ export default function ReservaPublicaAutoservicioPage() {
 
           <button
             type="button"
-            onClick={() => {
-              if (tokenGestion) {
-                window.location.href =
-                  `/reservar/${slug}?cita=${tokenGestion}`;
-                return;
-              }
-
-              alert(
-                "Cuando confirmes una reserva podrás gestionar tu cita desde aquí."
-              );
-            }}
+            onClick={abrirMiCita}
           >
             <span>▤</span>
             <small>Mi cita</small>
           </button>
         </nav>
+        )}
+
+        {mostrarAvisoMiCita && (
+          <div
+            className="kp-modal-overlay"
+            onClick={() => setMostrarAvisoMiCita(false)}
+          >
+            <div
+              className="kp-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="kp-modal-icon">▤</div>
+
+              <span className="kp-eyebrow-dark">
+                MI CITA
+              </span>
+
+              <h3>Aún no tienes una cita guardada</h3>
+
+              <p>
+                Cuando completes una reserva en este teléfono,
+                KONAX guardará el acceso para que puedas volver
+                directamente desde “Mi cita”.
+              </p>
+
+              <button
+                type="button"
+                className="kp-confirm"
+                onClick={() => {
+                  setMostrarAvisoMiCita(false);
+                  document
+                    .getElementById("flujo-reserva")
+                    ?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    });
+                }}
+              >
+                Reservar ahora
+              </button>
+
+              <button
+                type="button"
+                className="kp-link"
+                onClick={() => setMostrarAvisoMiCita(false)}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
         )}
 
         <footer className="kp-footer">
@@ -2422,6 +2510,52 @@ const CSS = `
     font-size: 20px;
   }
 
+  .kp-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(8,14,11,.58);
+    backdrop-filter: blur(3px);
+  }
+
+  .kp-modal {
+    width: min(420px,100%);
+    padding: 22px;
+    border-radius: 22px;
+    background: #ffffff;
+    color: #17211c;
+    box-shadow: 0 24px 60px rgba(0,0,0,.25);
+    text-align: center;
+  }
+
+  .kp-modal-icon {
+    width: 58px;
+    height: 58px;
+    margin: 0 auto 12px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #eaf5ef;
+    color: #0b7041;
+    font-size: 25px;
+    font-weight: 900;
+  }
+
+  .kp-modal h3 {
+    margin: 7px 0 8px;
+    font-size: 21px;
+  }
+
+  .kp-modal p {
+    margin: 0 0 16px;
+    color: #66746c;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
   .kp-footer {
     padding: 18px 2px 4px;
     display: flex;
@@ -2553,6 +2687,16 @@ const CSS = `
   .kp-dark .kp-menu button:hover {
     background: #223029;
   }
+
+  .kp-dark .kp-modal {
+    background: #17201b;
+    color: #f3f7f4;
+  }
+
+  .kp-dark .kp-modal p {
+    color: #aab8b0;
+  }
+
 
   @media (max-width: 520px) {
     .kp-continue-fixed {
