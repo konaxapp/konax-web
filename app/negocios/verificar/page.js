@@ -1,58 +1,69 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.19-KONAX-NEGOCIOS-VERIFICAR-V1";
-
-export default function VerificarNegocios() {
+export default function VerificarCorreoKonax() {
   const [correo, setCorreo] = useState("");
-  const [codigo, setCodigo] = useState(["", "", "", "", "", ""]);
+  const [codigo, setCodigo] = useState(Array(8).fill(""));
   const [cargando, setCargando] = useState(false);
   const [reenviando, setReenviando] = useState(false);
   const [mensaje, setMensaje] = useState("");
   const [tipoMensaje, setTipoMensaje] = useState("");
 
-  const refs = useRef([]);
+  const inputsRef = useRef([]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const correoUrl = params.get("correo") || "";
-
-    let correoRegistro = "";
-
-    try {
-      const guardado = sessionStorage.getItem("konaxNegociosRegistro");
-
-      if (guardado) {
-        const datos = JSON.parse(guardado);
-        correoRegistro = datos?.correo || "";
-      }
-    } catch (error) {
-      console.error("No se pudo leer el registro temporal:", error);
-    }
-
-    setCorreo(correoUrl || correoRegistro);
+    cargarCorreo();
   }, []);
 
-  function cambiarCodigo(index, valor) {
+  function cargarCorreo() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const correoUrl = params.get("correo") || "";
+
+      if (correoUrl) {
+        setCorreo(correoUrl.trim().toLowerCase());
+        return;
+      }
+
+      const registro = sessionStorage.getItem("konaxNegociosRegistro");
+
+      if (registro) {
+        const datos = JSON.parse(registro);
+
+        if (datos?.correo) {
+          setCorreo(String(datos.correo).trim().toLowerCase());
+        }
+      }
+    } catch (error) {
+      console.error("Error cargando correo:", error);
+    }
+  }
+
+  const codigoCompleto = useMemo(
+    () => codigo.join(""),
+    [codigo]
+  );
+
+  function actualizarDigito(index, valor) {
     const limpio = String(valor || "")
       .replace(/\D/g, "")
       .slice(-1);
 
     setCodigo((prev) => {
-      const copia = [...prev];
-      copia[index] = limpio;
-      return copia;
+      const nuevo = [...prev];
+      nuevo[index] = limpio;
+      return nuevo;
     });
 
-    if (limpio && index < 5) {
-      refs.current[index + 1]?.focus();
-    }
+    setMensaje("");
+    setTipoMensaje("");
 
-    if (mensaje) {
-      setMensaje("");
-      setTipoMensaje("");
+    if (limpio && index < 7) {
+      setTimeout(() => {
+        inputsRef.current[index + 1]?.focus();
+      }, 0);
     }
   }
 
@@ -62,151 +73,59 @@ export default function VerificarNegocios() {
       !codigo[index] &&
       index > 0
     ) {
-      refs.current[index - 1]?.focus();
+      inputsRef.current[index - 1]?.focus();
     }
 
     if (e.key === "ArrowLeft" && index > 0) {
-      refs.current[index - 1]?.focus();
+      inputsRef.current[index - 1]?.focus();
     }
 
-    if (e.key === "ArrowRight" && index < 5) {
-      refs.current[index + 1]?.focus();
+    if (e.key === "ArrowRight" && index < 7) {
+      inputsRef.current[index + 1]?.focus();
     }
   }
 
   function manejarPegado(e) {
     e.preventDefault();
 
-    const texto = String(
-      e.clipboardData.getData("text") || ""
-    )
+    const texto = e.clipboardData
+      .getData("text")
       .replace(/\D/g, "")
-      .slice(0, 6);
+      .slice(0, 8);
 
     if (!texto) return;
 
-    const nuevos = ["", "", "", "", "", ""];
+    const nuevo = Array(8).fill("");
 
-    texto.split("").forEach((numero, index) => {
-      nuevos[index] = numero;
+    texto.split("").forEach((digito, index) => {
+      nuevo[index] = digito;
     });
 
-    setCodigo(nuevos);
+    setCodigo(nuevo);
 
-    const ultimoIndex = Math.min(texto.length, 6) - 1;
+    const posicion = Math.min(texto.length, 8) - 1;
 
     setTimeout(() => {
-      refs.current[ultimoIndex]?.focus();
+      inputsRef.current[posicion]?.focus();
     }, 0);
   }
 
-  async function crearEmpresaDespuesDeVerificar() {
-    let registro = null;
+  async function verificarCodigo(e) {
+    e?.preventDefault();
 
-    try {
-      const guardado = sessionStorage.getItem(
-        "konaxNegociosRegistro"
-      );
-
-      if (guardado) {
-        registro = JSON.parse(guardado);
-      }
-    } catch (error) {
-      console.error(error);
-    }
-
-    if (!registro) {
-      throw new Error(
-        "No encontramos los datos del registro. Vuelve a iniciar el proceso."
-      );
-    }
-
-    const nombreCompleto =
-      registro.nombreCompleto ||
-      `${registro.nombre || ""} ${registro.apellido || ""}`.trim();
-
-    const { data, error } = await supabase.rpc(
-      "crear_empresa_konax_negocios",
-      {
-        p_nombre_usuario: nombreCompleto,
-        p_correo: registro.correo || correo,
-        p_telefono: registro.telefono || "",
-        p_nombre_empresa: null,
-      }
-    );
-
-    if (error) {
-      throw error;
-    }
-
-    const resultado = Array.isArray(data)
-      ? data[0]
-      : data;
-
-    if (!resultado?.empresa_id) {
-      throw new Error(
-        "La cuenta fue verificada, pero no se pudo crear el negocio."
-      );
-    }
-
-    localStorage.setItem(
-      "empresaId",
-      resultado.empresa_id
-    );
-
-    localStorage.setItem(
-      "empresaNombre",
-      resultado.empresa_nombre || "Mi negocio"
-    );
-
-    if (resultado.usuario_id) {
-      localStorage.setItem(
-        "usuarioId",
-        resultado.usuario_id
-      );
-    }
-
-    localStorage.setItem(
-      "usuarioNombre",
-      nombreCompleto
-    );
-
-    localStorage.setItem(
-      "usuarioCorreo",
-      registro.correo || correo
-    );
-
-    localStorage.setItem(
-      "usuarioRol",
-      "administrador"
-    );
-
-    localStorage.setItem(
-      "konaxOrigen",
-      "konax_negocios"
-    );
-
-    sessionStorage.removeItem(
-      "konaxNegociosAuthUserId"
-    );
-  }
-
-  async function verificar() {
     if (cargando) return;
-
-    const token = codigo.join("");
-
-    if (token.length !== 6) {
-      setTipoMensaje("error");
-      setMensaje("Escribe el código completo de 6 dígitos.");
-      return;
-    }
 
     if (!correo) {
       setTipoMensaje("error");
       setMensaje(
-        "No encontramos el correo del registro."
+        "No encontramos el correo del registro. Vuelve a registrarte."
       );
+      return;
+    }
+
+    if (codigoCompleto.length !== 8) {
+      setTipoMensaje("error");
+      setMensaje("Ingresa los 8 dígitos del código.");
       return;
     }
 
@@ -216,70 +135,71 @@ export default function VerificarNegocios() {
 
     try {
       const { data, error } = await supabase.auth.verifyOtp({
-        email: correo.trim().toLowerCase(),
-        token,
-        type: "signup",
+        email: correo,
+        token: codigoCompleto,
+        type: "email",
       });
 
       if (error) {
-        console.error("Error OTP:", error);
+        console.error("Error verificando OTP:", error);
 
-        setTipoMensaje("error");
-
-        const texto = String(
-          error.message || ""
-        ).toLowerCase();
+        const texto = String(error.message || "").toLowerCase();
 
         if (
           texto.includes("expired") ||
-          texto.includes("otp_expired")
+          texto.includes("token has expired")
         ) {
+          setTipoMensaje("error");
           setMensaje(
             "El código venció. Solicita uno nuevo."
           );
-        } else if (
+          return;
+        }
+
+        if (
           texto.includes("invalid") ||
           texto.includes("token")
         ) {
+          setTipoMensaje("error");
           setMensaje(
-            "El código no es válido. Revísalo e intenta nuevamente."
+            "El código no es correcto. Revísalo e intenta nuevamente."
           );
-        } else {
-          setMensaje(
-            error.message ||
-              "No se pudo verificar el código."
-          );
+          return;
         }
 
-        return;
-      }
-
-      if (!data?.session?.user?.id) {
         setTipoMensaje("error");
         setMensaje(
-          "El correo fue verificado, pero no se pudo iniciar la sesión."
+          error.message ||
+            "No se pudo verificar el correo."
         );
         return;
       }
 
-      await crearEmpresaDespuesDeVerificar();
+      if (!data?.user) {
+        setTipoMensaje("error");
+        setMensaje(
+          "No se pudo confirmar la cuenta."
+        );
+        return;
+      }
 
       setTipoMensaje("success");
-      setMensaje(
-        "Correo verificado. Estamos preparando tu negocio."
+      setMensaje("Correo verificado correctamente.");
+
+      sessionStorage.setItem(
+        "konaxNegociosCorreoVerificado",
+        "true"
       );
 
       setTimeout(() => {
-        window.location.href =
-          "/negocios/onboarding";
+        window.location.href = "/negocios/onboarding";
       }, 700);
     } catch (error) {
       console.error(error);
 
       setTipoMensaje("error");
       setMensaje(
-        error?.message ||
-          "Ocurrió un problema verificando tu cuenta."
+        "Ocurrió un problema verificando el código."
       );
     } finally {
       setCargando(false);
@@ -296,11 +216,11 @@ export default function VerificarNegocios() {
     try {
       const { error } = await supabase.auth.resend({
         type: "signup",
-        email: correo.trim().toLowerCase(),
+        email: correo,
       });
 
       if (error) {
-        console.error(error);
+        console.error("Error reenviando OTP:", error);
 
         setTipoMensaje("error");
         setMensaje(
@@ -310,15 +230,15 @@ export default function VerificarNegocios() {
         return;
       }
 
+      setCodigo(Array(8).fill(""));
+
       setTipoMensaje("success");
       setMensaje(
-        "Te enviamos un nuevo código al correo."
+        "Te enviamos un nuevo código de 8 dígitos."
       );
 
-      setCodigo(["", "", "", "", "", ""]);
-
       setTimeout(() => {
-        refs.current[0]?.focus();
+        inputsRef.current[0]?.focus();
       }, 100);
     } catch (error) {
       console.error(error);
@@ -333,11 +253,7 @@ export default function VerificarNegocios() {
   }
 
   function volverRegistro() {
-    window.location.href = "/negocios/registro";
-  }
-
-  function iniciarSesion() {
-    window.location.href = "/login";
+    window.location.href = "/negocios/registros";
   }
 
   return (
@@ -351,7 +267,7 @@ export default function VerificarNegocios() {
           onClick={volverRegistro}
           aria-label="Volver"
         >
-          ‹
+          ←
         </button>
 
         <img
@@ -360,28 +276,38 @@ export default function VerificarNegocios() {
           className="kv-logo"
         />
 
-        <div className="kv-header-space" />
+        <span className="kv-badge">
+          Negocios
+        </span>
       </header>
 
       <section className="kv-shell">
+        <div className="kv-intro">
+          <span>KONAX · VERIFICACIÓN</span>
+
+          <h1>Verifica tu correo</h1>
+
+          <p>
+            Ingresa el código de 8 dígitos que enviamos a tu correo.
+          </p>
+        </div>
+
         <div className="kv-card">
           <div className="kv-progress">
-            <div className="kv-progress-item">
-              <span className="kv-progress-circle done">
+            <div className="kv-progress-side">
+              <span className="kv-circle done">
                 ✓
               </span>
 
-              <span className="kv-progress-line done" />
+              <span className="kv-line active" />
             </div>
 
-            <div className="kv-progress-item last">
-              <span className="kv-progress-circle active">
-                2
-              </span>
-            </div>
+            <span className="kv-circle active">
+              2
+            </span>
           </div>
 
-          <p className="kv-step-label">
+          <p className="kv-step">
             Paso 2 de 2 · Verificar correo
           </p>
 
@@ -389,15 +315,17 @@ export default function VerificarNegocios() {
             ✉
           </div>
 
-          <h1>Verifica tu correo</h1>
+          <div className="kv-title">
+            <h2>Revisa tu correo</h2>
 
-          <p className="kv-subtitle">
-            Te enviamos un código de 6 dígitos a
-          </p>
+            <p>
+              Enviamos un código a:
+            </p>
 
-          <strong className="kv-email">
-            {correo || "tu correo electrónico"}
-          </strong>
+            <strong>
+              {correo || "tu correo electrónico"}
+            </strong>
+          </div>
 
           {mensaje && (
             <div
@@ -411,56 +339,64 @@ export default function VerificarNegocios() {
             </div>
           )}
 
-          <div className="kv-code-label">
-            Código de 6 dígitos
-          </div>
-
-          <div
-            className="kv-code"
-            onPaste={manejarPegado}
+          <form
+            onSubmit={verificarCodigo}
+            className="kv-form"
           >
-            {codigo.map((valor, index) => (
-              <input
-                key={index}
-                ref={(elemento) => {
-                  refs.current[index] = elemento;
-                }}
-                value={valor}
-                onChange={(e) =>
-                  cambiarCodigo(
-                    index,
-                    e.target.value
-                  )
-                }
-                onKeyDown={(e) =>
-                  manejarTecla(index, e)
-                }
-                inputMode="numeric"
-                pattern="[0-9]*"
-                autoComplete={
-                  index === 0
-                    ? "one-time-code"
-                    : "off"
-                }
-                maxLength={1}
-                aria-label={`Dígito ${index + 1}`}
-              />
-            ))}
-          </div>
+            <label className="kv-code-label">
+              Código de 8 dígitos
+            </label>
 
-          <button
-            type="button"
-            className="kv-primary"
-            onClick={verificar}
-            disabled={cargando}
-          >
-            {cargando
-              ? "Verificando..."
-              : "Verificar"}
-          </button>
+            <div
+              className="kv-code"
+              onPaste={manejarPegado}
+            >
+              {codigo.map((digito, index) => (
+                <input
+                  key={index}
+                  ref={(el) =>
+                    (inputsRef.current[index] = el)
+                  }
+                  value={digito}
+                  onChange={(e) =>
+                    actualizarDigito(
+                      index,
+                      e.target.value
+                    )
+                  }
+                  onKeyDown={(e) =>
+                    manejarTecla(index, e)
+                  }
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={1}
+                  autoComplete={
+                    index === 0
+                      ? "one-time-code"
+                      : "off"
+                  }
+                  aria-label={`Dígito ${index + 1}`}
+                />
+              ))}
+            </div>
+
+            <button
+              type="submit"
+              className="kv-primary"
+              disabled={cargando}
+            >
+              {cargando
+                ? "Verificando..."
+                : "Verificar correo"}
+
+              {!cargando && <strong>→</strong>}
+            </button>
+          </form>
 
           <div className="kv-resend">
-            <span>¿El código no funcionó?</span>
+            <span>
+              ¿No recibiste el código?
+            </span>
 
             <button
               type="button"
@@ -468,20 +404,18 @@ export default function VerificarNegocios() {
               disabled={reenviando}
             >
               {reenviando
-                ? "Reenviando..."
-                : "Reenviar nuevo código"}
+                ? "Enviando..."
+                : "Reenviar código"}
             </button>
           </div>
 
-          <div className="kv-login">
-            <span>¿Ya tienes cuenta?</span>
+          <div className="kv-help">
+            <span>✓</span>
 
-            <button
-              type="button"
-              onClick={iniciarSesion}
-            >
-              Inicia sesión
-            </button>
+            <p>
+              El código distingue tu cuenta y protege
+              el registro de tu negocio.
+            </p>
           </div>
         </div>
 
@@ -490,10 +424,6 @@ export default function VerificarNegocios() {
             src="/konax-logo.png"
             alt="KONAX"
           />
-
-          <span>
-            KONAX Negocios · {VERSION}
-          </span>
         </footer>
       </section>
     </main>
@@ -511,7 +441,7 @@ const CSS = `
     width: 100%;
     max-width: 100%;
     overflow-x: hidden;
-    background: #f4f7f5;
+    background: #f3f7f5;
   }
 
   button,
@@ -519,389 +449,409 @@ const CSS = `
     font: inherit;
   }
 
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   .kv-page {
     min-height: 100vh;
     width: 100%;
     background:
-      radial-gradient(
-        circle at 10% 100%,
-        rgba(12,128,75,.15),
-        transparent 32%
-      ),
-      radial-gradient(
-        circle at 100% 5%,
-        rgba(17,174,98,.12),
-        transparent 28%
-      ),
       linear-gradient(
-        160deg,
-        #e9f5ee 0%,
-        #f8faf9 42%,
-        #edf4f0 100%
+        180deg,
+        #f9fbfa 0%,
+        #eef6f2 100%
       );
-    color: #17211c;
+    color: #18231d;
     font-family:
-      Inter,
       Arial,
       Helvetica,
       sans-serif;
-    padding-bottom:
-      max(24px, env(safe-area-inset-bottom));
   }
 
   .kv-header {
-    height: 78px;
-    padding:
-      max(12px, env(safe-area-inset-top))
-      20px
-      10px;
+    height: 55px;
+    padding: 7px 13px;
     display: grid;
-    grid-template-columns: 48px 1fr 48px;
+    grid-template-columns: 34px 1fr auto;
     align-items: center;
-    border-bottom: 1px solid #dfe8e3;
-    background: rgba(255,255,255,.94);
-    backdrop-filter: blur(14px);
+    gap: 7px;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: rgba(255,255,255,.98);
+    border-bottom: 1px solid #e2e9e5;
   }
 
   .kv-back {
-    width: 44px;
-    height: 44px;
-    border: 0;
-    border-radius: 14px;
+    width: 32px;
+    height: 32px;
+    border: 1px solid #e1e8e4;
+    border-radius: 9px;
+    background: #f5f8f6;
+    color: #07804a;
     display: grid;
     place-items: center;
-    background: #eff4f1;
-    color: #17211c;
-    font-size: 37px;
-    line-height: 1;
+    font-size: 18px;
+    font-weight: 900;
     cursor: pointer;
   }
 
   .kv-logo {
-    width: min(190px, 55vw);
-    max-height: 48px;
+    width: min(128px, 38vw);
+    max-height: 29px;
     object-fit: contain;
     justify-self: center;
   }
 
-  .kv-header-space {
-    width: 44px;
+  .kv-badge {
+    height: 27px;
+    padding: 0 9px;
+    display: flex;
+    align-items: center;
+    border: 1px solid #14935a;
+    border-radius: 999px;
+    background: #f4fbf7;
+    color: #087b48;
+    font-size: 9px;
+    font-weight: 900;
   }
 
   .kv-shell {
-    width: min(100%, 580px);
+    width: min(100%, 560px);
     margin: 0 auto;
-    padding: 28px 16px 8px;
+    padding: 10px 10px 8px;
+  }
+
+  .kv-intro {
+    padding: 3px 6px 10px;
+  }
+
+  .kv-intro > span {
+    color: #087a47;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 1px;
+  }
+
+  .kv-intro h1 {
+    margin: 4px 0 3px;
+    font-size: 27px;
+    line-height: 1;
+    letter-spacing: -1px;
+  }
+
+  .kv-intro p {
+    margin: 0;
+    color: #6d7972;
+    font-size: 11.5px;
+    line-height: 1.35;
   }
 
   .kv-card {
-    padding: 28px 22px 27px;
-    border: 1px solid #dce6e0;
-    border-radius: 29px;
-    background: rgba(255,255,255,.97);
+    padding: 16px 15px 17px;
+    border: 1px solid #dbe5df;
+    border-radius: 20px;
+    background: #fff;
     box-shadow:
-      0 20px 55px rgba(12,63,37,.13);
-    text-align: center;
+      0 10px 27px rgba(18,53,34,.06);
   }
 
   .kv-progress {
-    width: 100%;
     display: grid;
     grid-template-columns: 1fr auto;
     align-items: center;
-    margin-bottom: 8px;
   }
 
-  .kv-progress-item {
+  .kv-progress-side {
     display: flex;
     align-items: center;
   }
 
-  .kv-progress-item.last {
-    justify-content: flex-end;
-  }
-
-  .kv-progress-circle {
-    width: 42px;
-    height: 42px;
-    flex: 0 0 auto;
+  .kv-circle {
+    width: 31px;
+    height: 31px;
     display: grid;
     place-items: center;
+    flex: 0 0 auto;
     border-radius: 50%;
-    background: #e7ede9;
-    color: #69756e;
-    font-size: 16px;
+    background: #e8eeea;
+    color: #66736b;
+    font-size: 11px;
     font-weight: 900;
   }
 
-  .kv-progress-circle.active {
+  .kv-circle.active,
+  .kv-circle.done {
     background:
       linear-gradient(
         145deg,
-        #086b3f,
-        #10a25c
+        #07703f,
+        #10a15d
       );
     color: #fff;
-    box-shadow:
-      0 7px 18px rgba(11,112,65,.22);
   }
 
-  .kv-progress-circle.done {
-    background: #daf2e4;
-    color: #087442;
-  }
-
-  .kv-progress-line {
-    height: 3px;
+  .kv-line {
+    height: 2px;
     flex: 1;
-    margin: 0 12px;
+    margin: 0 9px;
     border-radius: 999px;
-    background: #e0e8e3;
+    background: #dbe8e1;
   }
 
-  .kv-progress-line.done {
+  .kv-line.active {
     background:
       linear-gradient(
         90deg,
-        #087442,
-        #12a55e
+        #087b48,
+        #12a65e
       );
   }
 
-  .kv-step-label {
-    margin: 8px 0 25px;
-    color: #75827a;
-    font-size: 12px;
+  .kv-step {
+    margin: 5px 0 15px;
+    color: #758179;
+    font-size: 9.5px;
     font-weight: 700;
-    text-align: left;
   }
 
   .kv-icon {
-    width: 68px;
-    height: 68px;
-    margin: 2px auto 15px;
+    width: 54px;
+    height: 54px;
+    margin: 2px auto 11px;
     display: grid;
     place-items: center;
-    border-radius: 20px;
-    background:
-      linear-gradient(
-        145deg,
-        #e3f6eb,
-        #f5fbf7
-      );
-    color: #0a7b48;
-    font-size: 34px;
-    box-shadow:
-      inset 0 0 0 1px #d1e9dc;
+    border-radius: 17px;
+    background: #edf8f2;
+    color: #087b48;
+    font-size: 26px;
   }
 
-  .kv-card h1 {
+  .kv-title {
+    text-align: center;
+    margin-bottom: 16px;
+  }
+
+  .kv-title h2 {
+    margin: 0 0 5px;
+    font-size: 22px;
+  }
+
+  .kv-title p {
     margin: 0;
-    color: #152019;
-    font-size: 32px;
-    line-height: 1.08;
+    color: #7a867f;
+    font-size: 11px;
   }
 
-  .kv-subtitle {
-    margin: 11px 0 3px;
-    color: #717d76;
-    font-size: 14px;
-    line-height: 1.45;
-  }
-
-  .kv-email {
+  .kv-title strong {
     display: block;
-    max-width: 100%;
-    margin-bottom: 23px;
-    color: #27342d;
-    font-size: 14px;
+    margin-top: 3px;
+    color: #087b48;
+    font-size: 12px;
     word-break: break-word;
   }
 
   .kv-alert {
-    margin: 0 0 18px;
-    padding: 13px 14px;
-    border-radius: 13px;
-    font-size: 13px;
+    margin-bottom: 12px;
+    padding: 9px 10px;
+    border-radius: 11px;
+    font-size: 10.5px;
     font-weight: 750;
     line-height: 1.4;
-    text-align: left;
   }
 
   .kv-alert.error {
     border: 1px solid #fecaca;
-    background: #fff3f3;
-    color: #9e2222;
+    background: #fff4f4;
+    color: #a32020;
   }
 
   .kv-alert.success {
-    border: 1px solid #b8e4cb;
+    border: 1px solid #b9e5cc;
     background: #effbf4;
     color: #087442;
   }
 
+  .kv-form {
+    display: grid;
+    gap: 13px;
+  }
+
   .kv-code-label {
-    margin-bottom: 13px;
-    color: #35433b;
-    font-size: 14px;
-    font-weight: 850;
+    text-align: center;
+    color: #35443b;
+    font-size: 11px;
+    font-weight: 900;
   }
 
   .kv-code {
     display: grid;
     grid-template-columns:
-      repeat(6,minmax(0,1fr));
-    gap: 8px;
-    margin-bottom: 22px;
+      repeat(8,minmax(0,1fr));
+    gap: 5px;
   }
 
   .kv-code input {
     width: 100%;
     min-width: 0;
-    aspect-ratio: .82;
-    max-height: 68px;
-    border: 1.5px solid #c9d5ce;
+    height: 48px;
+    padding: 0;
+    border: 1px solid #cbd6d0;
+    border-radius: 10px;
     outline: none;
-    border-radius: 15px;
     background: #fff;
     color: #17211c;
     text-align: center;
-    font-size: 24px;
+    font-size: 18px;
     font-weight: 900;
-    transition:
-      border-color .18s ease,
-      box-shadow .18s ease,
-      transform .18s ease;
   }
 
   .kv-code input:focus {
-    border-color: #0b7a4b;
+    border-color: #0a854d;
     box-shadow:
-      0 0 0 4px rgba(11,122,75,.10);
-    transform: translateY(-1px);
+      0 0 0 3px rgba(10,133,77,.09);
   }
 
   .kv-primary {
     width: 100%;
-    min-height: 58px;
+    height: 48px;
     border: 0;
-    border-radius: 17px;
-    background:
-      linear-gradient(
-        135deg,
-        #075f39 0%,
-        #0a834b 55%,
-        #13a85f 100%
-      );
-    color: #fff;
-    font-size: 17px;
-    font-weight: 900;
-    box-shadow:
-      0 12px 26px rgba(11,122,75,.22);
-    cursor: pointer;
-  }
-
-  .kv-primary:disabled {
-    opacity: .68;
-    cursor: not-allowed;
-  }
-
-  .kv-resend {
-    margin-top: 25px;
-    display: grid;
-    justify-items: center;
-    gap: 9px;
-  }
-
-  .kv-resend > span {
-    color: #737f78;
-    font-size: 13px;
-  }
-
-  .kv-resend button {
-    min-height: 43px;
-    padding: 0 17px;
-    border: 1px solid #bddfca;
-    border-radius: 999px;
-    background: #effbf4;
-    color: #087442;
-    font-size: 13px;
-    font-weight: 900;
-    cursor: pointer;
-  }
-
-  .kv-resend button:disabled {
-    opacity: .65;
-  }
-
-  .kv-login {
-    margin-top: 28px;
-    display: flex;
-    justify-content: center;
-    gap: 5px;
-    flex-wrap: wrap;
-    color: #7c8781;
-    font-size: 13px;
-  }
-
-  .kv-login button {
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: #087a47;
-    font-weight: 900;
-    cursor: pointer;
-  }
-
-  .kv-footer {
-    padding: 25px 5px 8px;
+    border-radius: 14px;
     display: flex;
     justify-content: center;
     align-items: center;
     gap: 10px;
-    color: #87928c;
-    font-size: 9px;
+    background:
+      linear-gradient(
+        135deg,
+        #077240,
+        #0b914f,
+        #15b564
+      );
+    color: #fff;
+    font-size: 14px;
+    font-weight: 900;
+    cursor: pointer;
+  }
+
+  .kv-primary strong {
+    font-size: 19px;
+  }
+
+  .kv-primary:disabled {
+    opacity: .6;
+  }
+
+  .kv-resend {
+    margin-top: 15px;
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    color: #858e89;
+    font-size: 10.5px;
+  }
+
+  .kv-resend button {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: #087b48;
+    font-weight: 900;
+    cursor: pointer;
+  }
+
+  .kv-help {
+    margin-top: 14px;
+    padding: 9px 10px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    border-radius: 12px;
+    background: #eff8f3;
+  }
+
+  .kv-help > span {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #0a8b50;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 900;
+  }
+
+  .kv-help p {
+    margin: 1px 0 0;
+    color: #5f6d65;
+    font-size: 9.5px;
+    line-height: 1.35;
+  }
+
+  .kv-footer {
+    padding: 16px 0 7px;
+    display: flex;
+    justify-content: center;
   }
 
   .kv-footer img {
-    width: 78px;
-    height: auto;
+    width: 95px;
   }
 
-  @media (max-width: 480px) {
+  @media (max-width: 390px) {
     .kv-header {
-      height: 72px;
-      padding-left: 14px;
-      padding-right: 14px;
+      height: 52px;
+    }
+
+    .kv-logo {
+      width: 112px;
     }
 
     .kv-shell {
-      padding: 20px 13px 8px;
+      padding: 8px 8px 6px;
     }
 
     .kv-card {
-      padding: 25px 17px 24px;
-      border-radius: 25px;
+      padding: 14px 12px 15px;
+      border-radius: 18px;
     }
 
-    .kv-code {
-      gap: 6px;
+    .kv-intro h1 {
+      font-size: 24px;
     }
 
-    .kv-code input {
-      border-radius: 13px;
-      font-size: 22px;
-    }
-  }
-
-  @media (max-width: 360px) {
     .kv-code {
       gap: 4px;
     }
 
     .kv-code input {
-      border-radius: 11px;
-      font-size: 20px;
+      height: 45px;
+      border-radius: 9px;
+      font-size: 16px;
+    }
+  }
+
+  @media (max-width: 350px) {
+    .kv-badge {
+      display: none;
+    }
+
+    .kv-header {
+      grid-template-columns:
+        34px 1fr 34px;
+    }
+
+    .kv-code {
+      gap: 3px;
+    }
+
+    .kv-code input {
+      height: 42px;
+      font-size: 15px;
     }
   }
 `;
