@@ -48,6 +48,14 @@ function obtenerRegistroTemporal() {
   }
 }
 
+function normalizarNombreTemporal(nombre) {
+  return (
+    String(nombre || "")
+      .trim()
+      .toLowerCase() === "mi negocio"
+  );
+}
+
 export default function OnboardingKonaxNegocios() {
   const [empresaId, setEmpresaId] = useState("");
   const [empresa, setEmpresa] = useState(null);
@@ -55,10 +63,13 @@ export default function OnboardingKonaxNegocios() {
   const [paso, setPaso] = useState(1);
 
   const [categorias, setCategorias] = useState([]);
+
   const [
     categoriasSeleccionadas,
     setCategoriasSeleccionadas,
   ] = useState([]);
+
+  const [grupoAbierto, setGrupoAbierto] = useState("");
 
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState("");
@@ -93,6 +104,39 @@ export default function OnboardingKonaxNegocios() {
         item.id === categoriasSeleccionadas[0]
     );
   }, [categorias, categoriasSeleccionadas]);
+
+  const categoriasAgrupadas = useMemo(() => {
+    const grupos = {};
+
+    categorias.forEach((categoria) => {
+      const grupo =
+        String(categoria.grupo || "").trim() ||
+        "Otros";
+
+      if (!grupos[grupo]) {
+        grupos[grupo] = [];
+      }
+
+      grupos[grupo].push(categoria);
+    });
+
+    return grupos;
+  }, [categorias]);
+
+  const grupos = useMemo(() => {
+    return Object.keys(categoriasAgrupadas);
+  }, [categoriasAgrupadas]);
+
+  const categoriasSeleccionadasDetalle =
+    useMemo(() => {
+      return categoriasSeleccionadas
+        .map((id) =>
+          categorias.find(
+            (categoria) => categoria.id === id
+          )
+        )
+        .filter(Boolean);
+    }, [categorias, categoriasSeleccionadas]);
 
   async function iniciar() {
     setCargando(true);
@@ -148,11 +192,6 @@ export default function OnboardingKonaxNegocios() {
   }
 
   async function resolverEmpresaUsuario(user) {
-    /*
-      1. Si ya tenemos empresaId guardado,
-         verificamos que realmente exista.
-    */
-
     const empresaLocal =
       localStorage.getItem("empresaId");
 
@@ -174,20 +213,9 @@ export default function OnboardingKonaxNegocios() {
         return data.id;
       }
 
-      /*
-        Si quedó un empresaId viejo o inválido,
-        lo eliminamos y seguimos con la RPC.
-      */
-
       localStorage.removeItem("empresaId");
       localStorage.removeItem("empresaNombre");
     }
-
-    /*
-      2. Recuperamos los datos que guardó
-         /negocios/registro antes de verificar
-         el correo.
-    */
 
     const registro = obtenerRegistroTemporal();
 
@@ -221,15 +249,6 @@ export default function OnboardingKonaxNegocios() {
         ""
     ).trim();
 
-    /*
-      El negocio todavía no tiene nombre,
-      porque el usuario lo escribirá en Paso 1.
-
-      La RPC necesita p_nombre_empresa.
-      Creamos inicialmente "Mi negocio".
-      En Paso 1 se reemplaza por el nombre real.
-    */
-
     const nombreEmpresaTemporal =
       String(
         localStorage.getItem("empresaNombre") ||
@@ -241,24 +260,6 @@ export default function OnboardingKonaxNegocios() {
         "No encontramos el correo de la cuenta."
       );
     }
-
-    /*
-      3. La función SQL que ya verificamos:
-
-      crear_empresa_konax_negocios(
-        p_nombre_usuario,
-        p_correo,
-        p_telefono,
-        p_nombre_empresa
-      )
-
-      devuelve:
-      - empresa_id
-      - usuario_id
-      - empresa_nombre
-      - onboarding_paso
-      - marketplace_estado
-    */
 
     const { data, error } = await supabase.rpc(
       "crear_empresa_konax_negocios",
@@ -282,14 +283,6 @@ export default function OnboardingKonaxNegocios() {
           "No se pudo crear el negocio."
       );
     }
-
-    /*
-      Supabase puede devolver:
-      - array de filas
-      - objeto
-      dependiendo de cómo esté definida
-      la función.
-    */
 
     const resultado = Array.isArray(data)
       ? data[0]
@@ -327,17 +320,6 @@ export default function OnboardingKonaxNegocios() {
       );
     }
 
-    if (
-      resultado?.onboarding_paso !==
-        undefined &&
-      resultado?.onboarding_paso !== null
-    ) {
-      localStorage.setItem(
-        "onboardingPaso",
-        String(resultado.onboarding_paso)
-      );
-    }
-
     return nuevoEmpresaId;
   }
 
@@ -348,9 +330,7 @@ export default function OnboardingKonaxNegocios() {
       .eq("id", id)
       .maybeSingle();
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     if (!data) {
       throw new Error(
@@ -376,13 +356,12 @@ export default function OnboardingKonaxNegocios() {
       data.onboarding_paso || 1
     );
 
-    const pasoValido =
+    setPaso(
       pasoGuardado >= 1 &&
-      pasoGuardado <= 4
+        pasoGuardado <= 4
         ? pasoGuardado
-        : 1;
-
-    setPaso(pasoValido);
+        : 1
+    );
 
     if (data.logo_url) {
       setLogoPreview(data.logo_url);
@@ -455,10 +434,7 @@ export default function OnboardingKonaxNegocios() {
     setServicios(data || []);
   }
 
-  function actualizarEmpresa(
-    campo,
-    valor
-  ) {
+  function actualizarEmpresa(campo, valor) {
     setEmpresa((prev) => ({
       ...(prev || {}),
       [campo]: valor,
@@ -489,6 +465,12 @@ export default function OnboardingKonaxNegocios() {
     setMensaje(texto);
   }
 
+  function abrirGrupo(grupo) {
+    setGrupoAbierto((prev) =>
+      prev === grupo ? "" : grupo
+    );
+  }
+
   function seleccionarCategoria(id) {
     limpiarMensaje();
 
@@ -514,12 +496,7 @@ export default function OnboardingKonaxNegocios() {
   }
 
   async function guardarPaso1() {
-    if (
-      guardando ||
-      !empresaId
-    ) {
-      return;
-    }
+    if (guardando || !empresaId) return;
 
     const nombre = String(
       empresa?.nombre || ""
@@ -539,9 +516,7 @@ export default function OnboardingKonaxNegocios() {
       return;
     }
 
-    if (
-      !categoriasSeleccionadas.length
-    ) {
+    if (!categoriasSeleccionadas.length) {
       mostrarError(
         "Selecciona al menos una categoría para tu negocio."
       );
@@ -610,9 +585,7 @@ export default function OnboardingKonaxNegocios() {
         })
         .eq("id", empresaId);
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       const {
         error: eliminarError,
@@ -672,11 +645,6 @@ export default function OnboardingKonaxNegocios() {
         nombre
       );
 
-      localStorage.setItem(
-        "onboardingPaso",
-        "2"
-      );
-
       setPaso(2);
 
       mostrarExito(
@@ -699,23 +667,11 @@ export default function OnboardingKonaxNegocios() {
     }
   }
 
-  function normalizarNombreTemporal(
-    nombre
-  ) {
-    return (
-      String(nombre || "")
-        .trim()
-        .toLowerCase() ===
-      "mi negocio"
-    );
-  }
-
   function usarUbicacionActual() {
     if (!navigator.geolocation) {
       mostrarError(
         "Tu dispositivo no permite obtener la ubicación."
       );
-
       return;
     }
 
@@ -738,9 +694,7 @@ export default function OnboardingKonaxNegocios() {
         );
       },
 
-      (error) => {
-        console.error(error);
-
+      () => {
         mostrarError(
           "No pudimos obtener tu ubicación. Puedes escribir la dirección manualmente."
         );
@@ -755,12 +709,7 @@ export default function OnboardingKonaxNegocios() {
   }
 
   async function guardarPaso2() {
-    if (
-      guardando ||
-      !empresaId
-    ) {
-      return;
-    }
+    if (guardando || !empresaId) return;
 
     const direccion = String(
       empresa?.direccion || ""
@@ -774,7 +723,6 @@ export default function OnboardingKonaxNegocios() {
       mostrarError(
         "Escribe la dirección del negocio."
       );
-
       return;
     }
 
@@ -782,7 +730,6 @@ export default function OnboardingKonaxNegocios() {
       mostrarError(
         "Selecciona la provincia."
       );
-
       return;
     }
 
@@ -794,18 +741,15 @@ export default function OnboardingKonaxNegocios() {
         .update({
           direccion,
           provincia,
-
           distrito:
             String(
               empresa?.distrito || ""
             ).trim() || null,
-
           corregimiento:
             String(
               empresa?.corregimiento ||
                 ""
             ).trim() || null,
-
           latitud:
             empresa?.latitud === "" ||
             empresa?.latitud === null ||
@@ -815,7 +759,6 @@ export default function OnboardingKonaxNegocios() {
               : Number(
                   empresa.latitud
                 ),
-
           longitud:
             empresa?.longitud === "" ||
             empresa?.longitud === null ||
@@ -825,27 +768,18 @@ export default function OnboardingKonaxNegocios() {
               : Number(
                   empresa.longitud
                 ),
-
           onboarding_paso: 3,
-
           marketplace_actualizado_en:
             new Date().toISOString(),
         })
         .eq("id", empresaId);
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       setEmpresa((prev) => ({
         ...prev,
         onboarding_paso: 3,
       }));
-
-      localStorage.setItem(
-        "onboardingPaso",
-        "3"
-      );
 
       setPaso(3);
 
@@ -858,8 +792,6 @@ export default function OnboardingKonaxNegocios() {
         behavior: "smooth",
       });
     } catch (error) {
-      console.error(error);
-
       mostrarError(
         error?.message ||
           "No se pudo guardar la ubicación."
@@ -883,7 +815,6 @@ export default function OnboardingKonaxNegocios() {
       mostrarError(
         "Selecciona una imagen válida."
       );
-
       return;
     }
 
@@ -915,19 +846,16 @@ export default function OnboardingKonaxNegocios() {
       )
     );
 
-    if (!archivos.length) {
-      return;
-    }
+    if (!archivos.length) return;
 
-    const totalActual =
+    if (
       fotosFiles.length +
-      archivos.length;
-
-    if (totalActual > 6) {
+        archivos.length >
+      6
+    ) {
       mostrarError(
         "Puedes subir máximo 6 fotos del negocio."
       );
-
       return;
     }
 
@@ -938,7 +866,6 @@ export default function OnboardingKonaxNegocios() {
 
     setFotosPreview((prev) => [
       ...prev,
-
       ...archivos.map(
         (archivo) =>
           URL.createObjectURL(
@@ -974,12 +901,6 @@ export default function OnboardingKonaxNegocios() {
     archivo,
     carpeta
   ) {
-    if (!empresaId) {
-      throw new Error(
-        "No encontramos la empresa para subir la imagen."
-      );
-    }
-
     const extension =
       archivo.name
         .split(".")
@@ -1014,9 +935,7 @@ export default function OnboardingKonaxNegocios() {
           }
         );
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     const { data } =
       supabase.storage
@@ -1031,12 +950,7 @@ export default function OnboardingKonaxNegocios() {
   }
 
   async function guardarPaso3() {
-    if (
-      guardando ||
-      !empresaId
-    ) {
-      return;
-    }
+    if (guardando || !empresaId) return;
 
     if (
       !logoPreview &&
@@ -1045,7 +959,6 @@ export default function OnboardingKonaxNegocios() {
       mostrarError(
         "Sube el logo del negocio."
       );
-
       return;
     }
 
@@ -1061,12 +974,6 @@ export default function OnboardingKonaxNegocios() {
             logoFile,
             "logo"
           );
-      }
-
-      if (!logoUrl) {
-        throw new Error(
-          "No se pudo guardar el logo."
-        );
       }
 
       const fotosUrls = [];
@@ -1091,9 +998,7 @@ export default function OnboardingKonaxNegocios() {
         .from("empresas")
         .update({
           logo_url: logoUrl,
-
           onboarding_paso: 4,
-
           marketplace_actualizado_en:
             new Date().toISOString(),
         })
@@ -1137,11 +1042,6 @@ export default function OnboardingKonaxNegocios() {
         onboarding_paso: 4,
       }));
 
-      localStorage.setItem(
-        "onboardingPaso",
-        "4"
-      );
-
       setLogoFile(null);
       setFotosFiles([]);
       setFotosPreview([]);
@@ -1157,8 +1057,6 @@ export default function OnboardingKonaxNegocios() {
         behavior: "smooth",
       });
     } catch (error) {
-      console.error(error);
-
       mostrarError(
         error?.message ||
           "No se pudieron guardar las imágenes."
@@ -1181,12 +1079,7 @@ export default function OnboardingKonaxNegocios() {
   }
 
   async function agregarServicio() {
-    if (
-      guardando ||
-      !empresaId
-    ) {
-      return;
-    }
+    if (guardando || !empresaId) return;
 
     const nombre = String(
       servicioForm.nombre || ""
@@ -1208,7 +1101,6 @@ export default function OnboardingKonaxNegocios() {
       mostrarError(
         "Escribe el nombre del servicio."
       );
-
       return;
     }
 
@@ -1219,7 +1111,6 @@ export default function OnboardingKonaxNegocios() {
       mostrarError(
         "Escribe un precio válido."
       );
-
       return;
     }
 
@@ -1271,9 +1162,7 @@ export default function OnboardingKonaxNegocios() {
           )
           .single();
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       setServicios((prev) => [
         ...prev,
@@ -1288,8 +1177,6 @@ export default function OnboardingKonaxNegocios() {
         "Servicio agregado correctamente."
       );
     } catch (error) {
-      console.error(error);
-
       mostrarError(
         error?.message ||
           "No se pudo agregar el servicio."
@@ -1326,7 +1213,6 @@ export default function OnboardingKonaxNegocios() {
       mostrarError(
         "No se pudo eliminar el servicio."
       );
-
       return;
     }
 
@@ -1339,18 +1225,12 @@ export default function OnboardingKonaxNegocios() {
   }
 
   async function publicarNegocio() {
-    if (
-      publicando ||
-      !empresaId
-    ) {
-      return;
-    }
+    if (publicando || !empresaId) return;
 
     if (!servicios.length) {
       mostrarError(
         "Agrega al menos un servicio antes de publicar tu negocio."
       );
-
       return;
     }
 
@@ -1362,22 +1242,16 @@ export default function OnboardingKonaxNegocios() {
           .from("empresas")
           .update({
             onboarding_paso: 4,
-
             onboarding_completado:
               true,
-
             marketplace_estado:
               "publicado",
-
             marketplace_publicado:
               true,
-
             marketplace_fecha_publicacion:
               new Date().toISOString(),
-
             marketplace_actualizado_en:
               new Date().toISOString(),
-
             configuracion_completa:
               true,
           })
@@ -1386,32 +1260,12 @@ export default function OnboardingKonaxNegocios() {
             empresaId
           );
 
-      if (error) {
-        throw error;
-      }
-
-      setEmpresa((prev) => ({
-        ...prev,
-
-        onboarding_completado:
-          true,
-
-        marketplace_estado:
-          "publicado",
-
-        marketplace_publicado:
-          true,
-      }));
+      if (error) throw error;
 
       localStorage.setItem(
         "empresaNombre",
         empresa?.nombre ||
           "Mi negocio"
-      );
-
-      localStorage.setItem(
-        "onboardingCompletado",
-        "true"
       );
 
       sessionStorage.removeItem(
@@ -1435,8 +1289,6 @@ export default function OnboardingKonaxNegocios() {
           "/dashboard";
       }, 1200);
     } catch (error) {
-      console.error(error);
-
       mostrarError(
         error?.message ||
           "No se pudo publicar el negocio."
@@ -1446,9 +1298,7 @@ export default function OnboardingKonaxNegocios() {
     }
   }
 
-  async function cambiarPaso(
-    nuevoPaso
-  ) {
+  function cambiarPaso(nuevoPaso) {
     if (
       nuevoPaso < 1 ||
       nuevoPaso > 4
@@ -1460,9 +1310,7 @@ export default function OnboardingKonaxNegocios() {
       empresa?.onboarding_paso || 1
     );
 
-    if (
-      nuevoPaso > maximo
-    ) {
+    if (nuevoPaso > maximo) {
       return;
     }
 
@@ -1594,47 +1442,193 @@ export default function OnboardingKonaxNegocios() {
               </label>
 
               <p className="ko-help">
-                El primero que selecciones
-                será tu categoría principal.
-                Puedes seleccionar hasta 4.
+                Selecciona hasta 4.
+                La primera será tu categoría
+                principal.
               </p>
 
-              <div className="ko-categories">
-                {categorias.map(
-                  (categoria) => {
-                    const activa =
-                      categoriasSeleccionadas.includes(
-                        categoria.id
-                      );
+              {categoriasSeleccionadasDetalle.length >
+                0 && (
+                <div className="ko-selected-area">
+                  <div className="ko-selected-title">
+                    <strong>
+                      Seleccionadas
+                    </strong>
 
-                    return (
-                      <button
-                        key={
-                          categoria.id
-                        }
-                        type="button"
-                        className={
-                          activa
-                            ? "ko-category active"
-                            : "ko-category"
-                        }
-                        onClick={() =>
-                          seleccionarCategoria(
+                    <span>
+                      {
+                        categoriasSeleccionadasDetalle.length
+                      }{" "}
+                      de 4
+                    </span>
+                  </div>
+
+                  <div className="ko-selected-list">
+                    {categoriasSeleccionadasDetalle.map(
+                      (
+                        categoria,
+                        index
+                      ) => (
+                        <button
+                          key={
                             categoria.id
-                          )
-                        }
-                      >
-                        <span>
-                          {categoria.icono ||
-                            "•"}
-                        </span>
+                          }
+                          type="button"
+                          className={
+                            index === 0
+                              ? "ko-selected-chip principal"
+                              : "ko-selected-chip"
+                          }
+                          onClick={() =>
+                            seleccionarCategoria(
+                              categoria.id
+                            )
+                          }
+                        >
+                          <span>
+                            {categoria.icono ||
+                              "•"}
+                          </span>
 
-                        <strong>
                           {
                             categoria.nombre
                           }
-                        </strong>
-                      </button>
+
+                          {index ===
+                            0 && (
+                            <small>
+                              Principal
+                            </small>
+                          )}
+
+                          <b>×</b>
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="ko-groups">
+                {grupos.map(
+                  (grupo) => {
+                    const abierto =
+                      grupoAbierto ===
+                      grupo;
+
+                    const items =
+                      categoriasAgrupadas[
+                        grupo
+                      ] || [];
+
+                    const cantidadSeleccionadas =
+                      items.filter(
+                        (item) =>
+                          categoriasSeleccionadas.includes(
+                            item.id
+                          )
+                      ).length;
+
+                    return (
+                      <div
+                        key={grupo}
+                        className={
+                          abierto
+                            ? "ko-group open"
+                            : "ko-group"
+                        }
+                      >
+                        <button
+                          type="button"
+                          className="ko-group-header"
+                          onClick={() =>
+                            abrirGrupo(
+                              grupo
+                            )
+                          }
+                        >
+                          <div>
+                            <strong>
+                              {grupo}
+                            </strong>
+
+                            <small>
+                              {
+                                items.length
+                              }{" "}
+                              opciones
+                            </small>
+                          </div>
+
+                          <div className="ko-group-right">
+                            {cantidadSeleccionadas >
+                              0 && (
+                              <span className="ko-count">
+                                {
+                                  cantidadSeleccionadas
+                                }
+                              </span>
+                            )}
+
+                            <b>
+                              {abierto
+                                ? "⌃"
+                                : "⌄"}
+                            </b>
+                          </div>
+                        </button>
+
+                        {abierto && (
+                          <div className="ko-group-content">
+                            {items.map(
+                              (
+                                categoria
+                              ) => {
+                                const activa =
+                                  categoriasSeleccionadas.includes(
+                                    categoria.id
+                                  );
+
+                                return (
+                                  <button
+                                    key={
+                                      categoria.id
+                                    }
+                                    type="button"
+                                    className={
+                                      activa
+                                        ? "ko-category active"
+                                        : "ko-category"
+                                    }
+                                    onClick={() =>
+                                      seleccionarCategoria(
+                                        categoria.id
+                                      )
+                                    }
+                                  >
+                                    <span>
+                                      {categoria.icono ||
+                                        "•"}
+                                    </span>
+
+                                    <strong>
+                                      {
+                                        categoria.nombre
+                                      }
+                                    </strong>
+
+                                    {activa && (
+                                      <b>
+                                        ✓
+                                      </b>
+                                    )}
+                                  </button>
+                                );
+                              }
+                            )}
+                          </div>
+                        )}
+                      </div>
                     );
                   }
                 )}
@@ -2200,13 +2194,6 @@ export default function OnboardingKonaxNegocios() {
           </section>
         )}
 
-        {!empresa && !mensaje && (
-          <div className="ko-empty">
-            Preparando información del
-            negocio...
-          </div>
-        )}
-
         <footer className="ko-footer">
           <img
             src="/konax-logo.png"
@@ -2452,8 +2439,7 @@ button {
   gap: 15px;
   background: #f4f7f5;
   color: #26352d;
-  font-family:
-    Arial,sans-serif;
+  font-family: Arial,sans-serif;
 }
 
 .ko-loading img {
@@ -2461,67 +2447,60 @@ button {
 }
 
 .ko-header {
-  min-height: 76px;
+  min-height: 64px;
   padding:
     max(
-      10px,
+      8px,
       env(safe-area-inset-top)
     )
-    18px
-    10px;
+    13px
+    8px;
   display: grid;
   grid-template-columns:
-    48px 1fr auto;
+    42px 1fr 42px;
   align-items: center;
-  gap: 8px;
   position: sticky;
   top: 0;
   z-index: 30;
   background:
-    rgba(255,255,255,.94);
+    rgba(255,255,255,.96);
   border-bottom:
     1px solid #dfe7e2;
-  backdrop-filter: blur(14px);
 }
 
 .ko-back {
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   background: #edf3ef;
   color: #18231d;
-  font-size: 37px;
-  line-height: 1;
+  font-size: 31px;
   cursor: pointer;
 }
 
 .ko-logo {
-  width:
-    min(185px, 52vw);
-  max-height: 48px;
+  width: 140px;
+  max-height: 39px;
   object-fit: contain;
   justify-self: center;
 }
 
 .ko-badge {
-  padding: 7px 10px;
-  border-radius: 999px;
-  background: #e7f6ed;
-  color: #087442;
-  font-size: 10px;
-  font-weight: 900;
+  display: none;
 }
 
 .ko-shell {
   width:
     min(100%, 670px);
   margin: 0 auto;
-  padding: 25px 17px 10px;
+  padding:
+    16px 12px 8px;
 }
 
 .ko-intro {
-  padding: 3px 5px 22px;
+  padding:
+    3px 5px 17px;
   text-align: center;
 }
 
@@ -2534,32 +2513,30 @@ button {
 
 .ko-intro h1 {
   margin: 7px 0 6px;
-  color: #16211b;
   font-size:
-    clamp(31px, 9vw, 46px);
+    clamp(31px, 9vw, 44px);
   line-height: 1;
-  letter-spacing: -1.4px;
+  letter-spacing: -1.3px;
 }
 
 .ko-intro p {
   max-width: 470px;
   margin: 0 auto;
   color: #6c7971;
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.45;
 }
 
 .ko-stepper {
   margin-bottom: 18px;
-  padding: 18px 15px 14px;
+  padding:
+    15px 8px 12px;
   display: grid;
   grid-template-columns:
     repeat(4,minmax(0,1fr));
-  gap: 0;
   border: 1px solid #dae5de;
   border-radius: 21px;
-  background:
-    rgba(255,255,255,.94);
+  background: #fff;
   box-shadow:
     0 8px 25px
     rgba(26,60,41,.05);
@@ -2600,9 +2577,6 @@ button {
       #11a45d
     );
   color: #fff;
-  box-shadow:
-    0 6px 15px
-    rgba(11,112,65,.24);
 }
 
 .ko-circle.done {
@@ -2610,14 +2584,10 @@ button {
   color: #087442;
 }
 
-.ko-circle:disabled {
-  cursor: default;
-}
-
 .ko-line {
   height: 3px;
   flex: 1;
-  margin: 0 6px;
+  margin: 0 3px;
   border-radius: 999px;
   background:
     radial-gradient(
@@ -2637,7 +2607,6 @@ button {
   color: #859089;
   font-size: 8px;
   font-weight: 850;
-  line-height: 1.15;
   text-align: center;
 }
 
@@ -2655,33 +2624,29 @@ button {
 }
 
 .ko-alert.success {
-  border:
-    1px solid #b9e5cc;
+  border: 1px solid #b9e5cc;
   background: #effbf4;
   color: #087442;
 }
 
 .ko-alert.error {
-  border:
-    1px solid #f4c5c5;
+  border: 1px solid #f4c5c5;
   background: #fff3f3;
   color: #9b2222;
 }
 
 .ko-card {
-  padding: 27px 22px;
-  border:
-    1px solid #dce5e0;
-  border-radius: 27px;
-  background:
-    rgba(255,255,255,.98);
+  padding: 22px 16px;
+  border: 1px solid #dce5e0;
+  border-radius: 23px;
+  background: #fff;
   box-shadow:
-    0 17px 45px
-    rgba(19,57,35,.08);
+    0 15px 38px
+    rgba(19,57,35,.07);
 }
 
 .ko-card-header {
-  margin-bottom: 25px;
+  margin-bottom: 24px;
 }
 
 .ko-card-header > span {
@@ -2693,10 +2658,8 @@ button {
 
 .ko-card-header h2 {
   margin: 6px 0 5px;
-  color: #17211c;
-  font-size: 30px;
+  font-size: 28px;
   line-height: 1.05;
-  letter-spacing: -.8px;
 }
 
 .ko-card-header p {
@@ -2725,14 +2688,195 @@ button {
   line-height: 1.4;
 }
 
+.ko-selected-area {
+  margin-bottom: 13px;
+  padding: 12px;
+  border-radius: 15px;
+  background: #f1f8f4;
+}
+
+.ko-selected-title {
+  margin-bottom: 9px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ko-selected-title strong {
+  color: #34433a;
+  font-size: 11px;
+}
+
+.ko-selected-title span {
+  color: #087442;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.ko-selected-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.ko-selected-chip {
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid #bddcca;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #fff;
+  color: #31503f;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.ko-selected-chip.principal {
+  border-color: #0b7a4b;
+  background: #e9f8ef;
+  color: #087442;
+}
+
+.ko-selected-chip small {
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: #0b7a4b;
+  color: #fff;
+  font-size: 7px;
+}
+
+.ko-selected-chip b {
+  margin-left: 2px;
+  font-size: 14px;
+}
+
+.ko-groups {
+  display: grid;
+  gap: 8px;
+}
+
+.ko-group {
+  border: 1px solid #dbe4df;
+  border-radius: 15px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.ko-group.open {
+  border-color: #b9d9c7;
+}
+
+.ko-group-header {
+  width: 100%;
+  min-height: 58px;
+  padding: 10px 13px;
+  border: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  color: #2d3c33;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ko-group-header > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.ko-group-header strong {
+  font-size: 13px;
+}
+
+.ko-group-header small {
+  color: #87928c;
+  font-size: 9px;
+}
+
+.ko-group-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ko-group-right > b {
+  color: #66736b;
+  font-size: 16px;
+}
+
+.ko-count {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #0b7a4b;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.ko-group-content {
+  padding: 10px;
+  display: grid;
+  grid-template-columns:
+    repeat(2,minmax(0,1fr));
+  gap: 7px;
+  border-top: 1px solid #e3eae6;
+  background: #f8faf9;
+}
+
+.ko-category {
+  min-height: 51px;
+  padding: 8px 10px;
+  border: 1px solid #d9e2dd;
+  border-radius: 13px;
+  display: grid;
+  grid-template-columns:
+    auto minmax(0,1fr) auto;
+  align-items: center;
+  gap: 7px;
+  background: #fff;
+  color: #334139;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ko-category > span {
+  font-size: 16px;
+}
+
+.ko-category strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.ko-category > b {
+  color: #087442;
+  font-size: 13px;
+}
+
+.ko-category.active {
+  border-color: #0b7a4b;
+  background: #eaf8ef;
+  color: #087442;
+  box-shadow:
+    inset 0 0 0 1px #0b7a4b;
+}
+
 .ko-field input,
 .ko-field select,
 .ko-field textarea {
   width: 100%;
   min-height: 55px;
   padding: 0 15px;
-  border:
-    1px solid #cbd7d0;
+  border: 1px solid #cbd7d0;
   outline: none;
   border-radius: 15px;
   background: #fff;
@@ -2746,68 +2890,11 @@ button {
   resize: vertical;
 }
 
-.ko-field input:focus,
-.ko-field select:focus,
-.ko-field textarea:focus {
-  border-color: #0b7a4b;
-  box-shadow:
-    0 0 0 4px
-    rgba(11,122,75,.09);
-}
-
-.ko-field input::placeholder,
-.ko-field textarea::placeholder {
-  color: #a0aaa4;
-}
-
 .ko-two {
   display: grid;
   grid-template-columns:
     repeat(2,minmax(0,1fr));
   gap: 12px;
-}
-
-.ko-categories {
-  display: grid;
-  grid-template-columns:
-    repeat(2,minmax(0,1fr));
-  gap: 9px;
-}
-
-.ko-category {
-  min-height: 55px;
-  padding: 10px 12px;
-  border:
-    1px solid #d9e2dd;
-  border-radius: 15px;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  background: #fff;
-  color: #334139;
-  text-align: left;
-  cursor: pointer;
-}
-
-.ko-category span {
-  font-size: 18px;
-}
-
-.ko-category strong {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.ko-category.active {
-  border-color: #0b7a4b;
-  background: #edf9f2;
-  color: #087442;
-  box-shadow:
-    inset 0 0 0 1px
-    #0b7a4b;
 }
 
 .ko-slug {
@@ -2816,18 +2903,10 @@ button {
   grid-template-columns:
     auto minmax(0,1fr);
   align-items: center;
-  border:
-    1px solid #cbd7d0;
+  border: 1px solid #cbd7d0;
   border-radius: 15px;
   overflow: hidden;
   background: #fff;
-}
-
-.ko-slug:focus-within {
-  border-color: #0b7a4b;
-  box-shadow:
-    0 0 0 4px
-    rgba(11,122,75,.09);
 }
 
 .ko-slug span {
@@ -2840,20 +2919,18 @@ button {
 .ko-slug input {
   border: 0;
   border-radius: 0;
-  box-shadow: none !important;
 }
 
 .ko-next,
 .ko-publish {
   width: 100%;
-  min-height: 58px;
-  padding: 0 20px;
+  min-height: 56px;
   border: 0;
-  border-radius: 17px;
+  border-radius: 16px;
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   background:
     linear-gradient(
       135deg,
@@ -2862,103 +2939,58 @@ button {
       #13a85f
     );
   color: #fff;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 900;
-  cursor: pointer;
-  box-shadow:
-    0 11px 24px
-    rgba(11,122,75,.20);
-}
-
-.ko-next span {
-  font-size: 22px;
-}
-
-.ko-next:disabled,
-.ko-publish:disabled {
-  opacity: .55;
-  cursor: not-allowed;
 }
 
 .ko-location-card {
   margin-bottom: 20px;
   overflow: hidden;
-  border:
-    1px solid #dbe5df;
+  border: 1px solid #dbe5df;
   border-radius: 20px;
   background: #f5faf7;
 }
 
 .ko-map-placeholder {
-  min-height: 180px;
-  padding: 28px;
+  min-height: 170px;
   display: grid;
   place-content: center;
   justify-items: center;
   gap: 6px;
-  background:
-    radial-gradient(
-      circle at 30% 20%,
-      rgba(22,166,96,.15),
-      transparent 30%
-    ),
-    linear-gradient(
-      145deg,
-      #e9f6ef,
-      #f7faf8
-    );
-  color: #536159;
+  background: #eff8f3;
   text-align: center;
 }
 
 .ko-map-placeholder > span {
-  font-size: 42px;
+  font-size: 40px;
   color: #0b7a4b;
-}
-
-.ko-map-placeholder strong {
-  color: #253229;
-}
-
-.ko-map-placeholder small {
-  color: #738078;
 }
 
 .ko-location-button {
   width: 100%;
-  min-height: 51px;
+  min-height: 50px;
   border: 0;
-  border-top:
-    1px solid #dbe5df;
+  border-top: 1px solid #dbe5df;
   background: #fff;
   color: #087442;
   font-weight: 850;
-  cursor: pointer;
 }
 
-.ko-navigation {
-  margin-top: 5px;
+.ko-navigation,
+.ko-final-actions {
   display: grid;
   grid-template-columns:
-    minmax(0,.8fr)
-    minmax(0,1.2fr);
+    .8fr 1.2fr;
   gap: 10px;
 }
 
 .ko-secondary {
-  min-height: 55px;
-  padding: 0 14px;
-  border:
-    1px solid #d1dcd6;
-  border-radius: 16px;
+  min-height: 54px;
+  border: 1px solid #d1dcd6;
+  border-radius: 15px;
   background: #fff;
   color: #536159;
   font-weight: 850;
-  cursor: pointer;
-}
-
-.ko-next.small {
-  min-height: 55px;
 }
 
 .ko-logo-upload {
@@ -2972,9 +3004,7 @@ button {
 .ko-upload-empty {
   width: 100px;
   height: 100px;
-  flex: 0 0 auto;
-  border:
-    1px solid #d9e2dd;
+  border: 1px solid #d9e2dd;
   border-radius: 20px;
   object-fit: contain;
   background: #fff;
@@ -2984,15 +3014,13 @@ button {
   display: grid;
   place-items: center;
   border-style: dashed;
-  color: #77847c;
   font-size: 30px;
 }
 
 .ko-upload-button {
   min-height: 44px;
   padding: 0 17px;
-  border:
-    1px solid #cfe1d7;
+  border: 1px solid #cfe1d7;
   border-radius: 999px;
   display: flex;
   align-items: center;
@@ -3000,7 +3028,6 @@ button {
   color: #087442;
   font-size: 13px;
   font-weight: 900;
-  cursor: pointer;
 }
 
 .ko-gallery {
@@ -3019,8 +3046,6 @@ button {
 
 .ko-photo {
   position: relative;
-  border:
-    1px solid #d9e2dd;
 }
 
 .ko-photo img {
@@ -3030,44 +3055,28 @@ button {
 }
 
 .ko-photo button {
-  width: 28px;
-  height: 28px;
   position: absolute;
   top: 6px;
   right: 6px;
+  width: 28px;
+  height: 28px;
   border: 0;
   border-radius: 50%;
-  background:
-    rgba(10,20,14,.82);
+  background: #111;
   color: #fff;
-  font-size: 18px;
-  cursor: pointer;
 }
 
 .ko-add-photo {
-  border:
-    2px dashed #9fafa6;
+  border: 2px dashed #9fafa6;
   display: grid;
   place-content: center;
   justify-items: center;
-  gap: 3px;
-  color: #69766e;
-  cursor: pointer;
-}
-
-.ko-add-photo span {
-  font-size: 27px;
-}
-
-.ko-add-photo small {
-  font-weight: 800;
 }
 
 .ko-service-form {
   padding: 17px;
   margin-bottom: 23px;
-  border:
-    1px solid #dce5df;
+  border: 1px solid #dce5df;
   border-radius: 20px;
   background: #f8faf9;
 }
@@ -3075,67 +3084,40 @@ button {
 .ko-add-service {
   width: 100%;
   min-height: 49px;
-  border:
-    1px solid #0b7a4b;
+  border: 1px solid #0b7a4b;
   border-radius: 14px;
   background: #edf9f2;
   color: #087442;
   font-weight: 900;
-  cursor: pointer;
-}
-
-.ko-services-list h3 {
-  margin:
-    0 0 11px;
-  color: #243129;
-  font-size: 16px;
 }
 
 .ko-empty {
   padding: 20px;
-  border:
-    1px dashed #cbd7d0;
+  border: 1px dashed #cbd7d0;
   border-radius: 16px;
-  background: #fff;
   color: #7a867f;
   text-align: center;
-  font-size: 13px;
 }
 
 .ko-service {
   min-height: 77px;
   padding: 14px;
   margin-bottom: 9px;
-  border:
-    1px solid #dce5df;
+  border: 1px solid #dce5df;
   border-radius: 16px;
   display: grid;
   grid-template-columns:
     1fr auto;
-  gap: 10px;
   align-items: center;
-  background: #fff;
 }
 
 .ko-service > div {
-  min-width: 0;
   display: grid;
   gap: 4px;
 }
 
-.ko-service strong {
-  color: #19241e;
-  font-size: 15px;
-}
-
-.ko-service span {
-  color: #77837c;
-  font-size: 11px;
-}
-
 .ko-service b {
   color: #087442;
-  font-size: 13px;
 }
 
 .ko-service > button {
@@ -3145,8 +3127,6 @@ button {
   border-radius: 50%;
   background: #fff0f0;
   color: #a12d2d;
-  font-size: 20px;
-  cursor: pointer;
 }
 
 .ko-ready {
@@ -3155,130 +3135,39 @@ button {
   border-radius: 17px;
   display: flex;
   gap: 11px;
-  align-items: flex-start;
   background: #edf9f2;
 }
 
 .ko-ready > span {
   width: 30px;
   height: 30px;
-  flex: 0 0 auto;
   border-radius: 50%;
   display: grid;
   place-items: center;
   background: #0b7a4b;
   color: #fff;
-  font-weight: 900;
-}
-
-.ko-ready strong {
-  color: #17452d;
-  font-size: 13px;
 }
 
 .ko-ready p {
   margin: 3px 0 0;
-  color: #607067;
   font-size: 11px;
-  line-height: 1.4;
-}
-
-.ko-final-actions {
-  margin-top: 18px;
-  display: grid;
-  grid-template-columns:
-    minmax(0,.7fr)
-    minmax(0,1.3fr);
-  gap: 10px;
+  color: #607067;
 }
 
 .ko-footer {
-  padding: 25px 5px 7px;
+  padding: 24px 5px 7px;
   display: flex;
   justify-content: center;
-  align-items: center;
 }
 
 .ko-footer img {
   width: 82px;
 }
 
-@media (max-width: 480px) {
-  .ko-header {
-    min-height: 64px;
-    padding-left: 11px;
-    padding-right: 11px;
-  }
-
-  .ko-badge {
-    display: none;
-  }
-
-  .ko-header {
-    grid-template-columns:
-      42px 1fr 42px;
-  }
-
-  .ko-logo {
-    width: 140px;
-  }
-
-  .ko-back {
-    width: 38px;
-    height: 38px;
-  }
-
-  .ko-shell {
-    padding:
-      16px 12px 8px;
-  }
-
-  .ko-intro {
-    padding-bottom: 17px;
-  }
-
-  .ko-intro h1 {
-    font-size: 34px;
-  }
-
-  .ko-intro p {
-    font-size: 14px;
-  }
-
-  .ko-card {
-    padding:
-      22px 16px;
-    border-radius: 23px;
-  }
-
-  .ko-card-header h2 {
-    font-size: 28px;
-  }
-
-  .ko-stepper {
-    padding:
-      15px 8px 12px;
-  }
-
-  .ko-line {
-    margin:
-      0 3px;
-  }
-}
-
 @media (max-width: 370px) {
-  .ko-categories,
+  .ko-group-content,
   .ko-two {
     grid-template-columns: 1fr;
-  }
-
-  .ko-step small {
-    font-size: 7px;
-  }
-
-  .ko-circle {
-    width: 31px;
-    height: 31px;
   }
 
   .ko-gallery {
@@ -3289,6 +3178,10 @@ button {
   .ko-navigation,
   .ko-final-actions {
     grid-template-columns: 1fr;
+  }
+
+  .ko-step small {
+    font-size: 7px;
   }
 }
 `;
