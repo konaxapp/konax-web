@@ -3,8 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.19-KONAX-NEGOCIOS-ONBOARDING-V1";
-
 const PROVINCIAS = [
   "Bocas del Toro",
   "Coclé",
@@ -36,6 +34,20 @@ function slugificar(valor) {
     .slice(0, 70);
 }
 
+function obtenerRegistroTemporal() {
+  try {
+    const guardado = sessionStorage.getItem(
+      "konaxNegociosRegistro"
+    );
+
+    if (!guardado) return {};
+
+    return JSON.parse(guardado) || {};
+  } catch {
+    return {};
+  }
+}
+
 export default function OnboardingKonaxNegocios() {
   const [empresaId, setEmpresaId] = useState("");
   const [empresa, setEmpresa] = useState(null);
@@ -43,8 +55,10 @@ export default function OnboardingKonaxNegocios() {
   const [paso, setPaso] = useState(1);
 
   const [categorias, setCategorias] = useState([]);
-  const [categoriasSeleccionadas, setCategoriasSeleccionadas] =
-    useState([]);
+  const [
+    categoriasSeleccionadas,
+    setCategoriasSeleccionadas,
+  ] = useState([]);
 
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState("");
@@ -53,6 +67,7 @@ export default function OnboardingKonaxNegocios() {
   const [fotosPreview, setFotosPreview] = useState([]);
 
   const [servicios, setServicios] = useState([]);
+
   const [servicioForm, setServicioForm] = useState({
     ...SERVICIO_INICIAL,
   });
@@ -69,54 +84,261 @@ export default function OnboardingKonaxNegocios() {
   }, []);
 
   const categoriaPrincipal = useMemo(() => {
-    if (!categoriasSeleccionadas.length) return null;
+    if (!categoriasSeleccionadas.length) {
+      return null;
+    }
 
     return categorias.find(
-      (item) => item.id === categoriasSeleccionadas[0]
+      (item) =>
+        item.id === categoriasSeleccionadas[0]
     );
   }, [categorias, categoriasSeleccionadas]);
 
   async function iniciar() {
     setCargando(true);
+    setMensaje("");
+    setTipoMensaje("");
 
     try {
       const {
         data: { session },
+        error: errorSesion,
       } = await supabase.auth.getSession();
+
+      if (errorSesion) {
+        throw errorSesion;
+      }
 
       if (!session?.user?.id) {
         window.location.href = "/negocios/registro";
         return;
       }
 
-      const idLocal = localStorage.getItem("empresaId");
+      const idEmpresa =
+        await resolverEmpresaUsuario(session.user);
 
-      if (!idLocal) {
-        setTipoMensaje("error");
-        setMensaje(
-          "No encontramos el negocio asociado a esta cuenta."
+      if (!idEmpresa) {
+        throw new Error(
+          "No pudimos preparar el negocio para esta cuenta."
         );
-        setCargando(false);
-        return;
       }
 
-      setEmpresaId(idLocal);
+      setEmpresaId(idEmpresa);
 
       await Promise.all([
-        cargarEmpresa(idLocal),
-        cargarCategorias(idLocal),
-        cargarServicios(idLocal),
+        cargarEmpresa(idEmpresa),
+        cargarCategorias(idEmpresa),
+        cargarServicios(idEmpresa),
       ]);
     } catch (error) {
-      console.error(error);
+      console.error(
+        "Error iniciando onboarding:",
+        error
+      );
 
       setTipoMensaje("error");
+
       setMensaje(
-        "No se pudo cargar la configuración del negocio."
+        error?.message ||
+          "No se pudo preparar el registro del negocio."
       );
     } finally {
       setCargando(false);
     }
+  }
+
+  async function resolverEmpresaUsuario(user) {
+    /*
+      1. Si ya tenemos empresaId guardado,
+         verificamos que realmente exista.
+    */
+
+    const empresaLocal =
+      localStorage.getItem("empresaId");
+
+    if (empresaLocal) {
+      const { data, error } = await supabase
+        .from("empresas")
+        .select("id,nombre")
+        .eq("id", empresaLocal)
+        .maybeSingle();
+
+      if (!error && data?.id) {
+        if (data.nombre) {
+          localStorage.setItem(
+            "empresaNombre",
+            data.nombre
+          );
+        }
+
+        return data.id;
+      }
+
+      /*
+        Si quedó un empresaId viejo o inválido,
+        lo eliminamos y seguimos con la RPC.
+      */
+
+      localStorage.removeItem("empresaId");
+      localStorage.removeItem("empresaNombre");
+    }
+
+    /*
+      2. Recuperamos los datos que guardó
+         /negocios/registro antes de verificar
+         el correo.
+    */
+
+    const registro = obtenerRegistroTemporal();
+
+    const metadata = user?.user_metadata || {};
+
+    const correo = String(
+      user?.email ||
+        registro?.correo ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const nombreUsuario = String(
+      registro?.nombreCompleto ||
+        metadata?.nombre_completo ||
+        [
+          metadata?.nombre,
+          metadata?.apellido,
+        ]
+          .filter(Boolean)
+          .join(" ") ||
+        registro?.nombre ||
+        correo.split("@")[0] ||
+        "Administrador"
+    ).trim();
+
+    const telefono = String(
+      registro?.telefono ||
+        metadata?.telefono ||
+        ""
+    ).trim();
+
+    /*
+      El negocio todavía no tiene nombre,
+      porque el usuario lo escribirá en Paso 1.
+
+      La RPC necesita p_nombre_empresa.
+      Creamos inicialmente "Mi negocio".
+      En Paso 1 se reemplaza por el nombre real.
+    */
+
+    const nombreEmpresaTemporal =
+      String(
+        localStorage.getItem("empresaNombre") ||
+          "Mi negocio"
+      ).trim() || "Mi negocio";
+
+    if (!correo) {
+      throw new Error(
+        "No encontramos el correo de la cuenta."
+      );
+    }
+
+    /*
+      3. La función SQL que ya verificamos:
+
+      crear_empresa_konax_negocios(
+        p_nombre_usuario,
+        p_correo,
+        p_telefono,
+        p_nombre_empresa
+      )
+
+      devuelve:
+      - empresa_id
+      - usuario_id
+      - empresa_nombre
+      - onboarding_paso
+      - marketplace_estado
+    */
+
+    const { data, error } = await supabase.rpc(
+      "crear_empresa_konax_negocios",
+      {
+        p_nombre_usuario:
+          nombreUsuario || "Administrador",
+        p_correo: correo,
+        p_telefono: telefono || "",
+        p_nombre_empresa: nombreEmpresaTemporal,
+      }
+    );
+
+    if (error) {
+      console.error(
+        "Error crear_empresa_konax_negocios:",
+        error
+      );
+
+      throw new Error(
+        error.message ||
+          "No se pudo crear el negocio."
+      );
+    }
+
+    /*
+      Supabase puede devolver:
+      - array de filas
+      - objeto
+      dependiendo de cómo esté definida
+      la función.
+    */
+
+    const resultado = Array.isArray(data)
+      ? data[0]
+      : data;
+
+    const nuevoEmpresaId =
+      resultado?.empresa_id || "";
+
+    if (!nuevoEmpresaId) {
+      console.error(
+        "Respuesta RPC inesperada:",
+        data
+      );
+
+      throw new Error(
+        "La empresa fue procesada, pero no recibimos su identificador."
+      );
+    }
+
+    localStorage.setItem(
+      "empresaId",
+      nuevoEmpresaId
+    );
+
+    localStorage.setItem(
+      "empresaNombre",
+      resultado?.empresa_nombre ||
+        nombreEmpresaTemporal
+    );
+
+    if (resultado?.usuario_id) {
+      localStorage.setItem(
+        "usuarioId",
+        resultado.usuario_id
+      );
+    }
+
+    if (
+      resultado?.onboarding_paso !==
+        undefined &&
+      resultado?.onboarding_paso !== null
+    ) {
+      localStorage.setItem(
+        "onboardingPaso",
+        String(resultado.onboarding_paso)
+      );
+    }
+
+    return nuevoEmpresaId;
   }
 
   async function cargarEmpresa(id) {
@@ -131,18 +353,36 @@ export default function OnboardingKonaxNegocios() {
     }
 
     if (!data) {
-      throw new Error("Empresa no encontrada.");
+      throw new Error(
+        "La empresa no pudo cargarse."
+      );
     }
 
     setEmpresa(data);
 
-    const pasoGuardado = Number(data.onboarding_paso || 1);
-
-    setPaso(
-      pasoGuardado >= 1 && pasoGuardado <= 4
-        ? pasoGuardado
-        : 1
+    localStorage.setItem(
+      "empresaId",
+      data.id
     );
+
+    if (data.nombre) {
+      localStorage.setItem(
+        "empresaNombre",
+        data.nombre
+      );
+    }
+
+    const pasoGuardado = Number(
+      data.onboarding_paso || 1
+    );
+
+    const pasoValido =
+      pasoGuardado >= 1 &&
+      pasoGuardado <= 4
+        ? pasoGuardado
+        : 1;
+
+    setPaso(pasoValido);
 
     if (data.logo_url) {
       setLogoPreview(data.logo_url);
@@ -154,8 +394,12 @@ export default function OnboardingKonaxNegocios() {
       .from("marketplace_categorias")
       .select("*")
       .eq("activo", true)
-      .order("grupo", { ascending: true })
-      .order("orden", { ascending: true });
+      .order("grupo", {
+        ascending: true,
+      })
+      .order("orden", {
+        ascending: true,
+      });
 
     if (error) {
       throw error;
@@ -163,15 +407,24 @@ export default function OnboardingKonaxNegocios() {
 
     setCategorias(data || []);
 
-    const { data: seleccionadas, error: errorSeleccionadas } =
-      await supabase
-        .from("empresa_marketplace_categorias")
-        .select("categoria_id, es_principal")
-        .eq("empresa_id", id)
-        .order("es_principal", { ascending: false });
+    const {
+      data: seleccionadas,
+      error: errorSeleccionadas,
+    } = await supabase
+      .from("empresa_marketplace_categorias")
+      .select(
+        "categoria_id, es_principal"
+      )
+      .eq("empresa_id", id)
+      .order("es_principal", {
+        ascending: false,
+      });
 
     if (errorSeleccionadas) {
-      console.error(errorSeleccionadas);
+      console.error(
+        errorSeleccionadas
+      );
+
       return;
     }
 
@@ -190,7 +443,9 @@ export default function OnboardingKonaxNegocios() {
       )
       .eq("empresa_id", id)
       .eq("activo", true)
-      .order("nombre", { ascending: true });
+      .order("nombre", {
+        ascending: true,
+      });
 
     if (error) {
       console.error(error);
@@ -200,9 +455,12 @@ export default function OnboardingKonaxNegocios() {
     setServicios(data || []);
   }
 
-  function actualizarEmpresa(campo, valor) {
+  function actualizarEmpresa(
+    campo,
+    valor
+  ) {
     setEmpresa((prev) => ({
-      ...prev,
+      ...(prev || {}),
       [campo]: valor,
     }));
 
@@ -234,37 +492,56 @@ export default function OnboardingKonaxNegocios() {
   function seleccionarCategoria(id) {
     limpiarMensaje();
 
-    setCategoriasSeleccionadas((prev) => {
-      if (prev.includes(id)) {
-        return prev.filter((item) => item !== id);
+    setCategoriasSeleccionadas(
+      (prev) => {
+        if (prev.includes(id)) {
+          return prev.filter(
+            (item) => item !== id
+          );
+        }
+
+        if (prev.length >= 4) {
+          mostrarError(
+            "Puedes seleccionar máximo 4 categorías."
+          );
+
+          return prev;
+        }
+
+        return [...prev, id];
       }
-
-      if (prev.length >= 4) {
-        mostrarError(
-          "Puedes seleccionar máximo 4 categorías."
-        );
-
-        return prev;
-      }
-
-      return [...prev, id];
-    });
+    );
   }
 
   async function guardarPaso1() {
-    if (guardando) return;
+    if (
+      guardando ||
+      !empresaId
+    ) {
+      return;
+    }
 
-    const nombre = String(empresa?.nombre || "").trim();
+    const nombre = String(
+      empresa?.nombre || ""
+    ).trim();
+
     const descripcion = String(
       empresa?.descripcion_publica || ""
     ).trim();
 
-    if (!nombre) {
-      mostrarError("Escribe el nombre del negocio.");
+    if (
+      !nombre ||
+      normalizarNombreTemporal(nombre)
+    ) {
+      mostrarError(
+        "Escribe el nombre real de tu negocio."
+      );
       return;
     }
 
-    if (!categoriasSeleccionadas.length) {
+    if (
+      !categoriasSeleccionadas.length
+    ) {
       mostrarError(
         "Selecciona al menos una categoría para tu negocio."
       );
@@ -279,7 +556,9 @@ export default function OnboardingKonaxNegocios() {
     }
 
     let slug =
-      String(empresa?.slug_publico || "").trim() ||
+      String(
+        empresa?.slug_publico || ""
+      ).trim() ||
       slugificar(nombre);
 
     if (!slug) {
@@ -292,70 +571,117 @@ export default function OnboardingKonaxNegocios() {
     setGuardando(true);
 
     try {
-      const { data: slugExistente, error: errorSlug } =
-        await supabase
-          .from("empresas")
-          .select("id")
-          .ilike("slug_publico", slug)
-          .neq("id", empresaId)
-          .limit(1);
+      const {
+        data: slugExistente,
+        error: errorSlug,
+      } = await supabase
+        .from("empresas")
+        .select("id")
+        .ilike(
+          "slug_publico",
+          slug
+        )
+        .neq("id", empresaId)
+        .limit(1);
 
       if (errorSlug) {
         throw errorSlug;
       }
 
       if (slugExistente?.length) {
-        slug = `${slug}-${String(empresaId).slice(0, 6)}`;
+        slug = `${slug}-${String(
+          empresaId
+        ).slice(0, 6)}`;
       }
 
       const { error } = await supabase
         .from("empresas")
         .update({
           nombre,
-          descripcion_publica: descripcion,
+          descripcion_publica:
+            descripcion,
           slug_publico: slug,
           categoria_negocio:
-            categoriaPrincipal?.nombre || null,
+            categoriaPrincipal?.nombre ||
+            null,
           onboarding_paso: 2,
-          marketplace_actualizado_en: new Date().toISOString(),
+          marketplace_actualizado_en:
+            new Date().toISOString(),
         })
         .eq("id", empresaId);
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
-      const { error: eliminarError } = await supabase
-        .from("empresa_marketplace_categorias")
+      const {
+        error: eliminarError,
+      } = await supabase
+        .from(
+          "empresa_marketplace_categorias"
+        )
         .delete()
-        .eq("empresa_id", empresaId);
+        .eq(
+          "empresa_id",
+          empresaId
+        );
 
-      if (eliminarError) throw eliminarError;
+      if (eliminarError) {
+        throw eliminarError;
+      }
 
       const categoriasPayload =
         categoriasSeleccionadas.map(
           (categoriaId, index) => ({
             empresa_id: empresaId,
-            categoria_id: categoriaId,
-            es_principal: index === 0,
+            categoria_id:
+              categoriaId,
+            es_principal:
+              index === 0,
           })
         );
 
-      const { error: insertarError } = await supabase
-        .from("empresa_marketplace_categorias")
-        .insert(categoriasPayload);
+      const {
+        error: insertarError,
+      } = await supabase
+        .from(
+          "empresa_marketplace_categorias"
+        )
+        .insert(
+          categoriasPayload
+        );
 
-      if (insertarError) throw insertarError;
+      if (insertarError) {
+        throw insertarError;
+      }
 
       setEmpresa((prev) => ({
         ...prev,
         nombre,
-        descripcion_publica: descripcion,
+        descripcion_publica:
+          descripcion,
         slug_publico: slug,
+        categoria_negocio:
+          categoriaPrincipal?.nombre ||
+          null,
         onboarding_paso: 2,
       }));
 
+      localStorage.setItem(
+        "empresaNombre",
+        nombre
+      );
+
+      localStorage.setItem(
+        "onboardingPaso",
+        "2"
+      );
+
       setPaso(2);
 
-      mostrarExito("Información guardada.");
+      mostrarExito(
+        "Información guardada."
+      );
 
       window.scrollTo({
         top: 0,
@@ -373,11 +699,23 @@ export default function OnboardingKonaxNegocios() {
     }
   }
 
+  function normalizarNombreTemporal(
+    nombre
+  ) {
+    return (
+      String(nombre || "")
+        .trim()
+        .toLowerCase() ===
+      "mi negocio"
+    );
+  }
+
   function usarUbicacionActual() {
     if (!navigator.geolocation) {
       mostrarError(
         "Tu dispositivo no permite obtener la ubicación."
       );
+
       return;
     }
 
@@ -385,15 +723,15 @@ export default function OnboardingKonaxNegocios() {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        actualizarEmpresa(
-          "latitud",
-          Number(position.coords.latitude)
-        );
-
-        actualizarEmpresa(
-          "longitud",
-          Number(position.coords.longitude)
-        );
+        setEmpresa((prev) => ({
+          ...prev,
+          latitud: Number(
+            position.coords.latitude
+          ),
+          longitud: Number(
+            position.coords.longitude
+          ),
+        }));
 
         mostrarExito(
           "Ubicación obtenida correctamente."
@@ -417,7 +755,12 @@ export default function OnboardingKonaxNegocios() {
   }
 
   async function guardarPaso2() {
-    if (guardando) return;
+    if (
+      guardando ||
+      !empresaId
+    ) {
+      return;
+    }
 
     const direccion = String(
       empresa?.direccion || ""
@@ -431,11 +774,15 @@ export default function OnboardingKonaxNegocios() {
       mostrarError(
         "Escribe la dirección del negocio."
       );
+
       return;
     }
 
     if (!provincia) {
-      mostrarError("Selecciona la provincia.");
+      mostrarError(
+        "Selecciona la provincia."
+      );
+
       return;
     }
 
@@ -447,39 +794,64 @@ export default function OnboardingKonaxNegocios() {
         .update({
           direccion,
           provincia,
+
           distrito:
-            String(empresa?.distrito || "").trim() ||
-            null,
+            String(
+              empresa?.distrito || ""
+            ).trim() || null,
+
           corregimiento:
             String(
-              empresa?.corregimiento || ""
+              empresa?.corregimiento ||
+                ""
             ).trim() || null,
+
           latitud:
             empresa?.latitud === "" ||
-            empresa?.latitud === null
+            empresa?.latitud === null ||
+            empresa?.latitud ===
+              undefined
               ? null
-              : Number(empresa.latitud),
+              : Number(
+                  empresa.latitud
+                ),
+
           longitud:
             empresa?.longitud === "" ||
-            empresa?.longitud === null
+            empresa?.longitud === null ||
+            empresa?.longitud ===
+              undefined
               ? null
-              : Number(empresa.longitud),
+              : Number(
+                  empresa.longitud
+                ),
+
           onboarding_paso: 3,
+
           marketplace_actualizado_en:
             new Date().toISOString(),
         })
         .eq("id", empresaId);
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
       setEmpresa((prev) => ({
         ...prev,
         onboarding_paso: 3,
       }));
 
+      localStorage.setItem(
+        "onboardingPaso",
+        "3"
+      );
+
       setPaso(3);
 
-      mostrarExito("Ubicación guardada.");
+      mostrarExito(
+        "Ubicación guardada."
+      );
 
       window.scrollTo({
         top: 0,
@@ -498,25 +870,39 @@ export default function OnboardingKonaxNegocios() {
   }
 
   function seleccionarLogo(e) {
-    const archivo = e.target.files?.[0];
+    const archivo =
+      e.target.files?.[0];
 
     if (!archivo) return;
 
-    if (!archivo.type.startsWith("image/")) {
+    if (
+      !archivo.type.startsWith(
+        "image/"
+      )
+    ) {
       mostrarError(
         "Selecciona una imagen válida."
       );
+
       return;
     }
 
     setLogoFile(archivo);
 
-    if (logoPreview?.startsWith("blob:")) {
-      URL.revokeObjectURL(logoPreview);
+    if (
+      logoPreview?.startsWith(
+        "blob:"
+      )
+    ) {
+      URL.revokeObjectURL(
+        logoPreview
+      );
     }
 
     setLogoPreview(
-      URL.createObjectURL(archivo)
+      URL.createObjectURL(
+        archivo
+      )
     );
   }
 
@@ -524,18 +910,24 @@ export default function OnboardingKonaxNegocios() {
     const archivos = Array.from(
       e.target.files || []
     ).filter((archivo) =>
-      archivo.type.startsWith("image/")
+      archivo.type.startsWith(
+        "image/"
+      )
     );
 
-    if (!archivos.length) return;
+    if (!archivos.length) {
+      return;
+    }
 
     const totalActual =
-      fotosFiles.length + archivos.length;
+      fotosFiles.length +
+      archivos.length;
 
     if (totalActual > 6) {
       mostrarError(
         "Puedes subir máximo 6 fotos del negocio."
       );
+
       return;
     }
 
@@ -546,21 +938,29 @@ export default function OnboardingKonaxNegocios() {
 
     setFotosPreview((prev) => [
       ...prev,
-      ...archivos.map((archivo) =>
-        URL.createObjectURL(archivo)
+
+      ...archivos.map(
+        (archivo) =>
+          URL.createObjectURL(
+            archivo
+          )
       ),
     ]);
   }
 
   function quitarFoto(index) {
     setFotosFiles((prev) =>
-      prev.filter((_, i) => i !== index)
+      prev.filter(
+        (_, i) => i !== index
+      )
     );
 
     setFotosPreview((prev) => {
       const url = prev[index];
 
-      if (url?.startsWith("blob:")) {
+      if (
+        url?.startsWith("blob:")
+      ) {
         URL.revokeObjectURL(url);
       }
 
@@ -574,38 +974,78 @@ export default function OnboardingKonaxNegocios() {
     archivo,
     carpeta
   ) {
+    if (!empresaId) {
+      throw new Error(
+        "No encontramos la empresa para subir la imagen."
+      );
+    }
+
     const extension =
-      archivo.name.split(".").pop() || "jpg";
+      archivo.name
+        .split(".")
+        .pop()
+        ?.toLowerCase() ||
+      "jpg";
 
-    const nombreArchivo = `${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2, 9)}.${extension}`;
+    const nombreArchivo =
+      `${Date.now()}-` +
+      `${Math.random()
+        .toString(36)
+        .slice(2, 9)}.` +
+      extension;
 
-    const ruta = `${empresaId}/${carpeta}/${nombreArchivo}`;
+    const ruta =
+      `${empresaId}/` +
+      `${carpeta}/` +
+      nombreArchivo;
 
-    const { error } = await supabase.storage
-      .from("marketplace-negocios")
-      .upload(ruta, archivo, {
-        cacheControl: "3600",
-        upsert: false,
-      });
+    const { error } =
+      await supabase.storage
+        .from(
+          "marketplace-negocios"
+        )
+        .upload(
+          ruta,
+          archivo,
+          {
+            cacheControl:
+              "3600",
+            upsert: false,
+          }
+        );
 
-    if (error) throw error;
+    if (error) {
+      throw error;
+    }
 
-    const { data } = supabase.storage
-      .from("marketplace-negocios")
-      .getPublicUrl(ruta);
+    const { data } =
+      supabase.storage
+        .from(
+          "marketplace-negocios"
+        )
+        .getPublicUrl(ruta);
 
-    return data?.publicUrl || "";
+    return (
+      data?.publicUrl || ""
+    );
   }
 
   async function guardarPaso3() {
-    if (guardando) return;
+    if (
+      guardando ||
+      !empresaId
+    ) {
+      return;
+    }
 
-    if (!logoPreview && !empresa?.logo_url) {
+    if (
+      !logoPreview &&
+      !empresa?.logo_url
+    ) {
       mostrarError(
         "Sube el logo del negocio."
       );
+
       return;
     }
 
@@ -616,10 +1056,11 @@ export default function OnboardingKonaxNegocios() {
         empresa?.logo_url || "";
 
       if (logoFile) {
-        logoUrl = await subirArchivo(
-          logoFile,
-          "logo"
-        );
+        logoUrl =
+          await subirArchivo(
+            logoFile,
+            "logo"
+          );
       }
 
       if (!logoUrl) {
@@ -630,44 +1071,64 @@ export default function OnboardingKonaxNegocios() {
 
       const fotosUrls = [];
 
-      for (const archivo of fotosFiles) {
-        const url = await subirArchivo(
-          archivo,
-          "galeria"
-        );
+      for (
+        const archivo of fotosFiles
+      ) {
+        const url =
+          await subirArchivo(
+            archivo,
+            "galeria"
+          );
 
-        if (url) fotosUrls.push(url);
+        if (url) {
+          fotosUrls.push(url);
+        }
       }
 
-      const { error: empresaError } =
-        await supabase
-          .from("empresas")
-          .update({
-            logo_url: logoUrl,
-            onboarding_paso: 4,
-            marketplace_actualizado_en:
-              new Date().toISOString(),
-          })
-          .eq("id", empresaId);
+      const {
+        error: empresaError,
+      } = await supabase
+        .from("empresas")
+        .update({
+          logo_url: logoUrl,
 
-      if (empresaError) throw empresaError;
+          onboarding_paso: 4,
+
+          marketplace_actualizado_en:
+            new Date().toISOString(),
+        })
+        .eq("id", empresaId);
+
+      if (empresaError) {
+        throw empresaError;
+      }
 
       if (fotosUrls.length) {
         const payloadFotos =
-          fotosUrls.map((url, index) => ({
-            empresa_id: empresaId,
-            url,
-            tipo: "galeria",
-            orden: index + 1,
-            activo: true,
-          }));
+          fotosUrls.map(
+            (url, index) => ({
+              empresa_id:
+                empresaId,
+              url,
+              tipo: "galeria",
+              orden: index + 1,
+              activo: true,
+            })
+          );
 
-        const { error: fotosError } =
-          await supabase
-            .from("empresa_marketplace_fotos")
-            .insert(payloadFotos);
+        const {
+          error: fotosError,
+        } = await supabase
+          .from(
+            "empresa_marketplace_fotos"
+          )
+          .insert(
+            payloadFotos
+          );
 
-        if (fotosError) throw fotosError;
+        if (fotosError) {
+          throw fotosError;
+        }
       }
 
       setEmpresa((prev) => ({
@@ -676,13 +1137,20 @@ export default function OnboardingKonaxNegocios() {
         onboarding_paso: 4,
       }));
 
+      localStorage.setItem(
+        "onboardingPaso",
+        "4"
+      );
+
       setLogoFile(null);
       setFotosFiles([]);
       setFotosPreview([]);
 
       setPaso(4);
 
-      mostrarExito("Imágenes guardadas.");
+      mostrarExito(
+        "Imágenes guardadas."
+      );
 
       window.scrollTo({
         top: 0,
@@ -713,7 +1181,12 @@ export default function OnboardingKonaxNegocios() {
   }
 
   async function agregarServicio() {
-    if (guardando) return;
+    if (
+      guardando ||
+      !empresaId
+    ) {
+      return;
+    }
 
     const nombre = String(
       servicioForm.nombre || ""
@@ -726,7 +1199,8 @@ export default function OnboardingKonaxNegocios() {
     const duracion = Math.max(
       15,
       Number(
-        servicioForm.duracion_minutos || 60
+        servicioForm
+          .duracion_minutos || 60
       )
     );
 
@@ -734,6 +1208,7 @@ export default function OnboardingKonaxNegocios() {
       mostrarError(
         "Escribe el nombre del servicio."
       );
+
       return;
     }
 
@@ -744,39 +1219,61 @@ export default function OnboardingKonaxNegocios() {
       mostrarError(
         "Escribe un precio válido."
       );
+
       return;
     }
 
     setGuardando(true);
 
     try {
-      const { data, error } = await supabase
-        .from("agenda_servicios")
-        .insert([
-          {
-            empresa_id: empresaId,
-            nombre,
-            tipo:
-              categoriaPrincipal?.nombre ||
-              empresa?.categoria_negocio ||
-              "Servicio",
-            descripcion:
-              String(
-                servicioForm.descripcion || ""
-              ).trim() || null,
-            duracion_minutos: duracion,
-            requiere_membresia: false,
-            requiere_pago: precio > 0,
-            precio,
-            activo: true,
-          },
-        ])
-        .select(
-          "id,nombre,descripcion,precio,duracion_minutos,activo"
-        )
-        .single();
+      const { data, error } =
+        await supabase
+          .from(
+            "agenda_servicios"
+          )
+          .insert([
+            {
+              empresa_id:
+                empresaId,
 
-      if (error) throw error;
+              nombre,
+
+              tipo:
+                categoriaPrincipal
+                  ?.nombre ||
+                empresa
+                  ?.categoria_negocio ||
+                "Servicio",
+
+              descripcion:
+                String(
+                  servicioForm
+                    .descripcion || ""
+                ).trim() ||
+                null,
+
+              duracion_minutos:
+                duracion,
+
+              requiere_membresia:
+                false,
+
+              requiere_pago:
+                precio > 0,
+
+              precio,
+
+              activo: true,
+            },
+          ])
+          .select(
+            "id,nombre,descripcion,precio,duracion_minutos,activo"
+          )
+          .single();
+
+      if (error) {
+        throw error;
+      }
 
       setServicios((prev) => [
         ...prev,
@@ -811,76 +1308,122 @@ export default function OnboardingKonaxNegocios() {
       return;
     }
 
-    const { error } = await supabase
-      .from("agenda_servicios")
-      .update({
-        activo: false,
-      })
-      .eq("id", id)
-      .eq("empresa_id", empresaId);
+    const { error } =
+      await supabase
+        .from(
+          "agenda_servicios"
+        )
+        .update({
+          activo: false,
+        })
+        .eq("id", id)
+        .eq(
+          "empresa_id",
+          empresaId
+        );
 
     if (error) {
       mostrarError(
         "No se pudo eliminar el servicio."
       );
+
       return;
     }
 
     setServicios((prev) =>
       prev.filter(
-        (servicio) => servicio.id !== id
+        (servicio) =>
+          servicio.id !== id
       )
     );
   }
 
   async function publicarNegocio() {
-    if (publicando) return;
+    if (
+      publicando ||
+      !empresaId
+    ) {
+      return;
+    }
 
     if (!servicios.length) {
       mostrarError(
         "Agrega al menos un servicio antes de publicar tu negocio."
       );
+
       return;
     }
 
     setPublicando(true);
 
     try {
-      const { error } = await supabase
-        .from("empresas")
-        .update({
-          onboarding_paso: 4,
-          onboarding_completado: true,
+      const { error } =
+        await supabase
+          .from("empresas")
+          .update({
+            onboarding_paso: 4,
 
-          /*
-            El negocio queda listo para mostrarse.
+            onboarding_completado:
+              true,
 
-            Si más adelante quieres aprobación manual
-            de KONAX, cambiamos "publicado" por "revision".
-          */
+            marketplace_estado:
+              "publicado",
 
-          marketplace_estado: "publicado",
-          marketplace_publicado: true,
-          marketplace_fecha_publicacion:
-            new Date().toISOString(),
-          marketplace_actualizado_en:
-            new Date().toISOString(),
-          configuracion_completa: true,
-        })
-        .eq("id", empresaId);
+            marketplace_publicado:
+              true,
 
-      if (error) throw error;
+            marketplace_fecha_publicacion:
+              new Date().toISOString(),
+
+            marketplace_actualizado_en:
+              new Date().toISOString(),
+
+            configuracion_completa:
+              true,
+          })
+          .eq(
+            "id",
+            empresaId
+          );
+
+      if (error) {
+        throw error;
+      }
 
       setEmpresa((prev) => ({
         ...prev,
-        onboarding_completado: true,
-        marketplace_estado: "publicado",
-        marketplace_publicado: true,
+
+        onboarding_completado:
+          true,
+
+        marketplace_estado:
+          "publicado",
+
+        marketplace_publicado:
+          true,
       }));
 
       localStorage.setItem(
         "empresaNombre",
-        empresa?.nombre || "Mi negocio"
+        empresa?.nombre ||
+          "Mi negocio"
+      );
+
+      localStorage.setItem(
+        "onboardingCompletado",
+        "true"
+      );
+
+      sessionStorage.removeItem(
+        "konaxNegociosRegistro"
+      );
+
+      sessionStorage.removeItem(
+        "konaxNegociosAuthUserId"
+      );
+
+      sessionStorage.removeItem(
+        "konaxNegociosCorreoVerificado"
       );
 
       mostrarExito(
@@ -890,7 +1433,7 @@ export default function OnboardingKonaxNegocios() {
       setTimeout(() => {
         window.location.href =
           "/dashboard";
-      }, 1300);
+      }, 1200);
     } catch (error) {
       console.error(error);
 
@@ -903,19 +1446,29 @@ export default function OnboardingKonaxNegocios() {
     }
   }
 
-  async function cambiarPaso(nuevoPaso) {
-    if (nuevoPaso < 1 || nuevoPaso > 4) {
+  async function cambiarPaso(
+    nuevoPaso
+  ) {
+    if (
+      nuevoPaso < 1 ||
+      nuevoPaso > 4
+    ) {
       return;
     }
 
+    const maximo = Number(
+      empresa?.onboarding_paso || 1
+    );
+
     if (
-      nuevoPaso >
-      Number(empresa?.onboarding_paso || 1)
+      nuevoPaso > maximo
     ) {
       return;
     }
 
     setPaso(nuevoPaso);
+
+    limpiarMensaje();
 
     window.scrollTo({
       top: 0,
@@ -970,22 +1523,26 @@ export default function OnboardingKonaxNegocios() {
 
       <section className="ko-shell">
         <div className="ko-intro">
-          <span>KONAX NEGOCIOS</span>
+          <span>
+            KONAX NEGOCIOS
+          </span>
 
           <h1>
             Registra tu negocio
           </h1>
 
           <p>
-            Completa estos pasos para preparar
-            tu negocio y aparecer en KONAX.
+            Completa estos pasos para
+            preparar tu negocio y aparecer
+            en KONAX.
           </p>
         </div>
 
         <Stepper
           paso={paso}
           maxPaso={Number(
-            empresa?.onboarding_paso || 1
+            empresa?.onboarding_paso ||
+              1
           )}
           onChange={cambiarPaso}
         />
@@ -993,7 +1550,8 @@ export default function OnboardingKonaxNegocios() {
         {mensaje && (
           <div
             className={
-              tipoMensaje === "success"
+              tipoMensaje ===
+              "success"
                 ? "ko-alert success"
                 : "ko-alert error"
             }
@@ -1002,7 +1560,7 @@ export default function OnboardingKonaxNegocios() {
           </div>
         )}
 
-        {paso === 1 && (
+        {paso === 1 && empresa && (
           <section className="ko-card">
             <CabeceraPaso
               numero="1"
@@ -1010,11 +1568,16 @@ export default function OnboardingKonaxNegocios() {
               descripcion="Cuéntanos sobre tu negocio."
             />
 
-            <Campo
-              titulo="Nombre del negocio *"
-            >
+            <Campo titulo="Nombre del negocio *">
               <input
-                value={empresa?.nombre || ""}
+                value={
+                  normalizarNombreTemporal(
+                    empresa?.nombre
+                  )
+                    ? ""
+                    : empresa?.nombre ||
+                      ""
+                }
                 onChange={(e) =>
                   actualizarEmpresa(
                     "nombre",
@@ -1031,9 +1594,9 @@ export default function OnboardingKonaxNegocios() {
               </label>
 
               <p className="ko-help">
-                El primero que selecciones será
-                tu categoría principal. Puedes
-                seleccionar hasta 4.
+                El primero que selecciones
+                será tu categoría principal.
+                Puedes seleccionar hasta 4.
               </p>
 
               <div className="ko-categories">
@@ -1046,7 +1609,9 @@ export default function OnboardingKonaxNegocios() {
 
                     return (
                       <button
-                        key={categoria.id}
+                        key={
+                          categoria.id
+                        }
                         type="button"
                         className={
                           activa
@@ -1065,7 +1630,9 @@ export default function OnboardingKonaxNegocios() {
                         </span>
 
                         <strong>
-                          {categoria.nombre}
+                          {
+                            categoria.nombre
+                          }
                         </strong>
                       </button>
                     );
@@ -1077,7 +1644,8 @@ export default function OnboardingKonaxNegocios() {
             <Campo titulo="Descripción *">
               <textarea
                 value={
-                  empresa?.descripcion_publica ||
+                  empresa
+                    ?.descripcion_publica ||
                   ""
                 }
                 onChange={(e) =>
@@ -1098,9 +1666,16 @@ export default function OnboardingKonaxNegocios() {
 
                 <input
                   value={
-                    empresa?.slug_publico ||
+                    empresa
+                      ?.slug_publico ||
                     slugificar(
-                      empresa?.nombre || ""
+                      normalizarNombreTemporal(
+                        empresa?.nombre
+                      )
+                        ? ""
+                        : empresa
+                            ?.nombre ||
+                            ""
                     )
                   }
                   onChange={(e) =>
@@ -1122,13 +1697,17 @@ export default function OnboardingKonaxNegocios() {
                   ? "Guardando..."
                   : "Siguiente"
               }
-              onClick={guardarPaso1}
-              disabled={guardando}
+              onClick={
+                guardarPaso1
+              }
+              disabled={
+                guardando
+              }
             />
           </section>
         )}
 
-        {paso === 2 && (
+        {paso === 2 && empresa && (
           <section className="ko-card">
             <CabeceraPaso
               numero="2"
@@ -1164,8 +1743,9 @@ export default function OnboardingKonaxNegocios() {
                     </strong>
 
                     <small>
-                      Puedes usar la ubicación
-                      actual de tu dispositivo.
+                      Puedes usar la
+                      ubicación actual de
+                      tu dispositivo.
                     </small>
                   </>
                 )}
@@ -1185,7 +1765,8 @@ export default function OnboardingKonaxNegocios() {
             <Campo titulo="Dirección *">
               <input
                 value={
-                  empresa?.direccion || ""
+                  empresa?.direccion ||
+                  ""
                 }
                 onChange={(e) =>
                   actualizarEmpresa(
@@ -1200,7 +1781,8 @@ export default function OnboardingKonaxNegocios() {
             <Campo titulo="Provincia *">
               <select
                 value={
-                  empresa?.provincia || ""
+                  empresa?.provincia ||
+                  ""
                 }
                 onChange={(e) =>
                   actualizarEmpresa(
@@ -1230,7 +1812,8 @@ export default function OnboardingKonaxNegocios() {
               <Campo titulo="Distrito">
                 <input
                   value={
-                    empresa?.distrito || ""
+                    empresa?.distrito ||
+                    ""
                   }
                   onChange={(e) =>
                     actualizarEmpresa(
@@ -1245,7 +1828,8 @@ export default function OnboardingKonaxNegocios() {
               <Campo titulo="Corregimiento">
                 <input
                   value={
-                    empresa?.corregimiento ||
+                    empresa
+                      ?.corregimiento ||
                     ""
                   }
                   onChange={(e) =>
@@ -1263,13 +1847,17 @@ export default function OnboardingKonaxNegocios() {
               anterior={() =>
                 cambiarPaso(1)
               }
-              siguiente={guardarPaso2}
-              cargando={guardando}
+              siguiente={
+                guardarPaso2
+              }
+              cargando={
+                guardando
+              }
             />
           </section>
         )}
 
-        {paso === 3 && (
+        {paso === 3 && empresa && (
           <section className="ko-card">
             <CabeceraPaso
               numero="3"
@@ -1285,7 +1873,9 @@ export default function OnboardingKonaxNegocios() {
               <div className="ko-logo-upload">
                 {logoPreview ? (
                   <img
-                    src={logoPreview}
+                    src={
+                      logoPreview
+                    }
                     alt="Logo del negocio"
                   />
                 ) : (
@@ -1317,7 +1907,8 @@ export default function OnboardingKonaxNegocios() {
               </label>
 
               <p className="ko-help">
-                Puedes subir hasta 6 fotos.
+                Puedes subir hasta 6
+                fotos.
               </p>
 
               <div className="ko-gallery">
@@ -1325,7 +1916,7 @@ export default function OnboardingKonaxNegocios() {
                   (url, index) => (
                     <div
                       className="ko-photo"
-                      key={url}
+                      key={`${url}-${index}`}
                     >
                       <img
                         src={url}
@@ -1337,7 +1928,9 @@ export default function OnboardingKonaxNegocios() {
                       <button
                         type="button"
                         onClick={() =>
-                          quitarFoto(index)
+                          quitarFoto(
+                            index
+                          )
                         }
                       >
                         ×
@@ -1350,6 +1943,7 @@ export default function OnboardingKonaxNegocios() {
                   6 && (
                   <label className="ko-add-photo">
                     <span>↑</span>
+
                     <small>
                       Añadir
                     </small>
@@ -1372,13 +1966,17 @@ export default function OnboardingKonaxNegocios() {
               anterior={() =>
                 cambiarPaso(2)
               }
-              siguiente={guardarPaso3}
-              cargando={guardando}
+              siguiente={
+                guardarPaso3
+              }
+              cargando={
+                guardando
+              }
             />
           </section>
         )}
 
-        {paso === 4 && (
+        {paso === 4 && empresa && (
           <section className="ko-card">
             <CabeceraPaso
               numero="4"
@@ -1425,7 +2023,8 @@ export default function OnboardingKonaxNegocios() {
                 <Campo titulo="Duración">
                   <select
                     value={
-                      servicioForm.duracion_minutos
+                      servicioForm
+                        .duracion_minutos
                     }
                     onChange={(e) =>
                       actualizarServicio(
@@ -1439,18 +2038,23 @@ export default function OnboardingKonaxNegocios() {
                     <option value={15}>
                       15 min
                     </option>
+
                     <option value={30}>
                       30 min
                     </option>
+
                     <option value={45}>
                       45 min
                     </option>
+
                     <option value={60}>
                       60 min
                     </option>
+
                     <option value={90}>
                       90 min
                     </option>
+
                     <option value={120}>
                       120 min
                     </option>
@@ -1461,7 +2065,8 @@ export default function OnboardingKonaxNegocios() {
               <Campo titulo="Descripción">
                 <textarea
                   value={
-                    servicioForm.descripcion
+                    servicioForm
+                      .descripcion
                   }
                   onChange={(e) =>
                     actualizarServicio(
@@ -1476,8 +2081,12 @@ export default function OnboardingKonaxNegocios() {
               <button
                 type="button"
                 className="ko-add-service"
-                onClick={agregarServicio}
-                disabled={guardando}
+                onClick={
+                  agregarServicio
+                }
+                disabled={
+                  guardando
+                }
               >
                 + Agregar servicio
               </button>
@@ -1488,26 +2097,33 @@ export default function OnboardingKonaxNegocios() {
                 Servicios agregados
               </h3>
 
-              {servicios.length === 0 ? (
+              {servicios.length ===
+              0 ? (
                 <div className="ko-empty">
-                  Agrega al menos un servicio
-                  para publicar tu negocio.
+                  Agrega al menos un
+                  servicio para publicar
+                  tu negocio.
                 </div>
               ) : (
                 servicios.map(
                   (servicio) => (
                     <div
-                      key={servicio.id}
+                      key={
+                        servicio.id
+                      }
                       className="ko-service"
                     >
                       <div>
                         <strong>
-                          {servicio.nombre}
+                          {
+                            servicio.nombre
+                          }
                         </strong>
 
                         <span>
                           {Number(
-                            servicio.duracion_minutos ||
+                            servicio
+                              .duracion_minutos ||
                               60
                           )}{" "}
                           min
@@ -1516,7 +2132,8 @@ export default function OnboardingKonaxNegocios() {
                         <b>
                           USD{" "}
                           {Number(
-                            servicio.precio || 0
+                            servicio.precio ||
+                              0
                           ).toFixed(2)}
                         </b>
                       </div>
@@ -1583,15 +2200,18 @@ export default function OnboardingKonaxNegocios() {
           </section>
         )}
 
+        {!empresa && !mensaje && (
+          <div className="ko-empty">
+            Preparando información del
+            negocio...
+          </div>
+        )}
+
         <footer className="ko-footer">
           <img
             src="/konax-logo.png"
             alt="KONAX"
           />
-
-          <span>
-            KONAX Negocios · {VERSION}
-          </span>
         </footer>
       </section>
     </main>
@@ -1633,16 +2253,20 @@ function Stepper({
                   type="button"
                   className={[
                     "ko-circle",
+
                     activo
                       ? "active"
                       : "",
+
                     completado
                       ? "done"
                       : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
-                  disabled={!habilitado}
+                  disabled={
+                    !habilitado
+                  }
                   onClick={() =>
                     habilitado &&
                     onChange(numero)
@@ -1654,10 +2278,12 @@ function Stepper({
                 </button>
 
                 {index <
-                  pasos.length - 1 && (
+                  pasos.length -
+                    1 && (
                   <span
                     className={[
                       "ko-line",
+
                       numero < paso
                         ? "done"
                         : "",
@@ -1711,6 +2337,7 @@ function Campo({
   return (
     <div className="ko-field">
       <label>{titulo}</label>
+
       {children}
     </div>
   );
@@ -1729,7 +2356,10 @@ function BotonSiguiente({
       disabled={disabled}
     >
       {texto}
-      {!disabled && <span>→</span>}
+
+      {!disabled && (
+        <span>→</span>
+      )}
     </button>
   );
 }
@@ -1822,7 +2452,8 @@ button {
   gap: 15px;
   background: #f4f7f5;
   color: #26352d;
-  font-family: Arial,sans-serif;
+  font-family:
+    Arial,sans-serif;
 }
 
 .ko-loading img {
@@ -2415,7 +3046,7 @@ button {
 
 .ko-add-photo {
   border:
-    2px dashed #9fafA6;
+    2px dashed #9fafa6;
   display: grid;
   place-content: center;
   justify-items: center;
@@ -2465,6 +3096,7 @@ button {
   border:
     1px dashed #cbd7d0;
   border-radius: 16px;
+  background: #fff;
   color: #7a867f;
   text-align: center;
   font-size: 13px;
@@ -2565,20 +3197,17 @@ button {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 9px;
-  color: #89938e;
-  font-size: 8px;
 }
 
 .ko-footer img {
-  width: 75px;
+  width: 82px;
 }
 
 @media (max-width: 480px) {
   .ko-header {
-    min-height: 70px;
-    padding-left: 13px;
-    padding-right: 13px;
+    min-height: 64px;
+    padding-left: 11px;
+    padding-right: 11px;
   }
 
   .ko-badge {
@@ -2587,18 +3216,39 @@ button {
 
   .ko-header {
     grid-template-columns:
-      44px 1fr 44px;
+      42px 1fr 42px;
+  }
+
+  .ko-logo {
+    width: 140px;
+  }
+
+  .ko-back {
+    width: 38px;
+    height: 38px;
   }
 
   .ko-shell {
     padding:
-      19px 13px 8px;
+      16px 12px 8px;
+  }
+
+  .ko-intro {
+    padding-bottom: 17px;
+  }
+
+  .ko-intro h1 {
+    font-size: 34px;
+  }
+
+  .ko-intro p {
+    font-size: 14px;
   }
 
   .ko-card {
     padding:
-      24px 17px;
-    border-radius: 24px;
+      22px 16px;
+    border-radius: 23px;
   }
 
   .ko-card-header h2 {
@@ -2607,7 +3257,7 @@ button {
 
   .ko-stepper {
     padding:
-      16px 9px 13px;
+      15px 8px 12px;
   }
 
   .ko-line {
