@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.19-KONAX-NEGOCIOS-REGISTRO-V1";
+const VERSION = "2026.08.19-KONAX-NEGOCIOS-REGISTRO-V2";
 
 export default function RegistroKonaxNegocios() {
   const [form, setForm] = useState({
@@ -33,8 +33,7 @@ export default function RegistroKonaxNegocios() {
       } = await supabase.auth.getSession();
 
       if (session?.user?.id) {
-        // Si ya tiene sesión, no obligamos a volver a registrarse.
-        // Más adelante aquí podremos revisar si ya tiene empresa.
+        console.log("Sesión activa KONAX:", session.user.id);
       }
     } catch (error) {
       console.error("Error revisando sesión:", error);
@@ -123,20 +122,6 @@ export default function RegistroKonaxNegocios() {
       const apellido = form.apellido.trim();
       const telefono = form.telefono.trim();
 
-      /*
-        Guardamos temporalmente estos datos.
-
-        Después de verificar el correo,
-        /negocios/verificar los utilizará para llamar:
-
-        crear_empresa_konax_negocios()
-
-        y crear:
-        - empresa
-        - usuario administrador
-        - onboarding paso 1
-      */
-
       sessionStorage.setItem(
         "konaxNegociosRegistro",
         JSON.stringify({
@@ -181,25 +166,15 @@ export default function RegistroKonaxNegocios() {
         }
 
         setTipoMensaje("error");
-        setMensaje(
-          error.message || "No se pudo crear la cuenta."
-        );
+        setMensaje(error.message || "No se pudo crear la cuenta.");
         return;
       }
 
       if (!data?.user) {
         setTipoMensaje("error");
-        setMensaje(
-          "No se pudo crear la cuenta. Intenta nuevamente."
-        );
+        setMensaje("No se pudo crear la cuenta. Intenta nuevamente.");
         return;
       }
-
-      /*
-        También guardamos el ID Auth temporalmente.
-        No sustituye auth.uid().
-        Solo nos sirve como referencia del flujo.
-      */
 
       sessionStorage.setItem(
         "konaxNegociosAuthUserId",
@@ -261,7 +236,9 @@ export default function RegistroKonaxNegocios() {
           className="kn-logo"
         />
 
-        <div className="kn-header-space" />
+        <span className="kn-business-badge">
+          Negocios
+        </span>
       </header>
 
       <section className="kn-shell">
@@ -270,16 +247,11 @@ export default function RegistroKonaxNegocios() {
             KONAX · NEGOCIOS
           </span>
 
-          <h1>
-            Registra tu
-            <br />
-            negocio
-          </h1>
+          <h1>Registra tu negocio</h1>
 
           <p>
             Crea tu cuenta para administrar tu negocio,
-            recibir reservas y prepararte para aparecer
-            en KONAX.
+            recibir reservas y prepararte para aparecer en KONAX.
           </p>
         </div>
 
@@ -305,11 +277,12 @@ export default function RegistroKonaxNegocios() {
           </p>
 
           <div className="kn-card-title">
-            <span>Empieza con tu cuenta</span>
-            <h2>Datos del propietario</h2>
+            <span>CUENTA DE PROPIETARIO</span>
+
+            <h2>Datos de acceso</h2>
+
             <p>
-              Esta será tu cuenta de acceso a KONAX
-              Negocios.
+              Utilizarás estos datos para ingresar a KONAX Negocios.
             </p>
           </div>
 
@@ -329,7 +302,7 @@ export default function RegistroKonaxNegocios() {
             onSubmit={registrar}
             className="kn-form"
           >
-            <label className="kn-field kn-full">
+            <label className="kn-field">
               <span>Correo electrónico *</span>
 
               <input
@@ -372,7 +345,7 @@ export default function RegistroKonaxNegocios() {
               </label>
             </div>
 
-            <label className="kn-field kn-full">
+            <label className="kn-field">
               <span>Teléfono / WhatsApp *</span>
 
               <input
@@ -389,13 +362,15 @@ export default function RegistroKonaxNegocios() {
               />
             </label>
 
-            <label className="kn-field kn-full">
+            <label className="kn-field">
               <span>Contraseña *</span>
 
               <div className="kn-password">
                 <input
                   type={
-                    mostrarPassword ? "text" : "password"
+                    mostrarPassword
+                      ? "text"
+                      : "password"
                   }
                   value={form.password}
                   onChange={(e) =>
@@ -411,24 +386,31 @@ export default function RegistroKonaxNegocios() {
                 <button
                   type="button"
                   onClick={() =>
-                    setMostrarPassword((prev) => !prev)
+                    setMostrarPassword(
+                      (prev) => !prev
+                    )
                   }
-                  aria-label="Mostrar contraseña"
                 >
-                  {mostrarPassword ? "Ocultar" : "Ver"}
+                  {mostrarPassword
+                    ? "Ocultar"
+                    : "Ver"}
                 </button>
               </div>
             </label>
 
-            <label className="kn-field kn-full">
+            <label className="kn-field">
               <span>Confirmar contraseña *</span>
 
               <div className="kn-password">
                 <input
                   type={
-                    mostrarConfirmar ? "text" : "password"
+                    mostrarConfirmar
+                      ? "text"
+                      : "password"
                   }
-                  value={form.confirmarPassword}
+                  value={
+                    form.confirmarPassword
+                  }
                   onChange={(e) =>
                     actualizar(
                       "confirmarPassword",
@@ -442,11 +424,14 @@ export default function RegistroKonaxNegocios() {
                 <button
                   type="button"
                   onClick={() =>
-                    setMostrarConfirmar((prev) => !prev)
+                    setMostrarConfirmar(
+                      (prev) => !prev
+                    )
                   }
-                  aria-label="Mostrar contraseña"
                 >
-                  {mostrarConfirmar ? "Ocultar" : "Ver"}
+                  {mostrarConfirmar
+                    ? "Ocultar"
+                    : "Ver"}
                 </button>
               </div>
             </label>
@@ -471,7 +456,9 @@ export default function RegistroKonaxNegocios() {
                   : "Continuar"}
               </span>
 
-              {!cargando && <strong>→</strong>}
+              {!cargando && (
+                <strong>→</strong>
+              )}
             </button>
           </form>
 
@@ -528,119 +515,240 @@ const CSS = `
   .kn-page {
     min-height: 100vh;
     width: 100%;
+
     background:
       radial-gradient(
-        circle at 90% 2%,
-        rgba(16, 163, 93, .10),
+        circle at 100% 0%,
+        rgba(12, 145, 81, .08),
         transparent 26%
       ),
       linear-gradient(
         180deg,
-        #f8faf9 0%,
+        #f9fbfa 0%,
         #eef5f1 100%
       );
+
     color: #17211c;
+
     font-family:
       Inter,
       Arial,
       Helvetica,
       sans-serif;
+
     padding-bottom:
-      max(24px, env(safe-area-inset-bottom));
+      max(
+        22px,
+        env(safe-area-inset-bottom)
+      );
   }
 
+  /* =========================
+     HEADER MÁS PROFESIONAL
+  ========================== */
+
   .kn-header {
-    height: 78px;
+    min-height: 60px;
+
     padding:
-      max(12px, env(safe-area-inset-top))
-      20px
-      10px;
+      max(
+        7px,
+        env(safe-area-inset-top)
+      )
+      14px
+      7px;
+
     display: grid;
-    grid-template-columns: 48px 1fr 48px;
+
+    grid-template-columns:
+      38px
+      minmax(0,1fr)
+      auto;
+
     align-items: center;
-    border-bottom: 1px solid #e0e8e3;
-    background: rgba(255,255,255,.92);
-    backdrop-filter: blur(14px);
+
+    gap: 8px;
+
     position: sticky;
+
     top: 0;
-    z-index: 20;
+
+    z-index: 30;
+
+    background:
+      rgba(255,255,255,.97);
+
+    border-bottom:
+      1px solid #e4ebe7;
+
+    box-shadow:
+      0 3px 14px
+      rgba(18,53,34,.05);
+
+    backdrop-filter:
+      blur(16px);
   }
 
   .kn-back {
-    width: 44px;
-    height: 44px;
-    border: 0;
-    border-radius: 14px;
-    background: #f0f4f2;
-    color: #17211c;
+    width: 36px;
+    height: 36px;
+
+    padding: 0;
+
+    border:
+      1px solid #e0e8e3;
+
+    border-radius: 11px;
+
     display: grid;
     place-items: center;
-    font-size: 37px;
+
+    background: #f5f8f6;
+
+    color: #18221c;
+
+    font-size: 29px;
+
     line-height: 1;
+
     cursor: pointer;
   }
 
   .kn-logo {
-    width: min(190px, 55vw);
-    max-height: 48px;
+    width:
+      min(136px, 40vw);
+
+    max-height: 34px;
+
     object-fit: contain;
+
     justify-self: center;
   }
 
-  .kn-header-space {
-    width: 44px;
+  .kn-business-badge {
+    min-height: 28px;
+
+    padding:
+      0 9px;
+
+    border:
+      1px solid #d8ebdf;
+
+    border-radius: 999px;
+
+    display: flex;
+    align-items: center;
+
+    background: #edf8f2;
+
+    color: #087442;
+
+    font-size: 9px;
+
+    font-weight: 900;
+
+    letter-spacing: .25px;
   }
 
+  /* =========================
+     CONTENIDO
+  ========================== */
+
   .kn-shell {
-    width: min(100%, 620px);
+    width:
+      min(100%, 600px);
+
     margin: 0 auto;
-    padding: 22px 18px 10px;
+
+    padding:
+      15px 14px 9px;
   }
 
   .kn-brand {
-    padding: 12px 6px 25px;
+    padding:
+      5px 4px 16px;
   }
 
   .kn-eyebrow {
     display: block;
-    margin-bottom: 9px;
+
+    margin-bottom: 6px;
+
     color: #087a47;
-    font-size: 12px;
+
+    font-size: 10px;
+
     font-weight: 900;
-    letter-spacing: 1.4px;
+
+    letter-spacing: 1.2px;
   }
 
   .kn-brand h1 {
     margin: 0;
+
     color: #142019;
-    font-size: clamp(39px, 11vw, 58px);
-    line-height: .98;
-    letter-spacing: -2.1px;
+
+    font-size:
+      clamp(
+        31px,
+        8vw,
+        43px
+      );
+
+    line-height: 1;
+
+    letter-spacing: -1.3px;
   }
 
   .kn-brand p {
-    max-width: 520px;
-    margin: 15px 0 0;
-    color: #647269;
-    font-size: 16px;
-    line-height: 1.55;
+    max-width: 500px;
+
+    margin:
+      9px 0 0;
+
+    color: #69766f;
+
+    font-size: 13.5px;
+
+    line-height: 1.43;
   }
 
+  /* =========================
+     TARJETA
+  ========================== */
+
   .kn-card {
-    padding: 26px 22px 24px;
-    border: 1px solid #dce6e0;
-    border-radius: 28px;
-    background: rgba(255,255,255,.96);
+    padding:
+      21px 18px 20px;
+
+    border:
+      1px solid #dce6e0;
+
+    border-radius: 23px;
+
+    background:
+      rgba(255,255,255,.98);
+
     box-shadow:
-      0 18px 50px rgba(18,53,34,.09);
+      0 13px 35px
+      rgba(18,53,34,.07);
   }
+
+  /* =========================
+     PROGRESO
+  ========================== */
 
   .kn-progress {
     width: 100%;
+
     display: grid;
-    grid-template-columns: 1fr auto;
+
+    grid-template-columns:
+      1fr auto;
+
     align-items: center;
-    margin-bottom: 8px;
+
+    margin-bottom: 4px;
   }
 
   .kn-progress-item {
@@ -649,19 +757,27 @@ const CSS = `
   }
 
   .kn-progress-item.last {
-    justify-content: flex-end;
+    justify-content:
+      flex-end;
   }
 
   .kn-progress-circle {
-    width: 42px;
-    height: 42px;
+    width: 35px;
+    height: 35px;
+
     flex: 0 0 auto;
+
     display: grid;
     place-items: center;
+
     border-radius: 50%;
+
     background: #e8eeea;
+
     color: #6c786f;
-    font-size: 16px;
+
+    font-size: 13px;
+
     font-weight: 900;
   }
 
@@ -672,16 +788,25 @@ const CSS = `
         #086b3f,
         #0fa35c
       );
+
     color: #fff;
+
     box-shadow:
-      0 7px 18px rgba(11,112,65,.22);
+      0 5px 14px
+      rgba(11,112,65,.20);
   }
 
   .kn-progress-line {
-    height: 3px;
+    height: 2px;
+
     flex: 1;
-    margin: 0 12px;
-    border-radius: 999px;
+
+    margin:
+      0 10px;
+
+    border-radius:
+      999px;
+
     background:
       linear-gradient(
         90deg,
@@ -692,180 +817,305 @@ const CSS = `
   }
 
   .kn-step-label {
-    margin: 8px 0 24px;
+    margin:
+      6px 0 17px;
+
     color: #718078;
-    font-size: 12px;
-    font-weight: 700;
+
+    font-size: 10px;
+
+    font-weight: 750;
   }
 
+  /* =========================
+     TÍTULO TARJETA
+  ========================== */
+
   .kn-card-title {
-    margin-bottom: 22px;
+    margin-bottom: 17px;
   }
 
   .kn-card-title > span {
     color: #0b7a4b;
-    font-size: 11px;
+
+    font-size: 9px;
+
     font-weight: 900;
+
     letter-spacing: 1px;
-    text-transform: uppercase;
   }
 
   .kn-card-title h2 {
-    margin: 5px 0 5px;
+    margin:
+      4px 0 4px;
+
     color: #17211c;
-    font-size: 28px;
-    line-height: 1.1;
+
+    font-size: 24px;
+
+    line-height: 1.08;
   }
 
   .kn-card-title p {
     margin: 0;
+
     color: #77837c;
-    font-size: 14px;
-    line-height: 1.45;
+
+    font-size: 12px;
+
+    line-height: 1.4;
   }
 
+  /* =========================
+     ALERTAS
+  ========================== */
+
   .kn-alert {
-    margin-bottom: 18px;
-    padding: 13px 14px;
-    border-radius: 13px;
-    font-size: 13px;
+    margin-bottom: 14px;
+
+    padding:
+      11px 12px;
+
+    border-radius: 12px;
+
+    font-size: 12px;
+
     font-weight: 750;
+
     line-height: 1.4;
   }
 
   .kn-alert.error {
-    border: 1px solid #fecaca;
+    border:
+      1px solid #fecaca;
+
     background: #fff4f4;
+
     color: #a32020;
   }
 
   .kn-alert.success {
-    border: 1px solid #b9e5cc;
+    border:
+      1px solid #b9e5cc;
+
     background: #effbf4;
+
     color: #087442;
   }
 
+  /* =========================
+     FORMULARIO
+  ========================== */
+
   .kn-form {
     display: grid;
-    gap: 16px;
+
+    gap: 12px;
   }
 
   .kn-field {
     display: grid;
-    gap: 7px;
+
+    gap: 5px;
+
     min-width: 0;
   }
 
   .kn-field > span {
     color: #35443b;
-    font-size: 13px;
+
+    font-size: 11.5px;
+
     font-weight: 850;
   }
 
   .kn-two {
     display: grid;
+
     grid-template-columns:
-      repeat(2,minmax(0,1fr));
-    gap: 12px;
+      repeat(
+        2,
+        minmax(0,1fr)
+      );
+
+    gap: 9px;
   }
 
   .kn-field input {
     width: 100%;
-    min-height: 54px;
-    padding: 0 15px;
-    border: 1px solid #cad6cf;
+
+    min-height: 48px;
+
+    padding:
+      0 13px;
+
+    border:
+      1px solid #cad6cf;
+
     outline: none;
-    border-radius: 15px;
+
+    border-radius: 13px;
+
     background: #fff;
+
     color: #17211c;
-    font-size: 16px;
+
+    font-size: 15px;
+
     transition:
       border-color .18s ease,
       box-shadow .18s ease;
   }
 
   .kn-field input:focus {
-    border-color: #0b7a4b;
+    border-color:
+      #0b7a4b;
+
     box-shadow:
-      0 0 0 4px rgba(11,122,75,.10);
+      0 0 0 3px
+      rgba(11,122,75,.09);
   }
 
   .kn-field input::placeholder {
     color: #a1aaa5;
   }
 
+  /* =========================
+     PASSWORD
+  ========================== */
+
   .kn-password {
-    min-height: 54px;
+    min-height: 48px;
+
     display: grid;
-    grid-template-columns: 1fr auto;
-    border: 1px solid #cad6cf;
-    border-radius: 15px;
+
+    grid-template-columns:
+      1fr auto;
+
+    border:
+      1px solid #cad6cf;
+
+    border-radius: 13px;
+
     overflow: hidden;
+
     background: #fff;
   }
 
   .kn-password:focus-within {
-    border-color: #0b7a4b;
+    border-color:
+      #0b7a4b;
+
     box-shadow:
-      0 0 0 4px rgba(11,122,75,.10);
+      0 0 0 3px
+      rgba(11,122,75,.09);
   }
 
   .kn-password input {
+    min-height: 46px;
+
     border: 0;
+
     border-radius: 0;
-    box-shadow: none !important;
+
+    box-shadow:
+      none !important;
   }
 
   .kn-password button {
-    min-width: 65px;
+    min-width: 58px;
+
     border: 0;
-    background: transparent;
+
+    background:
+      transparent;
+
     color: #0b7a4b;
-    font-size: 12px;
+
+    font-size: 10px;
+
     font-weight: 900;
+
     cursor: pointer;
   }
 
+  /* =========================
+     SEGURIDAD
+  ========================== */
+
   .kn-security {
-    padding: 12px 13px;
+    padding:
+      10px 11px;
+
     display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    border-radius: 13px;
+
+    gap: 8px;
+
+    align-items:
+      flex-start;
+
+    border-radius: 12px;
+
     background: #f0f8f4;
   }
 
   .kn-security > span {
-    width: 23px;
-    height: 23px;
+    width: 21px;
+    height: 21px;
+
     flex: 0 0 auto;
+
     display: grid;
     place-items: center;
+
     border-radius: 50%;
+
     background: #0b7a4b;
+
     color: #fff;
-    font-size: 12px;
+
+    font-size: 10px;
+
     font-weight: 900;
   }
 
   .kn-security p {
-    margin: 2px 0 0;
+    margin:
+      2px 0 0;
+
     color: #5e6e65;
-    font-size: 12px;
-    line-height: 1.45;
+
+    font-size: 10.5px;
+
+    line-height: 1.4;
   }
+
+  /* =========================
+     BOTÓN PRINCIPAL
+  ========================== */
 
   .kn-primary {
     width: 100%;
-    min-height: 58px;
-    margin-top: 3px;
-    padding: 0 20px;
+
+    min-height: 52px;
+
+    margin-top: 2px;
+
+    padding:
+      0 18px;
+
     border: 0;
-    border-radius: 17px;
+
+    border-radius: 14px;
+
     display: flex;
+
     justify-content: center;
+
     align-items: center;
-    gap: 14px;
+
+    gap: 12px;
+
     background:
       linear-gradient(
         135deg,
@@ -873,91 +1123,153 @@ const CSS = `
         #0a834b 55%,
         #13a85f 100%
       );
+
     color: #fff;
-    font-size: 17px;
+
+    font-size: 15px;
+
     font-weight: 900;
+
     box-shadow:
-      0 12px 26px rgba(11,122,75,.22);
+      0 9px 21px
+      rgba(11,122,75,.20);
+
     cursor: pointer;
   }
 
   .kn-primary strong {
-    font-size: 23px;
+    font-size: 20px;
+
     line-height: 1;
   }
 
   .kn-primary:disabled {
     opacity: .68;
-    cursor: not-allowed;
+
+    cursor:
+      not-allowed;
   }
 
+  /* =========================
+     LOGIN
+  ========================== */
+
   .kn-login {
-    margin-top: 22px;
+    margin-top: 17px;
+
     display: flex;
+
     justify-content: center;
+
     align-items: center;
-    gap: 5px;
+
+    gap: 4px;
+
     flex-wrap: wrap;
+
     color: #7c8781;
-    font-size: 13px;
+
+    font-size: 11px;
   }
 
   .kn-login button {
     padding: 0;
+
     border: 0;
-    background: transparent;
+
+    background:
+      transparent;
+
     color: #087a47;
+
     font-weight: 900;
+
     cursor: pointer;
   }
 
+  /* =========================
+     FOOTER
+  ========================== */
+
   .kn-footer {
-    padding: 26px 5px 10px;
+    padding:
+      19px 5px 8px;
+
     display: flex;
+
     justify-content: center;
+
     align-items: center;
-    gap: 10px;
+
+    gap: 8px;
+
     color: #87928c;
-    font-size: 9px;
+
+    font-size: 8px;
   }
 
   .kn-footer img {
-    width: 78px;
+    width: 65px;
+
     height: auto;
   }
 
+  /* =========================
+     MÓVIL
+  ========================== */
+
   @media (max-width: 480px) {
     .kn-header {
-      height: 72px;
-      padding-left: 14px;
-      padding-right: 14px;
+      min-height: 58px;
+
+      padding-left: 11px;
+
+      padding-right: 11px;
     }
 
     .kn-shell {
-      padding: 17px 14px 8px;
+      padding:
+        12px 11px 7px;
     }
 
     .kn-brand {
-      padding: 9px 5px 20px;
+      padding:
+        4px 3px 13px;
     }
 
     .kn-card {
-      padding: 23px 18px 22px;
-      border-radius: 24px;
+      padding:
+        19px 15px 18px;
+
+      border-radius: 21px;
+    }
+
+    .kn-brand h1 {
+      font-size: 31px;
     }
 
     .kn-brand p {
-      font-size: 15px;
+      font-size: 12.5px;
     }
   }
 
   @media (max-width: 370px) {
+    .kn-business-badge {
+      display: none;
+    }
+
+    .kn-header {
+      grid-template-columns:
+        38px 1fr 38px;
+    }
+
     .kn-two {
-      grid-template-columns: 1fr;
+      grid-template-columns:
+        1fr;
     }
 
     .kn-brand h1 {
-      font-size: 39px;
+      font-size: 29px;
     }
   }
 `;
