@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.19-KONAX-NEGOCIOS-REGISTRO-V2";
-
 export default function RegistroKonaxNegocios() {
   const [form, setForm] = useState({
     correo: "",
@@ -33,7 +31,7 @@ export default function RegistroKonaxNegocios() {
       } = await supabase.auth.getSession();
 
       if (session?.user?.id) {
-        console.log("Sesión activa KONAX:", session.user.id);
+        console.log("Sesión activa:", session.user.id);
       }
     } catch (error) {
       console.error("Error revisando sesión:", error);
@@ -182,15 +180,13 @@ export default function RegistroKonaxNegocios() {
       );
 
       setTipoMensaje("success");
-      setMensaje(
-        "Cuenta creada. Te estamos llevando a verificar tu correo."
-      );
+      setMensaje("Cuenta creada. Vamos a verificar tu correo.");
 
       setTimeout(() => {
         window.location.href = `/negocios/verificar?correo=${encodeURIComponent(
           correo
         )}`;
-      }, 700);
+      }, 600);
     } catch (error) {
       console.error(error);
 
@@ -227,7 +223,7 @@ export default function RegistroKonaxNegocios() {
           onClick={volver}
           aria-label="Volver"
         >
-          ‹
+          ←
         </button>
 
         <img
@@ -242,22 +238,21 @@ export default function RegistroKonaxNegocios() {
       </header>
 
       <section className="kn-shell">
-        <div className="kn-brand">
-          <span className="kn-eyebrow">
-            KONAX · NEGOCIOS
-          </span>
+
+        <div className="kn-intro">
+          <span>KONAX · NEGOCIOS</span>
 
           <h1>Registra tu negocio</h1>
 
           <p>
-            Crea tu cuenta para administrar tu negocio,
-            recibir reservas y prepararte para aparecer en KONAX.
+            Crea tu cuenta y empieza a configurar tu negocio en KONAX.
           </p>
         </div>
 
         <div className="kn-card">
+
           <div className="kn-progress">
-            <div className="kn-progress-item">
+            <div className="kn-progress-side">
               <span className="kn-progress-circle active">
                 1
               </span>
@@ -265,24 +260,20 @@ export default function RegistroKonaxNegocios() {
               <span className="kn-progress-line" />
             </div>
 
-            <div className="kn-progress-item last">
-              <span className="kn-progress-circle">
-                2
-              </span>
-            </div>
+            <span className="kn-progress-circle">
+              2
+            </span>
           </div>
 
-          <p className="kn-step-label">
+          <p className="kn-step">
             Paso 1 de 2 · Datos de tu cuenta
           </p>
 
-          <div className="kn-card-title">
-            <span>CUENTA DE PROPIETARIO</span>
-
-            <h2>Datos de acceso</h2>
+          <div className="kn-title">
+            <h2>Datos del propietario</h2>
 
             <p>
-              Utilizarás estos datos para ingresar a KONAX Negocios.
+              Utiliza estos datos para ingresar a KONAX Negocios.
             </p>
           </div>
 
@@ -302,6 +293,7 @@ export default function RegistroKonaxNegocios() {
             onSubmit={registrar}
             className="kn-form"
           >
+
             <label className="kn-field">
               <span>Correo electrónico *</span>
 
@@ -318,6 +310,7 @@ export default function RegistroKonaxNegocios() {
             </label>
 
             <div className="kn-two">
+
               <label className="kn-field">
                 <span>Nombre *</span>
 
@@ -343,6 +336,7 @@ export default function RegistroKonaxNegocios() {
                   autoComplete="family-name"
                 />
               </label>
+
             </div>
 
             <label className="kn-field">
@@ -366,6 +360,7 @@ export default function RegistroKonaxNegocios() {
               <span>Contraseña *</span>
 
               <div className="kn-password">
+
                 <input
                   type={
                     mostrarPassword
@@ -391,10 +386,9 @@ export default function RegistroKonaxNegocios() {
                     )
                   }
                 >
-                  {mostrarPassword
-                    ? "Ocultar"
-                    : "Ver"}
+                  {mostrarPassword ? "Ocultar" : "Ver"}
                 </button>
+
               </div>
             </label>
 
@@ -402,15 +396,14 @@ export default function RegistroKonaxNegocios() {
               <span>Confirmar contraseña *</span>
 
               <div className="kn-password">
+
                 <input
                   type={
                     mostrarConfirmar
                       ? "text"
                       : "password"
                   }
-                  value={
-                    form.confirmarPassword
-                  }
+                  value={form.confirmarPassword}
                   onChange={(e) =>
                     actualizar(
                       "confirmarPassword",
@@ -429,20 +422,21 @@ export default function RegistroKonaxNegocios() {
                     )
                   }
                 >
-                  {mostrarConfirmar
-                    ? "Ocultar"
-                    : "Ver"}
+                  {mostrarConfirmar ? "Ocultar" : "Ver"}
                 </button>
+
               </div>
             </label>
 
             <div className="kn-security">
+
               <span>✓</span>
 
               <p>
                 Tu cuenta quedará vinculada al negocio
                 que registres en los siguientes pasos.
               </p>
+
             </div>
 
             <button
@@ -450,16 +444,13 @@ export default function RegistroKonaxNegocios() {
               className="kn-primary"
               disabled={cargando}
             >
-              <span>
-                {cargando
-                  ? "Creando cuenta..."
-                  : "Continuar"}
-              </span>
+              {cargando
+                ? "Creando cuenta..."
+                : "Continuar"}
 
-              {!cargando && (
-                <strong>→</strong>
-              )}
+              {!cargando && <strong>→</strong>}
             </button>
+
           </form>
 
           <div className="kn-login">
@@ -472,6 +463,7 @@ export default function RegistroKonaxNegocios() {
               Inicia sesión
             </button>
           </div>
+
         </div>
 
         <footer className="kn-footer">
@@ -479,11 +471,8 @@ export default function RegistroKonaxNegocios() {
             src="/konax-logo.png"
             alt="KONAX"
           />
-
-          <span>
-            KONAX Negocios · {VERSION}
-          </span>
         </footer>
+
       </section>
     </main>
   );
@@ -500,7 +489,7 @@ const CSS = `
     width: 100%;
     max-width: 100%;
     overflow-x: hidden;
-    background: #f4f7f5;
+    background: #f3f7f5;
   }
 
   button,
@@ -517,57 +506,38 @@ const CSS = `
     width: 100%;
 
     background:
-      radial-gradient(
-        circle at 100% 0%,
-        rgba(12, 145, 81, .08),
-        transparent 26%
-      ),
       linear-gradient(
         180deg,
         #f9fbfa 0%,
-        #eef5f1 100%
+        #eef6f2 100%
       );
 
-    color: #17211c;
+    color: #18231d;
 
     font-family:
-      Inter,
       Arial,
       Helvetica,
       sans-serif;
-
-    padding-bottom:
-      max(
-        22px,
-        env(safe-area-inset-bottom)
-      );
   }
 
-  /* =========================
-     HEADER MÁS PROFESIONAL
-  ========================== */
+  /* HEADER COMPACTO */
 
   .kn-header {
-    min-height: 60px;
+    height: 55px;
 
     padding:
-      max(
-        7px,
-        env(safe-area-inset-top)
-      )
-      14px
-      7px;
+      7px 13px;
 
     display: grid;
 
     grid-template-columns:
-      38px
-      minmax(0,1fr)
+      34px
+      1fr
       auto;
 
     align-items: center;
 
-    gap: 8px;
+    gap: 7px;
 
     position: sticky;
 
@@ -576,49 +546,45 @@ const CSS = `
     z-index: 30;
 
     background:
-      rgba(255,255,255,.97);
+      rgba(255,255,255,.98);
 
     border-bottom:
-      1px solid #e4ebe7;
+      1px solid #e2e9e5;
 
     box-shadow:
-      0 3px 14px
-      rgba(18,53,34,.05);
-
-    backdrop-filter:
-      blur(16px);
+      0 2px 10px
+      rgba(20,60,38,.04);
   }
 
   .kn-back {
-    width: 36px;
-    height: 36px;
-
-    padding: 0;
+    width: 32px;
+    height: 32px;
 
     border:
-      1px solid #e0e8e3;
+      1px solid #e1e8e4;
 
-    border-radius: 11px;
-
-    display: grid;
-    place-items: center;
+    border-radius: 9px;
 
     background: #f5f8f6;
 
-    color: #18221c;
+    color: #07804a;
 
-    font-size: 29px;
+    display: grid;
 
-    line-height: 1;
+    place-items: center;
+
+    font-size: 19px;
+
+    font-weight: 900;
 
     cursor: pointer;
   }
 
   .kn-logo {
     width:
-      min(136px, 40vw);
+      min(128px, 38vw);
 
-    max-height: 34px;
+    max-height: 29px;
 
     object-fit: contain;
 
@@ -626,217 +592,51 @@ const CSS = `
   }
 
   .kn-business-badge {
-    min-height: 28px;
+    height: 27px;
 
     padding:
       0 9px;
 
+    display: flex;
+
+    align-items: center;
+
     border:
-      1px solid #d8ebdf;
+      1px solid #14935a;
 
     border-radius: 999px;
 
-    display: flex;
-    align-items: center;
+    background: #f4fbf7;
 
-    background: #edf8f2;
-
-    color: #087442;
+    color: #087b48;
 
     font-size: 9px;
 
     font-weight: 900;
-
-    letter-spacing: .25px;
   }
 
-  /* =========================
-     CONTENIDO
-  ========================== */
+  /* CONTENEDOR */
 
   .kn-shell {
     width:
-      min(100%, 600px);
+      min(100%, 560px);
 
-    margin: 0 auto;
+    margin:
+      0 auto;
 
     padding:
-      15px 14px 9px;
+      10px 10px 8px;
   }
 
-  .kn-brand {
+  /* INTRO PEQUEÑA */
+
+  .kn-intro {
     padding:
-      5px 4px 16px;
+      3px 6px 10px;
   }
 
-  .kn-eyebrow {
-    display: block;
-
-    margin-bottom: 6px;
-
+  .kn-intro > span {
     color: #087a47;
-
-    font-size: 10px;
-
-    font-weight: 900;
-
-    letter-spacing: 1.2px;
-  }
-
-  .kn-brand h1 {
-    margin: 0;
-
-    color: #142019;
-
-    font-size:
-      clamp(
-        31px,
-        8vw,
-        43px
-      );
-
-    line-height: 1;
-
-    letter-spacing: -1.3px;
-  }
-
-  .kn-brand p {
-    max-width: 500px;
-
-    margin:
-      9px 0 0;
-
-    color: #69766f;
-
-    font-size: 13.5px;
-
-    line-height: 1.43;
-  }
-
-  /* =========================
-     TARJETA
-  ========================== */
-
-  .kn-card {
-    padding:
-      21px 18px 20px;
-
-    border:
-      1px solid #dce6e0;
-
-    border-radius: 23px;
-
-    background:
-      rgba(255,255,255,.98);
-
-    box-shadow:
-      0 13px 35px
-      rgba(18,53,34,.07);
-  }
-
-  /* =========================
-     PROGRESO
-  ========================== */
-
-  .kn-progress {
-    width: 100%;
-
-    display: grid;
-
-    grid-template-columns:
-      1fr auto;
-
-    align-items: center;
-
-    margin-bottom: 4px;
-  }
-
-  .kn-progress-item {
-    display: flex;
-    align-items: center;
-  }
-
-  .kn-progress-item.last {
-    justify-content:
-      flex-end;
-  }
-
-  .kn-progress-circle {
-    width: 35px;
-    height: 35px;
-
-    flex: 0 0 auto;
-
-    display: grid;
-    place-items: center;
-
-    border-radius: 50%;
-
-    background: #e8eeea;
-
-    color: #6c786f;
-
-    font-size: 13px;
-
-    font-weight: 900;
-  }
-
-  .kn-progress-circle.active {
-    background:
-      linear-gradient(
-        145deg,
-        #086b3f,
-        #0fa35c
-      );
-
-    color: #fff;
-
-    box-shadow:
-      0 5px 14px
-      rgba(11,112,65,.20);
-  }
-
-  .kn-progress-line {
-    height: 2px;
-
-    flex: 1;
-
-    margin:
-      0 10px;
-
-    border-radius:
-      999px;
-
-    background:
-      linear-gradient(
-        90deg,
-        #0b7a4b 0%,
-        #8bcbae 46%,
-        #e2e9e5 100%
-      );
-  }
-
-  .kn-step-label {
-    margin:
-      6px 0 17px;
-
-    color: #718078;
-
-    font-size: 10px;
-
-    font-weight: 750;
-  }
-
-  /* =========================
-     TÍTULO TARJETA
-  ========================== */
-
-  .kn-card-title {
-    margin-bottom: 17px;
-  }
-
-  .kn-card-title > span {
-    color: #0b7a4b;
 
     font-size: 9px;
 
@@ -845,44 +645,165 @@ const CSS = `
     letter-spacing: 1px;
   }
 
-  .kn-card-title h2 {
+  .kn-intro h1 {
     margin:
-      4px 0 4px;
+      4px 0 3px;
 
     color: #17211c;
 
-    font-size: 24px;
+    font-size: 27px;
 
-    line-height: 1.08;
+    line-height: 1;
+
+    letter-spacing: -1px;
   }
 
-  .kn-card-title p {
+  .kn-intro p {
     margin: 0;
 
-    color: #77837c;
+    color: #6d7972;
 
-    font-size: 12px;
+    font-size: 11.5px;
 
-    line-height: 1.4;
+    line-height: 1.35;
   }
 
-  /* =========================
-     ALERTAS
-  ========================== */
+  /* TARJETA */
+
+  .kn-card {
+    padding:
+      16px 15px 17px;
+
+    border:
+      1px solid #dbe5df;
+
+    border-radius: 20px;
+
+    background: #fff;
+
+    box-shadow:
+      0 10px 27px
+      rgba(18,53,34,.06);
+  }
+
+  /* PASOS */
+
+  .kn-progress {
+    display: grid;
+
+    grid-template-columns:
+      1fr auto;
+
+    align-items: center;
+  }
+
+  .kn-progress-side {
+    display: flex;
+
+    align-items: center;
+  }
+
+  .kn-progress-circle {
+    width: 31px;
+    height: 31px;
+
+    display: grid;
+
+    place-items: center;
+
+    flex:
+      0 0 auto;
+
+    border-radius: 50%;
+
+    background: #e8eeea;
+
+    color: #66736b;
+
+    font-size: 11px;
+
+    font-weight: 900;
+  }
+
+  .kn-progress-circle.active {
+    background:
+      linear-gradient(
+        145deg,
+        #07703f,
+        #10a15d
+      );
+
+    color: white;
+  }
+
+  .kn-progress-line {
+    height: 2px;
+
+    flex: 1;
+
+    margin:
+      0 9px;
+
+    background:
+      linear-gradient(
+        90deg,
+        #087b48,
+        #dbe8e1
+      );
+
+    border-radius:
+      999px;
+  }
+
+  .kn-step {
+    margin:
+      5px 0 12px;
+
+    color: #758179;
+
+    font-size: 9.5px;
+
+    font-weight: 700;
+  }
+
+  /* TÍTULO */
+
+  .kn-title {
+    margin-bottom: 13px;
+  }
+
+  .kn-title h2 {
+    margin:
+      0 0 3px;
+
+    color: #17211c;
+
+    font-size: 21px;
+  }
+
+  .kn-title p {
+    margin: 0;
+
+    color: #77847c;
+
+    font-size: 10.5px;
+
+    line-height: 1.35;
+  }
+
+  /* ALERTAS */
 
   .kn-alert {
-    margin-bottom: 14px;
+    margin-bottom: 11px;
 
     padding:
-      11px 12px;
+      9px 10px;
 
-    border-radius: 12px;
+    border-radius: 11px;
 
-    font-size: 12px;
+    font-size: 10.5px;
 
     font-weight: 750;
-
-    line-height: 1.4;
   }
 
   .kn-alert.error {
@@ -903,30 +824,26 @@ const CSS = `
     color: #087442;
   }
 
-  /* =========================
-     FORMULARIO
-  ========================== */
+  /* FORM */
 
   .kn-form {
     display: grid;
 
-    gap: 12px;
+    gap: 10px;
   }
 
   .kn-field {
     display: grid;
 
-    gap: 5px;
-
-    min-width: 0;
+    gap: 4px;
   }
 
   .kn-field > span {
-    color: #35443b;
+    color: #344139;
 
-    font-size: 11.5px;
+    font-size: 10.5px;
 
-    font-weight: 850;
+    font-weight: 900;
   }
 
   .kn-two {
@@ -938,54 +855,48 @@ const CSS = `
         minmax(0,1fr)
       );
 
-    gap: 9px;
+    gap: 8px;
   }
 
   .kn-field input {
     width: 100%;
 
-    min-height: 48px;
+    height: 43px;
 
     padding:
-      0 13px;
+      0 12px;
 
     border:
-      1px solid #cad6cf;
+      1px solid #cad5cf;
+
+    border-radius: 12px;
 
     outline: none;
-
-    border-radius: 13px;
 
     background: #fff;
 
     color: #17211c;
 
-    font-size: 15px;
-
-    transition:
-      border-color .18s ease,
-      box-shadow .18s ease;
+    font-size: 14px;
   }
 
   .kn-field input:focus {
     border-color:
-      #0b7a4b;
+      #0a854d;
 
     box-shadow:
       0 0 0 3px
-      rgba(11,122,75,.09);
+      rgba(10,133,77,.08);
   }
 
   .kn-field input::placeholder {
-    color: #a1aaa5;
+    color: #a7afaa;
   }
 
-  /* =========================
-     PASSWORD
-  ========================== */
+  /* PASSWORD */
 
   .kn-password {
-    min-height: 48px;
+    height: 43px;
 
     display: grid;
 
@@ -993,9 +904,9 @@ const CSS = `
       1fr auto;
 
     border:
-      1px solid #cad6cf;
+      1px solid #cad5cf;
 
-    border-radius: 13px;
+    border-radius: 12px;
 
     overflow: hidden;
 
@@ -1004,15 +915,15 @@ const CSS = `
 
   .kn-password:focus-within {
     border-color:
-      #0b7a4b;
+      #0a854d;
 
     box-shadow:
       0 0 0 3px
-      rgba(11,122,75,.09);
+      rgba(10,133,77,.08);
   }
 
   .kn-password input {
-    min-height: 46px;
+    height: 41px;
 
     border: 0;
 
@@ -1023,56 +934,58 @@ const CSS = `
   }
 
   .kn-password button {
-    min-width: 58px;
+    min-width: 51px;
+
+    padding:
+      0 9px;
 
     border: 0;
 
-    background:
-      transparent;
+    background: transparent;
 
-    color: #0b7a4b;
+    color: #08814b;
 
-    font-size: 10px;
+    font-size: 9.5px;
 
     font-weight: 900;
 
     cursor: pointer;
   }
 
-  /* =========================
-     SEGURIDAD
-  ========================== */
+  /* AVISO */
 
   .kn-security {
     padding:
-      10px 11px;
+      9px 10px;
 
     display: flex;
-
-    gap: 8px;
 
     align-items:
       flex-start;
 
+    gap: 8px;
+
     border-radius: 12px;
 
-    background: #f0f8f4;
+    background: #eff8f3;
   }
 
   .kn-security > span {
-    width: 21px;
-    height: 21px;
+    width: 20px;
+    height: 20px;
 
-    flex: 0 0 auto;
+    flex:
+      0 0 auto;
 
     display: grid;
+
     place-items: center;
 
     border-radius: 50%;
 
-    background: #0b7a4b;
+    background: #0a8b50;
 
-    color: #fff;
+    color: white;
 
     font-size: 10px;
 
@@ -1081,28 +994,24 @@ const CSS = `
 
   .kn-security p {
     margin:
-      2px 0 0;
+      1px 0 0;
 
-    color: #5e6e65;
+    color: #5f6d65;
 
-    font-size: 10.5px;
+    font-size: 9.5px;
 
-    line-height: 1.4;
+    line-height: 1.35;
   }
 
-  /* =========================
-     BOTÓN PRINCIPAL
-  ========================== */
+  /* CONTINUAR */
 
   .kn-primary {
     width: 100%;
 
-    min-height: 52px;
-
-    margin-top: 2px;
+    height: 48px;
 
     padding:
-      0 18px;
+      0 17px;
 
     border: 0;
 
@@ -1110,66 +1019,55 @@ const CSS = `
 
     display: flex;
 
-    justify-content: center;
-
     align-items: center;
 
-    gap: 12px;
+    justify-content: center;
+
+    gap: 11px;
 
     background:
       linear-gradient(
         135deg,
-        #075f39 0%,
-        #0a834b 55%,
-        #13a85f 100%
+        #077240,
+        #0b914f,
+        #15b564
       );
 
     color: #fff;
 
-    font-size: 15px;
+    font-size: 14px;
 
     font-weight: 900;
 
     box-shadow:
-      0 9px 21px
-      rgba(11,122,75,.20);
+      0 8px 18px
+      rgba(10,137,78,.18);
 
     cursor: pointer;
   }
 
   .kn-primary strong {
     font-size: 20px;
-
-    line-height: 1;
   }
 
   .kn-primary:disabled {
-    opacity: .68;
-
-    cursor:
-      not-allowed;
+    opacity: .6;
   }
 
-  /* =========================
-     LOGIN
-  ========================== */
+  /* LOGIN */
 
   .kn-login {
-    margin-top: 17px;
+    margin-top: 13px;
 
     display: flex;
 
     justify-content: center;
 
-    align-items: center;
-
     gap: 4px;
 
-    flex-wrap: wrap;
+    color: #858e89;
 
-    color: #7c8781;
-
-    font-size: 11px;
+    font-size: 10.5px;
   }
 
   .kn-login button {
@@ -1177,99 +1075,89 @@ const CSS = `
 
     border: 0;
 
-    background:
-      transparent;
+    background: transparent;
 
-    color: #087a47;
+    color: #087b48;
 
     font-weight: 900;
-
-    cursor: pointer;
   }
 
-  /* =========================
-     FOOTER
-  ========================== */
+  /* FOOTER SOLO LOGO */
 
   .kn-footer {
     padding:
-      19px 5px 8px;
+      16px 0 7px;
 
     display: flex;
 
     justify-content: center;
-
-    align-items: center;
-
-    gap: 8px;
-
-    color: #87928c;
-
-    font-size: 8px;
   }
 
   .kn-footer img {
-    width: 65px;
+    width: 95px;
 
     height: auto;
   }
 
-  /* =========================
-     MÓVIL
-  ========================== */
+  /* TELÉFONOS PEQUEÑOS */
 
-  @media (max-width: 480px) {
+  @media (max-width: 390px) {
+
     .kn-header {
-      min-height: 58px;
+      height: 52px;
+    }
 
-      padding-left: 11px;
-
-      padding-right: 11px;
+    .kn-logo {
+      width: 112px;
     }
 
     .kn-shell {
       padding:
-        12px 11px 7px;
-    }
-
-    .kn-brand {
-      padding:
-        4px 3px 13px;
+        8px 8px 6px;
     }
 
     .kn-card {
       padding:
-        19px 15px 18px;
+        14px 13px 15px;
 
-      border-radius: 21px;
+      border-radius: 18px;
     }
 
-    .kn-brand h1 {
-      font-size: 31px;
+    .kn-intro h1 {
+      font-size: 24px;
     }
 
-    .kn-brand p {
-      font-size: 12.5px;
+    .kn-intro p {
+      font-size: 10.5px;
+    }
+
+    .kn-field input,
+    .kn-password {
+      height: 41px;
+    }
+
+    .kn-password input {
+      height: 39px;
+    }
+
+    .kn-primary {
+      height: 46px;
     }
   }
 
-  @media (max-width: 370px) {
+  @media (max-width: 350px) {
+
     .kn-business-badge {
       display: none;
     }
 
     .kn-header {
       grid-template-columns:
-        38px 1fr 38px;
+        34px 1fr 34px;
     }
 
     .kn-two {
-      grid-template-columns:
-        1fr;
-    }
-
-    .kn-brand h1 {
-      font-size: 29px;
+      grid-template-columns: 1fr;
     }
   }
 `;
