@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.21-AGENDA-BELLEZA-MOVIL-AISLADA-FIX1";
+const VERSION = "2026.08.21-AGENDA-BELLEZA-CITAS-DIA-FIX2";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -1544,7 +1544,7 @@ export default function AgendaPage() {
           }}
         >
           <span>＋</span>
-          Nueva reserva
+          {esSalonBelleza ? "Nueva reserva" : "Nueva reserva"}
         </button>
 
         <button
@@ -1556,7 +1556,7 @@ export default function AgendaPage() {
           }}
         >
           <span>≡</span>
-          Reservas
+          {esSalonBelleza ? "Reservas" : "Reservas"}
         </button>
 
         {esAdmin && (
@@ -1749,6 +1749,281 @@ export default function AgendaPage() {
             </article>
           </section>
 
+          {esSalonBelleza ? (
+            <section
+              style={{
+                ...neo.commandGrid,
+                gridTemplateColumns: "minmax(0,1fr) 300px",
+              }}
+              className="agenda-d-command-grid"
+            >
+              <article
+                style={{
+                  ...neo.schedulePanel,
+                  minWidth: 0,
+                }}
+              >
+                <div style={neo.panelTop}>
+                  <div>
+                    <span style={neo.sectionEyebrow}>
+                      AGENDA DEL DÍA
+                    </span>
+                    <h2 style={neo.panelHeading}>
+                      Citas de la jornada
+                    </h2>
+                  </div>
+
+                  <div style={neo.dateInline}>
+                    <button
+                      type="button"
+                      onClick={() => moverFechaAgenda(-1)}
+                      style={neo.dateArrow}
+                    >
+                      ‹
+                    </button>
+
+                    <input
+                      type="date"
+                      value={fechaAgenda}
+                      onChange={(e) => {
+                        setFechaAgenda(e.target.value);
+                        setHorarioSeleccionado("");
+                      }}
+                      style={neo.dateInput}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => moverFechaAgenda(1)}
+                      style={neo.dateArrow}
+                    >
+                      ›
+                    </button>
+                  </div>
+                </div>
+
+                {reservasFechaOperativas.length === 0 ? (
+                  <div style={neo.emptyLarge}>
+                    <div style={neo.emptyIcon}>◎</div>
+                    <strong style={neo.emptyTitle}>
+                      No hay citas para este día
+                    </strong>
+                    <span style={neo.emptyText}>
+                      Selecciona otra fecha o crea una nueva cita.
+                    </span>
+
+                    <button
+                      type="button"
+                      style={neo.emptyButton}
+                      onClick={() => setVista("nueva")}
+                    >
+                      Nueva reserva
+                    </button>
+                  </div>
+                ) : (
+                  <div style={neo.timeline}>
+                    {reservasFechaOperativas.map((reserva, index) => {
+                      const estado = normalizar(reserva.estado);
+                      const esConfirmada = estado === "confirmada";
+                      const asistio = estado === "asistio";
+                      const noAsistio = estado === "no_asistio";
+                      const pendiente = estado === "pendiente_pago";
+                      const cancelada = estado === "cancelada";
+
+                      return (
+                        <div
+                          key={reserva.id}
+                          style={{
+                            ...neo.timelineRow,
+                            gridTemplateColumns:
+                              "26px 96px minmax(0,1fr) 118px",
+                          }}
+                          className="agenda-d-timeline-row"
+                        >
+                          <div style={neo.timelineRail}>
+                            <span style={neo.timelineDot} />
+                            {index <
+                              reservasFechaOperativas.length - 1 && (
+                              <span style={neo.timelineLine} />
+                            )}
+                          </div>
+
+                          <div style={neo.timelineTime}>
+                            <strong>
+                              {formatoHora(reserva.hora_inicio)}
+                            </strong>
+                            <span>
+                              {reserva.hora_fin
+                                ? formatoHora(reserva.hora_fin)
+                                : ""}
+                            </span>
+                          </div>
+
+                          <div style={neo.timelineClass}>
+                            <div style={neo.classTopLine}>
+                              <span style={neo.classBadge}>
+                                CITA
+                              </span>
+
+                              <span
+                                style={{
+                                  ...neo.statusTag,
+                                  ...(asistio
+                                    ? neo.statusSuccess
+                                    : noAsistio
+                                    ? neo.statusNeutral
+                                    : pendiente
+                                    ? neo.statusPending
+                                    : esConfirmada
+                                    ? neo.statusConfirmed
+                                    : {}),
+                                }}
+                              >
+                                {cancelada
+                                  ? "CANCELADA"
+                                  : asistio
+                                  ? "ASISTIÓ"
+                                  : noAsistio
+                                  ? "NO ASISTIÓ"
+                                  : pendiente
+                                  ? "PENDIENTE"
+                                  : "CONFIRMADA"}
+                              </span>
+                            </div>
+
+                            <strong style={neo.classTitle}>
+                              {nombreDeReserva(reserva)}
+                            </strong>
+
+                            <span style={neo.classMeta}>
+                              {nombreServicio(reserva.servicio_id)}
+                              {reserva.telefono
+                                ? ` · ${reserva.telefono}`
+                                : ""}
+                            </span>
+                          </div>
+
+                          <div
+                            style={{
+                              display: "grid",
+                              gap: 6,
+                            }}
+                          >
+                            <button
+                              type="button"
+                              style={neo.reserveButton}
+                              onClick={() => {
+                                setBusquedaReservas(
+                                  nombreDeReserva(reserva) || ""
+                                );
+                                setVista("reservas");
+                              }}
+                            >
+                              Ver cita
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {reservasFechaOperativas.length > 0 && (
+                  <button
+                    type="button"
+                    style={{
+                      ...neo.viewAllButton,
+                      marginTop: 12,
+                    }}
+                    onClick={() => setVista("reservas")}
+                  >
+                    Administrar citas
+                  </button>
+                )}
+              </article>
+
+              <aside style={neo.controlPanel}>
+                <span style={neo.controlEyebrow}>
+                  RESUMEN DE LA JORNADA
+                </span>
+                <h3 style={neo.controlTitle}>
+                  Estado del día
+                </h3>
+
+                <div style={neo.controlStats}>
+                  <div style={neo.controlRow}>
+                    <span>Citas</span>
+                    <strong>
+                      {reservasFechaOperativas.length}
+                    </strong>
+                  </div>
+
+                  <div style={neo.controlRow}>
+                    <span>Confirmadas</span>
+                    <strong>
+                      {resumenReservas.confirmadas}
+                    </strong>
+                  </div>
+
+                  <div style={neo.controlRow}>
+                    <span>Asistieron</span>
+                    <strong>
+                      {resumenReservas.asistieron}
+                    </strong>
+                  </div>
+
+                  <div style={neo.controlRow}>
+                    <span>Pendientes</span>
+                    <strong>
+                      {resumenReservas.pendientes}
+                    </strong>
+                  </div>
+
+                  <div style={neo.controlRow}>
+                    <span>No asistieron</span>
+                    <strong>
+                      {resumenReservas.noAsistieron}
+                    </strong>
+                  </div>
+
+                  <div style={neo.controlRow}>
+                    <span>Horarios libres</span>
+                    <strong>
+                      {resumenAgenda.cuposDisponibles}
+                    </strong>
+                  </div>
+                </div>
+
+                <div style={neo.controlDivider} />
+
+                <button
+                  type="button"
+                  style={neo.controlPrimary}
+                  onClick={() => setVista("nueva")}
+                >
+                  + Nueva reserva
+                </button>
+
+                <button
+                  type="button"
+                  style={neo.controlSecondary}
+                  onClick={() => setVista("reservas")}
+                >
+                  Administrar citas
+                </button>
+
+                {esAdmin && (
+                  <button
+                    type="button"
+                    style={neo.controlSecondary}
+                    onClick={() => setVista("configuracion")}
+                  >
+                    Servicios y horarios
+                  </button>
+                )}
+              </aside>
+            </section>
+          ) : (
           <section style={neo.commandGrid} className="agenda-d-command-grid">
             <article style={neo.schedulePanel}>
               <div style={neo.panelTop}>
@@ -2197,6 +2472,7 @@ export default function AgendaPage() {
               )}
             </aside>
           </section>
+          )}
         </>
       )}
 
@@ -2472,10 +2748,16 @@ export default function AgendaPage() {
         >
           <div style={pro.panelHeader}>
             <div>
-              <span style={pro.panelEyebrow}>CONTROL Y SEGUIMIENTO</span>
-              <h2 style={pro.panelTitle}>Reservas</h2>
+              <span style={pro.panelEyebrow}>
+                {esSalonBelleza ? "RESERVAS" : "CONTROL Y SEGUIMIENTO"}
+              </span>
+              <h2 style={pro.panelTitle}>
+                {esSalonBelleza ? "Administrar citas" : "Reservas"}
+              </h2>
               <p style={{ ...s.muted, margin: "6px 0 0" }}>
-                Consulta reservas, asistencia, pendientes de pago y cancelaciones.
+                {esSalonBelleza
+                  ? "Consulta, filtra y administra las citas del salón."
+                  : "Consulta reservas, asistencia, pendientes de pago y cancelaciones."}
               </p>
             </div>
 
