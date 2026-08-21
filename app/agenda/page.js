@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.21-AGENDA-BELLEZA-VISUAL-RESERVAS-FIX4";
+const VERSION = "2026.08.21-AGENDA-BELLEZA-RESERVAS-COMPACTAS-FIX5";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -3901,7 +3901,7 @@ function ReservaLista({
   }
 
   return (
-    <div style={s.stack}>
+    <div style={s.stack} className={salon ? "agenda-reservas-stack-salon" : ""}>
       {reservas.map((reserva) => {
         const estado = normalizar(reserva.estado);
         const puedeGestionar =
@@ -5194,21 +5194,92 @@ const AGENDA_CSS = `
       gap: 5px !important;
     }
 
+    .agenda-reservas-stack-salon {
+      gap: 8px !important;
+    }
+
     .agenda-reserva-card-salon {
-      align-items: flex-start !important;
-      flex-direction: column !important;
-      padding: 15px !important;
+      min-height: 0 !important;
+      padding: 11px 12px !important;
+      gap: 9px !important;
+      border-radius: 13px !important;
+      align-items: center !important;
+      flex-direction: row !important;
+      flex-wrap: wrap !important;
+      box-shadow: 0 3px 10px rgba(18,60,39,.045) !important;
+    }
+
+    .agenda-reserva-card-salon > div:first-child {
+      flex: 1 1 100% !important;
+      min-width: 0 !important;
+    }
+
+    .agenda-reserva-card-salon > div:first-child > div:first-child {
+      width: 42px !important;
+      height: 42px !important;
+      border-radius: 12px !important;
+      font-size: 15px !important;
+    }
+
+    .agenda-reserva-card-salon > div:first-child > div:last-child {
+      min-width: 0 !important;
+    }
+
+    .agenda-reserva-card-salon strong {
+      font-size: 14px !important;
+      line-height: 1.15 !important;
+    }
+
+    .agenda-reserva-card-salon span {
+      line-height: 1.3 !important;
     }
 
     .agenda-reserva-actions-salon {
       width: 100% !important;
+      display: grid !important;
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+      gap: 6px !important;
       justify-content: stretch !important;
+      align-items: stretch !important;
     }
 
     .agenda-reserva-actions-salon button {
-      flex: 1 1 150px !important;
-      min-height: 44px !important;
-      font-size: 12px !important;
+      width: 100% !important;
+      min-width: 0 !important;
+      min-height: 36px !important;
+      padding: 7px 8px !important;
+      border-radius: 9px !important;
+      font-size: 10.5px !important;
+      line-height: 1.15 !important;
+      white-space: normal !important;
+    }
+
+    .agenda-reserva-actions-salon button:first-child:nth-last-child(2),
+    .agenda-reserva-actions-salon button:first-child:nth-last-child(2) ~ button {
+      grid-column: auto !important;
+    }
+
+    .agenda-reserva-actions-salon:has(button:nth-child(2):last-child) {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .agenda-reserva-actions-salon:has(button:only-child) {
+      grid-template-columns: 1fr !important;
+    }
+  }
+
+  @media (max-width: 430px) {
+    .agenda-reserva-card-salon {
+      padding: 10px !important;
+    }
+
+    .agenda-reserva-actions-salon {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .agenda-reserva-actions-salon button {
+      min-height: 35px !important;
+      font-size: 10px !important;
     }
   }
 
@@ -7079,9 +7150,9 @@ const s = {
   },
 
   reservationCardSalon: {
-    minHeight: 86,
-    padding: "16px 18px",
-    gap: 16,
+    minHeight: 74,
+    padding: "13px 15px",
+    gap: 12,
     border: "1px solid #dce6e0",
     borderRadius: 15,
     background: "#ffffff",
@@ -7093,28 +7164,28 @@ const s = {
   },
 
   avatarSalon: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: 14,
     fontSize: 17,
   },
 
   reservationNameSalon: {
     marginTop: 0,
-    fontSize: 15,
+    fontSize: 14,
     lineHeight: 1.2,
   },
 
   slotDetailSalon: {
-    marginTop: 6,
-    fontSize: 12,
+    marginTop: 4,
+    fontSize: 11,
     lineHeight: 1.45,
   },
 
   badgeSalon: {
-    minHeight: 28,
-    padding: "6px 10px",
-    fontSize: 10,
+    minHeight: 24,
+    padding: "5px 8px",
+    fontSize: 9,
     letterSpacing: ".35px",
   },
 
