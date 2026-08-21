@@ -860,6 +860,7 @@ export default function Dashboard() {
   const [bloqueado, setBloqueado] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [esMovil, setEsMovil] = useState(false);
+  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
 
   const [resumenGimnasio, setResumenGimnasio] =
     useState({
@@ -888,6 +889,9 @@ export default function Dashboard() {
 
       setEsMovil(movil);
 
+      if (!movil) {
+        setMenuMovilAbierto(false);
+      }
     };
 
     actualizarVista();
@@ -1995,6 +1999,166 @@ export default function Dashboard() {
           ...(esMovil ? s.mainMobile : {}),
         }}
       >
+        {esMovil && (
+          <>
+            <div style={s.mobileBar}>
+              <img
+                src="/konax-logo.png"
+                alt="KONAX"
+                style={s.mobileLogo}
+              />
+
+              <button
+                type="button"
+                onClick={() =>
+                  setMenuMovilAbierto(
+                    (actual) => !actual
+                  )
+                }
+                style={s.mobileMenuButton}
+                aria-label={
+                  menuMovilAbierto
+                    ? "Cerrar menú"
+                    : "Abrir menú"
+                }
+                aria-expanded={menuMovilAbierto}
+              >
+                <span style={s.hamburgerIcon}>
+                  {menuMovilAbierto ? "×" : "☰"}
+                </span>
+
+                {menuMovilAbierto ? "Cerrar" : "Menú"}
+              </button>
+            </div>
+
+            {menuMovilAbierto && (
+              <>
+                <div
+                  onClick={() =>
+                    setMenuMovilAbierto(false)
+                  }
+                  style={{
+                    position: "fixed",
+                    inset: 0,
+                    zIndex: 55,
+                    background: "rgba(7,16,11,.34)",
+                    backdropFilter: "blur(2px)",
+                  }}
+                  aria-hidden="true"
+                />
+
+                <nav
+                  style={s.mobileMenu}
+                  aria-label="Menú principal"
+                >
+                  <div
+                    style={{
+                      padding: "7px 8px 11px",
+                      borderBottom:
+                        "1px solid #e4ebe7",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "block",
+                        color: "#16834f",
+                        fontSize: 9,
+                        fontWeight: 900,
+                        letterSpacing: 1.2,
+                      }}
+                    >
+                      {etiquetaPanel}
+                    </span>
+
+                    <strong
+                      style={{
+                        display: "block",
+                        marginTop: 4,
+                        color: "#142019",
+                        fontSize: 16,
+                        lineHeight: 1.25,
+                      }}
+                    >
+                      {empresaNombre}
+                    </strong>
+
+                    <span
+                      style={{
+                        display: "block",
+                        marginTop: 3,
+                        color: "#78857d",
+                        fontSize: 11,
+                      }}
+                    >
+                      {usuarioNombre || "Usuario"}
+                      {" · "}
+                      {usuarioRol || "Sin rol"}
+                    </span>
+                  </div>
+
+                  {modulosMenu.map((item) => (
+                    <button
+                      key={`${item.codigo}-${item.ruta}`}
+                      type="button"
+                      onClick={() => {
+                        setMenuMovilAbierto(false);
+                        router.push(item.ruta);
+                      }}
+                      style={{
+                        ...s.mobileMenuItem,
+                        ...(item.codigo === "dashboard"
+                          ? s.mobileMenuItemActivo
+                          : {}),
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 30,
+                          height: 30,
+                          display: "grid",
+                          placeItems: "center",
+                          borderRadius: 9,
+                          background:
+                            item.codigo === "dashboard"
+                              ? "#dff3e7"
+                              : "#edf8f1",
+                          color: "#16834f",
+                          fontSize: 17,
+                          lineHeight: 1,
+                        }}
+                      >
+                        {item.icono}
+                      </span>
+
+                      <span
+                        style={{
+                          minWidth: 0,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {item.nombre}
+                      </span>
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuMovilAbierto(false);
+                      cerrarSesion();
+                    }}
+                    style={s.mobileLogout}
+                  >
+                    ↪ Cerrar sesión
+                  </button>
+                </nav>
+              </>
+            )}
+          </>
+        )}
+
         <header
           className="dashboard-topbar"
           style={{
