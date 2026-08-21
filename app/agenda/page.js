@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.17-AGENDA-V13-DISPONIBILIDAD-ACORDEON";
+const VERSION = "2026.08.20-AGENDA-WOD-V1";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -29,23 +29,6 @@ const HORARIO_INICIAL = {
   activo: true,
 };
 
-const SERVICIO_SALON_INICIAL = {
-  ...SERVICIO_INICIAL,
-  tipo: "cita_individual",
-  duracion_minutos: 45,
-  capacidad_default: 1,
-  requiere_membresia: false,
-  requiere_pago: true,
-  precio: 0,
-};
-
-const HORARIO_SALON_INICIAL = {
-  ...HORARIO_INICIAL,
-  hora_inicio: "09:00",
-  hora_fin: "10:00",
-  capacidad: 1,
-};
-
 function fechaHoy() {
   const d = new Date();
   const offset = d.getTimezoneOffset();
@@ -60,24 +43,6 @@ function normalizar(valor) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
-}
-
-function esTipoSalonBelleza(tipoNegocio, categoriaNegocio = "") {
-  const texto = normalizar(
-    `${tipoNegocio || ""} ${categoriaNegocio || ""}`
-  );
-
-  return [
-    "salon de belleza",
-    "salon belleza",
-    "salon",
-    "belleza",
-    "beauty",
-    "peluqueria",
-    "estetica",
-    "barberia",
-    "spa",
-  ].some((palabra) => texto.includes(palabra));
 }
 
 function formatoHora(hora) {
@@ -123,6 +88,27 @@ function esRolAdministrador(rol) {
   ].includes(normalizar(rol).replace(/\s+/g, "_"));
 }
 
+function esTipoGimnasio(tipoNegocio = "", categoriaNegocio = "") {
+  const texto = normalizar(`${tipoNegocio || ""} ${categoriaNegocio || ""}`);
+  return ["gimnasio", "gym", "fitness", "crossfit", "box", "academia", "club"]
+    .some((palabra) => texto.includes(palabra));
+}
+
+const WOD_INICIAL = {
+  servicio_id: "",
+  fecha: fechaHoy(),
+  titulo: "WOD del día",
+  warmup: "",
+  strength: "",
+  skill: "",
+  metcon: "",
+  cooldown: "",
+  notas_publicas: "",
+  notas_coach: "",
+  visible_desde: "",
+  activo: true,
+};
+
 export default function AgendaPage() {
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -132,7 +118,11 @@ export default function AgendaPage() {
   const [empresaNombre, setEmpresaNombre] = useState("");
   const [rol, setRol] = useState("");
   const [esAdmin, setEsAdmin] = useState(false);
-  const [esSalonBelleza, setEsSalonBelleza] = useState(false);
+  const [tipoNegocio, setTipoNegocio] = useState("");
+  const [categoriaNegocio, setCategoriaNegocio] = useState("");
+  const [wods, setWods] = useState([]);
+  const [wodForm, setWodForm] = useState(WOD_INICIAL);
+  const [wodEditandoId, setWodEditandoId] = useState(null);
 
   const [vista, setVista] = useState("hoy");
   const [fechaAgenda, setFechaAgenda] = useState(fechaHoy());
@@ -148,15 +138,10 @@ export default function AgendaPage() {
 
   const [horarioForm, setHorarioForm] = useState(HORARIO_INICIAL);
   const [horarioEditandoId, setHorarioEditandoId] = useState(null);
-  const [horarioEditandoIds, setHorarioEditandoIds] = useState([]);
-  const [diasHorarioSeleccionados, setDiasHorarioSeleccionados] = useState([5]);
 
   const [busquedaCliente, setBusquedaCliente] = useState("");
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [horarioSeleccionado, setHorarioSeleccionado] = useState("");
-  const [horaReservaSeleccionada, setHoraReservaSeleccionada] = useState("");
-  const [horarioDisponibilidadAbierto, setHorarioDisponibilidadAbierto] = useState("");
-  const [servicioReservaSeleccionado, setServicioReservaSeleccionado] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [busquedaReservas, setBusquedaReservas] = useState("");
   const [estadoReservaFiltro, setEstadoReservaFiltro] = useState("Todos");
@@ -167,7 +152,6 @@ export default function AgendaPage() {
     titulo_publico: "",
   });
   const [guardandoPortal, setGuardandoPortal] = useState(false);
-  const [alertaCancelacionCliente, setAlertaCancelacionCliente] = useState(null);
 
   useEffect(() => {
     inicializar();
@@ -179,53 +163,6 @@ export default function AgendaPage() {
       cargarReservas();
     }
   }, [fechaAgenda, empresaId]);
-
-
-  useEffect(() => {
-    if (!empresaId || clientes.length === 0) return;
-
-    const raw = localStorage.getItem("konaxAgendaClientePendiente");
-    if (!raw) return;
-
-    try {
-      const pendiente = JSON.parse(raw);
-
-      if (
-        String(pendiente?.empresaId || "") !== String(empresaId)
-      ) {
-        localStorage.removeItem("konaxAgendaClientePendiente");
-        return;
-      }
-
-      // Evita arrastrar una selección vieja si quedó guardada por accidente.
-      if (
-        pendiente?.creadoEn &&
-        Date.now() - Number(pendiente.creadoEn) > 30 * 60 * 1000
-      ) {
-        localStorage.removeItem("konaxAgendaClientePendiente");
-        return;
-      }
-
-      const cliente = clientes.find(
-        (item) => String(item.id) === String(pendiente?.clienteId)
-      );
-
-      if (!cliente) return;
-
-      setClienteSeleccionado(cliente);
-      setBusquedaCliente(cliente.nombre || pendiente.nombre || "");
-      setServicioReservaSeleccionado("");
-      setHorarioSeleccionado("");
-      setHoraReservaSeleccionada("");
-      setObservaciones("");
-      setVista("nueva");
-
-      localStorage.removeItem("konaxAgendaClientePendiente");
-    } catch (err) {
-      console.error("No se pudo recuperar el cliente para Agenda:", err);
-      localStorage.removeItem("konaxAgendaClientePendiente");
-    }
-  }, [empresaId, clientes]);
 
 
   useEffect(() => {
@@ -253,87 +190,6 @@ export default function AgendaPage() {
     };
   }, [empresaId, fechaAgenda]);
 
-  // Cancelaciones del portal público en tiempo real.
-  // El cliente libera el horario y el administrador recibe la alerta
-  // sin tener que actualizar manualmente la pantalla.
-  useEffect(() => {
-    if (!empresaId || !esAdmin) return;
-
-    const canal = supabase
-      .channel(`agenda-cancelaciones-${empresaId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "agenda_reservas",
-          filter: `empresa_id=eq.${empresaId}`,
-        },
-        async (payload) => {
-          const anterior = payload?.old || {};
-          const actual = payload?.new || {};
-
-          if (
-            normalizar(actual.estado) !== "cancelada" ||
-            normalizar(anterior.estado) === "cancelada"
-          ) {
-            return;
-          }
-
-          try {
-            const [clienteResp, servicioResp] = await Promise.all([
-              actual.cliente_id
-                ? supabase
-                    .from("clientes")
-                    .select("id,nombre,telefono")
-                    .eq("empresa_id", empresaId)
-                    .eq("id", actual.cliente_id)
-                    .maybeSingle()
-                : Promise.resolve({ data: null, error: null }),
-              actual.servicio_id
-                ? supabase
-                    .from("agenda_servicios")
-                    .select("id,nombre")
-                    .eq("empresa_id", empresaId)
-                    .eq("id", actual.servicio_id)
-                    .maybeSingle()
-                : Promise.resolve({ data: null, error: null }),
-            ]);
-
-            setAlertaCancelacionCliente({
-              reservaId: actual.id,
-              cliente:
-                clienteResp?.data?.nombre ||
-                actual.nombre_reserva ||
-                "Cliente",
-              telefono: clienteResp?.data?.telefono || "",
-              servicio:
-                servicioResp?.data?.nombre || "Servicio",
-              fecha: actual.fecha_reserva || fechaAgenda,
-              hora: actual.hora_inicio || "",
-              motivo: actual.motivo_cancelacion || "",
-              canceladoPor: actual.cancelado_por || "cliente",
-            });
-
-            await Promise.all([
-              cargarReservas(empresaId),
-              cargarDisponibilidad(fechaAgenda, empresaId),
-            ]);
-          } catch (err) {
-            console.error(
-              "No se pudo procesar la alerta de cancelación:",
-              err
-            );
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(canal);
-    };
-  }, [empresaId, esAdmin, fechaAgenda]);
-
   async function inicializar() {
     setCargando(true);
     setError("");
@@ -350,12 +206,11 @@ export default function AgendaPage() {
 
       const empresaLocal = localStorage.getItem("empresaId") || "";
       const empresaNombreLocal = localStorage.getItem("empresaNombre") || "";
-      const tipoNegocioLocal = localStorage.getItem("tipoNegocio") || "";
-      const categoriaNegocioLocal =
-        localStorage.getItem("categoriaNegocio") || "";
       const rolLocal = localStorage.getItem("usuarioRol") ||
         localStorage.getItem("rol") ||
         "";
+      const tipoNegocioLocal = localStorage.getItem("tipoNegocio") || "";
+      const categoriaNegocioLocal = localStorage.getItem("categoriaNegocio") || "";
 
       if (!empresaLocal) {
         alert("No hay una empresa activa.");
@@ -366,34 +221,12 @@ export default function AgendaPage() {
       const adminLocal =
         esRolAdministrador(rolLocal);
 
-      const salonLocal = esTipoSalonBelleza(
-        tipoNegocioLocal,
-        categoriaNegocioLocal
-      );
-
       setEmpresaId(empresaLocal);
       setEmpresaNombre(empresaNombreLocal);
       setRol(rolLocal);
       setEsAdmin(adminLocal);
-      setEsSalonBelleza(salonLocal);
-
-      if (salonLocal) {
-        setServicioForm(SERVICIO_SALON_INICIAL);
-        setHorarioForm(HORARIO_SALON_INICIAL);
-        setDiasHorarioSeleccionados([1, 2, 3, 4, 5, 6, 0]);
-      } else {
-        setDiasHorarioSeleccionados([5]);
-      }
-
-      if (typeof window !== "undefined") {
-        const vistaUrl = new URLSearchParams(
-          window.location.search
-        ).get("vista");
-
-        if (["hoy", "nueva", "reservas", "configuracion"].includes(vistaUrl)) {
-          setVista(vistaUrl);
-        }
-      }
+      setTipoNegocio(tipoNegocioLocal);
+      setCategoriaNegocio(categoriaNegocioLocal);
 
       await Promise.all([
         cargarServicios(empresaLocal),
@@ -401,6 +234,7 @@ export default function AgendaPage() {
         cargarClientes(empresaLocal),
         cargarReservas(empresaLocal),
         cargarDisponibilidad(fechaAgenda, empresaLocal),
+        cargarWods(empresaLocal),
         adminLocal
           ? cargarConfiguracionPortal(empresaLocal)
           : Promise.resolve(),
@@ -521,9 +355,8 @@ export default function AgendaPage() {
 
     if (!enlace) return;
 
-    const texto = esSalonBelleza
-      ? `Reserva tu cita en el salón aquí:\n${enlace}`
-      : `Reserva tu clase o servicio aquí:\n${enlace}`;
+    const texto =
+      `Reserva tu clase o servicio aquí:\n${enlace}`;
 
     window.open(
       `https://wa.me/?text=${encodeURIComponent(texto)}`,
@@ -626,6 +459,89 @@ export default function AgendaPage() {
     }));
   }
 
+  async function cargarWods(idEmpresa = empresaId) {
+    if (!idEmpresa) return;
+    const { data, error } = await supabase.rpc("listar_wods_agenda", {
+      p_empresa_id: idEmpresa,
+      p_desde: null,
+      p_hasta: null,
+    });
+    if (error) {
+      console.error("WOD:", error);
+      setWods([]);
+      return;
+    }
+    setWods(Array.isArray(data) ? data : []);
+  }
+
+  async function guardarWod() {
+    if (!esAdmin) return;
+    if (!wodForm.servicio_id || !wodForm.fecha) {
+      alert("Selecciona la clase/programa y la fecha.");
+      return;
+    }
+    setGuardando(true);
+    try {
+      const { data, error } = await supabase.rpc("guardar_wod_agenda", {
+        p_empresa_id: empresaId,
+        p_id: wodEditandoId,
+        p_servicio_id: wodForm.servicio_id,
+        p_fecha: wodForm.fecha,
+        p_titulo: wodForm.titulo.trim() || "WOD del día",
+        p_warmup: wodForm.warmup.trim() || null,
+        p_strength: wodForm.strength.trim() || null,
+        p_skill: wodForm.skill.trim() || null,
+        p_metcon: wodForm.metcon.trim() || null,
+        p_cooldown: wodForm.cooldown.trim() || null,
+        p_notas_publicas: wodForm.notas_publicas.trim() || null,
+        p_notas_coach: wodForm.notas_coach.trim() || null,
+        p_visible_desde: wodForm.visible_desde ? new Date(wodForm.visible_desde).toISOString() : null,
+        p_activo: Boolean(wodForm.activo),
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.mensaje || "No se pudo guardar el WOD.");
+      setWodForm({ ...WOD_INICIAL, fecha: wodForm.fecha || fechaHoy() });
+      setWodEditandoId(null);
+      await cargarWods();
+      alert("WOD guardado.");
+    } catch (err) {
+      setError(err?.message || "No se pudo guardar el WOD.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  function editarWod(wod) {
+    setWodEditandoId(wod.id);
+    setWodForm({
+      servicio_id: wod.servicio_id || "",
+      fecha: String(wod.fecha || fechaHoy()).slice(0, 10),
+      titulo: wod.titulo || "WOD del día",
+      warmup: wod.warmup || "",
+      strength: wod.strength || "",
+      skill: wod.skill || "",
+      metcon: wod.metcon || "",
+      cooldown: wod.cooldown || "",
+      notas_publicas: wod.notas_publicas || "",
+      notas_coach: wod.notas_coach || "",
+      visible_desde: wod.visible_desde ? String(wod.visible_desde).slice(0,16) : "",
+      activo: Boolean(wod.activo),
+    });
+  }
+
+  async function eliminarWod(wod) {
+    if (!esAdmin || !wod?.id || !window.confirm("¿Deseas eliminar este WOD?")) return;
+    const { data, error } = await supabase.rpc("eliminar_wod_agenda", {
+      p_empresa_id: empresaId,
+      p_id: wod.id,
+    });
+    if (error || !data?.ok) {
+      alert(error?.message || data?.mensaje || "No se pudo eliminar el WOD.");
+      return;
+    }
+    await cargarWods();
+  }
+
   async function cargarServicios(idEmpresa = empresaId) {
     if (!idEmpresa) return;
 
@@ -723,53 +639,6 @@ export default function AgendaPage() {
     return mapa;
   }, [horarios]);
 
-  const horariosAgrupados = useMemo(() => {
-    const grupos = new Map();
-    const ordenDias = [1, 2, 3, 4, 5, 6, 0];
-
-    horarios.forEach((horario) => {
-      const clave = [
-        horario.servicio_id || "",
-        String(horario.hora_inicio || "").slice(0, 5),
-        String(horario.hora_fin || "").slice(0, 5),
-        normalizar(horario.instructor || ""),
-        Number(horario.capacidad || 1),
-        horario.fecha_desde || "",
-        horario.fecha_hasta || "",
-        Boolean(horario.activo) ? "1" : "0",
-      ].join("|");
-
-      if (!grupos.has(clave)) {
-        grupos.set(clave, {
-          ...horario,
-          ids: [],
-          dias: [],
-        });
-      }
-
-      const grupo = grupos.get(clave);
-      grupo.ids.push(horario.id);
-
-      const dia = Number(horario.dia_semana);
-      if (!grupo.dias.includes(dia)) {
-        grupo.dias.push(dia);
-      }
-    });
-
-    return Array.from(grupos.values())
-      .map((grupo) => ({
-        ...grupo,
-        dias: [...grupo.dias].sort(
-          (a, b) => ordenDias.indexOf(a) - ordenDias.indexOf(b)
-        ),
-      }))
-      .sort((a, b) =>
-        nombreServicio(a.servicio_id).localeCompare(
-          nombreServicio(b.servicio_id)
-        )
-      );
-  }, [horarios, servicios]);
-
   const clientesFiltrados = useMemo(() => {
     const q = normalizar(busquedaCliente);
     if (!q) return [];
@@ -791,108 +660,6 @@ export default function AgendaPage() {
         String(a.hora_inicio || "").localeCompare(String(b.hora_inicio || ""))
       );
   }, [reservas, fechaAgenda]);
-
-  const serviciosDisponiblesReserva = useMemo(() => {
-    const ids = new Set();
-
-    disponibilidad.forEach((item) => {
-      const horario = mapaHorarios.get(String(item.horario_id));
-      const servicioId =
-        item.servicio_id ||
-        horario?.servicio_id ||
-        "";
-
-      if (servicioId) ids.add(String(servicioId));
-    });
-
-    return servicios
-      .filter((servicio) => ids.has(String(servicio.id)))
-      .sort((a, b) =>
-        String(a.nombre || "").localeCompare(String(b.nombre || ""))
-      );
-  }, [disponibilidad, mapaHorarios, servicios]);
-
-  const disponibilidadReservaFiltrada = useMemo(() => {
-    if (!servicioReservaSeleccionado) return [];
-
-    return disponibilidad.filter((item) => {
-      const horario = mapaHorarios.get(String(item.horario_id));
-      const servicioId =
-        item.servicio_id ||
-        horario?.servicio_id ||
-        "";
-
-      return String(servicioId) === String(servicioReservaSeleccionado);
-    });
-  }, [
-    disponibilidad,
-    servicioReservaSeleccionado,
-    mapaHorarios,
-  ]);
-
-  const disponibilidadCompacta = useMemo(() => {
-    if (!esSalonBelleza) return disponibilidad;
-
-    const grupos = new Map();
-
-    disponibilidad.forEach((item) => {
-      const clave = String(item.horario_id);
-
-      if (!grupos.has(clave)) {
-        grupos.set(clave, {
-          ...item,
-          slots: [],
-          reservadosTotal: 0,
-          disponiblesTotal: 0,
-          slotsDisponibles: 0,
-        });
-      }
-
-      const grupo = grupos.get(clave);
-
-      grupo.slots.push({
-        hora_inicio: item.hora_inicio,
-        hora_fin: item.hora_fin,
-        disponibles: Number(item.disponibles || 0),
-        reservados: Number(item.reservados || 0),
-      });
-
-      grupo.reservadosTotal += Number(item.reservados || 0);
-      grupo.disponiblesTotal += Number(item.disponibles || 0);
-
-      if (Number(item.disponibles || 0) > 0) {
-        grupo.slotsDisponibles += 1;
-      }
-    });
-
-    return Array.from(grupos.values())
-      .map((grupo) => ({
-        ...grupo,
-        slots: [...grupo.slots].sort((a, b) =>
-          String(a.hora_inicio || "").localeCompare(
-            String(b.hora_inicio || "")
-          )
-        ),
-      }))
-      .sort((a, b) =>
-        String(a.servicio_nombre || "").localeCompare(
-          String(b.servicio_nombre || "")
-        )
-      );
-  }, [disponibilidad, esSalonBelleza]);
-
-  const horariosLibresReales = useMemo(() => {
-    if (esSalonBelleza) {
-      return disponibilidad.filter(
-        (item) => Number(item.disponibles || 0) > 0
-      ).length;
-    }
-
-    return disponibilidad.reduce(
-      (total, item) => total + Number(item.disponibles || 0),
-      0
-    );
-  }, [disponibilidad, esSalonBelleza]);
 
   const reservasActivas = useMemo(() => {
     return reservas.filter((r) =>
@@ -1052,6 +819,7 @@ export default function AgendaPage() {
         cargarClientes(),
         cargarReservas(),
         cargarDisponibilidad(),
+        cargarWods(),
       ]);
     } catch (err) {
       setError(err?.message || "No se pudo actualizar Agenda.");
@@ -1062,20 +830,12 @@ export default function AgendaPage() {
 
   async function guardarServicio() {
     if (!esAdmin) {
-      alert(
-        esSalonBelleza
-          ? "Solo el administrador puede configurar los servicios del salón."
-          : "Solo el administrador puede configurar servicios o clases."
-      );
+      alert("Solo el administrador puede configurar servicios o clases.");
       return;
     }
 
     if (!servicioForm.nombre.trim()) {
-      alert(
-        esSalonBelleza
-          ? "Escribe el nombre del servicio del salón."
-          : "Escribe el nombre del servicio o clase."
-      );
+      alert("Escribe el nombre del servicio o clase.");
       return;
     }
 
@@ -1124,11 +884,7 @@ export default function AgendaPage() {
 
       if (respuesta.error) throw respuesta.error;
 
-      setServicioForm(
-        esSalonBelleza
-          ? SERVICIO_SALON_INICIAL
-          : SERVICIO_INICIAL
-      );
+      setServicioForm(SERVICIO_INICIAL);
       setServicioEditandoId(null);
       await cargarServicios();
       alert(servicioEditandoId ? "Servicio actualizado." : "Servicio creado.");
@@ -1172,44 +928,6 @@ export default function AgendaPage() {
     await cargarServicios();
   }
 
-  function alternarDiaHorario(dia) {
-    setDiasHorarioSeleccionados((actuales) => {
-      const existe = actuales.includes(dia);
-      const orden = [1, 2, 3, 4, 5, 6, 0];
-
-      if (existe) {
-        return actuales.filter((item) => item !== dia);
-      }
-
-      return [...actuales, dia].sort(
-        (a, b) => orden.indexOf(a) - orden.indexOf(b)
-      );
-    });
-  }
-
-  function alternarGrupoDias(diasGrupo) {
-    const grupo = diasGrupo.map(Number);
-
-    setDiasHorarioSeleccionados((actuales) => {
-      const todosActivos = grupo.every((dia) => actuales.includes(dia));
-      const orden = [1, 2, 3, 4, 5, 6, 0];
-
-      if (todosActivos) {
-        return actuales.filter((dia) => !grupo.includes(dia));
-      }
-
-      return Array.from(new Set([...actuales, ...grupo])).sort(
-        (a, b) => orden.indexOf(a) - orden.indexOf(b)
-      );
-    });
-  }
-
-  function grupoDiasActivo(diasGrupo) {
-    return diasGrupo.every((dia) =>
-      diasHorarioSeleccionados.includes(Number(dia))
-    );
-  }
-
   async function guardarHorario() {
     if (!esAdmin) {
       alert("Solo el administrador puede configurar horarios.");
@@ -1221,18 +939,8 @@ export default function AgendaPage() {
       return;
     }
 
-    if (!diasHorarioSeleccionados.length) {
-      alert("Selecciona por lo menos un día disponible.");
-      return;
-    }
-
     if (!horarioForm.hora_inicio || !horarioForm.hora_fin) {
       alert("Completa la hora de inicio y fin.");
-      return;
-    }
-
-    if (horarioForm.hora_fin <= horarioForm.hora_inicio) {
-      alert("La hora de finalización debe ser posterior a la hora de inicio.");
       return;
     }
 
@@ -1240,9 +948,10 @@ export default function AgendaPage() {
     setError("");
 
     try {
-      const basePayload = {
+      const payload = {
         empresa_id: empresaId,
         servicio_id: horarioForm.servicio_id,
+        dia_semana: Number(horarioForm.dia_semana),
         hora_inicio: horarioForm.hora_inicio,
         hora_fin: horarioForm.hora_fin,
         instructor: horarioForm.instructor.trim() || null,
@@ -1252,186 +961,47 @@ export default function AgendaPage() {
         activo: Boolean(horarioForm.activo),
       };
 
+      let respuesta;
+
       if (horarioEditandoId) {
-        const idsAnteriores =
-          horarioEditandoIds.length > 0
-            ? horarioEditandoIds
-            : [horarioEditandoId];
-
-        /*
-          IMPORTANTE:
-          Antes se borraban los horarios y luego se volvían a insertar.
-          Eso puede fallar si una reserva histórica apunta al horario por ID.
-          Ahora se conservan los IDs existentes y se actualizan en su lugar.
-        */
-        const { data: filasActuales, error: errorFilas } = await supabase
+        respuesta = await supabase
           .from("agenda_horarios")
-          .select("id,dia_semana")
+          .update(payload)
           .eq("empresa_id", empresaId)
-          .in("id", idsAnteriores);
-
-        if (errorFilas) throw errorFilas;
-
-        const actuales = Array.isArray(filasActuales) ? filasActuales : [];
-        const diasDeseados = [...diasHorarioSeleccionados].map(Number);
-        const filasPorDia = new Map(
-          actuales.map((fila) => [Number(fila.dia_semana), fila])
-        );
-
-        // 1. Actualizar los días que ya existían, manteniendo exactamente su ID.
-        for (const dia of diasDeseados) {
-          const filaExistente = filasPorDia.get(dia);
-
-          if (filaExistente?.id) {
-            const { error: errorActualizar } = await supabase
-              .from("agenda_horarios")
-              .update({
-                ...basePayload,
-                dia_semana: dia,
-              })
-              .eq("empresa_id", empresaId)
-              .eq("id", filaExistente.id);
-
-            if (errorActualizar) throw errorActualizar;
-          }
-        }
-
-        // 2. Insertar únicamente días nuevos.
-        const diasNuevos = diasDeseados.filter(
-          (dia) => !filasPorDia.has(dia)
-        );
-
-        if (diasNuevos.length > 0) {
-          const { error: errorInsertar } = await supabase
-            .from("agenda_horarios")
-            .insert(
-              diasNuevos.map((dia) => ({
-                ...basePayload,
-                dia_semana: dia,
-              }))
-            );
-
-          if (errorInsertar) throw errorInsertar;
-        }
-
-        // 3. Quitar únicamente días que el usuario desmarcó.
-        // Si tienen reservas relacionadas, se desactivan para conservar historial.
-        const filasRemovidas = actuales.filter(
-          (fila) => !diasDeseados.includes(Number(fila.dia_semana))
-        );
-
-        for (const fila of filasRemovidas) {
-          const { count, error: errorConteo } = await supabase
-            .from("agenda_reservas")
-            .select("id", { count: "exact", head: true })
-            .eq("empresa_id", empresaId)
-            .eq("horario_id", fila.id);
-
-          if (errorConteo) throw errorConteo;
-
-          if (Number(count || 0) > 0) {
-            const { error: errorDesactivar } = await supabase
-              .from("agenda_horarios")
-              .update({ activo: false })
-              .eq("empresa_id", empresaId)
-              .eq("id", fila.id);
-
-            if (errorDesactivar) throw errorDesactivar;
-          } else {
-            const { error: errorEliminar } = await supabase
-              .from("agenda_horarios")
-              .delete()
-              .eq("empresa_id", empresaId)
-              .eq("id", fila.id);
-
-            if (errorEliminar) throw errorEliminar;
-          }
-        }
+          .eq("id", horarioEditandoId);
       } else {
-        const horariosNuevos =
-          diasHorarioSeleccionados.map((dia) => ({
-            ...basePayload,
-            dia_semana: Number(dia),
-          }));
-
-        const insercion = await supabase
+        respuesta = await supabase
           .from("agenda_horarios")
-          .insert(horariosNuevos);
-
-        if (insercion.error) {
-          throw insercion.error;
-        }
+          .insert([payload]);
       }
 
-      setHorarioForm(
-        esSalonBelleza
-          ? HORARIO_SALON_INICIAL
-          : HORARIO_INICIAL
-      );
+      if (respuesta.error) throw respuesta.error;
 
-      setDiasHorarioSeleccionados(
-        esSalonBelleza
-          ? [1, 2, 3, 4, 5, 6, 0]
-          : [5]
-      );
-
+      setHorarioForm(HORARIO_INICIAL);
       setHorarioEditandoId(null);
-      setHorarioEditandoIds([]);
-
       await cargarHorarios();
       await cargarDisponibilidad();
-
-      alert(
-        horarioEditandoId
-          ? "Horario actualizado."
-          : diasHorarioSeleccionados.length > 1
-          ? "Horarios creados para los días seleccionados."
-          : "Horario creado."
-      );
+      alert(horarioEditandoId ? "Horario actualizado." : "Horario creado.");
     } catch (err) {
       console.error(err);
-      const mensaje =
-        err?.message || "No se pudo guardar el horario.";
-      setError(mensaje);
-      alert(`No se pudo guardar el cambio: ${mensaje}`);
+      setError(err?.message || "No se pudo guardar el horario.");
     } finally {
       setGuardando(false);
     }
   }
 
   function editarHorario(horario) {
-    editarGrupoHorario({
-      ...horario,
-      ids: [horario.id],
-      dias: [Number(horario.dia_semana ?? 5)],
-    });
-  }
-
-  function editarGrupoHorario(grupo) {
-    const dias =
-      Array.isArray(grupo.dias) && grupo.dias.length
-        ? grupo.dias.map(Number)
-        : [Number(grupo.dia_semana ?? 5)];
-
-    const ids =
-      Array.isArray(grupo.ids) && grupo.ids.length
-        ? grupo.ids
-        : [grupo.id];
-
-    setHorarioEditandoId(ids[0]);
-    setHorarioEditandoIds(ids);
-    setDiasHorarioSeleccionados(dias);
-
+    setHorarioEditandoId(horario.id);
     setHorarioForm({
-      servicio_id: grupo.servicio_id || "",
-      dia_semana: Number(dias[0] ?? 5),
-      hora_inicio: String(grupo.hora_inicio || "18:00").slice(0, 5),
-      hora_fin: String(grupo.hora_fin || "19:00").slice(0, 5),
-      instructor: grupo.instructor || "",
-      capacidad: Number(grupo.capacidad || 1),
-      fecha_desde: grupo.fecha_desde || fechaHoy(),
-      fecha_hasta: grupo.fecha_hasta || "",
-      activo: Boolean(grupo.activo),
+      servicio_id: horario.servicio_id || "",
+      dia_semana: Number(horario.dia_semana ?? 5),
+      hora_inicio: String(horario.hora_inicio || "18:00").slice(0, 5),
+      hora_fin: String(horario.hora_fin || "19:00").slice(0, 5),
+      instructor: horario.instructor || "",
+      capacidad: Number(horario.capacidad || 1),
+      fecha_desde: horario.fecha_desde || fechaHoy(),
+      fecha_hasta: horario.fecha_hasta || "",
+      activo: Boolean(horario.activo),
     });
   }
 
@@ -1453,36 +1023,9 @@ export default function AgendaPage() {
     await cargarDisponibilidad();
   }
 
-  async function alternarGrupoHorario(grupo) {
-    if (!esAdmin) return;
-
-    const ids =
-      Array.isArray(grupo.ids) && grupo.ids.length
-        ? grupo.ids
-        : [grupo.id];
-
-    const { error } = await supabase
-      .from("agenda_horarios")
-      .update({ activo: !grupo.activo })
-      .eq("empresa_id", empresaId)
-      .in("id", ids);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    await cargarHorarios();
-    await cargarDisponibilidad();
-  }
-
   async function crearReserva() {
     if (!clienteSeleccionado?.id) {
-      alert(
-        esSalonBelleza
-          ? "Selecciona un cliente."
-          : "Selecciona un alumno."
-      );
+      alert("Selecciona un alumno.");
       return;
     }
 
@@ -1491,30 +1034,17 @@ export default function AgendaPage() {
       return;
     }
 
-    if (esSalonBelleza && !horaReservaSeleccionada) {
-      alert("Selecciona la hora exacta de la cita.");
-      return;
-    }
-
     setGuardando(true);
     setError("");
 
     try {
-      const parametrosReserva = {
+      const { data, error } = await supabase.rpc("crear_reserva_agenda", {
         p_empresa_id: empresaId,
         p_horario_id: horarioSeleccionado,
         p_cliente_id: clienteSeleccionado.id,
         p_fecha_reserva: fechaAgenda,
         p_observaciones: observaciones.trim() || null,
-        ...(esSalonBelleza
-          ? { p_hora_inicio: horaReservaSeleccionada }
-          : {}),
-      };
-
-      const { data, error } = await supabase.rpc(
-        "crear_reserva_agenda",
-        parametrosReserva
-      );
+      });
 
       if (error) throw error;
 
@@ -1522,9 +1052,7 @@ export default function AgendaPage() {
 
       setClienteSeleccionado(null);
       setBusquedaCliente("");
-      setServicioReservaSeleccionado("");
       setHorarioSeleccionado("");
-      setHoraReservaSeleccionada("");
       setObservaciones("");
 
       await Promise.all([
@@ -1540,9 +1068,7 @@ export default function AgendaPage() {
         );
       } else {
         alert(
-          esSalonBelleza
-            ? "Cita confirmada correctamente."
-            : `Reserva confirmada. Quedan ${resultado.disponibles ?? 0} cupos disponibles.`
+          `Reserva confirmada. Quedan ${resultado.disponibles ?? 0} cupos disponibles.`
         );
       }
 
@@ -1678,6 +1204,13 @@ export default function AgendaPage() {
     return `${nombreDia(h.dia_semana)} · ${formatoHora(h.hora_inicio)}`;
   }
 
+  const esGimnasio = esTipoGimnasio(tipoNegocio, categoriaNegocio);
+
+  const wodsFecha = useMemo(() =>
+    wods.filter((wod) => String(wod.fecha || "").slice(0,10) === fechaAgenda),
+    [wods, fechaAgenda]
+  );
+
   if (cargando) {
     return (
       <main style={s.loading}>
@@ -1692,8 +1225,8 @@ export default function AgendaPage() {
       <style>{AGENDA_CSS}</style>
 
       <header style={neo.hero} className="agenda-d-hero">
-        <div style={neo.heroMain} className="agenda-d-hero-main">
-          <div style={neo.brandRow} className="agenda-d-brand-row">
+        <div style={neo.heroMain}>
+          <div style={neo.brandRow}>
             <div style={neo.logoCard}>
               <img
                 src="/konax-logo.png"
@@ -1704,19 +1237,15 @@ export default function AgendaPage() {
 
             <div>
               <span style={neo.heroEyebrow}>
-                {esSalonBelleza
-                  ? "KONAX · CITAS Y SERVICIOS"
-                  : "KONAX · RESERVAS Y CLASES"}
+                KONAX · RESERVAS Y CLASES
               </span>
               <h1 style={neo.heroTitle}>
-                {esSalonBelleza
-                  ? "Agenda Operativa"
-                  : "Agenda Operativa"}
+                Centro de Agenda
               </h1>
               <p style={neo.heroSubtitle}>
-                {empresaNombre || "KONAX"} · {esSalonBelleza
-                  ? "Citas, horarios y disponibilidad del día en una sola vista."
-                  : "Reservas, horarios y capacidad del día en una sola vista."}
+                {empresaNombre || "KONAX"} · Controla horarios,
+                capacidad, reservas y asistencia desde una vista
+                operativa más clara.
               </p>
             </div>
           </div>
@@ -1730,29 +1259,23 @@ export default function AgendaPage() {
               ← Panel principal
             </button>
 
+            <button
+              type="button"
+              style={neo.heroPrimary}
+              onClick={() => setVista("nueva")}
+            >
+              + Crear reserva
+            </button>
           </div>
         </div>
 
-        <div style={neo.heroSide} className="agenda-d-hero-side">
+        <div style={neo.heroSide}>
           <span style={neo.heroSideLabel}>
             FECHA EN OPERACIÓN
           </span>
-
-          <label style={neo.heroCalendar}>
-            <span style={neo.heroCalendarLabel}>
-              Calendario
-            </span>
-
-            <input
-              type="date"
-              value={fechaAgenda}
-              onChange={(e) => {
-                setFechaAgenda(e.target.value);
-                setHorarioSeleccionado("");
-              }}
-              style={neo.heroCalendarInput}
-            />
-          </label>
+          <strong style={neo.heroSideDate}>
+            {formatoFecha(fechaAgenda)}
+          </strong>
 
           <div style={neo.heroSideStats}>
             <div>
@@ -1777,83 +1300,6 @@ export default function AgendaPage() {
       </header>
 
       {error && <div style={s.error}>{error}</div>}
-
-      {alertaCancelacionCliente && (
-        <section
-          style={{
-            margin: "0 auto 14px",
-            maxWidth: 1450,
-            padding: "14px 16px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 14,
-            flexWrap: "wrap",
-            border: "1px solid #F2C7C2",
-            borderRadius: 16,
-            background: "#FFF4F2",
-            color: "#7A271A",
-          }}
-        >
-          <div>
-            <strong style={{ display: "block", marginBottom: 4 }}>
-              ⚠ Cita cancelada por el cliente · horario liberado
-            </strong>
-            <span style={{ fontSize: 12 }}>
-              {alertaCancelacionCliente.cliente} · {alertaCancelacionCliente.servicio}
-              {" · "}
-              {formatoFecha(alertaCancelacionCliente.fecha)}
-              {" · "}
-              {formatoHora(alertaCancelacionCliente.hora)}
-              {alertaCancelacionCliente.motivo
-                ? ` · Motivo: ${alertaCancelacionCliente.motivo}`
-                : ""}
-            </span>
-          </div>
-
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={() => {
-                setFechaAgenda(
-                  alertaCancelacionCliente.fecha || fechaHoy()
-                );
-                setHorarioSeleccionado("");
-                setVista("nueva");
-              }}
-              style={{
-                minHeight: 38,
-                padding: "0 14px",
-                border: 0,
-                borderRadius: 10,
-                background: "#111827",
-                color: "#FFFFFF",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              Nueva reserva
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setAlertaCancelacionCliente(null)}
-              style={{
-                minHeight: 38,
-                padding: "0 12px",
-                border: "1px solid #E5A59D",
-                borderRadius: 10,
-                background: "#FFFFFF",
-                color: "#7A271A",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              Cerrar
-            </button>
-          </div>
-        </section>
-      )}
 
       <section style={neo.nav} className="agenda-d-nav">
         <button
@@ -1892,6 +1338,20 @@ export default function AgendaPage() {
           Reservas
         </button>
 
+        {esGimnasio && (
+          <button
+            type="button"
+            onClick={() => setVista("wod")}
+            style={{
+              ...neo.navItem,
+              ...(vista === "wod" ? neo.navItemActive : {}),
+            }}
+          >
+            <span>W</span>
+            WOD
+          </button>
+        )}
+
         {esAdmin && (
           <button
             type="button"
@@ -1904,9 +1364,7 @@ export default function AgendaPage() {
             }}
           >
             <span>⚙</span>
-            {esSalonBelleza
-            ? "Servicios y horarios"
-            : "Clases y horarios"}
+            Clases y horarios
           </button>
         )}
 
@@ -1922,19 +1380,119 @@ export default function AgendaPage() {
 
       {vista === "hoy" && (
         <>
+          <section style={neo.weekShell} className="agenda-d-week-shell">
+            <div style={neo.weekHeader}>
+              <div>
+                <span style={neo.sectionEyebrow}>
+                  SEMANA OPERATIVA
+                </span>
+                <h2 style={neo.sectionTitle}>
+                  Selecciona el día que deseas gestionar
+                </h2>
+              </div>
+
+              <div style={neo.weekControls}>
+                <button
+                  type="button"
+                  style={neo.roundButton}
+                  onClick={() => moverFechaAgenda(-7)}
+                >
+                  ←
+                </button>
+
+                <button
+                  type="button"
+                  style={neo.todayPill}
+                  onClick={irAgendaHoy}
+                >
+                  Hoy
+                </button>
+
+                <button
+                  type="button"
+                  style={neo.roundButton}
+                  onClick={() => moverFechaAgenda(7)}
+                >
+                  →
+                </button>
+              </div>
+            </div>
+
+            <div style={neo.weekStrip} className="agenda-d-week-strip">
+              {semanaAgenda.map((dia) => (
+                <button
+                  key={dia.fecha}
+                  type="button"
+                  onClick={() => {
+                    setFechaAgenda(dia.fecha);
+                    setHorarioSeleccionado("");
+                  }}
+                  style={{
+                    ...neo.dayCard,
+                    ...(dia.seleccionado
+                      ? neo.dayCardActive
+                      : {}),
+                  }}
+                >
+                  <span
+                    style={{
+                      ...neo.dayName,
+                      ...(dia.seleccionado
+                        ? neo.dayTextActive
+                        : {}),
+                    }}
+                  >
+                    {dia.dia}
+                  </span>
+
+                  <strong
+                    style={{
+                      ...neo.dayNumber,
+                      ...(dia.seleccionado
+                        ? neo.dayTextActive
+                        : {}),
+                    }}
+                  >
+                    {dia.numero}
+                  </strong>
+
+                  <span
+                    style={{
+                      ...neo.dayMonth,
+                      ...(dia.seleccionado
+                        ? neo.dayTextActive
+                        : {}),
+                    }}
+                  >
+                    {dia.mes}
+                  </span>
+
+                  {dia.hoy && (
+                    <span
+                      style={{
+                        ...neo.todayDot,
+                        ...(dia.seleccionado
+                          ? neo.todayDotActive
+                          : {}),
+                      }}
+                    >
+                      HOY
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </section>
+
           <section style={neo.kpiGrid} className="agenda-d-kpis">
             <article style={neo.kpiCard}>
-              <span style={neo.kpiCaption}>
-                {esSalonBelleza ? "SERVICIOS" : "CLASES"}
-              </span>
+              <span style={neo.kpiCaption}>CLASES</span>
               <div style={neo.kpiBody}>
                 <strong style={neo.kpiNumber}>
-                  {esSalonBelleza
-                    ? disponibilidadCompacta.length
-                    : disponibilidad.length}
+                  {disponibilidad.length}
                 </strong>
                 <span style={neo.kpiHint}>
-                  {esSalonBelleza ? "programados hoy" : "programadas"}
+                  programadas
                 </span>
               </div>
             </article>
@@ -1952,14 +1510,10 @@ export default function AgendaPage() {
             </article>
 
             <article style={neo.kpiCard}>
-              <span style={neo.kpiCaption}>
-                {esSalonBelleza ? "HORARIOS LIBRES" : "CUPOS LIBRES"}
-              </span>
+              <span style={neo.kpiCaption}>CUPOS LIBRES</span>
               <div style={neo.kpiBody}>
                 <strong style={neo.kpiNumber}>
-                  {esSalonBelleza
-                    ? horariosLibresReales
-                    : resumenAgenda.cuposDisponibles}
+                  {resumenAgenda.cuposDisponibles}
                 </strong>
                 <span style={neo.kpiHint}>
                   disponibles
@@ -1976,40 +1530,62 @@ export default function AgendaPage() {
                   {resumenAgenda.ocupacion}%
                 </strong>
                 <span style={neo.kpiHintAccent}>
-                  {esSalonBelleza ? "de la agenda" : "de la capacidad"}
+                  de la capacidad
                 </span>
               </div>
             </article>
           </section>
 
           <section style={neo.commandGrid} className="agenda-d-command-grid">
-            <article style={neo.schedulePanel} className="agenda-main-schedule">
+            <article style={neo.schedulePanel}>
               <div style={neo.panelTop}>
                 <div>
                   <span style={neo.sectionEyebrow}>
                     PROGRAMACIÓN DEL DÍA
                   </span>
                   <h2 style={neo.panelHeading}>
-                    {esSalonBelleza
-                      ? "Servicios y horarios"
-                      : "Horarios y capacidad"}
+                    Horarios y capacidad
                   </h2>
                 </div>
 
+                <div style={neo.dateInline}>
+                  <button
+                    type="button"
+                    onClick={() => moverFechaAgenda(-1)}
+                    style={neo.dateArrow}
+                  >
+                    ‹
+                  </button>
+
+                  <input
+                    type="date"
+                    value={fechaAgenda}
+                    onChange={(e) => {
+                      setFechaAgenda(e.target.value);
+                      setHorarioSeleccionado("");
+                    }}
+                    style={neo.dateInput}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => moverFechaAgenda(1)}
+                    style={neo.dateArrow}
+                  >
+                    ›
+                  </button>
+                </div>
               </div>
 
               {disponibilidad.length === 0 ? (
                 <div style={neo.emptyLarge}>
                   <div style={neo.emptyIcon}>◷</div>
                   <strong style={neo.emptyTitle}>
-                    {esSalonBelleza
-                      ? "No hay servicios programados"
-                      : "No hay clases programadas"}
+                    No hay clases programadas
                   </strong>
                   <span style={neo.emptyText}>
-                    {esSalonBelleza
-                      ? "Selecciona otra fecha o configura los servicios y horarios disponibles."
-                      : "Selecciona otra fecha o crea un horario desde Clases y horarios."}
+                    Selecciona otra fecha o crea un horario
+                    desde Clases y horarios.
                   </span>
 
                   {esAdmin && (
@@ -2018,28 +1594,18 @@ export default function AgendaPage() {
                       style={neo.emptyButton}
                       onClick={() => setVista("configuracion")}
                     >
-                      {esSalonBelleza
-                        ? "Configurar servicios y horarios"
-                        : "Configurar horario"}
+                      Configurar horario
                     </button>
                   )}
                 </div>
               ) : (
                 <div style={neo.timeline}>
-                  {(esSalonBelleza
-                    ? disponibilidadCompacta
-                    : disponibilidad
-                  ).map((item, index) => {
+                  {disponibilidad.map((item, index) => {
                     const capacidad = Number(item.capacidad || 0);
-                    const reservados = esSalonBelleza
-                      ? Number(item.reservadosTotal || 0)
-                      : Number(item.reservados || 0);
-
-                    const libres = esSalonBelleza
-                      ? Number(item.slotsDisponibles || 0)
-                      : Number(item.disponibles || 0);
+                    const reservados = Number(item.reservados || 0);
+                    const libres = Number(item.disponibles || 0);
                     const porcentaje =
-                      capacidad > 0 && !esSalonBelleza
+                      capacidad > 0
                         ? Math.min(
                             100,
                             Math.round(
@@ -2053,44 +1619,33 @@ export default function AgendaPage() {
                     return (
                       <div
                         key={item.horario_id}
-                        style={{
-                          ...neo.timelineRow,
-                          ...(esSalonBelleza
-                            ? neo.timelineRowBeautyCompact
-                            : {}),
-                        }}
+                        style={neo.timelineRow}
                         className="agenda-d-timeline-row"
                       >
                         <div style={neo.timelineRail}>
                           <span style={neo.timelineDot} />
                           {index <
-                            (esSalonBelleza
-                              ? disponibilidadCompacta.length
-                              : disponibilidad.length) -
-                              1 && (
+                            disponibilidad.length - 1 && (
                             <span style={neo.timelineLine} />
                           )}
                         </div>
 
-                        {!esSalonBelleza && (
-                          <div style={neo.timelineTime}>
-                            <strong>
-                              {formatoHora(item.hora_inicio)}
-                            </strong>
-                            <span>
-                              {formatoHora(item.hora_fin)}
-                            </span>
-                          </div>
-                        )}
+                        <div style={neo.timelineTime}>
+                          <strong>
+                            {formatoHora(item.hora_inicio)}
+                          </strong>
+                          <span>
+                            {formatoHora(item.hora_fin)}
+                          </span>
+                        </div>
 
                         <div style={neo.timelineClass}>
                           <div style={neo.classTopLine}>
                             <span style={neo.classBadge}>
-                              {esSalonBelleza
-                              ? "SERVICIO"
-                              : item.servicio_tipo === "cita_individual"
-                              ? "CITA"
-                              : "CLASE"}
+                              {item.servicio_tipo ===
+                              "cita_individual"
+                                ? "CITA"
+                                : "CLASE"}
                             </span>
 
                             <span
@@ -2101,11 +1656,7 @@ export default function AgendaPage() {
                                   : {}),
                               }}
                             >
-                              {esSalonBelleza
-                                ? lleno
-                                  ? "SIN HORAS LIBRES"
-                                  : `${libres} HORA${libres === 1 ? "" : "S"} LIBRE${libres === 1 ? "" : "S"}`
-                                : lleno
+                              {lleno
                                 ? "COMPLETO"
                                 : `${libres} CUPOS`}
                             </span>
@@ -2116,62 +1667,30 @@ export default function AgendaPage() {
                           </strong>
 
                           <span style={neo.classMeta}>
-                            {esSalonBelleza ? (
-                              <>
-                                {item.instructor || "Profesional por asignar"}
-                                {" · "}
-                                {item.requiere_pago ? "Cobro en Caja" : "Sin cobro pendiente"}
-                              </>
-                            ) : (
-                              <>
-                                {item.instructor || (esSalonBelleza ? "Profesional por asignar" : "Sin instructor")}
-                                {" · "}
-                                {item.requiere_membresia
-                                  ? "Membresía activa"
-                                  : "Acceso abierto"}
-                              </>
-                            )}
+                            {item.instructor || "Sin instructor"}
+                            {" · "}
+                            {item.requiere_membresia
+                              ? "Membresía activa"
+                              : "Acceso abierto"}
                           </span>
 
-                          {esSalonBelleza ? (
-                            <div style={neo.hoursSingleLine}>
-                              <span style={neo.hoursSingleLabel}>
-                                Horarios:
-                              </span>
+                          <div style={neo.capacityBar}>
+                            <div
+                              style={{
+                                ...neo.capacityFill,
+                                width: `${porcentaje}%`,
+                              }}
+                            />
+                          </div>
 
-                              <span style={neo.hoursSingleText}>
-                                {item.slots
-                                  .map((slot) =>
-                                    `${formatoHora(slot.hora_inicio)}${
-                                      Number(slot.disponibles || 0) <= 0
-                                        ? " (ocupado)"
-                                        : ""
-                                    }`
-                                  )
-                                  .join("  ·  ")}
-                              </span>
-                            </div>
-                          ) : (
-                            <>
-                              <div style={neo.capacityBar}>
-                                <div
-                                  style={{
-                                    ...neo.capacityFill,
-                                    width: `${porcentaje}%`,
-                                  }}
-                                />
-                              </div>
-
-                              <div style={neo.capacityFooter}>
-                                <span>
-                                  {reservados} reservados
-                                </span>
-                                <span>
-                                  {capacidad} capacidad total
-                                </span>
-                              </div>
-                            </>
-                          )}
+                          <div style={neo.capacityFooter}>
+                            <span>
+                              {reservados} reservados
+                            </span>
+                            <span>
+                              {capacidad} capacidad total
+                            </span>
+                          </div>
                         </div>
 
                         <div style={neo.timelineAction}>
@@ -2179,24 +1698,9 @@ export default function AgendaPage() {
                             type="button"
                             disabled={lleno}
                             onClick={() => {
-                              if (esSalonBelleza) {
-                                const horario = mapaHorarios.get(
-                                  String(item.horario_id)
-                                );
-
-                                setServicioReservaSeleccionado(
-                                  String(
-                                    item.servicio_id ||
-                                      horario?.servicio_id ||
-                                      ""
-                                  )
-                                );
-                                setHorarioSeleccionado("");
-                                setHoraReservaSeleccionada("");
-                              } else {
-                                setHorarioSeleccionado(item.horario_id);
-                              }
-
+                              setHorarioSeleccionado(
+                                item.horario_id
+                              );
                               setVista("nueva");
                             }}
                             style={
@@ -2206,11 +1710,7 @@ export default function AgendaPage() {
                             }
                           >
                             {lleno
-                              ? esSalonBelleza
-                                ? "Sin horarios"
-                                : "Sin cupos"
-                              : esSalonBelleza
-                              ? "Reservar cita"
+                              ? "Sin cupos"
                               : "Reservar"}
                           </button>
                         </div>
@@ -2221,16 +1721,14 @@ export default function AgendaPage() {
               )}
             </article>
 
-            <article style={neo.reservationsPanel} className="agenda-main-reservations">
+            <article style={neo.reservationsPanel}>
               <div style={neo.panelTop}>
                 <div>
                   <span style={neo.sectionEyebrow}>
-                    {esSalonBelleza ? "CITAS DE LA JORNADA" : "RESERVAS DE LA JORNADA"}
+                    RESERVAS DE LA JORNADA
                   </span>
                   <h2 style={neo.panelHeading}>
-                    {esSalonBelleza
-                      ? "Clientes con cita"
-                      : "Alumnos reservados"}
+                    Alumnos reservados
                   </h2>
                 </div>
 
@@ -2242,11 +1740,10 @@ export default function AgendaPage() {
               {reservasFechaOperativas.length === 0 ? (
                 <div style={neo.emptySmall}>
                   <span style={neo.emptySmallIcon}>◎</span>
-                  <strong>{esSalonBelleza ? "Sin citas" : "Sin reservas"}</strong>
+                  <strong>Sin reservas</strong>
                   <span>
-                    {esSalonBelleza
-                      ? "Todavía no hay clientes con cita para este día."
-                      : "Todavía no hay alumnos reservados para este día."}
+                    Todavía no hay alumnos reservados
+                    para este día.
                   </span>
                 </div>
               ) : (
@@ -2320,9 +1817,7 @@ export default function AgendaPage() {
                               : noAsistio
                               ? "NO ASISTIÓ"
                               : pendiente
-                              ? "PENDIENTE DE PAGO"
-                              : esSalonBelleza
-                              ? "PAGADA"
+                              ? "PENDIENTE"
                               : "CONFIRMADA"}
                           </span>
                         </div>
@@ -2342,36 +1837,116 @@ export default function AgendaPage() {
               )}
             </article>
 
-            <aside
-              style={neo.controlPanelCompact}
-              className="agenda-main-control agenda-main-control-compact"
-            >
+            <aside style={neo.controlPanel}>
               <span style={neo.controlEyebrow}>
-                OCUPACIÓN DEL DÍA
+                CONTROL OPERATIVO
               </span>
+              <h3 style={neo.controlTitle}>
+                Estado del día
+              </h3>
 
-              <div style={neo.occupancyCompactRow}>
+              <div style={neo.occupancyCircle}>
                 <div
                   style={{
-                    ...neo.occupancyRingCompact,
+                    ...neo.occupancyRing,
                     background: `conic-gradient(#5BE39A ${resumenAgenda.ocupacion}%, rgba(255,255,255,.14) 0)`,
                   }}
                 >
-                  <div style={neo.occupancyInnerCompact}>
-                    <strong>{resumenAgenda.ocupacion}%</strong>
+                  <div style={neo.occupancyInner}>
+                    <strong>
+                      {resumenAgenda.ocupacion}%
+                    </strong>
+                    <span>ocupación</span>
                   </div>
                 </div>
+              </div>
 
-                <div style={neo.occupancyCompactText}>
-                  <strong>{resumenAgenda.ocupacion}% ocupado</strong>
-                  <span>
-                    {resumenAgenda.reservadosTotal} reserva
-                    {resumenAgenda.reservadosTotal === 1 ? "" : "s"} de{" "}
-                    {resumenAgenda.capacidadTotal} espacio
-                    {resumenAgenda.capacidadTotal === 1 ? "" : "s"}.
-                  </span>
+              <div style={neo.controlStats}>
+                <div style={neo.controlRow}>
+                  <span>Capacidad</span>
+                  <strong>
+                    {resumenAgenda.capacidadTotal}
+                  </strong>
+                </div>
+
+                <div style={neo.controlRow}>
+                  <span>Reservados</span>
+                  <strong>
+                    {resumenAgenda.reservadosTotal}
+                  </strong>
+                </div>
+
+                <div style={neo.controlRow}>
+                  <span>Disponibles</span>
+                  <strong>
+                    {resumenAgenda.cuposDisponibles}
+                  </strong>
                 </div>
               </div>
+
+              <div style={neo.controlDivider} />
+
+              <span style={neo.controlLabel}>
+                ESTADO DE RESERVAS
+              </span>
+
+              <div style={neo.stateGrid}>
+                <div style={neo.stateBox}>
+                  <span>Confirmadas</span>
+                  <strong>
+                    {resumenReservas.confirmadas}
+                  </strong>
+                </div>
+
+                <div style={neo.stateBox}>
+                  <span>Asistieron</span>
+                  <strong>
+                    {resumenReservas.asistieron}
+                  </strong>
+                </div>
+
+                <div style={neo.stateBox}>
+                  <span>Pendientes</span>
+                  <strong>
+                    {resumenReservas.pendientes}
+                  </strong>
+                </div>
+
+                <div style={neo.stateBox}>
+                  <span>No asistieron</span>
+                  <strong>
+                    {resumenReservas.noAsistieron}
+                  </strong>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                style={neo.controlPrimary}
+                onClick={() => setVista("nueva")}
+              >
+                + Nueva reserva
+              </button>
+
+              <button
+                type="button"
+                style={neo.controlSecondary}
+                onClick={() => setVista("reservas")}
+              >
+                Gestionar reservas
+              </button>
+
+              {esAdmin && (
+                <button
+                  type="button"
+                  style={neo.controlSecondary}
+                  onClick={() =>
+                    setVista("configuracion")
+                  }
+                >
+                  Configurar clases
+                </button>
+              )}
             </aside>
           </section>
         </>
@@ -2390,9 +1965,7 @@ export default function AgendaPage() {
               }}
             >
               <span style={pro.stepNumber}>1</span>
-              {esSalonBelleza
-                ? "Seleccionar cliente"
-                : "Seleccionar alumno"}
+              Seleccionar alumno
             </div>
 
             <div
@@ -2402,9 +1975,7 @@ export default function AgendaPage() {
               }}
             >
               <span style={pro.stepNumber}>2</span>
-              {esSalonBelleza
-                ? "Elegir servicio y hora"
-                : "Elegir fecha y horario"}
+              Elegir fecha y horario
             </div>
 
             <div
@@ -2416,34 +1987,20 @@ export default function AgendaPage() {
               }}
             >
               <span style={pro.stepNumber}>3</span>
-              {esSalonBelleza
-                ? "Confirmar cita"
-                : "Confirmar reserva"}
+              Confirmar reserva
             </div>
           </section>
 
           <section style={s.twoColumns}>
           <article style={s.panel}>
-            <span style={pro.panelEyebrow}>
-              {esSalonBelleza ? "NUEVA RESERVA" : "NUEVA RESERVA"}
-            </span>
-            <h2 style={pro.panelTitle}>
-              {esSalonBelleza ? "Datos de la cita" : "Datos de la reserva"}
-            </h2>
+            <span style={pro.panelEyebrow}>NUEVA RESERVA</span>
+            <h2 style={pro.panelTitle}>Datos de la reserva</h2>
             <p style={{ ...s.muted, margin: "6px 0 0" }}>
-              {esSalonBelleza
-                ? "Selecciona el cliente, la fecha y el horario del servicio."
-                : "Selecciona al alumno, la fecha y uno de los horarios disponibles."}
+              Selecciona al alumno, la fecha y uno de los horarios disponibles.
             </p>
 
             <div style={{ marginTop: 16 }}>
-              <Campo
-                label={
-                  esSalonBelleza
-                    ? "Buscar cliente por nombre, cédula o teléfono"
-                    : "Buscar por nombre, cédula o teléfono"
-                }
-              >
+              <Campo label="Buscar por nombre, cédula o teléfono">
                 <input
                   type="text"
                   value={busquedaCliente}
@@ -2452,7 +2009,7 @@ export default function AgendaPage() {
                     setClienteSeleccionado(null);
                   }}
                   style={s.input}
-                  placeholder={esSalonBelleza ? "Ej. María González" : "Ej. LIA SAMANIEGO"}
+                  placeholder="Ej. LIA SAMANIEGO"
                 />
               </Campo>
 
@@ -2470,7 +2027,7 @@ export default function AgendaPage() {
                           setBusquedaCliente(cliente.nombre || "");
                         }}
                       >
-                        <strong>{cliente.nombre || (esSalonBelleza ? "Cliente" : "Alumno")}</strong>
+                        <strong>{cliente.nombre || "Alumno"}</strong>
                         <span style={s.muted}>
                           {cliente.cedula || cliente.telefono || "Sin identificación"}
                         </span>
@@ -2482,11 +2039,7 @@ export default function AgendaPage() {
               {clienteSeleccionado && (
                 <div style={s.selectedClient}>
                   <div>
-                    <span style={s.muted}>
-                      {esSalonBelleza
-                        ? "Cliente seleccionado"
-                        : "Alumno seleccionado"}
-                    </span>
+                    <span style={s.muted}>Alumno seleccionado</span>
                     <strong style={{ display: "block", marginTop: 4 }}>
                       {clienteSeleccionado.nombre}
                     </strong>
@@ -2514,100 +2067,31 @@ export default function AgendaPage() {
                   min={fechaHoy()}
                   onChange={(e) => {
                     setFechaAgenda(e.target.value);
-                    setServicioReservaSeleccionado("");
                     setHorarioSeleccionado("");
-                    setHoraReservaSeleccionada("");
-                    setHorarioDisponibilidadAbierto("");
                   }}
                   style={s.input}
                 />
               </Campo>
 
-              {esSalonBelleza ? (
-                <>
-                  <Campo label="Servicio">
-                    <select
-                      value={servicioReservaSeleccionado}
-                      onChange={(e) => {
-                        setServicioReservaSeleccionado(e.target.value);
-                        setHorarioSeleccionado("");
-                        setHoraReservaSeleccionada("");
-                      }}
-                      style={s.input}
+              <Campo label="Clase / horario disponible">
+                <select
+                  value={horarioSeleccionado}
+                  onChange={(e) => setHorarioSeleccionado(e.target.value)}
+                  style={s.input}
+                >
+                  <option value="">Seleccionar</option>
+                  {disponibilidad.map((item) => (
+                    <option
+                      key={item.horario_id}
+                      value={item.horario_id}
+                      disabled={Number(item.disponibles) <= 0}
                     >
-                      <option value="">Seleccionar servicio</option>
-                      {serviciosDisponiblesReserva.map((servicio) => (
-                        <option key={servicio.id} value={servicio.id}>
-                          {servicio.nombre}
-                        </option>
-                      ))}
-                    </select>
-                  </Campo>
-
-                  <Campo label="Horario disponible">
-                    <select
-                      value={
-                        horarioSeleccionado && horaReservaSeleccionada
-                          ? `${horarioSeleccionado}|${horaReservaSeleccionada}`
-                          : ""
-                      }
-                      onChange={(e) => {
-                        const [horarioId = "", horaInicio = ""] =
-                          String(e.target.value || "").split("|");
-
-                        setHorarioSeleccionado(horarioId);
-                        setHoraReservaSeleccionada(horaInicio);
-                      }}
-                      style={s.input}
-                      disabled={!servicioReservaSeleccionado}
-                    >
-                      <option value="">
-                        {servicioReservaSeleccionado
-                          ? "Seleccionar horario"
-                          : "Primero selecciona un servicio"}
-                      </option>
-
-                      {disponibilidadReservaFiltrada.map((item) => (
-                        <option
-                          key={`${item.horario_id}-${item.hora_inicio}`}
-                          value={`${item.horario_id}|${String(item.hora_inicio || "").slice(0, 8)}`}
-                          disabled={Number(item.disponibles) <= 0}
-                        >
-                          {formatoHora(item.hora_inicio)}
-                          {" – "}
-                          {formatoHora(item.hora_fin)}
-                          {" · "}
-                          {item.instructor || "Profesional por asignar"}
-                          {" · "}
-                          {Number(item.disponibles) > 0
-                            ? `${item.disponibles} disponible${Number(item.disponibles) === 1 ? "" : "s"}`
-                            : "Ocupado"}
-                        </option>
-                      ))}
-                    </select>
-                  </Campo>
-                </>
-              ) : (
-                <Campo label="Clase / horario disponible">
-                  <select
-                    value={horarioSeleccionado}
-                    onChange={(e) => setHorarioSeleccionado(e.target.value)}
-                    style={s.input}
-                  >
-                    <option value="">Seleccionar</option>
-                    {disponibilidad.map((item) => (
-                      <option
-                        key={item.horario_id}
-                        value={item.horario_id}
-                        disabled={Number(item.disponibles) <= 0}
-                      >
-                        {item.servicio_nombre} · {formatoHora(item.hora_inicio)} ·{" "}
-                        {`${item.disponibles} cupos`}
-                      </option>
-                    ))}
-                  </select>
-                </Campo>
-              )}
+                      {item.servicio_nombre} · {formatoHora(item.hora_inicio)} ·{" "}
+                      {item.disponibles} cupos
+                    </option>
+                  ))}
+                </select>
+              </Campo>
             </div>
 
             <Campo label="Observaciones">
@@ -2625,11 +2109,7 @@ export default function AgendaPage() {
               onClick={crearReserva}
               disabled={guardando}
             >
-              {guardando
-                ? "Guardando..."
-                : esSalonBelleza
-                ? "Confirmar cita"
-                : "Confirmar reserva"}
+              {guardando ? "Guardando..." : "Confirmar reserva"}
             </button>
           </article>
 
@@ -2637,137 +2117,12 @@ export default function AgendaPage() {
             <span style={pro.panelEyebrow}>DISPONIBILIDAD EN TIEMPO REAL</span>
             <h2 style={pro.panelTitle}>{formatoFecha(fechaAgenda)}</h2>
             <p style={{ ...s.muted, margin: "6px 0 12px" }}>
-              {esSalonBelleza
-                ? "Los horarios se actualizan automáticamente al confirmar o cancelar una cita."
-                : "Los cupos se actualizan automáticamente al confirmar o cancelar una reserva."}
+              Los cupos se actualizan automáticamente al confirmar o cancelar una reserva.
             </p>
 
             <div style={s.slotList}>
               {disponibilidad.length === 0 ? (
                 <p style={s.muted}>No hay horarios para esta fecha.</p>
-              ) : esSalonBelleza ? (
-                disponibilidadCompacta.map((grupo) => {
-                  const abierto =
-                    String(horarioDisponibilidadAbierto) ===
-                    String(grupo.horario_id);
-
-                  const horasLibres = grupo.slots.filter(
-                    (slot) => Number(slot.disponibles || 0) > 0
-                  );
-
-                  const horaElegidaEnGrupo =
-                    String(horarioSeleccionado) ===
-                    String(grupo.horario_id);
-
-                  return (
-                    <div
-                      key={grupo.horario_id}
-                      style={{
-                        ...s.availabilityGroup,
-                        ...(horaElegidaEnGrupo
-                          ? s.availabilityGroupSelected
-                          : {}),
-                      }}
-                    >
-                      <button
-                        type="button"
-                        style={s.availabilityGroupHeader}
-                        onClick={() =>
-                          setHorarioDisponibilidadAbierto(
-                            abierto ? "" : grupo.horario_id
-                          )
-                        }
-                      >
-                        <div style={s.availabilityGroupInfo}>
-                          <strong style={s.availabilityServiceName}>
-                            {grupo.servicio_nombre}
-                          </strong>
-
-                          <span style={s.availabilityProfessional}>
-                            {grupo.instructor || "Profesional por asignar"}
-                            {" · "}
-                            {horasLibres.length} horario
-                            {horasLibres.length === 1 ? "" : "s"} disponible
-                            {horasLibres.length === 1 ? "" : "s"}
-                          </span>
-                        </div>
-
-                        <span style={s.availabilityToggle}>
-                          {abierto ? "Ocultar horarios" : "Ver horarios"}
-                          <span
-                            style={{
-                              ...s.availabilityChevron,
-                              transform: abierto
-                                ? "rotate(180deg)"
-                                : "rotate(0deg)",
-                            }}
-                          >
-                            ▾
-                          </span>
-                        </span>
-                      </button>
-
-                      {abierto && (
-                        <div style={s.availabilityTimes}>
-                          {grupo.slots.map((slot) => {
-                            const disponible =
-                              Number(slot.disponibles || 0) > 0;
-
-                            const seleccionado =
-                              String(horarioSeleccionado) ===
-                                String(grupo.horario_id) &&
-                              String(horaReservaSeleccionada).slice(0, 5) ===
-                                String(slot.hora_inicio || "").slice(0, 5);
-
-                            return (
-                              <button
-                                key={`${grupo.horario_id}-${slot.hora_inicio}`}
-                                type="button"
-                                disabled={!disponible}
-                                style={{
-                                  ...s.availabilityTimeButton,
-                                  ...(seleccionado
-                                    ? s.availabilityTimeButtonSelected
-                                    : {}),
-                                  ...(!disponible
-                                    ? s.availabilityTimeButtonDisabled
-                                    : {}),
-                                }}
-                                onClick={() => {
-                                  const horario = mapaHorarios.get(
-                                    String(grupo.horario_id)
-                                  );
-
-                                  setServicioReservaSeleccionado(
-                                    String(
-                                      grupo.servicio_id ||
-                                        horario?.servicio_id ||
-                                        ""
-                                    )
-                                  );
-                                  setHorarioSeleccionado(grupo.horario_id);
-                                  setHoraReservaSeleccionada(
-                                    String(slot.hora_inicio || "").slice(0, 8)
-                                  );
-                                }}
-                              >
-                                <span>
-                                  {formatoHora(slot.hora_inicio)}
-                                </span>
-
-                                {!disponible && (
-                                  <small style={s.availabilityOccupied}>
-                                    Ocupado
-                                  </small>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
               ) : (
                 disponibilidad.map((item) => (
                   <button
@@ -2780,9 +2135,7 @@ export default function AgendaPage() {
                         : {}),
                     }}
                     disabled={Number(item.disponibles) <= 0}
-                    onClick={() => {
-                      setHorarioSeleccionado(item.horario_id);
-                    }}
+                    onClick={() => setHorarioSeleccionado(item.horario_id)}
                   >
                     <div>
                       <strong>{item.servicio_nombre}</strong>
@@ -2799,7 +2152,7 @@ export default function AgendaPage() {
                           : s.smallFull
                       }
                     >
-                      {`${item.disponibles}/${item.capacidad}`}
+                      {item.disponibles}/{item.capacidad}
                     </span>
                   </button>
                 ))
@@ -2812,15 +2165,18 @@ export default function AgendaPage() {
 
       {vista === "reservas" && (
         <section
-          style={pro.reservasPanelCompacto}
-          className="agenda-reservas-compactas"
+          style={{
+            ...pro.panel,
+            maxWidth: 1450,
+            margin: "0 auto 18px",
+          }}
         >
-          <div style={pro.reservasHeaderCompacto}>
+          <div style={pro.panelHeader}>
             <div>
               <span style={pro.panelEyebrow}>CONTROL Y SEGUIMIENTO</span>
               <h2 style={pro.panelTitle}>Reservas</h2>
-              <p style={{ ...s.muted, margin: "4px 0 0" }}>
-                Consulta y gestiona las reservas del negocio.
+              <p style={{ ...s.muted, margin: "6px 0 0" }}>
+                Consulta reservas, asistencia, pendientes de pago y cancelaciones.
               </p>
             </div>
 
@@ -2829,19 +2185,15 @@ export default function AgendaPage() {
             </span>
           </div>
 
-          <div style={pro.reservasFiltersCompacto}>
-            <div className="agenda-reserva-filtros agenda-reserva-filtros-compactos">
+          <div style={pro.filters}>
+            <div className="agenda-reserva-filtros">
               <Campo label="Buscar reserva">
                 <input
                   type="text"
                   value={busquedaReservas}
                   onChange={(e) => setBusquedaReservas(e.target.value)}
                   style={pro.input}
-                  placeholder={
-                    esSalonBelleza
-                      ? "Cliente, teléfono, servicio o fecha"
-                      : "Alumno, cédula, teléfono, clase o fecha"
-                  }
+                  placeholder="Alumno, cédula, teléfono, clase o fecha"
                 />
               </Campo>
 
@@ -2870,9 +2222,95 @@ export default function AgendaPage() {
             onAsistencia={marcarAsistencia}
             onCobrar={cobrarReserva}
             mostrarFecha
-            compacto
           />
         </section>
+      )}
+
+      {vista === "wod" && esGimnasio && (
+        <>
+          <section style={{ ...pro.panel, maxWidth: 1450, margin: "0 auto 14px" }}>
+            <div style={pro.panelHeader}>
+              <div>
+                <span style={pro.panelEyebrow}>WORKOUT OF THE DAY</span>
+                <h2 style={pro.panelTitle}>WOD · {formatoFecha(fechaAgenda)}</h2>
+                <p style={{ ...s.muted, margin: "6px 0 0" }}>
+                  Publica el entrenamiento del día por clase. Las notas del coach son privadas.
+                </p>
+              </div>
+              <input type="date" value={fechaAgenda} onChange={(e) => {
+                setFechaAgenda(e.target.value);
+                setWodForm((actual) => ({ ...actual, fecha: e.target.value }));
+              }} style={{ ...s.input, width: 180 }} />
+            </div>
+
+            {wodsFecha.length === 0 ? (
+              <div style={s.empty}>
+                <strong>No hay WOD publicado para esta fecha.</strong>
+                <span style={s.muted}>Créalo abajo y asígnalo a una clase.</span>
+              </div>
+            ) : (
+              <div style={s.wodGrid}>
+                {wodsFecha.map((wod) => (
+                  <article key={wod.id} style={s.wodCard}>
+                    <span style={s.eyebrowSmall}>{wod.servicio_nombre}</span>
+                    <h3 style={{ margin: "4px 0 10px" }}>{wod.titulo || "WOD del día"}</h3>
+                    {wod.warmup && <WodBloque titulo="Warm-up" texto={wod.warmup} />}
+                    {wod.strength && <WodBloque titulo="Strength" texto={wod.strength} />}
+                    {wod.skill && <WodBloque titulo="Skill" texto={wod.skill} />}
+                    {wod.metcon && <WodBloque titulo="Metcon" texto={wod.metcon} destacado />}
+                    {wod.cooldown && <WodBloque titulo="Cooldown" texto={wod.cooldown} />}
+                    {wod.notas_publicas && <WodBloque titulo="Notas para alumnos" texto={wod.notas_publicas} />}
+                    {esAdmin && (
+                      <div style={{ ...s.inlineActions, marginTop: 10 }}>
+                        <button type="button" style={s.smallButton} onClick={() => editarWod(wod)}>Editar</button>
+                        <button type="button" style={s.smallDanger} onClick={() => eliminarWod(wod)}>Eliminar</button>
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {esAdmin && (
+            <section style={{ ...pro.panel, maxWidth: 1450, margin: "0 auto 18px" }}>
+              <span style={pro.panelEyebrow}>CONFIGURAR WOD</span>
+              <h2 style={pro.panelTitle}>{wodEditandoId ? "Editar WOD" : "Nuevo WOD"}</h2>
+              <div style={{ ...s.formGrid, marginTop: 14 }}>
+                <Campo label="Clase / programa">
+                  <select value={wodForm.servicio_id} onChange={(e) => setWodForm({ ...wodForm, servicio_id: e.target.value })} style={s.input}>
+                    <option value="">Seleccionar</option>
+                    {servicios.filter((servicio) => servicio.activo && servicio.tipo !== "cita_individual").map((servicio) => (
+                      <option key={servicio.id} value={servicio.id}>{servicio.nombre}</option>
+                    ))}
+                  </select>
+                </Campo>
+                <Campo label="Fecha"><input type="date" value={wodForm.fecha} onChange={(e) => setWodForm({ ...wodForm, fecha: e.target.value })} style={s.input} /></Campo>
+                <Campo label="Título"><input value={wodForm.titulo} onChange={(e) => setWodForm({ ...wodForm, titulo: e.target.value })} style={s.input} /></Campo>
+                <Campo label="Visible desde"><input type="datetime-local" value={wodForm.visible_desde} onChange={(e) => setWodForm({ ...wodForm, visible_desde: e.target.value })} style={s.input} /></Campo>
+              </div>
+              <div style={s.wodFormGrid}>
+                {[
+                  ["Warm-up", "warmup"], ["Strength", "strength"], ["Skill / técnica", "skill"],
+                  ["Metcon", "metcon"], ["Cooldown", "cooldown"], ["Notas para alumnos", "notas_publicas"],
+                  ["Notas privadas del coach", "notas_coach"]
+                ].map(([label, key]) => (
+                  <Campo key={key} label={label}>
+                    <textarea value={wodForm[key]} onChange={(e) => setWodForm({ ...wodForm, [key]: e.target.value })} style={s.wodTextarea} />
+                  </Campo>
+                ))}
+              </div>
+              <label style={s.portalToggle}>
+                <input type="checkbox" checked={wodForm.activo} onChange={(e) => setWodForm({ ...wodForm, activo: e.target.checked })} />
+                <span><strong>WOD activo</strong><small>Se mostrará cuando llegue la fecha/hora de visibilidad.</small></span>
+              </label>
+              <div style={s.formActions}>
+                {wodEditandoId && <button type="button" style={s.secondaryButton} onClick={() => { setWodEditandoId(null); setWodForm({ ...WOD_INICIAL, fecha: fechaAgenda }); }}>Cancelar</button>}
+                <button type="button" style={s.primaryButton} onClick={guardarWod} disabled={guardando}>{guardando ? "Guardando..." : "Publicar WOD"}</button>
+              </div>
+            </section>
+          )}
+        </>
       )}
 
       {vista === "configuracion" && esAdmin && (
@@ -2888,7 +2326,8 @@ export default function AgendaPage() {
               </h2>
 
               <p style={s.portalText}>
-                Comparte tu enlace por WhatsApp, Instagram o código QR.
+                Usa un solo enlace para Instagram, WhatsApp,
+                código QR o la página web del negocio.
               </p>
 
               <div style={s.portalFields}>
@@ -2940,7 +2379,7 @@ export default function AgendaPage() {
                 <span>
                   <strong>Reservas online activas</strong>
                   <small>
-                    Activa o pausa las reservas desde tu enlace.
+                    Si se desactiva, el enlace público deja de aceptar reservas.
                   </small>
                 </span>
               </label>
@@ -3010,9 +2449,9 @@ export default function AgendaPage() {
                     alt="QR del portal de reservas"
                     style={s.qrImage}
                   />
-                  <strong>QR de reservas</strong>
+                  <strong>Escanea para reservar</strong>
                   <span>
-                    Listo para compartir.
+                    Ideal para recepción, volante o mostrador.
                   </span>
                 </>
               ) : (
@@ -3027,11 +2466,7 @@ export default function AgendaPage() {
             <article style={s.panel}>
               <span style={s.eyebrowSmall}>CONFIGURACIÓN</span>
               <h2 style={s.panelTitle}>
-                {servicioEditandoId
-                  ? "Editar servicio"
-                  : esSalonBelleza
-                  ? "Nuevo servicio del salón"
-                  : "Nueva clase o servicio"}
+                {servicioEditandoId ? "Editar servicio" : "Nueva clase o servicio"}
               </h2>
 
               <div style={s.formGrid}>
@@ -3045,7 +2480,7 @@ export default function AgendaPage() {
                       })
                     }
                     style={s.input}
-                    placeholder={esSalonBelleza ? "Ej. Corte, manicure o masaje" : "Spinning"}
+                    placeholder="Spinning"
                   />
                 </Campo>
 
@@ -3060,12 +2495,8 @@ export default function AgendaPage() {
                     }
                     style={s.input}
                   >
-                    <option value="clase_grupal">
-                      {esSalonBelleza ? "Servicio grupal" : "Clase grupal"}
-                    </option>
-                    <option value="cita_individual">
-                      {esSalonBelleza ? "Servicio individual" : "Cita individual"}
-                    </option>
+                    <option value="clase_grupal">Clase grupal</option>
+                    <option value="cita_individual">Cita individual</option>
                   </select>
                 </Campo>
 
@@ -3084,13 +2515,7 @@ export default function AgendaPage() {
                   />
                 </Campo>
 
-                <Campo
-                  label={
-                    esSalonBelleza
-                      ? "Citas simultáneas"
-                      : "Capacidad sugerida"
-                  }
-                >
+                <Campo label="Capacidad sugerida">
                   <input
                     type="number"
                     min="1"
@@ -3116,51 +2541,33 @@ export default function AgendaPage() {
                     })
                   }
                   style={{ ...s.input, minHeight: 82, resize: "vertical" }}
-                  placeholder={
-                    esSalonBelleza
-                      ? "Ej. Manicure semipermanente"
-                      : "Clase grupal de spinning"
-                  }
+                  placeholder="Clase grupal de spinning"
                 />
               </Campo>
 
               <Campo label="Modalidad de reserva">
-                {esSalonBelleza ? (
-                  <select value="pago_local" disabled style={s.input}>
-                    <option value="pago_local">
-                      Servicio del salón · Cobro en Caja
-                    </option>
-                  </select>
-                ) : (
-                  <select
-                    value={modalidadServicio(servicioForm)}
-                    onChange={(e) =>
-                      aplicarModalidadServicio(e.target.value)
-                    }
-                    style={s.input}
-                  >
-                    <option value="solo_miembros">
-                      Miembro activo · Incluida en membresía
-                    </option>
-                    <option value="pago_local">
-                      Pago al llegar · No requiere membresía
-                    </option>
-                    <option value="miembros_pago">
-                      Miembro activo · Servicio personalizado con costo
-                    </option>
-                  </select>
-                )}
+                <select
+                  value={modalidadServicio(servicioForm)}
+                  onChange={(e) =>
+                    aplicarModalidadServicio(e.target.value)
+                  }
+                  style={s.input}
+                >
+                  <option value="solo_miembros">
+                    Miembro activo · Incluida en membresía
+                  </option>
+                  <option value="pago_local">
+                    Pago al llegar · No requiere membresía
+                  </option>
+                  <option value="miembros_pago">
+                    Miembro activo · Servicio personalizado con costo
+                  </option>
+                </select>
               </Campo>
 
               {servicioForm.requiere_pago && (
                 <>
-                  <Campo
-                    label={
-                      esSalonBelleza
-                        ? "Precio del servicio"
-                        : "Precio de la clase / servicio"
-                    }
-                  >
+                  <Campo label="Precio de la clase / servicio">
                     <input
                       type="number"
                       min="0.01"
@@ -3182,9 +2589,9 @@ export default function AgendaPage() {
                       Cobro en el local
                     </strong>
                     <span>
-                      {esSalonBelleza
-                        ? "La cita queda pendiente de pago y recepción la cobra desde Caja al finalizar el servicio."
-                        : "El cliente reserva su cupo. Si esta modalidad tiene precio, la reserva queda pendiente de pago y recepción la cobra desde Caja cuando el cliente llegue."}
+                      El cliente reserva su cupo. Si esta modalidad
+                      tiene precio, la reserva queda pendiente de pago y
+                      recepción la cobra desde Caja cuando el cliente llegue.
                     </span>
                   </div>
                 </>
@@ -3197,11 +2604,7 @@ export default function AgendaPage() {
                     style={s.secondaryButton}
                     onClick={() => {
                       setServicioEditandoId(null);
-                      setServicioForm(
-                        esSalonBelleza
-                          ? SERVICIO_SALON_INICIAL
-                          : SERVICIO_INICIAL
-                      );
+                      setServicioForm(SERVICIO_INICIAL);
                     }}
                   >
                     Cancelar
@@ -3225,7 +2628,7 @@ export default function AgendaPage() {
                 {horarioEditandoId ? "Editar horario" : "Nuevo horario"}
               </h2>
 
-              <Campo label={esSalonBelleza ? "Servicio" : "Clase / servicio"}>
+              <Campo label="Clase / servicio">
                 <select
                   value={horarioForm.servicio_id}
                   onChange={(e) => {
@@ -3253,85 +2656,27 @@ export default function AgendaPage() {
                 </select>
               </Campo>
 
-              <div
-                style={s.formGrid}
-                className={esSalonBelleza ? "agenda-salon-horario-grid" : ""}
-              >
-                <div style={{ ...s.daysField, ...(esSalonBelleza ? { gridColumn: "1 / -1" } : {}) }}>
-                  <span style={s.label}>
-                    {esSalonBelleza
-                      ? "Días disponibles"
-                      : "Días de la semana"}
-                  </span>
+              <div style={s.formGrid}>
+                <Campo label="Día">
+                  <select
+                    value={horarioForm.dia_semana}
+                    onChange={(e) =>
+                      setHorarioForm({
+                        ...horarioForm,
+                        dia_semana: Number(e.target.value),
+                      })
+                    }
+                    style={s.input}
+                  >
+                    {[1, 2, 3, 4, 5, 6, 0].map((dia) => (
+                      <option key={dia} value={dia}>
+                        {nombreDia(dia)}
+                      </option>
+                    ))}
+                  </select>
+                </Campo>
 
-                  {esSalonBelleza ? (
-                    <>
-                      <div
-                        style={s.daysGroupedGrid}
-                        className="agenda-days-grouped-grid"
-                      >
-                        {[
-                          { etiqueta: "Lunes a viernes", dias: [1, 2, 3, 4, 5] },
-                          { etiqueta: "Sábado", dias: [6] },
-                          { etiqueta: "Domingo", dias: [0] },
-                        ].map((grupo) => {
-                          const activo = grupoDiasActivo(grupo.dias);
-
-                          return (
-                            <button
-                              key={grupo.etiqueta}
-                              type="button"
-                              onClick={() => alternarGrupoDias(grupo.dias)}
-                              style={{
-                                ...s.dayGroupToggle,
-                                ...(activo ? s.dayToggleActive : {}),
-                              }}
-                            >
-                              {grupo.etiqueta}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      <span style={s.daysHint}>
-                        Elige cuándo atiende este profesional. Si el fin de semana
-                        tiene otro horario, guárdalo por separado.
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <div
-                        style={s.daysGrid}
-                        className="agenda-days-grid"
-                      >
-                        {[1, 2, 3, 4, 5, 6, 0].map((dia) => {
-                          const activo =
-                            diasHorarioSeleccionados.includes(dia);
-
-                          return (
-                            <button
-                              key={dia}
-                              type="button"
-                              onClick={() => alternarDiaHorario(dia)}
-                              style={{
-                                ...s.dayToggle,
-                                ...(activo ? s.dayToggleActive : {}),
-                              }}
-                            >
-                              {nombreDia(dia).slice(0, 3)}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      <span style={s.daysHint}>
-                        Marca los días en que estará disponible.
-                      </span>
-                    </>
-                  )}
-                </div>
-
-                <Campo label={esSalonBelleza ? "Profesional" : "Instructor"}>
+                <Campo label="Instructor">
                   <input
                     value={horarioForm.instructor}
                     onChange={(e) =>
@@ -3341,41 +2686,39 @@ export default function AgendaPage() {
                       })
                     }
                     style={s.input}
-                    placeholder={esSalonBelleza ? "Ana" : "Carlos"}
+                    placeholder="Carlos"
                   />
                 </Campo>
 
                 <Campo label="Hora inicio">
-                  <SelectorHoraKonax
+                  <input
+                    type="time"
                     value={horarioForm.hora_inicio}
-                    onApply={(hora) =>
-                      setHorarioForm((actual) => ({
-                        ...actual,
-                        hora_inicio: hora,
-                      }))
+                    onChange={(e) =>
+                      setHorarioForm({
+                        ...horarioForm,
+                        hora_inicio: e.target.value,
+                      })
                     }
+                    style={s.input}
                   />
                 </Campo>
 
                 <Campo label="Hora fin">
-                  <SelectorHoraKonax
+                  <input
+                    type="time"
                     value={horarioForm.hora_fin}
-                    onApply={(hora) =>
-                      setHorarioForm((actual) => ({
-                        ...actual,
-                        hora_fin: hora,
-                      }))
+                    onChange={(e) =>
+                      setHorarioForm({
+                        ...horarioForm,
+                        hora_fin: e.target.value,
+                      })
                     }
+                    style={s.input}
                   />
                 </Campo>
 
-                <Campo
-                  label={
-                    esSalonBelleza
-                      ? "Cupos por horario"
-                      : "Cupos"
-                  }
-                >
+                <Campo label="Cupos">
                   <input
                     type="number"
                     min="1"
@@ -3412,17 +2755,7 @@ export default function AgendaPage() {
                     style={s.secondaryButton}
                     onClick={() => {
                       setHorarioEditandoId(null);
-                      setHorarioEditandoIds([]);
-                      setHorarioForm(
-                        esSalonBelleza
-                          ? HORARIO_SALON_INICIAL
-                          : HORARIO_INICIAL
-                      );
-                      setDiasHorarioSeleccionados(
-                        esSalonBelleza
-                          ? [1, 2, 3, 4, 5, 6, 0]
-                          : [5]
-                      );
+                      setHorarioForm(HORARIO_INICIAL);
                     }}
                   >
                     Cancelar
@@ -3435,7 +2768,7 @@ export default function AgendaPage() {
                   onClick={guardarHorario}
                   disabled={guardando}
                 >
-                  {horarioEditandoId ? "Guardar cambios" : esSalonBelleza ? "Guardar horario" : "Crear horario"}
+                  {horarioEditandoId ? "Guardar cambios" : "Crear horario"}
                 </button>
               </div>
             </article>
@@ -3446,11 +2779,7 @@ export default function AgendaPage() {
               <div style={s.panelHeader}>
                 <div>
                   <span style={s.eyebrowSmall}>SERVICIOS</span>
-                  <h2 style={s.panelTitle}>
-                    {esSalonBelleza
-                      ? "Servicios del salón"
-                      : "Clases y servicios"}
-                  </h2>
+                  <h2 style={s.panelTitle}>Clases y servicios</h2>
                 </div>
                 <span style={s.counter}>{servicios.length}</span>
               </div>
@@ -3464,11 +2793,7 @@ export default function AgendaPage() {
                       <div>
                         <strong>{servicio.nombre}</strong>
                         <span style={s.slotDetail}>
-                          {esSalonBelleza
-                            ? servicio.tipo === "cita_individual"
-                              ? "Servicio individual"
-                              : "Servicio grupal"
-                            : servicio.tipo === "cita_individual"
+                          {servicio.tipo === "cita_individual"
                             ? "Cita individual"
                             : "Clase grupal"}{" "}
                           · {servicio.duracion_minutos} min
@@ -3506,48 +2831,21 @@ export default function AgendaPage() {
                   <span style={s.eyebrowSmall}>HORARIOS</span>
                   <h2 style={s.panelTitle}>Horarios configurados</h2>
                 </div>
-                <span style={s.counter}>{horariosAgrupados.length}</span>
+                <span style={s.counter}>{horarios.length}</span>
               </div>
 
-              <span style={s.groupSummary}>
-                {horariosAgrupados.length} servicio
-                {horariosAgrupados.length === 1 ? "" : "s"} configurado
-                {horariosAgrupados.length === 1 ? "" : "s"}.
-              </span>
-
               <div style={s.stack}>
-                {horariosAgrupados.length === 0 ? (
+                {horarios.length === 0 ? (
                   <p style={s.muted}>Todavía no hay horarios.</p>
                 ) : (
-                  horariosAgrupados.map((grupo) => (
-                    <div
-                      key={`${grupo.servicio_id}-${grupo.hora_inicio}-${grupo.hora_fin}-${grupo.ids.join("-")}`}
-                      style={s.scheduleGroupCard}
-                      className="agenda-schedule-group-card"
-                    >
-                      <div style={s.scheduleGroupMain}>
-                        <strong style={s.scheduleGroupTitle}>
-                          {nombreServicio(grupo.servicio_id)}
-                        </strong>
-
-                        <div style={s.scheduleDaysRow}>
-                          {grupo.dias.map((dia) => (
-                            <span key={dia} style={s.scheduleDayChip}>
-                              {nombreDia(dia).slice(0, 3)}
-                            </span>
-                          ))}
-                        </div>
-
-                        <span style={s.scheduleGroupMeta}>
-                          {formatoHora(grupo.hora_inicio)} –{" "}
-                          {formatoHora(grupo.hora_fin)} ·{" "}
-                          {grupo.capacidad}{" "}
-                          {esSalonBelleza
-                            ? "espacio(s) por horario"
-                            : "cupos"}
-                          {grupo.instructor
-                            ? ` · ${grupo.instructor}`
-                            : ""}
+                  horarios.map((horario) => (
+                    <div key={horario.id} style={s.listCard}>
+                      <div>
+                        <strong>{nombreServicio(horario.servicio_id)}</strong>
+                        <span style={s.slotDetail}>
+                          {nombreDia(horario.dia_semana)} ·{" "}
+                          {formatoHora(horario.hora_inicio)} ·{" "}
+                          {horario.capacidad} cupos
                         </span>
                       </div>
 
@@ -3555,7 +2853,7 @@ export default function AgendaPage() {
                         <button
                           type="button"
                           style={s.smallButton}
-                          onClick={() => editarGrupoHorario(grupo)}
+                          onClick={() => editarHorario(horario)}
                         >
                           Editar
                         </button>
@@ -3563,11 +2861,11 @@ export default function AgendaPage() {
                         <button
                           type="button"
                           style={
-                            grupo.activo ? s.smallDanger : s.smallSuccess
+                            horario.activo ? s.smallDanger : s.smallSuccess
                           }
-                          onClick={() => alternarGrupoHorario(grupo)}
+                          onClick={() => alternarHorario(horario)}
                         >
-                          {grupo.activo ? "Desactivar" : "Activar"}
+                          {horario.activo ? "Desactivar" : "Activar"}
                         </button>
                       </div>
                     </div>
@@ -3580,7 +2878,7 @@ export default function AgendaPage() {
       )}
 
       <footer style={s.footer}>
-        {esSalonBelleza ? "KONAX Salón · Agenda" : "KONAX Agenda"} · {VERSION} · Rol: {rol || "Usuario"}
+        KONAX Agenda · {VERSION} · Rol: {rol || "Usuario"}
       </footer>
     </main>
   );
@@ -3628,132 +2926,12 @@ function Empty({ titulo, texto }) {
   );
 }
 
-function SelectorHoraKonax({
-  value = "09:00",
-  onApply,
-}) {
-  function descomponerHora(valor) {
-    const [hh = "09", mm = "00"] = String(
-      valor || "09:00"
-    ).split(":");
-
-    const hora24 = Number(hh);
-    const periodo = hora24 >= 12 ? "PM" : "AM";
-    const hora12 = hora24 % 12 || 12;
-
-    return {
-      hora: String(hora12).padStart(2, "0"),
-      minuto: String(mm || "00").padStart(2, "0"),
-      periodo,
-    };
-  }
-
-  const inicial = descomponerHora(value);
-
-  const [hora, setHora] = useState(inicial.hora);
-  const [minuto, setMinuto] = useState(inicial.minuto);
-  const [periodo, setPeriodo] = useState(inicial.periodo);
-
-  useEffect(() => {
-    const siguiente = descomponerHora(value);
-    setHora(siguiente.hora);
-    setMinuto(siguiente.minuto);
-    setPeriodo(siguiente.periodo);
-  }, [value]);
-
-  function emitirHora(
-    siguienteHora = hora,
-    siguienteMinuto = minuto,
-    siguientePeriodo = periodo
-  ) {
-    let hora24 = Number(siguienteHora);
-
-    if (siguientePeriodo === "AM") {
-      if (hora24 === 12) hora24 = 0;
-    } else if (hora24 !== 12) {
-      hora24 += 12;
-    }
-
-    const nuevaHora =
-      `${String(hora24).padStart(2, "0")}:${String(
-        siguienteMinuto
-      ).padStart(2, "0")}`;
-
-    if (typeof onApply === "function") {
-      onApply(nuevaHora);
-    }
-  }
-
-  const minutos = [
-    "00",
-    "05",
-    "10",
-    "15",
-    "20",
-    "25",
-    "30",
-    "35",
-    "40",
-    "45",
-    "50",
-    "55",
-  ];
-
+function WodBloque({ titulo, texto, destacado = false }) {
+  if (!texto) return null;
   return (
-    <div style={s.timePicker}>
-      <div style={s.timePickerControls} className="agenda-time-picker-mobile">
-        <select
-          value={hora}
-          onChange={(e) => {
-            const valor = e.target.value;
-            setHora(valor);
-            emitirHora(valor, minuto, periodo);
-          }}
-          style={s.timeSelect}
-          aria-label="Hora"
-        >
-          {Array.from({ length: 12 }, (_, index) => {
-            const valor = String(index + 1).padStart(2, "0");
-
-            return (
-              <option key={valor} value={valor}>
-                {valor}
-              </option>
-            );
-          })}
-        </select>
-
-        <select
-          value={minuto}
-          onChange={(e) => {
-            const valor = e.target.value;
-            setMinuto(valor);
-            emitirHora(hora, valor, periodo);
-          }}
-          style={s.timeSelect}
-          aria-label="Minutos"
-        >
-          {minutos.map((valor) => (
-            <option key={valor} value={valor}>
-              {valor}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={periodo}
-          onChange={(e) => {
-            const valor = e.target.value;
-            setPeriodo(valor);
-            emitirHora(hora, minuto, valor);
-          }}
-          style={s.timePeriodSelect}
-          aria-label="Período"
-        >
-          <option value="AM">a. m.</option>
-          <option value="PM">p. m.</option>
-        </select>
-      </div>
+    <div style={{ ...s.wodBlock, ...(destacado ? s.wodBlockAccent : {}) }}>
+      <span>{titulo}</span>
+      <strong style={{ whiteSpace: "pre-wrap" }}>{texto}</strong>
     </div>
   );
 }
@@ -3766,7 +2944,6 @@ function ReservaLista({
   onAsistencia,
   onCobrar,
   mostrarFecha = false,
-  compacto = false,
 }) {
   if (!reservas.length) {
     return (
@@ -3797,57 +2974,21 @@ function ReservaLista({
             : s.badge;
 
         return (
-          <article
-            key={reserva.id}
-            style={
-              compacto
-                ? s.reservationCardCompact
-                : s.reservationCard
-            }
-            className={
-              compacto
-                ? "agenda-reservation-row-compact"
-                : ""
-            }
-          >
-            <div
-              style={
-                compacto
-                  ? s.reservationIdentityCompact
-                  : s.reservationIdentity
-              }
-            >
-              <div style={compacto ? s.avatarCompact : s.avatar}>
+          <article key={reserva.id} style={s.reservationCard}>
+            <div style={s.reservationIdentity}>
+              <div style={s.avatar}>
                 {String(nombre || "A").charAt(0).toUpperCase()}
               </div>
 
               <div style={s.reservationMain}>
                 <div style={s.reservationTopLine}>
-                  <strong
-                    style={
-                      compacto
-                        ? s.reservationNameCompact
-                        : s.reservationName
-                    }
-                  >
-                    {nombre}
-                  </strong>
+                  <strong style={s.reservationName}>{nombre}</strong>
                   <span style={badgeEstado}>
-                    {estado === "confirmada" && reserva.requiere_pago
-                      ? "pagada"
-                      : String(
-                          reserva.estado || "confirmada"
-                        ).replace(/_/g, " ")}
+                    {String(reserva.estado || "confirmada").replace(/_/g, " ")}
                   </span>
                 </div>
 
-                <span
-                  style={
-                    compacto
-                      ? s.reservationDetailCompact
-                      : s.slotDetail
-                  }
-                >
+                <span style={s.slotDetail}>
                   {nombreServicio(reserva.servicio_id)}
                   {mostrarFecha ? ` · ${formatoFecha(reserva.fecha_reserva)}` : ""}
                   {" · "}
@@ -3859,13 +3000,7 @@ function ReservaLista({
               </div>
             </div>
 
-            <div
-              style={
-                compacto
-                  ? s.inlineActionsCompact
-                  : s.inlineActions
-              }
-            >
+            <div style={s.inlineActions}>
               {puedeGestionar && estado === "pendiente_pago" && (
                 <button
                   type="button"
@@ -4382,69 +3517,6 @@ const sPro = {
     gap: 9,
   },
 
-  daysField: {
-    display: "grid",
-    gap: 7,
-    marginBottom: 10,
-  },
-
-  daysGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(7,minmax(0,1fr))",
-    gap: 6,
-  },
-
-  daysGroupedGrid: {
-    width: "100%",
-    display: "grid",
-    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
-    gap: 8,
-  },
-
-  dayGroupToggle: {
-    width: "100%",
-    minWidth: 0,
-    minHeight: 40,
-    padding: "8px 10px",
-    border: "1px solid #D4DED8",
-    borderRadius: 10,
-    background: "#FFFFFF",
-    color: "#48574F",
-    fontSize: 10.5,
-    fontWeight: 850,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-
-  dayToggle: {
-    minHeight: 38,
-    padding: "6px 4px",
-    border: "1px solid #D4DED8",
-    borderRadius: 9,
-    background: "#FFFFFF",
-    color: "#5A675F",
-    fontSize: 9,
-    fontWeight: 900,
-    textTransform: "uppercase",
-    cursor: "pointer",
-  },
-
-  dayToggleActive: {
-    borderColor: "#16834F",
-    background: "#EAF8EF",
-    color: "#0B7542",
-    boxShadow: "0 4px 10px rgba(22,131,79,.10)",
-  },
-
-  daysHint: {
-    color: "#7B8880",
-    fontSize: 8.5,
-    lineHeight: 1.4,
-  },
-
-
   checkGrid: {
     display: "grid",
     gap: 8,
@@ -4537,118 +3609,7 @@ const sPro = {
   slotList: {
     marginTop: 12,
     display: "grid",
-    gap: 8,
-  },
-
-  availabilityGroup: {
-    width: "100%",
-    overflow: "hidden",
-    border: "1px solid #DCE5DF",
-    borderRadius: 13,
-    background: "#FFFFFF",
-    transition: "border-color .18s ease, box-shadow .18s ease",
-  },
-
-  availabilityGroupSelected: {
-    borderColor: "#16834F",
-    boxShadow: "0 6px 16px rgba(22,131,79,.10)",
-  },
-
-  availabilityGroupHeader: {
-    width: "100%",
-    minHeight: 66,
-    padding: "11px 12px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-    border: "none",
-    background: "#FFFFFF",
-    color: "#17211C",
-    textAlign: "left",
-    cursor: "pointer",
-  },
-
-  availabilityGroupInfo: {
-    minWidth: 0,
-    display: "grid",
-    gap: 4,
-  },
-
-  availabilityServiceName: {
-    color: "#17211C",
-    fontSize: 14,
-    lineHeight: 1.15,
-  },
-
-  availabilityProfessional: {
-    color: "#758078",
-    fontSize: 10,
-    lineHeight: 1.35,
-  },
-
-  availabilityToggle: {
-    flex: "0 0 auto",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    color: "#16834F",
-    fontSize: 9.5,
-    fontWeight: 900,
-    whiteSpace: "nowrap",
-  },
-
-  availabilityChevron: {
-    display: "inline-block",
-    fontSize: 13,
-    lineHeight: 1,
-    transition: "transform .18s ease",
-  },
-
-  availabilityTimes: {
-    padding: "10px 12px 12px",
-    display: "flex",
-    flexWrap: "wrap",
     gap: 7,
-    borderTop: "1px solid #EDF1EE",
-    background: "#FAFCFB",
-  },
-
-  availabilityTimeButton: {
-    minWidth: 74,
-    minHeight: 38,
-    padding: "7px 10px",
-    display: "grid",
-    placeItems: "center",
-    gap: 2,
-    border: "1px solid #BFD8C9",
-    borderRadius: 10,
-    background: "#FFFFFF",
-    color: "#17623C",
-    fontSize: 10.5,
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-
-  availabilityTimeButtonSelected: {
-    borderColor: "#16834F",
-    background: "#16834F",
-    color: "#FFFFFF",
-    boxShadow: "0 5px 12px rgba(22,131,79,.15)",
-  },
-
-  availabilityTimeButtonDisabled: {
-    borderColor: "#E5E7EB",
-    background: "#F3F4F6",
-    color: "#9CA3AF",
-    cursor: "not-allowed",
-    textDecoration: "line-through",
-  },
-
-  availabilityOccupied: {
-    fontSize: 7.5,
-    fontWeight: 800,
-    textDecoration: "none",
   },
 
   slot: {
@@ -4683,62 +3644,8 @@ const sPro = {
     background: "#fbfcfb",
   },
 
-  groupSummary: {
-    display: "block",
-    margin: "-3px 0 9px",
-    color: "#7B8880",
-    fontSize: 8.5,
-  },
-
-  scheduleGroupCard: {
-    padding: 11,
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 10,
-    alignItems: "center",
-    border: "1px solid #E1E8E3",
-    borderRadius: 12,
-    background: "#FBFDFC",
-  },
-
-  scheduleGroupMain: {
-    minWidth: 0,
-    display: "grid",
-    gap: 5,
-  },
-
-  scheduleGroupTitle: {
-    fontSize: 13,
-    lineHeight: 1.1,
-  },
-
-  scheduleDaysRow: {
-    display: "flex",
-    gap: 4,
-    flexWrap: "wrap",
-  },
-
-  scheduleDayChip: {
-    minWidth: 30,
-    padding: "4px 6px",
-    borderRadius: 999,
-    background: "#EAF8EF",
-    color: "#0B7542",
-    fontSize: 7.5,
-    fontWeight: 900,
-    textAlign: "center",
-    textTransform: "uppercase",
-  },
-
-  scheduleGroupMeta: {
-    color: "#748078",
-    fontSize: 10.5,
-    lineHeight: 1.4,
-  },
-
-
   reservationCard: {
-    padding: 9,
+    padding: 12,
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -4747,64 +3654,6 @@ const sPro = {
     borderRadius: 12,
     background: "#fbfdfc",
   },
-
-  reservationCardCompact: {
-    minHeight: 52,
-    padding: "7px 9px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 8,
-    border: "1px solid #E3EAE6",
-    borderRadius: 9,
-    background: "#FFFFFF",
-  },
-
-  reservationIdentityCompact: {
-    width: "100%",
-    minWidth: 0,
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    flex: "1 1 auto",
-  },
-
-  avatarCompact: {
-    width: 30,
-    height: 30,
-    flex: "0 0 auto",
-    display: "grid",
-    placeItems: "center",
-    borderRadius: 8,
-    background: "#173C2A",
-    color: "#FFFFFF",
-    fontSize: 10,
-    fontWeight: 900,
-  },
-
-  reservationNameCompact: {
-    display: "block",
-    fontSize: 11,
-    lineHeight: 1.15,
-    overflowWrap: "anywhere",
-  },
-
-  reservationDetailCompact: {
-    display: "block",
-    marginTop: 2,
-    color: "#78847D",
-    fontSize: 8.2,
-    lineHeight: 1.3,
-    overflowWrap: "anywhere",
-  },
-
-  inlineActionsCompact: {
-    display: "flex",
-    gap: 4,
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-  },
-
 
   reservationIdentity: {
     minWidth: 0,
@@ -4815,8 +3664,8 @@ const sPro = {
   },
 
   avatar: {
-    width: 48,
-    height: 48,
+    width: 40,
+    height: 40,
     flex: "0 0 auto",
     display: "grid",
     placeItems: "center",
@@ -4958,23 +3807,6 @@ const AGENDA_CSS = `
     gap: 10px;
   }
 
-  .agenda-reserva-filtros-compactos {
-    grid-template-columns: minmax(220px,1fr) 180px;
-    gap: 7px;
-  }
-
-  .agenda-reservas-compactas {
-    width: min(1080px,100%);
-    max-width: 100%;
-    overflow: hidden;
-  }
-
-  .agenda-reservation-row-compact {
-    width: 100%;
-    max-width: 100%;
-  }
-
-
   .agenda-stepper {
     display: grid;
     grid-template-columns: repeat(3, minmax(0,1fr));
@@ -5012,10 +3844,6 @@ const AGENDA_CSS = `
   @media (max-width: 720px) {
     .agenda-page {
       padding: 14px !important;
-    }
-
-    .agenda-days-grouped-grid {
-      grid-template-columns: 1fr !important;
     }
 
     .agenda-header {
@@ -5058,33 +3886,6 @@ const AGENDA_CSS = `
       grid-template-columns: 1fr;
     }
 
-    .agenda-days-grid {
-      grid-template-columns: repeat(4,minmax(0,1fr)) !important;
-    }
-
-    .agenda-reservation-row-compact {
-      width: 100% !important;
-      min-height: 0 !important;
-      height: auto !important;
-      padding: 10px !important;
-      align-items: flex-start !important;
-      flex-direction: column !important;
-      gap: 8px !important;
-    }
-
-    .agenda-reservation-row-compact > div:first-child {
-      width: 100% !important;
-      min-height: 0 !important;
-      flex: 0 1 auto !important;
-    }
-
-    .agenda-reservation-row-compact > div:last-child {
-      width: 100% !important;
-      min-height: 0 !important;
-      justify-content: flex-start !important;
-      flex: 0 1 auto !important;
-    }
-
     .agenda-stepper {
       grid-template-columns: 1fr;
     }
@@ -5098,67 +3899,20 @@ const AGENDA_CSS = `
     .agenda-kpis {
       grid-template-columns: 1fr;
     }
-
-    .agenda-days-grid {
-      grid-template-columns: repeat(2,minmax(0,1fr)) !important;
-    }
-  }
-
-  @media (max-width: 420px) {
-    .agenda-time-picker-mobile {
-      grid-template-columns: 1fr;
-    }
   }
 
 
-@media (max-width: 980px) and (min-width: 821px) {
+@media (max-width: 1180px) {
   .agenda-d-command-grid {
-    grid-template-columns:
-      minmax(0,1fr) minmax(260px,.92fr) minmax(230px,.72fr) !important;
-    grid-template-rows: auto !important;
-    gap: 8px !important;
+    grid-template-columns: 1fr 1fr !important;
   }
 
-  .agenda-main-schedule {
-    grid-column: 1 !important;
-    grid-row: 1 !important;
-  }
-
-  .agenda-main-reservations {
-    grid-column: 2 !important;
-    grid-row: 1 !important;
-  }
-
-  .agenda-main-control {
-    grid-column: 3 !important;
-    grid-row: 1 !important;
+  .agenda-d-command-grid > aside {
+    grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 820px) {
-
-  .agenda-main-schedule,
-  .agenda-main-reservations,
-  .agenda-main-control {
-    grid-column: 1 !important;
-    grid-row: auto !important;
-  }
-
-  .agenda-main-control-compact {
-    padding: 10px !important;
-  }
-
-  .agenda-d-timeline-row {
-    grid-template-columns: 16px 76px minmax(0,1fr) !important;
-    gap: 8px !important;
-  }
-
-  .agenda-d-timeline-row > div:last-child {
-    grid-column: 2 / -1 !important;
-    justify-content: flex-start !important;
-    padding-top: 4px !important;
-  }
-
   .agenda-d-hero {
     grid-template-columns: 1fr !important;
   }
@@ -5225,354 +3979,22 @@ const AGENDA_CSS = `
   .agenda-portal-responsive {
     grid-template-columns: 1fr !important;
   }
-
-  .agenda-days-grouped-grid {
-    grid-template-columns: 1fr !important;
-  }
 }
-
-
-.agenda-d-command-grid,
-.agenda-main-schedule,
-.agenda-main-reservations,
-.agenda-main-control,
-.agenda-d-timeline-row,
-.agenda-d-timeline-row > * {
-  min-width: 0 !important;
-  max-width: 100% !important;
-}
-
-.agenda-main-control-compact {
-  overflow: hidden !important;
-}
-
-@media (min-width: 821px) {
-  .agenda-d-command-grid {
-    width: 100% !important;
-    max-width: 1480px !important;
-  }
-}
-
-
-@media (max-width: 980px) {
-  .agenda-salon-horario-grid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .agenda-salon-horario-grid > * {
-    min-width: 0 !important;
-    max-width: 100% !important;
-  }
-}
-
-@media (min-width: 981px) {
-  .agenda-salon-horario-grid {
-    grid-template-columns: repeat(2,minmax(0,1fr)) !important;
-  }
-}
-
-
-@media (max-width: 820px) {
-  .agenda-d-reservation-row {
-    min-height: 70px !important;
-    padding: 10px !important;
-  }
-
-  .agenda-d-reservation-row > div:first-child {
-    width: 44px !important;
-    height: 44px !important;
-  }
-}
-
-
-@media (max-width: 720px) {
-  .agenda-reservas-compactas > div:last-child {
-    gap: 7px !important;
-  }
-
-  .agenda-reservation-row-compact + .agenda-reservation-row-compact {
-    margin-top: 0 !important;
-  }
-}
-
-/* ==========================================================
-   KONAX · CORRECCIÓN MÓVIL 2026-08-14
-   Evita recortes horizontales y compacta el Hero de Agenda.
-   ========================================================== */
-
-html,
-body {
-  max-width: 100%;
-  overflow-x: hidden;
-}
-
-.agenda-page {
-  width: 100%;
-  max-width: 100vw;
-  min-width: 0;
-  overflow-x: hidden;
-}
-
-.agenda-page img,
-.agenda-page svg {
-  max-width: 100%;
-}
-
-.agenda-page button,
-.agenda-page input,
-.agenda-page select,
-.agenda-page textarea {
-  max-width: 100%;
-}
-
-@media (max-width: 820px) {
-  .agenda-d-hero {
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-    padding: 16px !important;
-    gap: 12px !important;
-    border-radius: 19px !important;
-  }
-
-  .agenda-d-hero-main,
-  .agenda-d-hero-side {
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-  }
-
-  .agenda-d-brand-row {
-    width: 100% !important;
-    min-width: 0 !important;
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 12px !important;
-  }
-
-  .agenda-d-brand-row > div:last-child {
-    width: 100% !important;
-    min-width: 0 !important;
-  }
-
-  .agenda-d-brand-row h1 {
-    max-width: 100% !important;
-    font-size: clamp(29px, 9vw, 38px) !important;
-    line-height: 1.02 !important;
-    letter-spacing: -0.8px !important;
-    overflow-wrap: anywhere;
-  }
-
-  .agenda-d-brand-row p {
-    width: 100% !important;
-    max-width: 100% !important;
-    margin-top: 8px !important;
-    font-size: 11.5px !important;
-    line-height: 1.45 !important;
-    overflow-wrap: anywhere;
-  }
-
-  .agenda-d-hero-side {
-    padding: 14px !important;
-  }
-
-  .agenda-d-nav {
-    width: 100% !important;
-    max-width: 100% !important;
-    overflow-x: auto !important;
-    overscroll-behavior-x: contain;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-  }
-
-  .agenda-d-nav > button {
-    flex: 0 0 auto !important;
-  }
-
-  .agenda-d-nav > button:last-child {
-    margin-left: 0 !important;
-  }
-
-  .agenda-d-week-shell {
-    width: 100% !important;
-    max-width: 100% !important;
-    padding: 14px 12px !important;
-    overflow: hidden !important;
-  }
-
-  .agenda-d-week-header {
-    align-items: flex-start !important;
-  }
-
-  .agenda-d-week-controls {
-    width: 100% !important;
-    justify-content: flex-start !important;
-  }
-
-  .agenda-d-week-strip {
-    width: 100% !important;
-    max-width: 100% !important;
-    display: flex !important;
-    gap: 8px !important;
-    overflow-x: auto !important;
-    padding: 2px 0 6px !important;
-    scroll-snap-type: x proximity;
-    overscroll-behavior-x: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .agenda-d-week-strip > button {
-    flex: 0 0 78px !important;
-    width: 78px !important;
-    min-width: 78px !important;
-    scroll-snap-align: start;
-  }
-
-  .agenda-d-command-grid,
-  .agenda-d-kpis,
-  .agenda-stepper,
-  .agenda-reserva-filtros,
-  .agenda-portal-responsive {
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-  }
-}
-
-@media (max-width: 560px) {
-
-  .agenda-page {
-    padding: 10px !important;
-  }
-
-  .agenda-d-hero {
-    padding: 14px !important;
-  }
-
-  .agenda-d-brand-row > div:first-child {
-    width: 116px !important;
-    min-height: 62px !important;
-    padding: 6px 10px !important;
-    border-radius: 14px !important;
-  }
-
-  .agenda-d-brand-row > div:first-child img {
-    width: 98px !important;
-    height: auto !important;
-  }
-
-  .agenda-d-hero-side {
-    border-radius: 14px !important;
-  }
-
-  .agenda-d-week-header h2 {
-    font-size: 17px !important;
-    line-height: 1.15 !important;
-  }
-
-  .agenda-d-week-strip > button {
-    flex-basis: 74px !important;
-    width: 74px !important;
-    min-width: 74px !important;
-  }
-}
-
-@media (max-width: 560px) {
-  .agenda-d-hero {
-    max-width: 100% !important;
-    padding: 12px !important;
-    border-radius: 16px !important;
-  }
-
-  .agenda-d-brand-row {
-    gap: 10px !important;
-  }
-
-  .agenda-d-brand-row > div:first-child {
-    width: 96px !important;
-    min-width: 96px !important;
-    min-height: 56px !important;
-  }
-
-  .agenda-d-brand-row h1 {
-    font-size: 27px !important;
-    line-height: 1.02 !important;
-  }
-
-  .agenda-d-brand-row p {
-    font-size: 10px !important;
-  }
-
-  .agenda-d-nav {
-    padding: 4px !important;
-    gap: 3px !important;
-  }
-
-  .agenda-d-nav > button {
-    min-height: 38px !important;
-    padding: 0 11px !important;
-    font-size: 10.5px !important;
-    font-weight: 800 !important;
-  }
-}
-
-@media (min-width: 981px) {
-  .agenda-d-command-grid {
-    grid-template-columns:
-      minmax(0,1.10fr) minmax(320px,.95fr) minmax(280px,.72fr) !important;
-    grid-template-rows: auto !important;
-  }
-
-  .agenda-main-schedule {
-    grid-column: 1 !important;
-    grid-row: 1 !important;
-  }
-
-  .agenda-main-reservations {
-    grid-column: 2 !important;
-    grid-row: 1 !important;
-  }
-
-  .agenda-main-control {
-    grid-column: 3 !important;
-    grid-row: 1 !important;
-  }
-
-  .agenda-main-schedule,
-  .agenda-main-reservations,
-  .agenda-main-control {
-    min-width: 0 !important;
-    max-width: 100% !important;
-    overflow: hidden !important;
-  }
-}
-@media (max-width: 560px) {
-  .agenda-schedule-group-card {
-    flex-direction: column !important;
-    align-items: flex-start !important;
-  }
-
-  .agenda-schedule-group-card > div:last-child {
-    width: 100% !important;
-    justify-content: flex-start !important;
-  }
-}
-
 `;
 
 const neo = {
   hero: {
-    maxWidth: 1180,
-    margin: "0 auto 12px",
-    padding: "12px 14px",
+    maxWidth: 1480,
+    margin: "0 auto 16px",
+    padding: 24,
     display: "grid",
-    gridTemplateColumns: "minmax(0,1fr) 238px",
-    gap: 14,
-    borderRadius: 18,
+    gridTemplateColumns: "minmax(0,1fr) 320px",
+    gap: 18,
+    borderRadius: 24,
     background:
-      "linear-gradient(135deg,#071b13 0%,#0b4a2b 60%,#0f7a42 100%)",
+      "linear-gradient(135deg,#071b13 0%,#0b4a2b 58%,#0f7a42 100%)",
     color: "#fff",
-    boxShadow: "0 12px 28px rgba(5,40,25,.14)",
+    boxShadow: "0 18px 45px rgba(5,40,25,.18)",
     overflow: "hidden",
   },
 
@@ -5581,54 +4003,54 @@ const neo = {
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
-    gap: 12,
+    gap: 22,
   },
 
   brandRow: {
     display: "flex",
     alignItems: "center",
-    gap: 13,
+    gap: 18,
   },
 
   logoCard: {
-    width: 100,
-    minHeight: 54,
+    width: 138,
+    minHeight: 74,
     display: "grid",
     placeItems: "center",
-    padding: "6px 10px",
-    borderRadius: 14,
+    padding: "8px 12px",
+    borderRadius: 18,
     background: "#fff",
     flex: "0 0 auto",
   },
 
   logo: {
-    width: 84,
-    height: 34,
+    width: 118,
+    height: 48,
     objectFit: "contain",
   },
 
   heroEyebrow: {
     display: "block",
-    marginBottom: 4,
+    marginBottom: 6,
     color: "#6EE5A3",
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: 900,
-    letterSpacing: 1.2,
+    letterSpacing: 1.5,
   },
 
   heroTitle: {
     margin: 0,
-    fontSize: "clamp(25px,2.8vw,36px)",
-    lineHeight: 1,
-    letterSpacing: -1,
+    fontSize: "clamp(34px,5vw,58px)",
+    lineHeight: .98,
+    letterSpacing: -1.4,
   },
 
   heroSubtitle: {
-    maxWidth: 620,
-    margin: "6px 0 0",
+    maxWidth: 760,
+    margin: "10px 0 0",
     color: "#DDEDE4",
-    fontSize: 10.5,
-    lineHeight: 1.4,
+    fontSize: 13,
+    lineHeight: 1.55,
   },
 
   heroActions: {
@@ -5638,13 +4060,12 @@ const neo = {
   },
 
   heroGhost: {
-    minHeight: 36,
-    padding: "0 12px",
-    border: "1px solid rgba(255,255,255,.24)",
-    borderRadius: 9,
-    background: "rgba(255,255,255,.05)",
+    minHeight: 42,
+    padding: "0 15px",
+    border: "1px solid rgba(255,255,255,.28)",
+    borderRadius: 11,
+    background: "rgba(255,255,255,.06)",
     color: "#fff",
-    fontSize: 9.5,
     fontWeight: 800,
     cursor: "pointer",
   },
@@ -5661,7 +4082,7 @@ const neo = {
   },
 
   heroSide: {
-    padding: 13,
+    padding: 18,
     display: "flex",
     flexDirection: "column",
     justifyContent: "center",
@@ -5678,39 +4099,6 @@ const neo = {
     letterSpacing: 1.2,
   },
 
-  heroCalendar: {
-    width: "100%",
-    marginTop: 7,
-    padding: "8px 10px",
-    display: "grid",
-    gap: 2,
-    border: "1px solid rgba(255,255,255,.18)",
-    borderRadius: 10,
-    background: "rgba(255,255,255,.09)",
-  },
-
-  heroCalendarLabel: {
-    color: "#A8DDBD",
-    fontSize: 7,
-    fontWeight: 900,
-    letterSpacing: .8,
-  },
-
-  heroCalendarInput: {
-    width: "100%",
-    minWidth: 0,
-    border: 0,
-    outline: "none",
-    background: "transparent",
-    color: "#FFFFFF",
-    colorScheme: "dark",
-    fontFamily: "inherit",
-    fontSize: 12,
-    fontWeight: 850,
-    cursor: "pointer",
-  },
-
-
   heroSideDate: {
     display: "block",
     marginTop: 6,
@@ -5718,7 +4106,7 @@ const neo = {
   },
 
   heroSideStats: {
-    marginTop: 10,
+    marginTop: 17,
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: 10,
@@ -5733,13 +4121,13 @@ const neo = {
   heroSideValue: {
     display: "block",
     marginTop: 3,
-    fontSize: 20,
+    fontSize: 24,
   },
 
   roleBadge: {
     alignSelf: "flex-start",
-    marginTop: 9,
-    padding: "5px 9px",
+    marginTop: 16,
+    padding: "7px 10px",
     borderRadius: 999,
     background: "rgba(255,255,255,.12)",
     color: "#fff",
@@ -5748,16 +4136,16 @@ const neo = {
   },
 
   nav: {
-    maxWidth: 1180,
-    margin: "0 auto 12px",
-    padding: 5,
+    maxWidth: 1480,
+    margin: "0 auto 14px",
+    padding: 7,
     display: "flex",
-    gap: 4,
+    gap: 6,
     alignItems: "center",
     border: "1px solid #DDE8E1",
-    borderRadius: 12,
+    borderRadius: 15,
     background: "#fff",
-    boxShadow: "0 5px 14px rgba(15,50,31,.035)",
+    boxShadow: "0 6px 18px rgba(15,50,31,.04)",
   },
 
   navItem: {
@@ -5765,27 +4153,27 @@ const neo = {
     padding: "0 13px",
     display: "inline-flex",
     alignItems: "center",
-    gap: 5,
+    gap: 7,
     border: 0,
-    borderRadius: 9,
+    borderRadius: 10,
     background: "transparent",
     color: "#506057",
-    fontSize: 11.5,
-    fontWeight: 800,
+    fontSize: 11,
+    fontWeight: 850,
     whiteSpace: "nowrap",
     cursor: "pointer",
   },
 
   navItemActive: {
-    background: "linear-gradient(135deg,#0B6F40,#15945A)",
+    background: "#0B7A43",
     color: "#fff",
-    boxShadow: "0 6px 14px rgba(11,122,67,.16)",
+    boxShadow: "0 7px 16px rgba(11,122,67,.18)",
   },
 
   navRefresh: {
     marginLeft: "auto",
-    minHeight: 34,
-    padding: "0 10px",
+    minHeight: 38,
+    padding: "0 12px",
     border: "1px solid #D9E4DD",
     borderRadius: 9,
     background: "#F7FAF8",
@@ -5794,101 +4182,6 @@ const neo = {
     fontWeight: 850,
     cursor: "pointer",
     whiteSpace: "nowrap",
-  },
-
-  dateSelectorShell: {
-    maxWidth: 1480,
-    margin: "0 auto 14px",
-    padding: "14px 16px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 16,
-    flexWrap: "wrap",
-    border: "1px solid #DCE6E0",
-    borderRadius: 18,
-    background: "#FFFFFF",
-    boxShadow: "0 7px 20px rgba(14,52,32,.04)",
-  },
-
-  dateSelectorInfo: {
-    minWidth: 0,
-    display: "grid",
-    gap: 3,
-  },
-
-  dateSelectorTitle: {
-    color: "#16261D",
-    fontSize: 24,
-    lineHeight: 1.05,
-  },
-
-  dateSelectorHint: {
-    color: "#78867E",
-    fontSize: 10,
-  },
-
-  dateSelectorControls: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 7,
-    flexWrap: "wrap",
-  },
-
-  dateSelectorArrow: {
-    width: 40,
-    height: 40,
-    flex: "0 0 auto",
-    border: "1px solid #D8E2DC",
-    borderRadius: 11,
-    background: "#FFFFFF",
-    color: "#173C2A",
-    fontSize: 17,
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-
-  dateSelectorCalendar: {
-    minWidth: 190,
-    padding: "7px 10px",
-    display: "grid",
-    gap: 2,
-    border: "1px solid #D8E2DC",
-    borderRadius: 11,
-    background: "#F8FBF9",
-  },
-
-  dateSelectorCalendarLabel: {
-    color: "#728077",
-    fontSize: 7,
-    fontWeight: 900,
-    letterSpacing: .8,
-  },
-
-  dateSelectorInput: {
-    width: "100%",
-    minWidth: 0,
-    border: 0,
-    outline: "none",
-    background: "transparent",
-    color: "#173C2A",
-    fontSize: 12,
-    fontWeight: 850,
-    fontFamily: "inherit",
-    cursor: "pointer",
-  },
-
-  dateSelectorToday: {
-    minHeight: 40,
-    padding: "0 14px",
-    border: 0,
-    borderRadius: 11,
-    background: "#E9F7EF",
-    color: "#0B7A43",
-    fontSize: 10,
-    fontWeight: 900,
-    cursor: "pointer",
   },
 
   weekShell: {
@@ -6082,25 +4375,16 @@ const neo = {
   },
 
   commandGrid: {
-    width: "100%",
     maxWidth: 1480,
-    margin: "0 auto 18px",
+    margin: "0 auto 20px",
     display: "grid",
-    gridTemplateColumns:
-      "minmax(0,1.10fr) minmax(320px,.95fr) minmax(280px,.72fr)",
-    gridTemplateRows: "auto",
-    gap: 10,
-    alignItems: "stretch",
-    overflow: "hidden",
+    gridTemplateColumns: "minmax(0,1.35fr) minmax(330px,.82fr) 300px",
+    gap: 12,
+    alignItems: "start",
   },
 
   schedulePanel: {
-    gridColumn: "1",
-    gridRow: "1",
-    minWidth: 0,
-    width: "100%",
-    maxWidth: "100%",
-    padding: 12,
+    padding: 16,
     border: "1px solid #DCE6E0",
     borderRadius: 18,
     background: "#fff",
@@ -6108,12 +4392,7 @@ const neo = {
   },
 
   reservationsPanel: {
-    gridColumn: "2",
-    gridRow: "1",
-    minWidth: 0,
-    width: "100%",
-    maxWidth: "100%",
-    padding: 12,
+    padding: 16,
     border: "1px solid #DCE6E0",
     borderRadius: 18,
     background: "#fff",
@@ -6131,8 +4410,7 @@ const neo = {
 
   panelHeading: {
     margin: "4px 0 0",
-    fontSize: 21,
-    lineHeight: 1.1,
+    fontSize: 19,
   },
 
   dateInline: {
@@ -6167,13 +4445,13 @@ const neo = {
   },
 
   timelineRow: {
-    minHeight: 66,
+    minHeight: 126,
     display: "grid",
     gridTemplateColumns:
-      "10px 56px minmax(0,1fr) 80px",
-    gap: 6,
+      "26px 100px minmax(0,1fr) 110px",
+    gap: 12,
     alignItems: "center",
-    padding: "4px 0",
+    padding: "10px 0",
     borderBottom: "1px solid #EDF2EF",
   },
 
@@ -6186,10 +4464,10 @@ const neo = {
 
   timelineDot: {
     position: "absolute",
-    top: 22,
-    width: 10,
-    height: 10,
-    border: "2px solid #BEE7CF",
+    top: 28,
+    width: 12,
+    height: 12,
+    border: "3px solid #BEE7CF",
     borderRadius: "50%",
     background: "#0B7A43",
     zIndex: 2,
@@ -6197,17 +4475,15 @@ const neo = {
 
   timelineLine: {
     position: "absolute",
-    top: 32,
-    bottom: -18,
+    top: 40,
+    bottom: -22,
     width: 2,
     background: "#DCEBE3",
   },
 
   timelineTime: {
     display: "grid",
-    gap: 1,
-    color: "#536158",
-    fontSize: 9,
+    gap: 3,
   },
 
   timelineClass: {
@@ -6246,23 +4522,21 @@ const neo = {
 
   classTitle: {
     display: "block",
-    marginTop: 3,
-    fontSize: 13,
-    lineHeight: 1.12,
+    marginTop: 7,
+    fontSize: 17,
   },
 
   classMeta: {
     display: "block",
-    marginTop: 2,
+    marginTop: 3,
     color: "#6F7D75",
-    fontSize: 7.8,
-    lineHeight: 1.2,
+    fontSize: 9,
+    lineHeight: 1.35,
   },
 
   capacityBar: {
-    width: "min(100%,170px)",
-    height: 5,
-    marginTop: 4,
+    height: 7,
+    marginTop: 10,
     overflow: "hidden",
     borderRadius: 999,
     background: "#E8EFEA",
@@ -6276,51 +4550,12 @@ const neo = {
   },
 
   capacityFooter: {
-    width: "min(100%,170px)",
-    marginTop: 3,
+    marginTop: 5,
     display: "flex",
     justifyContent: "space-between",
     gap: 8,
     color: "#849088",
     fontSize: 8,
-  },
-
-  timelineRowBeautyCompact: {
-    minHeight: 94,
-    gridTemplateColumns:
-      "10px minmax(0,1fr) 80px",
-    gap: 8,
-    padding: "7px 0",
-  },
-
-  hoursSingleLine: {
-    width: "100%",
-    minWidth: 0,
-    marginTop: 6,
-    padding: "6px 8px",
-    display: "flex",
-    alignItems: "center",
-    gap: 7,
-    overflowX: "auto",
-    border: "1px solid #E3EBE6",
-    borderRadius: 9,
-    background: "#FAFCFB",
-    scrollbarWidth: "thin",
-  },
-
-  hoursSingleLabel: {
-    flex: "0 0 auto",
-    color: "#587066",
-    fontSize: 8.5,
-    fontWeight: 900,
-  },
-
-  hoursSingleText: {
-    minWidth: "max-content",
-    color: "#24352D",
-    fontSize: 9.5,
-    fontWeight: 750,
-    whiteSpace: "nowrap",
   },
 
   timelineAction: {
@@ -6329,8 +4564,8 @@ const neo = {
   },
 
   reserveButton: {
-    minHeight: 30,
-    padding: "0 8px",
+    minHeight: 38,
+    padding: "0 13px",
     border: 0,
     borderRadius: 10,
     background: "#0B7A43",
@@ -6341,8 +4576,8 @@ const neo = {
   },
 
   reserveDisabled: {
-    minHeight: 30,
-    padding: "0 8px",
+    minHeight: 38,
+    padding: "0 13px",
     border: "1px solid #E0E5E2",
     borderRadius: 10,
     background: "#F2F4F3",
@@ -6417,11 +4652,11 @@ const neo = {
   },
 
   reservationRow: {
-    minHeight: 78,
-    padding: 12,
+    minHeight: 62,
+    padding: 9,
     display: "grid",
-    gridTemplateColumns: "48px minmax(0,1fr) auto",
-    gap: 11,
+    gridTemplateColumns: "40px minmax(0,1fr) auto",
+    gap: 9,
     alignItems: "center",
     border: "1px solid #E5ECE8",
     borderRadius: 12,
@@ -6436,7 +4671,7 @@ const neo = {
     borderRadius: 11,
     background: "#0D3B28",
     color: "#fff",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 900,
   },
 
@@ -6449,29 +4684,24 @@ const neo = {
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
-    fontSize: 14,
-    lineHeight: 1.2,
-    fontWeight: 900,
+    fontSize: 11,
   },
 
   reservationMeta: {
     display: "block",
-    marginTop: 5,
+    marginTop: 3,
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
-    color: "#6C7A72",
-    fontSize: 10.5,
-    lineHeight: 1.3,
-    fontWeight: 700,
+    color: "#7A867F",
+    fontSize: 8,
   },
 
   statusTag: {
-    padding: "6px 9px",
+    padding: "5px 7px",
     borderRadius: 999,
-    fontSize: 8.5,
+    fontSize: 6.5,
     fontWeight: 900,
-    whiteSpace: "nowrap",
   },
 
   statusConfirmed: {
@@ -6529,60 +4759,8 @@ const neo = {
     cursor: "pointer",
   },
 
-  controlPanelCompact: {
-    gridColumn: "3",
-    gridRow: "1",
-    minWidth: 0,
-    width: "100%",
-    maxWidth: "100%",
-    padding: "16px 17px",
-    borderRadius: 14,
-    background: "linear-gradient(145deg,#082017,#0B4A2B)",
-    color: "#FFFFFF",
-    boxShadow: "0 8px 20px rgba(6,40,25,.12)",
-  },
-
-  occupancyCompactRow: {
-    marginTop: 8,
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  },
-
-  occupancyRingCompact: {
-    width: 78,
-    height: 78,
-    flex: "0 0 auto",
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "50%",
-  },
-
-  occupancyInnerCompact: {
-    width: 58,
-    height: 58,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "50%",
-    background: "#0A261B",
-    color: "#FFFFFF",
-    fontSize: 14,
-  },
-
-  occupancyCompactText: {
-    minWidth: 0,
-    display: "grid",
-    gap: 2,
-    color: "#DCEDE4",
-    fontSize: 8.5,
-    lineHeight: 1.3,
-  },
-
   controlPanel: {
-    gridColumn: "2",
-    gridRow: "2",
-    minWidth: 0,
-    padding: 14,
+    padding: 18,
     borderRadius: 18,
     background:
       "linear-gradient(160deg,#071C14,#0B4A2B)",
@@ -6598,27 +4776,27 @@ const neo = {
   },
 
   controlTitle: {
-    margin: "4px 0 0",
-    fontSize: 17,
+    margin: "5px 0 0",
+    fontSize: 20,
   },
 
   occupancyCircle: {
-    margin: "12px 0",
+    margin: "20px 0",
     display: "grid",
     placeItems: "center",
   },
 
   occupancyRing: {
-    width: 96,
-    height: 96,
+    width: 140,
+    height: 140,
     display: "grid",
     placeItems: "center",
     borderRadius: "50%",
   },
 
   occupancyInner: {
-    width: 70,
-    height: 70,
+    width: 104,
+    height: 104,
     display: "grid",
     placeItems: "center",
     alignContent: "center",
@@ -6628,7 +4806,7 @@ const neo = {
 
   controlStats: {
     display: "grid",
-    gap: 6,
+    gap: 9,
   },
 
   controlRow: {
@@ -6641,7 +4819,7 @@ const neo = {
 
   controlDivider: {
     height: 1,
-    margin: "10px 0",
+    margin: "16px 0",
     background: "rgba(255,255,255,.12)",
   },
 
@@ -6661,7 +4839,7 @@ const neo = {
   },
 
   stateBox: {
-    padding: 7,
+    padding: 9,
     display: "grid",
     gap: 4,
     borderRadius: 10,
@@ -6672,8 +4850,8 @@ const neo = {
 
   controlPrimary: {
     width: "100%",
-    minHeight: 35,
-    marginTop: 10,
+    minHeight: 40,
+    marginTop: 16,
     border: 0,
     borderRadius: 10,
     background: "#5CE19B",
@@ -6685,8 +4863,8 @@ const neo = {
 
   controlSecondary: {
     width: "100%",
-    minHeight: 34,
-    marginTop: 5,
+    minHeight: 38,
+    marginTop: 7,
     border: "1px solid rgba(255,255,255,.18)",
     borderRadius: 10,
     background: "rgba(255,255,255,.06)",
@@ -6698,32 +4876,6 @@ const neo = {
 };
 
 const pro = {
-  reservasPanelCompacto:{
-    maxWidth:1080,
-    margin:"0 auto 16px",
-    padding:12,
-    border:"1px solid #DCE5DF",
-    borderRadius:15,
-    background:"#FFFFFF",
-    boxShadow:"0 7px 20px rgba(15,23,42,.04)",
-  },
-  reservasHeaderCompacto:{
-    marginBottom:9,
-    paddingBottom:8,
-    display:"flex",
-    alignItems:"center",
-    justifyContent:"space-between",
-    gap:10,
-    flexWrap:"wrap",
-    borderBottom:"1px solid #EDF1EE",
-  },
-  reservasFiltersCompacto:{
-    marginBottom:8,
-    padding:8,
-    borderRadius:11,
-    background:"#F7FAF8",
-    border:"1px solid #E4EAE6",
-  },
   header:{
     maxWidth:1450,
     margin:"0 auto 14px",
@@ -7776,95 +5928,13 @@ const s = {
   },
   ...sPro,
 
-  timePicker: {
-    width: "100%",
-    maxWidth: "100%",
-    minWidth: 0,
-    overflow: "hidden",
-    padding: 8,
-    border: "1px solid #CCD7D0",
-    borderRadius: 11,
-    background: "#F9FBFA",
-  },
-
-  timePickerControls: {
-    width: "100%",
-    minWidth: 0,
-    display: "grid",
-    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
-    gap: 5,
-    alignItems: "center",
-    overflow: "hidden",
-  },
-
-  timeSelect: {
-    width: "100%",
-    minWidth: 0,
-    minHeight: 40,
-    padding: "7px 5px",
-    border: "1px solid #D4DED8",
-    borderRadius: 9,
-    background: "#FFFFFF",
-    color: "#17211C",
-    fontSize: 13,
-    fontWeight: 800,
-    textAlign: "center",
-  },
-
-  timePeriodSelect: {
-    width: "100%",
-    minWidth: 0,
-    minHeight: 40,
-    padding: "7px 5px",
-    border: "1px solid #D4DED8",
-    borderRadius: 9,
-    background: "#FFFFFF",
-    color: "#17211C",
-    fontSize: 12,
-    fontWeight: 800,
-  },
-
-  timeColon: {
-    color: "#506057",
-    fontSize: 17,
-    fontWeight: 900,
-    textAlign: "center",
-  },
-
-  timePickerFooter: {
-    marginTop: 7,
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 7,
-    flexWrap: "wrap",
-  },
-
-  timeApplied: {
-    color: "#6F7D75",
-    fontSize: 9,
-    fontWeight: 800,
-  },
-
-  timeApplyButton: {
-    minHeight: 34,
-    padding: "6px 10px",
-    border: "none",
-    borderRadius: 8,
-    background: "#16834F",
-    color: "#FFFFFF",
-    fontSize: 10,
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-
   portalPanel: {
-    maxWidth: 1180,
-    margin: "0 auto 12px",
-    padding: 12,
+    maxWidth: 1450,
+    margin: "0 auto 14px",
+    padding: 18,
     display: "grid",
-    gridTemplateColumns: "minmax(0,1fr) 155px",
-    gap: 10,
+    gridTemplateColumns: "minmax(0,1fr) 250px",
+    gap: 16,
     border: "1px solid #D8E6DE",
     borderRadius: 18,
     background:
@@ -7877,10 +5947,10 @@ const s = {
   },
 
   portalText: {
-    maxWidth: 620,
-    margin: "3px 0 9px",
+    maxWidth: 700,
+    margin: "5px 0 14px",
     color: "#718078",
-    fontSize: 10,
+    fontSize: 11,
     lineHeight: 1.5,
   },
 
@@ -7891,8 +5961,8 @@ const s = {
   },
 
   portalToggle: {
-    marginTop: 6,
-    padding: 8,
+    marginTop: 10,
+    padding: 11,
     display: "flex",
     alignItems: "flex-start",
     gap: 9,
@@ -7953,8 +6023,8 @@ const s = {
   },
 
   qrPanel: {
-    minHeight: 150,
-    padding: 8,
+    minHeight: 220,
+    padding: 14,
     display: "grid",
     placeItems: "center",
     alignContent: "center",
@@ -7965,8 +6035,8 @@ const s = {
   },
 
   qrImage: {
-    width: 92,
-    height: 92,
+    width: 150,
+    height: 150,
     objectFit: "contain",
   },
 
@@ -8000,5 +6070,11 @@ const s = {
     fontWeight: 900,
     cursor: "pointer",
   },
+  wodGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 12 },
+  wodCard: { padding: 16, border: "1px solid #DCE6E0", borderRadius: 16, background: "#FBFDFC" },
+  wodBlock: { marginTop: 8, padding: 11, display: "grid", gap: 5, border: "1px solid #E1E8E4", borderRadius: 11, background: "#FFFFFF" },
+  wodBlockAccent: { borderColor: "#A9D9BC", background: "#EEF9F2" },
+  wodFormGrid: { marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 10 },
+  wodTextarea: { width: "100%", minHeight: 105, padding: "10px 11px", border: "1px solid #CCD7D0", borderRadius: 10, background: "#FFFFFF", color: "#17211C", fontFamily: "inherit", resize: "vertical" },
 
 };
