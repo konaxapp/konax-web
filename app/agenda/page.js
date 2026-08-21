@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.20-AGENDA-WOD-V1";
+const VERSION = "2026.08.21-AGENDA-BELLEZA-MOVIL-AISLADA";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -29,6 +29,23 @@ const HORARIO_INICIAL = {
   activo: true,
 };
 
+const SERVICIO_SALON_INICIAL = {
+  ...SERVICIO_INICIAL,
+  tipo: "cita_individual",
+  duracion_minutos: 45,
+  capacidad_default: 1,
+  requiere_membresia: false,
+  requiere_pago: true,
+  precio: 0,
+};
+
+const HORARIO_SALON_INICIAL = {
+  ...HORARIO_INICIAL,
+  hora_inicio: "09:00",
+  hora_fin: "10:00",
+  capacidad: 1,
+};
+
 function fechaHoy() {
   const d = new Date();
   const offset = d.getTimezoneOffset();
@@ -43,6 +60,24 @@ function normalizar(valor) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function esTipoSalonBelleza(tipoNegocio, categoriaNegocio = "") {
+  const texto = normalizar(
+    `${tipoNegocio || ""} ${categoriaNegocio || ""}`
+  );
+
+  return [
+    "salon de belleza",
+    "salon belleza",
+    "salon",
+    "belleza",
+    "beauty",
+    "peluqueria",
+    "estetica",
+    "barberia",
+    "spa",
+  ].some((palabra) => texto.includes(palabra));
 }
 
 function formatoHora(hora) {
@@ -88,26 +123,27 @@ function esRolAdministrador(rol) {
   ].includes(normalizar(rol).replace(/\s+/g, "_"));
 }
 
-function esTipoGimnasio(tipoNegocio = "", categoriaNegocio = "") {
-  const texto = normalizar(`${tipoNegocio || ""} ${categoriaNegocio || ""}`);
-  return ["gimnasio", "gym", "fitness", "crossfit", "box", "academia", "club"]
-    .some((palabra) => texto.includes(palabra));
+
+function horaAMinutos(hora) {
+  if (!hora) return 0;
+  const [hh = "0", mm = "0"] = String(hora).split(":");
+  return Number(hh) * 60 + Number(mm);
 }
 
-const WOD_INICIAL = {
-  servicio_id: "",
-  fecha: fechaHoy(),
-  titulo: "WOD del día",
-  warmup: "",
-  strength: "",
-  skill: "",
-  metcon: "",
-  cooldown: "",
-  notas_publicas: "",
-  notas_coach: "",
-  visible_desde: "",
-  activo: true,
-};
+function rangoCoincideConFecha(horario, fecha) {
+  if (!horario || !fecha) return false;
+
+  const d = new Date(`${fecha}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return false;
+
+  const diaSemana = d.getDay();
+  if (Number(horario.dia_semana) !== diaSemana) return false;
+
+  if (horario.fecha_desde && fecha < horario.fecha_desde) return false;
+  if (horario.fecha_hasta && fecha > horario.fecha_hasta) return false;
+
+  return Boolean(horario.activo);
+}
 
 export default function AgendaPage() {
   const [cargando, setCargando] = useState(true);
@@ -118,11 +154,7 @@ export default function AgendaPage() {
   const [empresaNombre, setEmpresaNombre] = useState("");
   const [rol, setRol] = useState("");
   const [esAdmin, setEsAdmin] = useState(false);
-  const [tipoNegocio, setTipoNegocio] = useState("");
-  const [categoriaNegocio, setCategoriaNegocio] = useState("");
-  const [wods, setWods] = useState([]);
-  const [wodForm, setWodForm] = useState(WOD_INICIAL);
-  const [wodEditandoId, setWodEditandoId] = useState(null);
+  const [esSalonBelleza, setEsSalonBelleza] = useState(false);
 
   const [vista, setVista] = useState("hoy");
   const [fechaAgenda, setFechaAgenda] = useState(fechaHoy());
@@ -132,6 +164,8 @@ export default function AgendaPage() {
   const [reservas, setReservas] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [disponibilidad, setDisponibilidad] = useState([]);
+
+  const [esMovil, setEsMovil] = useState(false);
 
   const [servicioForm, setServicioForm] = useState(SERVICIO_INICIAL);
   const [servicioEditandoId, setServicioEditandoId] = useState(null);
@@ -152,9 +186,24 @@ export default function AgendaPage() {
     titulo_publico: "",
   });
   const [guardandoPortal, setGuardandoPortal] = useState(false);
+  const [alertaCancelacionCliente, setAlertaCancelacionCliente] = useState(null);
 
   useEffect(() => {
     inicializar();
+  }, []);
+
+
+  useEffect(() => {
+    const actualizarVista = () => {
+      setEsMovil(window.innerWidth <= 760);
+    };
+
+    actualizarVista();
+    window.addEventListener("resize", actualizarVista);
+
+    return () => {
+      window.removeEventListener("resize", actualizarVista);
+    };
   }, []);
 
   useEffect(() => {
@@ -190,6 +239,87 @@ export default function AgendaPage() {
     };
   }, [empresaId, fechaAgenda]);
 
+  // Cancelaciones del portal público en tiempo real.
+  // El cliente libera el horario y el administrador recibe la alerta
+  // sin tener que actualizar manualmente la pantalla.
+  useEffect(() => {
+    if (!empresaId || !esAdmin) return;
+
+    const canal = supabase
+      .channel(`agenda-cancelaciones-${empresaId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "agenda_reservas",
+          filter: `empresa_id=eq.${empresaId}`,
+        },
+        async (payload) => {
+          const anterior = payload?.old || {};
+          const actual = payload?.new || {};
+
+          if (
+            normalizar(actual.estado) !== "cancelada" ||
+            normalizar(anterior.estado) === "cancelada"
+          ) {
+            return;
+          }
+
+          try {
+            const [clienteResp, servicioResp] = await Promise.all([
+              actual.cliente_id
+                ? supabase
+                    .from("clientes")
+                    .select("id,nombre,telefono")
+                    .eq("empresa_id", empresaId)
+                    .eq("id", actual.cliente_id)
+                    .maybeSingle()
+                : Promise.resolve({ data: null, error: null }),
+              actual.servicio_id
+                ? supabase
+                    .from("agenda_servicios")
+                    .select("id,nombre")
+                    .eq("empresa_id", empresaId)
+                    .eq("id", actual.servicio_id)
+                    .maybeSingle()
+                : Promise.resolve({ data: null, error: null }),
+            ]);
+
+            setAlertaCancelacionCliente({
+              reservaId: actual.id,
+              cliente:
+                clienteResp?.data?.nombre ||
+                actual.nombre_reserva ||
+                "Cliente",
+              telefono: clienteResp?.data?.telefono || "",
+              servicio:
+                servicioResp?.data?.nombre || "Servicio",
+              fecha: actual.fecha_reserva || fechaAgenda,
+              hora: actual.hora_inicio || "",
+              motivo: actual.motivo_cancelacion || "",
+              canceladoPor: actual.cancelado_por || "cliente",
+            });
+
+            await Promise.all([
+              cargarReservas(empresaId),
+              cargarDisponibilidad(fechaAgenda, empresaId),
+            ]);
+          } catch (err) {
+            console.error(
+              "No se pudo procesar la alerta de cancelación:",
+              err
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canal);
+    };
+  }, [empresaId, esAdmin, fechaAgenda]);
+
   async function inicializar() {
     setCargando(true);
     setError("");
@@ -206,11 +336,12 @@ export default function AgendaPage() {
 
       const empresaLocal = localStorage.getItem("empresaId") || "";
       const empresaNombreLocal = localStorage.getItem("empresaNombre") || "";
+      const tipoNegocioLocal = localStorage.getItem("tipoNegocio") || "";
+      const categoriaNegocioLocal =
+        localStorage.getItem("categoriaNegocio") || "";
       const rolLocal = localStorage.getItem("usuarioRol") ||
         localStorage.getItem("rol") ||
         "";
-      const tipoNegocioLocal = localStorage.getItem("tipoNegocio") || "";
-      const categoriaNegocioLocal = localStorage.getItem("categoriaNegocio") || "";
 
       if (!empresaLocal) {
         alert("No hay una empresa activa.");
@@ -221,12 +352,31 @@ export default function AgendaPage() {
       const adminLocal =
         esRolAdministrador(rolLocal);
 
+      const salonLocal = esTipoSalonBelleza(
+        tipoNegocioLocal,
+        categoriaNegocioLocal
+      );
+
       setEmpresaId(empresaLocal);
       setEmpresaNombre(empresaNombreLocal);
       setRol(rolLocal);
       setEsAdmin(adminLocal);
-      setTipoNegocio(tipoNegocioLocal);
-      setCategoriaNegocio(categoriaNegocioLocal);
+      setEsSalonBelleza(salonLocal);
+
+      if (salonLocal) {
+        setServicioForm(SERVICIO_SALON_INICIAL);
+        setHorarioForm(HORARIO_SALON_INICIAL);
+      }
+
+      if (typeof window !== "undefined") {
+        const vistaUrl = new URLSearchParams(
+          window.location.search
+        ).get("vista");
+
+        if (["hoy", "nueva", "reservas", "configuracion"].includes(vistaUrl)) {
+          setVista(vistaUrl);
+        }
+      }
 
       await Promise.all([
         cargarServicios(empresaLocal),
@@ -234,7 +384,6 @@ export default function AgendaPage() {
         cargarClientes(empresaLocal),
         cargarReservas(empresaLocal),
         cargarDisponibilidad(fechaAgenda, empresaLocal),
-        cargarWods(empresaLocal),
         adminLocal
           ? cargarConfiguracionPortal(empresaLocal)
           : Promise.resolve(),
@@ -355,8 +504,9 @@ export default function AgendaPage() {
 
     if (!enlace) return;
 
-    const texto =
-      `Reserva tu clase o servicio aquí:\n${enlace}`;
+    const texto = esSalonBelleza
+      ? `Reserva tu cita en el salón aquí:\n${enlace}`
+      : `Reserva tu clase o servicio aquí:\n${enlace}`;
 
     window.open(
       `https://wa.me/?text=${encodeURIComponent(texto)}`,
@@ -457,89 +607,6 @@ export default function AgendaPage() {
           ? actual.precio
           : 0,
     }));
-  }
-
-  async function cargarWods(idEmpresa = empresaId) {
-    if (!idEmpresa) return;
-    const { data, error } = await supabase.rpc("listar_wods_agenda", {
-      p_empresa_id: idEmpresa,
-      p_desde: null,
-      p_hasta: null,
-    });
-    if (error) {
-      console.error("WOD:", error);
-      setWods([]);
-      return;
-    }
-    setWods(Array.isArray(data) ? data : []);
-  }
-
-  async function guardarWod() {
-    if (!esAdmin) return;
-    if (!wodForm.servicio_id || !wodForm.fecha) {
-      alert("Selecciona la clase/programa y la fecha.");
-      return;
-    }
-    setGuardando(true);
-    try {
-      const { data, error } = await supabase.rpc("guardar_wod_agenda", {
-        p_empresa_id: empresaId,
-        p_id: wodEditandoId,
-        p_servicio_id: wodForm.servicio_id,
-        p_fecha: wodForm.fecha,
-        p_titulo: wodForm.titulo.trim() || "WOD del día",
-        p_warmup: wodForm.warmup.trim() || null,
-        p_strength: wodForm.strength.trim() || null,
-        p_skill: wodForm.skill.trim() || null,
-        p_metcon: wodForm.metcon.trim() || null,
-        p_cooldown: wodForm.cooldown.trim() || null,
-        p_notas_publicas: wodForm.notas_publicas.trim() || null,
-        p_notas_coach: wodForm.notas_coach.trim() || null,
-        p_visible_desde: wodForm.visible_desde ? new Date(wodForm.visible_desde).toISOString() : null,
-        p_activo: Boolean(wodForm.activo),
-      });
-      if (error) throw error;
-      if (!data?.ok) throw new Error(data?.mensaje || "No se pudo guardar el WOD.");
-      setWodForm({ ...WOD_INICIAL, fecha: wodForm.fecha || fechaHoy() });
-      setWodEditandoId(null);
-      await cargarWods();
-      alert("WOD guardado.");
-    } catch (err) {
-      setError(err?.message || "No se pudo guardar el WOD.");
-    } finally {
-      setGuardando(false);
-    }
-  }
-
-  function editarWod(wod) {
-    setWodEditandoId(wod.id);
-    setWodForm({
-      servicio_id: wod.servicio_id || "",
-      fecha: String(wod.fecha || fechaHoy()).slice(0, 10),
-      titulo: wod.titulo || "WOD del día",
-      warmup: wod.warmup || "",
-      strength: wod.strength || "",
-      skill: wod.skill || "",
-      metcon: wod.metcon || "",
-      cooldown: wod.cooldown || "",
-      notas_publicas: wod.notas_publicas || "",
-      notas_coach: wod.notas_coach || "",
-      visible_desde: wod.visible_desde ? String(wod.visible_desde).slice(0,16) : "",
-      activo: Boolean(wod.activo),
-    });
-  }
-
-  async function eliminarWod(wod) {
-    if (!esAdmin || !wod?.id || !window.confirm("¿Deseas eliminar este WOD?")) return;
-    const { data, error } = await supabase.rpc("eliminar_wod_agenda", {
-      p_empresa_id: empresaId,
-      p_id: wod.id,
-    });
-    if (error || !data?.ok) {
-      alert(error?.message || data?.mensaje || "No se pudo eliminar el WOD.");
-      return;
-    }
-    await cargarWods();
   }
 
   async function cargarServicios(idEmpresa = empresaId) {
@@ -732,17 +799,21 @@ export default function AgendaPage() {
   }, [reservasFechaOperativas]);
 
   const resumenAgenda = useMemo(() => {
-    const capacidadTotal = disponibilidad.reduce(
+    const baseDisponibilidad = esSalonBelleza
+      ? disponibilidadVisible
+      : disponibilidad;
+
+    const capacidadTotal = baseDisponibilidad.reduce(
       (total, item) => total + Number(item.capacidad || 0),
       0
     );
 
-    const reservadosTotal = disponibilidad.reduce(
+    const reservadosTotal = baseDisponibilidad.reduce(
       (total, item) => total + Number(item.reservados || 0),
       0
     );
 
-    const cuposDisponibles = disponibilidad.reduce(
+    const cuposDisponibles = baseDisponibilidad.reduce(
       (total, item) => total + Number(item.disponibles || 0),
       0
     );
@@ -758,7 +829,7 @@ export default function AgendaPage() {
       cuposDisponibles,
       ocupacion,
     };
-  }, [disponibilidad]);
+  }, [disponibilidad, disponibilidadVisible, esSalonBelleza]);
 
   const semanaAgenda = useMemo(() => {
     const base = new Date(`${fechaAgenda}T12:00:00`);
@@ -808,6 +879,63 @@ export default function AgendaPage() {
     });
   }, [fechaAgenda]);
 
+  const horariosSalonFecha = useMemo(() => {
+    if (!esSalonBelleza) return horarios;
+
+    return horarios
+      .filter((horario) => rangoCoincideConFecha(horario, fechaAgenda))
+      .sort(
+        (a, b) =>
+          horaAMinutos(a.hora_inicio) -
+          horaAMinutos(b.hora_inicio)
+      );
+  }, [horarios, esSalonBelleza, fechaAgenda]);
+
+  const disponibilidadVisible = useMemo(() => {
+    if (!esSalonBelleza) return disponibilidad;
+
+    // Para salón mostramos solamente bloques realmente utilizables del día:
+    // una fila por horario configurado, no una cascada de segmentos repetidos.
+    const porHorario = new Map();
+
+    disponibilidad.forEach((item) => {
+      const clave = String(item.horario_id || "");
+      if (!clave) return;
+
+      const horarioBase = mapaHorarios.get(clave);
+      if (
+        horarioBase &&
+        !rangoCoincideConFecha(horarioBase, fechaAgenda)
+      ) {
+        return;
+      }
+
+      if (!porHorario.has(clave)) {
+        porHorario.set(clave, item);
+        return;
+      }
+
+      const actual = porHorario.get(clave);
+      const inicioActual = horaAMinutos(actual?.hora_inicio);
+      const inicioNuevo = horaAMinutos(item?.hora_inicio);
+
+      if (inicioNuevo < inicioActual) {
+        porHorario.set(clave, item);
+      }
+    });
+
+    return Array.from(porHorario.values()).sort(
+      (a, b) =>
+        horaAMinutos(a.hora_inicio) -
+        horaAMinutos(b.hora_inicio)
+    );
+  }, [
+    disponibilidad,
+    esSalonBelleza,
+    fechaAgenda,
+    mapaHorarios,
+  ]);
+
   async function refrescarTodo() {
     setGuardando(true);
     setError("");
@@ -819,7 +947,6 @@ export default function AgendaPage() {
         cargarClientes(),
         cargarReservas(),
         cargarDisponibilidad(),
-        cargarWods(),
       ]);
     } catch (err) {
       setError(err?.message || "No se pudo actualizar Agenda.");
@@ -830,12 +957,20 @@ export default function AgendaPage() {
 
   async function guardarServicio() {
     if (!esAdmin) {
-      alert("Solo el administrador puede configurar servicios o clases.");
+      alert(
+        esSalonBelleza
+          ? "Solo el administrador puede configurar los servicios del salón."
+          : "Solo el administrador puede configurar servicios o clases."
+      );
       return;
     }
 
     if (!servicioForm.nombre.trim()) {
-      alert("Escribe el nombre del servicio o clase.");
+      alert(
+        esSalonBelleza
+          ? "Escribe el nombre del servicio del salón."
+          : "Escribe el nombre del servicio o clase."
+      );
       return;
     }
 
@@ -884,7 +1019,11 @@ export default function AgendaPage() {
 
       if (respuesta.error) throw respuesta.error;
 
-      setServicioForm(SERVICIO_INICIAL);
+      setServicioForm(
+        esSalonBelleza
+          ? SERVICIO_SALON_INICIAL
+          : SERVICIO_INICIAL
+      );
       setServicioEditandoId(null);
       await cargarServicios();
       alert(servicioEditandoId ? "Servicio actualizado." : "Servicio creado.");
@@ -944,6 +1083,11 @@ export default function AgendaPage() {
       return;
     }
 
+    if (horarioForm.hora_fin <= horarioForm.hora_inicio) {
+      alert("La hora de finalización debe ser posterior a la hora de inicio.");
+      return;
+    }
+
     setGuardando(true);
     setError("");
 
@@ -977,7 +1121,11 @@ export default function AgendaPage() {
 
       if (respuesta.error) throw respuesta.error;
 
-      setHorarioForm(HORARIO_INICIAL);
+      setHorarioForm(
+        esSalonBelleza
+          ? HORARIO_SALON_INICIAL
+          : HORARIO_INICIAL
+      );
       setHorarioEditandoId(null);
       await cargarHorarios();
       await cargarDisponibilidad();
@@ -1025,7 +1173,11 @@ export default function AgendaPage() {
 
   async function crearReserva() {
     if (!clienteSeleccionado?.id) {
-      alert("Selecciona un alumno.");
+      alert(
+        esSalonBelleza
+          ? "Selecciona un cliente."
+          : "Selecciona un alumno."
+      );
       return;
     }
 
@@ -1068,7 +1220,9 @@ export default function AgendaPage() {
         );
       } else {
         alert(
-          `Reserva confirmada. Quedan ${resultado.disponibles ?? 0} cupos disponibles.`
+          esSalonBelleza
+            ? "Cita confirmada correctamente."
+            : `Reserva confirmada. Quedan ${resultado.disponibles ?? 0} cupos disponibles.`
         );
       }
 
@@ -1204,13 +1358,6 @@ export default function AgendaPage() {
     return `${nombreDia(h.dia_semana)} · ${formatoHora(h.hora_inicio)}`;
   }
 
-  const esGimnasio = esTipoGimnasio(tipoNegocio, categoriaNegocio);
-
-  const wodsFecha = useMemo(() =>
-    wods.filter((wod) => String(wod.fecha || "").slice(0,10) === fechaAgenda),
-    [wods, fechaAgenda]
-  );
-
   if (cargando) {
     return (
       <main style={s.loading}>
@@ -1225,9 +1372,9 @@ export default function AgendaPage() {
       <style>{AGENDA_CSS}</style>
 
       <header style={neo.hero} className="agenda-d-hero">
-        <div style={neo.heroMain}>
-          <div style={neo.brandRow}>
-            <div style={neo.logoCard}>
+        <div style={neo.heroMain} className="agenda-d-hero-main">
+          <div style={neo.brandRow} className="agenda-d-brand-row">
+            <div style={neo.logoCard} className="agenda-d-logo-card">
               <img
                 src="/konax-logo.png"
                 alt="KONAX"
@@ -1237,20 +1384,24 @@ export default function AgendaPage() {
 
             <div>
               <span style={neo.heroEyebrow}>
-                KONAX · RESERVAS Y CLASES
+                {esSalonBelleza
+                  ? "KONAX · CITAS Y SERVICIOS"
+                  : "KONAX · RESERVAS Y CLASES"}
               </span>
               <h1 style={neo.heroTitle}>
-                Centro de Agenda
+                {esSalonBelleza
+                  ? "Agenda de Servicios"
+                  : "Centro de Agenda"}
               </h1>
               <p style={neo.heroSubtitle}>
-                {empresaNombre || "KONAX"} · Controla horarios,
-                capacidad, reservas y asistencia desde una vista
-                operativa más clara.
+                {empresaNombre || "KONAX"} · {esSalonBelleza
+                  ? "Controla servicios, profesionales, horarios, citas y cobros desde una sola agenda."
+                  : "Controla horarios, capacidad, reservas y asistencia desde una vista operativa más clara."}
               </p>
             </div>
           </div>
 
-          <div style={neo.heroActions}>
+          <div style={neo.heroActions} className="agenda-d-hero-actions">
             <button
               type="button"
               style={neo.heroGhost}
@@ -1259,17 +1410,10 @@ export default function AgendaPage() {
               ← Panel principal
             </button>
 
-            <button
-              type="button"
-              style={neo.heroPrimary}
-              onClick={() => setVista("nueva")}
-            >
-              + Crear reserva
-            </button>
           </div>
         </div>
 
-        <div style={neo.heroSide}>
+        <div style={neo.heroSide} className="agenda-d-hero-side">
           <span style={neo.heroSideLabel}>
             FECHA EN OPERACIÓN
           </span>
@@ -1300,6 +1444,83 @@ export default function AgendaPage() {
       </header>
 
       {error && <div style={s.error}>{error}</div>}
+
+      {alertaCancelacionCliente && (
+        <section
+          style={{
+            margin: "0 auto 14px",
+            maxWidth: 1450,
+            padding: "14px 16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 14,
+            flexWrap: "wrap",
+            border: "1px solid #F2C7C2",
+            borderRadius: 16,
+            background: "#FFF4F2",
+            color: "#7A271A",
+          }}
+        >
+          <div>
+            <strong style={{ display: "block", marginBottom: 4 }}>
+              ⚠ Cita cancelada por el cliente · horario liberado
+            </strong>
+            <span style={{ fontSize: 12 }}>
+              {alertaCancelacionCliente.cliente} · {alertaCancelacionCliente.servicio}
+              {" · "}
+              {formatoFecha(alertaCancelacionCliente.fecha)}
+              {" · "}
+              {formatoHora(alertaCancelacionCliente.hora)}
+              {alertaCancelacionCliente.motivo
+                ? ` · Motivo: ${alertaCancelacionCliente.motivo}`
+                : ""}
+            </span>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => {
+                setFechaAgenda(
+                  alertaCancelacionCliente.fecha || fechaHoy()
+                );
+                setHorarioSeleccionado("");
+                setVista("nueva");
+              }}
+              style={{
+                minHeight: 38,
+                padding: "0 14px",
+                border: 0,
+                borderRadius: 10,
+                background: "#111827",
+                color: "#FFFFFF",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              Agendar otro cliente
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAlertaCancelacionCliente(null)}
+              style={{
+                minHeight: 38,
+                padding: "0 12px",
+                border: "1px solid #E5A59D",
+                borderRadius: 10,
+                background: "#FFFFFF",
+                color: "#7A271A",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              Cerrar
+            </button>
+          </div>
+        </section>
+      )}
 
       <section style={neo.nav} className="agenda-d-nav">
         <button
@@ -1338,20 +1559,6 @@ export default function AgendaPage() {
           Reservas
         </button>
 
-        {esGimnasio && (
-          <button
-            type="button"
-            onClick={() => setVista("wod")}
-            style={{
-              ...neo.navItem,
-              ...(vista === "wod" ? neo.navItemActive : {}),
-            }}
-          >
-            <span>W</span>
-            WOD
-          </button>
-        )}
-
         {esAdmin && (
           <button
             type="button"
@@ -1364,7 +1571,9 @@ export default function AgendaPage() {
             }}
           >
             <span>⚙</span>
-            Clases y horarios
+            {esSalonBelleza
+            ? "Servicios y horarios"
+            : "Clases y horarios"}
           </button>
         )}
 
@@ -1391,7 +1600,7 @@ export default function AgendaPage() {
                 </h2>
               </div>
 
-              <div style={neo.weekControls}>
+              <div style={neo.weekControls} className="agenda-d-week-controls">
                 <button
                   type="button"
                   style={neo.roundButton}
@@ -1486,13 +1695,15 @@ export default function AgendaPage() {
 
           <section style={neo.kpiGrid} className="agenda-d-kpis">
             <article style={neo.kpiCard}>
-              <span style={neo.kpiCaption}>CLASES</span>
+              <span style={neo.kpiCaption}>
+                {esSalonBelleza ? "SERVICIOS" : "CLASES"}
+              </span>
               <div style={neo.kpiBody}>
                 <strong style={neo.kpiNumber}>
-                  {disponibilidad.length}
+                  {disponibilidadVisible.length}
                 </strong>
                 <span style={neo.kpiHint}>
-                  programadas
+                  {esSalonBelleza ? "programados hoy" : "programadas"}
                 </span>
               </div>
             </article>
@@ -1510,7 +1721,9 @@ export default function AgendaPage() {
             </article>
 
             <article style={neo.kpiCard}>
-              <span style={neo.kpiCaption}>CUPOS LIBRES</span>
+              <span style={neo.kpiCaption}>
+                {esSalonBelleza ? "HORARIOS LIBRES" : "CUPOS LIBRES"}
+              </span>
               <div style={neo.kpiBody}>
                 <strong style={neo.kpiNumber}>
                   {resumenAgenda.cuposDisponibles}
@@ -1530,7 +1743,7 @@ export default function AgendaPage() {
                   {resumenAgenda.ocupacion}%
                 </strong>
                 <span style={neo.kpiHintAccent}>
-                  de la capacidad
+                  {esSalonBelleza ? "de la agenda" : "de la capacidad"}
                 </span>
               </div>
             </article>
@@ -1544,7 +1757,9 @@ export default function AgendaPage() {
                     PROGRAMACIÓN DEL DÍA
                   </span>
                   <h2 style={neo.panelHeading}>
-                    Horarios y capacidad
+                    {esSalonBelleza
+                      ? "Servicios y horarios"
+                      : "Horarios y capacidad"}
                   </h2>
                 </div>
 
@@ -1577,15 +1792,18 @@ export default function AgendaPage() {
                 </div>
               </div>
 
-              {disponibilidad.length === 0 ? (
+              {disponibilidadVisible.length === 0 ? (
                 <div style={neo.emptyLarge}>
                   <div style={neo.emptyIcon}>◷</div>
                   <strong style={neo.emptyTitle}>
-                    No hay clases programadas
+                    {esSalonBelleza
+                      ? "No hay servicios programados"
+                      : "No hay clases programadas"}
                   </strong>
                   <span style={neo.emptyText}>
-                    Selecciona otra fecha o crea un horario
-                    desde Clases y horarios.
+                    {esSalonBelleza
+                      ? "Selecciona otra fecha o configura los servicios y horarios disponibles."
+                      : "Selecciona otra fecha o crea un horario desde Clases y horarios."}
                   </span>
 
                   {esAdmin && (
@@ -1594,13 +1812,15 @@ export default function AgendaPage() {
                       style={neo.emptyButton}
                       onClick={() => setVista("configuracion")}
                     >
-                      Configurar horario
+                      {esSalonBelleza
+                        ? "Configurar servicios y horarios"
+                        : "Configurar horario"}
                     </button>
                   )}
                 </div>
               ) : (
                 <div style={neo.timeline}>
-                  {disponibilidad.map((item, index) => {
+                  {disponibilidadVisible.map((item, index) => {
                     const capacidad = Number(item.capacidad || 0);
                     const reservados = Number(item.reservados || 0);
                     const libres = Number(item.disponibles || 0);
@@ -1625,7 +1845,7 @@ export default function AgendaPage() {
                         <div style={neo.timelineRail}>
                           <span style={neo.timelineDot} />
                           {index <
-                            disponibilidad.length - 1 && (
+                            disponibilidadVisible.length - 1 && (
                             <span style={neo.timelineLine} />
                           )}
                         </div>
@@ -1642,10 +1862,11 @@ export default function AgendaPage() {
                         <div style={neo.timelineClass}>
                           <div style={neo.classTopLine}>
                             <span style={neo.classBadge}>
-                              {item.servicio_tipo ===
-                              "cita_individual"
-                                ? "CITA"
-                                : "CLASE"}
+                              {esSalonBelleza
+                              ? "SERVICIO"
+                              : item.servicio_tipo === "cita_individual"
+                              ? "CITA"
+                              : "CLASE"}
                             </span>
 
                             <span
@@ -1656,7 +1877,13 @@ export default function AgendaPage() {
                                   : {}),
                               }}
                             >
-                              {lleno
+                              {esSalonBelleza
+                                ? lleno
+                                  ? "OCUPADO"
+                                  : libres === 1
+                                  ? "DISPONIBLE"
+                                  : `${libres} DISPONIBLES`
+                                : lleno
                                 ? "COMPLETO"
                                 : `${libres} CUPOS`}
                             </span>
@@ -1667,11 +1894,21 @@ export default function AgendaPage() {
                           </strong>
 
                           <span style={neo.classMeta}>
-                            {item.instructor || "Sin instructor"}
-                            {" · "}
-                            {item.requiere_membresia
-                              ? "Membresía activa"
-                              : "Acceso abierto"}
+                            {esSalonBelleza ? (
+                              <>
+                                {item.instructor || "Profesional por asignar"}
+                                {" · "}
+                                {item.requiere_pago ? "Cobro en Caja" : "Sin cobro pendiente"}
+                              </>
+                            ) : (
+                              <>
+                                {item.instructor || (esSalonBelleza ? "Profesional por asignar" : "Sin instructor")}
+                                {" · "}
+                                {item.requiere_membresia
+                                  ? "Membresía activa"
+                                  : "Acceso abierto"}
+                              </>
+                            )}
                           </span>
 
                           <div style={neo.capacityBar}>
@@ -1685,10 +1922,14 @@ export default function AgendaPage() {
 
                           <div style={neo.capacityFooter}>
                             <span>
-                              {reservados} reservados
+                              {esSalonBelleza
+                                ? `${reservados} reserva${reservados === 1 ? "" : "s"}`
+                                : `${reservados} reservados`}
                             </span>
                             <span>
-                              {capacidad} capacidad total
+                              {esSalonBelleza
+                                ? `${libres} disponible${libres === 1 ? "" : "s"}`
+                                : `${capacidad} capacidad total`}
                             </span>
                           </div>
                         </div>
@@ -1710,7 +1951,11 @@ export default function AgendaPage() {
                             }
                           >
                             {lleno
-                              ? "Sin cupos"
+                              ? esSalonBelleza
+                                ? "Horario ocupado"
+                                : "Sin cupos"
+                              : esSalonBelleza
+                              ? "Reservar cita"
                               : "Reservar"}
                           </button>
                         </div>
@@ -1725,10 +1970,12 @@ export default function AgendaPage() {
               <div style={neo.panelTop}>
                 <div>
                   <span style={neo.sectionEyebrow}>
-                    RESERVAS DE LA JORNADA
+                    {esSalonBelleza ? "CITAS DE LA JORNADA" : "RESERVAS DE LA JORNADA"}
                   </span>
                   <h2 style={neo.panelHeading}>
-                    Alumnos reservados
+                    {esSalonBelleza
+                      ? "Clientes con cita"
+                      : "Alumnos reservados"}
                   </h2>
                 </div>
 
@@ -1740,10 +1987,11 @@ export default function AgendaPage() {
               {reservasFechaOperativas.length === 0 ? (
                 <div style={neo.emptySmall}>
                   <span style={neo.emptySmallIcon}>◎</span>
-                  <strong>Sin reservas</strong>
+                  <strong>{esSalonBelleza ? "Sin citas" : "Sin reservas"}</strong>
                   <span>
-                    Todavía no hay alumnos reservados
-                    para este día.
+                    {esSalonBelleza
+                      ? "Todavía no hay clientes con cita para este día."
+                      : "Todavía no hay alumnos reservados para este día."}
                   </span>
                 </div>
               ) : (
@@ -1863,14 +2111,14 @@ export default function AgendaPage() {
 
               <div style={neo.controlStats}>
                 <div style={neo.controlRow}>
-                  <span>Capacidad</span>
+                  <span>{esSalonBelleza ? "Espacios" : "Capacidad"}</span>
                   <strong>
                     {resumenAgenda.capacidadTotal}
                   </strong>
                 </div>
 
                 <div style={neo.controlRow}>
-                  <span>Reservados</span>
+                  <span>{esSalonBelleza ? "Reservas" : "Reservados"}</span>
                   <strong>
                     {resumenAgenda.reservadosTotal}
                   </strong>
@@ -1944,7 +2192,7 @@ export default function AgendaPage() {
                     setVista("configuracion")
                   }
                 >
-                  Configurar clases
+                  {esSalonBelleza ? "Configurar servicios" : "Configurar clases"}
                 </button>
               )}
             </aside>
@@ -1965,7 +2213,9 @@ export default function AgendaPage() {
               }}
             >
               <span style={pro.stepNumber}>1</span>
-              Seleccionar alumno
+              {esSalonBelleza
+                ? "Seleccionar cliente"
+                : "Seleccionar alumno"}
             </div>
 
             <div
@@ -1975,7 +2225,9 @@ export default function AgendaPage() {
               }}
             >
               <span style={pro.stepNumber}>2</span>
-              Elegir fecha y horario
+              {esSalonBelleza
+                ? "Elegir servicio y hora"
+                : "Elegir fecha y horario"}
             </div>
 
             <div
@@ -1987,20 +2239,34 @@ export default function AgendaPage() {
               }}
             >
               <span style={pro.stepNumber}>3</span>
-              Confirmar reserva
+              {esSalonBelleza
+                ? "Confirmar cita"
+                : "Confirmar reserva"}
             </div>
           </section>
 
           <section style={s.twoColumns}>
           <article style={s.panel}>
-            <span style={pro.panelEyebrow}>NUEVA RESERVA</span>
-            <h2 style={pro.panelTitle}>Datos de la reserva</h2>
+            <span style={pro.panelEyebrow}>
+              {esSalonBelleza ? "NUEVA CITA" : "NUEVA RESERVA"}
+            </span>
+            <h2 style={pro.panelTitle}>
+              {esSalonBelleza ? "Datos de la cita" : "Datos de la reserva"}
+            </h2>
             <p style={{ ...s.muted, margin: "6px 0 0" }}>
-              Selecciona al alumno, la fecha y uno de los horarios disponibles.
+              {esSalonBelleza
+                ? "Selecciona el cliente, la fecha y el horario del servicio."
+                : "Selecciona al alumno, la fecha y uno de los horarios disponibles."}
             </p>
 
             <div style={{ marginTop: 16 }}>
-              <Campo label="Buscar por nombre, cédula o teléfono">
+              <Campo
+                label={
+                  esSalonBelleza
+                    ? "Buscar cliente por nombre, cédula o teléfono"
+                    : "Buscar por nombre, cédula o teléfono"
+                }
+              >
                 <input
                   type="text"
                   value={busquedaCliente}
@@ -2009,7 +2275,7 @@ export default function AgendaPage() {
                     setClienteSeleccionado(null);
                   }}
                   style={s.input}
-                  placeholder="Ej. LIA SAMANIEGO"
+                  placeholder={esSalonBelleza ? "Ej. María González" : "Ej. LIA SAMANIEGO"}
                 />
               </Campo>
 
@@ -2027,7 +2293,7 @@ export default function AgendaPage() {
                           setBusquedaCliente(cliente.nombre || "");
                         }}
                       >
-                        <strong>{cliente.nombre || "Alumno"}</strong>
+                        <strong>{cliente.nombre || (esSalonBelleza ? "Cliente" : "Alumno")}</strong>
                         <span style={s.muted}>
                           {cliente.cedula || cliente.telefono || "Sin identificación"}
                         </span>
@@ -2039,7 +2305,11 @@ export default function AgendaPage() {
               {clienteSeleccionado && (
                 <div style={s.selectedClient}>
                   <div>
-                    <span style={s.muted}>Alumno seleccionado</span>
+                    <span style={s.muted}>
+                      {esSalonBelleza
+                        ? "Cliente seleccionado"
+                        : "Alumno seleccionado"}
+                    </span>
                     <strong style={{ display: "block", marginTop: 4 }}>
                       {clienteSeleccionado.nombre}
                     </strong>
@@ -2073,21 +2343,34 @@ export default function AgendaPage() {
                 />
               </Campo>
 
-              <Campo label="Clase / horario disponible">
+              <Campo
+                label={
+                  esSalonBelleza
+                    ? "Servicio y horario disponible"
+                    : "Clase / horario disponible"
+                }
+              >
                 <select
                   value={horarioSeleccionado}
                   onChange={(e) => setHorarioSeleccionado(e.target.value)}
                   style={s.input}
                 >
                   <option value="">Seleccionar</option>
-                  {disponibilidad.map((item) => (
+                  {(esSalonBelleza
+                    ? disponibilidadVisible
+                    : disponibilidad
+                  ).map((item) => (
                     <option
                       key={item.horario_id}
                       value={item.horario_id}
                       disabled={Number(item.disponibles) <= 0}
                     >
                       {item.servicio_nombre} · {formatoHora(item.hora_inicio)} ·{" "}
-                      {item.disponibles} cupos
+                      {esSalonBelleza
+                        ? item.disponibles > 0
+                          ? `${item.disponibles} disponible${Number(item.disponibles) === 1 ? "" : "s"}`
+                          : "ocupado"
+                        : `${item.disponibles} cupos`}
                     </option>
                   ))}
                 </select>
@@ -2109,7 +2392,11 @@ export default function AgendaPage() {
               onClick={crearReserva}
               disabled={guardando}
             >
-              {guardando ? "Guardando..." : "Confirmar reserva"}
+              {guardando
+                ? "Guardando..."
+                : esSalonBelleza
+                ? "Confirmar cita"
+                : "Confirmar reserva"}
             </button>
           </article>
 
@@ -2117,14 +2404,22 @@ export default function AgendaPage() {
             <span style={pro.panelEyebrow}>DISPONIBILIDAD EN TIEMPO REAL</span>
             <h2 style={pro.panelTitle}>{formatoFecha(fechaAgenda)}</h2>
             <p style={{ ...s.muted, margin: "6px 0 12px" }}>
-              Los cupos se actualizan automáticamente al confirmar o cancelar una reserva.
+              {esSalonBelleza
+                ? "Los horarios se actualizan automáticamente al confirmar o cancelar una cita."
+                : "Los cupos se actualizan automáticamente al confirmar o cancelar una reserva."}
             </p>
 
             <div style={s.slotList}>
-              {disponibilidad.length === 0 ? (
+              {(esSalonBelleza
+                ? disponibilidadVisible
+                : disponibilidad
+              ).length === 0 ? (
                 <p style={s.muted}>No hay horarios para esta fecha.</p>
               ) : (
-                disponibilidad.map((item) => (
+                (esSalonBelleza
+                  ? disponibilidadVisible
+                  : disponibilidad
+                ).map((item) => (
                   <button
                     key={item.horario_id}
                     type="button"
@@ -2141,7 +2436,7 @@ export default function AgendaPage() {
                       <strong>{item.servicio_nombre}</strong>
                       <span style={s.slotDetail}>
                         {formatoHora(item.hora_inicio)} ·{" "}
-                        {item.instructor || "Sin instructor"}
+                        {item.instructor || (esSalonBelleza ? "Profesional por asignar" : "Sin instructor")}
                       </span>
                     </div>
 
@@ -2152,7 +2447,11 @@ export default function AgendaPage() {
                           : s.smallFull
                       }
                     >
-                      {item.disponibles}/{item.capacidad}
+                      {esSalonBelleza
+                        ? Number(item.disponibles) > 0
+                          ? "Disponible"
+                          : "Ocupado"
+                        : `${item.disponibles}/${item.capacidad}`}
                     </span>
                   </button>
                 ))
@@ -2193,7 +2492,11 @@ export default function AgendaPage() {
                   value={busquedaReservas}
                   onChange={(e) => setBusquedaReservas(e.target.value)}
                   style={pro.input}
-                  placeholder="Alumno, cédula, teléfono, clase o fecha"
+                  placeholder={
+                    esSalonBelleza
+                      ? "Cliente, teléfono, servicio o fecha"
+                      : "Alumno, cédula, teléfono, clase o fecha"
+                  }
                 />
               </Campo>
 
@@ -2224,93 +2527,6 @@ export default function AgendaPage() {
             mostrarFecha
           />
         </section>
-      )}
-
-      {vista === "wod" && esGimnasio && (
-        <>
-          <section style={{ ...pro.panel, maxWidth: 1450, margin: "0 auto 14px" }}>
-            <div style={pro.panelHeader}>
-              <div>
-                <span style={pro.panelEyebrow}>WORKOUT OF THE DAY</span>
-                <h2 style={pro.panelTitle}>WOD · {formatoFecha(fechaAgenda)}</h2>
-                <p style={{ ...s.muted, margin: "6px 0 0" }}>
-                  Publica el entrenamiento del día por clase. Las notas del coach son privadas.
-                </p>
-              </div>
-              <input type="date" value={fechaAgenda} onChange={(e) => {
-                setFechaAgenda(e.target.value);
-                setWodForm((actual) => ({ ...actual, fecha: e.target.value }));
-              }} style={{ ...s.input, width: 180 }} />
-            </div>
-
-            {wodsFecha.length === 0 ? (
-              <div style={s.empty}>
-                <strong>No hay WOD publicado para esta fecha.</strong>
-                <span style={s.muted}>Créalo abajo y asígnalo a una clase.</span>
-              </div>
-            ) : (
-              <div style={s.wodGrid}>
-                {wodsFecha.map((wod) => (
-                  <article key={wod.id} style={s.wodCard}>
-                    <span style={s.eyebrowSmall}>{wod.servicio_nombre}</span>
-                    <h3 style={{ margin: "4px 0 10px" }}>{wod.titulo || "WOD del día"}</h3>
-                    {wod.warmup && <WodBloque titulo="Warm-up" texto={wod.warmup} />}
-                    {wod.strength && <WodBloque titulo="Strength" texto={wod.strength} />}
-                    {wod.skill && <WodBloque titulo="Skill" texto={wod.skill} />}
-                    {wod.metcon && <WodBloque titulo="Metcon" texto={wod.metcon} destacado />}
-                    {wod.cooldown && <WodBloque titulo="Cooldown" texto={wod.cooldown} />}
-                    {wod.notas_publicas && <WodBloque titulo="Notas para alumnos" texto={wod.notas_publicas} />}
-                    {esAdmin && (
-                      <div style={{ ...s.inlineActions, marginTop: 10 }}>
-                        <button type="button" style={s.smallButton} onClick={() => editarWod(wod)}>Editar</button>
-                        <button type="button" style={s.smallDanger} onClick={() => eliminarWod(wod)}>Eliminar</button>
-                      </div>
-                    )}
-                  </article>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {esAdmin && (
-            <section style={{ ...pro.panel, maxWidth: 1450, margin: "0 auto 18px" }}>
-              <span style={pro.panelEyebrow}>CONFIGURAR WOD</span>
-              <h2 style={pro.panelTitle}>{wodEditandoId ? "Editar WOD" : "Nuevo WOD"}</h2>
-              <div style={{ ...s.formGrid, marginTop: 14 }}>
-                <Campo label="Clase / programa">
-                  <select value={wodForm.servicio_id} onChange={(e) => setWodForm({ ...wodForm, servicio_id: e.target.value })} style={s.input}>
-                    <option value="">Seleccionar</option>
-                    {servicios.filter((servicio) => servicio.activo && servicio.tipo !== "cita_individual").map((servicio) => (
-                      <option key={servicio.id} value={servicio.id}>{servicio.nombre}</option>
-                    ))}
-                  </select>
-                </Campo>
-                <Campo label="Fecha"><input type="date" value={wodForm.fecha} onChange={(e) => setWodForm({ ...wodForm, fecha: e.target.value })} style={s.input} /></Campo>
-                <Campo label="Título"><input value={wodForm.titulo} onChange={(e) => setWodForm({ ...wodForm, titulo: e.target.value })} style={s.input} /></Campo>
-                <Campo label="Visible desde"><input type="datetime-local" value={wodForm.visible_desde} onChange={(e) => setWodForm({ ...wodForm, visible_desde: e.target.value })} style={s.input} /></Campo>
-              </div>
-              <div style={s.wodFormGrid}>
-                {[
-                  ["Warm-up", "warmup"], ["Strength", "strength"], ["Skill / técnica", "skill"],
-                  ["Metcon", "metcon"], ["Cooldown", "cooldown"], ["Notas para alumnos", "notas_publicas"],
-                  ["Notas privadas del coach", "notas_coach"]
-                ].map(([label, key]) => (
-                  <Campo key={key} label={label}>
-                    <textarea value={wodForm[key]} onChange={(e) => setWodForm({ ...wodForm, [key]: e.target.value })} style={s.wodTextarea} />
-                  </Campo>
-                ))}
-              </div>
-              <label style={s.portalToggle}>
-                <input type="checkbox" checked={wodForm.activo} onChange={(e) => setWodForm({ ...wodForm, activo: e.target.checked })} />
-                <span><strong>WOD activo</strong><small>Se mostrará cuando llegue la fecha/hora de visibilidad.</small></span>
-              </label>
-              <div style={s.formActions}>
-                {wodEditandoId && <button type="button" style={s.secondaryButton} onClick={() => { setWodEditandoId(null); setWodForm({ ...WOD_INICIAL, fecha: fechaAgenda }); }}>Cancelar</button>}
-                <button type="button" style={s.primaryButton} onClick={guardarWod} disabled={guardando}>{guardando ? "Guardando..." : "Publicar WOD"}</button>
-              </div>
-            </section>
-          )}
-        </>
       )}
 
       {vista === "configuracion" && esAdmin && (
@@ -2466,7 +2682,11 @@ export default function AgendaPage() {
             <article style={s.panel}>
               <span style={s.eyebrowSmall}>CONFIGURACIÓN</span>
               <h2 style={s.panelTitle}>
-                {servicioEditandoId ? "Editar servicio" : "Nueva clase o servicio"}
+                {servicioEditandoId
+                  ? "Editar servicio"
+                  : esSalonBelleza
+                  ? "Nuevo servicio del salón"
+                  : "Nueva clase o servicio"}
               </h2>
 
               <div style={s.formGrid}>
@@ -2480,7 +2700,7 @@ export default function AgendaPage() {
                       })
                     }
                     style={s.input}
-                    placeholder="Spinning"
+                    placeholder={esSalonBelleza ? "Ej. Corte, manicure o masaje" : "Spinning"}
                   />
                 </Campo>
 
@@ -2495,8 +2715,12 @@ export default function AgendaPage() {
                     }
                     style={s.input}
                   >
-                    <option value="clase_grupal">Clase grupal</option>
-                    <option value="cita_individual">Cita individual</option>
+                    <option value="clase_grupal">
+                      {esSalonBelleza ? "Servicio grupal" : "Clase grupal"}
+                    </option>
+                    <option value="cita_individual">
+                      {esSalonBelleza ? "Servicio individual" : "Cita individual"}
+                    </option>
                   </select>
                 </Campo>
 
@@ -2515,7 +2739,13 @@ export default function AgendaPage() {
                   />
                 </Campo>
 
-                <Campo label="Capacidad sugerida">
+                <Campo
+                  label={
+                    esSalonBelleza
+                      ? "Citas simultáneas"
+                      : "Capacidad sugerida"
+                  }
+                >
                   <input
                     type="number"
                     min="1"
@@ -2541,33 +2771,51 @@ export default function AgendaPage() {
                     })
                   }
                   style={{ ...s.input, minHeight: 82, resize: "vertical" }}
-                  placeholder="Clase grupal de spinning"
+                  placeholder={
+                    esSalonBelleza
+                      ? "Ej. Manicure semipermanente"
+                      : "Clase grupal de spinning"
+                  }
                 />
               </Campo>
 
               <Campo label="Modalidad de reserva">
-                <select
-                  value={modalidadServicio(servicioForm)}
-                  onChange={(e) =>
-                    aplicarModalidadServicio(e.target.value)
-                  }
-                  style={s.input}
-                >
-                  <option value="solo_miembros">
-                    Miembro activo · Incluida en membresía
-                  </option>
-                  <option value="pago_local">
-                    Pago al llegar · No requiere membresía
-                  </option>
-                  <option value="miembros_pago">
-                    Miembro activo · Servicio personalizado con costo
-                  </option>
-                </select>
+                {esSalonBelleza ? (
+                  <select value="pago_local" disabled style={s.input}>
+                    <option value="pago_local">
+                      Servicio del salón · Cobro en Caja
+                    </option>
+                  </select>
+                ) : (
+                  <select
+                    value={modalidadServicio(servicioForm)}
+                    onChange={(e) =>
+                      aplicarModalidadServicio(e.target.value)
+                    }
+                    style={s.input}
+                  >
+                    <option value="solo_miembros">
+                      Miembro activo · Incluida en membresía
+                    </option>
+                    <option value="pago_local">
+                      Pago al llegar · No requiere membresía
+                    </option>
+                    <option value="miembros_pago">
+                      Miembro activo · Servicio personalizado con costo
+                    </option>
+                  </select>
+                )}
               </Campo>
 
               {servicioForm.requiere_pago && (
                 <>
-                  <Campo label="Precio de la clase / servicio">
+                  <Campo
+                    label={
+                      esSalonBelleza
+                        ? "Precio del servicio"
+                        : "Precio de la clase / servicio"
+                    }
+                  >
                     <input
                       type="number"
                       min="0.01"
@@ -2589,9 +2837,9 @@ export default function AgendaPage() {
                       Cobro en el local
                     </strong>
                     <span>
-                      El cliente reserva su cupo. Si esta modalidad
-                      tiene precio, la reserva queda pendiente de pago y
-                      recepción la cobra desde Caja cuando el cliente llegue.
+                      {esSalonBelleza
+                        ? "La cita queda pendiente de pago y recepción la cobra desde Caja al finalizar el servicio."
+                        : "El cliente reserva su cupo. Si esta modalidad tiene precio, la reserva queda pendiente de pago y recepción la cobra desde Caja cuando el cliente llegue."}
                     </span>
                   </div>
                 </>
@@ -2604,7 +2852,11 @@ export default function AgendaPage() {
                     style={s.secondaryButton}
                     onClick={() => {
                       setServicioEditandoId(null);
-                      setServicioForm(SERVICIO_INICIAL);
+                      setServicioForm(
+                        esSalonBelleza
+                          ? SERVICIO_SALON_INICIAL
+                          : SERVICIO_INICIAL
+                      );
                     }}
                   >
                     Cancelar
@@ -2628,7 +2880,7 @@ export default function AgendaPage() {
                 {horarioEditandoId ? "Editar horario" : "Nuevo horario"}
               </h2>
 
-              <Campo label="Clase / servicio">
+              <Campo label={esSalonBelleza ? "Servicio" : "Clase / servicio"}>
                 <select
                   value={horarioForm.servicio_id}
                   onChange={(e) => {
@@ -2676,7 +2928,7 @@ export default function AgendaPage() {
                   </select>
                 </Campo>
 
-                <Campo label="Instructor">
+                <Campo label={esSalonBelleza ? "Profesional" : "Instructor"}>
                   <input
                     value={horarioForm.instructor}
                     onChange={(e) =>
@@ -2686,39 +2938,41 @@ export default function AgendaPage() {
                       })
                     }
                     style={s.input}
-                    placeholder="Carlos"
+                    placeholder={esSalonBelleza ? "Ana" : "Carlos"}
                   />
                 </Campo>
 
                 <Campo label="Hora inicio">
-                  <input
-                    type="time"
+                  <SelectorHoraKonax
                     value={horarioForm.hora_inicio}
-                    onChange={(e) =>
-                      setHorarioForm({
-                        ...horarioForm,
-                        hora_inicio: e.target.value,
-                      })
+                    onApply={(hora) =>
+                      setHorarioForm((actual) => ({
+                        ...actual,
+                        hora_inicio: hora,
+                      }))
                     }
-                    style={s.input}
                   />
                 </Campo>
 
                 <Campo label="Hora fin">
-                  <input
-                    type="time"
+                  <SelectorHoraKonax
                     value={horarioForm.hora_fin}
-                    onChange={(e) =>
-                      setHorarioForm({
-                        ...horarioForm,
-                        hora_fin: e.target.value,
-                      })
+                    onApply={(hora) =>
+                      setHorarioForm((actual) => ({
+                        ...actual,
+                        hora_fin: hora,
+                      }))
                     }
-                    style={s.input}
                   />
                 </Campo>
 
-                <Campo label="Cupos">
+                <Campo
+                  label={
+                    esSalonBelleza
+                      ? "Disponibilidad por horario"
+                      : "Cupos"
+                  }
+                >
                   <input
                     type="number"
                     min="1"
@@ -2755,7 +3009,11 @@ export default function AgendaPage() {
                     style={s.secondaryButton}
                     onClick={() => {
                       setHorarioEditandoId(null);
-                      setHorarioForm(HORARIO_INICIAL);
+                      setHorarioForm(
+                        esSalonBelleza
+                          ? HORARIO_SALON_INICIAL
+                          : HORARIO_INICIAL
+                      );
                     }}
                   >
                     Cancelar
@@ -2779,7 +3037,11 @@ export default function AgendaPage() {
               <div style={s.panelHeader}>
                 <div>
                   <span style={s.eyebrowSmall}>SERVICIOS</span>
-                  <h2 style={s.panelTitle}>Clases y servicios</h2>
+                  <h2 style={s.panelTitle}>
+                    {esSalonBelleza
+                      ? "Servicios del salón"
+                      : "Clases y servicios"}
+                  </h2>
                 </div>
                 <span style={s.counter}>{servicios.length}</span>
               </div>
@@ -2793,7 +3055,11 @@ export default function AgendaPage() {
                       <div>
                         <strong>{servicio.nombre}</strong>
                         <span style={s.slotDetail}>
-                          {servicio.tipo === "cita_individual"
+                          {esSalonBelleza
+                            ? servicio.tipo === "cita_individual"
+                              ? "Servicio individual"
+                              : "Servicio grupal"
+                            : servicio.tipo === "cita_individual"
                             ? "Cita individual"
                             : "Clase grupal"}{" "}
                           · {servicio.duracion_minutos} min
@@ -2831,21 +3097,38 @@ export default function AgendaPage() {
                   <span style={s.eyebrowSmall}>HORARIOS</span>
                   <h2 style={s.panelTitle}>Horarios configurados</h2>
                 </div>
-                <span style={s.counter}>{horarios.length}</span>
+                <span style={s.counter}>
+                  {esSalonBelleza
+                    ? horariosSalonFecha.length
+                    : horarios.length}
+                </span>
               </div>
 
               <div style={s.stack}>
-                {horarios.length === 0 ? (
-                  <p style={s.muted}>Todavía no hay horarios.</p>
+                {(esSalonBelleza
+                  ? horariosSalonFecha
+                  : horarios
+                ).length === 0 ? (
+                  <p style={s.muted}>
+                    {esSalonBelleza
+                      ? "No hay horarios configurados para el día seleccionado."
+                      : "Todavía no hay horarios."}
+                  </p>
                 ) : (
-                  horarios.map((horario) => (
+                  (esSalonBelleza
+                    ? horariosSalonFecha
+                    : horarios
+                  ).map((horario) => (
                     <div key={horario.id} style={s.listCard}>
                       <div>
                         <strong>{nombreServicio(horario.servicio_id)}</strong>
                         <span style={s.slotDetail}>
                           {nombreDia(horario.dia_semana)} ·{" "}
                           {formatoHora(horario.hora_inicio)} ·{" "}
-                          {horario.capacidad} cupos
+                          {horario.capacidad}{" "}
+                          {esSalonBelleza
+                            ? "espacio(s) por horario"
+                            : "cupos"}
                         </span>
                       </div>
 
@@ -2878,7 +3161,7 @@ export default function AgendaPage() {
       )}
 
       <footer style={s.footer}>
-        KONAX Agenda · {VERSION} · Rol: {rol || "Usuario"}
+        {esSalonBelleza ? "KONAX Salón · Agenda" : "KONAX Agenda"} · {VERSION} · Rol: {rol || "Usuario"}
       </footer>
     </main>
   );
@@ -2926,12 +3209,136 @@ function Empty({ titulo, texto }) {
   );
 }
 
-function WodBloque({ titulo, texto, destacado = false }) {
-  if (!texto) return null;
+function SelectorHoraKonax({
+  value = "09:00",
+  onApply,
+}) {
+  function descomponerHora(valor) {
+    const [hh = "09", mm = "00"] = String(
+      valor || "09:00"
+    ).split(":");
+
+    const hora24 = Number(hh);
+    const periodo = hora24 >= 12 ? "PM" : "AM";
+    const hora12 = hora24 % 12 || 12;
+
+    return {
+      hora: String(hora12).padStart(2, "0"),
+      minuto: String(mm || "00").padStart(2, "0"),
+      periodo,
+    };
+  }
+
+  const inicial = descomponerHora(value);
+
+  const [hora, setHora] = useState(inicial.hora);
+  const [minuto, setMinuto] = useState(inicial.minuto);
+  const [periodo, setPeriodo] = useState(inicial.periodo);
+  const [aplicado, setAplicado] = useState(value);
+
+  useEffect(() => {
+    const siguiente = descomponerHora(value);
+    setHora(siguiente.hora);
+    setMinuto(siguiente.minuto);
+    setPeriodo(siguiente.periodo);
+    setAplicado(value);
+  }, [value]);
+
+  function aplicarHora() {
+    let hora24 = Number(hora);
+
+    if (periodo === "AM") {
+      if (hora24 === 12) hora24 = 0;
+    } else if (hora24 !== 12) {
+      hora24 += 12;
+    }
+
+    const nuevaHora =
+      `${String(hora24).padStart(2, "0")}:${String(
+        minuto
+      ).padStart(2, "0")}`;
+
+    setAplicado(nuevaHora);
+
+    if (typeof onApply === "function") {
+      onApply(nuevaHora);
+    }
+  }
+
+  const minutos = [
+    "00",
+    "05",
+    "10",
+    "15",
+    "20",
+    "25",
+    "30",
+    "35",
+    "40",
+    "45",
+    "50",
+    "55",
+  ];
+
   return (
-    <div style={{ ...s.wodBlock, ...(destacado ? s.wodBlockAccent : {}) }}>
-      <span>{titulo}</span>
-      <strong style={{ whiteSpace: "pre-wrap" }}>{texto}</strong>
+    <div style={s.timePicker}>
+      <div style={s.timePickerControls} className="agenda-time-picker-mobile">
+        <select
+          value={hora}
+          onChange={(e) => setHora(e.target.value)}
+          style={s.timeSelect}
+          aria-label="Hora"
+        >
+          {Array.from({ length: 12 }, (_, index) => {
+            const valor = String(index + 1).padStart(2, "0");
+
+            return (
+              <option key={valor} value={valor}>
+                {valor}
+              </option>
+            );
+          })}
+        </select>
+
+        <span style={s.timeColon}>:</span>
+
+        <select
+          value={minuto}
+          onChange={(e) => setMinuto(e.target.value)}
+          style={s.timeSelect}
+          aria-label="Minutos"
+        >
+          {minutos.map((valor) => (
+            <option key={valor} value={valor}>
+              {valor}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={periodo}
+          onChange={(e) => setPeriodo(e.target.value)}
+          style={s.timePeriodSelect}
+          aria-label="Período"
+        >
+          <option value="AM">a. m.</option>
+          <option value="PM">p. m.</option>
+        </select>
+      </div>
+
+      <div style={s.timePickerFooter}>
+        <span style={s.timeApplied}>
+          Seleccionada: {formatoHora(aplicado)}
+        </span>
+
+        <button
+          type="button"
+          style={s.timeApplyButton}
+          onClick={aplicarHora}
+        >
+          Aplicar hora
+        </button>
+      </div>
     </div>
   );
 }
@@ -3901,6 +4308,12 @@ const AGENDA_CSS = `
     }
   }
 
+  @media (max-width: 420px) {
+    .agenda-time-picker-mobile {
+      grid-template-columns: 1fr;
+    }
+  }
+
 
 @media (max-width: 1180px) {
   .agenda-d-command-grid {
@@ -3980,6 +4393,147 @@ const AGENDA_CSS = `
     grid-template-columns: 1fr !important;
   }
 }
+
+  /* ============================
+     SALÓN / MÓVIL
+     No altera la lógica de gimnasio.
+     ============================ */
+  @media (max-width: 760px) {
+    .agenda-d-hero {
+      padding: 16px !important;
+      gap: 12px !important;
+      border-radius: 18px !important;
+    }
+
+    .agenda-d-brand-row {
+      align-items: flex-start !important;
+      gap: 12px !important;
+    }
+
+    .agenda-d-logo-card {
+      width: 92px !important;
+      min-height: 58px !important;
+      padding: 6px 8px !important;
+      border-radius: 14px !important;
+    }
+
+    .agenda-d-logo-card img {
+      width: 78px !important;
+      height: 38px !important;
+    }
+
+    .agenda-d-hero h1 {
+      font-size: clamp(28px, 9vw, 38px) !important;
+      line-height: 1.02 !important;
+      overflow-wrap: anywhere;
+    }
+
+    .agenda-d-hero p {
+      font-size: 11px !important;
+      line-height: 1.45 !important;
+    }
+
+    .agenda-d-hero-actions {
+      width: 100% !important;
+    }
+
+    .agenda-d-hero-actions button {
+      width: 100% !important;
+    }
+
+    .agenda-d-hero-side {
+      padding: 13px !important;
+      border-radius: 14px !important;
+    }
+
+    .agenda-d-nav {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 7px !important;
+      overflow: visible !important;
+      padding: 7px !important;
+    }
+
+    .agenda-d-nav > button {
+      width: 100% !important;
+      justify-content: center !important;
+      padding: 0 8px !important;
+      margin-left: 0 !important;
+      white-space: normal !important;
+      text-align: center !important;
+    }
+
+    .agenda-d-week-shell {
+      padding: 12px !important;
+    }
+
+    .agenda-d-week-controls {
+      width: 100% !important;
+      display: grid !important;
+      grid-template-columns: 44px minmax(0, 1fr) 44px !important;
+    }
+
+    .agenda-d-week-controls button:nth-child(2) {
+      width: 100% !important;
+    }
+
+    .agenda-d-week-strip {
+      grid-template-columns: repeat(7, minmax(58px, 1fr)) !important;
+      gap: 6px !important;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .agenda-d-week-strip > button {
+      min-height: 72px !important;
+      padding: 7px !important;
+    }
+
+    .agenda-d-kpis {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .agenda-d-command-grid {
+      grid-template-columns: 1fr !important;
+    }
+
+    .agenda-d-timeline-row {
+      min-height: auto !important;
+      grid-template-columns: 18px minmax(0,1fr) !important;
+      gap: 8px !important;
+      padding: 12px 0 !important;
+    }
+
+    .agenda-d-timeline-row > div:nth-child(2),
+    .agenda-d-timeline-row > div:nth-child(3),
+    .agenda-d-timeline-row > div:last-child {
+      grid-column: 2 !important;
+    }
+
+    .agenda-d-timeline-row > div:last-child button {
+      width: 100% !important;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .agenda-d-brand-row {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+    }
+
+    .agenda-d-logo-card {
+      width: 86px !important;
+    }
+
+    .agenda-d-kpis {
+      grid-template-columns: 1fr 1fr !important;
+    }
+
+    .agenda-d-nav {
+      grid-template-columns: 1fr 1fr !important;
+    }
+  }
+
 `;
 
 const neo = {
@@ -5928,6 +6482,81 @@ const s = {
   },
   ...sPro,
 
+  timePicker: {
+    width: "100%",
+    padding: 9,
+    border: "1px solid #CCD7D0",
+    borderRadius: 11,
+    background: "#F9FBFA",
+  },
+
+  timePickerControls: {
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(64px,1fr) auto minmax(64px,1fr) minmax(78px,1fr)",
+    gap: 6,
+    alignItems: "center",
+  },
+
+  timeSelect: {
+    width: "100%",
+    minHeight: 40,
+    padding: "7px 8px",
+    border: "1px solid #D4DED8",
+    borderRadius: 9,
+    background: "#FFFFFF",
+    color: "#17211C",
+    fontSize: 13,
+    fontWeight: 800,
+    textAlign: "center",
+  },
+
+  timePeriodSelect: {
+    width: "100%",
+    minHeight: 40,
+    padding: "7px 8px",
+    border: "1px solid #D4DED8",
+    borderRadius: 9,
+    background: "#FFFFFF",
+    color: "#17211C",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+
+  timeColon: {
+    color: "#506057",
+    fontSize: 17,
+    fontWeight: 900,
+    textAlign: "center",
+  },
+
+  timePickerFooter: {
+    marginTop: 7,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 7,
+    flexWrap: "wrap",
+  },
+
+  timeApplied: {
+    color: "#6F7D75",
+    fontSize: 9,
+    fontWeight: 800,
+  },
+
+  timeApplyButton: {
+    minHeight: 34,
+    padding: "6px 10px",
+    border: "none",
+    borderRadius: 8,
+    background: "#16834F",
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
   portalPanel: {
     maxWidth: 1450,
     margin: "0 auto 14px",
@@ -6070,11 +6699,5 @@ const s = {
     fontWeight: 900,
     cursor: "pointer",
   },
-  wodGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 12 },
-  wodCard: { padding: 16, border: "1px solid #DCE6E0", borderRadius: 16, background: "#FBFDFC" },
-  wodBlock: { marginTop: 8, padding: 11, display: "grid", gap: 5, border: "1px solid #E1E8E4", borderRadius: 11, background: "#FFFFFF" },
-  wodBlockAccent: { borderColor: "#A9D9BC", background: "#EEF9F2" },
-  wodFormGrid: { marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 10 },
-  wodTextarea: { width: "100%", minHeight: 105, padding: "10px 11px", border: "1px solid #CCD7D0", borderRadius: 10, background: "#FFFFFF", color: "#17211C", fontFamily: "inherit", resize: "vertical" },
 
 };
