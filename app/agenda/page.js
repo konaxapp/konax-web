@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.21-AGENDA-BELLEZA-CITAS-DIA-FIX2";
+const VERSION = "2026.08.21-AGENDA-BELLEZA-HORARIOS-MULTIDIA-FIX3";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -171,6 +171,7 @@ export default function AgendaPage() {
   const [servicioEditandoId, setServicioEditandoId] = useState(null);
 
   const [horarioForm, setHorarioForm] = useState(HORARIO_INICIAL);
+  const [diasHorarioSalon, setDiasHorarioSalon] = useState([1, 2, 3, 4, 5]);
   const [horarioEditandoId, setHorarioEditandoId] = useState(null);
 
   const [busquedaCliente, setBusquedaCliente] = useState("");
@@ -366,6 +367,7 @@ export default function AgendaPage() {
       if (salonLocal) {
         setServicioForm(SERVICIO_SALON_INICIAL);
         setHorarioForm(HORARIO_SALON_INICIAL);
+        setDiasHorarioSalon([1, 2, 3, 4, 5]);
       }
 
       if (typeof window !== "undefined") {
@@ -1088,14 +1090,22 @@ export default function AgendaPage() {
       return;
     }
 
+    if (
+      esSalonBelleza &&
+      !horarioEditandoId &&
+      diasHorarioSalon.length === 0
+    ) {
+      alert("Selecciona por lo menos un día.");
+      return;
+    }
+
     setGuardando(true);
     setError("");
 
     try {
-      const payload = {
+      const payloadBase = {
         empresa_id: empresaId,
         servicio_id: horarioForm.servicio_id,
-        dia_semana: Number(horarioForm.dia_semana),
         hora_inicio: horarioForm.hora_inicio,
         hora_fin: horarioForm.hora_fin,
         instructor: horarioForm.instructor.trim() || null,
@@ -1108,15 +1118,39 @@ export default function AgendaPage() {
       let respuesta;
 
       if (horarioEditandoId) {
+        const payload = {
+          ...payloadBase,
+          dia_semana: Number(horarioForm.dia_semana),
+        };
+
         respuesta = await supabase
           .from("agenda_horarios")
           .update(payload)
           .eq("empresa_id", empresaId)
           .eq("id", horarioEditandoId);
+      } else if (esSalonBelleza) {
+        const diasOrdenados = [...diasHorarioSalon].sort((a, b) => {
+          const orden = [1, 2, 3, 4, 5, 6, 0];
+          return orden.indexOf(a) - orden.indexOf(b);
+        });
+
+        const payloads = diasOrdenados.map((dia) => ({
+          ...payloadBase,
+          dia_semana: Number(dia),
+        }));
+
+        respuesta = await supabase
+          .from("agenda_horarios")
+          .insert(payloads);
       } else {
         respuesta = await supabase
           .from("agenda_horarios")
-          .insert([payload]);
+          .insert([
+            {
+              ...payloadBase,
+              dia_semana: Number(horarioForm.dia_semana),
+            },
+          ]);
       }
 
       if (respuesta.error) throw respuesta.error;
@@ -1126,10 +1160,26 @@ export default function AgendaPage() {
           ? HORARIO_SALON_INICIAL
           : HORARIO_INICIAL
       );
+
+      if (esSalonBelleza) {
+        setDiasHorarioSalon([1, 2, 3, 4, 5]);
+      }
+
       setHorarioEditandoId(null);
       await cargarHorarios();
       await cargarDisponibilidad();
-      alert(horarioEditandoId ? "Horario actualizado." : "Horario creado.");
+
+      if (horarioEditandoId) {
+        alert("Horario actualizado.");
+      } else if (esSalonBelleza) {
+        alert(
+          diasHorarioSalon.length > 1
+            ? "Horarios creados para los días seleccionados."
+            : "Horario creado."
+        );
+      } else {
+        alert("Horario creado.");
+      }
     } catch (err) {
       console.error(err);
       setError(err?.message || "No se pudo guardar el horario.");
@@ -1140,6 +1190,11 @@ export default function AgendaPage() {
 
   function editarHorario(horario) {
     setHorarioEditandoId(horario.id);
+
+    if (esSalonBelleza) {
+      setDiasHorarioSalon([Number(horario.dia_semana ?? 5)]);
+    }
+
     setHorarioForm({
       servicio_id: horario.servicio_id || "",
       dia_semana: Number(horario.dia_semana ?? 5),
@@ -3156,7 +3211,7 @@ export default function AgendaPage() {
               </div>
             </article>
 
-            <article style={s.panel}>
+            <article style={s.panel} className="agenda-horario-panel">
               <span style={s.eyebrowSmall}>HORARIO</span>
               <h2 style={s.panelTitle}>
                 {horarioEditandoId ? "Editar horario" : "Nuevo horario"}
@@ -3191,24 +3246,154 @@ export default function AgendaPage() {
               </Campo>
 
               <div style={s.formGrid}>
-                <Campo label="Día">
-                  <select
-                    value={horarioForm.dia_semana}
-                    onChange={(e) =>
-                      setHorarioForm({
-                        ...horarioForm,
-                        dia_semana: Number(e.target.value),
-                      })
-                    }
-                    style={s.input}
+                {esSalonBelleza && !horarioEditandoId ? (
+                  <div
+                    style={{
+                      gridColumn: "1 / -1",
+                      display: "grid",
+                      gap: 8,
+                      marginBottom: 2,
+                    }}
                   >
-                    {[1, 2, 3, 4, 5, 6, 0].map((dia) => (
-                      <option key={dia} value={dia}>
-                        {nombreDia(dia)}
-                      </option>
-                    ))}
-                  </select>
-                </Campo>
+                    <span style={s.label}>Días de atención</span>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 7,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {[
+                        {
+                          label: "Lun a Vie",
+                          dias: [1, 2, 3, 4, 5],
+                        },
+                        {
+                          label: "Lun a Sáb",
+                          dias: [1, 2, 3, 4, 5, 6],
+                        },
+                        {
+                          label: "Lun a Dom",
+                          dias: [1, 2, 3, 4, 5, 6, 0],
+                        },
+                      ].map((preset) => {
+                        const activo =
+                          preset.dias.length === diasHorarioSalon.length &&
+                          preset.dias.every((dia) =>
+                            diasHorarioSalon.includes(dia)
+                          );
+
+                        return (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            onClick={() =>
+                              setDiasHorarioSalon(preset.dias)
+                            }
+                            style={{
+                              minHeight: 35,
+                              padding: "7px 11px",
+                              borderRadius: 999,
+                              border: activo
+                                ? "1px solid #16834f"
+                                : "1px solid #d7e1db",
+                              background: activo
+                                ? "#e9f7ef"
+                                : "#fff",
+                              color: activo
+                                ? "#126c42"
+                                : "#516059",
+                              fontSize: 12,
+                              fontWeight: 900,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {preset.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(7,minmax(44px,1fr))",
+                        gap: 6,
+                      }}
+                    >
+                      {[1, 2, 3, 4, 5, 6, 0].map((dia) => {
+                        const activo =
+                          diasHorarioSalon.includes(dia);
+
+                        return (
+                          <button
+                            key={dia}
+                            type="button"
+                            onClick={() =>
+                              setDiasHorarioSalon((actual) =>
+                                actual.includes(dia)
+                                  ? actual.filter(
+                                      (item) => item !== dia
+                                    )
+                                  : [...actual, dia]
+                              )
+                            }
+                            style={{
+                              minHeight: 40,
+                              borderRadius: 9,
+                              border: activo
+                                ? "1px solid #16834f"
+                                : "1px solid #d9e2dd",
+                              background: activo
+                                ? "#16834f"
+                                : "#fff",
+                              color: activo
+                                ? "#fff"
+                                : "#46534c",
+                              fontSize: 11,
+                              fontWeight: 900,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {nombreDia(dia).slice(0, 3)}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <span
+                      style={{
+                        color: "#7a877f",
+                        fontSize: 11,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      Puedes elegir un rango rápido o activar y
+                      desactivar días individualmente.
+                    </span>
+                  </div>
+                ) : (
+                  <Campo label="Día">
+                    <select
+                      value={horarioForm.dia_semana}
+                      onChange={(e) =>
+                        setHorarioForm({
+                          ...horarioForm,
+                          dia_semana: Number(e.target.value),
+                        })
+                      }
+                      style={s.input}
+                    >
+                      {[1, 2, 3, 4, 5, 6, 0].map((dia) => (
+                        <option key={dia} value={dia}>
+                          {nombreDia(dia)}
+                        </option>
+                      ))}
+                    </select>
+                  </Campo>
+                )}
 
                 <Campo label={esSalonBelleza ? "Profesional" : "Instructor"}>
                   <input
@@ -4813,6 +4998,26 @@ const AGENDA_CSS = `
 
     .agenda-d-nav {
       grid-template-columns: 1fr 1fr !important;
+    }
+  }
+
+
+  @media (max-width: 760px) {
+    .agenda-horario-panel {
+      padding: 14px !important;
+    }
+
+    .agenda-horario-panel h2 {
+      margin-bottom: 10px !important;
+    }
+
+    .agenda-horario-panel select,
+    .agenda-horario-panel input {
+      min-height: 40px !important;
+    }
+
+    .agenda-horario-panel button {
+      max-width: 100%;
     }
   }
 
