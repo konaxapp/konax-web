@@ -966,7 +966,7 @@ export default function ReservaPublicaAutoservicioPage() {
               className="kp-secondary"
               onClick={reservarOtraCita}
             >
-              {perfilGimnasio ? "+ Reservar otra clase" : "{perfilGimnasio ? "+ Reservar otra clase" : "+ Reservar otra cita"}"}
+              {perfilGimnasio ? "+ Reservar otra clase" : "+ Reservar otra cita"}
             </button>
 
             <button
