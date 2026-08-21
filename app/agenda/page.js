@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.21-AGENDA-BELLEZA-HORARIOS-MULTIDIA-FIX3";
+const VERSION = "2026.08.21-AGENDA-BELLEZA-VISUAL-RESERVAS-FIX4";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -2862,6 +2862,7 @@ export default function AgendaPage() {
             onAsistencia={marcarAsistencia}
             onCobrar={cobrarReserva}
             mostrarFecha
+            salon={esSalonBelleza}
           />
         </section>
       )}
@@ -3245,7 +3246,7 @@ export default function AgendaPage() {
                 </select>
               </Campo>
 
-              <div style={s.formGrid}>
+              <div style={s.formGrid} className={esSalonBelleza ? "agenda-horario-grid" : ""}>
                 {esSalonBelleza && !horarioEditandoId ? (
                   <div
                     style={{
@@ -3395,7 +3396,10 @@ export default function AgendaPage() {
                   </Campo>
                 )}
 
-                <Campo label={esSalonBelleza ? "Profesional" : "Instructor"}>
+                <Campo
+                  label={esSalonBelleza ? "Profesional" : "Instructor"}
+                  className={esSalonBelleza ? "agenda-horario-profesional" : ""}
+                >
                   <input
                     value={horarioForm.instructor}
                     onChange={(e) =>
@@ -3409,9 +3413,13 @@ export default function AgendaPage() {
                   />
                 </Campo>
 
-                <Campo label="Hora inicio">
+                <Campo
+                  label="Hora inicio"
+                  className={esSalonBelleza ? "agenda-horario-inicio" : ""}
+                >
                   <SelectorHoraKonax
                     value={horarioForm.hora_inicio}
+                    compact={esSalonBelleza}
                     onApply={(hora) =>
                       setHorarioForm((actual) => ({
                         ...actual,
@@ -3421,9 +3429,13 @@ export default function AgendaPage() {
                   />
                 </Campo>
 
-                <Campo label="Hora fin">
+                <Campo
+                  label="Hora fin"
+                  className={esSalonBelleza ? "agenda-horario-fin" : ""}
+                >
                   <SelectorHoraKonax
                     value={horarioForm.hora_fin}
+                    compact={esSalonBelleza}
                     onApply={(hora) =>
                       setHorarioForm((actual) => ({
                         ...actual,
@@ -3439,6 +3451,7 @@ export default function AgendaPage() {
                       ? "Disponibilidad por horario"
                       : "Cupos"
                   }
+                  className={esSalonBelleza ? "agenda-horario-capacidad" : ""}
                 >
                   <input
                     type="number"
@@ -3454,7 +3467,10 @@ export default function AgendaPage() {
                   />
                 </Campo>
 
-                <Campo label="Disponible desde">
+                <Campo
+                  label="Disponible desde"
+                  className={esSalonBelleza ? "agenda-horario-desde" : ""}
+                >
                   <input
                     type="date"
                     value={horarioForm.fecha_desde}
@@ -3649,9 +3665,9 @@ function Tab({ activo, onClick, children }) {
   );
 }
 
-function Campo({ label, children }) {
+function Campo({ label, children, className = "" }) {
   return (
-    <label style={s.field}>
+    <label style={s.field} className={className}>
       <span style={s.label}>{label}</span>
       {children}
     </label>
@@ -3679,6 +3695,7 @@ function Empty({ titulo, texto }) {
 function SelectorHoraKonax({
   value = "09:00",
   onApply,
+  compact = false,
 }) {
   function descomponerHora(valor) {
     const [hh = "09", mm = "00"] = String(
@@ -3710,6 +3727,40 @@ function SelectorHoraKonax({
     setPeriodo(siguiente.periodo);
     setAplicado(value);
   }, [value]);
+
+  function construirHora(horaValor, minutoValor, periodoValor) {
+    let hora24 = Number(horaValor);
+
+    if (periodoValor === "AM") {
+      if (hora24 === 12) hora24 = 0;
+    } else if (hora24 !== 12) {
+      hora24 += 12;
+    }
+
+    return `${String(hora24).padStart(2, "0")}:${String(
+      minutoValor
+    ).padStart(2, "0")}`;
+  }
+
+  function aplicarCambioCompacto(
+    siguienteHora = hora,
+    siguienteMinuto = minuto,
+    siguientePeriodo = periodo
+  ) {
+    if (!compact) return;
+
+    const nuevaHora = construirHora(
+      siguienteHora,
+      siguienteMinuto,
+      siguientePeriodo
+    );
+
+    setAplicado(nuevaHora);
+
+    if (typeof onApply === "function") {
+      onApply(nuevaHora);
+    }
+  }
 
   function aplicarHora() {
     let hora24 = Number(hora);
@@ -3752,7 +3803,11 @@ function SelectorHoraKonax({
       <div style={s.timePickerControls} className="agenda-time-picker-mobile">
         <select
           value={hora}
-          onChange={(e) => setHora(e.target.value)}
+          onChange={(e) => {
+            const valor = e.target.value;
+            setHora(valor);
+            aplicarCambioCompacto(valor, minuto, periodo);
+          }}
           style={s.timeSelect}
           aria-label="Hora"
         >
@@ -3771,7 +3826,11 @@ function SelectorHoraKonax({
 
         <select
           value={minuto}
-          onChange={(e) => setMinuto(e.target.value)}
+          onChange={(e) => {
+            const valor = e.target.value;
+            setMinuto(valor);
+            aplicarCambioCompacto(hora, valor, periodo);
+          }}
           style={s.timeSelect}
           aria-label="Minutos"
         >
@@ -3784,7 +3843,11 @@ function SelectorHoraKonax({
 
         <select
           value={periodo}
-          onChange={(e) => setPeriodo(e.target.value)}
+          onChange={(e) => {
+            const valor = e.target.value;
+            setPeriodo(valor);
+            aplicarCambioCompacto(hora, minuto, valor);
+          }}
           style={s.timePeriodSelect}
           aria-label="Período"
         >
@@ -3793,19 +3856,27 @@ function SelectorHoraKonax({
         </select>
       </div>
 
-      <div style={s.timePickerFooter}>
-        <span style={s.timeApplied}>
-          Seleccionada: {formatoHora(aplicado)}
-        </span>
+      {compact ? (
+        <div style={s.timeCompactFooter}>
+          <span style={s.timeApplied}>
+            {formatoHora(aplicado)}
+          </span>
+        </div>
+      ) : (
+        <div style={s.timePickerFooter}>
+          <span style={s.timeApplied}>
+            Seleccionada: {formatoHora(aplicado)}
+          </span>
 
-        <button
-          type="button"
-          style={s.timeApplyButton}
-          onClick={aplicarHora}
-        >
-          Aplicar hora
-        </button>
-      </div>
+          <button
+            type="button"
+            style={s.timeApplyButton}
+            onClick={aplicarHora}
+          >
+            Aplicar hora
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -3818,6 +3889,7 @@ function ReservaLista({
   onAsistencia,
   onCobrar,
   mostrarFecha = false,
+  salon = false,
 }) {
   if (!reservas.length) {
     return (
@@ -3848,21 +3920,55 @@ function ReservaLista({
             : s.badge;
 
         return (
-          <article key={reserva.id} style={s.reservationCard}>
-            <div style={s.reservationIdentity}>
-              <div style={s.avatar}>
+          <article
+            key={reserva.id}
+            style={{
+              ...s.reservationCard,
+              ...(salon ? s.reservationCardSalon : {}),
+            }}
+            className={salon ? "agenda-reserva-card-salon" : ""}
+          >
+            <div
+              style={{
+                ...s.reservationIdentity,
+                ...(salon ? s.reservationIdentitySalon : {}),
+              }}
+            >
+              <div
+                style={{
+                  ...s.avatar,
+                  ...(salon ? s.avatarSalon : {}),
+                }}
+              >
                 {String(nombre || "A").charAt(0).toUpperCase()}
               </div>
 
               <div style={s.reservationMain}>
                 <div style={s.reservationTopLine}>
-                  <strong style={s.reservationName}>{nombre}</strong>
-                  <span style={badgeEstado}>
+                  <strong
+                    style={{
+                      ...s.reservationName,
+                      ...(salon ? s.reservationNameSalon : {}),
+                    }}
+                  >
+                    {nombre}
+                  </strong>
+                  <span
+                    style={{
+                      ...badgeEstado,
+                      ...(salon ? s.badgeSalon : {}),
+                    }}
+                  >
                     {String(reserva.estado || "confirmada").replace(/_/g, " ")}
                   </span>
                 </div>
 
-                <span style={s.slotDetail}>
+                <span
+                  style={{
+                    ...s.slotDetail,
+                    ...(salon ? s.slotDetailSalon : {}),
+                  }}
+                >
                   {nombreServicio(reserva.servicio_id)}
                   {mostrarFecha ? ` · ${formatoFecha(reserva.fecha_reserva)}` : ""}
                   {" · "}
@@ -3874,11 +3980,17 @@ function ReservaLista({
               </div>
             </div>
 
-            <div style={s.inlineActions}>
+            <div
+              style={{
+                ...s.inlineActions,
+                ...(salon ? s.inlineActionsSalon : {}),
+              }}
+              className={salon ? "agenda-reserva-actions-salon" : ""}
+            >
               {puedeGestionar && estado === "pendiente_pago" && (
                 <button
                   type="button"
-                  style={s.smallPay}
+                  style={salon ? s.smallPaySalon : s.smallPay}
                   onClick={() => onCobrar(reserva)}
                 >
                   Cobrar ${Number(reserva.monto || 0).toFixed(2)}
@@ -3908,7 +4020,7 @@ function ReservaLista({
               {!["cancelada", "asistio"].includes(estado) && (
                 <button
                   type="button"
-                  style={s.smallDanger}
+                  style={salon ? s.smallDangerSalon : s.smallDanger}
                   onClick={() => onCancelar(reserva)}
                 >
                   Cancelar
@@ -5018,6 +5130,85 @@ const AGENDA_CSS = `
 
     .agenda-horario-panel button {
       max-width: 100%;
+    }
+  }
+
+
+  /* =========================================================
+     SALÓN DE BELLEZA · NUEVO HORARIO COMPACTO
+     ========================================================= */
+  .agenda-horario-grid {
+    grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) !important;
+    gap: 12px !important;
+    align-items: start;
+  }
+
+  .agenda-horario-grid > div:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .agenda-horario-profesional {
+    grid-column: 1;
+  }
+
+  .agenda-horario-capacidad {
+    grid-column: 2;
+  }
+
+  .agenda-horario-inicio {
+    grid-column: 1;
+  }
+
+  .agenda-horario-fin {
+    grid-column: 2;
+  }
+
+  .agenda-horario-desde {
+    grid-column: 1 / -1;
+    max-width: 360px;
+  }
+
+  .agenda-horario-panel .agenda-time-picker-mobile {
+    grid-template-columns:
+      minmax(58px, .85fr) auto minmax(58px, .85fr) minmax(72px, 1fr) !important;
+  }
+
+  @media (max-width: 760px) {
+    .agenda-horario-grid {
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+
+    .agenda-horario-profesional,
+    .agenda-horario-capacidad,
+    .agenda-horario-inicio,
+    .agenda-horario-fin,
+    .agenda-horario-desde {
+      grid-column: 1 !important;
+      max-width: none !important;
+    }
+
+    .agenda-horario-panel .agenda-time-picker-mobile {
+      grid-template-columns:
+        minmax(52px, .9fr) auto minmax(52px, .9fr) minmax(68px, 1fr) !important;
+      gap: 5px !important;
+    }
+
+    .agenda-reserva-card-salon {
+      align-items: flex-start !important;
+      flex-direction: column !important;
+      padding: 15px !important;
+    }
+
+    .agenda-reserva-actions-salon {
+      width: 100% !important;
+      justify-content: stretch !important;
+    }
+
+    .agenda-reserva-actions-salon button {
+      flex: 1 1 150px !important;
+      min-height: 44px !important;
+      font-size: 12px !important;
     }
   }
 
@@ -6887,6 +7078,76 @@ const s = {
     background: "#fbfcfb",
   },
 
+  reservationCardSalon: {
+    minHeight: 86,
+    padding: "16px 18px",
+    gap: 16,
+    border: "1px solid #dce6e0",
+    borderRadius: 15,
+    background: "#ffffff",
+    boxShadow: "0 6px 18px rgba(18,60,39,.05)",
+  },
+
+  reservationIdentitySalon: {
+    gap: 13,
+  },
+
+  avatarSalon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    fontSize: 17,
+  },
+
+  reservationNameSalon: {
+    marginTop: 0,
+    fontSize: 15,
+    lineHeight: 1.2,
+  },
+
+  slotDetailSalon: {
+    marginTop: 6,
+    fontSize: 12,
+    lineHeight: 1.45,
+  },
+
+  badgeSalon: {
+    minHeight: 28,
+    padding: "6px 10px",
+    fontSize: 10,
+    letterSpacing: ".35px",
+  },
+
+  inlineActionsSalon: {
+    gap: 9,
+    alignItems: "center",
+  },
+
+  smallPaySalon: {
+    minHeight: 42,
+    padding: "9px 15px",
+    border: 0,
+    borderRadius: 10,
+    background: "#0B7A43",
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 5px 12px rgba(11,122,67,.15)",
+  },
+
+  smallDangerSalon: {
+    minHeight: 42,
+    padding: "9px 13px",
+    border: "1px solid #fecaca",
+    borderRadius: 10,
+    background: "#fff7f7",
+    color: "#be123c",
+    fontSize: 11,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
   reservationMain: {
     minWidth: 0,
   },
@@ -7015,6 +7276,15 @@ const s = {
     fontSize: 17,
     fontWeight: 900,
     textAlign: "center",
+  },
+
+  timeCompactFooter: {
+    marginTop: 6,
+    minHeight: 24,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    padding: "0 2px",
   },
 
   timePickerFooter: {
