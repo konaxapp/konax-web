@@ -1630,6 +1630,13 @@ export default function Dashboard() {
         "📊",
       ],
       [
+        "Profesionales",
+        "/admin-configuracion?seccion=profesionales",
+        "configuracion",
+        "configuracion",
+        "👤",
+      ],
+      [
         "Configuración",
         "/admin-configuracion",
         "configuracion",
@@ -2618,6 +2625,56 @@ export default function Dashboard() {
                 icono="▦"
                 detalle="Módulos habilitados para este acceso."
               />
+
+              {esSalonBelleza && esAdministrador() && (
+                <article
+                  className="dashboard-info-card dashboard-prof-card"
+                  style={{
+                    ...s.infoCard,
+                    cursor: "pointer",
+                  }}
+                  onClick={() =>
+                    router.push(
+                      "/admin-configuracion?seccion=profesionales"
+                    )
+                  }
+                >
+                  <div className="dashboard-info-top" style={s.infoTop}>
+                    <div style={s.infoIcon}>👤</div>
+                    <span style={s.infoLabel}>
+                      EQUIPO PROFESIONAL
+                    </span>
+                  </div>
+
+                  <h3
+                    className="dashboard-info-title"
+                    style={s.infoTitle}
+                  >
+                    Perfiles profesionales
+                  </h3>
+
+                  <p
+                    className="dashboard-info-text"
+                    style={s.infoText}
+                  >
+                    Gestiona foto, especialidad y datos visibles
+                    de quienes atienden a tus clientes.
+                  </p>
+
+                  <button
+                    type="button"
+                    style={s.professionalButton}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      router.push(
+                        "/admin-configuracion?seccion=profesionales"
+                      );
+                    }}
+                  >
+                    Configurar perfiles →
+                  </button>
+                </article>
+              )}
             </section>
           </>
         )}
@@ -3749,6 +3806,12 @@ const DASHBOARD_RESPONSIVE_CSS = `
     .dashboard-info-card .dashboard-info-top > span {
       grid-column: 2 !important;
       font-size: 8px !important;
+    }
+
+    .dashboard-prof-card > button {
+      grid-column: 2 !important;
+      width: 100% !important;
+      margin-top: 8px !important;
     }
 
     .dashboard-gym-tools {
@@ -5044,6 +5107,19 @@ const s = {
     border: "1px solid #dfe7e2",
     borderRadius: 17,
     background: "#fff",
+  },
+
+  professionalButton: {
+    marginTop: 13,
+    minHeight: 38,
+    padding: "8px 12px",
+    border: "1px solid #bfe0cb",
+    borderRadius: 10,
+    background: "#edf8f1",
+    color: "#16834f",
+    fontSize: 11,
+    fontWeight: 900,
+    cursor: "pointer",
   },
 
   infoTop: {
