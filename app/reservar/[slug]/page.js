@@ -1,3149 +1,6529 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
-import { supabase } from "../../../lib/supabase";
+import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.21-PORTAL-ADAPTATIVO-GYM-WOD-V1";
+const VERSION = "2026.08.21-AGENDA-WOD-V2-PRO";
 
-function normalizar(valor) {
-  return String(valor || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
+const SERVICIO_INICIAL = {
+  nombre: "",
+  descripcion: "",
+  tipo: "clase_grupal",
+  duracion_minutos: 60,
+  capacidad_default: 5,
+  requiere_membresia: true,
+  requiere_pago: false,
+  precio: 0,
+  activo: true,
+};
 
-function esBelleza(portal) {
-  const texto = normalizar(
-    `${portal?.tipo_negocio || ""} ${portal?.categoria_negocio || ""}`
-  );
+const HORARIO_INICIAL = {
+  servicio_id: "",
+  dia_semana: 5,
+  hora_inicio: "18:00",
+  hora_fin: "19:00",
+  instructor: "",
+  capacidad: 5,
+  fecha_desde: fechaHoy(),
+  fecha_hasta: "",
+  activo: true,
+};
 
-  return [
-    "belleza",
-    "salon",
-    "peluqueria",
-    "estetica",
-    "barberia",
-    "spa",
-    "beauty",
-  ].some((item) => texto.includes(item));
-}
-
-
-function esGimnasio(portal) {
-  const texto = normalizar(
-    `${portal?.tipo_negocio || ""} ${portal?.categoria_negocio || ""}`
-  );
-
-  return [
-    "gimnasio",
-    "gym",
-    "fitness",
-    "crossfit",
-    "cross fit",
-    "box",
-    "academia",
-    "club deportivo",
-  ].some((item) => texto.includes(item));
-}
-
-function fechaISO(fecha = new Date()) {
-  const d = fecha instanceof Date ? fecha : new Date(fecha);
+function fechaHoy() {
+  const d = new Date();
   const offset = d.getTimezoneOffset();
   return new Date(d.getTime() - offset * 60000)
     .toISOString()
     .slice(0, 10);
 }
 
-function formatoFecha(iso) {
-  if (!iso) return "-";
-  return new Intl.DateTimeFormat("es-PA", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(`${String(iso).slice(0, 10)}T12:00:00`));
-}
-
-function formatoHora(hora) {
-  if (!hora) return "-";
-  const [h = "0", m = "0"] = String(hora).split(":");
-  const d = new Date();
-  d.setHours(Number(h), Number(m), 0, 0);
-  return new Intl.DateTimeFormat("es-PA", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  }).format(d);
-}
-
-function dinero(valor) {
-  return new Intl.NumberFormat("es-PA", {
-    style: "currency",
-    currency: "USD",
-  }).format(Number(valor || 0));
-}
-
-function mensajeError(error) {
-  return String(
-    error?.message ||
-      error?.details ||
-      error?.hint ||
-      error ||
-      "Error inesperado"
-  )
-    .replace("P0001:", "")
-    .replace("Error:", "")
+function normalizar(valor) {
+  return String(valor ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
     .trim();
 }
 
-function claveSlot(item) {
-  return `${item?.horario_id || ""}-${String(
-    item?.hora_inicio || ""
-  ).slice(0, 5)}`;
+function formatoHora(hora) {
+  if (!hora) return "";
+  const [hh = "00", mm = "00"] = String(hora).split(":");
+  const h = Number(hh);
+  const sufijo = h >= 12 ? "p. m." : "a. m.";
+  const hora12 = h % 12 || 12;
+  return `${hora12}:${mm} ${sufijo}`;
 }
 
-
-function proximosDias(cantidad = 8) {
-  const lista = [];
-  const hoy = new Date();
-
-  for (let i = 0; i < cantidad; i += 1) {
-    const d = new Date(hoy);
-    d.setDate(hoy.getDate() + i);
-    lista.push(fechaISO(d));
-  }
-
-  return lista;
+function nombreDia(numero) {
+  return [
+    "Domingo",
+    "Lunes",
+    "Martes",
+    "Miércoles",
+    "Jueves",
+    "Viernes",
+    "Sábado",
+  ][Number(numero)] || "Día";
 }
 
-function fechaCorta(iso) {
-  if (!iso) return "";
+function formatoFecha(fecha) {
+  if (!fecha) return "";
+  const d = new Date(`${fecha}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return fecha;
+
   return new Intl.DateTimeFormat("es-PA", {
-    weekday: "short",
-    day: "numeric",
+    day: "2-digit",
     month: "short",
-  }).format(new Date(`${iso}T12:00:00`));
+    year: "numeric",
+  }).format(d);
 }
 
-function inicialNombre(nombre) {
-  return String(nombre || "?").trim().charAt(0).toUpperCase();
+function esRolAdministrador(rol) {
+  return [
+    "administrador",
+    "superadmin",
+    "super_admin",
+    "admin_master",
+    "administrador_master",
+  ].includes(normalizar(rol).replace(/\s+/g, "_"));
 }
 
-export default function ReservaPublicaAutoservicioPage() {
-  const params = useParams();
-  const searchParams = useSearchParams();
+function esTipoGimnasio(tipoNegocio = "", categoriaNegocio = "") {
+  const texto = normalizar(`${tipoNegocio || ""} ${categoriaNegocio || ""}`);
+  return ["gimnasio", "gym", "fitness", "crossfit", "box", "academia", "club"]
+    .some((palabra) => texto.includes(palabra));
+}
 
-  const slug = Array.isArray(params?.slug)
-    ? params.slug[0]
-    : params?.slug || "";
+const WOD_INICIAL = {
+  servicio_id: "",
+  fecha: fechaHoy(),
+  titulo: "WOD del día",
+  warmup: "",
+  strength: "",
+  skill: "",
+  metcon: "",
+  cooldown: "",
+  notas_publicas: "",
+  notas_coach: "",
+  visible_desde: "",
+  activo: true,
+};
 
-  const tokenUrl = searchParams?.get("cita") || "";
-
-  const [portal, setPortal] = useState(null);
-  const [identidadEmpresa, setIdentidadEmpresa] = useState(null);
+export default function AgendaPage() {
   const [cargando, setCargando] = useState(true);
-  const [cargandoHorarios, setCargandoHorarios] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
 
-  const [tema, setTema] = useState("claro");
-  const [menuAbierto, setMenuAbierto] = useState(false);
-  const [mostrarAvisoMiCita, setMostrarAvisoMiCita] = useState(false);
+  const [empresaId, setEmpresaId] = useState("");
+  const [empresaNombre, setEmpresaNombre] = useState("");
+  const [rol, setRol] = useState("");
+  const [esAdmin, setEsAdmin] = useState(false);
+  const [tipoNegocio, setTipoNegocio] = useState("");
+  const [categoriaNegocio, setCategoriaNegocio] = useState("");
+  const [wods, setWods] = useState([]);
+  const [wodForm, setWodForm] = useState(WOD_INICIAL);
+  const [wodEditandoId, setWodEditandoId] = useState(null);
+  const [visibilidadWod, setVisibilidadWod] = useState("inmediato");
 
-  const [paso, setPaso] = useState(1);
+  const [vista, setVista] = useState("hoy");
+  const [fechaAgenda, setFechaAgenda] = useState(fechaHoy());
 
-  const [fecha, setFecha] = useState(fechaISO());
+  const [servicios, setServicios] = useState([]);
   const [horarios, setHorarios] = useState([]);
-  const [servicioFiltro, setServicioFiltro] = useState("todos");
-  const [servicioSeleccionado, setServicioSeleccionado] = useState(null);
-  const [profesionalSeleccionado, setProfesionalSeleccionado] =
-    useState("sin-preferencia");
-  const [horarioSeleccionado, setHorarioSeleccionado] = useState(null);
+  const [reservas, setReservas] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [disponibilidad, setDisponibilidad] = useState([]);
 
-  const [nombre, setNombre] = useState("");
-  const [telefono, setTelefono] = useState("");
+  const [servicioForm, setServicioForm] = useState(SERVICIO_INICIAL);
+  const [servicioEditandoId, setServicioEditandoId] = useState(null);
+
+  const [horarioForm, setHorarioForm] = useState(HORARIO_INICIAL);
+  const [horarioEditandoId, setHorarioEditandoId] = useState(null);
+
+  const [busquedaCliente, setBusquedaCliente] = useState("");
+  const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
+  const [horarioSeleccionado, setHorarioSeleccionado] = useState("");
   const [observaciones, setObservaciones] = useState("");
-  const [reservaConfirmada, setReservaConfirmada] = useState(null);
-  const [tokenGestion, setTokenGestion] = useState("");
+  const [busquedaReservas, setBusquedaReservas] = useState("");
+  const [estadoReservaFiltro, setEstadoReservaFiltro] = useState("Todos");
 
-  const [miCita, setMiCita] = useState(null);
-  const [telefonoGestion, setTelefonoGestion] = useState("");
-  const [motivoCancelacion, setMotivoCancelacion] = useState("");
-  const [cancelando, setCancelando] = useState(false);
-  const [mostrarNuevaCita, setMostrarNuevaCita] = useState(false);
-  const [wodPublico, setWodPublico] = useState(null);
-  const [cargandoWod, setCargandoWod] = useState(false);
-
-  const perfilBelleza = esBelleza(portal);
-  const perfilGimnasio = esGimnasio(portal);
-  const dias = useMemo(() => proximosDias(8), []);
+  const [portalConfig, setPortalConfig] = useState({
+    activo: false,
+    slug: "",
+    titulo_publico: "",
+  });
+  const [guardandoPortal, setGuardandoPortal] = useState(false);
 
   useEffect(() => {
-    if (!slug) return;
+    inicializar();
+  }, []);
 
-    cargarPortal();
+  useEffect(() => {
+    if (empresaId) {
+      cargarDisponibilidad(fechaAgenda);
+      cargarReservas();
+    }
+  }, [fechaAgenda, empresaId]);
 
-    try {
-      const tokenGuardado = localStorage.getItem(
-        `konax_reserva_token_${slug}`
-      );
 
-      if (tokenGuardado) {
-        setTokenGestion(tokenGuardado);
+  useEffect(() => {
+    if (!empresaId) return;
+
+    const sincronizarAgenda = async () => {
+      try {
+        await Promise.all([
+          cargarClientes(empresaId),
+          cargarReservas(empresaId),
+          cargarDisponibilidad(fechaAgenda, empresaId),
+        ]);
+      } catch (err) {
+        console.error(
+          "No se pudo sincronizar Agenda al volver a la pestaña:",
+          err
+        );
       }
-    } catch (err) {
-      console.warn("No se pudo leer la cita guardada:", err);
-    }
-  }, [slug]);
+    };
 
-  useEffect(() => {
-    if (!portal?.ok || !fecha) return;
-    cargarDisponibilidad(fecha);
-  }, [portal?.ok, fecha]);
+    window.addEventListener("focus", sincronizarAgenda);
 
-  useEffect(() => {
-    if (!portal?.ok || !tokenUrl) return;
+    return () => {
+      window.removeEventListener("focus", sincronizarAgenda);
+    };
+  }, [empresaId, fechaAgenda]);
 
-    cargarMiCita(tokenUrl);
-
-    try {
-      localStorage.setItem(
-        `konax_reserva_token_${slug}`,
-        tokenUrl
-      );
-      setTokenGestion(tokenUrl);
-    } catch (err) {
-      console.warn("No se pudo guardar la cita:", err);
-    }
-  }, [portal?.ok, tokenUrl, slug]);
-
-  async function cargarPortal() {
+  async function inicializar() {
     setCargando(true);
     setError("");
 
-    const { data, error: rpcError } = await supabase.rpc(
-      "obtener_agenda_publica",
-      { p_slug: slug }
-    );
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-    if (rpcError || !data?.ok) {
-      setError(
-        mensajeError(rpcError) ||
-          data?.mensaje ||
-          "Este portal de reservas no está disponible."
-      );
-      setPortal(null);
+      if (!session?.user?.id) {
+        window.location.href = "/login";
+        return;
+      }
+
+      const empresaLocal = localStorage.getItem("empresaId") || "";
+      const empresaNombreLocal = localStorage.getItem("empresaNombre") || "";
+      const rolLocal = localStorage.getItem("usuarioRol") ||
+        localStorage.getItem("rol") ||
+        "";
+      const tipoNegocioLocal = localStorage.getItem("tipoNegocio") || "";
+      const categoriaNegocioLocal = localStorage.getItem("categoriaNegocio") || "";
+
+      if (!empresaLocal) {
+        alert("No hay una empresa activa.");
+        window.location.href = "/login";
+        return;
+      }
+
+      const adminLocal =
+        esRolAdministrador(rolLocal);
+
+      setEmpresaId(empresaLocal);
+      setEmpresaNombre(empresaNombreLocal);
+      setRol(rolLocal);
+      setEsAdmin(adminLocal);
+      setTipoNegocio(tipoNegocioLocal);
+      setCategoriaNegocio(categoriaNegocioLocal);
+
+      await Promise.all([
+        cargarServicios(empresaLocal),
+        cargarHorarios(empresaLocal),
+        cargarClientes(empresaLocal),
+        cargarReservas(empresaLocal),
+        cargarDisponibilidad(fechaAgenda, empresaLocal),
+        cargarWods(empresaLocal),
+        adminLocal
+          ? cargarConfiguracionPortal(empresaLocal)
+          : Promise.resolve(),
+      ]);
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || "No fue posible cargar Agenda.");
+    } finally {
       setCargando(false);
-      return;
     }
-
-    setPortal(data);
-
-    const { data: identidadData } = await supabase.rpc(
-      "obtener_identidad_empresa_publica",
-      {
-        p_slug: slug,
-      }
-    );
-
-    const identidad = Array.isArray(identidadData)
-      ? identidadData[0]
-      : identidadData;
-
-    setIdentidadEmpresa(identidad || null);
-    setCargando(false);
   }
 
-  async function cargarDisponibilidad(fechaSeleccionada) {
-    setCargandoHorarios(true);
-    setError("");
-    setHorarioSeleccionado(null);
+  async function cargarConfiguracionPortal(
+    idEmpresa = empresaId
+  ) {
+    if (!idEmpresa) return;
 
-    const { data, error: rpcError } = await supabase.rpc(
-      "obtener_disponibilidad_agenda_publica",
+    const { data, error } = await supabase.rpc(
+      "obtener_configuracion_portal_agenda",
       {
-        p_slug: slug,
-        p_fecha: fechaSeleccionada,
+        p_empresa_id: idEmpresa,
       }
     );
 
-    if (rpcError) {
-      setHorarios([]);
-      setError(mensajeError(rpcError));
-      setCargandoHorarios(false);
-      return;
-    }
-
-    setHorarios(Array.isArray(data) ? data : []);
-    setCargandoHorarios(false);
-  }
-
-
-  async function cargarWodPublico(fechaWod, servicioId) {
-    if (!perfilGimnasio || !fechaWod || !servicioId) {
-      setWodPublico(null);
-      return;
-    }
-
-    setCargandoWod(true);
-
-    const { data, error: rpcError } = await supabase.rpc(
-      "obtener_wod_publico",
-      {
-        p_slug: slug,
-        p_fecha: String(fechaWod).slice(0, 10),
-        p_servicio_id: servicioId,
-      }
-    );
-
-    if (rpcError || !data?.ok) {
-      setWodPublico(null);
-      setCargandoWod(false);
-      return;
-    }
-
-    setWodPublico(data);
-    setCargandoWod(false);
-  }
-
-  async function cargarMiCita(token = tokenUrl) {
-    if (!token) return;
-
-    const { data, error: rpcError } = await supabase.rpc(
-      "obtener_reserva_agenda_publica",
-      {
-        p_slug: slug,
-        p_token: token,
-      }
-    );
-
-    if (rpcError || !data?.ok) {
-      setMiCita(null);
-      setError(
-        mensajeError(rpcError) ||
-          data?.mensaje ||
-          "No se pudo cargar la cita."
+    if (error) {
+      console.error(
+        "No se pudo cargar el portal de reservas:",
+        error
       );
       return;
     }
 
-    setMiCita(data);
-    if (data.fecha) setFecha(String(data.fecha).slice(0, 10));
-
-    if (perfilGimnasio && data.servicio_id && data.fecha) {
-      await cargarWodPublico(data.fecha, data.servicio_id);
-    }
+    setPortalConfig({
+      activo: Boolean(data?.activo),
+      slug: data?.slug || "",
+      titulo_publico:
+        data?.titulo_publico || empresaNombre || "",
+    });
   }
 
-  const servicios = useMemo(() => {
-    const mapa = new Map();
+  async function guardarConfiguracionPortal() {
+    if (!esAdmin) return;
 
-    horarios.forEach((item) => {
-      if (!mapa.has(String(item.servicio_id))) {
-        mapa.set(String(item.servicio_id), {
-          id: String(item.servicio_id),
-          nombre: item.servicio_nombre,
-          descripcion: item.descripcion || "",
-          precio: Number(item.precio || 0),
-          requierePago: Boolean(item.requiere_pago),
-          duracion: Number(item.duracion_minutos || 60),
-        });
-      }
-    });
+    if (!portalConfig.slug.trim()) {
+      alert("Escribe el enlace público del negocio.");
+      return;
+    }
 
-    return Array.from(mapa.values());
-  }, [horarios]);
-
-  const profesionales = useMemo(() => {
-    if (!servicioSeleccionado) return [];
-
-    const mapa = new Map();
-
-    horarios
-      .filter(
-        (item) =>
-          String(item.servicio_id) ===
-          String(servicioSeleccionado.id)
-      )
-      .forEach((item) => {
-        const nombreProfesional = String(
-          item.instructor || ""
-        ).trim();
-
-        if (!nombreProfesional) return;
-
-        const clave = normalizar(nombreProfesional);
-
-        if (!mapa.has(clave)) {
-          mapa.set(clave, {
-            id: clave,
-            nombre: nombreProfesional,
-          });
-        }
-      });
-
-    return Array.from(mapa.values());
-  }, [horarios, servicioSeleccionado]);
-
-  const slotsDisponibles = useMemo(() => {
-    if (!servicioSeleccionado) return [];
-
-    return horarios.filter((item) => {
-      const mismoServicio =
-        String(item.servicio_id) ===
-        String(servicioSeleccionado.id);
-
-      const disponible = Number(item.disponibles || 0) > 0;
-
-      const coincideProfesional =
-        profesionalSeleccionado === "sin-preferencia" ||
-        normalizar(item.instructor || "") ===
-          normalizar(profesionalSeleccionado);
-
-      return mismoServicio && disponible && coincideProfesional;
-    });
-  }, [
-    horarios,
-    servicioSeleccionado,
-    profesionalSeleccionado,
-  ]);
-
-  const serviciosFechaActual = useMemo(() => {
-    const mapa = new Map();
-
-    horarios.forEach((item) => {
-      const id = String(item.servicio_id);
-
-      if (!mapa.has(id)) {
-        mapa.set(id, {
-          id,
-          nombre: item.servicio_nombre,
-          descripcion: item.descripcion || "",
-          precio: Number(item.precio || 0),
-          requierePago: Boolean(item.requiere_pago),
-          duracion: Number(item.duracion_minutos || 60),
-        });
-      }
-    });
-
-    return Array.from(mapa.values());
-  }, [horarios]);
-
-  const [fechasConDisponibilidad, setFechasConDisponibilidad] = useState([]);
-  const [buscandoFechas, setBuscandoFechas] = useState(false);
-
-  async function buscarFechasDisponibles() {
-    if (!portal?.ok) return;
-
-    setBuscandoFechas(true);
+    setGuardandoPortal(true);
 
     try {
-      const candidatos = proximosDias(14);
-      const resultados = [];
-
-      for (const dia of candidatos) {
-        const { data, error: rpcError } = await supabase.rpc(
-          "obtener_disponibilidad_agenda_publica",
-          {
-            p_slug: slug,
-            p_fecha: dia,
-          }
-        );
-
-        if (!rpcError && Array.isArray(data) && data.length > 0) {
-          resultados.push(dia);
+      const { data, error } = await supabase.rpc(
+        "configurar_portal_agenda",
+        {
+          p_empresa_id: empresaId,
+          p_activo: Boolean(portalConfig.activo),
+          p_slug: portalConfig.slug.trim(),
+          p_titulo_publico:
+            portalConfig.titulo_publico.trim() ||
+            empresaNombre ||
+            null,
         }
+      );
 
-        if (resultados.length >= 8) break;
-      }
+      if (error) throw error;
 
-      setFechasConDisponibilidad(resultados);
+      setPortalConfig({
+        activo: Boolean(data?.activo),
+        slug: data?.slug || portalConfig.slug,
+        titulo_publico:
+          data?.titulo_publico ||
+          portalConfig.titulo_publico ||
+          empresaNombre,
+      });
 
-      if (
-        resultados.length > 0 &&
-        !resultados.includes(fecha)
-      ) {
-        setFecha(resultados[0]);
-      }
+      alert("Portal de reservas actualizado.");
+    } catch (err) {
+      alert(
+        err?.message ||
+          "No se pudo actualizar el portal de reservas."
+      );
     } finally {
-      setBuscandoFechas(false);
+      setGuardandoPortal(false);
     }
   }
 
-  useEffect(() => {
-    if (!portal?.ok) return;
-    buscarFechasDisponibles();
-  }, [portal?.ok]);
+  function obtenerEnlacePortal() {
+    if (!portalConfig.slug) return "";
 
-  const profesionalResumen = useMemo(() => {
-    if (profesionalSeleccionado === "sin-preferencia") {
-      return "Sin preferencia";
+    const ruta =
+      `/reservar/${portalConfig.slug}`;
+
+    if (typeof window === "undefined") {
+      return ruta;
     }
+
+    return `${window.location.origin}${ruta}`;
+  }
+
+  async function copiarEnlacePortal() {
+    const enlace = obtenerEnlacePortal();
+
+    if (!enlace) return;
+
+    try {
+      await navigator.clipboard.writeText(enlace);
+      alert("Enlace de reservas copiado.");
+    } catch {
+      window.prompt(
+        "Copia este enlace de reservas:",
+        enlace
+      );
+    }
+  }
+
+  function compartirPortalWhatsApp() {
+    const enlace = obtenerEnlacePortal();
+
+    if (!enlace) return;
+
+    const texto =
+      `Reserva tu clase o servicio aquí:\n${enlace}`;
+
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(texto)}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  function abrirPortal() {
+    const enlace = obtenerEnlacePortal();
+
+    if (!enlace) return;
+
+    window.open(
+      enlace,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  function obtenerQrPortal() {
+    const enlace = obtenerEnlacePortal();
+
+    if (!enlace) return "";
 
     return (
-      profesionales.find(
-        (p) => p.id === profesionalSeleccionado
-      )?.nombre || "Sin preferencia"
+      "https://api.qrserver.com/v1/create-qr-code/" +
+      `?size=700x700&margin=24&data=${encodeURIComponent(enlace)}`
     );
-  }, [profesionalSeleccionado, profesionales]);
+  }
 
-  const horariosVisibles = useMemo(() => {
-    if (servicioFiltro === "todos") return horarios;
+  async function descargarQrPortal() {
+    const qr = obtenerQrPortal();
 
-    return horarios.filter(
-      (item) =>
-        String(item.servicio_id) === String(servicioFiltro)
-    );
-  }, [horarios, servicioFiltro]);
+    if (!qr) return;
 
-  const serviciosConSlots = useMemo(() => {
-    const grupos = new Map();
+    try {
+      const respuesta = await fetch(qr);
+      if (!respuesta.ok) throw new Error("QR no disponible.");
 
-    horariosVisibles.forEach((item) => {
-      const servicioId = String(item.servicio_id);
+      const blob = await respuesta.blob();
+      const url = URL.createObjectURL(blob);
+      const enlace = document.createElement("a");
 
-      if (!grupos.has(servicioId)) {
-        grupos.set(servicioId, {
-          servicio_id: item.servicio_id,
-          servicio_nombre: item.servicio_nombre,
-          descripcion: item.descripcion || "",
-          instructor: item.instructor || "",
-          precio: Number(item.precio || 0),
-          requiere_pago: Boolean(item.requiere_pago),
-          duracion_minutos: Number(item.duracion_minutos || 60),
-          slots: [],
-        });
-      }
+      enlace.href = url;
+      enlace.download =
+        `QR-reservas-${portalConfig.slug || "konax"}.png`;
 
-      grupos.get(servicioId).slots.push(item);
+      document.body.appendChild(enlace);
+      enlace.click();
+      enlace.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      window.open(
+        qr,
+        "_blank",
+        "noopener,noreferrer"
+      );
+    }
+  }
+
+  function modalidadServicio(form = servicioForm) {
+    if (
+      form.requiere_membresia &&
+      form.requiere_pago
+    ) {
+      return "miembros_pago";
+    }
+
+    if (form.requiere_membresia) {
+      return "solo_miembros";
+    }
+
+    if (form.requiere_pago) {
+      return "pago_local";
+    }
+
+    /*
+      Compatibilidad con servicios antiguos que estaban configurados
+      como reserva abierta sin costo. Esa modalidad ya no se ofrece.
+      Al editarlos, se muestran como "Incluida con membresía".
+    */
+    return "solo_miembros";
+  }
+
+  function aplicarModalidadServicio(modalidad) {
+    setServicioForm((actual) => ({
+      ...actual,
+      requiere_membresia:
+        modalidad === "solo_miembros" ||
+        modalidad === "miembros_pago",
+      requiere_pago:
+        modalidad === "pago_local" ||
+        modalidad === "miembros_pago",
+      precio:
+        modalidad === "pago_local" ||
+        modalidad === "miembros_pago"
+          ? actual.precio
+          : 0,
+    }));
+  }
+
+  async function cargarWods(idEmpresa = empresaId) {
+    if (!idEmpresa) return;
+    const { data, error } = await supabase.rpc("listar_wods_agenda", {
+      p_empresa_id: idEmpresa,
+      p_desde: null,
+      p_hasta: null,
     });
-
-    return Array.from(grupos.values());
-  }, [horariosVisibles]);
-
-  function elegirServicio(servicio) {
-    setServicioSeleccionado(servicio);
-    setServicioFiltro(servicio.id);
-    setProfesionalSeleccionado("sin-preferencia");
-    setHorarioSeleccionado(null);
-    setError("");
-    setPaso(2);
+    if (error) {
+      console.error("WOD:", error);
+      setWods([]);
+      return;
+    }
+    setWods(Array.isArray(data) ? data : []);
   }
 
-  function elegirProfesional(valor) {
-    setProfesionalSeleccionado(valor);
-    setHorarioSeleccionado(null);
-    setError("");
-    setPaso(3);
-  }
+  function aplicarVisibilidadWod(valor) {
+    setVisibilidadWod(valor);
 
-  function elegirFecha(valor) {
-    setFecha(valor);
-    setHorarioSeleccionado(null);
-    setError("");
-  }
-
-  function continuarFechaHora() {
-    if (!horarioSeleccionado) {
-      setError("Selecciona una hora disponible.");
+    if (valor === "inmediato") {
+      setWodForm((actual) => ({
+        ...actual,
+        visible_desde: "",
+      }));
       return;
     }
 
-    setError("");
-    setPaso(4);
+    const fechaBase = wodForm.fecha || fechaAgenda || fechaHoy();
+    const base = new Date(`${fechaBase}T12:00:00`);
+
+    if (valor === "dia_anterior") {
+      base.setDate(base.getDate() - 1);
+      base.setHours(18, 0, 0, 0);
+
+      const local = new Date(
+        base.getTime() - base.getTimezoneOffset() * 60000
+      )
+        .toISOString()
+        .slice(0, 16);
+
+      setWodForm((actual) => ({
+        ...actual,
+        visible_desde: local,
+      }));
+      return;
+    }
+
+    if (valor === "mismo_dia") {
+      base.setHours(5, 0, 0, 0);
+
+      const local = new Date(
+        base.getTime() - base.getTimezoneOffset() * 60000
+      )
+        .toISOString()
+        .slice(0, 16);
+
+      setWodForm((actual) => ({
+        ...actual,
+        visible_desde: local,
+      }));
+      return;
+    }
+
+    if (valor === "personalizado" && !wodForm.visible_desde) {
+      const ahora = new Date();
+      const local = new Date(
+        ahora.getTime() - ahora.getTimezoneOffset() * 60000
+      )
+        .toISOString()
+        .slice(0, 16);
+
+      setWodForm((actual) => ({
+        ...actual,
+        visible_desde: local,
+      }));
+    }
   }
 
-  function reiniciarFlujo() {
-    setPaso(1);
-    setServicioSeleccionado(null);
-    setServicioFiltro("todos");
-    setProfesionalSeleccionado("sin-preferencia");
-    setHorarioSeleccionado(null);
-    setReservaConfirmada(null);
-    setTokenGestion("");
-    setFecha(fechaISO());
-    setNombre("");
-    setTelefono("");
-    setObservaciones("");
-    setError("");
-
-    setTimeout(() => {
-      document.getElementById("flujo-reserva")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
+  async function guardarWod() {
+    if (!esAdmin) return;
+    if (!wodForm.servicio_id || !wodForm.fecha) {
+      alert("Selecciona la clase/programa y la fecha.");
+      return;
+    }
+    setGuardando(true);
+    try {
+      const { data, error } = await supabase.rpc("guardar_wod_agenda", {
+        p_empresa_id: empresaId,
+        p_id: wodEditandoId,
+        p_servicio_id: wodForm.servicio_id,
+        p_fecha: wodForm.fecha,
+        p_titulo: wodForm.titulo.trim() || "WOD del día",
+        p_warmup: wodForm.warmup.trim() || null,
+        p_strength: wodForm.strength.trim() || null,
+        p_skill: wodForm.skill.trim() || null,
+        p_metcon: wodForm.metcon.trim() || null,
+        p_cooldown: wodForm.cooldown.trim() || null,
+        p_notas_publicas: wodForm.notas_publicas.trim() || null,
+        p_notas_coach: wodForm.notas_coach.trim() || null,
+        p_visible_desde: wodForm.visible_desde ? new Date(wodForm.visible_desde).toISOString() : null,
+        p_activo: Boolean(wodForm.activo),
       });
-    }, 60);
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.mensaje || "No se pudo guardar el WOD.");
+      setWodForm({ ...WOD_INICIAL, fecha: wodForm.fecha || fechaHoy() });
+      setWodEditandoId(null);
+      setVisibilidadWod("inmediato");
+      await cargarWods();
+      alert("WOD guardado.");
+    } catch (err) {
+      setError(err?.message || "No se pudo guardar el WOD.");
+    } finally {
+      setGuardando(false);
+    }
   }
 
-  async function confirmarReserva(e) {
-    e.preventDefault();
+  function editarWod(wod) {
+    setWodEditandoId(wod.id);
+    setVisibilidadWod(wod.visible_desde ? "personalizado" : "inmediato");
+    setWodForm({
+      servicio_id: wod.servicio_id || "",
+      fecha: String(wod.fecha || fechaHoy()).slice(0, 10),
+      titulo: wod.titulo || "WOD del día",
+      warmup: wod.warmup || "",
+      strength: wod.strength || "",
+      skill: wod.skill || "",
+      metcon: wod.metcon || "",
+      cooldown: wod.cooldown || "",
+      notas_publicas: wod.notas_publicas || "",
+      notas_coach: wod.notas_coach || "",
+      visible_desde: wod.visible_desde ? String(wod.visible_desde).slice(0,16) : "",
+      activo: Boolean(wod.activo),
+    });
+  }
 
-    if (!horarioSeleccionado) {
-      setError("Selecciona un servicio y una hora disponible.");
+  async function eliminarWod(wod) {
+    if (!esAdmin || !wod?.id || !window.confirm("¿Deseas eliminar este WOD?")) return;
+    const { data, error } = await supabase.rpc("eliminar_wod_agenda", {
+      p_empresa_id: empresaId,
+      p_id: wod.id,
+    });
+    if (error || !data?.ok) {
+      alert(error?.message || data?.mensaje || "No se pudo eliminar el WOD.");
+      return;
+    }
+    await cargarWods();
+  }
+
+  async function cargarServicios(idEmpresa = empresaId) {
+    if (!idEmpresa) return;
+
+    const { data, error } = await supabase
+      .from("agenda_servicios")
+      .select("*")
+      .eq("empresa_id", idEmpresa)
+      .order("nombre", { ascending: true });
+
+    if (error) throw error;
+    setServicios(Array.isArray(data) ? data : []);
+  }
+
+  async function cargarHorarios(idEmpresa = empresaId) {
+    if (!idEmpresa) return;
+
+    const { data, error } = await supabase
+      .from("agenda_horarios")
+      .select("*")
+      .eq("empresa_id", idEmpresa)
+      .order("dia_semana", { ascending: true })
+      .order("hora_inicio", { ascending: true });
+
+    if (error) throw error;
+    setHorarios(Array.isArray(data) ? data : []);
+  }
+
+  async function cargarClientes(idEmpresa = empresaId) {
+    if (!idEmpresa) return;
+
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("id,nombre,cedula,telefono,correo,estado")
+      .eq("empresa_id", idEmpresa)
+      .order("nombre", { ascending: true })
+      .limit(5000);
+
+    if (error) throw error;
+    setClientes(Array.isArray(data) ? data : []);
+  }
+
+  async function cargarReservas(idEmpresa = empresaId) {
+    if (!idEmpresa) return;
+
+    const { data, error } = await supabase
+      .from("agenda_reservas")
+      .select("*")
+      .eq("empresa_id", idEmpresa)
+      .order("fecha_reserva", { ascending: false })
+      .order("hora_inicio", { ascending: true })
+      .limit(1000);
+
+    if (error) throw error;
+    setReservas(Array.isArray(data) ? data : []);
+  }
+
+  async function cargarDisponibilidad(
+    fecha = fechaAgenda,
+    idEmpresa = empresaId
+  ) {
+    if (!idEmpresa || !fecha) return;
+
+    const { data, error } = await supabase.rpc(
+      "obtener_disponibilidad_agenda",
+      {
+        p_empresa_id: idEmpresa,
+        p_fecha: fecha,
+      }
+    );
+
+    if (error) {
+      console.error("Disponibilidad:", error);
+      setDisponibilidad([]);
       return;
     }
 
-    if (!nombre.trim() || !telefono.trim()) {
-      setError("Ingresa tu nombre y teléfono.");
+    setDisponibilidad(Array.isArray(data) ? data : []);
+  }
+
+  const mapaClientes = useMemo(() => {
+    const mapa = new Map();
+    clientes.forEach((c) => mapa.set(String(c.id), c));
+    return mapa;
+  }, [clientes]);
+
+  const mapaServicios = useMemo(() => {
+    const mapa = new Map();
+    servicios.forEach((s) => mapa.set(String(s.id), s));
+    return mapa;
+  }, [servicios]);
+
+  const mapaHorarios = useMemo(() => {
+    const mapa = new Map();
+    horarios.forEach((h) => mapa.set(String(h.id), h));
+    return mapa;
+  }, [horarios]);
+
+  const clientesFiltrados = useMemo(() => {
+    const q = normalizar(busquedaCliente);
+    if (!q) return [];
+
+    return clientes
+      .filter((c) => {
+        const texto = normalizar(
+          `${c.nombre || ""} ${c.cedula || ""} ${c.telefono || ""}`
+        );
+        return texto.includes(q);
+      })
+      .slice(0, 8);
+  }, [clientes, busquedaCliente]);
+
+  const reservasFecha = useMemo(() => {
+    return reservas
+      .filter((r) => r.fecha_reserva === fechaAgenda)
+      .sort((a, b) =>
+        String(a.hora_inicio || "").localeCompare(String(b.hora_inicio || ""))
+      );
+  }, [reservas, fechaAgenda]);
+
+  const reservasActivas = useMemo(() => {
+    return reservas.filter((r) =>
+      ["confirmada", "pendiente_pago", "asistio", "no_asistio"].includes(
+        normalizar(r.estado)
+      )
+    );
+  }, [reservas]);
+
+  const reservasFechaOperativas = useMemo(() => {
+    return reservasFecha.filter(
+      (r) => normalizar(r.estado) !== "cancelada"
+    );
+  }, [reservasFecha]);
+
+  const reservasFiltradas = useMemo(() => {
+    const q = normalizar(busquedaReservas);
+    const estadoBuscado = normalizar(estadoReservaFiltro);
+
+    return reservas
+      .filter((reserva) => {
+        const estado = normalizar(reserva.estado);
+        const cliente = mapaClientes.get(String(reserva.cliente_id));
+        const servicio = mapaServicios.get(String(reserva.servicio_id));
+
+        const cumpleEstado =
+          estadoReservaFiltro === "Todos" ||
+          estado === estadoBuscado;
+
+        const texto = normalizar(
+          `${cliente?.nombre || ""} ${cliente?.cedula || ""} ${
+            cliente?.telefono || ""
+          } ${servicio?.nombre || ""} ${reserva.fecha_reserva || ""}`
+        );
+
+        const cumpleBusqueda = !q || texto.includes(q);
+
+        return cumpleEstado && cumpleBusqueda;
+      })
+      .sort((a, b) => {
+        const fechaA = `${a.fecha_reserva || ""} ${a.hora_inicio || ""}`;
+        const fechaB = `${b.fecha_reserva || ""} ${b.hora_inicio || ""}`;
+        return fechaB.localeCompare(fechaA);
+      });
+  }, [
+    reservas,
+    busquedaReservas,
+    estadoReservaFiltro,
+    mapaClientes,
+    mapaServicios,
+  ]);
+
+  const resumenReservas = useMemo(() => {
+    const base = reservasFechaOperativas;
+
+    return {
+      confirmadas: base.filter(
+        (r) => normalizar(r.estado) === "confirmada"
+      ).length,
+      pendientes: base.filter(
+        (r) => normalizar(r.estado) === "pendiente_pago"
+      ).length,
+      asistieron: base.filter(
+        (r) => normalizar(r.estado) === "asistio"
+      ).length,
+      noAsistieron: base.filter(
+        (r) => normalizar(r.estado) === "no_asistio"
+      ).length,
+    };
+  }, [reservasFechaOperativas]);
+
+  const resumenAgenda = useMemo(() => {
+    const capacidadTotal = disponibilidad.reduce(
+      (total, item) => total + Number(item.capacidad || 0),
+      0
+    );
+
+    const reservadosTotal = disponibilidad.reduce(
+      (total, item) => total + Number(item.reservados || 0),
+      0
+    );
+
+    const cuposDisponibles = disponibilidad.reduce(
+      (total, item) => total + Number(item.disponibles || 0),
+      0
+    );
+
+    const ocupacion =
+      capacidadTotal > 0
+        ? Math.round((reservadosTotal / capacidadTotal) * 100)
+        : 0;
+
+    return {
+      capacidadTotal,
+      reservadosTotal,
+      cuposDisponibles,
+      ocupacion,
+    };
+  }, [disponibilidad]);
+
+  const semanaAgenda = useMemo(() => {
+    const base = new Date(`${fechaAgenda}T12:00:00`);
+
+    if (Number.isNaN(base.getTime())) return [];
+
+    const diaActual = base.getDay();
+    const desplazamientoLunes =
+      diaActual === 0 ? -6 : 1 - diaActual;
+
+    const lunes = new Date(base);
+    lunes.setDate(base.getDate() + desplazamientoLunes);
+
+    return Array.from({ length: 7 }, (_, indice) => {
+      const fecha = new Date(lunes);
+      fecha.setDate(lunes.getDate() + indice);
+
+      const offset = fecha.getTimezoneOffset();
+      const iso = new Date(
+        fecha.getTime() - offset * 60000
+      )
+        .toISOString()
+        .slice(0, 10);
+
+      const nombre = new Intl.DateTimeFormat("es-PA", {
+        weekday: "short",
+      })
+        .format(fecha)
+        .replace(".", "")
+        .toUpperCase();
+
+      const mes = new Intl.DateTimeFormat("es-PA", {
+        month: "short",
+      })
+        .format(fecha)
+        .replace(".", "")
+        .toUpperCase();
+
+      return {
+        fecha: iso,
+        dia: nombre,
+        numero: fecha.getDate(),
+        mes,
+        seleccionado: iso === fechaAgenda,
+        hoy: iso === fechaHoy(),
+      };
+    });
+  }, [fechaAgenda]);
+
+  async function refrescarTodo() {
+    setGuardando(true);
+    setError("");
+
+    try {
+      await Promise.all([
+        cargarServicios(),
+        cargarHorarios(),
+        cargarClientes(),
+        cargarReservas(),
+        cargarDisponibilidad(),
+        cargarWods(),
+      ]);
+    } catch (err) {
+      setError(err?.message || "No se pudo actualizar Agenda.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function guardarServicio() {
+    if (!esAdmin) {
+      alert("Solo el administrador puede configurar servicios o clases.");
+      return;
+    }
+
+    if (!servicioForm.nombre.trim()) {
+      alert("Escribe el nombre del servicio o clase.");
+      return;
+    }
+
+    if (
+      servicioForm.requiere_pago &&
+      Number(servicioForm.precio || 0) <= 0
+    ) {
+      alert(
+        "Coloca el precio que se cobrará en Caja."
+      );
       return;
     }
 
     setGuardando(true);
     setError("");
 
-    const { data, error: rpcError } = await supabase.rpc(
-      "crear_reserva_agenda_publica",
-      {
-        p_slug: slug,
-        p_horario_id: horarioSeleccionado.horario_id,
-        p_fecha_reserva: fecha,
-        p_hora_inicio: horarioSeleccionado.hora_inicio,
-        p_nombre: nombre.trim(),
-        p_telefono: telefono.trim(),
-        p_observaciones: observaciones.trim() || null,
-      }
-    );
+    try {
+      const payload = {
+        empresa_id: empresaId,
+        nombre: servicioForm.nombre.trim(),
+        descripcion: servicioForm.descripcion.trim() || null,
+        tipo: servicioForm.tipo,
+        duracion_minutos: Number(servicioForm.duracion_minutos || 60),
+        capacidad_default: Number(servicioForm.capacidad_default || 1),
+        requiere_membresia: Boolean(servicioForm.requiere_membresia),
+        requiere_pago: Boolean(servicioForm.requiere_pago),
+        precio: servicioForm.requiere_pago
+          ? Number(servicioForm.precio || 0)
+          : 0,
+        activo: Boolean(servicioForm.activo),
+      };
 
-    if (rpcError || !data?.ok) {
-      setError(
-        mensajeError(rpcError) ||
-          data?.mensaje ||
-          "No se pudo reservar."
-      );
+      let respuesta;
+
+      if (servicioEditandoId) {
+        respuesta = await supabase
+          .from("agenda_servicios")
+          .update(payload)
+          .eq("empresa_id", empresaId)
+          .eq("id", servicioEditandoId);
+      } else {
+        respuesta = await supabase
+          .from("agenda_servicios")
+          .insert([payload]);
+      }
+
+      if (respuesta.error) throw respuesta.error;
+
+      setServicioForm(SERVICIO_INICIAL);
+      setServicioEditandoId(null);
+      await cargarServicios();
+      alert(servicioEditandoId ? "Servicio actualizado." : "Servicio creado.");
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || "No se pudo guardar el servicio.");
+    } finally {
       setGuardando(false);
+    }
+  }
+
+  function editarServicio(servicio) {
+    setServicioEditandoId(servicio.id);
+    setServicioForm({
+      nombre: servicio.nombre || "",
+      descripcion: servicio.descripcion || "",
+      tipo: servicio.tipo || "clase_grupal",
+      duracion_minutos: Number(servicio.duracion_minutos || 60),
+      capacidad_default: Number(servicio.capacidad_default || 1),
+      requiere_membresia: Boolean(servicio.requiere_membresia),
+      requiere_pago: Boolean(servicio.requiere_pago),
+      precio: Number(servicio.precio || 0),
+      activo: Boolean(servicio.activo),
+    });
+  }
+
+  async function alternarServicio(servicio) {
+    if (!esAdmin) return;
+
+    const { error } = await supabase
+      .from("agenda_servicios")
+      .update({ activo: !servicio.activo })
+      .eq("empresa_id", empresaId)
+      .eq("id", servicio.id);
+
+    if (error) {
+      alert(error.message);
       return;
     }
 
-    setReservaConfirmada(data);
+    await cargarServicios();
+  }
 
-    const { data: gestion } = await supabase.rpc(
-      "obtener_token_gestion_reserva_publica",
-      {
-        p_slug: slug,
-        p_reserva_id: data.reserva_id,
-        p_telefono: telefono.trim(),
-      }
-    );
-
-    if (gestion?.ok && gestion?.token) {
-      const tokenNuevo = String(gestion.token);
-
-      setTokenGestion(tokenNuevo);
-
-      try {
-        localStorage.setItem(
-          `konax_reserva_token_${slug}`,
-          tokenNuevo
-        );
-      } catch (err) {
-        console.warn("No se pudo guardar la cita:", err);
-      }
+  async function guardarHorario() {
+    if (!esAdmin) {
+      alert("Solo el administrador puede configurar horarios.");
+      return;
     }
 
-    await cargarDisponibilidad(fecha);
-
-    if (perfilGimnasio && servicioSeleccionado?.id) {
-      await cargarWodPublico(fecha, servicioSeleccionado.id);
+    if (!horarioForm.servicio_id) {
+      alert("Selecciona un servicio o clase.");
+      return;
     }
 
-    setGuardando(false);
-    setPaso(5);
+    if (!horarioForm.hora_inicio || !horarioForm.hora_fin) {
+      alert("Completa la hora de inicio y fin.");
+      return;
+    }
 
-    setTimeout(() => {
-      document.getElementById("confirmacion-cita")?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
+    setGuardando(true);
+    setError("");
+
+    try {
+      const payload = {
+        empresa_id: empresaId,
+        servicio_id: horarioForm.servicio_id,
+        dia_semana: Number(horarioForm.dia_semana),
+        hora_inicio: horarioForm.hora_inicio,
+        hora_fin: horarioForm.hora_fin,
+        instructor: horarioForm.instructor.trim() || null,
+        capacidad: Number(horarioForm.capacidad || 1),
+        fecha_desde: horarioForm.fecha_desde || fechaHoy(),
+        fecha_hasta: horarioForm.fecha_hasta || null,
+        activo: Boolean(horarioForm.activo),
+      };
+
+      let respuesta;
+
+      if (horarioEditandoId) {
+        respuesta = await supabase
+          .from("agenda_horarios")
+          .update(payload)
+          .eq("empresa_id", empresaId)
+          .eq("id", horarioEditandoId);
+      } else {
+        respuesta = await supabase
+          .from("agenda_horarios")
+          .insert([payload]);
+      }
+
+      if (respuesta.error) throw respuesta.error;
+
+      setHorarioForm(HORARIO_INICIAL);
+      setHorarioEditandoId(null);
+      await cargarHorarios();
+      await cargarDisponibilidad();
+      alert(horarioEditandoId ? "Horario actualizado." : "Horario creado.");
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || "No se pudo guardar el horario.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  function editarHorario(horario) {
+    setHorarioEditandoId(horario.id);
+    setHorarioForm({
+      servicio_id: horario.servicio_id || "",
+      dia_semana: Number(horario.dia_semana ?? 5),
+      hora_inicio: String(horario.hora_inicio || "18:00").slice(0, 5),
+      hora_fin: String(horario.hora_fin || "19:00").slice(0, 5),
+      instructor: horario.instructor || "",
+      capacidad: Number(horario.capacidad || 1),
+      fecha_desde: horario.fecha_desde || fechaHoy(),
+      fecha_hasta: horario.fecha_hasta || "",
+      activo: Boolean(horario.activo),
+    });
+  }
+
+  async function alternarHorario(horario) {
+    if (!esAdmin) return;
+
+    const { error } = await supabase
+      .from("agenda_horarios")
+      .update({ activo: !horario.activo })
+      .eq("empresa_id", empresaId)
+      .eq("id", horario.id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    await cargarHorarios();
+    await cargarDisponibilidad();
+  }
+
+  async function crearReserva() {
+    if (!clienteSeleccionado?.id) {
+      alert("Selecciona un alumno.");
+      return;
+    }
+
+    if (!horarioSeleccionado) {
+      alert("Selecciona un horario disponible.");
+      return;
+    }
+
+    setGuardando(true);
+    setError("");
+
+    try {
+      const { data, error } = await supabase.rpc("crear_reserva_agenda", {
+        p_empresa_id: empresaId,
+        p_horario_id: horarioSeleccionado,
+        p_cliente_id: clienteSeleccionado.id,
+        p_fecha_reserva: fechaAgenda,
+        p_observaciones: observaciones.trim() || null,
       });
-    }, 80);
+
+      if (error) throw error;
+
+      const resultado = data || {};
+
+      setClienteSeleccionado(null);
+      setBusquedaCliente("");
+      setHorarioSeleccionado("");
+      setObservaciones("");
+
+      await Promise.all([
+        cargarReservas(),
+        cargarDisponibilidad(),
+      ]);
+
+      if (resultado.estado === "pendiente_pago") {
+        alert(
+          `Reserva creada. Este servicio requiere pago de $${Number(
+            resultado.monto || 0
+          ).toFixed(2)}.`
+        );
+      } else {
+        alert(
+          `Reserva confirmada. Quedan ${resultado.disponibles ?? 0} cupos disponibles.`
+        );
+      }
+
+      setVista("hoy");
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || "No se pudo crear la reserva.");
+    } finally {
+      setGuardando(false);
+    }
   }
 
-  function abrirMiCita() {
-    let token = tokenGestion;
-
-    if (!token) {
-      try {
-        token = localStorage.getItem(
-          `konax_reserva_token_${slug}`
-        );
-      } catch (err) {
-        console.warn("No se pudo leer la cita guardada:", err);
-      }
-    }
-
-    if (token) {
-      window.location.href = `/reservar/${slug}?cita=${token}`;
+  function cobrarReserva(reserva) {
+    if (!reserva?.id || !reserva?.cliente_id) {
+      alert("No se pudo identificar la reserva.");
       return;
     }
 
-    setMostrarAvisoMiCita(true);
-  }
-
-  async function cancelarMiCita() {
-    if (!miCita?.puede_cancelar) return;
-
-    if (!telefonoGestion.trim()) {
-      setError(
-        "Escribe el teléfono utilizado en la cita para confirmar la cancelación."
+    if (
+      normalizar(reserva.estado) !==
+      "pendiente_pago"
+    ) {
+      alert(
+        "Esta reserva ya no se encuentra pendiente de pago."
       );
       return;
     }
 
+    const parametros = new URLSearchParams({
+      clienteId: String(reserva.cliente_id),
+      agendaReservaId: String(reserva.id),
+      flujo: "agenda",
+    });
+
+    window.location.href =
+      `/caja?${parametros.toString()}`;
+  }
+
+  async function cancelarReserva(reserva) {
     const confirmar = window.confirm(
-      "¿Seguro que deseas cancelar esta cita? El horario quedará disponible inmediatamente."
+      "¿Deseas cancelar esta reserva?"
     );
 
     if (!confirmar) return;
 
-    setCancelando(true);
-    setError("");
+    setGuardando(true);
 
-    const { data, error: rpcError } = await supabase.rpc(
-      "cancelar_reserva_agenda_publica",
-      {
-        p_slug: slug,
-        p_token: tokenUrl,
-        p_telefono: telefonoGestion.trim(),
-        p_motivo: motivoCancelacion.trim() || null,
-      }
-    );
+    try {
+      const { error } = await supabase.rpc("cancelar_reserva_agenda", {
+        p_empresa_id: empresaId,
+        p_reserva_id: reserva.id,
+      });
 
-    if (rpcError || !data?.ok) {
-      setError(
-        mensajeError(rpcError) ||
-          data?.mensaje ||
-          "No se pudo cancelar la cita."
-      );
-      setCancelando(false);
-      return;
+      if (error) throw error;
+
+      await Promise.all([
+        cargarReservas(),
+        cargarDisponibilidad(),
+      ]);
+    } catch (err) {
+      alert(err?.message || "No se pudo cancelar la reserva.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function marcarAsistencia(reserva, asistio) {
+    setGuardando(true);
+
+    try {
+      const { error } = await supabase.rpc("marcar_asistencia_agenda", {
+        p_empresa_id: empresaId,
+        p_reserva_id: reserva.id,
+        p_asistio: asistio,
+      });
+
+      if (error) throw error;
+
+      await cargarReservas();
+    } catch (err) {
+      alert(err?.message || "No se pudo registrar la asistencia.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  function nombreCliente(id) {
+    return mapaClientes.get(String(id))?.nombre || "Cliente";
+  }
+
+  function nombreDeReserva(reserva) {
+    const nombreGuardado = String(
+      reserva?.nombre_reserva || ""
+    ).trim();
+
+    if (nombreGuardado) {
+      return nombreGuardado;
     }
 
-    await Promise.all([
-      cargarMiCita(tokenUrl),
-      cargarDisponibilidad(miCita.fecha || fecha),
-    ]);
-
-    setCancelando(false);
+    return nombreCliente(reserva?.cliente_id);
   }
 
-  function reservarOtraCita() {
-    setMostrarNuevaCita(true);
-    setMiCita(null);
-    reiniciarFlujo();
+  function nombreServicio(id) {
+    return mapaServicios.get(String(id))?.nombre || "Servicio";
   }
 
-  function enlaceGestion() {
-    if (!tokenGestion || typeof window === "undefined") return "";
-    return `${window.location.origin}/reservar/${slug}?cita=${tokenGestion}`;
+  function moverFechaAgenda(dias) {
+    const base = new Date(`${fechaAgenda}T12:00:00`);
+
+    if (Number.isNaN(base.getTime())) return;
+
+    base.setDate(base.getDate() + dias);
+
+    const offset = base.getTimezoneOffset();
+    const nuevaFecha = new Date(
+      base.getTime() - offset * 60000
+    )
+      .toISOString()
+      .slice(0, 10);
+
+    setFechaAgenda(nuevaFecha);
+    setHorarioSeleccionado("");
   }
+
+  function irAgendaHoy() {
+    setFechaAgenda(fechaHoy());
+    setHorarioSeleccionado("");
+  }
+
+  function detalleHorario(id) {
+    const h = mapaHorarios.get(String(id));
+    if (!h) return "";
+    return `${nombreDia(h.dia_semana)} · ${formatoHora(h.hora_inicio)}`;
+  }
+
+  const esGimnasio = esTipoGimnasio(tipoNegocio, categoriaNegocio);
+
+  const wodsFecha = useMemo(() =>
+    wods.filter((wod) => String(wod.fecha || "").slice(0,10) === fechaAgenda),
+    [wods, fechaAgenda]
+  );
 
   if (cargando) {
     return (
-      <main className="kp-loading">
-        <img src="/konax-logo.png" alt="KONAX" />
-        <strong>Preparando agenda...</strong>
+      <main style={s.loading}>
+        <div style={s.spinner} />
+        <strong>Cargando Agenda...</strong>
       </main>
     );
   }
-
-  if (!portal?.ok) {
-    return (
-      <main className="kp-loading">
-        <div className="kp-error-card">
-          <strong>Reservas no disponibles</strong>
-          <span>{error}</span>
-        </div>
-      </main>
-    );
-  }
-
-  const nombreNegocio =
-    identidadEmpresa?.empresa_nombre ||
-    portal.titulo_publico ||
-    portal.empresa_nombre ||
-    "Negocio";
-
-  const logoNegocio =
-    identidadEmpresa?.logo_url || "";
 
   return (
-    <main className={`kp-page ${tema === "oscuro" ? "kp-dark" : ""}`}>
-      <style>{CSS}</style>
+    <main style={s.page} className="agenda-page">
+      <style>{AGENDA_CSS}</style>
 
-      <div className="kp-shell">
-        <header className="kp-topbar">
+      <header style={neo.hero} className="agenda-d-hero">
+        <div style={neo.heroMain}>
+          <div style={neo.brandRow}>
+            <div style={neo.logoCard}>
+              <img
+                src="/konax-logo.png"
+                alt="KONAX"
+                style={neo.logo}
+              />
+            </div>
+
+            <div>
+              <span style={neo.heroEyebrow}>
+                KONAX · RESERVAS Y CLASES
+              </span>
+              <h1 style={neo.heroTitle}>
+                Centro de Agenda
+              </h1>
+              <p style={neo.heroSubtitle}>
+                {empresaNombre || "KONAX"} · Controla horarios,
+                capacidad, reservas y asistencia desde una vista
+                operativa más clara.
+              </p>
+            </div>
+          </div>
+
+          <div style={neo.heroActions}>
+            <button
+              type="button"
+              style={neo.heroGhost}
+              onClick={() => (window.location.href = "/dashboard")}
+            >
+              ← Panel principal
+            </button>
+
+            <button
+              type="button"
+              style={neo.heroPrimary}
+              onClick={() => setVista("nueva")}
+            >
+              + Crear reserva
+            </button>
+          </div>
+        </div>
+
+        <div style={neo.heroSide}>
+          <span style={neo.heroSideLabel}>
+            FECHA EN OPERACIÓN
+          </span>
+          <strong style={neo.heroSideDate}>
+            {formatoFecha(fechaAgenda)}
+          </strong>
+
+          <div style={neo.heroSideStats}>
+            <div>
+              <span style={neo.heroSideMini}>Ocupación</span>
+              <strong style={neo.heroSideValue}>
+                {resumenAgenda.ocupacion}%
+              </strong>
+            </div>
+
+            <div>
+              <span style={neo.heroSideMini}>Reservas</span>
+              <strong style={neo.heroSideValue}>
+                {reservasFechaOperativas.length}
+              </strong>
+            </div>
+          </div>
+
+          <span style={neo.roleBadge}>
+            {esAdmin ? "Administrador" : rol || "Usuario"}
+          </span>
+        </div>
+      </header>
+
+      {error && <div style={s.error}>{error}</div>}
+
+      <section style={neo.nav} className="agenda-d-nav">
+        <button
+          type="button"
+          onClick={() => setVista("hoy")}
+          style={{
+            ...neo.navItem,
+            ...(vista === "hoy" ? neo.navItemActive : {}),
+          }}
+        >
+          <span>▦</span>
+          Agenda
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setVista("nueva")}
+          style={{
+            ...neo.navItem,
+            ...(vista === "nueva" ? neo.navItemActive : {}),
+          }}
+        >
+          <span>＋</span>
+          Nueva reserva
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setVista("reservas")}
+          style={{
+            ...neo.navItem,
+            ...(vista === "reservas" ? neo.navItemActive : {}),
+          }}
+        >
+          <span>≡</span>
+          Reservas
+        </button>
+
+        {esGimnasio && (
           <button
             type="button"
-            className="kp-back"
-            onClick={() => {
-              if (tokenUrl) {
-                window.location.href = `/reservar/${slug}`;
-                return;
-              }
-
-              if (paso > 1 && paso < 5) {
-                setPaso((actual) => actual - 1);
-                setError("");
-                return;
-              }
-
-              window.scrollTo({ top: 0, behavior: "smooth" });
+            onClick={() => setVista("wod")}
+            style={{
+              ...neo.navItem,
+              ...(vista === "wod" ? neo.navItemActive : {}),
             }}
           >
-            ‹
+            <span>W</span>
+            WOD
           </button>
-
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            className="kp-top-logo"
-          />
-
-          <div className="kp-top-icons">
-            <button
-              type="button"
-              className={tema === "oscuro" ? "active" : ""}
-              onClick={() => {
-                setTema("oscuro");
-                setMenuAbierto(false);
-              }}
-              aria-label="Modo oscuro"
-              title="Modo oscuro"
-            >
-              ☾
-            </button>
-
-            <button
-              type="button"
-              className={tema === "claro" ? "active" : ""}
-              onClick={() => {
-                setTema("claro");
-                setMenuAbierto(false);
-              }}
-              aria-label="Modo claro"
-              title="Modo claro"
-            >
-              ☀
-            </button>
-
-            <button
-              type="button"
-              className={menuAbierto ? "active" : ""}
-              onClick={() => setMenuAbierto((actual) => !actual)}
-              aria-label="Abrir menú"
-              title="Menú"
-            >
-              ☰
-            </button>
-          </div>
-
-          {menuAbierto && (
-            <div className="kp-menu">
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuAbierto(false);
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
-              >
-                ⌂ Inicio
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuAbierto(false);
-                  document
-                    .getElementById("flujo-reserva")
-                    ?.scrollIntoView({
-                      behavior: "smooth",
-                      block: "start",
-                    });
-                }}
-              >
-                {perfilGimnasio ? "▣ Reservar clase" : "▣ Reservar"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuAbierto(false);
-                  abrirMiCita();
-                }}
-              >
-                {perfilGimnasio ? "▤ Mi reserva" : "▤ Mi cita"}
-              </button>
-            </div>
-          )}
-        </header>
-
-
-        {error && (
-          <div className="kp-error">
-            {error}
-          </div>
         )}
 
-        {tokenUrl && miCita ? (
-          <section className="kp-manage">
-            <span className="kp-eyebrow-dark">
-              {perfilGimnasio ? "GESTIONAR MI RESERVA" : "GESTIONAR MI CITA"}
-            </span>
-
-            <h2>{miCita.servicio}</h2>
-
-            <div className="kp-data-grid">
-              <Dato label="Cliente" value={miCita.cliente} />
-              <Dato label="Fecha" value={formatoFecha(miCita.fecha)} />
-              <Dato
-                label="Horario"
-                value={`${formatoHora(
-                  miCita.hora_inicio
-                )} – ${formatoHora(miCita.hora_fin)}`}
-              />
-              <Dato
-                label={perfilBelleza ? "Profesional" : "Instructor"}
-                value={miCita.profesional || "Por confirmar"}
-              />
-              <Dato
-                label="Estado"
-                value={String(miCita.estado || "")
-                  .replaceAll("_", " ")
-                  .toUpperCase()}
-              />
-            </div>
-
-            {miCita.estado === "cancelada" ? (
-              <div className="kp-cancelled">
-                {perfilGimnasio
-                  ? "Esta reserva está cancelada. El cupo quedó disponible nuevamente."
-                  : "Esta cita está cancelada. El horario quedó disponible nuevamente."}
-              </div>
-            ) : miCita.puede_cancelar ? (
-              <div className="kp-cancel-box">
-                <label>
-                  <span>Teléfono de la cita</span>
-                  <input
-                    value={telefonoGestion}
-                    onChange={(e) =>
-                      setTelefonoGestion(e.target.value)
-                    }
-                    placeholder="Ej. 6000-0000"
-                  />
-                </label>
-
-                <label>
-                  <span>Motivo de cancelación (opcional)</span>
-                  <input
-                    value={motivoCancelacion}
-                    onChange={(e) =>
-                      setMotivoCancelacion(e.target.value)
-                    }
-                    placeholder="Ej. No podré llegar"
-                  />
-                </label>
-
-                <button
-                  type="button"
-                  className="kp-danger"
-                  onClick={cancelarMiCita}
-                  disabled={cancelando}
-                >
-                  {cancelando ? "Cancelando..." : "Cancelar mi cita"}
-                </button>
-              </div>
-            ) : (
-              <div className="kp-info">
-                {perfilGimnasio
-                  ? "Esta reserva ya no puede cancelarse desde autoservicio."
-                  : "Esta cita ya no puede cancelarse desde autoservicio."}
-              </div>
-            )}
-
-            <button
-              type="button"
-              className="kp-secondary"
-              onClick={reservarOtraCita}
-            >
-              {perfilGimnasio ? "+ Reservar otra clase" : "{perfilGimnasio ? "+ Reservar otra clase" : "+ Reservar otra cita"}"}
-            </button>
-
-            <button
-              type="button"
-              className="kp-link"
-              onClick={() =>
-                (window.location.href = `/reservar/${slug}`)
-              }
-            >
-              Volver al portal
-            </button>
-          </section>
-        ) : (
-          <section
-            id="flujo-reserva"
-            className="kp-flow"
+        {esAdmin && (
+          <button
+            type="button"
+            onClick={() => setVista("configuracion")}
+            style={{
+              ...neo.navItem,
+              ...(vista === "configuracion"
+                ? neo.navItemActive
+                : {}),
+            }}
           >
-            <div className="kp-business-window">
-              <div className="kp-business-logo-box">
-                {logoNegocio ? (
-                  <img
-                    src={logoNegocio}
-                    alt={nombreNegocio}
-                    className="kp-business-logo"
-                  />
-                ) : (
-                  <span className="kp-business-placeholder">🏢</span>
-                )}
+            <span>⚙</span>
+            Clases y horarios
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={refrescarTodo}
+          disabled={guardando}
+          style={neo.navRefresh}
+        >
+          {guardando ? "Actualizando..." : "↻ Actualizar"}
+        </button>
+      </section>
+
+      {vista === "hoy" && (
+        <>
+          <section style={neo.weekShell} className="agenda-d-week-shell">
+            <div style={neo.weekHeader}>
+              <div>
+                <span style={neo.sectionEyebrow}>
+                  SEMANA OPERATIVA
+                </span>
+                <h2 style={neo.sectionTitle}>
+                  Selecciona el día que deseas gestionar
+                </h2>
               </div>
 
-              <div className="kp-business-window-info">
-                <strong>{nombreNegocio}</strong>
-                <span>
-                  {perfilGimnasio
-                    ? "Reserva tus clases en línea"
-                    : "Reserva en línea"}
-                </span>
+              <div style={neo.weekControls}>
+                <button
+                  type="button"
+                  style={neo.roundButton}
+                  onClick={() => moverFechaAgenda(-7)}
+                >
+                  ←
+                </button>
+
+                <button
+                  type="button"
+                  style={neo.todayPill}
+                  onClick={irAgendaHoy}
+                >
+                  Hoy
+                </button>
+
+                <button
+                  type="button"
+                  style={neo.roundButton}
+                  onClick={() => moverFechaAgenda(7)}
+                >
+                  →
+                </button>
               </div>
             </div>
 
-            <Stepper paso={paso} gimnasio={perfilGimnasio} />
-
-            {paso === 1 && (
-              <div>
-                <span className="kp-eyebrow-dark">
-                  PASO 1 DE 4
-                </span>
-                <h2>{perfilGimnasio ? "Clases" : "Servicios"}</h2>
-                <p className="kp-muted">
-                  {perfilGimnasio
-                    ? "Selecciona la clase o programa que deseas reservar."
-                    : "Selecciona el servicio que deseas."}
-                </p>
-
-                {cargandoHorarios ? (
-                  <div className="kp-empty">
-                    Consultando servicios...
-                  </div>
-                ) : servicios.length === 0 ? (
-                  <div className="kp-empty">
-                    <strong>
-                      {perfilGimnasio
-                        ? "No hay clases disponibles hoy."
-                        : "No hay servicios disponibles hoy."}
-                    </strong>
-                    <span>
-                      {buscandoFechas
-                        ? " Buscando próximas fechas..."
-                        : fechasConDisponibilidad.length > 0
-                        ? ` Próxima fecha disponible: ${formatoFecha(
-                            fechasConDisponibilidad[0]
-                          )}.`
-                        : " No hay fechas disponibles en los próximos días."}
-                    </span>
-
-                    {fechasConDisponibilidad.length > 0 && (
-                      <button
-                        type="button"
-                        className="kp-empty-action"
-                        onClick={async () => {
-                          const proxima = fechasConDisponibilidad[0];
-                          setFecha(proxima);
-                          setError("");
-
-                          const { data, error: rpcError } = await supabase.rpc(
-                            "obtener_disponibilidad_agenda_publica",
-                            {
-                              p_slug: slug,
-                              p_fecha: proxima,
-                            }
-                          );
-
-                          if (rpcError) {
-                            setError(mensajeError(rpcError));
-                            return;
-                          }
-
-                          setHorarios(Array.isArray(data) ? data : []);
-                        }}
-                      >
-                        Ver próxima fecha
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="kp-service-list">
-                    {servicios.map((servicio) => (
-                      <article
-                        key={servicio.id}
-                        className="kp-service"
-                      >
-                        <div className="kp-service-icon">
-                          {perfilGimnasio
-                            ? normalizar(servicio.nombre).includes("cross")
-                              ? "🏋"
-                              : normalizar(servicio.nombre).includes("yoga")
-                              ? "🧘"
-                              : "💪"
-                            : normalizar(servicio.nombre).includes("manicure") ||
-                              normalizar(servicio.nombre).includes("uña")
-                            ? "💅"
-                            : normalizar(servicio.nombre).includes("color")
-                            ? "👩"
-                            : "✂"}
-                        </div>
-
-                        <div className="kp-service-info">
-                          <strong>{servicio.nombre}</strong>
-                          <span>{servicio.duracion} min</span>
-
-                          {servicio.descripcion && (
-                            <small>{servicio.descripcion}</small>
-                          )}
-
-                          {servicio.requierePago && (
-                            <b>
-                              desde {dinero(servicio.precio)}
-                            </b>
-                          )}
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => elegirServicio(servicio)}
-                        >
-                          {perfilGimnasio ? "Ver clase" : "Reservar"}
-                        </button>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {paso === 2 && servicioSeleccionado && (
-              <div>
+            <div style={neo.weekStrip} className="agenda-d-week-strip">
+              {semanaAgenda.map((dia) => (
                 <button
+                  key={dia.fecha}
                   type="button"
-                  className="kp-blue-link"
-                  onClick={() => setPaso(1)}
+                  onClick={() => {
+                    setFechaAgenda(dia.fecha);
+                    setHorarioSeleccionado("");
+                  }}
+                  style={{
+                    ...neo.dayCard,
+                    ...(dia.seleccionado
+                      ? neo.dayCardActive
+                      : {}),
+                  }}
                 >
-                  {perfilGimnasio ? "‹ Cambiar clase" : "‹ Cambiar servicio"}
-                </button>
-
-                <span className="kp-eyebrow-dark">
-                  PASO 2 DE 4
-                </span>
-
-                <h2>{perfilGimnasio ? "Seleccionar instructor" : "Seleccionar profesional"}</h2>
-
-                <ServicioResumen servicio={servicioSeleccionado} />
-
-                <div className="kp-prof-list">
-                  <button
-                    type="button"
-                    className="kp-prof"
-                    onClick={() =>
-                      elegirProfesional("sin-preferencia")
-                    }
+                  <span
+                    style={{
+                      ...neo.dayName,
+                      ...(dia.seleccionado
+                        ? neo.dayTextActive
+                        : {}),
+                    }}
                   >
-                    <span className="kp-avatar">↝</span>
-
-                    <span className="kp-prof-info">
-                      <strong>
-                        {perfilGimnasio ? "Cualquier instructor" : "Sin preferencia"}
-                      </strong>
-                      <small>Máxima disponibilidad</small>
-                    </span>
-
-                    <span className="kp-select">
-                      Seleccionar
-                    </span>
-                  </button>
-
-                  {profesionales.map((profesional) => (
-                    <button
-                      key={profesional.id}
-                      type="button"
-                      className="kp-prof"
-                      onClick={() =>
-                        elegirProfesional(profesional.id)
-                      }
-                    >
-                      <span className="kp-avatar">
-                        {inicialNombre(profesional.nombre)}
-                      </span>
-
-                      <span className="kp-prof-info">
-                        <strong>{profesional.nombre}</strong>
-                        <small>
-                          {perfilBelleza
-                            ? "Profesional"
-                            : "Instructor"}
-                        </small>
-                      </span>
-
-                      <span className="kp-select">
-                        Seleccionar
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {paso === 3 && servicioSeleccionado && (
-              <div>
-                <button
-                  type="button"
-                  className="kp-blue-link"
-                  onClick={() => setPaso(2)}
-                >
-                  {perfilGimnasio ? "‹ Cambiar instructor" : "‹ Cambiar profesional"}
-                </button>
-
-                <span className="kp-eyebrow-dark">
-                  PASO 3 DE 4
-                </span>
-
-                <h2>Seleccionar fecha y hora</h2>
-
-                <div className="kp-booking-head">
-                  <div className="kp-booking-business">
-                    <div className="kp-mini-avatar">
-                      {profesionalSeleccionado === "sin-preferencia"
-                        ? "↝"
-                        : inicialNombre(profesionalResumen)}
-                    </div>
-
-                    <div>
-                      <strong>{profesionalResumen}</strong>
-                      <small>
-                        {servicioSeleccionado.nombre} ·{" "}
-                        {servicioSeleccionado.duracion} min
-                        {servicioSeleccionado.requierePago
-                          ? ` · ${dinero(servicioSeleccionado.precio)}`
-                          : ""}
-                      </small>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="kp-date-strip-wrap">
-                  <div className="kp-date-strip">
-                    {(fechasConDisponibilidad.length > 0
-                      ? fechasConDisponibilidad
-                      : dias
-                    ).map((dia) => {
-                      const activo = dia === fecha;
-                      const d = new Date(`${dia}T12:00:00`);
-
-                      return (
-                        <button
-                          key={dia}
-                          type="button"
-                          className={`kp-date-pill ${
-                            activo ? "active" : ""
-                          }`}
-                          onClick={() => elegirFecha(dia)}
-                        >
-                          <span>
-                            {new Intl.DateTimeFormat("es-PA", {
-                              weekday: "short",
-                            }).format(d)}
-                          </span>
-
-                          <strong>{d.getDate()}</strong>
-
-                          <span>
-                            {new Intl.DateTimeFormat("es-PA", {
-                              month: "short",
-                            }).format(d)}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <h3 className="kp-time-title">Escoge una hora</h3>
-
-                {cargandoHorarios ? (
-                  <div className="kp-empty">
-                    Consultando horarios...
-                  </div>
-                ) : slotsDisponibles.length === 0 ? (
-                  <div className="kp-empty">
-                    No hay horas disponibles para esta fecha.
-                  </div>
-                ) : (
-                  <div className="kp-time-cards">
-                    {slotsDisponibles.map((slot) => {
-                      const activo =
-                        claveSlot(horarioSeleccionado) ===
-                        claveSlot(slot);
-
-                      return (
-                        <button
-                          key={claveSlot(slot)}
-                          type="button"
-                          className={`kp-time-card ${
-                            activo ? "active" : ""
-                          }`}
-                          onClick={() =>
-                            setHorarioSeleccionado(slot)
-                          }
-                        >
-                          {formatoHora(slot.hora_inicio)}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {horarioSeleccionado && (
-                  <button
-                    type="button"
-                    className="kp-continue kp-continue-fixed"
-                    onClick={continuarFechaHora}
-                  >
-                    <span className="kp-continue-detail">
-                      {servicioSeleccionado.requierePago
-                        ? `${dinero(
-                            servicioSeleccionado.precio
-                          )} · ${servicioSeleccionado.duracion} min`
-                        : `${servicioSeleccionado.duracion} min`}
-                    </span>
-
-                    <strong className="kp-continue-action">
-                      Continuar <b>›</b>
-                    </strong>
-                  </button>
-                )}
-              </div>
-            )}
-
-            {paso === 4 &&
-              servicioSeleccionado &&
-              horarioSeleccionado && (
-                <div>
-                  <button
-                    type="button"
-                    className="kp-blue-link"
-                    onClick={() => setPaso(3)}
-                  >
-                    ‹ Cambiar fecha u hora
-                  </button>
-
-                  <span className="kp-eyebrow-dark">
-                    PASO 4 DE 4
+                    {dia.dia}
                   </span>
 
-                  <h2>Resumen de tu reserva</h2>
-
-                  <div className="kp-summary">
-                    <ResumenFila
-                      label="Negocio"
-                      value={nombreNegocio}
-                    />
-                    <ResumenFila
-                      label={perfilGimnasio ? "Clase" : "Servicio"}
-                      value={servicioSeleccionado.nombre}
-                    />
-                    <ResumenFila
-                      label={perfilGimnasio ? "Instructor" : "Profesional"}
-                      value={profesionalResumen}
-                    />
-                    <ResumenFila
-                      label="Duración"
-                      value={`${servicioSeleccionado.duracion} min`}
-                    />
-                    <ResumenFila
-                      label="Fecha"
-                      value={formatoFecha(fecha)}
-                    />
-                    <ResumenFila
-                      label="Hora"
-                      value={formatoHora(
-                        horarioSeleccionado.hora_inicio
-                      )}
-                    />
-
-                    {servicioSeleccionado.requierePago && (
-                      <ResumenFila
-                        label="Precio"
-                        value={dinero(servicioSeleccionado.precio)}
-                        destacado
-                      />
-                    )}
-                  </div>
-
-                  <div className="kp-note">
-                    Completa tus datos para finalizar la reserva.
-                  </div>
-
-                  <form
-                    className="kp-form"
-                    onSubmit={confirmarReserva}
+                  <strong
+                    style={{
+                      ...neo.dayNumber,
+                      ...(dia.seleccionado
+                        ? neo.dayTextActive
+                        : {}),
+                    }}
                   >
-                    <label>
-                      <span>Nombre completo</span>
-                      <input
-                        value={nombre}
-                        onChange={(e) =>
-                          setNombre(e.target.value)
-                        }
-                        placeholder="Nombre del cliente"
-                      />
-                    </label>
+                    {dia.numero}
+                  </strong>
 
-                    <label>
-                      <span>WhatsApp / teléfono</span>
-                      <input
-                        value={telefono}
-                        onChange={(e) =>
-                          setTelefono(e.target.value)
-                        }
-                        placeholder="6000-0000"
-                      />
-                    </label>
+                  <span
+                    style={{
+                      ...neo.dayMonth,
+                      ...(dia.seleccionado
+                        ? neo.dayTextActive
+                        : {}),
+                    }}
+                  >
+                    {dia.mes}
+                  </span>
 
-                    <label>
-                      <span>Observaciones (opcional)</span>
-                      <textarea
-                        value={observaciones}
-                        onChange={(e) =>
-                          setObservaciones(e.target.value)
-                        }
-                        placeholder="Alguna indicación para el negocio"
-                      />
-                    </label>
-
-                    <button
-                      className="kp-confirm"
-                      disabled={guardando}
+                  {dia.hoy && (
+                    <span
+                      style={{
+                        ...neo.todayDot,
+                        ...(dia.seleccionado
+                          ? neo.todayDotActive
+                          : {}),
+                      }}
                     >
-                      {guardando
-                        ? "Reservando..."
-                        : "Reservar ahora →"}
+                      HOY
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section style={neo.kpiGrid} className="agenda-d-kpis">
+            <article style={neo.kpiCard}>
+              <span style={neo.kpiCaption}>CLASES</span>
+              <div style={neo.kpiBody}>
+                <strong style={neo.kpiNumber}>
+                  {disponibilidad.length}
+                </strong>
+                <span style={neo.kpiHint}>
+                  programadas
+                </span>
+              </div>
+            </article>
+
+            <article style={neo.kpiCard}>
+              <span style={neo.kpiCaption}>RESERVAS</span>
+              <div style={neo.kpiBody}>
+                <strong style={neo.kpiNumber}>
+                  {reservasFechaOperativas.length}
+                </strong>
+                <span style={neo.kpiHint}>
+                  activas hoy
+                </span>
+              </div>
+            </article>
+
+            <article style={neo.kpiCard}>
+              <span style={neo.kpiCaption}>CUPOS LIBRES</span>
+              <div style={neo.kpiBody}>
+                <strong style={neo.kpiNumber}>
+                  {resumenAgenda.cuposDisponibles}
+                </strong>
+                <span style={neo.kpiHint}>
+                  disponibles
+                </span>
+              </div>
+            </article>
+
+            <article style={neo.kpiCardAccent}>
+              <span style={neo.kpiCaptionAccent}>
+                OCUPACIÓN
+              </span>
+              <div style={neo.kpiBody}>
+                <strong style={neo.kpiNumberAccent}>
+                  {resumenAgenda.ocupacion}%
+                </strong>
+                <span style={neo.kpiHintAccent}>
+                  de la capacidad
+                </span>
+              </div>
+            </article>
+          </section>
+
+          <section style={neo.commandGrid} className="agenda-d-command-grid">
+            <article style={neo.schedulePanel}>
+              <div style={neo.panelTop}>
+                <div>
+                  <span style={neo.sectionEyebrow}>
+                    PROGRAMACIÓN DEL DÍA
+                  </span>
+                  <h2 style={neo.panelHeading}>
+                    Horarios y capacidad
+                  </h2>
+                </div>
+
+                <div style={neo.dateInline}>
+                  <button
+                    type="button"
+                    onClick={() => moverFechaAgenda(-1)}
+                    style={neo.dateArrow}
+                  >
+                    ‹
+                  </button>
+
+                  <input
+                    type="date"
+                    value={fechaAgenda}
+                    onChange={(e) => {
+                      setFechaAgenda(e.target.value);
+                      setHorarioSeleccionado("");
+                    }}
+                    style={neo.dateInput}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => moverFechaAgenda(1)}
+                    style={neo.dateArrow}
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+
+              {disponibilidad.length === 0 ? (
+                <div style={neo.emptyLarge}>
+                  <div style={neo.emptyIcon}>◷</div>
+                  <strong style={neo.emptyTitle}>
+                    No hay clases programadas
+                  </strong>
+                  <span style={neo.emptyText}>
+                    Selecciona otra fecha o crea un horario
+                    desde Clases y horarios.
+                  </span>
+
+                  {esAdmin && (
+                    <button
+                      type="button"
+                      style={neo.emptyButton}
+                      onClick={() => setVista("configuracion")}
+                    >
+                      Configurar horario
                     </button>
-                  </form>
+                  )}
+                </div>
+              ) : (
+                <div style={neo.timeline}>
+                  {disponibilidad.map((item, index) => {
+                    const capacidad = Number(item.capacidad || 0);
+                    const reservados = Number(item.reservados || 0);
+                    const libres = Number(item.disponibles || 0);
+                    const porcentaje =
+                      capacidad > 0
+                        ? Math.min(
+                            100,
+                            Math.round(
+                              (reservados / capacidad) * 100
+                            )
+                          )
+                        : 0;
+
+                    const lleno = libres <= 0;
+
+                    return (
+                      <div
+                        key={item.horario_id}
+                        style={neo.timelineRow}
+                        className="agenda-d-timeline-row"
+                      >
+                        <div style={neo.timelineRail}>
+                          <span style={neo.timelineDot} />
+                          {index <
+                            disponibilidad.length - 1 && (
+                            <span style={neo.timelineLine} />
+                          )}
+                        </div>
+
+                        <div style={neo.timelineTime}>
+                          <strong>
+                            {formatoHora(item.hora_inicio)}
+                          </strong>
+                          <span>
+                            {formatoHora(item.hora_fin)}
+                          </span>
+                        </div>
+
+                        <div style={neo.timelineClass}>
+                          <div style={neo.classTopLine}>
+                            <span style={neo.classBadge}>
+                              {item.servicio_tipo ===
+                              "cita_individual"
+                                ? "CITA"
+                                : "CLASE"}
+                            </span>
+
+                            <span
+                              style={{
+                                ...neo.capacityStatus,
+                                ...(lleno
+                                  ? neo.capacityStatusFull
+                                  : {}),
+                              }}
+                            >
+                              {lleno
+                                ? "COMPLETO"
+                                : `${libres} CUPOS`}
+                            </span>
+                          </div>
+
+                          <strong style={neo.classTitle}>
+                            {item.servicio_nombre}
+                          </strong>
+
+                          <span style={neo.classMeta}>
+                            {item.instructor || "Sin instructor"}
+                            {" · "}
+                            {item.requiere_membresia
+                              ? "Membresía activa"
+                              : "Acceso abierto"}
+                          </span>
+
+                          <div style={neo.capacityBar}>
+                            <div
+                              style={{
+                                ...neo.capacityFill,
+                                width: `${porcentaje}%`,
+                              }}
+                            />
+                          </div>
+
+                          <div style={neo.capacityFooter}>
+                            <span>
+                              {reservados} reservados
+                            </span>
+                            <span>
+                              {capacidad} capacidad total
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={neo.timelineAction}>
+                          <button
+                            type="button"
+                            disabled={lleno}
+                            onClick={() => {
+                              setHorarioSeleccionado(
+                                item.horario_id
+                              );
+                              setVista("nueva");
+                            }}
+                            style={
+                              lleno
+                                ? neo.reserveDisabled
+                                : neo.reserveButton
+                            }
+                          >
+                            {lleno
+                              ? "Sin cupos"
+                              : "Reservar"}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </article>
+
+            <article style={neo.reservationsPanel}>
+              <div style={neo.panelTop}>
+                <div>
+                  <span style={neo.sectionEyebrow}>
+                    RESERVAS DE LA JORNADA
+                  </span>
+                  <h2 style={neo.panelHeading}>
+                    Alumnos reservados
+                  </h2>
+                </div>
+
+                <span style={neo.counterPill}>
+                  {reservasFechaOperativas.length}
+                </span>
+              </div>
+
+              {reservasFechaOperativas.length === 0 ? (
+                <div style={neo.emptySmall}>
+                  <span style={neo.emptySmallIcon}>◎</span>
+                  <strong>Sin reservas</strong>
+                  <span>
+                    Todavía no hay alumnos reservados
+                    para este día.
+                  </span>
+                </div>
+              ) : (
+                <div style={neo.reservationList}>
+                  {reservasFechaOperativas
+                    .slice(0, 8)
+                    .map((reserva) => {
+                      const estado = normalizar(
+                        reserva.estado
+                      );
+
+                      const esConfirmada =
+                        estado === "confirmada";
+                      const asistio =
+                        estado === "asistio";
+                      const noAsistio =
+                        estado === "no_asistio";
+                      const pendiente =
+                        estado === "pendiente_pago";
+
+                      return (
+                        <div
+                          key={reserva.id}
+                          style={neo.reservationRow}
+                          className="agenda-d-reservation-row"
+                        >
+                          <div style={neo.avatar}>
+                            {String(
+                              nombreDeReserva(
+                                reserva
+                              ) || "C"
+                            )
+                              .charAt(0)
+                              .toUpperCase()}
+                          </div>
+
+                          <div style={neo.reservationInfo}>
+                            <strong style={neo.reservationName}>
+                              {nombreDeReserva(
+                                reserva
+                              )}
+                            </strong>
+
+                            <span style={neo.reservationMeta}>
+                              {nombreServicio(
+                                reserva.servicio_id
+                              )}
+                              {" · "}
+                              {formatoHora(
+                                reserva.hora_inicio
+                              )}
+                            </span>
+                          </div>
+
+                          <span
+                            style={{
+                              ...neo.statusTag,
+                              ...(asistio
+                                ? neo.statusSuccess
+                                : noAsistio
+                                ? neo.statusNeutral
+                                : pendiente
+                                ? neo.statusPending
+                                : esConfirmada
+                                ? neo.statusConfirmed
+                                : {}),
+                            }}
+                          >
+                            {asistio
+                              ? "ASISTIÓ"
+                              : noAsistio
+                              ? "NO ASISTIÓ"
+                              : pendiente
+                              ? "PENDIENTE"
+                              : "CONFIRMADA"}
+                          </span>
+                        </div>
+                      );
+                    })}
                 </div>
               )}
 
-            {paso === 5 && reservaConfirmada && (
-              <div
-                id="confirmacion-cita"
-                className="kp-success"
+              {reservasFechaOperativas.length > 8 && (
+                <button
+                  type="button"
+                  style={neo.viewAllButton}
+                  onClick={() => setVista("reservas")}
+                >
+                  Ver todas las reservas
+                </button>
+              )}
+            </article>
+
+            <aside style={neo.controlPanel}>
+              <span style={neo.controlEyebrow}>
+                CONTROL OPERATIVO
+              </span>
+              <h3 style={neo.controlTitle}>
+                Estado del día
+              </h3>
+
+              <div style={neo.occupancyCircle}>
+                <div
+                  style={{
+                    ...neo.occupancyRing,
+                    background: `conic-gradient(#5BE39A ${resumenAgenda.ocupacion}%, rgba(255,255,255,.14) 0)`,
+                  }}
+                >
+                  <div style={neo.occupancyInner}>
+                    <strong>
+                      {resumenAgenda.ocupacion}%
+                    </strong>
+                    <span>ocupación</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={neo.controlStats}>
+                <div style={neo.controlRow}>
+                  <span>Capacidad</span>
+                  <strong>
+                    {resumenAgenda.capacidadTotal}
+                  </strong>
+                </div>
+
+                <div style={neo.controlRow}>
+                  <span>Reservados</span>
+                  <strong>
+                    {resumenAgenda.reservadosTotal}
+                  </strong>
+                </div>
+
+                <div style={neo.controlRow}>
+                  <span>Disponibles</span>
+                  <strong>
+                    {resumenAgenda.cuposDisponibles}
+                  </strong>
+                </div>
+              </div>
+
+              <div style={neo.controlDivider} />
+
+              <span style={neo.controlLabel}>
+                ESTADO DE RESERVAS
+              </span>
+
+              <div style={neo.stateGrid}>
+                <div style={neo.stateBox}>
+                  <span>Confirmadas</span>
+                  <strong>
+                    {resumenReservas.confirmadas}
+                  </strong>
+                </div>
+
+                <div style={neo.stateBox}>
+                  <span>Asistieron</span>
+                  <strong>
+                    {resumenReservas.asistieron}
+                  </strong>
+                </div>
+
+                <div style={neo.stateBox}>
+                  <span>Pendientes</span>
+                  <strong>
+                    {resumenReservas.pendientes}
+                  </strong>
+                </div>
+
+                <div style={neo.stateBox}>
+                  <span>No asistieron</span>
+                  <strong>
+                    {resumenReservas.noAsistieron}
+                  </strong>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                style={neo.controlPrimary}
+                onClick={() => setVista("nueva")}
               >
-                <div className="kp-check">✓</div>
+                + Nueva reserva
+              </button>
 
-                <span className="kp-eyebrow-dark">
-                  RESERVA CONFIRMADA
-                </span>
+              <button
+                type="button"
+                style={neo.controlSecondary}
+                onClick={() => setVista("reservas")}
+              >
+                Gestionar reservas
+              </button>
 
-                <h2>{perfilGimnasio ? "Tu clase quedó reservada" : "Tu cita quedó registrada"}</h2>
+              {esAdmin && (
+                <button
+                  type="button"
+                  style={neo.controlSecondary}
+                  onClick={() =>
+                    setVista("configuracion")
+                  }
+                >
+                  Configurar clases
+                </button>
+              )}
+            </aside>
+          </section>
+        </>
+      )}
 
-                <p>
-                  {reservaConfirmada.servicio}
-                  <br />
-                  {formatoFecha(reservaConfirmada.fecha)}
-                  <br />
-                  {formatoHora(
-                    reservaConfirmada.hora_inicio
-                  )}{" "}
-                  –{" "}
-                  {formatoHora(
-                    reservaConfirmada.hora_fin
-                  )}
-                </p>
+      {vista === "nueva" && (
+        <>
+          <section
+            style={pro.stepper}
+            className="agenda-stepper"
+          >
+            <div
+              style={{
+                ...pro.step,
+                ...(clienteSeleccionado ? pro.stepActive : {}),
+              }}
+            >
+              <span style={pro.stepNumber}>1</span>
+              Seleccionar alumno
+            </div>
 
-                {perfilGimnasio && (
-                  <div className="kp-wod-wrap">
-                    {cargandoWod ? (
-                      <div className="kp-info">Consultando WOD...</div>
-                    ) : wodPublico?.ok ? (
-                      <WodPublico wod={wodPublico} />
-                    ) : (
-                      <div className="kp-wod-locked">
-                        <strong>WOD</strong>
-                        <span>
-                          El entrenamiento todavía no está publicado.
-                          Aparecerá aquí cuando el coach lo habilite.
+            <div
+              style={{
+                ...pro.step,
+                ...(horarioSeleccionado ? pro.stepActive : {}),
+              }}
+            >
+              <span style={pro.stepNumber}>2</span>
+              Elegir fecha y horario
+            </div>
+
+            <div
+              style={{
+                ...pro.step,
+                ...(clienteSeleccionado && horarioSeleccionado
+                  ? pro.stepActive
+                  : {}),
+              }}
+            >
+              <span style={pro.stepNumber}>3</span>
+              Confirmar reserva
+            </div>
+          </section>
+
+          <section style={s.twoColumns}>
+          <article style={s.panel}>
+            <span style={pro.panelEyebrow}>NUEVA RESERVA</span>
+            <h2 style={pro.panelTitle}>Datos de la reserva</h2>
+            <p style={{ ...s.muted, margin: "6px 0 0" }}>
+              Selecciona al alumno, la fecha y uno de los horarios disponibles.
+            </p>
+
+            <div style={{ marginTop: 16 }}>
+              <Campo label="Buscar por nombre, cédula o teléfono">
+                <input
+                  type="text"
+                  value={busquedaCliente}
+                  onChange={(e) => {
+                    setBusquedaCliente(e.target.value);
+                    setClienteSeleccionado(null);
+                  }}
+                  style={s.input}
+                  placeholder="Ej. LIA SAMANIEGO"
+                />
+              </Campo>
+
+              {!clienteSeleccionado &&
+                busquedaCliente.trim() &&
+                clientesFiltrados.length > 0 && (
+                  <div style={s.searchResults}>
+                    {clientesFiltrados.map((cliente) => (
+                      <button
+                        key={cliente.id}
+                        type="button"
+                        style={s.searchItem}
+                        onClick={() => {
+                          setClienteSeleccionado(cliente);
+                          setBusquedaCliente(cliente.nombre || "");
+                        }}
+                      >
+                        <strong>{cliente.nombre || "Alumno"}</strong>
+                        <span style={s.muted}>
+                          {cliente.cedula || cliente.telefono || "Sin identificación"}
                         </span>
-                      </div>
-                    )}
+                      </button>
+                    ))}
                   </div>
                 )}
 
-                {reservaConfirmada.requiere_pago && (
-                  <div className="kp-info">
-                    Pago en el local:{" "}
-                    {dinero(reservaConfirmada.monto)}
+              {clienteSeleccionado && (
+                <div style={s.selectedClient}>
+                  <div>
+                    <span style={s.muted}>Alumno seleccionado</span>
+                    <strong style={{ display: "block", marginTop: 4 }}>
+                      {clienteSeleccionado.nombre}
+                    </strong>
                   </div>
-                )}
 
-                {tokenGestion && (
                   <button
                     type="button"
-                    className="kp-confirm"
-                    onClick={() =>
-                      (window.location.href =
-                        `/reservar/${slug}?cita=${tokenGestion}`)
-                    }
+                    style={s.linkButton}
+                    onClick={() => {
+                      setClienteSeleccionado(null);
+                      setBusquedaCliente("");
+                    }}
                   >
-                    Ver mi cita
+                    Cambiar
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div style={s.formGrid}>
+              <Campo label="Fecha">
+                <input
+                  type="date"
+                  value={fechaAgenda}
+                  min={fechaHoy()}
+                  onChange={(e) => {
+                    setFechaAgenda(e.target.value);
+                    setHorarioSeleccionado("");
+                  }}
+                  style={s.input}
+                />
+              </Campo>
+
+              <Campo label="Clase / horario disponible">
+                <select
+                  value={horarioSeleccionado}
+                  onChange={(e) => setHorarioSeleccionado(e.target.value)}
+                  style={s.input}
+                >
+                  <option value="">Seleccionar</option>
+                  {disponibilidad.map((item) => (
+                    <option
+                      key={item.horario_id}
+                      value={item.horario_id}
+                      disabled={Number(item.disponibles) <= 0}
+                    >
+                      {item.servicio_nombre} · {formatoHora(item.hora_inicio)} ·{" "}
+                      {item.disponibles} cupos
+                    </option>
+                  ))}
+                </select>
+              </Campo>
+            </div>
+
+            <Campo label="Observaciones">
+              <textarea
+                value={observaciones}
+                onChange={(e) => setObservaciones(e.target.value)}
+                style={{ ...s.input, minHeight: 90, resize: "vertical" }}
+                placeholder="Opcional"
+              />
+            </Campo>
+
+            <button
+              type="button"
+              style={s.primaryWide}
+              onClick={crearReserva}
+              disabled={guardando}
+            >
+              {guardando ? "Guardando..." : "Confirmar reserva"}
+            </button>
+          </article>
+
+          <article style={s.panel}>
+            <span style={pro.panelEyebrow}>DISPONIBILIDAD EN TIEMPO REAL</span>
+            <h2 style={pro.panelTitle}>{formatoFecha(fechaAgenda)}</h2>
+            <p style={{ ...s.muted, margin: "6px 0 12px" }}>
+              Los cupos se actualizan automáticamente al confirmar o cancelar una reserva.
+            </p>
+
+            <div style={s.slotList}>
+              {disponibilidad.length === 0 ? (
+                <p style={s.muted}>No hay horarios para esta fecha.</p>
+              ) : (
+                disponibilidad.map((item) => (
+                  <button
+                    key={item.horario_id}
+                    type="button"
+                    style={{
+                      ...s.slot,
+                      ...(horarioSeleccionado === item.horario_id
+                        ? s.slotSelected
+                        : {}),
+                    }}
+                    disabled={Number(item.disponibles) <= 0}
+                    onClick={() => setHorarioSeleccionado(item.horario_id)}
+                  >
+                    <div>
+                      <strong>{item.servicio_nombre}</strong>
+                      <span style={s.slotDetail}>
+                        {formatoHora(item.hora_inicio)} ·{" "}
+                        {item.instructor || "Sin instructor"}
+                      </span>
+                    </div>
+
+                    <span
+                      style={
+                        Number(item.disponibles) > 0
+                          ? s.smallGood
+                          : s.smallFull
+                      }
+                    >
+                      {item.disponibles}/{item.capacidad}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </article>
+        </section>
+        </>
+      )}
+
+      {vista === "reservas" && (
+        <section
+          style={{
+            ...pro.panel,
+            maxWidth: 1450,
+            margin: "0 auto 18px",
+          }}
+        >
+          <div style={pro.panelHeader}>
+            <div>
+              <span style={pro.panelEyebrow}>CONTROL Y SEGUIMIENTO</span>
+              <h2 style={pro.panelTitle}>Reservas</h2>
+              <p style={{ ...s.muted, margin: "6px 0 0" }}>
+                Consulta reservas, asistencia, pendientes de pago y cancelaciones.
+              </p>
+            </div>
+
+            <span style={pro.counter}>
+              {reservasFiltradas.length} registros
+            </span>
+          </div>
+
+          <div style={pro.filters}>
+            <div className="agenda-reserva-filtros">
+              <Campo label="Buscar reserva">
+                <input
+                  type="text"
+                  value={busquedaReservas}
+                  onChange={(e) => setBusquedaReservas(e.target.value)}
+                  style={pro.input}
+                  placeholder="Alumno, cédula, teléfono, clase o fecha"
+                />
+              </Campo>
+
+              <Campo label="Estado">
+                <select
+                  value={estadoReservaFiltro}
+                  onChange={(e) => setEstadoReservaFiltro(e.target.value)}
+                  style={pro.input}
+                >
+                  <option value="Todos">Todos</option>
+                  <option value="confirmada">Confirmada</option>
+                  <option value="pendiente_pago">Pendiente de pago</option>
+                  <option value="asistio">Asistió</option>
+                  <option value="no_asistio">No asistió</option>
+                  <option value="cancelada">Cancelada</option>
+                </select>
+              </Campo>
+            </div>
+          </div>
+
+          <ReservaLista
+            reservas={reservasFiltradas}
+            nombreReserva={nombreDeReserva}
+            nombreServicio={nombreServicio}
+            onCancelar={cancelarReserva}
+            onAsistencia={marcarAsistencia}
+            onCobrar={cobrarReserva}
+            mostrarFecha
+          />
+        </section>
+      )}
+
+      {vista === "wod" && esGimnasio && (
+        <>
+          <section style={{ ...pro.panel, maxWidth: 1450, margin: "0 auto 14px" }}>
+            <div style={pro.panelHeader}>
+              <div>
+                <span style={pro.panelEyebrow}>WORKOUT OF THE DAY</span>
+                <h2 style={pro.panelTitle}>WOD · {formatoFecha(fechaAgenda)}</h2>
+                <p style={{ ...s.muted, margin: "6px 0 0" }}>
+                  Publica el entrenamiento del día por clase. Las notas del coach son privadas.
+                </p>
+              </div>
+              <input type="date" value={fechaAgenda} onChange={(e) => {
+                setFechaAgenda(e.target.value);
+                setWodForm((actual) => ({ ...actual, fecha: e.target.value }));
+              }} style={{ ...s.input, width: 180 }} />
+            </div>
+
+            {wodsFecha.length === 0 ? (
+              <div style={s.empty}>
+                <strong>No hay WOD publicado para esta fecha.</strong>
+                <span style={s.muted}>Créalo abajo y asígnalo a una clase.</span>
+              </div>
+            ) : (
+              <div style={s.wodGrid}>
+                {wodsFecha.map((wod) => (
+                  <article key={wod.id} style={s.wodCard}>
+                    <span style={s.eyebrowSmall}>{wod.servicio_nombre}</span>
+                    <h3 style={{ margin: "4px 0 10px" }}>{wod.titulo || "WOD del día"}</h3>
+                    {wod.warmup && <WodBloque titulo="Warm-up" texto={wod.warmup} />}
+                    {wod.strength && <WodBloque titulo="Fuerza" texto={wod.strength} />}
+                    {wod.skill && <WodBloque titulo="Técnica / Skill" texto={wod.skill} />}
+                    {wod.metcon && <WodBloque titulo="Metcon" texto={wod.metcon} destacado />}
+                    {wod.cooldown && <WodBloque titulo="Vuelta a la calma" texto={wod.cooldown} />}
+                    {wod.notas_publicas && <WodBloque titulo="Notas para alumnos" texto={wod.notas_publicas} />}
+                    {esAdmin && (
+                      <div style={{ ...s.inlineActions, marginTop: 10 }}>
+                        <button type="button" style={s.smallButton} onClick={() => editarWod(wod)}>Editar</button>
+                        <button type="button" style={s.smallDanger} onClick={() => eliminarWod(wod)}>Eliminar</button>
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {esAdmin && (
+            <section style={{ ...pro.panel, maxWidth: 1450, margin: "0 auto 18px" }}>
+              <span style={pro.panelEyebrow}>CONFIGURAR WOD</span>
+              <h2 style={pro.panelTitle}>{wodEditandoId ? "Editar WOD" : "Nuevo WOD"}</h2>
+              <div style={s.wodTopGrid} className="agenda-wod-top-grid">
+                <Campo label="Clase / programa">
+                  <select
+                    value={wodForm.servicio_id}
+                    onChange={(e) =>
+                      setWodForm({
+                        ...wodForm,
+                        servicio_id: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                  >
+                    <option value="">Seleccionar</option>
+                    {servicios
+                      .filter(
+                        (servicio) =>
+                          servicio.activo &&
+                          servicio.tipo !== "cita_individual"
+                      )
+                      .map((servicio) => (
+                        <option key={servicio.id} value={servicio.id}>
+                          {servicio.nombre}
+                        </option>
+                      ))}
+                  </select>
+                </Campo>
+
+                <Campo label="Fecha">
+                  <input
+                    type="date"
+                    value={wodForm.fecha}
+                    onChange={(e) =>
+                      setWodForm({
+                        ...wodForm,
+                        fecha: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                  />
+                </Campo>
+
+                <Campo label="Título">
+                  <input
+                    value={wodForm.titulo}
+                    onChange={(e) =>
+                      setWodForm({
+                        ...wodForm,
+                        titulo: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                    placeholder="WOD del día"
+                  />
+                </Campo>
+
+                <Campo label="Visibilidad">
+                  <select
+                    value={visibilidadWod}
+                    onChange={(e) =>
+                      aplicarVisibilidadWod(e.target.value)
+                    }
+                    style={s.input}
+                  >
+                    <option value="inmediato">
+                      Inmediatamente
+                    </option>
+                    <option value="dia_anterior">
+                      Día anterior · 6:00 p. m.
+                    </option>
+                    <option value="mismo_dia">
+                      Mismo día · 5:00 a. m.
+                    </option>
+                    <option value="personalizado">
+                      Personalizado
+                    </option>
+                  </select>
+                </Campo>
+              </div>
+
+              {visibilidadWod === "personalizado" && (
+                <div style={s.wodCustomVisibility}>
+                  <Campo label="Fecha y hora de publicación">
+                    <input
+                      type="datetime-local"
+                      value={wodForm.visible_desde}
+                      onChange={(e) =>
+                        setWodForm({
+                          ...wodForm,
+                          visible_desde: e.target.value,
+                        })
+                      }
+                      style={s.input}
+                    />
+                  </Campo>
+                </div>
+              )}
+
+              <div
+                style={s.wodEditorGrid}
+                className="agenda-wod-editor-grid"
+              >
+                <div style={s.wodColumn}>
+                  <div style={s.wodColumnTitle}>
+                    <span style={s.wodColumnEyebrow}>
+                      PREPARACIÓN
+                    </span>
+                    <strong>Base técnica</strong>
+                  </div>
+
+                  <Campo label="Warm-up">
+                    <textarea
+                      value={wodForm.warmup}
+                      onChange={(e) =>
+                        setWodForm({
+                          ...wodForm,
+                          warmup: e.target.value,
+                        })
+                      }
+                      style={s.wodTextareaCompact}
+                      placeholder="Ej. 3 rounds: 200 m run, 10 air squats..."
+                    />
+                  </Campo>
+
+                  <Campo label="Fuerza">
+                    <textarea
+                      value={wodForm.strength}
+                      onChange={(e) =>
+                        setWodForm({
+                          ...wodForm,
+                          strength: e.target.value,
+                        })
+                      }
+                      style={s.wodTextareaCompact}
+                      placeholder="Ej. Back Squat 5 x 5"
+                    />
+                  </Campo>
+
+                  <Campo label="Técnica / Skill">
+                    <textarea
+                      value={wodForm.skill}
+                      onChange={(e) =>
+                        setWodForm({
+                          ...wodForm,
+                          skill: e.target.value,
+                        })
+                      }
+                      style={s.wodTextareaCompact}
+                      placeholder="Ej. Handstand walk practice"
+                    />
+                  </Campo>
+                </div>
+
+                <div style={s.wodColumn}>
+                  <div style={s.wodColumnTitle}>
+                    <span style={s.wodColumnEyebrow}>
+                      ENTRENAMIENTO
+                    </span>
+                    <strong>Trabajo principal</strong>
+                  </div>
+
+                  <Campo label="Metcon">
+                    <textarea
+                      value={wodForm.metcon}
+                      onChange={(e) =>
+                        setWodForm({
+                          ...wodForm,
+                          metcon: e.target.value,
+                        })
+                      }
+                      style={s.wodTextareaMetcon}
+                      placeholder="Ej. AMRAP 20: 10 burpees, 15 wall balls..."
+                    />
+                  </Campo>
+
+                  <Campo label="Vuelta a la calma">
+                    <textarea
+                      value={wodForm.cooldown}
+                      onChange={(e) =>
+                        setWodForm({
+                          ...wodForm,
+                          cooldown: e.target.value,
+                        })
+                      }
+                      style={s.wodTextareaCompact}
+                      placeholder="Movilidad / estiramiento"
+                    />
+                  </Campo>
+
+                  <Campo label="Notas para alumnos">
+                    <textarea
+                      value={wodForm.notas_publicas}
+                      onChange={(e) =>
+                        setWodForm({
+                          ...wodForm,
+                          notas_publicas: e.target.value,
+                        })
+                      }
+                      style={s.wodTextareaCompact}
+                      placeholder="Información visible para los alumnos"
+                    />
+                  </Campo>
+                </div>
+              </div>
+
+              <div style={s.wodCoachNote}>
+                <Campo label="Notas privadas del coach">
+                  <textarea
+                    value={wodForm.notas_coach}
+                    onChange={(e) =>
+                      setWodForm({
+                        ...wodForm,
+                        notas_coach: e.target.value,
+                      })
+                    }
+                    style={s.wodTextareaCoach}
+                    placeholder="Escalas, ajustes, indicaciones o recordatorios internos"
+                  />
+                </Campo>
+              </div>
+
+              <div
+                style={s.wodFooterBar}
+                className="agenda-wod-footer"
+              >
+                <label style={s.wodActiveToggle}>
+                  <input
+                    type="checkbox"
+                    checked={wodForm.activo}
+                    onChange={(e) =>
+                      setWodForm({
+                        ...wodForm,
+                        activo: e.target.checked,
+                      })
+                    }
+                  />
+                  <span>
+                    <strong>WOD activo</strong>
+                    <small>
+                      Se mostrará al alumno según la visibilidad configurada.
+                    </small>
+                  </span>
+                </label>
+
+                <div style={s.wodFooterActions}>
+                  {wodEditandoId && (
+                    <button
+                      type="button"
+                      style={s.secondaryButton}
+                      onClick={() => {
+                        setWodEditandoId(null);
+                        setVisibilidadWod("inmediato");
+                        setWodForm({
+                          ...WOD_INICIAL,
+                          fecha: fechaAgenda,
+                        });
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    style={s.primaryButton}
+                    onClick={guardarWod}
+                    disabled={guardando}
+                  >
+                    {guardando
+                      ? "Guardando..."
+                      : wodEditandoId
+                      ? "Guardar cambios"
+                      : "Publicar WOD"}
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
+      {vista === "configuracion" && esAdmin && (
+        <>
+          <section style={s.portalPanel} className="agenda-portal-responsive">
+            <div style={s.portalMain}>
+              <span style={s.eyebrowSmall}>
+                PORTAL DE RESERVAS
+              </span>
+
+              <h2 style={s.panelTitle}>
+                Comparte tus reservas
+              </h2>
+
+              <p style={s.portalText}>
+                Usa un solo enlace para Instagram, WhatsApp,
+                código QR o la página web del negocio.
+              </p>
+
+              <div style={s.portalFields}>
+                <Campo label="Nombre visible">
+                  <input
+                    value={portalConfig.titulo_publico}
+                    onChange={(e) =>
+                      setPortalConfig({
+                        ...portalConfig,
+                        titulo_publico: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                    placeholder={empresaNombre}
+                  />
+                </Campo>
+
+                <Campo label="Enlace del negocio">
+                  <div style={s.slugField}>
+                    <span style={s.slugPrefix}>
+                      /reservar/
+                    </span>
+                    <input
+                      value={portalConfig.slug}
+                      onChange={(e) =>
+                        setPortalConfig({
+                          ...portalConfig,
+                          slug: e.target.value,
+                        })
+                      }
+                      style={s.slugInput}
+                      placeholder="fitness-507"
+                    />
+                  </div>
+                </Campo>
+              </div>
+
+              <label style={s.portalToggle}>
+                <input
+                  type="checkbox"
+                  checked={portalConfig.activo}
+                  onChange={(e) =>
+                    setPortalConfig({
+                      ...portalConfig,
+                      activo: e.target.checked,
+                    })
+                  }
+                />
+                <span>
+                  <strong>Reservas online activas</strong>
+                  <small>
+                    Si se desactiva, el enlace público deja de aceptar reservas.
+                  </small>
+                </span>
+              </label>
+
+              <div style={s.portalLinkBox}>
+                <span>ENLACE PÚBLICO</span>
+                <strong>
+                  {obtenerEnlacePortal() || "Configura el enlace"}
+                </strong>
+              </div>
+
+              <div style={s.portalActions}>
+                <button
+                  type="button"
+                  style={s.primaryButton}
+                  onClick={guardarConfiguracionPortal}
+                  disabled={guardandoPortal}
+                >
+                  {guardandoPortal
+                    ? "Guardando..."
+                    : "Guardar portal"}
+                </button>
+
+                <button
+                  type="button"
+                  style={s.secondaryButton}
+                  onClick={copiarEnlacePortal}
+                  disabled={!portalConfig.slug}
+                >
+                  Copiar enlace
+                </button>
+
+                <button
+                  type="button"
+                  style={s.secondaryButton}
+                  onClick={compartirPortalWhatsApp}
+                  disabled={!portalConfig.slug}
+                >
+                  WhatsApp
+                </button>
+
+                <button
+                  type="button"
+                  style={s.secondaryButton}
+                  onClick={abrirPortal}
+                  disabled={!portalConfig.slug}
+                >
+                  Ver portal
+                </button>
+
+                <button
+                  type="button"
+                  style={s.secondaryButton}
+                  onClick={descargarQrPortal}
+                  disabled={!portalConfig.slug}
+                >
+                  Descargar QR
+                </button>
+              </div>
+            </div>
+
+            <div style={s.qrPanel}>
+              {portalConfig.slug ? (
+                <>
+                  <img
+                    src={obtenerQrPortal()}
+                    alt="QR del portal de reservas"
+                    style={s.qrImage}
+                  />
+                  <strong>Escanea para reservar</strong>
+                  <span>
+                    Ideal para recepción, volante o mostrador.
+                  </span>
+                </>
+              ) : (
+                <div style={s.qrEmpty}>
+                  QR disponible al configurar el enlace.
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section style={s.twoColumns}>
+            <article style={s.panel}>
+              <span style={s.eyebrowSmall}>CONFIGURACIÓN</span>
+              <h2 style={s.panelTitle}>
+                {servicioEditandoId ? "Editar servicio" : "Nueva clase o servicio"}
+              </h2>
+
+              <div style={s.formGrid}>
+                <Campo label="Nombre">
+                  <input
+                    value={servicioForm.nombre}
+                    onChange={(e) =>
+                      setServicioForm({
+                        ...servicioForm,
+                        nombre: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                    placeholder="Spinning"
+                  />
+                </Campo>
+
+                <Campo label="Tipo">
+                  <select
+                    value={servicioForm.tipo}
+                    onChange={(e) =>
+                      setServicioForm({
+                        ...servicioForm,
+                        tipo: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                  >
+                    <option value="clase_grupal">Clase grupal</option>
+                    <option value="cita_individual">Cita individual</option>
+                  </select>
+                </Campo>
+
+                <Campo label="Duración (minutos)">
+                  <input
+                    type="number"
+                    min="1"
+                    value={servicioForm.duracion_minutos}
+                    onChange={(e) =>
+                      setServicioForm({
+                        ...servicioForm,
+                        duracion_minutos: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                  />
+                </Campo>
+
+                <Campo label="Capacidad sugerida">
+                  <input
+                    type="number"
+                    min="1"
+                    value={servicioForm.capacidad_default}
+                    onChange={(e) =>
+                      setServicioForm({
+                        ...servicioForm,
+                        capacidad_default: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                  />
+                </Campo>
+              </div>
+
+              <Campo label="Descripción">
+                <textarea
+                  value={servicioForm.descripcion}
+                  onChange={(e) =>
+                    setServicioForm({
+                      ...servicioForm,
+                      descripcion: e.target.value,
+                    })
+                  }
+                  style={{ ...s.input, minHeight: 82, resize: "vertical" }}
+                  placeholder="Clase grupal de spinning"
+                />
+              </Campo>
+
+              <Campo label="Modalidad de reserva">
+                <select
+                  value={modalidadServicio(servicioForm)}
+                  onChange={(e) =>
+                    aplicarModalidadServicio(e.target.value)
+                  }
+                  style={s.input}
+                >
+                  <option value="solo_miembros">
+                    Miembro activo · Incluida en membresía
+                  </option>
+                  <option value="pago_local">
+                    Pago al llegar · No requiere membresía
+                  </option>
+                  <option value="miembros_pago">
+                    Miembro activo · Servicio personalizado con costo
+                  </option>
+                </select>
+              </Campo>
+
+              {servicioForm.requiere_pago && (
+                <>
+                  <Campo label="Precio de la clase / servicio">
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={servicioForm.precio}
+                      onChange={(e) =>
+                        setServicioForm({
+                          ...servicioForm,
+                          precio: e.target.value,
+                        })
+                      }
+                      style={s.input}
+                      placeholder="6.00"
+                    />
+                  </Campo>
+
+                  <div style={s.paymentInfo}>
+                    <strong>
+                      Cobro en el local
+                    </strong>
+                    <span>
+                      El cliente reserva su cupo. Si esta modalidad
+                      tiene precio, la reserva queda pendiente de pago y
+                      recepción la cobra desde Caja cuando el cliente llegue.
+                    </span>
+                  </div>
+                </>
+              )}
+
+              <div style={s.formActions}>
+                {servicioEditandoId && (
+                  <button
+                    type="button"
+                    style={s.secondaryButton}
+                    onClick={() => {
+                      setServicioEditandoId(null);
+                      setServicioForm(SERVICIO_INICIAL);
+                    }}
+                  >
+                    Cancelar
                   </button>
                 )}
 
                 <button
                   type="button"
-                  className="kp-secondary"
-                  onClick={reiniciarFlujo}
+                  style={s.primaryButton}
+                  onClick={guardarServicio}
+                  disabled={guardando}
                 >
-                  + Reservar otra cita
+                  {servicioEditandoId ? "Guardar cambios" : "Crear servicio"}
                 </button>
+              </div>
+            </article>
+
+            <article style={s.panel}>
+              <span style={s.eyebrowSmall}>HORARIO</span>
+              <h2 style={s.panelTitle}>
+                {horarioEditandoId ? "Editar horario" : "Nuevo horario"}
+              </h2>
+
+              <Campo label="Clase / servicio">
+                <select
+                  value={horarioForm.servicio_id}
+                  onChange={(e) => {
+                    const servicio = servicios.find(
+                      (item) => item.id === e.target.value
+                    );
+
+                    setHorarioForm({
+                      ...horarioForm,
+                      servicio_id: e.target.value,
+                      capacidad:
+                        servicio?.capacidad_default || horarioForm.capacidad,
+                    });
+                  }}
+                  style={s.input}
+                >
+                  <option value="">Seleccionar</option>
+                  {servicios
+                    .filter((item) => item.activo)
+                    .map((servicio) => (
+                      <option key={servicio.id} value={servicio.id}>
+                        {servicio.nombre}
+                      </option>
+                    ))}
+                </select>
+              </Campo>
+
+              <div style={s.formGrid}>
+                <Campo label="Día">
+                  <select
+                    value={horarioForm.dia_semana}
+                    onChange={(e) =>
+                      setHorarioForm({
+                        ...horarioForm,
+                        dia_semana: Number(e.target.value),
+                      })
+                    }
+                    style={s.input}
+                  >
+                    {[1, 2, 3, 4, 5, 6, 0].map((dia) => (
+                      <option key={dia} value={dia}>
+                        {nombreDia(dia)}
+                      </option>
+                    ))}
+                  </select>
+                </Campo>
+
+                <Campo label="Instructor">
+                  <input
+                    value={horarioForm.instructor}
+                    onChange={(e) =>
+                      setHorarioForm({
+                        ...horarioForm,
+                        instructor: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                    placeholder="Carlos"
+                  />
+                </Campo>
+
+                <Campo label="Hora inicio">
+                  <input
+                    type="time"
+                    value={horarioForm.hora_inicio}
+                    onChange={(e) =>
+                      setHorarioForm({
+                        ...horarioForm,
+                        hora_inicio: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                  />
+                </Campo>
+
+                <Campo label="Hora fin">
+                  <input
+                    type="time"
+                    value={horarioForm.hora_fin}
+                    onChange={(e) =>
+                      setHorarioForm({
+                        ...horarioForm,
+                        hora_fin: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                  />
+                </Campo>
+
+                <Campo label="Cupos">
+                  <input
+                    type="number"
+                    min="1"
+                    value={horarioForm.capacidad}
+                    onChange={(e) =>
+                      setHorarioForm({
+                        ...horarioForm,
+                        capacidad: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                  />
+                </Campo>
+
+                <Campo label="Disponible desde">
+                  <input
+                    type="date"
+                    value={horarioForm.fecha_desde}
+                    onChange={(e) =>
+                      setHorarioForm({
+                        ...horarioForm,
+                        fecha_desde: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                  />
+                </Campo>
+              </div>
+
+              <div style={s.formActions}>
+                {horarioEditandoId && (
+                  <button
+                    type="button"
+                    style={s.secondaryButton}
+                    onClick={() => {
+                      setHorarioEditandoId(null);
+                      setHorarioForm(HORARIO_INICIAL);
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                )}
 
                 <button
                   type="button"
-                  className="kp-link"
-                  onClick={() =>
-                    (window.location.href = `/reservar/${slug}`)
-                  }
+                  style={s.primaryButton}
+                  onClick={guardarHorario}
+                  disabled={guardando}
                 >
-                  Volver al portal
+                  {horarioEditandoId ? "Guardar cambios" : "Crear horario"}
                 </button>
               </div>
-            )}
+            </article>
           </section>
-        )}
 
-        {!tokenUrl && paso < 5 && paso !== 3 && paso !== 4 && (
-          <button
-            type="button"
-            className="kp-reserve-now"
-            onClick={() => {
-              document
-                .getElementById("flujo-reserva")
-                ?.scrollIntoView({
-                  behavior: "smooth",
-                  block: "start",
-                });
+          <section style={s.twoColumns}>
+            <article style={s.panel}>
+              <div style={s.panelHeader}>
+                <div>
+                  <span style={s.eyebrowSmall}>SERVICIOS</span>
+                  <h2 style={s.panelTitle}>Clases y servicios</h2>
+                </div>
+                <span style={s.counter}>{servicios.length}</span>
+              </div>
 
-              if (paso === 3 && horarioSeleccionado) {
-                continuarFechaHora();
-              }
-            }}
-          >
-            <span>ϟ</span>
-            <strong>
-              {paso === 3 && horarioSeleccionado
-                ? "Continuar"
-                : "Reservar ahora"}
-            </strong>
-            <span>→</span>
-          </button>
-        )}
+              <div style={s.stack}>
+                {servicios.length === 0 ? (
+                  <p style={s.muted}>Todavía no hay servicios.</p>
+                ) : (
+                  servicios.map((servicio) => (
+                    <div key={servicio.id} style={s.listCard}>
+                      <div>
+                        <strong>{servicio.nombre}</strong>
+                        <span style={s.slotDetail}>
+                          {servicio.tipo === "cita_individual"
+                            ? "Cita individual"
+                            : "Clase grupal"}{" "}
+                          · {servicio.duracion_minutos} min
+                        </span>
+                      </div>
 
-        {!(paso === 3 && horarioSeleccionado) && (
-        <nav className="kp-bottom-nav">
-          <button
-            type="button"
-            onClick={() =>
-              window.scrollTo({ top: 0, behavior: "smooth" })
-            }
-          >
-            <span>⌂</span>
-            <small>Inicio</small>
-          </button>
+                      <div style={s.inlineActions}>
+                        <button
+                          type="button"
+                          style={s.smallButton}
+                          onClick={() => editarServicio(servicio)}
+                        >
+                          Editar
+                        </button>
 
-          <button
-            type="button"
-            onClick={() =>
-              document
-                .getElementById("flujo-reserva")
-                ?.scrollIntoView({
-                  behavior: "smooth",
-                  block: "start",
-                })
-            }
-          >
-            <span>▣</span>
-            <small>{perfilGimnasio ? "Clases" : "Reservar"}</small>
-          </button>
+                        <button
+                          type="button"
+                          style={
+                            servicio.activo ? s.smallDanger : s.smallSuccess
+                          }
+                          onClick={() => alternarServicio(servicio)}
+                        >
+                          {servicio.activo ? "Desactivar" : "Activar"}
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </article>
 
-          <button
-            type="button"
-            onClick={abrirMiCita}
-          >
-            <span>▤</span>
-            <small>{perfilGimnasio ? "Mi reserva" : "Mi cita"}</small>
-          </button>
-        </nav>
-        )}
+            <article style={s.panel}>
+              <div style={s.panelHeader}>
+                <div>
+                  <span style={s.eyebrowSmall}>HORARIOS</span>
+                  <h2 style={s.panelTitle}>Horarios configurados</h2>
+                </div>
+                <span style={s.counter}>{horarios.length}</span>
+              </div>
 
-        {mostrarAvisoMiCita && (
-          <div
-            className="kp-modal-overlay"
-            onClick={() => setMostrarAvisoMiCita(false)}
-          >
-            <div
-              className="kp-modal"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="kp-modal-icon">▤</div>
+              <div style={s.stack}>
+                {horarios.length === 0 ? (
+                  <p style={s.muted}>Todavía no hay horarios.</p>
+                ) : (
+                  horarios.map((horario) => (
+                    <div key={horario.id} style={s.listCard}>
+                      <div>
+                        <strong>{nombreServicio(horario.servicio_id)}</strong>
+                        <span style={s.slotDetail}>
+                          {nombreDia(horario.dia_semana)} ·{" "}
+                          {formatoHora(horario.hora_inicio)} ·{" "}
+                          {horario.capacidad} cupos
+                        </span>
+                      </div>
 
-              <span className="kp-eyebrow-dark">
-                {perfilGimnasio ? "MI RESERVA" : "MI CITA"}
-              </span>
+                      <div style={s.inlineActions}>
+                        <button
+                          type="button"
+                          style={s.smallButton}
+                          onClick={() => editarHorario(horario)}
+                        >
+                          Editar
+                        </button>
 
-              <h3>
-                {perfilGimnasio
-                  ? "Aún no tienes una reserva guardada"
-                  : "Aún no tienes una cita guardada"}
-              </h3>
+                        <button
+                          type="button"
+                          style={
+                            horario.activo ? s.smallDanger : s.smallSuccess
+                          }
+                          onClick={() => alternarHorario(horario)}
+                        >
+                          {horario.activo ? "Desactivar" : "Activar"}
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </article>
+          </section>
+        </>
+      )}
 
-              <p>
-                Cuando completes una reserva en este teléfono,
-                KONAX guardará el acceso para que puedas volver
-                directamente desde{" "}
-                {perfilGimnasio ? "“Mi reserva”." : "“Mi cita”."}
-              </p>
-
-              <button
-                type="button"
-                className="kp-confirm"
-                onClick={() => {
-                  setMostrarAvisoMiCita(false);
-                  document
-                    .getElementById("flujo-reserva")
-                    ?.scrollIntoView({
-                      behavior: "smooth",
-                      block: "start",
-                    });
-                }}
-              >
-                Reservar ahora
-              </button>
-
-              <button
-                type="button"
-                className="kp-link"
-                onClick={() => setMostrarAvisoMiCita(false)}
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        )}
-
-        <footer className="kp-footer">
-          <img src="/konax-logo.png" alt="KONAX" />
-          <span>Reservas por KONAX · {VERSION}</span>
-        </footer>
-      </div>
+      <footer style={s.footer}>
+        KONAX Agenda · {VERSION} · Rol: {rol || "Usuario"}
+      </footer>
     </main>
   );
 }
 
-function Stepper({ paso, gimnasio = false }) {
-  const pasos = gimnasio
-    ? [
-        [1, "Clase"],
-        [2, "Instructor"],
-        [3, "Fecha y hora"],
-        [4, "Confirmación"],
-      ]
-    : [
-        [1, "Servicio"],
-        [2, "Profesional"],
-        [3, "Fecha y hora"],
-        [4, "Confirmación"],
-      ];
-
+function Tab({ activo, onClick, children }) {
   return (
-    <div className="kp-stepper">
-      {pasos.map(([numero, label], index) => (
-        <div
-          key={numero}
-          className="kp-step-item"
-        >
-          <div className="kp-step-top">
-            <span
-              className={[
-                "kp-step-circle",
-                paso === numero ? "active" : "",
-                paso > numero ? "done" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              {paso > numero ? "✓" : numero}
-            </span>
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        ...s.tab,
+        ...(activo ? s.tabActive : {}),
+      }}
+    >
+      {children}
+    </button>
+  );
+}
 
-            {index < pasos.length - 1 && (
-              <span
-                className={[
-                  "kp-step-line",
-                  paso > numero ? "done" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              />
-            )}
-          </div>
+function Campo({ label, children }) {
+  return (
+    <label style={s.field}>
+      <span style={s.label}>{label}</span>
+      {children}
+    </label>
+  );
+}
 
-          <small
-            className={
-              paso >= numero ? "active" : ""
-            }
-          >
-            {label}
-          </small>
-        </div>
-      ))}
+function Dato({ nombre, valor }) {
+  return (
+    <div style={s.dataRow}>
+      <span style={s.muted}>{nombre}</span>
+      <strong>{valor}</strong>
     </div>
   );
 }
 
-
-function WodPublico({ wod }) {
-  if (!wod?.ok) return null;
-
-  const bloques = [
-    ["Warm-up", wod.warmup],
-    ["Strength", wod.strength],
-    ["Skill", wod.skill],
-    ["Metcon", wod.metcon],
-    ["Cooldown", wod.cooldown],
-  ].filter(([, valor]) => Boolean(valor));
-
+function Empty({ titulo, texto }) {
   return (
-    <div className="kp-wod">
-      <span className="kp-wod-eyebrow">WORKOUT OF THE DAY</span>
-      <h3>{wod.titulo || "WOD del día"}</h3>
-
-      {wod.servicio && (
-        <div className="kp-wod-program">{wod.servicio}</div>
-      )}
-
-      <div className="kp-wod-blocks">
-        {bloques.map(([titulo, valor]) => (
-          <div
-            key={titulo}
-            className={`kp-wod-block ${
-              titulo === "Metcon" ? "accent" : ""
-            }`}
-          >
-            <span>{titulo}</span>
-            <strong>{valor}</strong>
-          </div>
-        ))}
-      </div>
-
-      {wod.notas_publicas && (
-        <div className="kp-wod-note">
-          <span>Nota del coach</span>
-          <strong>{wod.notas_publicas}</strong>
-        </div>
-      )}
+    <div style={s.empty}>
+      <strong>{titulo}</strong>
+      <span style={s.muted}>{texto}</span>
     </div>
   );
 }
 
-function ServicioResumen({ servicio }) {
-  if (!servicio) return null;
-
+function WodBloque({ titulo, texto, destacado = false }) {
+  if (!texto) return null;
   return (
-    <div className="kp-selected-service">
-      <strong>{servicio.nombre}</strong>
-      <span>
-        {servicio.duracion} min
-        {servicio.requierePago
-          ? ` · ${dinero(servicio.precio)}`
-          : ""}
-      </span>
+    <div style={{ ...s.wodBlock, ...(destacado ? s.wodBlockAccent : {}) }}>
+      <span>{titulo}</span>
+      <strong style={{ whiteSpace: "pre-wrap" }}>{texto}</strong>
     </div>
   );
 }
 
-function ResumenFila({
-  label,
-  value,
-  destacado = false,
+function ReservaLista({
+  reservas,
+  nombreReserva,
+  nombreServicio,
+  onCancelar,
+  onAsistencia,
+  onCobrar,
+  mostrarFecha = false,
 }) {
+  if (!reservas.length) {
+    return (
+      <Empty
+        titulo="Sin reservas"
+        texto="Todavía no hay reservas para mostrar."
+      />
+    );
+  }
+
   return (
-    <div className="kp-summary-row">
-      <span>{label}</span>
-      <strong className={destacado ? "accent" : ""}>
-        {value || "-"}
-      </strong>
+    <div style={s.stack}>
+      {reservas.map((reserva) => {
+        const estado = normalizar(reserva.estado);
+        const puedeGestionar =
+          !["cancelada", "asistio"].includes(estado);
+
+        const nombre = nombreReserva(reserva);
+        const badgeEstado =
+          estado === "asistio"
+            ? s.badgeSuccess
+            : estado === "no_asistio"
+            ? s.badgeNeutral
+            : estado === "cancelada"
+            ? s.badgeDanger
+            : estado === "pendiente_pago"
+            ? s.badgeWarning
+            : s.badge;
+
+        return (
+          <article key={reserva.id} style={s.reservationCard}>
+            <div style={s.reservationIdentity}>
+              <div style={s.avatar}>
+                {String(nombre || "A").charAt(0).toUpperCase()}
+              </div>
+
+              <div style={s.reservationMain}>
+                <div style={s.reservationTopLine}>
+                  <strong style={s.reservationName}>{nombre}</strong>
+                  <span style={badgeEstado}>
+                    {String(reserva.estado || "confirmada").replace(/_/g, " ")}
+                  </span>
+                </div>
+
+                <span style={s.slotDetail}>
+                  {nombreServicio(reserva.servicio_id)}
+                  {mostrarFecha ? ` · ${formatoFecha(reserva.fecha_reserva)}` : ""}
+                  {" · "}
+                  {formatoHora(reserva.hora_inicio)}
+                  {reserva.requiere_pago
+                    ? ` · $${Number(reserva.monto || 0).toFixed(2)}`
+                    : ""}
+                </span>
+              </div>
+            </div>
+
+            <div style={s.inlineActions}>
+              {puedeGestionar && estado === "pendiente_pago" && (
+                <button
+                  type="button"
+                  style={s.smallPay}
+                  onClick={() => onCobrar(reserva)}
+                >
+                  Cobrar ${Number(reserva.monto || 0).toFixed(2)}
+                </button>
+              )}
+
+              {puedeGestionar && estado !== "pendiente_pago" && (
+                <>
+                  <button
+                    type="button"
+                    style={s.smallSuccess}
+                    onClick={() => onAsistencia(reserva, true)}
+                  >
+                    Asistió
+                  </button>
+
+                  <button
+                    type="button"
+                    style={s.smallButton}
+                    onClick={() => onAsistencia(reserva, false)}
+                  >
+                    No asistió
+                  </button>
+                </>
+              )}
+
+              {!["cancelada", "asistio"].includes(estado) && (
+                <button
+                  type="button"
+                  style={s.smallDanger}
+                  onClick={() => onCancelar(reserva)}
+                >
+                  Cancelar
+                </button>
+              )}
+            </div>
+          </article>
+        );
+      })}
     </div>
   );
 }
 
-function Dato({ label, value }) {
-  return (
-    <div className="kp-data">
-      <span>{label}</span>
-      <strong>{value || "-"}</strong>
-    </div>
-  );
-}
 
-const CSS = `
-  * { box-sizing: border-box; }
-
-  html, body {
-    max-width: 100%;
-    overflow-x: hidden;
-  }
-
-  body {
-    margin: 0;
-  }
-
-  button, input, textarea {
-    font: inherit;
-  }
-
-  button {
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .kp-page {
-    min-height: 100vh;
-    padding-bottom: 150px;
-    background: #f5f7f6;
-    color: #152019;
-    font-family: Inter, system-ui, "Segoe UI", sans-serif;
-  }
-
-  .kp-shell {
-    width: min(760px, 100%);
-    margin: 0 auto;
-    padding: 0 14px 28px;
-  }
-
-  .kp-topbar {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    min-height: 66px;
-    margin: 0 -14px 14px;
-    padding: 10px 14px;
-    display: grid;
-    grid-template-columns: 42px 1fr auto;
-    align-items: center;
-    gap: 8px;
-    border-bottom: 1px solid #e1e7e3;
-    background: rgba(255,255,255,.97);
-    backdrop-filter: blur(12px);
-  }
-
-  .kp-back {
-    width: 40px;
-    height: 40px;
-    border: 0;
-    border-radius: 12px;
-    background: #fff;
-    font-size: 34px;
-    line-height: 1;
-    cursor: pointer;
-  }
-
-  .kp-top-logo {
-    width: 92px;
-    height: 34px;
-    object-fit: contain;
-    justify-self: center;
-  }
-
-  .kp-top-icons {
-    display: flex;
-    gap: 4px;
-  }
-
-  .kp-top-icons button {
-    width: 34px;
-    height: 34px;
-    display: grid;
-    place-items: center;
-    border: 1px solid transparent;
-    border-radius: 999px;
-    background: #f1f4f2;
-    color: #17211c;
-    font-size: 14px;
-    cursor: pointer;
-  }
-
-  .kp-top-icons button.active {
-    border-color: #0b7041;
-    background: #e8f5ed;
-    color: #0b7041;
-  }
-
-  .kp-menu {
-    position: absolute;
-    top: 58px;
-    right: 14px;
-    z-index: 90;
-    width: 190px;
-    padding: 8px;
-    display: grid;
-    gap: 5px;
-    border: 1px solid #dfe6e2;
-    border-radius: 15px;
-    background: #ffffff;
-    box-shadow: 0 14px 34px rgba(20,38,28,.16);
-  }
-
-  .kp-menu button {
-    min-height: 42px;
-    padding: 0 12px;
-    border: 0;
-    border-radius: 10px;
-    background: transparent;
-    color: #17211c;
-    text-align: left;
-    font-weight: 800;
-    cursor: pointer;
-  }
-
-  .kp-menu button:hover {
-    background: #f1f7f3;
-  }
-
-  .kp-hero {
-    margin-bottom: 14px;
-    padding: 20px;
-    display: grid;
-    grid-template-columns: minmax(0,1fr) auto;
-    align-items: center;
-    gap: 14px;
-    border-radius: 22px;
-    color: #fff;
-    background: linear-gradient(135deg,#073a29,#0e7042);
-  }
-
-  .kp-hero h1 {
-    margin: 7px 0;
-    font-size: clamp(27px,7vw,42px);
-    line-height: 1.03;
-  }
-
-  .kp-hero p {
-    margin: 0;
-    color: #d9ede2;
-    font-size: 14px;
-    line-height: 1.45;
-  }
-
-  .kp-hero img {
-    width: 106px;
-    min-height: 72px;
-    padding: 9px;
-    object-fit: contain;
-    border-radius: 18px;
-    background: #fff;
-  }
-
-  .kp-eyebrow,
-  .kp-eyebrow-dark {
-    display: block;
-    font-size: 9px;
-    font-weight: 900;
-    letter-spacing: 1.2px;
-  }
-
-  .kp-eyebrow { color: #74e1a5; }
-  .kp-eyebrow-dark { color: #0b7041; }
-
-  .kp-flow,
-  .kp-manage {
-    padding: 16px;
-    border: 1px solid #dfe6e2;
-    border-radius: 22px;
-    background: #fff;
-    box-shadow: 0 10px 24px rgba(20,38,28,.05);
-  }
-
-  .kp-flow h2,
-  .kp-manage h2 {
-    margin: 5px 0 8px;
-    font-size: clamp(24px,6vw,32px);
-    line-height: 1.08;
-  }
-
-  .kp-muted {
-    margin: 0 0 14px;
-    color: #6b7770;
-    font-size: 13px;
-  }
-
-  .kp-business-window {
-    margin: 4px 0 18px;
-    padding: 15px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    border: 1px solid #dfe6e2;
-    border-radius: 17px;
-    background: #ffffff;
-    box-shadow: 0 5px 14px rgba(20,38,28,.04);
-  }
-
-  .kp-business-logo-box {
-    width: 58px;
-    height: 58px;
-    flex: 0 0 auto;
-    display: grid;
-    place-items: center;
-    border: 1px solid #e5ebe7;
-    border-radius: 14px;
-    background: #ffffff;
-    overflow: hidden;
-  }
-
-  .kp-business-logo {
-    width: 50px;
-    height: 44px;
-    object-fit: contain;
-  }
-
-  .kp-business-placeholder {
-    font-size: 27px;
-    line-height: 1;
-  }
-
-  .kp-business-window-info {
-    min-width: 0;
-    display: grid;
-    gap: 3px;
-  }
-
-  .kp-business-window-info strong {
-    color: #17211c;
-    font-size: 19px;
-    line-height: 1.2;
-  }
-
-  .kp-business-window-info span {
-    color: #6f7c74;
-    font-size: 13px;
-  }
-
-  .kp-stepper {
-    margin-bottom: 22px;
-    padding: 18px 16px 14px;
-    display: grid;
-    grid-template-columns: repeat(4,minmax(0,1fr));
-    gap: 0;
-    border: 1px solid #e1e7e3;
-    border-radius: 18px;
-    background: #f8faf9;
-  }
-
-  .kp-step-item {
-    min-width: 0;
-    display: grid;
-    justify-items: center;
-    gap: 7px;
-  }
-
-  .kp-step-top {
-    width: 100%;
-    display: flex;
-    align-items: center;
-  }
-
-  .kp-step-circle {
-    width: 34px;
-    height: 34px;
-    flex: 0 0 auto;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: #e7ece9;
-    color: #5e6963;
-    font-size: 13px;
-    font-weight: 900;
-    position: relative;
-    z-index: 2;
-  }
-
-  .kp-step-line {
-    height: 3px;
-    flex: 1;
-    margin: 0 8px;
-    border-radius: 999px;
+const sPro = {
+  page: {
+    minHeight: "100vh",
+    padding: "clamp(12px, 2vw, 28px)",
     background:
-      radial-gradient(circle, #9aa59f 1.4px, transparent 1.6px)
-      center / 9px 3px repeat-x;
-    opacity: .7;
+      "radial-gradient(circle at top right, rgba(22,131,79,.08), transparent 28%), #f4f7f5",
+    color: "#14231b",
+    fontFamily: "Inter, Arial, system-ui, sans-serif",
+  },
+
+  header: {
+    maxWidth: 1450,
+    margin: "0 auto 14px",
+    minHeight: 118,
+    padding: "18px 20px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 18,
+    flexWrap: "wrap",
+    borderRadius: 22,
+    background:
+      "linear-gradient(120deg,#061f16 0%,#0b4b2e 58%,#11864d 100%)",
+    color: "#fff",
+    boxShadow: "0 18px 45px rgba(6,58,34,.18)",
+    border: "1px solid rgba(255,255,255,.08)",
+  },
+
+  heroBrand: {
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+    minWidth: 0,
+    flex: "1 1 560px",
+  },
+
+  logoCard: {
+    width: 118,
+    height: 78,
+    flex: "0 0 auto",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 17,
+    background: "#fff",
+    boxShadow: "0 10px 26px rgba(0,0,0,.16)",
+  },
+
+  logo: {
+    width: 100,
+    height: 54,
+    objectFit: "contain",
+    display: "block",
+  },
+
+  heroText: {
+    minWidth: 0,
+  },
+
+  eyebrow: {
+    display: "block",
+    marginBottom: 5,
+    color: "#86efac",
+    fontSize: 10,
+    fontWeight: 900,
+    letterSpacing: 1.6,
+  },
+
+  title: {
+    margin: "0 0 6px",
+    color: "#fff",
+    fontSize: "clamp(27px, 3vw, 39px)",
+    lineHeight: 1.02,
+    letterSpacing: "-.8px",
+  },
+
+  subtitle: {
+    margin: 0,
+    color: "#d9eee2",
+    fontSize: 13,
+    lineHeight: 1.45,
+  },
+
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+
+  roleBadge: {
+    minHeight: 36,
+    padding: "0 12px",
+    display: "inline-flex",
+    alignItems: "center",
+    borderRadius: 999,
+    background: "rgba(255,255,255,.10)",
+    border: "1px solid rgba(255,255,255,.16)",
+    color: "#eaf8ef",
+    fontSize: 10,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: ".7px",
+  },
+
+  secondaryButton: {
+    minHeight: 40,
+    padding: "9px 13px",
+    border: "1px solid #d6e1da",
+    borderRadius: 11,
+    background: "#fff",
+    color: "#20332a",
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  heroButton: {
+    minHeight: 40,
+    padding: "9px 14px",
+    border: "1px solid rgba(255,255,255,.24)",
+    borderRadius: 11,
+    background: "rgba(255,255,255,.10)",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  tabs: {
+    maxWidth: 1450,
+    margin: "0 auto 14px",
+    padding: 6,
+    display: "flex",
+    gap: 6,
+    overflowX: "auto",
+    border: "1px solid #dce7e0",
+    borderRadius: 15,
+    background: "#fff",
+    boxShadow: "0 7px 20px rgba(15,23,42,.04)",
+  },
+
+  tab: {
+    flex: "0 0 auto",
+    minHeight: 40,
+    padding: "8px 14px",
+    border: "1px solid transparent",
+    borderRadius: 10,
+    background: "transparent",
+    color: "#526158",
+    fontSize: 12,
+    fontWeight: 850,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+
+  tabActive: {
+    borderColor: "#0d7d47",
+    background: "linear-gradient(135deg,#139253,#08713b)",
+    color: "#fff",
+    boxShadow: "0 6px 14px rgba(8,113,59,.18)",
+  },
+
+  toolbar: {
+    maxWidth: 1450,
+    margin: "0 auto 14px",
+    padding: 12,
+    display: "grid",
+    gridTemplateColumns: "minmax(210px,1.45fr) repeat(4,minmax(135px,.65fr))",
+    gap: 9,
+    border: "1px solid #dce5df",
+    borderRadius: 17,
+    background: "#fff",
+    boxShadow: "0 8px 24px rgba(15,23,42,.045)",
+  },
+
+  dateCard: {
+    minWidth: 0,
+    padding: "10px 12px 5px",
+    borderRadius: 13,
+    background: "linear-gradient(180deg,#f8fbf9,#f2f7f4)",
+    border: "1px solid #e1e9e4",
+  },
+
+  dateHuman: {
+    display: "block",
+    marginTop: -5,
+    color: "#16834f",
+    fontSize: 10,
+    fontWeight: 850,
+  },
+
+  quickInfo: {
+    minHeight: 73,
+    padding: 11,
+    display: "grid",
+    gridTemplateColumns: "38px 1fr",
+    gap: 9,
+    alignItems: "center",
+    borderRadius: 13,
+    background: "#fbfdfc",
+    border: "1px solid #e2eae5",
+  },
+
+  statIcon: {
+    width: 36,
+    height: 36,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 11,
+    background: "#eaf7ef",
+    color: "#16834f",
+    fontSize: 16,
+    fontWeight: 900,
+  },
+
+  bigNumber: {
+    display: "block",
+    marginTop: 2,
+    fontSize: 22,
+    lineHeight: 1,
+    color: "#16251d",
+  },
+
+  gridCards: {
+    maxWidth: 1450,
+    margin: "0 auto 14px",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))",
+    gap: 12,
+  },
+
+  classCard: {
+    position: "relative",
+    overflow: "hidden",
+    padding: 17,
+    border: "1px solid #dbe6df",
+    borderRadius: 18,
+    background:
+      "linear-gradient(180deg,rgba(255,255,255,1),rgba(248,252,249,1))",
+    boxShadow: "0 10px 28px rgba(18,66,42,.07)",
+  },
+
+  classTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    paddingBottom: 12,
+    borderBottom: "1px solid #edf1ee",
+  },
+
+  badge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "#e8f7ed",
+    color: "#117a43",
+    fontSize: 9,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: ".5px",
+  },
+
+  badgeSuccess: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "#e8f7ed",
+    color: "#08743c",
+    fontSize: 9,
+    fontWeight: 900,
+    textTransform: "uppercase",
+  },
+
+  badgeNeutral: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "#eef2f0",
+    color: "#526158",
+    fontSize: 9,
+    fontWeight: 900,
+    textTransform: "uppercase",
+  },
+
+  badgeDanger: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "#fff0f0",
+    color: "#b42318",
+    fontSize: 9,
+    fontWeight: 900,
+    textTransform: "uppercase",
+  },
+
+  badgeWarning: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "5px 9px",
+    borderRadius: 999,
+    background: "#fff7dd",
+    color: "#956400",
+    fontSize: 9,
+    fontWeight: 900,
+    textTransform: "uppercase",
+  },
+
+  cardTitle: {
+    margin: "8px 0 0",
+    fontSize: 21,
+    letterSpacing: "-.3px",
+  },
+
+  availabilityGood: {
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#edf8f1",
+    color: "#16834f",
+    fontSize: 10,
+    fontWeight: 900,
+  },
+
+  availabilityFull: {
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#fff0f0",
+    color: "#be123c",
+    fontSize: 10,
+    fontWeight: 900,
+  },
+
+  classData: {
+    marginTop: 12,
+    display: "grid",
+    gap: 7,
+  },
+
+  dataRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingBottom: 7,
+    borderBottom: "1px solid #edf1ee",
+    fontSize: 12,
+  },
+
+  capacityBlock: {
+    marginTop: 11,
+  },
+
+  capacityMeta: {
+    marginBottom: 6,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    color: "#6d7b73",
+    fontSize: 10,
+    fontWeight: 750,
+  },
+
+  progressTrack: {
+    width: "100%",
+    height: 7,
+    overflow: "hidden",
+    borderRadius: 999,
+    background: "#e9efeb",
+  },
+
+  progressFill: {
+    height: "100%",
+    borderRadius: 999,
+    background: "linear-gradient(90deg,#18a45b,#08733c)",
+  },
+
+  cardButton: {
+    width: "100%",
+    minHeight: 40,
+    marginTop: 13,
+    border: "none",
+    borderRadius: 10,
+    background: "linear-gradient(135deg,#159552,#08743c)",
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 7px 16px rgba(8,116,60,.16)",
+  },
+
+  panel: {
+    maxWidth: 1450,
+    margin: "0 auto 14px",
+    padding: "17px",
+    border: "1px solid #dce5df",
+    borderRadius: 18,
+    background: "#fff",
+    boxShadow: "0 9px 26px rgba(15,23,42,.05)",
+  },
+
+  panelHeader: {
+    marginBottom: 13,
+    paddingBottom: 11,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    flexWrap: "wrap",
+    borderBottom: "1px solid #edf1ee",
+  },
+
+  panelTitle: {
+    margin: 0,
+    fontSize: 20,
+    letterSpacing: "-.3px",
+  },
+
+  counter: {
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#edf8f1",
+    color: "#16834f",
+    fontSize: 10,
+    fontWeight: 900,
+  },
+
+  twoColumns: {
+    maxWidth: 1450,
+    margin: "0 auto",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,390px),1fr))",
+    gap: 14,
+  },
+
+  field: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 5,
+    marginBottom: 10,
+  },
+
+  label: {
+    color: "#526158",
+    fontSize: 11,
+    fontWeight: 850,
+  },
+
+  input: {
+    width: "100%",
+    minHeight: 41,
+    padding: "9px 11px",
+    boxSizing: "border-box",
+    border: "1px solid #ccd8d1",
+    borderRadius: 10,
+    background: "#fff",
+    color: "#17211c",
+    outline: "none",
+    fontSize: 13,
+  },
+
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))",
+    gap: 9,
+  },
+
+  checkGrid: {
+    display: "grid",
+    gap: 8,
+    margin: "5px 0 12px",
+  },
+
+  checkLabel: {
+    minHeight: 39,
+    padding: "0 11px",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 10,
+    background: "#f7faf8",
+    border: "1px solid #e3eae6",
+    fontSize: 12,
+    fontWeight: 750,
+    color: "#526158",
+  },
+
+  formActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+
+  primaryButton: {
+    minHeight: 40,
+    padding: "9px 14px",
+    border: "none",
+    borderRadius: 10,
+    background: "linear-gradient(135deg,#159552,#08743c)",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  primaryWide: {
+    width: "100%",
+    minHeight: 44,
+    marginTop: 3,
+    border: "none",
+    borderRadius: 10,
+    background: "linear-gradient(135deg,#159552,#08743c)",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 8px 18px rgba(8,116,60,.16)",
+  },
+
+  searchResults: {
+    marginTop: -4,
+    marginBottom: 10,
+    display: "grid",
+    gap: 5,
+    padding: 7,
+    border: "1px solid #dce5df",
+    borderRadius: 11,
+    background: "#fff",
+    boxShadow: "0 9px 22px rgba(15,23,42,.06)",
+  },
+
+  searchItem: {
+    width: "100%",
+    padding: 10,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    border: "1px solid transparent",
+    borderRadius: 9,
+    background: "#f7faf8",
+    color: "#17211c",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  selectedClient: {
+    marginBottom: 12,
+    padding: 12,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    border: "1px solid #bfe0cb",
+    borderRadius: 12,
+    background: "linear-gradient(180deg,#f2fbf5,#eaf7ef)",
+  },
+
+  slotList: {
+    marginTop: 12,
+    display: "grid",
+    gap: 7,
+  },
+
+  slot: {
+    width: "100%",
+    padding: 11,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    border: "1px solid #dce5df",
+    borderRadius: 11,
+    background: "#fbfcfb",
+    color: "#17211c",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  slotSelected: {
+    borderColor: "#16834f",
+    background: "#edf9f1",
+    boxShadow: "0 5px 13px rgba(22,131,79,.10)",
+  },
+
+  listCard: {
+    padding: 11,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    border: "1px solid #e3e9e5",
+    borderRadius: 11,
+    background: "#fbfcfb",
+  },
+
+  reservationCard: {
+    padding: 12,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    border: "1px solid #e1e8e3",
+    borderRadius: 12,
+    background: "#fbfdfc",
+  },
+
+  reservationIdentity: {
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flex: "1 1 360px",
+  },
+
+  avatar: {
+    width: 40,
+    height: 40,
+    flex: "0 0 auto",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 12,
+    background: "linear-gradient(135deg,#123c29,#16834f)",
+    color: "#fff",
+    fontWeight: 900,
+  },
+
+  reservationMain: {
+    minWidth: 0,
+    flex: 1,
+  },
+
+  reservationTopLine: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+
+  reservationName: {
+    display: "block",
+    fontSize: 14,
+    overflowWrap: "anywhere",
+  },
+
+  inlineActions: {
+    display: "flex",
+    gap: 6,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+
+  smallButton: {
+    minHeight: 32,
+    padding: "6px 9px",
+    border: "1px solid #d4ddd7",
+    borderRadius: 8,
+    background: "#fff",
+    color: "#435047",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  smallSuccess: {
+    minHeight: 32,
+    padding: "6px 9px",
+    border: "1px solid #bfe0cb",
+    borderRadius: 8,
+    background: "#edf8f1",
+    color: "#16834f",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  smallDanger: {
+    minHeight: 32,
+    padding: "6px 9px",
+    border: "1px solid #fecaca",
+    borderRadius: 8,
+    background: "#fff5f5",
+    color: "#be123c",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  empty: {
+    gridColumn: "1 / -1",
+    minHeight: 130,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 7,
+    padding: 20,
+    border: "1px dashed #cbd9d0",
+    borderRadius: 15,
+    background:
+      "linear-gradient(180deg,rgba(250,252,251,1),rgba(246,250,247,1))",
+    textAlign: "center",
+  },
+
+  muted: {
+    color: "#748078",
+    fontSize: 11,
+  },
+
+  footer: {
+    maxWidth: 1450,
+    margin: "0 auto",
+    padding: "6px 2px 18px",
+    color: "#8b958f",
+    fontSize: 9,
+    textAlign: "right",
+  },
+};
+
+
+const AGENDA_CSS = `
+  .agenda-page * {
+    box-sizing: border-box;
   }
 
-  .kp-step-line.done {
-    background: #0b7041;
-    opacity: 1;
+  .agenda-tabs::-webkit-scrollbar {
+    height: 5px;
   }
 
-  .kp-step-circle.active {
-    background: linear-gradient(145deg,#0b7041,#14a35f);
-    color: #fff;
-    box-shadow: 0 6px 14px rgba(11,112,65,.24);
-  }
-
-  .kp-step-circle.done {
-    background: #dff3e7;
-    color: #0b7041;
-  }
-
-  .kp-stepper small {
-    color: #7d8882;
-    font-size: 9px;
-    font-weight: 850;
-    text-align: center;
-    line-height: 1.2;
-  }
-
-  .kp-stepper small.active {
-    color: #0b7041;
-  }
-
-  .kp-service-list,
-  .kp-prof-list,
-  .kp-times,
-  .kp-form,
-  .kp-cancel-box {
-    display: grid;
-    gap: 11px;
-  }
-
-  .kp-service {
-    padding: 14px;
-    display: grid;
-    grid-template-columns: 56px minmax(0,1fr) auto;
-    gap: 12px;
-    align-items: center;
-    border: 1px solid #dbe4df;
-    border-radius: 18px;
-    background: #ffffff;
-    box-shadow: 0 5px 14px rgba(20,38,28,.04);
-  }
-
-  .kp-service-icon,
-  .kp-avatar,
-  .kp-mini-avatar {
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: #eaf5ef;
-    color: #0b7041;
-    font-weight: 900;
-  }
-
-  .kp-service-icon {
-    width: 54px;
-    height: 54px;
-    color: #fff;
-    background: linear-gradient(145deg,#07834b,#13a95f);
-    box-shadow: 0 7px 16px rgba(11,112,65,.22);
-    font-size: 24px;
-  }
-
-  .kp-service-info {
-    min-width: 0;
-    display: grid;
-    gap: 3px;
-  }
-
-  .kp-service-info strong {
-    color: #17211c;
-    font-size: 17px;
-    line-height: 1.15;
-  }
-
-  .kp-service-info span,
-  .kp-service-info small {
-    color: #6f7b74;
-    font-size: 12px;
-  }
-
-  .kp-service-info b {
-    color: #0b7041;
-    font-size: 14px;
-    font-weight: 900;
-  }
-
-  .kp-service > button,
-  .kp-select {
-    min-width: 86px;
-    min-height: 38px;
-    padding: 0 12px;
-    display: grid;
-    place-items: center;
-    border: 0;
+  .agenda-tabs::-webkit-scrollbar-thumb {
+    background: #c9d8cf;
     border-radius: 999px;
-    background: #0b7041;
-    color: #fff;
-    font-size: 11px;
-    font-weight: 900;
-    cursor: pointer;
   }
 
-  .kp-blue-link,
-  .kp-link {
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: #3564c4;
-    font-weight: 800;
-    cursor: pointer;
-  }
-
-  .kp-selected-service,
-  .kp-prof-summary {
-    margin: 12px 0 15px;
-    padding: 13px;
+  .agenda-kpis {
     display: grid;
-    gap: 4px;
-    border-radius: 15px;
-    background: #f8faf9;
-  }
-
-  .kp-prof {
-    width: 100%;
-    padding: 13px;
-    display: grid;
-    grid-template-columns: 52px minmax(0,1fr) auto;
-    gap: 11px;
-    align-items: center;
-    border: 1px solid #dfe5e2;
-    border-radius: 18px;
-    background: #fff;
-    color: #17211c;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .kp-avatar {
-    width: 50px;
-    height: 50px;
-    font-size: 18px;
-  }
-
-  .kp-prof-info {
-    min-width: 0;
-    display: grid;
-    gap: 3px;
-  }
-
-  .kp-prof-info small {
-    color: #6c7871;
-  }
-
-  .kp-select {
-    min-width: 88px;
-    min-height: 34px;
-    border: 1px solid #d7deda;
-    background: #fff;
-    color: #303b35;
-  }
-
-  .kp-prof-summary {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    border: 1px solid #e0e6e3;
-    background: #fff;
-  }
-
-  .kp-mini-avatar {
-    width: 30px;
-    height: 30px;
-  }
-
-  .kp-flow h3 {
-    margin: 18px 0 10px;
-    font-size: 17px;
-  }
-
-
-  .kp-booking-head {
-    margin: 12px 0 14px;
-  }
-
-  .kp-booking-business {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border: 1px solid #e0e6e3;
-    border-radius: 16px;
-    background: #ffffff;
-  }
-
-  .kp-booking-business > div:last-child {
-    min-width: 0;
-    display: grid;
-    gap: 2px;
-  }
-
-  .kp-booking-business strong {
-    color: #17211c;
-    font-size: 14px;
-  }
-
-  .kp-booking-business small {
-    color: #6e7a73;
-    font-size: 11px;
-    line-height: 1.35;
-  }
-
-  .kp-date-strip-wrap {
-    margin: 12px -16px 0;
-    padding: 0 16px 4px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .kp-date-strip {
-    display: flex;
-    gap: 8px;
-    width: max-content;
-  }
-
-  .kp-date-pill {
-    min-width: 78px;
-    height: 104px;
-    padding: 8px 6px;
-    display: grid;
-    place-items: center;
-    gap: 2px;
-    border: 1px solid #dfe5e1;
-    border-radius: 18px;
-    background: #ffffff;
-    color: #526058;
-    cursor: pointer;
-  }
-
-  .kp-date-pill strong {
-    font-size: 27px;
-    line-height: 1;
-    color: inherit;
-  }
-
-  .kp-date-pill span {
-    font-size: 12px;
-    text-transform: lowercase;
-  }
-
-  .kp-date-pill.active {
-    border-color: #0b7041;
-    background: #0b7041;
-    color: #ffffff;
-    box-shadow: 0 8px 18px rgba(11,112,65,.18);
-  }
-
-  .kp-time-title {
-    margin: 24px 0 12px !important;
-    font-size: 20px !important;
-    font-weight: 800;
-  }
-
-  .kp-time-cards {
-    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px;
-    padding-bottom: 92px;
   }
 
-  .kp-time-card {
-    width: 100%;
-    min-height: 78px;
-    padding: 0 18px;
-    display: flex;
+  .agenda-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.75fr) minmax(285px, .65fr);
+    gap: 16px;
+    align-items: start;
+  }
+
+  .agenda-schedule-row {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr) 160px 150px;
+    gap: 16px;
     align-items: center;
-    border: 1px solid #dfe4e1;
-    border-radius: 18px;
-    background: #ffffff;
-    color: #17211c;
-    font-size: 19px;
-    text-align: left;
-    cursor: pointer;
   }
 
-  .kp-time-card.active {
-    border: 2px solid #0b7041;
-    background: #eef8f2;
-    color: #0b7041;
-    font-weight: 900;
-  }
-
-  .kp-continue-fixed {
-    position: fixed;
-    left: 50%;
-    bottom: 18px;
-    transform: translateX(-50%);
-    z-index: 95;
-    width: min(620px, calc(100% - 34px));
-    min-height: 66px;
-    margin: 0;
-    padding: 0 20px;
-    border-radius: 18px;
-    background: #171817;
-    color: #ffffff;
-    box-shadow: 0 12px 30px rgba(0,0,0,.24);
-  }
-
-  .kp-continue-detail {
-    color: #d3d3d3;
-    font-size: 15px;
-    font-weight: 800;
-  }
-
-  .kp-continue-action {
-    display: inline-flex;
-    align-items: center;
+  .agenda-reserva-filtros {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) minmax(180px, 240px);
     gap: 10px;
-    color: #ffffff;
-    font-size: 18px;
-    font-weight: 900;
   }
 
-  .kp-continue-action b {
-    font-size: 29px;
-    line-height: 1;
-    font-weight: 400;
-  }
-
-  .kp-available-note {
-    margin: -2px 0 10px;
-    color: #6b7770;
-    font-size: 11px;
-  }
-
-  .kp-days {
-    padding-bottom: 6px;
-    display: flex;
-    gap: 9px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .kp-days button {
-    min-width: 72px;
-    min-height: 100px;
-    padding: 9px 7px;
+  .agenda-stepper {
     display: grid;
-    place-items: center;
-    gap: 3px;
-    border: 1px solid #dce3df;
-    border-radius: 18px;
-    background: #fff;
-    color: #59645e;
-    cursor: pointer;
-  }
-
-  .kp-days button strong {
-    font-size: 24px;
-  }
-
-  .kp-days button.active {
-    border-color: #171817;
-    background: #171817;
-    color: #fff;
-  }
-
-  .kp-times button {
-    min-height: 68px;
-    padding: 0 18px;
-    display: flex;
-    align-items: center;
-    border: 1px solid #dfe4e1;
-    border-radius: 17px;
-    background: #fff;
-    color: #1b231f;
-    font-size: 18px;
-    cursor: pointer;
-  }
-
-  .kp-times button.active {
-    border: 2px solid #2f65c8;
-    background: #f3f6ff;
-    color: #2f65c8;
-    font-weight: 900;
-  }
-
-  .kp-continue {
-    width: 100%;
-    min-height: 58px;
-    margin-top: 15px;
-    padding: 0 18px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border: 0;
-    border-radius: 18px;
-    background: #171817;
-    color: #fff;
-    cursor: pointer;
-  }
-
-  .kp-summary {
-    margin: 13px 0;
-    padding: 15px;
-    display: grid;
-    gap: 10px;
-    border: 1px solid #edf0ee;
-    border-radius: 18px;
-    background: #fafbfa;
-  }
-
-  .kp-summary-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    color: #6c7771;
-    font-size: 13px;
-  }
-
-  .kp-summary-row strong {
-    color: #17211c;
-    text-align: right;
-  }
-
-  .kp-summary-row strong.accent {
-    color: #0b7041;
-  }
-
-  .kp-note,
-  .kp-info,
-  .kp-cancelled {
-    margin: 12px 0;
-    padding: 12px;
-    border-radius: 13px;
-    font-size: 12px;
-    line-height: 1.4;
-  }
-
-  .kp-note {
-    background: #fff8e7;
-    color: #8a6414;
-  }
-
-  .kp-info {
-    background: #eef5f1;
-    color: #405147;
-  }
-
-  .kp-cancelled {
-    background: #ffedec;
-    color: #8a1c12;
-  }
-
-  .kp-form label,
-  .kp-cancel-box label {
-    display: grid;
-    gap: 6px;
-    color: #263129;
-    font-size: 12px;
-    font-weight: 800;
-  }
-
-  .kp-form input,
-  .kp-form textarea,
-  .kp-cancel-box input {
-    width: 100%;
-    min-height: 48px;
-    padding: 10px 12px;
-    border: 1px solid #cfd9d3;
-    border-radius: 13px;
-    background: #fff;
-    color: #17211c;
-    font-size: 16px;
-  }
-
-  .kp-form textarea {
-    min-height: 82px;
-    resize: vertical;
-  }
-
-  .kp-confirm,
-  .kp-secondary,
-  .kp-danger {
-    width: 100%;
-    min-height: 50px;
-    border-radius: 14px;
-    font-weight: 900;
-    cursor: pointer;
-  }
-
-  .kp-confirm {
-    border: 0;
-    color: #fff;
-    background: linear-gradient(180deg,#168c54,#0b7041);
-  }
-
-  .kp-secondary {
-    margin-top: 10px;
-    border: 1px solid #0b7041;
-    background: #fff;
-    color: #0b7041;
-  }
-
-  .kp-danger {
-    border: 0;
-    background: #b42318;
-    color: #fff;
-  }
-
-  .kp-link {
-    width: 100%;
-    min-height: 42px;
-    margin-top: 6px;
-    color: #5d6962;
-  }
-
-  .kp-success {
-    text-align: center;
-  }
-
-  .kp-check {
-    width: 62px;
-    height: 62px;
-    margin: 6px auto 13px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: #0b7041;
-    color: #fff;
-    font-size: 30px;
-    font-weight: 900;
-  }
-
-  .kp-success p {
-    color: #536159;
-    line-height: 1.6;
-  }
-
-  .kp-manage {
-    border: 2px solid #a7d7ba;
-    background: #f0faf4;
-  }
-
-  .kp-data-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit,minmax(150px,1fr));
-    gap: 9px;
-  }
-
-  .kp-data {
-    padding: 11px;
-    display: grid;
-    gap: 4px;
-    border: 1px solid #dce6e0;
-    border-radius: 13px;
-    background: #fff;
-  }
-
-  .kp-error,
-  .kp-error-card {
-    margin-bottom: 12px;
-    padding: 12px;
-    border: 1px solid #f2b8b3;
-    border-radius: 13px;
-    background: #fff1ef;
-    color: #8a1c12;
-  }
-
-  .kp-empty-action {
-    margin-top: 12px;
-    min-height: 42px;
-    padding: 0 14px;
-    border: 0;
-    border-radius: 12px;
-    background: #0b7041;
-    color: #ffffff;
-    font-weight: 900;
-    cursor: pointer;
-  }
-
-  .kp-empty {
-    padding: 24px;
-    border: 1px dashed #d5ddd8;
-    border-radius: 15px;
-    background: #fafcfb;
-    color: #748078;
-    text-align: center;
-    font-size: 13px;
-  }
-
-  .kp-reserve-now {
-    position: fixed;
-    z-index: 80;
-    left: 50%;
-    bottom: 82px;
-    transform: translateX(-50%);
-    width: min(620px,calc(100% - 30px));
-    min-height: 58px;
-    padding: 0 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    border: 0;
-    border-radius: 18px;
-    color: #fff;
-    background: linear-gradient(180deg,#168c54,#0b7041);
-    box-shadow: 0 12px 30px rgba(11,112,65,.28);
-    font-size: 18px;
-    cursor: pointer;
-  }
-
-  .kp-bottom-nav {
-    position: fixed;
-    z-index: 70;
-    left: 50%;
-    bottom: 8px;
-    transform: translateX(-50%);
-    width: min(620px,calc(100% - 20px));
-    min-height: 68px;
-    padding: 8px 12px;
-    display: grid;
-    grid-template-columns: repeat(3,minmax(0,1fr));
-    gap: 6px;
-    border: 1px solid #e2e7e4;
-    border-radius: 22px;
-    background: rgba(255,255,255,.98);
-    box-shadow: 0 8px 28px rgba(20,38,28,.10);
-  }
-
-  .kp-bottom-nav button {
-    display: grid;
-    place-items: center;
-    gap: 2px;
-    border: 0;
-    background: transparent;
-    color: #56625b;
-    font-weight: 800;
-    cursor: pointer;
-  }
-
-  .kp-bottom-nav button span {
-    font-size: 20px;
-  }
-
-  .kp-modal-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 120;
-    display: grid;
-    place-items: center;
-    padding: 20px;
-    background: rgba(8,14,11,.58);
-    backdrop-filter: blur(3px);
-  }
-
-  .kp-modal {
-    width: min(420px,100%);
-    padding: 22px;
-    border-radius: 22px;
-    background: #ffffff;
-    color: #17211c;
-    box-shadow: 0 24px 60px rgba(0,0,0,.25);
-    text-align: center;
-  }
-
-  .kp-modal-icon {
-    width: 58px;
-    height: 58px;
-    margin: 0 auto 12px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: #eaf5ef;
-    color: #0b7041;
-    font-size: 25px;
-    font-weight: 900;
-  }
-
-  .kp-modal h3 {
-    margin: 7px 0 8px;
-    font-size: 21px;
-  }
-
-  .kp-modal p {
-    margin: 0 0 16px;
-    color: #66746c;
-    font-size: 13px;
-    line-height: 1.5;
-  }
-
-
-  .kp-wod-wrap {
-    margin: 16px 0;
-    text-align: left;
-  }
-
-  .kp-wod,
-  .kp-wod-locked {
-    padding: 16px;
-    border: 1px solid #b9ddc8;
-    border-radius: 18px;
-    background: #f0faf4;
-  }
-
-  .kp-wod-eyebrow {
-    display: block;
-    color: #0b7041;
-    font-size: 9px;
-    font-weight: 900;
-    letter-spacing: 1.1px;
-  }
-
-  .kp-wod h3 {
-    margin: 5px 0 4px;
-    color: #17211c;
-    font-size: 22px;
-  }
-
-  .kp-wod-program {
-    margin-bottom: 12px;
-    color: #607068;
-    font-size: 12px;
-    font-weight: 800;
-  }
-
-  .kp-wod-blocks {
-    display: grid;
+    grid-template-columns: repeat(3, minmax(0,1fr));
     gap: 8px;
   }
 
-  .kp-wod-block {
-    padding: 11px 12px;
-    display: grid;
-    gap: 5px;
-    border: 1px solid #dce7e1;
-    border-radius: 12px;
-    background: #ffffff;
+  .agenda-status-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .kp-wod-block.accent {
-    border-color: #8fcaa8;
-    background: #e8f7ee;
-  }
-
-  .kp-wod-block span,
-  .kp-wod-note span {
-    color: #0b7041;
-    font-size: 9px;
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: .8px;
-  }
-
-  .kp-wod-block strong,
-  .kp-wod-note strong {
-    white-space: pre-wrap;
-    color: #17211c;
-    font-size: 13px;
-    line-height: 1.45;
-  }
-
-  .kp-wod-note {
-    margin-top: 9px;
-    padding: 11px 12px;
-    display: grid;
-    gap: 5px;
-    border-radius: 12px;
-    background: #fff8e7;
-  }
-
-  .kp-wod-locked {
-    display: grid;
-    gap: 5px;
-    color: #536159;
-  }
-
-  .kp-wod-locked strong {
-    color: #0b7041;
-  }
-
-  .kp-dark .kp-wod,
-  .kp-dark .kp-wod-locked {
-    background: #102018;
-    border-color: #28523a;
-  }
-
-  .kp-dark .kp-wod h3,
-  .kp-dark .kp-wod-block strong,
-  .kp-dark .kp-wod-note strong {
-    color: #ffffff;
-  }
-
-  .kp-dark .kp-wod-block {
-    background: #111b16;
-    border-color: #2b3a32;
-  }
-
-  .kp-dark .kp-wod-block.accent {
-    background: #153c29;
-    border-color: #42d47f;
-  }
-
-  .kp-dark .kp-wod-program,
-  .kp-dark .kp-wod-locked {
-    color: #aeb9b2;
-  }
-
-  .kp-footer {
-    padding: 18px 2px 4px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    color: #829088;
-    font-size: 9px;
-  }
-
-  .kp-footer img {
-    width: 74px;
-    height: 28px;
-    object-fit: contain;
-  }
-
-  .kp-loading {
-    min-height: 100vh;
-    display: grid;
-    place-items: center;
-    align-content: center;
-    gap: 12px;
-    background: #f5f7f6;
-    color: #0b7041;
-    font-family: Inter, system-ui, "Segoe UI", sans-serif;
-  }
-
-  .kp-loading img {
-    width: 115px;
-  }
-
-
-  .kp-dark {
-    background:
-      radial-gradient(circle at top right, rgba(20,163,95,.08), transparent 30%),
-      #08100c;
-    color: #f5f7f6;
-  }
-
-  .kp-dark .kp-topbar {
-    background: rgba(8,16,12,.97);
-    border-color: #26332c;
-  }
-
-  .kp-dark .kp-flow,
-  .kp-dark .kp-manage {
-    background: #0f1713;
-    color: #f5f7f6;
-    border-color: #2a3931;
-    box-shadow: 0 12px 30px rgba(0,0,0,.22);
-  }
-
-  .kp-dark .kp-business-window,
-  .kp-dark .kp-business-logo-box,
-  .kp-dark .kp-booking-business,
-  .kp-dark .kp-date-pill,
-  .kp-dark .kp-time-card,
-  .kp-dark .kp-prof,
-  .kp-dark .kp-service,
-  .kp-dark .kp-data,
-  .kp-dark .kp-summary,
-  .kp-dark .kp-menu,
-  .kp-dark .kp-bottom-nav {
-    background: #111b16;
-    color: #f5f7f6;
-    border-color: #2b3a32;
-  }
-
-  .kp-dark .kp-stepper {
-    background: #121a16;
-    border-color: #2d3b34;
-  }
-
-  .kp-dark .kp-step-circle {
-    background: #313a35;
-    color: #d7ded9;
-  }
-
-  .kp-dark .kp-step-circle.active {
-    background: linear-gradient(145deg,#0b7041,#15b466);
-    color: #ffffff;
-  }
-
-  .kp-dark .kp-step-circle.done {
-    background: #173c29;
-    color: #78e7aa;
-  }
-
-  .kp-dark .kp-step-line {
-    background:
-      radial-gradient(circle, #647169 1.4px, transparent 1.6px)
-      center / 9px 3px repeat-x;
-    opacity: 1;
-  }
-
-  .kp-dark .kp-step-line.done {
-    background: #17a25e;
-  }
-
-  .kp-dark .kp-stepper small {
-    color: #aab4ae;
-  }
-
-  .kp-dark .kp-stepper small.active {
-    color: #48d889;
-  }
-
-  .kp-dark .kp-top-icons button,
-  .kp-dark .kp-back {
-    background: #17221c;
-    color: #eef4f0;
-    border-color: #26342d;
-  }
-
-  .kp-dark .kp-top-icons button.active {
-    background: #143c29;
-    border-color: #43d483;
-    color: #77e9aa;
-  }
-
-  .kp-dark .kp-business-window-info strong,
-  .kp-dark .kp-booking-business strong,
-  .kp-dark .kp-service-info strong,
-  .kp-dark .kp-prof-info strong,
-  .kp-dark .kp-summary-row strong,
-  .kp-dark .kp-menu button,
-  .kp-dark .kp-flow h2,
-  .kp-dark .kp-flow h3,
-  .kp-dark .kp-time-title {
-    color: #ffffff;
-  }
-
-  .kp-dark .kp-business-window-info span,
-  .kp-dark .kp-booking-business small,
-  .kp-dark .kp-muted,
-  .kp-dark .kp-service-info span,
-  .kp-dark .kp-service-info small,
-  .kp-dark .kp-prof-info small,
-  .kp-dark .kp-summary-row,
-  .kp-dark .kp-footer,
-  .kp-dark .kp-available-note {
-    color: #aeb9b2;
-  }
-
-  .kp-dark .kp-service-info b,
-  .kp-dark .kp-eyebrow-dark {
-    color: #45d987;
-  }
-
-  .kp-dark .kp-service > button,
-  .kp-dark .kp-select,
-  .kp-dark .kp-confirm,
-  .kp-dark .kp-empty-action {
-    background: linear-gradient(145deg,#0b7041,#14a55f);
-    color: #ffffff;
-    border-color: transparent;
-  }
-
-  .kp-dark .kp-date-pill.active,
-  .kp-dark .kp-time-card.active {
-    background: #153c29;
-    color: #7be7aa;
-    border-color: #42d47f;
-  }
-
-  .kp-dark .kp-form input,
-  .kp-dark .kp-form textarea,
-  .kp-dark .kp-cancel-box input {
-    background: #0b120e;
-    color: #ffffff;
-    border-color: #33433a;
-  }
-
-  .kp-dark .kp-form input::placeholder,
-  .kp-dark .kp-form textarea::placeholder,
-  .kp-dark .kp-cancel-box input::placeholder {
-    color: #7f8b84;
-  }
-
-  .kp-dark .kp-empty {
-    background: #101813;
-    color: #aeb9b2;
-    border-color: #34443a;
-  }
-
-  .kp-dark .kp-menu button:hover {
-    background: #1b2922;
-  }
-
-  .kp-dark .kp-modal {
-    background: #111b16;
-    color: #f5f7f6;
-  }
-
-  .kp-dark .kp-modal p {
-    color: #aeb9b2;
-  }
-
-  .kp-dark .kp-bottom-nav button {
-    color: #b5c0ba;
-  }
-
-  .kp-dark .kp-bottom-nav button:hover,
-  .kp-dark .kp-bottom-nav button:focus {
-    color: #49d98a;
-  }
-
-  @media (max-width: 520px) {
-    .kp-continue-fixed {
-      width: calc(100% - 28px);
-      bottom: 12px;
-      min-height: 64px;
-      padding: 0 18px;
+  @media (max-width: 1180px) {
+    .agenda-kpis {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .kp-continue-detail {
-      font-size: 14px;
+    .agenda-schedule-row {
+      grid-template-columns: 92px minmax(0, 1fr) 130px;
     }
 
-    .kp-continue-action {
-      font-size: 17px;
+    .agenda-schedule-action {
+      grid-column: 1 / -1;
     }
+  }
 
-    .kp-hero {
+  @media (max-width: 980px) {
+    .agenda-workspace {
       grid-template-columns: 1fr;
     }
 
-    .kp-hero img {
-      width: 104px;
-    }
-
-    .kp-service {
-      grid-template-columns: 46px minmax(0,1fr);
-    }
-
-    .kp-service > button {
-      grid-column: 1 / -1;
-      width: 100%;
-    }
-
-    .kp-prof {
-      grid-template-columns: 50px minmax(0,1fr);
-    }
-
-    .kp-select {
-      grid-column: 1 / -1;
-      width: 100%;
+    .agenda-executive-aside {
+      position: static !important;
     }
   }
+
+  @media (max-width: 720px) {
+    .agenda-page {
+      padding: 14px !important;
+    }
+
+    .agenda-header {
+      padding: 18px !important;
+      border-radius: 18px !important;
+    }
+
+    .agenda-kpis {
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .agenda-datebar {
+      align-items: stretch !important;
+    }
+
+    .agenda-date-controls {
+      width: 100%;
+      display: grid !important;
+      grid-template-columns: auto minmax(0,1fr) auto;
+    }
+
+    .agenda-date-today {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
+
+    .agenda-schedule-row {
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .agenda-time-block {
+      display: flex !important;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .agenda-reserva-filtros {
+      grid-template-columns: 1fr;
+    }
+
+    .agenda-stepper {
+      grid-template-columns: 1fr;
+    }
+
+    .agenda-status-strip {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .agenda-kpis {
+      grid-template-columns: 1fr;
+    }
+  }
+
+
+@media (max-width: 1180px) {
+  .agenda-d-command-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .agenda-d-command-grid > aside {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 820px) {
+  .agenda-d-hero {
+    grid-template-columns: 1fr !important;
+  }
+
+  .agenda-d-nav {
+    overflow-x: auto;
+  }
+
+  .agenda-d-week-strip {
+    grid-template-columns: repeat(7, minmax(86px, 1fr)) !important;
+    overflow-x: auto;
+  }
+
+  .agenda-d-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .agenda-d-command-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .agenda-d-timeline-row {
+    grid-template-columns: 24px 82px minmax(0, 1fr) !important;
+  }
+
+  .agenda-d-timeline-row > div:last-child {
+    grid-column: 2 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .agenda-d-kpis {
+    grid-template-columns: 1fr !important;
+  }
+
+  .agenda-d-timeline-row {
+    grid-template-columns: 20px 1fr !important;
+  }
+
+  .agenda-d-timeline-row > div:nth-child(2) {
+    grid-column: 2;
+  }
+
+  .agenda-d-timeline-row > div:nth-child(3) {
+    grid-column: 2;
+  }
+
+  .agenda-d-timeline-row > div:last-child {
+    grid-column: 2;
+  }
+
+  .agenda-d-reservation-row {
+    grid-template-columns: 42px minmax(0,1fr) !important;
+  }
+
+  .agenda-d-reservation-row > span:last-child {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+
+@media (max-width: 760px) {
+  .agenda-portal-responsive {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 980px) {
+  .agenda-wod-top-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .agenda-wod-editor-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 620px) {
+  .agenda-wod-top-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .agenda-wod-footer {
+    align-items: stretch !important;
+  }
+
+  .agenda-wod-footer > div {
+    width: 100%;
+  }
+}
 `;
+
+const neo = {
+  hero: {
+    maxWidth: 1480,
+    margin: "0 auto 16px",
+    padding: 24,
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) 320px",
+    gap: 18,
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg,#071b13 0%,#0b4a2b 58%,#0f7a42 100%)",
+    color: "#fff",
+    boxShadow: "0 18px 45px rgba(5,40,25,.18)",
+    overflow: "hidden",
+  },
+
+  heroMain: {
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    gap: 22,
+  },
+
+  brandRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 18,
+  },
+
+  logoCard: {
+    width: 138,
+    minHeight: 74,
+    display: "grid",
+    placeItems: "center",
+    padding: "8px 12px",
+    borderRadius: 18,
+    background: "#fff",
+    flex: "0 0 auto",
+  },
+
+  logo: {
+    width: 118,
+    height: 48,
+    objectFit: "contain",
+  },
+
+  heroEyebrow: {
+    display: "block",
+    marginBottom: 6,
+    color: "#6EE5A3",
+    fontSize: 10,
+    fontWeight: 900,
+    letterSpacing: 1.5,
+  },
+
+  heroTitle: {
+    margin: 0,
+    fontSize: "clamp(34px,5vw,58px)",
+    lineHeight: .98,
+    letterSpacing: -1.4,
+  },
+
+  heroSubtitle: {
+    maxWidth: 760,
+    margin: "10px 0 0",
+    color: "#DDEDE4",
+    fontSize: 13,
+    lineHeight: 1.55,
+  },
+
+  heroActions: {
+    display: "flex",
+    gap: 9,
+    flexWrap: "wrap",
+  },
+
+  heroGhost: {
+    minHeight: 42,
+    padding: "0 15px",
+    border: "1px solid rgba(255,255,255,.28)",
+    borderRadius: 11,
+    background: "rgba(255,255,255,.06)",
+    color: "#fff",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
+  heroPrimary: {
+    minHeight: 42,
+    padding: "0 16px",
+    border: 0,
+    borderRadius: 11,
+    background: "#fff",
+    color: "#0B6036",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  heroSide: {
+    padding: 18,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    border: "1px solid rgba(255,255,255,.16)",
+    borderRadius: 18,
+    background: "rgba(255,255,255,.08)",
+    backdropFilter: "blur(8px)",
+  },
+
+  heroSideLabel: {
+    color: "#9EEABF",
+    fontSize: 9,
+    fontWeight: 900,
+    letterSpacing: 1.2,
+  },
+
+  heroSideDate: {
+    display: "block",
+    marginTop: 6,
+    fontSize: 22,
+  },
+
+  heroSideStats: {
+    marginTop: 17,
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 10,
+  },
+
+  heroSideMini: {
+    display: "block",
+    color: "#CFE8D9",
+    fontSize: 9,
+  },
+
+  heroSideValue: {
+    display: "block",
+    marginTop: 3,
+    fontSize: 24,
+  },
+
+  roleBadge: {
+    alignSelf: "flex-start",
+    marginTop: 16,
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,.12)",
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: 900,
+  },
+
+  nav: {
+    maxWidth: 1480,
+    margin: "0 auto 14px",
+    padding: 7,
+    display: "flex",
+    gap: 6,
+    alignItems: "center",
+    border: "1px solid #DDE8E1",
+    borderRadius: 15,
+    background: "#fff",
+    boxShadow: "0 6px 18px rgba(15,50,31,.04)",
+  },
+
+  navItem: {
+    minHeight: 40,
+    padding: "0 13px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 7,
+    border: 0,
+    borderRadius: 10,
+    background: "transparent",
+    color: "#506057",
+    fontSize: 11,
+    fontWeight: 850,
+    whiteSpace: "nowrap",
+    cursor: "pointer",
+  },
+
+  navItemActive: {
+    background: "#0B7A43",
+    color: "#fff",
+    boxShadow: "0 7px 16px rgba(11,122,67,.18)",
+  },
+
+  navRefresh: {
+    marginLeft: "auto",
+    minHeight: 38,
+    padding: "0 12px",
+    border: "1px solid #D9E4DD",
+    borderRadius: 9,
+    background: "#F7FAF8",
+    color: "#0B7A43",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+
+  weekShell: {
+    maxWidth: 1480,
+    margin: "0 auto 14px",
+    padding: 16,
+    border: "1px solid #DCE6E0",
+    borderRadius: 18,
+    background: "#fff",
+  },
+
+  weekHeader: {
+    marginBottom: 12,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+
+  sectionEyebrow: {
+    display: "block",
+    color: "#0B7A43",
+    fontSize: 9,
+    fontWeight: 900,
+    letterSpacing: 1.2,
+  },
+
+  sectionTitle: {
+    margin: "4px 0 0",
+    fontSize: 18,
+  },
+
+  weekControls: {
+    display: "flex",
+    gap: 6,
+    alignItems: "center",
+  },
+
+  roundButton: {
+    width: 36,
+    height: 36,
+    border: "1px solid #D9E4DD",
+    borderRadius: 10,
+    background: "#fff",
+    color: "#1B3225",
+    fontSize: 16,
+    cursor: "pointer",
+  },
+
+  todayPill: {
+    minHeight: 36,
+    padding: "0 12px",
+    border: 0,
+    borderRadius: 10,
+    background: "#E9F7EF",
+    color: "#0B7A43",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  weekStrip: {
+    display: "grid",
+    gridTemplateColumns: "repeat(7,minmax(0,1fr))",
+    gap: 8,
+  },
+
+  dayCard: {
+    minHeight: 88,
+    padding: 10,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 1,
+    border: "1px solid #E0E8E3",
+    borderRadius: 13,
+    background: "#FAFCFB",
+    color: "#2D3C34",
+    cursor: "pointer",
+  },
+
+  dayCardActive: {
+    borderColor: "#0B7A43",
+    background:
+      "linear-gradient(145deg,#0B6A3B,#0E8A4C)",
+    boxShadow: "0 10px 20px rgba(11,122,67,.18)",
+  },
+
+  dayName: {
+    fontSize: 9,
+    fontWeight: 900,
+    color: "#78867E",
+  },
+
+  dayNumber: {
+    fontSize: 24,
+    lineHeight: 1,
+  },
+
+  dayMonth: {
+    fontSize: 8,
+    color: "#89958E",
+    fontWeight: 800,
+  },
+
+  dayTextActive: {
+    color: "#fff",
+  },
+
+  todayDot: {
+    marginTop: 4,
+    padding: "3px 5px",
+    borderRadius: 999,
+    background: "#E7F5ED",
+    color: "#0B7A43",
+    fontSize: 6,
+    fontWeight: 900,
+  },
+
+  todayDotActive: {
+    background: "rgba(255,255,255,.16)",
+    color: "#fff",
+  },
+
+  kpiGrid: {
+    maxWidth: 1480,
+    margin: "0 auto 14px",
+    display: "grid",
+    gridTemplateColumns: "repeat(4,minmax(0,1fr))",
+    gap: 10,
+  },
+
+  kpiCard: {
+    padding: 14,
+    border: "1px solid #DDE6E0",
+    borderRadius: 15,
+    background: "#fff",
+    boxShadow: "0 6px 18px rgba(14,52,32,.04)",
+  },
+
+  kpiCardAccent: {
+    padding: 14,
+    border: "1px solid #0B7A43",
+    borderRadius: 15,
+    background:
+      "linear-gradient(145deg,#0B6B3C,#0E8A4C)",
+    color: "#fff",
+    boxShadow: "0 10px 22px rgba(11,122,67,.17)",
+  },
+
+  kpiCaption: {
+    color: "#78867E",
+    fontSize: 8,
+    fontWeight: 900,
+    letterSpacing: 1,
+  },
+
+  kpiCaptionAccent: {
+    color: "#BAF0CF",
+    fontSize: 8,
+    fontWeight: 900,
+    letterSpacing: 1,
+  },
+
+  kpiBody: {
+    marginTop: 8,
+    display: "flex",
+    alignItems: "baseline",
+    gap: 7,
+  },
+
+  kpiNumber: {
+    fontSize: 27,
+    lineHeight: 1,
+  },
+
+  kpiNumberAccent: {
+    fontSize: 27,
+    lineHeight: 1,
+  },
+
+  kpiHint: {
+    color: "#7A867F",
+    fontSize: 9,
+  },
+
+  kpiHintAccent: {
+    color: "#DDF3E6",
+    fontSize: 9,
+  },
+
+  commandGrid: {
+    maxWidth: 1480,
+    margin: "0 auto 20px",
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1.35fr) minmax(330px,.82fr) 300px",
+    gap: 12,
+    alignItems: "start",
+  },
+
+  schedulePanel: {
+    padding: 16,
+    border: "1px solid #DCE6E0",
+    borderRadius: 18,
+    background: "#fff",
+    boxShadow: "0 8px 22px rgba(14,52,32,.045)",
+  },
+
+  reservationsPanel: {
+    padding: 16,
+    border: "1px solid #DCE6E0",
+    borderRadius: 18,
+    background: "#fff",
+    boxShadow: "0 8px 22px rgba(14,52,32,.045)",
+  },
+
+  panelTop: {
+    marginBottom: 13,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+
+  panelHeading: {
+    margin: "4px 0 0",
+    fontSize: 19,
+  },
+
+  dateInline: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+  },
+
+  dateArrow: {
+    width: 32,
+    height: 34,
+    border: "1px solid #D9E4DD",
+    borderRadius: 8,
+    background: "#F9FBFA",
+    color: "#244034",
+    fontSize: 17,
+    cursor: "pointer",
+  },
+
+  dateInput: {
+    minHeight: 34,
+    padding: "6px 8px",
+    border: "1px solid #D9E4DD",
+    borderRadius: 8,
+    background: "#fff",
+    color: "#1F3027",
+    fontSize: 10,
+  },
+
+  timeline: {
+    display: "grid",
+  },
+
+  timelineRow: {
+    minHeight: 126,
+    display: "grid",
+    gridTemplateColumns:
+      "26px 100px minmax(0,1fr) 110px",
+    gap: 12,
+    alignItems: "center",
+    padding: "10px 0",
+    borderBottom: "1px solid #EDF2EF",
+  },
+
+  timelineRail: {
+    position: "relative",
+    alignSelf: "stretch",
+    display: "flex",
+    justifyContent: "center",
+  },
+
+  timelineDot: {
+    position: "absolute",
+    top: 28,
+    width: 12,
+    height: 12,
+    border: "3px solid #BEE7CF",
+    borderRadius: "50%",
+    background: "#0B7A43",
+    zIndex: 2,
+  },
+
+  timelineLine: {
+    position: "absolute",
+    top: 40,
+    bottom: -22,
+    width: 2,
+    background: "#DCEBE3",
+  },
+
+  timelineTime: {
+    display: "grid",
+    gap: 3,
+  },
+
+  timelineClass: {
+    minWidth: 0,
+  },
+
+  classTopLine: {
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+    flexWrap: "wrap",
+  },
+
+  classBadge: {
+    padding: "4px 7px",
+    borderRadius: 999,
+    background: "#EAF7F0",
+    color: "#0B7A43",
+    fontSize: 7,
+    fontWeight: 900,
+  },
+
+  capacityStatus: {
+    padding: "4px 7px",
+    borderRadius: 999,
+    background: "#EEF7F2",
+    color: "#0B7A43",
+    fontSize: 7,
+    fontWeight: 900,
+  },
+
+  capacityStatusFull: {
+    background: "#FFF0EE",
+    color: "#B42318",
+  },
+
+  classTitle: {
+    display: "block",
+    marginTop: 7,
+    fontSize: 17,
+  },
+
+  classMeta: {
+    display: "block",
+    marginTop: 3,
+    color: "#6F7D75",
+    fontSize: 9,
+    lineHeight: 1.35,
+  },
+
+  capacityBar: {
+    height: 7,
+    marginTop: 10,
+    overflow: "hidden",
+    borderRadius: 999,
+    background: "#E8EFEA",
+  },
+
+  capacityFill: {
+    height: "100%",
+    borderRadius: 999,
+    background:
+      "linear-gradient(90deg,#0B7A43,#61D494)",
+  },
+
+  capacityFooter: {
+    marginTop: 5,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 8,
+    color: "#849088",
+    fontSize: 8,
+  },
+
+  timelineAction: {
+    display: "flex",
+    justifyContent: "flex-end",
+  },
+
+  reserveButton: {
+    minHeight: 38,
+    padding: "0 13px",
+    border: 0,
+    borderRadius: 10,
+    background: "#0B7A43",
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  reserveDisabled: {
+    minHeight: 38,
+    padding: "0 13px",
+    border: "1px solid #E0E5E2",
+    borderRadius: 10,
+    background: "#F2F4F3",
+    color: "#9AA39E",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "not-allowed",
+  },
+
+  emptyLarge: {
+    minHeight: 360,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 8,
+    border: "1px dashed #D3DED7",
+    borderRadius: 15,
+    background: "#FAFCFB",
+    textAlign: "center",
+  },
+
+  emptyIcon: {
+    width: 52,
+    height: 52,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 16,
+    background: "#EAF7F0",
+    color: "#0B7A43",
+    fontSize: 24,
+  },
+
+  emptyTitle: {
+    fontSize: 16,
+  },
+
+  emptyText: {
+    maxWidth: 360,
+    color: "#7A867F",
+    fontSize: 10,
+    lineHeight: 1.5,
+  },
+
+  emptyButton: {
+    minHeight: 36,
+    marginTop: 5,
+    padding: "0 12px",
+    border: 0,
+    borderRadius: 9,
+    background: "#0B7A43",
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  counterPill: {
+    minWidth: 30,
+    height: 30,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 999,
+    background: "#EAF7F0",
+    color: "#0B7A43",
+    fontSize: 11,
+    fontWeight: 900,
+  },
+
+  reservationList: {
+    display: "grid",
+    gap: 7,
+  },
+
+  reservationRow: {
+    minHeight: 62,
+    padding: 9,
+    display: "grid",
+    gridTemplateColumns: "40px minmax(0,1fr) auto",
+    gap: 9,
+    alignItems: "center",
+    border: "1px solid #E5ECE8",
+    borderRadius: 12,
+    background: "#FBFCFB",
+  },
+
+  avatar: {
+    width: 40,
+    height: 40,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 11,
+    background: "#0D3B28",
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: 900,
+  },
+
+  reservationInfo: {
+    minWidth: 0,
+  },
+
+  reservationName: {
+    display: "block",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    fontSize: 11,
+  },
+
+  reservationMeta: {
+    display: "block",
+    marginTop: 3,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    color: "#7A867F",
+    fontSize: 8,
+  },
+
+  statusTag: {
+    padding: "5px 7px",
+    borderRadius: 999,
+    fontSize: 6.5,
+    fontWeight: 900,
+  },
+
+  statusConfirmed: {
+    background: "#EAF7F0",
+    color: "#0B7A43",
+  },
+
+  statusSuccess: {
+    background: "#E8F7ED",
+    color: "#08743C",
+  },
+
+  statusNeutral: {
+    background: "#F1F3F2",
+    color: "#59655E",
+  },
+
+  statusPending: {
+    background: "#FFF7DD",
+    color: "#8A6400",
+  },
+
+  emptySmall: {
+    minHeight: 260,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 7,
+    color: "#7B8780",
+    textAlign: "center",
+    fontSize: 10,
+  },
+
+  emptySmallIcon: {
+    width: 44,
+    height: 44,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 13,
+    background: "#EDF6F1",
+    color: "#0B7A43",
+    fontSize: 20,
+  },
+
+  viewAllButton: {
+    width: "100%",
+    minHeight: 38,
+    marginTop: 10,
+    border: "1px solid #D9E4DD",
+    borderRadius: 10,
+    background: "#fff",
+    color: "#0B7A43",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  controlPanel: {
+    padding: 18,
+    borderRadius: 18,
+    background:
+      "linear-gradient(160deg,#071C14,#0B4A2B)",
+    color: "#fff",
+    boxShadow: "0 16px 34px rgba(6,40,25,.18)",
+  },
+
+  controlEyebrow: {
+    color: "#67D899",
+    fontSize: 8,
+    fontWeight: 900,
+    letterSpacing: 1.2,
+  },
+
+  controlTitle: {
+    margin: "5px 0 0",
+    fontSize: 20,
+  },
+
+  occupancyCircle: {
+    margin: "20px 0",
+    display: "grid",
+    placeItems: "center",
+  },
+
+  occupancyRing: {
+    width: 140,
+    height: 140,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+  },
+
+  occupancyInner: {
+    width: 104,
+    height: 104,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    borderRadius: "50%",
+    background: "#0A2A1D",
+  },
+
+  controlStats: {
+    display: "grid",
+    gap: 9,
+  },
+
+  controlRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    color: "#CFE7D9",
+    fontSize: 10,
+  },
+
+  controlDivider: {
+    height: 1,
+    margin: "16px 0",
+    background: "rgba(255,255,255,.12)",
+  },
+
+  controlLabel: {
+    display: "block",
+    marginBottom: 8,
+    color: "#9BDDB8",
+    fontSize: 8,
+    fontWeight: 900,
+    letterSpacing: 1,
+  },
+
+  stateGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 7,
+  },
+
+  stateBox: {
+    padding: 9,
+    display: "grid",
+    gap: 4,
+    borderRadius: 10,
+    background: "rgba(255,255,255,.08)",
+    color: "#DDEFE5",
+    fontSize: 8,
+  },
+
+  controlPrimary: {
+    width: "100%",
+    minHeight: 40,
+    marginTop: 16,
+    border: 0,
+    borderRadius: 10,
+    background: "#5CE19B",
+    color: "#06301E",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  controlSecondary: {
+    width: "100%",
+    minHeight: 38,
+    marginTop: 7,
+    border: "1px solid rgba(255,255,255,.18)",
+    borderRadius: 10,
+    background: "rgba(255,255,255,.06)",
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+};
+
+const pro = {
+  header:{
+    maxWidth:1450,
+    margin:"0 auto 14px",
+    padding:"24px 26px",
+    display:"flex",
+    justifyContent:"space-between",
+    alignItems:"center",
+    gap:18,
+    flexWrap:"wrap",
+    borderRadius:24,
+    background:
+      "radial-gradient(circle at 78% 18%, rgba(61,199,120,.20), transparent 32%), linear-gradient(120deg,#071d14 0%,#0b3524 54%,#0a6a3b 100%)",
+    color:"#fff",
+    boxShadow:"0 18px 45px rgba(8,53,34,.20)",
+    border:"1px solid rgba(255,255,255,.08)",
+  },
+  headerBrand:{
+    minWidth:0,
+    display:"flex",
+    alignItems:"center",
+    gap:16,
+  },
+  logoBox:{
+    width:126,
+    height:70,
+    padding:"8px 12px",
+    display:"grid",
+    placeItems:"center",
+    borderRadius:17,
+    background:"#fff",
+    boxShadow:"0 10px 24px rgba(0,0,0,.18)",
+    flex:"0 0 auto",
+  },
+  logo:{
+    width:"100%",
+    height:"100%",
+    objectFit:"contain",
+  },
+  headerEyebrow:{
+    display:"block",
+    marginBottom:5,
+    color:"#7de0a7",
+    fontSize:10,
+    fontWeight:900,
+    letterSpacing:1.3,
+  },
+  headerTitle:{
+    margin:0,
+    fontSize:"clamp(28px,3vw,40px)",
+    lineHeight:1,
+    letterSpacing:"-.8px",
+  },
+  headerSubtitle:{
+    margin:"7px 0 0",
+    maxWidth:620,
+    color:"#d9ece2",
+    fontSize:13,
+    lineHeight:1.5,
+  },
+  headerRight:{
+    display:"flex",
+    alignItems:"center",
+    gap:8,
+    flexWrap:"wrap",
+    justifyContent:"flex-end",
+  },
+  role:{
+    minHeight:38,
+    padding:"0 12px",
+    display:"inline-flex",
+    alignItems:"center",
+    gap:7,
+    border:"1px solid rgba(255,255,255,.18)",
+    borderRadius:999,
+    background:"rgba(255,255,255,.09)",
+    color:"#e9fff2",
+    fontSize:11,
+    fontWeight:850,
+  },
+  headerSecondary:{
+    minHeight:40,
+    padding:"0 14px",
+    border:"1px solid rgba(255,255,255,.24)",
+    borderRadius:11,
+    background:"rgba(0,0,0,.14)",
+    color:"#fff",
+    fontWeight:800,
+    cursor:"pointer",
+  },
+  headerPrimary:{
+    minHeight:40,
+    padding:"0 15px",
+    border:"none",
+    borderRadius:11,
+    background:"#fff",
+    color:"#0b5a35",
+    fontWeight:900,
+    cursor:"pointer",
+    boxShadow:"0 8px 18px rgba(0,0,0,.13)",
+  },
+  navShell:{
+    maxWidth:1450,
+    margin:"0 auto 14px",
+    padding:7,
+    display:"flex",
+    gap:6,
+    overflowX:"auto",
+    border:"1px solid #dbe6df",
+    borderRadius:14,
+    background:"#fff",
+    boxShadow:"0 8px 20px rgba(15,23,42,.035)",
+  },
+  datebar:{
+    maxWidth:1450,
+    margin:"0 auto 12px",
+    padding:"13px 15px",
+    display:"flex",
+    alignItems:"center",
+    justifyContent:"space-between",
+    gap:12,
+    flexWrap:"wrap",
+    border:"1px solid #dce6df",
+    borderRadius:16,
+    background:"#fff",
+    boxShadow:"0 7px 18px rgba(15,23,42,.035)",
+  },
+  dateLead:{
+    display:"grid",
+    gap:2,
+  },
+  dateEyebrow:{
+    color:"#15804d",
+    fontSize:9,
+    fontWeight:900,
+    letterSpacing:1.1,
+  },
+  dateTitle:{
+    fontSize:19,
+    fontWeight:900,
+    color:"#17251e",
+  },
+  dateControls:{
+    display:"flex",
+    alignItems:"center",
+    gap:7,
+  },
+  iconButton:{
+    width:38,
+    height:38,
+    display:"grid",
+    placeItems:"center",
+    border:"1px solid #d7e1db",
+    borderRadius:10,
+    background:"#fff",
+    color:"#244236",
+    fontSize:18,
+    fontWeight:900,
+    cursor:"pointer",
+  },
+  dateInput:{
+    minHeight:38,
+    padding:"7px 10px",
+    border:"1px solid #d7e1db",
+    borderRadius:10,
+    background:"#fff",
+    color:"#17251e",
+    fontWeight:800,
+  },
+  todayButton:{
+    minHeight:38,
+    padding:"0 13px",
+    border:"1px solid #16834f",
+    borderRadius:10,
+    background:"#eef9f2",
+    color:"#16834f",
+    fontWeight:900,
+    cursor:"pointer",
+  },
+  kpi:{
+    minHeight:98,
+    padding:14,
+    display:"flex",
+    alignItems:"center",
+    gap:12,
+    border:"1px solid #dce6df",
+    borderRadius:16,
+    background:"#fff",
+    boxShadow:"0 8px 20px rgba(15,23,42,.04)",
+  },
+  kpiIcon:{
+    width:44,
+    height:44,
+    flex:"0 0 auto",
+    display:"grid",
+    placeItems:"center",
+    borderRadius:13,
+    background:"#edf8f1",
+    color:"#16834f",
+    fontSize:14,
+    fontWeight:950,
+  },
+  kpiLabel:{
+    display:"block",
+    color:"#708078",
+    fontSize:10,
+    fontWeight:800,
+  },
+  kpiValue:{
+    display:"block",
+    marginTop:3,
+    color:"#17251e",
+    fontSize:24,
+    lineHeight:1,
+  },
+  workspace:{
+    maxWidth:1450,
+    margin:"12px auto 16px",
+  },
+  panel:{
+    padding:18,
+    border:"1px solid #dce6df",
+    borderRadius:18,
+    background:"#fff",
+    boxShadow:"0 10px 26px rgba(15,23,42,.045)",
+  },
+  panelHeader:{
+    marginBottom:13,
+    display:"flex",
+    justifyContent:"space-between",
+    alignItems:"center",
+    gap:12,
+    flexWrap:"wrap",
+  },
+  panelEyebrow:{
+    display:"block",
+    marginBottom:4,
+    color:"#16834f",
+    fontSize:9,
+    fontWeight:900,
+    letterSpacing:1.1,
+  },
+  panelTitle:{
+    margin:0,
+    color:"#17251e",
+    fontSize:21,
+    letterSpacing:"-.3px",
+  },
+  counter:{
+    padding:"6px 10px",
+    borderRadius:999,
+    background:"#edf8f1",
+    color:"#16834f",
+    fontSize:10,
+    fontWeight:900,
+  },
+  scheduleList:{
+    display:"grid",
+    gap:9,
+  },
+  scheduleRow:{
+    padding:"14px",
+    border:"1px solid #e1e8e4",
+    borderRadius:14,
+    background:"linear-gradient(180deg,#ffffff,#fbfdfc)",
+    transition:"transform .15s ease, box-shadow .15s ease",
+  },
+  time:{
+    display:"grid",
+    gap:3,
+  },
+  timeMain:{
+    fontSize:18,
+    fontWeight:950,
+    color:"#153b29",
+  },
+  timeEnd:{
+    color:"#7b8780",
+    fontSize:10,
+    fontWeight:700,
+  },
+  classMeta:{
+    minWidth:0,
+  },
+  classType:{
+    display:"inline-flex",
+    padding:"4px 7px",
+    borderRadius:999,
+    background:"#eef8f2",
+    color:"#16834f",
+    fontSize:8,
+    fontWeight:950,
+    letterSpacing:.8,
+  },
+  className:{
+    display:"block",
+    marginTop:5,
+    color:"#17251e",
+    fontSize:17,
+    fontWeight:950,
+  },
+  classInstructor:{
+    display:"block",
+    marginTop:3,
+    color:"#748178",
+    fontSize:10,
+  },
+  capacityWrap:{
+    display:"grid",
+    gap:6,
+  },
+  capacityTop:{
+    display:"flex",
+    justifyContent:"space-between",
+    gap:8,
+    color:"#607168",
+    fontSize:9,
+    fontWeight:800,
+  },
+  track:{
+    height:7,
+    overflow:"hidden",
+    borderRadius:999,
+    background:"#e7eee9",
+  },
+  fill:{
+    height:"100%",
+    borderRadius:999,
+    background:"linear-gradient(90deg,#16a45b,#08743c)",
+  },
+  actionButton:{
+    minHeight:40,
+    padding:"0 13px",
+    border:"none",
+    borderRadius:10,
+    background:"#16834f",
+    color:"#fff",
+    fontSize:11,
+    fontWeight:900,
+    cursor:"pointer",
+  },
+  actionDisabled:{
+    minHeight:40,
+    padding:"0 13px",
+    border:"1px solid #e3e8e5",
+    borderRadius:10,
+    background:"#f4f6f5",
+    color:"#9aa49e",
+    fontSize:11,
+    fontWeight:900,
+    cursor:"not-allowed",
+  },
+  aside:{
+    position:"sticky",
+    top:12,
+    padding:18,
+    border:"1px solid #dce6df",
+    borderRadius:18,
+    background:"linear-gradient(180deg,#0c3a27,#08291c)",
+    color:"#fff",
+    boxShadow:"0 14px 34px rgba(8,53,34,.17)",
+  },
+  asideEyebrow:{
+    display:"block",
+    color:"#76dfa3",
+    fontSize:9,
+    fontWeight:900,
+    letterSpacing:1.1,
+  },
+  asideTitle:{
+    margin:"5px 0 15px",
+    fontSize:20,
+  },
+  ringWrap:{
+    display:"grid",
+    placeItems:"center",
+    margin:"4px auto 16px",
+  },
+  ring:{
+    width:128,
+    height:128,
+    display:"grid",
+    placeItems:"center",
+    borderRadius:"50%",
+  },
+  ringInner:{
+    width:94,
+    height:94,
+    display:"grid",
+    placeItems:"center",
+    alignContent:"center",
+    borderRadius:"50%",
+    background:"#0b2e20",
+    boxShadow:"inset 0 0 0 1px rgba(255,255,255,.08)",
+  },
+  ringValue:{
+    fontSize:25,
+    lineHeight:1,
+    fontWeight:950,
+  },
+  ringLabel:{
+    marginTop:4,
+    color:"#bfd7ca",
+    fontSize:9,
+    fontWeight:800,
+  },
+  asideStats:{
+    display:"grid",
+    gap:8,
+  },
+  asideRow:{
+    padding:"9px 0",
+    display:"flex",
+    justifyContent:"space-between",
+    gap:12,
+    borderBottom:"1px solid rgba(255,255,255,.09)",
+    color:"#d5e8dd",
+    fontSize:10,
+  },
+  asideValue:{
+    color:"#fff",
+    fontWeight:950,
+  },
+  asideButton:{
+    width:"100%",
+    minHeight:42,
+    marginTop:14,
+    border:"none",
+    borderRadius:11,
+    background:"#fff",
+    color:"#0b5b35",
+    fontWeight:950,
+    cursor:"pointer",
+  },
+  statusStrip:{
+    marginTop:12,
+    display:"grid",
+    gap:8,
+  },
+  statusBox:{
+    padding:10,
+    border:"1px solid #e1e8e4",
+    borderRadius:12,
+    background:"#fafcfb",
+  },
+  statusLabel:{
+    display:"block",
+    color:"#77847d",
+    fontSize:9,
+    fontWeight:800,
+  },
+  statusValue:{
+    display:"block",
+    marginTop:3,
+    color:"#17251e",
+    fontSize:17,
+    fontWeight:950,
+  },
+  filters:{
+    marginBottom:13,
+    padding:11,
+    border:"1px solid #e0e8e3",
+    borderRadius:13,
+    background:"#f8fbf9",
+  },
+  input:{
+    width:"100%",
+    minHeight:42,
+    padding:"9px 11px",
+    border:"1px solid #cfdad3",
+    borderRadius:10,
+    background:"#fff",
+    color:"#17251e",
+    outline:"none",
+    fontSize:13,
+  },
+  stepper:{
+    maxWidth:1450,
+    margin:"0 auto 12px",
+  },
+  step:{
+    padding:"10px 12px",
+    display:"flex",
+    alignItems:"center",
+    gap:9,
+    border:"1px solid #dce6df",
+    borderRadius:12,
+    background:"#fff",
+    color:"#506158",
+    fontSize:10,
+    fontWeight:850,
+  },
+  stepActive:{
+    borderColor:"#9fd3b3",
+    background:"#edf8f1",
+    color:"#0d6f40",
+  },
+  stepNumber:{
+    width:27,
+    height:27,
+    display:"grid",
+    placeItems:"center",
+    borderRadius:9,
+    background:"#173c2a",
+    color:"#fff",
+    fontSize:10,
+    fontWeight:950,
+  },
+};
+
+const s = {
+  page: {
+    minHeight: "100vh",
+    padding: "28px",
+    background: "#f4f7f5",
+    color: "#17211c",
+    fontFamily: "Arial, sans-serif",
+  },
+
+  loading: {
+    minHeight: "100vh",
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 12,
+    background: "#f4f7f5",
+    color: "#16834f",
+    fontFamily: "Arial, sans-serif",
+  },
+
+  spinner: {
+    width: 42,
+    height: 42,
+    border: "5px solid #dce8e1",
+    borderTopColor: "#16834f",
+    borderRadius: "50%",
+  },
+
+  header: {
+    maxWidth: 1450,
+    margin: "0 auto 20px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 18,
+    flexWrap: "wrap",
+  },
+
+  eyebrow: {
+    display: "block",
+    marginBottom: 6,
+    color: "#16834f",
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 1.3,
+  },
+
+  eyebrowSmall: {
+    display: "block",
+    marginBottom: 5,
+    color: "#16834f",
+    fontSize: 10,
+    fontWeight: 900,
+    letterSpacing: 1.1,
+  },
+
+  title: {
+    margin: "0 0 7px",
+    fontSize: "clamp(30px,4vw,42px)",
+    lineHeight: 1.05,
+  },
+
+  subtitle: {
+    margin: 0,
+    color: "#69756d",
+    fontSize: 14,
+  },
+
+  headerActions: {
+    display: "flex",
+    gap: 9,
+    flexWrap: "wrap",
+  },
+
+  tabs: {
+    maxWidth: 1450,
+    margin: "0 auto 18px",
+    display: "flex",
+    gap: 8,
+    overflowX: "auto",
+    paddingBottom: 4,
+  },
+
+  tab: {
+    flex: "0 0 auto",
+    minHeight: 42,
+    padding: "9px 14px",
+    border: "1px solid #d6e1da",
+    borderRadius: 12,
+    background: "#fff",
+    color: "#506057",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
+  tabActive: {
+    borderColor: "#16834f",
+    background: "#16834f",
+    color: "#fff",
+  },
+
+  error: {
+    maxWidth: 1450,
+    margin: "0 auto 18px",
+    padding: "13px 15px",
+    border: "1px solid #fecaca",
+    borderRadius: 12,
+    background: "#fef2f2",
+    color: "#991b1b",
+    fontWeight: 700,
+  },
+
+  toolbar: {
+    maxWidth: 1450,
+    margin: "0 auto 18px",
+    padding: 16,
+    display: "grid",
+    gridTemplateColumns: "minmax(190px,1fr) repeat(2,minmax(150px,.55fr))",
+    gap: 12,
+    border: "1px solid #dce5df",
+    borderRadius: 17,
+    background: "#fff",
+  },
+
+  quickInfo: {
+    minHeight: 70,
+    padding: 12,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    borderRadius: 13,
+    background: "#f7faf8",
+  },
+
+  bigNumber: {
+    marginTop: 4,
+    fontSize: 22,
+  },
+
+  gridCards: {
+    maxWidth: 1450,
+    margin: "0 auto 18px",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
+    gap: 14,
+  },
+
+  classCard: {
+    padding: 18,
+    border: "1px solid #dce5df",
+    borderRadius: 17,
+    background: "#fff",
+    boxShadow: "0 7px 22px rgba(15,23,42,.045)",
+  },
+
+  classTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+
+  badge: {
+    display: "inline-block",
+    padding: "5px 8px",
+    borderRadius: 999,
+    background: "#edf8f1",
+    color: "#16834f",
+    fontSize: 10,
+    fontWeight: 900,
+    textTransform: "uppercase",
+  },
+
+  cardTitle: {
+    margin: "8px 0 0",
+    fontSize: 20,
+  },
+
+  availabilityGood: {
+    color: "#16834f",
+    fontSize: 12,
+  },
+
+  availabilityFull: {
+    color: "#be123c",
+    fontSize: 12,
+  },
+
+  classData: {
+    marginTop: 15,
+    display: "grid",
+    gap: 8,
+  },
+
+  dataRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingBottom: 8,
+    borderBottom: "1px solid #edf1ee",
+    fontSize: 13,
+  },
+
+  cardButton: {
+    width: "100%",
+    minHeight: 42,
+    marginTop: 15,
+    border: "none",
+    borderRadius: 11,
+    background: "#16834f",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  panel: {
+    maxWidth: 1450,
+    margin: "0 auto 18px",
+    padding: 20,
+    border: "1px solid #dce5df",
+    borderRadius: 17,
+    background: "#fff",
+    boxShadow: "0 7px 22px rgba(15,23,42,.045)",
+  },
+
+  panelHeader: {
+    marginBottom: 15,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+
+  panelTitle: {
+    margin: 0,
+    fontSize: 21,
+  },
+
+  counter: {
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#edf8f1",
+    color: "#16834f",
+    fontSize: 11,
+    fontWeight: 900,
+  },
+
+  twoColumns: {
+    maxWidth: 1450,
+    margin: "0 auto",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))",
+    gap: 16,
+  },
+
+  field: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    marginBottom: 12,
+  },
+
+  label: {
+    color: "#526158",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+
+  input: {
+    width: "100%",
+    minHeight: 43,
+    padding: "9px 11px",
+    boxSizing: "border-box",
+    border: "1px solid #ccd7d0",
+    borderRadius: 10,
+    background: "#fff",
+    color: "#17211c",
+    fontSize: 14,
+  },
+
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+    gap: 10,
+  },
+
+  checkGrid: {
+    display: "grid",
+    gap: 9,
+    margin: "6px 0 14px",
+  },
+
+  checkLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#526158",
+  },
+
+  formActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 9,
+    flexWrap: "wrap",
+  },
+
+  primaryButton: {
+    minHeight: 42,
+    padding: "9px 15px",
+    border: "none",
+    borderRadius: 10,
+    background: "#16834f",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  secondaryButton: {
+    minHeight: 42,
+    padding: "9px 14px",
+    border: "1px solid #ccd7d0",
+    borderRadius: 10,
+    background: "#fff",
+    color: "#26342b",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
+  primaryWide: {
+    width: "100%",
+    minHeight: 45,
+    marginTop: 4,
+    border: "none",
+    borderRadius: 11,
+    background: "#16834f",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  searchResults: {
+    marginTop: -5,
+    marginBottom: 12,
+    display: "grid",
+    gap: 6,
+    padding: 8,
+    border: "1px solid #dce5df",
+    borderRadius: 12,
+    background: "#fff",
+  },
+
+  searchItem: {
+    width: "100%",
+    padding: 10,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    border: "none",
+    borderRadius: 9,
+    background: "#f7faf8",
+    color: "#17211c",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  selectedClient: {
+    marginBottom: 14,
+    padding: 13,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    border: "1px solid #bfe0cb",
+    borderRadius: 12,
+    background: "#f0faf4",
+  },
+
+  linkButton: {
+    border: "none",
+    background: "transparent",
+    color: "#16834f",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  slotList: {
+    marginTop: 14,
+    display: "grid",
+    gap: 8,
+  },
+
+  slot: {
+    width: "100%",
+    padding: 12,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    border: "1px solid #dce5df",
+    borderRadius: 12,
+    background: "#fff",
+    color: "#17211c",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  slotSelected: {
+    borderColor: "#16834f",
+    background: "#f0faf4",
+  },
+
+  slotDetail: {
+    display: "block",
+    marginTop: 4,
+    color: "#7a867f",
+    fontSize: 11,
+    lineHeight: 1.4,
+  },
+
+  smallGood: {
+    color: "#16834f",
+    fontSize: 11,
+    fontWeight: 900,
+  },
+
+  smallFull: {
+    color: "#be123c",
+    fontSize: 11,
+    fontWeight: 900,
+  },
+
+  stack: {
+    display: "grid",
+    gap: 9,
+  },
+
+  listCard: {
+    padding: 12,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    border: "1px solid #edf1ee",
+    borderRadius: 12,
+    background: "#fbfcfb",
+  },
+
+  reservationCard: {
+    padding: 13,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    border: "1px solid #edf1ee",
+    borderRadius: 12,
+    background: "#fbfcfb",
+  },
+
+  reservationMain: {
+    minWidth: 0,
+  },
+
+  reservationName: {
+    display: "block",
+    marginTop: 6,
+    overflowWrap: "anywhere",
+  },
+
+  inlineActions: {
+    display: "flex",
+    gap: 7,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+
+  smallButton: {
+    minHeight: 34,
+    padding: "7px 10px",
+    border: "1px solid #d4ddd7",
+    borderRadius: 9,
+    background: "#fff",
+    color: "#435047",
+    fontSize: 11,
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
+  smallSuccess: {
+    minHeight: 34,
+    padding: "7px 10px",
+    border: "1px solid #bfe0cb",
+    borderRadius: 9,
+    background: "#edf8f1",
+    color: "#16834f",
+    fontSize: 11,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  smallDanger: {
+    minHeight: 34,
+    padding: "7px 10px",
+    border: "1px solid #fecaca",
+    borderRadius: 9,
+    background: "#fff5f5",
+    color: "#be123c",
+    fontSize: 11,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  empty: {
+    gridColumn: "1 / -1",
+    minHeight: 120,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 7,
+    padding: 20,
+    border: "1px dashed #ccd7d0",
+    borderRadius: 15,
+    background: "#fbfcfb",
+    textAlign: "center",
+  },
+
+  muted: {
+    color: "#7a867f",
+    fontSize: 12,
+  },
+
+  footer: {
+    maxWidth: 1450,
+    margin: "0 auto",
+    padding: "8px 2px 20px",
+    color: "#8b958f",
+    fontSize: 10,
+    textAlign: "right",
+  },
+  ...sPro,
+
+  portalPanel: {
+    maxWidth: 1450,
+    margin: "0 auto 14px",
+    padding: 18,
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) 250px",
+    gap: 16,
+    border: "1px solid #D8E6DE",
+    borderRadius: 18,
+    background:
+      "linear-gradient(135deg,#FFFFFF 0%,#F2FAF5 100%)",
+    boxShadow: "0 8px 24px rgba(18,61,39,.05)",
+  },
+
+  portalMain: {
+    minWidth: 0,
+  },
+
+  portalText: {
+    maxWidth: 700,
+    margin: "5px 0 14px",
+    color: "#718078",
+    fontSize: 11,
+    lineHeight: 1.5,
+  },
+
+  portalFields: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 10,
+  },
+
+  portalToggle: {
+    marginTop: 10,
+    padding: 11,
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 9,
+    border: "1px solid #D9E6DE",
+    borderRadius: 11,
+    background: "#FFFFFF",
+    color: "#244034",
+    fontSize: 10,
+  },
+
+  portalLinkBox: {
+    marginTop: 10,
+    padding: 11,
+    display: "grid",
+    gap: 4,
+    overflow: "hidden",
+    borderRadius: 11,
+    background: "#0B4B2C",
+    color: "#FFFFFF",
+    fontSize: 9,
+  },
+
+  portalActions: {
+    marginTop: 10,
+    display: "flex",
+    gap: 7,
+    flexWrap: "wrap",
+  },
+
+  slugField: {
+    minHeight: 42,
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0,1fr)",
+    alignItems: "center",
+    overflow: "hidden",
+    border: "1px solid #D6E1DA",
+    borderRadius: 10,
+    background: "#FFFFFF",
+  },
+
+  slugPrefix: {
+    padding: "0 0 0 10px",
+    color: "#6F7D75",
+    fontSize: 10,
+    fontWeight: 800,
+  },
+
+  slugInput: {
+    width: "100%",
+    minWidth: 0,
+    minHeight: 40,
+    padding: "8px 10px 8px 3px",
+    border: 0,
+    outline: "none",
+    background: "transparent",
+    color: "#142019",
+    fontFamily: "inherit",
+  },
+
+  qrPanel: {
+    minHeight: 220,
+    padding: 14,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 6,
+    borderRadius: 15,
+    background: "#FFFFFF",
+    textAlign: "center",
+  },
+
+  qrImage: {
+    width: 150,
+    height: 150,
+    objectFit: "contain",
+  },
+
+  qrEmpty: {
+    color: "#7A867F",
+    fontSize: 10,
+    lineHeight: 1.45,
+  },
+
+  paymentInfo: {
+    marginTop: 9,
+    padding: 11,
+    display: "grid",
+    gap: 4,
+    border: "1px solid #F1D28B",
+    borderRadius: 11,
+    background: "#FFF9E9",
+    color: "#785B09",
+    fontSize: 9,
+    lineHeight: 1.45,
+  },
+
+  smallPay: {
+    minHeight: 34,
+    padding: "7px 11px",
+    border: 0,
+    borderRadius: 9,
+    background: "#0B7A43",
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  wodGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 12 },
+  wodCard: { padding: 16, border: "1px solid #DCE6E0", borderRadius: 16, background: "#FBFDFC" },
+  wodBlock: { marginTop: 8, padding: 11, display: "grid", gap: 5, border: "1px solid #E1E8E4", borderRadius: 11, background: "#FFFFFF" },
+  wodBlockAccent: { borderColor: "#A9D9BC", background: "#EEF9F2" },
+  wodTopGrid: {
+    marginTop: 14,
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(220px,1.15fr) minmax(150px,.7fr) minmax(220px,1fr) minmax(210px,.9fr)",
+    gap: 10,
+    alignItems: "end",
+  },
+
+  wodCustomVisibility: {
+    maxWidth: 430,
+    marginTop: 10,
+    padding: 10,
+    border: "1px solid #DCE6E0",
+    borderRadius: 12,
+    background: "#F8FBF9",
+  },
+
+  wodEditorGrid: {
+    marginTop: 12,
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 14,
+    alignItems: "start",
+  },
+
+  wodColumn: {
+    padding: 14,
+    border: "1px solid #DCE6E0",
+    borderRadius: 15,
+    background: "#FBFDFC",
+  },
+
+  wodColumnTitle: {
+    marginBottom: 11,
+    paddingBottom: 9,
+    display: "grid",
+    gap: 3,
+    borderBottom: "1px solid #E6ECE8",
+  },
+
+  wodColumnEyebrow: {
+    color: "#0B7A43",
+    fontSize: 8,
+    fontWeight: 900,
+    letterSpacing: 1,
+  },
+
+  wodCoachNote: {
+    marginTop: 12,
+    padding: 14,
+    border: "1px solid #E4EAE6",
+    borderRadius: 15,
+    background: "#F7F9F8",
+  },
+
+  wodTextareaCompact: {
+    width: "100%",
+    minHeight: 84,
+    padding: "10px 11px",
+    border: "1px solid #CCD7D0",
+    borderRadius: 10,
+    background: "#FFFFFF",
+    color: "#17211C",
+    fontFamily: "inherit",
+    resize: "vertical",
+  },
+
+  wodTextareaMetcon: {
+    width: "100%",
+    minHeight: 154,
+    padding: 12,
+    border: "1px solid #9FD3B3",
+    borderRadius: 12,
+    background: "#F0FAF4",
+    color: "#17211C",
+    fontFamily: "inherit",
+    fontWeight: 700,
+    resize: "vertical",
+  },
+
+  wodTextareaCoach: {
+    width: "100%",
+    minHeight: 76,
+    padding: "10px 11px",
+    border: "1px solid #CCD7D0",
+    borderRadius: 10,
+    background: "#FFFFFF",
+    color: "#17211C",
+    fontFamily: "inherit",
+    resize: "vertical",
+  },
+
+  wodFooterBar: {
+    marginTop: 12,
+    padding: 12,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+    border: "1px solid #DCE6E0",
+    borderRadius: 14,
+    background: "#F8FBF9",
+  },
+
+  wodActiveToggle: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 9,
+    color: "#244034",
+    fontSize: 10,
+  },
+
+  wodFooterActions: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+
+};
