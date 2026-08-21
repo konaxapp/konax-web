@@ -1,6 +1,6 @@
 "use client";
 
-// KONAX Mobile Nav · Gimnasio · VERSION 2026.08.07-P
+// KONAX Mobile Nav · Gimnasio · VERSION 2026.08.21-R-MENU-SYNC
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -26,7 +26,11 @@ function esAdministrador(rol) {
 }
 
 function esVendedor(rol) {
-  return normalizar(rol) === "vendedor";
+  return [
+    "vendedor",
+    "recepcion",
+    "recepcionista",
+  ].includes(normalizar(rol));
 }
 
 function esGimnasio(tipo, categoria = "") {
@@ -41,9 +45,16 @@ const MENU_GIMNASIO_ADMIN = [
   { nombre: "Panel", ruta: "/dashboard", icono: "▦" },
   { nombre: "Alumnos", ruta: "/clientes", icono: "👥" },
   { nombre: "Membresías", ruta: "/suscripciones", icono: "▣" },
+  { nombre: "Agenda", ruta: "/agenda", icono: "📅" },
   { nombre: "Check-in", ruta: "/gimnasio/check-in", icono: "✓" },
   { nombre: "Caja", ruta: "/caja", icono: "$" },
+  { nombre: "Gastos", ruta: "/gastos", icono: "🧮" },
   { nombre: "Reportes", ruta: "/reportes", icono: "▥" },
+  {
+    nombre: "Reporte Financiero",
+    ruta: "/reporte-financiero",
+    icono: "📊",
+  },
   { nombre: "Usuarios y Roles", ruta: "/usuarios", icono: "🔐" },
   { nombre: "Configuración", ruta: "/admin-configuracion", icono: "⚙" },
 ];
@@ -52,6 +63,7 @@ const MENU_GIMNASIO_VENDEDOR = [
   { nombre: "Panel", ruta: "/dashboard", icono: "▦" },
   { nombre: "Alumnos", ruta: "/clientes", icono: "👥" },
   { nombre: "Membresías", ruta: "/suscripciones", icono: "▣" },
+  { nombre: "Agenda", ruta: "/agenda", icono: "📅" },
   { nombre: "Check-in", ruta: "/gimnasio/check-in", icono: "✓" },
   { nombre: "Caja", ruta: "/caja", icono: "$" },
 ];
@@ -432,7 +444,7 @@ const s = {
   },
 
   drawer: {
-    width: "min(88vw,340px)",
+    width: "min(90vw,370px)",
     height: "100dvh",
     padding: "18px 12px max(18px, env(safe-area-inset-bottom))",
     boxSizing: "border-box",
@@ -496,7 +508,7 @@ const s = {
 
   item: {
     width: "100%",
-    minHeight: 50,
+    minHeight: 48,
     padding: "7px 10px",
     display: "grid",
     gridTemplateColumns: "34px minmax(0,1fr) 14px",
