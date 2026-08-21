@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.21-AGENDA-BELLEZA-MOVIL-AISLADA";
+const VERSION = "2026.08.21-AGENDA-BELLEZA-MOVIL-AISLADA-FIX1";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -798,39 +798,6 @@ export default function AgendaPage() {
     };
   }, [reservasFechaOperativas]);
 
-  const resumenAgenda = useMemo(() => {
-    const baseDisponibilidad = esSalonBelleza
-      ? disponibilidadVisible
-      : disponibilidad;
-
-    const capacidadTotal = baseDisponibilidad.reduce(
-      (total, item) => total + Number(item.capacidad || 0),
-      0
-    );
-
-    const reservadosTotal = baseDisponibilidad.reduce(
-      (total, item) => total + Number(item.reservados || 0),
-      0
-    );
-
-    const cuposDisponibles = baseDisponibilidad.reduce(
-      (total, item) => total + Number(item.disponibles || 0),
-      0
-    );
-
-    const ocupacion =
-      capacidadTotal > 0
-        ? Math.round((reservadosTotal / capacidadTotal) * 100)
-        : 0;
-
-    return {
-      capacidadTotal,
-      reservadosTotal,
-      cuposDisponibles,
-      ocupacion,
-    };
-  }, [disponibilidad, disponibilidadVisible, esSalonBelleza]);
-
   const semanaAgenda = useMemo(() => {
     const base = new Date(`${fechaAgenda}T12:00:00`);
 
@@ -935,6 +902,39 @@ export default function AgendaPage() {
     fechaAgenda,
     mapaHorarios,
   ]);
+
+  const resumenAgenda = useMemo(() => {
+    const baseDisponibilidad = esSalonBelleza
+      ? disponibilidadVisible
+      : disponibilidad;
+
+    const capacidadTotal = baseDisponibilidad.reduce(
+      (total, item) => total + Number(item.capacidad || 0),
+      0
+    );
+
+    const reservadosTotal = baseDisponibilidad.reduce(
+      (total, item) => total + Number(item.reservados || 0),
+      0
+    );
+
+    const cuposDisponibles = baseDisponibilidad.reduce(
+      (total, item) => total + Number(item.disponibles || 0),
+      0
+    );
+
+    const ocupacion =
+      capacidadTotal > 0
+        ? Math.round((reservadosTotal / capacidadTotal) * 100)
+        : 0;
+
+    return {
+      capacidadTotal,
+      reservadosTotal,
+      cuposDisponibles,
+      ocupacion,
+    };
+  }, [disponibilidad, disponibilidadVisible, esSalonBelleza]);
 
   async function refrescarTodo() {
     setGuardando(true);
