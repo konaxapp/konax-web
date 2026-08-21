@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.17-PORTAL-MOVIL-FLUJO-V11-DARK-PRO";
+const VERSION = "2026.08.21-PORTAL-ADAPTATIVO-GYM-WOD-V1";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -27,6 +27,24 @@ function esBelleza(portal) {
     "barberia",
     "spa",
     "beauty",
+  ].some((item) => texto.includes(item));
+}
+
+
+function esGimnasio(portal) {
+  const texto = normalizar(
+    `${portal?.tipo_negocio || ""} ${portal?.categoria_negocio || ""}`
+  );
+
+  return [
+    "gimnasio",
+    "gym",
+    "fitness",
+    "crossfit",
+    "cross fit",
+    "box",
+    "academia",
+    "club deportivo",
   ].some((item) => texto.includes(item));
 }
 
@@ -155,8 +173,11 @@ export default function ReservaPublicaAutoservicioPage() {
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
   const [cancelando, setCancelando] = useState(false);
   const [mostrarNuevaCita, setMostrarNuevaCita] = useState(false);
+  const [wodPublico, setWodPublico] = useState(null);
+  const [cargandoWod, setCargandoWod] = useState(false);
 
   const perfilBelleza = esBelleza(portal);
+  const perfilGimnasio = esGimnasio(portal);
   const dias = useMemo(() => proximosDias(8), []);
 
   useEffect(() => {
@@ -259,6 +280,34 @@ export default function ReservaPublicaAutoservicioPage() {
     setCargandoHorarios(false);
   }
 
+
+  async function cargarWodPublico(fechaWod, servicioId) {
+    if (!perfilGimnasio || !fechaWod || !servicioId) {
+      setWodPublico(null);
+      return;
+    }
+
+    setCargandoWod(true);
+
+    const { data, error: rpcError } = await supabase.rpc(
+      "obtener_wod_publico",
+      {
+        p_slug: slug,
+        p_fecha: String(fechaWod).slice(0, 10),
+        p_servicio_id: servicioId,
+      }
+    );
+
+    if (rpcError || !data?.ok) {
+      setWodPublico(null);
+      setCargandoWod(false);
+      return;
+    }
+
+    setWodPublico(data);
+    setCargandoWod(false);
+  }
+
   async function cargarMiCita(token = tokenUrl) {
     if (!token) return;
 
@@ -282,6 +331,10 @@ export default function ReservaPublicaAutoservicioPage() {
 
     setMiCita(data);
     if (data.fecha) setFecha(String(data.fecha).slice(0, 10));
+
+    if (perfilGimnasio && data.servicio_id && data.fecha) {
+      await cargarWodPublico(data.fecha, data.servicio_id);
+    }
   }
 
   const servicios = useMemo(() => {
@@ -590,6 +643,11 @@ export default function ReservaPublicaAutoservicioPage() {
     }
 
     await cargarDisponibilidad(fecha);
+
+    if (perfilGimnasio && servicioSeleccionado?.id) {
+      await cargarWodPublico(fecha, servicioSeleccionado.id);
+    }
+
     setGuardando(false);
     setPaso(5);
 
@@ -804,7 +862,7 @@ export default function ReservaPublicaAutoservicioPage() {
                     });
                 }}
               >
-                ▣ Reservar
+                {perfilGimnasio ? "▣ Reservar clase" : "▣ Reservar"}
               </button>
 
               <button
@@ -814,7 +872,7 @@ export default function ReservaPublicaAutoservicioPage() {
                   abrirMiCita();
                 }}
               >
-                ▤ Mi cita
+                {perfilGimnasio ? "▤ Mi reserva" : "▤ Mi cita"}
               </button>
             </div>
           )}
@@ -830,7 +888,7 @@ export default function ReservaPublicaAutoservicioPage() {
         {tokenUrl && miCita ? (
           <section className="kp-manage">
             <span className="kp-eyebrow-dark">
-              GESTIONAR MI CITA
+              {perfilGimnasio ? "GESTIONAR MI RESERVA" : "GESTIONAR MI CITA"}
             </span>
 
             <h2>{miCita.servicio}</h2>
@@ -858,8 +916,9 @@ export default function ReservaPublicaAutoservicioPage() {
 
             {miCita.estado === "cancelada" ? (
               <div className="kp-cancelled">
-                Esta cita está cancelada. El horario quedó
-                disponible nuevamente.
+                {perfilGimnasio
+                  ? "Esta reserva está cancelada. El cupo quedó disponible nuevamente."
+                  : "Esta cita está cancelada. El horario quedó disponible nuevamente."}
               </div>
             ) : miCita.puede_cancelar ? (
               <div className="kp-cancel-box">
@@ -896,7 +955,9 @@ export default function ReservaPublicaAutoservicioPage() {
               </div>
             ) : (
               <div className="kp-info">
-                Esta cita ya no puede cancelarse desde autoservicio.
+                {perfilGimnasio
+                  ? "Esta reserva ya no puede cancelarse desde autoservicio."
+                  : "Esta cita ya no puede cancelarse desde autoservicio."}
               </div>
             )}
 
@@ -905,7 +966,7 @@ export default function ReservaPublicaAutoservicioPage() {
               className="kp-secondary"
               onClick={reservarOtraCita}
             >
-              + Reservar otra cita
+              {perfilGimnasio ? "+ Reservar otra clase" : "{perfilGimnasio ? "+ Reservar otra clase" : "+ Reservar otra cita"}"}
             </button>
 
             <button
@@ -938,20 +999,26 @@ export default function ReservaPublicaAutoservicioPage() {
 
               <div className="kp-business-window-info">
                 <strong>{nombreNegocio}</strong>
-                <span>Reserva en línea</span>
+                <span>
+                  {perfilGimnasio
+                    ? "Reserva tus clases en línea"
+                    : "Reserva en línea"}
+                </span>
               </div>
             </div>
 
-            <Stepper paso={paso} />
+            <Stepper paso={paso} gimnasio={perfilGimnasio} />
 
             {paso === 1 && (
               <div>
                 <span className="kp-eyebrow-dark">
                   PASO 1 DE 4
                 </span>
-                <h2>Servicios</h2>
+                <h2>{perfilGimnasio ? "Clases" : "Servicios"}</h2>
                 <p className="kp-muted">
-                  Selecciona el servicio que deseas.
+                  {perfilGimnasio
+                    ? "Selecciona la clase o programa que deseas reservar."
+                    : "Selecciona el servicio que deseas."}
                 </p>
 
                 {cargandoHorarios ? (
@@ -960,7 +1027,11 @@ export default function ReservaPublicaAutoservicioPage() {
                   </div>
                 ) : servicios.length === 0 ? (
                   <div className="kp-empty">
-                    <strong>No hay servicios disponibles hoy.</strong>
+                    <strong>
+                      {perfilGimnasio
+                        ? "No hay clases disponibles hoy."
+                        : "No hay servicios disponibles hoy."}
+                    </strong>
                     <span>
                       {buscandoFechas
                         ? " Buscando próximas fechas..."
@@ -1008,8 +1079,14 @@ export default function ReservaPublicaAutoservicioPage() {
                         className="kp-service"
                       >
                         <div className="kp-service-icon">
-                          {normalizar(servicio.nombre).includes("manicure") ||
-                          normalizar(servicio.nombre).includes("uña")
+                          {perfilGimnasio
+                            ? normalizar(servicio.nombre).includes("cross")
+                              ? "🏋"
+                              : normalizar(servicio.nombre).includes("yoga")
+                              ? "🧘"
+                              : "💪"
+                            : normalizar(servicio.nombre).includes("manicure") ||
+                              normalizar(servicio.nombre).includes("uña")
                             ? "💅"
                             : normalizar(servicio.nombre).includes("color")
                             ? "👩"
@@ -1035,7 +1112,7 @@ export default function ReservaPublicaAutoservicioPage() {
                           type="button"
                           onClick={() => elegirServicio(servicio)}
                         >
-                          Reservar
+                          {perfilGimnasio ? "Ver clase" : "Reservar"}
                         </button>
                       </article>
                     ))}
@@ -1051,14 +1128,14 @@ export default function ReservaPublicaAutoservicioPage() {
                   className="kp-blue-link"
                   onClick={() => setPaso(1)}
                 >
-                  ‹ Cambiar servicio
+                  {perfilGimnasio ? "‹ Cambiar clase" : "‹ Cambiar servicio"}
                 </button>
 
                 <span className="kp-eyebrow-dark">
                   PASO 2 DE 4
                 </span>
 
-                <h2>Seleccionar profesional</h2>
+                <h2>{perfilGimnasio ? "Seleccionar instructor" : "Seleccionar profesional"}</h2>
 
                 <ServicioResumen servicio={servicioSeleccionado} />
 
@@ -1073,7 +1150,9 @@ export default function ReservaPublicaAutoservicioPage() {
                     <span className="kp-avatar">↝</span>
 
                     <span className="kp-prof-info">
-                      <strong>Sin preferencia</strong>
+                      <strong>
+                        {perfilGimnasio ? "Cualquier instructor" : "Sin preferencia"}
+                      </strong>
                       <small>Máxima disponibilidad</small>
                     </span>
 
@@ -1120,7 +1199,7 @@ export default function ReservaPublicaAutoservicioPage() {
                   className="kp-blue-link"
                   onClick={() => setPaso(2)}
                 >
-                  ‹ Cambiar profesional
+                  {perfilGimnasio ? "‹ Cambiar instructor" : "‹ Cambiar profesional"}
                 </button>
 
                 <span className="kp-eyebrow-dark">
@@ -1268,11 +1347,11 @@ export default function ReservaPublicaAutoservicioPage() {
                       value={nombreNegocio}
                     />
                     <ResumenFila
-                      label="Servicio"
+                      label={perfilGimnasio ? "Clase" : "Servicio"}
                       value={servicioSeleccionado.nombre}
                     />
                     <ResumenFila
-                      label="Profesional"
+                      label={perfilGimnasio ? "Instructor" : "Profesional"}
                       value={profesionalResumen}
                     />
                     <ResumenFila
@@ -1363,7 +1442,7 @@ export default function ReservaPublicaAutoservicioPage() {
                   RESERVA CONFIRMADA
                 </span>
 
-                <h2>Tu cita quedó registrada</h2>
+                <h2>{perfilGimnasio ? "Tu clase quedó reservada" : "Tu cita quedó registrada"}</h2>
 
                 <p>
                   {reservaConfirmada.servicio}
@@ -1378,6 +1457,24 @@ export default function ReservaPublicaAutoservicioPage() {
                     reservaConfirmada.hora_fin
                   )}
                 </p>
+
+                {perfilGimnasio && (
+                  <div className="kp-wod-wrap">
+                    {cargandoWod ? (
+                      <div className="kp-info">Consultando WOD...</div>
+                    ) : wodPublico?.ok ? (
+                      <WodPublico wod={wodPublico} />
+                    ) : (
+                      <div className="kp-wod-locked">
+                        <strong>WOD</strong>
+                        <span>
+                          El entrenamiento todavía no está publicado.
+                          Aparecerá aquí cuando el coach lo habilite.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {reservaConfirmada.requiere_pago && (
                   <div className="kp-info">
@@ -1472,7 +1569,7 @@ export default function ReservaPublicaAutoservicioPage() {
             }
           >
             <span>▣</span>
-            <small>Reservar</small>
+            <small>{perfilGimnasio ? "Clases" : "Reservar"}</small>
           </button>
 
           <button
@@ -1480,7 +1577,7 @@ export default function ReservaPublicaAutoservicioPage() {
             onClick={abrirMiCita}
           >
             <span>▤</span>
-            <small>Mi cita</small>
+            <small>{perfilGimnasio ? "Mi reserva" : "Mi cita"}</small>
           </button>
         </nav>
         )}
@@ -1497,15 +1594,20 @@ export default function ReservaPublicaAutoservicioPage() {
               <div className="kp-modal-icon">▤</div>
 
               <span className="kp-eyebrow-dark">
-                MI CITA
+                {perfilGimnasio ? "MI RESERVA" : "MI CITA"}
               </span>
 
-              <h3>Aún no tienes una cita guardada</h3>
+              <h3>
+                {perfilGimnasio
+                  ? "Aún no tienes una reserva guardada"
+                  : "Aún no tienes una cita guardada"}
+              </h3>
 
               <p>
                 Cuando completes una reserva en este teléfono,
                 KONAX guardará el acceso para que puedas volver
-                directamente desde “Mi cita”.
+                directamente desde{" "}
+                {perfilGimnasio ? "“Mi reserva”." : "“Mi cita”."}
               </p>
 
               <button
@@ -1544,13 +1646,20 @@ export default function ReservaPublicaAutoservicioPage() {
   );
 }
 
-function Stepper({ paso }) {
-  const pasos = [
-    [1, "Servicio"],
-    [2, "Profesional"],
-    [3, "Fecha y hora"],
-    [4, "Confirmación"],
-  ];
+function Stepper({ paso, gimnasio = false }) {
+  const pasos = gimnasio
+    ? [
+        [1, "Clase"],
+        [2, "Instructor"],
+        [3, "Fecha y hora"],
+        [4, "Confirmación"],
+      ]
+    : [
+        [1, "Servicio"],
+        [2, "Profesional"],
+        [3, "Fecha y hora"],
+        [4, "Confirmación"],
+      ];
 
   return (
     <div className="kp-stepper">
@@ -1593,6 +1702,51 @@ function Stepper({ paso }) {
           </small>
         </div>
       ))}
+    </div>
+  );
+}
+
+
+function WodPublico({ wod }) {
+  if (!wod?.ok) return null;
+
+  const bloques = [
+    ["Warm-up", wod.warmup],
+    ["Strength", wod.strength],
+    ["Skill", wod.skill],
+    ["Metcon", wod.metcon],
+    ["Cooldown", wod.cooldown],
+  ].filter(([, valor]) => Boolean(valor));
+
+  return (
+    <div className="kp-wod">
+      <span className="kp-wod-eyebrow">WORKOUT OF THE DAY</span>
+      <h3>{wod.titulo || "WOD del día"}</h3>
+
+      {wod.servicio && (
+        <div className="kp-wod-program">{wod.servicio}</div>
+      )}
+
+      <div className="kp-wod-blocks">
+        {bloques.map(([titulo, valor]) => (
+          <div
+            key={titulo}
+            className={`kp-wod-block ${
+              titulo === "Metcon" ? "accent" : ""
+            }`}
+          >
+            <span>{titulo}</span>
+            <strong>{valor}</strong>
+          </div>
+        ))}
+      </div>
+
+      {wod.notas_publicas && (
+        <div className="kp-wod-note">
+          <span>Nota del coach</span>
+          <strong>{wod.notas_publicas}</strong>
+        </div>
+      )}
     </div>
   );
 }
@@ -2624,6 +2778,123 @@ const CSS = `
     color: #66746c;
     font-size: 13px;
     line-height: 1.5;
+  }
+
+
+  .kp-wod-wrap {
+    margin: 16px 0;
+    text-align: left;
+  }
+
+  .kp-wod,
+  .kp-wod-locked {
+    padding: 16px;
+    border: 1px solid #b9ddc8;
+    border-radius: 18px;
+    background: #f0faf4;
+  }
+
+  .kp-wod-eyebrow {
+    display: block;
+    color: #0b7041;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 1.1px;
+  }
+
+  .kp-wod h3 {
+    margin: 5px 0 4px;
+    color: #17211c;
+    font-size: 22px;
+  }
+
+  .kp-wod-program {
+    margin-bottom: 12px;
+    color: #607068;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .kp-wod-blocks {
+    display: grid;
+    gap: 8px;
+  }
+
+  .kp-wod-block {
+    padding: 11px 12px;
+    display: grid;
+    gap: 5px;
+    border: 1px solid #dce7e1;
+    border-radius: 12px;
+    background: #ffffff;
+  }
+
+  .kp-wod-block.accent {
+    border-color: #8fcaa8;
+    background: #e8f7ee;
+  }
+
+  .kp-wod-block span,
+  .kp-wod-note span {
+    color: #0b7041;
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+  }
+
+  .kp-wod-block strong,
+  .kp-wod-note strong {
+    white-space: pre-wrap;
+    color: #17211c;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .kp-wod-note {
+    margin-top: 9px;
+    padding: 11px 12px;
+    display: grid;
+    gap: 5px;
+    border-radius: 12px;
+    background: #fff8e7;
+  }
+
+  .kp-wod-locked {
+    display: grid;
+    gap: 5px;
+    color: #536159;
+  }
+
+  .kp-wod-locked strong {
+    color: #0b7041;
+  }
+
+  .kp-dark .kp-wod,
+  .kp-dark .kp-wod-locked {
+    background: #102018;
+    border-color: #28523a;
+  }
+
+  .kp-dark .kp-wod h3,
+  .kp-dark .kp-wod-block strong,
+  .kp-dark .kp-wod-note strong {
+    color: #ffffff;
+  }
+
+  .kp-dark .kp-wod-block {
+    background: #111b16;
+    border-color: #2b3a32;
+  }
+
+  .kp-dark .kp-wod-block.accent {
+    background: #153c29;
+    border-color: #42d47f;
+  }
+
+  .kp-dark .kp-wod-program,
+  .kp-dark .kp-wod-locked {
+    color: #aeb9b2;
   }
 
   .kp-footer {
