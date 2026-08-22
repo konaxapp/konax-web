@@ -421,7 +421,6 @@ Código: ${token}`;
       }
     }
   }
-  }
 
   function obtenerFechaLocalISO() {
     const hoy = new Date();
