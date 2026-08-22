@@ -1,6 +1,6 @@
 "use client";
 
-// KONAX Usuarios y Roles · Gimnasio · VERSION 2026.08.07-P
+// KONAX Usuarios y Roles · Gimnasio · VERSION 2026.08.21-VOLVER-FIX
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -262,6 +262,39 @@ export default function Usuarios() {
   useEffect(() => {
     inicializar();
   }, []);
+
+  function volverSegunContexto() {
+    const tieneSesionAdminMaster = Boolean(
+      localStorage.getItem("adminKonaxId")
+    );
+
+    const rolActual = normalizar(
+      localStorage.getItem("usuarioRol") ||
+        localStorage.getItem("adminKonaxRol") ||
+        localStorage.getItem("adminKonaxRole")
+    );
+
+    const esAdminMaster =
+      tieneSesionAdminMaster ||
+      [
+        "superadmin",
+        "super_admin",
+        "admin_master",
+        "administrador_master",
+      ].includes(rolActual);
+
+    // Si esta pantalla fue abierta desde el panel maestro,
+    // regresamos al panel maestro.
+    if (esAdminMaster) {
+      router.push("/admin");
+      return;
+    }
+
+    // Para administradores normales de la empresa
+    // (incluido Gimnasio), conservamos la sesión actual
+    // y regresamos a su dashboard.
+    router.push("/dashboard");
+  }
 
   async function inicializar() {
     const empresaSesion = localStorage.getItem("empresaId");
@@ -964,7 +997,26 @@ export default function Usuarios() {
           : "Configuración finalizada correctamente."
       );
 
-      router.replace("/admin");
+      const tieneSesionAdminMaster = Boolean(
+        localStorage.getItem("adminKonaxId")
+      );
+
+      const rolActual = normalizar(
+        localStorage.getItem("usuarioRol") ||
+          localStorage.getItem("adminKonaxRol") ||
+          localStorage.getItem("adminKonaxRole")
+      );
+
+      const esAdminMaster =
+        tieneSesionAdminMaster ||
+        [
+          "superadmin",
+          "super_admin",
+          "admin_master",
+          "administrador_master",
+        ].includes(rolActual);
+
+      router.replace(esAdminMaster ? "/admin" : "/dashboard");
     } catch (error) {
       alert(
         "No se pudo finalizar la configuración: " +
@@ -1030,7 +1082,7 @@ export default function Usuarios() {
           </p>
         </div>
 
-        <button onClick={() => router.push("/admin")}>
+        <button type="button" onClick={volverSegunContexto}>
           ← Volver
         </button>
       </header>
