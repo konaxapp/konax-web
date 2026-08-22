@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 // KONAX Configuración · Perfil empresarial + Gimnasio + Profesionales Belleza
-// Version 2026.08.21-PROFESIONALES-1
+// Version 2026.08.21-PROFESIONALES-MOVIL-FIX2
 
 const PLAN_INICIAL = {
   nombre: "",
@@ -667,8 +667,8 @@ export default function AdminConfiguracion() {
                       {profesionales.map((prof) => {
                         const nombres = serviciosSalon.filter((s) => Array.isArray(prof.servicio_ids) && prof.servicio_ids.map(String).includes(String(s.id))).map((s) => s.nombre);
                         return (
-                          <article key={prof.id} style={S.profCard}>
-                            <div style={S.profCardTop}>
+                          <article key={prof.id} style={S.profCard} className="prof-card">
+                            <div style={S.profCardTop} className="prof-card-top">
                               <div style={S.profAvatar}>{prof.foto_url ? <img src={prof.foto_url} alt={prof.nombre} style={S.cover} /> : String(prof.nombre || "P").charAt(0).toUpperCase()}</div>
                               <div style={{ minWidth: 0 }}><strong>{prof.nombre}</strong><span style={S.profSpec}>{prof.especialidad || "Sin especialidad definida"}</span></div>
                               <span style={prof.activo ? S.badgeActive : S.badgeInactive}>{prof.activo ? "Activo" : "Inactivo"}</span>
@@ -748,8 +748,57 @@ const CSS = `
     .config-menu{min-height:auto!important;padding:14px!important}
     .config-card{padding:16px!important}
     .two-cols,.logo-box,.prof-header{grid-template-columns:1fr!important}
-    .prof-list{grid-template-columns:1fr!important}
-    .service-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .prof-list{
+      grid-template-columns:minmax(0,1fr)!important;
+      width:100%!important;
+      min-width:0!important;
+    }
+    .prof-list>*{
+      width:100%!important;
+      max-width:100%!important;
+      min-width:0!important;
+      box-sizing:border-box!important;
+    }
+    .prof-card{
+      overflow:hidden!important;
+      padding:13px!important;
+    }
+    .prof-card-top{
+      grid-template-columns:50px minmax(0,1fr)!important;
+      gap:9px!important;
+      min-width:0!important;
+    }
+    .prof-card-top>div:nth-child(2){
+      min-width:0!important;
+    }
+    .prof-card-top>span:last-child{
+      grid-column:2!important;
+      justify-self:start!important;
+      margin-top:2px!important;
+    }
+    .service-grid{
+      grid-template-columns:repeat(2,minmax(0,1fr))!important;
+      width:100%!important;
+      min-width:0!important;
+    }
+    .service-grid>button{
+      width:100%!important;
+      min-width:0!important;
+      min-height:42px!important;
+      padding:8px 9px!important;
+      font-size:11px!important;
+      overflow-wrap:anywhere!important;
+    }
+    .prof-header{
+      width:100%!important;
+      max-width:100%!important;
+      min-width:0!important;
+      overflow:hidden!important;
+      padding:12px!important;
+    }
+    .prof-header>div:last-child{
+      min-width:0!important;
+    }
     .config-page input,.config-page select,.config-page textarea{font-size:16px!important}
   }
   @media(max-width:390px){.config-resumen{grid-template-columns:1fr!important}.service-grid{grid-template-columns:1fr!important}}
@@ -770,9 +819,9 @@ const S = {
   label:{display:"block",marginBottom:6,color:"#374151",fontWeight:800,fontSize:14}, input:{width:"100%",padding:13,borderRadius:12,border:"1px solid #d1d5db",fontSize:15,background:"#fff",color:"#111827"}, textarea:{width:"100%",padding:13,borderRadius:12,border:"1px solid #d1d5db",fontSize:15,minHeight:110,resize:"vertical"}, twoCols:{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:14},
   primary:{background:"#111827",color:"#fff",border:0,padding:"13px 22px",borderRadius:12,fontWeight:800,cursor:"pointer",marginTop:10}, secondary:{background:"#fff",color:"#374151",border:"1px solid #d1d5db",padding:"13px 22px",borderRadius:12,fontWeight:800,cursor:"pointer",marginTop:10}, actions:{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"},
   logoBox:{marginBottom:22,padding:16,display:"grid",gridTemplateColumns:"120px minmax(0,1fr)",gap:18,alignItems:"center",border:"1px solid #dfe6e2",borderRadius:18,background:"#f9fbfa"}, logoPreview:{width:120,height:120,display:"grid",placeItems:"center",border:"1px solid #d9e2dd",borderRadius:18,background:"#fff",overflow:"hidden"}, coverContain:{width:"100%",height:"100%",objectFit:"contain"}, cover:{width:"100%",height:"100%",objectFit:"cover"}, greenLabel:{minHeight:40,padding:"0 14px",display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:11,background:"#0b7041",color:"#fff",fontWeight:900,fontSize:13,cursor:"pointer"}, dangerLight:{minHeight:40,padding:"0 14px",border:"1px solid #fecaca",borderRadius:11,background:"#fff5f5",color:"#b42318",fontWeight:900,cursor:"pointer"},
-  profHeader:{marginBottom:20,padding:16,display:"grid",gridTemplateColumns:"128px minmax(0,1fr)",gap:18,alignItems:"center",border:"1px solid #dfe6e2",borderRadius:18,background:"#f9fbfa"}, profPhoto:{width:128,height:128,borderRadius:"50%",overflow:"hidden",display:"grid",placeItems:"center",background:"#e7f5ec",border:"4px solid #fff",boxShadow:"0 6px 16px rgba(16,72,43,.12)"}, profInitial:{color:"#167044",fontSize:42,fontWeight:900},
+  profHeader:{marginBottom:20,padding:16,display:"grid",gridTemplateColumns:"128px minmax(0,1fr)",gap:18,alignItems:"center",minWidth:0,border:"1px solid #dfe6e2",borderRadius:18,background:"#f9fbfa"}, profPhoto:{width:128,height:128,borderRadius:"50%",overflow:"hidden",display:"grid",placeItems:"center",background:"#e7f5ec",border:"4px solid #fff",boxShadow:"0 6px 16px rgba(16,72,43,.12)"}, profInitial:{color:"#167044",fontSize:42,fontWeight:900},
   service:{minHeight:42,padding:"9px 11px",border:"1px solid #d7e0da",borderRadius:11,background:"#fff",color:"#46534c",fontSize:12,fontWeight:800,cursor:"pointer",textAlign:"left"}, serviceActive:{minHeight:42,padding:"9px 11px",border:"1px solid #16834f",borderRadius:11,background:"#e9f7ef",color:"#126c42",fontSize:12,fontWeight:800,cursor:"pointer",textAlign:"left"},
-  profCard:{padding:16,border:"1px solid #e1e8e4",borderRadius:16,background:"#fff",boxShadow:"0 6px 16px rgba(22,72,45,.05)"}, profCardTop:{display:"grid",gridTemplateColumns:"54px minmax(0,1fr) auto",gap:11,alignItems:"center"}, profAvatar:{width:54,height:54,borderRadius:"50%",overflow:"hidden",display:"grid",placeItems:"center",background:"#e8f6ed",color:"#147344",fontWeight:900,fontSize:18}, profSpec:{display:"block",marginTop:3,color:"#6b7280",fontSize:11},
+  profCard:{padding:16,border:"1px solid #e1e8e4",borderRadius:16,background:"#fff",boxShadow:"0 6px 16px rgba(22,72,45,.05)"}, profCardTop:{display:"grid",gridTemplateColumns:"54px minmax(0,1fr) auto",gap:11,alignItems:"center",minWidth:0}, profAvatar:{width:54,height:54,borderRadius:"50%",overflow:"hidden",display:"grid",placeItems:"center",background:"#e8f6ed",color:"#147344",fontWeight:900,fontSize:18}, profSpec:{display:"block",marginTop:3,color:"#6b7280",fontSize:11},
   badgeActive:{padding:"5px 9px",borderRadius:999,background:"#dcfce7",color:"#166534",fontSize:10,fontWeight:900}, badgeInactive:{padding:"5px 9px",borderRadius:999,background:"#fee2e2",color:"#991b1b",fontSize:10,fontWeight:900}, darkSmall:{minHeight:38,padding:"9px 12px",border:0,borderRadius:10,background:"#111827",color:"#fff",fontWeight:800,cursor:"pointer"}, warningSmall:{minHeight:38,padding:"9px 12px",border:"1px solid #fed7aa",borderRadius:10,background:"#fff7ed",color:"#c2410c",fontWeight:800,cursor:"pointer"}, successSmall:{minHeight:38,padding:"9px 12px",border:"1px solid #bbf7d0",borderRadius:10,background:"#f0fdf4",color:"#166534",fontWeight:800,cursor:"pointer"},
   empty:{padding:18,border:"1px dashed #cbd5e1",borderRadius:14,background:"#f8fafc",color:"#64748b",textAlign:"center"}, muted:{color:"#6b7280",lineHeight:1.5}, mutedSmall:{margin:"6px 0 0",color:"#6b7280",fontSize:12,lineHeight:1.5}, planCard:{padding:16,border:"1px solid #e5e7eb",borderRadius:16,background:"#f9fafb",display:"flex",justifyContent:"space-between",gap:16,flexWrap:"wrap"}, planPrice:{marginTop:7,color:"#166534",fontSize:22,fontWeight:900}, planBox:{background:"linear-gradient(135deg,#f9fafb,#ecfdf5)",border:"1px solid #e5e7eb",borderRadius:18,padding:22,display:"flex",justifyContent:"space-between",gap:18,flexWrap:"wrap"}, badgeBlue:{display:"inline-block",background:"#dbeafe",color:"#1d4ed8",padding:"8px 15px",borderRadius:999,fontWeight:800,alignSelf:"flex-start"},
 };
