@@ -2028,7 +2028,11 @@ export default function Dashboard() {
           ...(esMovil ? s.mainMobile : {}),
         }}
       >
-        {esMovil && (
+        {/* IMPORTANTE:
+            Gimnasio usa únicamente el menú móvil global de app/layout.js.
+            El menú móvil interno del Dashboard se conserva para los demás perfiles,
+            por lo que Salón de Belleza y otros módulos no se modifican. */}
+        {esMovil && !esGimnasio && (
           <>
             <div style={s.mobileBar}>
               <img
