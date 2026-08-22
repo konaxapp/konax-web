@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.21-AGENDA-BELLEZA-PROFESIONALES-FIX6";
+const VERSION = "2026.08.21-AGENDA-BELLEZA-CONFIG-PREMIUM-FIX7";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -173,7 +173,7 @@ export default function AgendaPage() {
   const [servicioEditandoId, setServicioEditandoId] = useState(null);
 
   const [horarioForm, setHorarioForm] = useState(HORARIO_INICIAL);
-  const [diasHorarioSalon, setDiasHorarioSalon] = useState([1, 2, 3, 4, 5]);
+  const [diasHorarioSalon, setDiasHorarioSalon] = useState([]);
   const [horarioEditandoId, setHorarioEditandoId] = useState(null);
 
   const [busquedaCliente, setBusquedaCliente] = useState("");
@@ -369,7 +369,7 @@ export default function AgendaPage() {
       if (salonLocal) {
         setServicioForm(SERVICIO_SALON_INICIAL);
         setHorarioForm(HORARIO_SALON_INICIAL);
-        setDiasHorarioSalon([1, 2, 3, 4, 5]);
+        setDiasHorarioSalon([]);
       }
 
       if (typeof window !== "undefined") {
@@ -1257,7 +1257,7 @@ export default function AgendaPage() {
       );
 
       if (esSalonBelleza) {
-        setDiasHorarioSalon([1, 2, 3, 4, 5]);
+        setDiasHorarioSalon([]);
       }
 
       setHorarioEditandoId(null);
@@ -2671,7 +2671,7 @@ export default function AgendaPage() {
             </div>
           </section>
 
-          <section style={s.twoColumns}>
+          <section style={s.twoColumns} className="premium-config-grid">
           <article style={s.panel}>
             <span style={pro.panelEyebrow}>
               {esSalonBelleza ? "NUEVA CITA" : "NUEVA RESERVA"}
@@ -3025,15 +3025,30 @@ export default function AgendaPage() {
 
       {vista === "configuracion" && esAdmin && (
         <>
-          <section style={s.portalPanel} className="agenda-portal-responsive">
+          <section style={s.portalPanel} className="agenda-portal-responsive agenda-premium-portal">
             <div style={s.portalMain}>
-              <span style={s.eyebrowSmall}>
-                PORTAL DE RESERVAS
-              </span>
+              <div style={s.portalHeaderRow}>
+                <div>
+                  <span style={s.eyebrowSmall}>
+                    PORTAL DE RESERVAS
+                  </span>
 
-              <h2 style={s.panelTitle}>
-                Comparte tus reservas
-              </h2>
+                  <h2 style={s.panelTitle}>
+                    Comparte tus reservas
+                  </h2>
+                </div>
+
+                <span
+                  style={{
+                    ...s.portalStatus,
+                    ...(portalConfig.activo
+                      ? s.portalStatusActive
+                      : s.portalStatusInactive),
+                  }}
+                >
+                  {portalConfig.activo ? "● Activo" : "● Inactivo"}
+                </span>
+              </div>
 
               <p style={s.portalText}>
                 Usa un solo enlace para Instagram, WhatsApp,
@@ -3107,7 +3122,9 @@ export default function AgendaPage() {
                   style={s.primaryButton}
                   onClick={guardarConfiguracionPortal}
                   disabled={guardandoPortal}
+                  className="portal-action portal-action-primary"
                 >
+                  <span>✓</span>
                   {guardandoPortal
                     ? "Guardando..."
                     : "Guardar portal"}
@@ -3118,7 +3135,9 @@ export default function AgendaPage() {
                   style={s.secondaryButton}
                   onClick={copiarEnlacePortal}
                   disabled={!portalConfig.slug}
+                  className="portal-action"
                 >
+                  <span>⧉</span>
                   Copiar enlace
                 </button>
 
@@ -3127,7 +3146,9 @@ export default function AgendaPage() {
                   style={s.secondaryButton}
                   onClick={compartirPortalWhatsApp}
                   disabled={!portalConfig.slug}
+                  className="portal-action"
                 >
+                  <span>◉</span>
                   WhatsApp
                 </button>
 
@@ -3136,7 +3157,9 @@ export default function AgendaPage() {
                   style={s.secondaryButton}
                   onClick={abrirPortal}
                   disabled={!portalConfig.slug}
+                  className="portal-action"
                 >
+                  <span>↗</span>
                   Ver portal
                 </button>
 
@@ -3145,7 +3168,9 @@ export default function AgendaPage() {
                   style={s.secondaryButton}
                   onClick={descargarQrPortal}
                   disabled={!portalConfig.slug}
+                  className="portal-action"
                 >
+                  <span>▦</span>
                   Descargar QR
                 </button>
               </div>
@@ -3172,7 +3197,7 @@ export default function AgendaPage() {
             </div>
           </section>
 
-          <section style={s.twoColumns}>
+          <section style={s.twoColumns} className="premium-config-grid">
             <article style={s.panel}>
               <span style={s.eyebrowSmall}>CONFIGURACIÓN</span>
               <h2 style={s.panelTitle}>
@@ -3416,64 +3441,6 @@ export default function AgendaPage() {
 
                     <div
                       style={{
-                        display: "flex",
-                        gap: 7,
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      {[
-                        {
-                          label: "Lun a Vie",
-                          dias: [1, 2, 3, 4, 5],
-                        },
-                        {
-                          label: "Lun a Sáb",
-                          dias: [1, 2, 3, 4, 5, 6],
-                        },
-                        {
-                          label: "Lun a Dom",
-                          dias: [1, 2, 3, 4, 5, 6, 0],
-                        },
-                      ].map((preset) => {
-                        const activo =
-                          preset.dias.length === diasHorarioSalon.length &&
-                          preset.dias.every((dia) =>
-                            diasHorarioSalon.includes(dia)
-                          );
-
-                        return (
-                          <button
-                            key={preset.label}
-                            type="button"
-                            onClick={() =>
-                              setDiasHorarioSalon(preset.dias)
-                            }
-                            style={{
-                              minHeight: 35,
-                              padding: "7px 11px",
-                              borderRadius: 999,
-                              border: activo
-                                ? "1px solid #16834f"
-                                : "1px solid #d7e1db",
-                              background: activo
-                                ? "#e9f7ef"
-                                : "#fff",
-                              color: activo
-                                ? "#126c42"
-                                : "#516059",
-                              fontSize: 12,
-                              fontWeight: 900,
-                              cursor: "pointer",
-                            }}
-                          >
-                            {preset.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div
-                      style={{
                         display: "grid",
                         gridTemplateColumns:
                           "repeat(7,minmax(44px,1fr))",
@@ -3527,8 +3494,8 @@ export default function AgendaPage() {
                         lineHeight: 1.4,
                       }}
                     >
-                      Puedes elegir un rango rápido o activar y
-                      desactivar días individualmente.
+                      Selecciona únicamente los días en que este
+                      profesional atiende este servicio.
                     </span>
                   </div>
                 ) : (
@@ -3732,7 +3699,7 @@ export default function AgendaPage() {
                   <p style={s.muted}>Todavía no hay servicios.</p>
                 ) : (
                   servicios.map((servicio) => (
-                    <div key={servicio.id} style={s.listCard}>
+                    <div key={servicio.id} style={s.listCard} className="premium-config-card">
                       <div>
                         <strong>{servicio.nombre}</strong>
                         <span style={s.slotDetail}>
@@ -3747,10 +3714,10 @@ export default function AgendaPage() {
                         </span>
                       </div>
 
-                      <div style={s.inlineActions}>
+                      <div style={s.inlineActions} className="premium-config-actions">
                         <button
                           type="button"
-                          style={s.smallButton}
+                          style={s.smallButtonPremium}
                           onClick={() => editarServicio(servicio)}
                         >
                           Editar
@@ -3759,7 +3726,7 @@ export default function AgendaPage() {
                         <button
                           type="button"
                           style={
-                            servicio.activo ? s.smallDanger : s.smallSuccess
+                            servicio.activo ? s.smallDangerPremium : s.smallSuccessPremium
                           }
                           onClick={() => alternarServicio(servicio)}
                         >
@@ -3800,7 +3767,7 @@ export default function AgendaPage() {
                     ? horariosSalonFecha
                     : horarios
                   ).map((horario) => (
-                    <div key={horario.id} style={s.listCard}>
+                    <div key={horario.id} style={s.listCard} className="premium-config-card">
                       <div>
                         <strong>{nombreServicio(horario.servicio_id)}</strong>
                         <span style={s.slotDetail}>
@@ -3813,10 +3780,10 @@ export default function AgendaPage() {
                         </span>
                       </div>
 
-                      <div style={s.inlineActions}>
+                      <div style={s.inlineActions} className="premium-config-actions">
                         <button
                           type="button"
-                          style={s.smallButton}
+                          style={s.smallButtonPremium}
                           onClick={() => editarHorario(horario)}
                         >
                           Editar
@@ -3825,7 +3792,7 @@ export default function AgendaPage() {
                         <button
                           type="button"
                           style={
-                            horario.activo ? s.smallDanger : s.smallSuccess
+                            horario.activo ? s.smallDangerPremium : s.smallSuccessPremium
                           }
                           onClick={() => alternarHorario(horario)}
                         >
@@ -4940,6 +4907,43 @@ const sPro = {
     cursor: "pointer",
   },
 
+  smallButtonPremium: {
+    minHeight: 36,
+    padding: "8px 12px",
+    border: "1px solid #d4ddd7",
+    borderRadius: 10,
+    background: "linear-gradient(180deg,#ffffff,#f8faf9)",
+    color: "#26372e",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 3px 8px rgba(18,61,39,.05)",
+  },
+
+  smallSuccessPremium: {
+    minHeight: 36,
+    padding: "8px 12px",
+    border: "1px solid #bfe0cb",
+    borderRadius: 10,
+    background: "linear-gradient(180deg,#f3fbf6,#e7f7ed)",
+    color: "#147344",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  smallDangerPremium: {
+    minHeight: 36,
+    padding: "8px 12px",
+    border: "1px solid #f2c6c6",
+    borderRadius: 10,
+    background: "linear-gradient(180deg,#fffafa,#fff2f2)",
+    color: "#b42318",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
   smallSuccess: {
     minHeight: 32,
     padding: "6px 9px",
@@ -5521,6 +5525,123 @@ const AGENDA_CSS = `
 
     .agenda-reserva-actions-salon button {
       min-height: 35px !important;
+      font-size: 10px !important;
+    }
+  }
+
+
+  /* =========================================================
+     CONFIGURACIÓN · PREMIUM
+     ========================================================= */
+  .agenda-premium-portal {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .agenda-premium-portal::before {
+    content: "";
+    position: absolute;
+    width: 260px;
+    height: 260px;
+    right: -110px;
+    top: -130px;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      rgba(52, 211, 153, .18),
+      rgba(52, 211, 153, 0)
+    );
+    pointer-events: none;
+  }
+
+  .portal-action {
+    min-height: 44px !important;
+    padding: 9px 13px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 7px !important;
+    border-radius: 11px !important;
+    border: 1px solid #d8e3dc !important;
+    background: rgba(255,255,255,.96) !important;
+    color: #24382e !important;
+    box-shadow: 0 4px 12px rgba(19,67,42,.06) !important;
+    font-weight: 900 !important;
+  }
+
+  .portal-action-primary {
+    border: 1px solid #0f6b3e !important;
+    background: linear-gradient(135deg,#0b4b2c,#12804a) !important;
+    color: #fff !important;
+    box-shadow: 0 7px 18px rgba(11,75,44,.18) !important;
+  }
+
+  .premium-config-grid > article {
+    border: 1px solid #dce6e0 !important;
+    border-radius: 18px !important;
+    background:
+      linear-gradient(180deg,#ffffff 0%,#fbfdfc 100%) !important;
+    box-shadow: 0 8px 24px rgba(18,61,39,.06) !important;
+  }
+
+  .premium-config-card {
+    min-height: 78px !important;
+    padding: 14px 15px !important;
+    border: 1px solid #dfe8e3 !important;
+    border-radius: 14px !important;
+    background: #fff !important;
+    box-shadow: 0 5px 14px rgba(18,61,39,.045) !important;
+  }
+
+  .premium-config-card > div:first-child strong {
+    font-size: 13px !important;
+    color: #17231c !important;
+  }
+
+  .premium-config-actions {
+    gap: 8px !important;
+  }
+
+  .premium-config-actions button {
+    min-width: 82px;
+  }
+
+  @media (max-width: 760px) {
+    .agenda-premium-portal {
+      padding: 15px !important;
+    }
+
+    .agenda-premium-portal .portal-action {
+      flex: 1 1 calc(50% - 6px) !important;
+      min-height: 42px !important;
+      padding: 8px 9px !important;
+      font-size: 10px !important;
+    }
+
+    .agenda-premium-portal .portal-action-primary {
+      flex-basis: 100% !important;
+    }
+
+    .premium-config-grid {
+      gap: 12px !important;
+    }
+
+    .premium-config-card {
+      align-items: flex-start !important;
+      flex-direction: column !important;
+      gap: 10px !important;
+      padding: 13px !important;
+    }
+
+    .premium-config-actions {
+      width: 100% !important;
+      display: grid !important;
+      grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+    }
+
+    .premium-config-actions button {
+      width: 100% !important;
+      min-height: 39px !important;
       font-size: 10px !important;
     }
   }
@@ -7629,20 +7750,51 @@ const s = {
 
   portalPanel: {
     maxWidth: 1450,
-    margin: "0 auto 14px",
-    padding: 18,
+    margin: "0 auto 16px",
+    padding: 20,
     display: "grid",
     gridTemplateColumns: "minmax(0,1fr) 250px",
     gap: 16,
     border: "1px solid #D8E6DE",
-    borderRadius: 18,
+    borderRadius: 20,
     background:
-      "linear-gradient(135deg,#FFFFFF 0%,#F2FAF5 100%)",
-    boxShadow: "0 8px 24px rgba(18,61,39,.05)",
+      "linear-gradient(135deg,#FFFFFF 0%,#F4FBF7 60%,#ECF8F1 100%)",
+    boxShadow: "0 12px 34px rgba(18,61,39,.08)",
   },
 
   portalMain: {
     minWidth: 0,
+  },
+
+  portalHeaderRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  portalStatus: {
+    minHeight: 28,
+    padding: "6px 10px",
+    display: "inline-flex",
+    alignItems: "center",
+    borderRadius: 999,
+    fontSize: 9,
+    fontWeight: 900,
+    letterSpacing: ".25px",
+    whiteSpace: "nowrap",
+  },
+
+  portalStatusActive: {
+    border: "1px solid #bce4ca",
+    background: "#eaf8ef",
+    color: "#117344",
+  },
+
+  portalStatusInactive: {
+    border: "1px solid #f3c9c9",
+    background: "#fff3f3",
+    color: "#b42318",
   },
 
   portalText: {
@@ -7723,13 +7875,16 @@ const s = {
 
   qrPanel: {
     minHeight: 220,
-    padding: 14,
+    padding: 16,
     display: "grid",
     placeItems: "center",
     alignContent: "center",
     gap: 6,
-    borderRadius: 15,
-    background: "#FFFFFF",
+    border: "1px solid #dbe7df",
+    borderRadius: 17,
+    background:
+      "linear-gradient(180deg,#ffffff 0%,#f8fcf9 100%)",
+    boxShadow: "inset 0 0 0 1px rgba(255,255,255,.55)",
     textAlign: "center",
   },
 
