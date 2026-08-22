@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.22-KONAX-CLIENTES-QR-PORTAL-PRO-V2";
+const VERSION = "2026.08.22-KONAX-CLIENTES-QR-PORTAL-PRO-V4";
 
 export default function ClientesPage() {
   const router = useRouter();
@@ -645,26 +645,52 @@ Código: ${token}`;
       referencia_telefono: referenciaTelefono.trim(),
       estado: estadoCliente,
       observacion: observacionFinal,
-
-      // NUEVOS CAMPOS PORTAL / QR
       acceso_portal: Boolean(accesoPortal),
       auth_user_id: authUserId || null,
       foto_url: fotoUrl.trim() || null,
       qr_token: qrFinal,
     };
 
-    if (clienteSeleccionadoId) {
+    async function leerClientePorId(clienteId) {
       const { data, error } = await supabase
+        .from("clientes")
+        .select("*")
+        .eq("id", clienteId)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+
+      if (error) {
+        throw new Error("No se pudo volver a leer el alumno: " + error.message);
+      }
+
+      return data || null;
+    }
+
+    if (clienteSeleccionadoId) {
+      const { data: filasActualizadas, error } = await supabase
         .from("clientes")
         .update(payload)
         .eq("id", clienteSeleccionadoId)
         .eq("empresa_id", empresaId)
-        .select()
-        .single();
+        .select("*");
 
       if (error) {
+        throw new Error("No se pudo actualizar el cliente: " + error.message);
+      }
+
+      let data = Array.isArray(filasActualizadas)
+        ? filasActualizadas[0]
+        : filasActualizadas;
+
+      // Supabase puede devolver 0 filas en una actualización aunque la ficha
+      // siga siendo visible. En ese caso recuperamos el alumno y continuamos.
+      if (!data) {
+        data = await leerClientePorId(clienteSeleccionadoId);
+      }
+
+      if (!data) {
         throw new Error(
-          "No se pudo actualizar el cliente: " + error.message
+          "No se pudo recuperar la ficha del alumno después de guardar."
         );
       }
 
@@ -692,18 +718,31 @@ Código: ${token}`;
     }
 
     if (clienteExistente) {
-      const { data, error } = await supabase
+      const { data: filasActualizadas, error } = await supabase
         .from("clientes")
         .update(payload)
         .eq("id", clienteExistente.id)
         .eq("empresa_id", empresaId)
-        .select()
-        .single();
+        .select("*");
 
       if (error) {
         throw new Error(
           "El cliente ya existe, pero no se pudieron actualizar sus datos: " +
             error.message
+        );
+      }
+
+      let data = Array.isArray(filasActualizadas)
+        ? filasActualizadas[0]
+        : filasActualizadas;
+
+      if (!data) {
+        data = await leerClientePorId(clienteExistente.id);
+      }
+
+      if (!data) {
+        throw new Error(
+          "No se pudo recuperar la ficha del alumno después de actualizar."
         );
       }
 
@@ -715,11 +754,10 @@ Código: ${token}`;
       };
     }
 
-    const { data, error } = await supabase
+    const { data: filasInsertadas, error } = await supabase
       .from("clientes")
       .insert([payload])
-      .select()
-      .single();
+      .select("*");
 
     if (error) {
       const mensajeError = String(error.message || "").toLowerCase();
@@ -729,14 +767,18 @@ Código: ${token}`;
         mensajeError.includes("clientes_cedula_key") ||
         mensajeError.includes("duplicate key")
       ) {
-        throw new Error(
-          "Ya existe un cliente registrado con esta cédula."
-        );
+        throw new Error("Ya existe un cliente registrado con esta cédula.");
       }
 
-      throw new Error(
-        "No se pudo guardar el cliente: " + error.message
-      );
+      throw new Error("No se pudo guardar el cliente: " + error.message);
+    }
+
+    const data = Array.isArray(filasInsertadas)
+      ? filasInsertadas[0]
+      : filasInsertadas;
+
+    if (!data) {
+      throw new Error("El alumno se guardó, pero no se pudo recuperar su ficha.");
     }
 
     setQrToken(data.qr_token || qrFinal || "");
