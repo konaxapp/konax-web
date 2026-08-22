@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.21-AGENDA-BELLEZA-COLOR-PREMIUM-FIX8";
+const VERSION = "2026.08.21-AGENDA-BELLEZA-FONDOS-COLOR-FIX9";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -1518,7 +1518,12 @@ export default function AgendaPage() {
   }
 
   return (
-    <main style={s.page} className="agenda-page">
+    <main
+      style={s.page}
+      className={`agenda-page ${
+        esSalonBelleza ? `agenda-salon agenda-view-${vista}` : ""
+      }`}
+    >
       <style>{AGENDA_CSS}</style>
 
       <header style={neo.hero} className="agenda-d-hero">
@@ -1672,7 +1677,12 @@ export default function AgendaPage() {
         </section>
       )}
 
-      <section style={neo.nav} className="agenda-d-nav">
+      <section
+        style={neo.nav}
+        className={`agenda-d-nav ${
+          esSalonBelleza ? `agenda-nav-${vista}` : ""
+        }`}
+      >
         <button
           type="button"
           onClick={() => setVista("hoy")}
@@ -5853,6 +5863,108 @@ const AGENDA_CSS = `
       border-radius: 8px;
       font-size: 12px;
       vertical-align: -4px;
+    }
+  }
+
+
+  /* =========================================================
+     SALÓN DE BELLEZA · FONDOS POR MÓDULO FIX9
+     ========================================================= */
+
+  .agenda-salon {
+    transition: background .25s ease;
+  }
+
+  /* AGENDA · verde agua / jade */
+  .agenda-salon.agenda-view-hoy {
+    background:
+      radial-gradient(circle at 8% 12%, rgba(44,190,132,.16), transparent 26%),
+      radial-gradient(circle at 92% 24%, rgba(58,188,196,.12), transparent 25%),
+      linear-gradient(145deg,#edf9f3 0%,#f5fbf8 48%,#e8f6f1 100%) !important;
+  }
+
+  /* NUEVA RESERVA · coral suave / crema */
+  .agenda-salon.agenda-view-nueva {
+    background:
+      radial-gradient(circle at 12% 18%, rgba(247,155,125,.18), transparent 27%),
+      radial-gradient(circle at 88% 28%, rgba(245,190,110,.13), transparent 26%),
+      linear-gradient(145deg,#fff5ef 0%,#fffaf6 50%,#fbeee6 100%) !important;
+  }
+
+  /* RESERVAS · lavanda / azul */
+  .agenda-salon.agenda-view-reservas {
+    background:
+      radial-gradient(circle at 10% 16%, rgba(118,109,222,.16), transparent 27%),
+      radial-gradient(circle at 91% 32%, rgba(75,164,220,.13), transparent 26%),
+      linear-gradient(145deg,#f3f1ff 0%,#f8f9ff 50%,#edf4fb 100%) !important;
+  }
+
+  /* SERVICIOS Y HORARIOS · menta / dorado */
+  .agenda-salon.agenda-view-configuracion {
+    background:
+      radial-gradient(circle at 8% 15%, rgba(38,184,123,.15), transparent 26%),
+      radial-gradient(circle at 91% 22%, rgba(242,177,55,.15), transparent 28%),
+      linear-gradient(145deg,#eef9f2 0%,#fbfaf4 50%,#f5f1e6 100%) !important;
+  }
+
+  /* Navegación flotante con cristal suave */
+  .agenda-salon .agenda-d-nav {
+    border: 1px solid rgba(118,143,128,.20) !important;
+    background: rgba(255,255,255,.78) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 10px 28px rgba(27,65,45,.08) !important;
+  }
+
+  /* Panels generales: siguen claros, pero ya no blanco plano */
+  .agenda-salon.agenda-view-hoy .agenda-d-week-shell,
+  .agenda-salon.agenda-view-hoy .agenda-d-command-grid > article,
+  .agenda-salon.agenda-view-hoy .agenda-d-command-grid > aside {
+    background:
+      linear-gradient(150deg,rgba(255,255,255,.94),rgba(230,248,239,.90)) !important;
+    border-color: rgba(77,157,112,.22) !important;
+    box-shadow: 0 12px 30px rgba(31,93,61,.07) !important;
+  }
+
+  .agenda-salon.agenda-view-nueva .agenda-pro-shell,
+  .agenda-salon.agenda-view-nueva .agenda-pro-panel {
+    background:
+      linear-gradient(150deg,rgba(255,255,255,.95),rgba(255,239,229,.92)) !important;
+    border-color: rgba(218,132,99,.20) !important;
+    box-shadow: 0 12px 30px rgba(133,70,45,.07) !important;
+  }
+
+  .agenda-salon.agenda-view-reservas .agenda-pro-shell,
+  .agenda-salon.agenda-view-reservas .agenda-pro-panel {
+    background:
+      linear-gradient(150deg,rgba(255,255,255,.95),rgba(238,239,255,.92)) !important;
+    border-color: rgba(108,105,194,.20) !important;
+    box-shadow: 0 12px 30px rgba(77,74,145,.07) !important;
+  }
+
+  .agenda-salon.agenda-view-configuracion .premium-config-grid > article,
+  .agenda-salon.agenda-view-configuracion .premium-config-lists > article {
+    box-shadow:
+      0 14px 34px rgba(27,76,49,.08),
+      inset 0 1px 0 rgba(255,255,255,.86) !important;
+  }
+
+  /* Activo del menú toma el color de cada módulo */
+  .agenda-salon.agenda-view-hoy .agenda-d-nav button[style*="background"] {
+    transition: all .2s ease;
+  }
+
+  @media (max-width: 760px) {
+    .agenda-salon.agenda-view-hoy,
+    .agenda-salon.agenda-view-nueva,
+    .agenda-salon.agenda-view-reservas,
+    .agenda-salon.agenda-view-configuracion {
+      background-attachment: scroll !important;
+    }
+
+    .agenda-salon .agenda-d-nav {
+      background: rgba(255,255,255,.86) !important;
+      border-radius: 14px !important;
     }
   }
 
