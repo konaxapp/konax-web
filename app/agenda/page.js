@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.21-AGENDA-BELLEZA-CONFIG-PREMIUM-FIX7";
+const VERSION = "2026.08.21-AGENDA-BELLEZA-COLOR-PREMIUM-FIX8";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -3197,8 +3197,8 @@ export default function AgendaPage() {
             </div>
           </section>
 
-          <section style={s.twoColumns} className="premium-config-grid">
-            <article style={s.panel}>
+          <section style={s.twoColumns} className="premium-config-grid premium-create-grid">
+            <article style={s.panel} className="config-gradient-card config-gradient-service">
               <span style={s.eyebrowSmall}>CONFIGURACIÓN</span>
               <h2 style={s.panelTitle}>
                 {servicioEditandoId
@@ -3393,7 +3393,7 @@ export default function AgendaPage() {
               </div>
             </article>
 
-            <article style={s.panel} className="agenda-horario-panel">
+            <article style={s.panel} className="agenda-horario-panel config-gradient-card config-gradient-schedule">
               <span style={s.eyebrowSmall}>HORARIO</span>
               <h2 style={s.panelTitle}>
                 {horarioEditandoId ? "Editar horario" : "Nuevo horario"}
@@ -3680,8 +3680,8 @@ export default function AgendaPage() {
             </article>
           </section>
 
-          <section style={s.twoColumns}>
-            <article style={s.panel}>
+          <section style={s.twoColumns} className="premium-config-lists">
+            <article style={s.panel} className="config-gradient-card config-gradient-services-list">
               <div style={s.panelHeader}>
                 <div>
                   <span style={s.eyebrowSmall}>SERVICIOS</span>
@@ -3739,7 +3739,7 @@ export default function AgendaPage() {
               </div>
             </article>
 
-            <article style={s.panel}>
+            <article style={s.panel} className="config-gradient-card config-gradient-schedules-list">
               <div style={s.panelHeader}>
                 <div>
                   <span style={s.eyebrowSmall}>HORARIOS</span>
@@ -4207,7 +4207,7 @@ const sPro = {
     background:
       "radial-gradient(circle at top right, rgba(22,131,79,.08), transparent 28%), #f4f7f5",
     color: "#14231b",
-    fontFamily: "Inter, Arial, system-ui, sans-serif",
+    fontFamily: '"Aptos", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif',
   },
 
   header: {
@@ -4615,8 +4615,12 @@ const sPro = {
 
   panelTitle: {
     margin: 0,
-    fontSize: 20,
-    letterSpacing: "-.3px",
+    fontSize: 21,
+    lineHeight: 1.12,
+    letterSpacing: "-.55px",
+    fontFamily:
+      '"Aptos Display", "Aptos", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif',
+    fontWeight: 800,
   },
 
   counter: {
@@ -5643,6 +5647,212 @@ const AGENDA_CSS = `
       width: 100% !important;
       min-height: 39px !important;
       font-size: 10px !important;
+    }
+  }
+
+
+  /* =========================================================
+     CONFIGURACIÓN · COLOR PREMIUM FIX8
+     ========================================================= */
+  .config-gradient-card {
+    position: relative !important;
+    overflow: hidden !important;
+    isolation: isolate;
+    border-width: 1px !important;
+    box-shadow:
+      0 14px 34px rgba(18,61,39,.075),
+      inset 0 1px 0 rgba(255,255,255,.8) !important;
+  }
+
+  .config-gradient-card::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    height: 6px;
+    z-index: 0;
+  }
+
+  .config-gradient-card::after {
+    content: "";
+    position: absolute;
+    width: 220px;
+    height: 220px;
+    right: -105px;
+    bottom: -125px;
+    border-radius: 50%;
+    z-index: -1;
+    pointer-events: none;
+    opacity: .65;
+  }
+
+  .config-gradient-card > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Nuevo servicio: verde esmeralda / menta */
+  .config-gradient-service {
+    border-color: #b9e7cd !important;
+    background:
+      linear-gradient(145deg,#ffffff 0%,#f4fff9 45%,#e1f8eb 100%) !important;
+  }
+
+  .config-gradient-service::before {
+    background:
+      linear-gradient(90deg,#0a7b45,#24c77b,#6ee7b7);
+  }
+
+  .config-gradient-service::after {
+    background:
+      radial-gradient(circle,#82edb5 0%,rgba(130,237,181,0) 70%);
+  }
+
+  /* Nuevo horario: azul cielo / turquesa */
+  .config-gradient-schedule {
+    border-color: #b8dff1 !important;
+    background:
+      linear-gradient(145deg,#ffffff 0%,#f2fbff 46%,#dff4fb 100%) !important;
+  }
+
+  .config-gradient-schedule::before {
+    background:
+      linear-gradient(90deg,#087f8c,#20b9c7,#60d9e5);
+  }
+
+  .config-gradient-schedule::after {
+    background:
+      radial-gradient(circle,#8de4ec 0%,rgba(141,228,236,0) 70%);
+  }
+
+  /* Servicios registrados: ámbar / crema */
+  .config-gradient-services-list {
+    border-color: #f0d9a6 !important;
+    background:
+      linear-gradient(145deg,#ffffff 0%,#fffdf5 45%,#fff2cf 100%) !important;
+  }
+
+  .config-gradient-services-list::before {
+    background:
+      linear-gradient(90deg,#c57b06,#f2ad24,#ffd36d);
+  }
+
+  .config-gradient-services-list::after {
+    background:
+      radial-gradient(circle,#ffe091 0%,rgba(255,224,145,0) 70%);
+  }
+
+  /* Horarios registrados: violeta / lavanda */
+  .config-gradient-schedules-list {
+    border-color: #d7caf5 !important;
+    background:
+      linear-gradient(145deg,#ffffff 0%,#faf7ff 45%,#eee6ff 100%) !important;
+  }
+
+  .config-gradient-schedules-list::before {
+    background:
+      linear-gradient(90deg,#6950bd,#8b6bd8,#b29af0);
+  }
+
+  .config-gradient-schedules-list::after {
+    background:
+      radial-gradient(circle,#cbb8f5 0%,rgba(203,184,245,0) 70%);
+  }
+
+  /* Inputs siguen blancos para máxima legibilidad */
+  .config-gradient-card input,
+  .config-gradient-card select,
+  .config-gradient-card textarea {
+    background: rgba(255,255,255,.93) !important;
+    border-color: rgba(103,130,113,.24) !important;
+    box-shadow: inset 0 1px 2px rgba(18,61,39,.025) !important;
+  }
+
+  .config-gradient-card input:focus,
+  .config-gradient-card select:focus,
+  .config-gradient-card textarea:focus {
+    outline: 2px solid rgba(18,131,79,.14) !important;
+    border-color: rgba(18,131,79,.46) !important;
+  }
+
+  .config-gradient-card .premium-config-card {
+    background: rgba(255,255,255,.80) !important;
+    backdrop-filter: blur(3px);
+  }
+
+  .config-gradient-card h2 {
+    color: #17241d !important;
+    text-wrap: balance;
+  }
+
+  .config-gradient-service h2::before,
+  .config-gradient-schedule h2::before,
+  .config-gradient-services-list h2::before,
+  .config-gradient-schedules-list h2::before {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    margin-right: 8px;
+    border-radius: 9px;
+    vertical-align: -5px;
+    font-size: 14px;
+    color: #fff;
+    box-shadow: 0 5px 12px rgba(20,50,35,.12);
+  }
+
+  .config-gradient-service h2::before {
+    content: "+";
+    background: linear-gradient(135deg,#087341,#25b96f);
+  }
+
+  .config-gradient-schedule h2::before {
+    content: "◷";
+    background: linear-gradient(135deg,#087c89,#26b7c6);
+  }
+
+  .config-gradient-services-list h2::before {
+    content: "✦";
+    background: linear-gradient(135deg,#b46c00,#efa61e);
+  }
+
+  .config-gradient-schedules-list h2::before {
+    content: "▦";
+    background: linear-gradient(135deg,#6047b4,#8f70da);
+  }
+
+  @media (max-width: 760px) {
+    .config-gradient-card {
+      border-radius: 16px !important;
+      box-shadow: 0 9px 22px rgba(18,61,39,.065) !important;
+    }
+
+    .config-gradient-card::before {
+      height: 5px;
+    }
+
+    .config-gradient-card::after {
+      width: 150px;
+      height: 150px;
+      right: -75px;
+      bottom: -80px;
+    }
+
+    .config-gradient-card h2 {
+      font-size: 18px !important;
+    }
+
+    .config-gradient-service h2::before,
+    .config-gradient-schedule h2::before,
+    .config-gradient-services-list h2::before,
+    .config-gradient-schedules-list h2::before {
+      width: 25px;
+      height: 25px;
+      margin-right: 6px;
+      border-radius: 8px;
+      font-size: 12px;
+      vertical-align: -4px;
     }
   }
 
@@ -7057,7 +7267,7 @@ const s = {
     padding: "28px",
     background: "#f4f7f5",
     color: "#17211c",
-    fontFamily: "Arial, sans-serif",
+    fontFamily: '"Aptos", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif',
   },
 
   loading: {
@@ -7068,7 +7278,7 @@ const s = {
     gap: 12,
     background: "#f4f7f5",
     color: "#16834f",
-    fontFamily: "Arial, sans-serif",
+    fontFamily: '"Aptos", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif',
   },
 
   spinner: {
