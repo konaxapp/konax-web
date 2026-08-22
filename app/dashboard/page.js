@@ -1,6 +1,6 @@
 "use client";
 
-// DASHBOARD KONAX - GIMNASIO + SALÓN DE BELLEZA - MOBILE HEADER CLEAN - 2026-08-20
+// DASHBOARD KONAX - GIMNASIO + SALÓN DE BELLEZA - LOGO EMPRESA GIMNASIO - 2026-08-21
 
 // KONAX Dashboard · Reportes gimnasio habilitados · Versión 2026.08.07-S
 
@@ -837,6 +837,8 @@ export default function Dashboard() {
 
   const [empresaNombre, setEmpresaNombre] =
     useState("");
+  const [empresaLogo, setEmpresaLogo] =
+    useState("");
   const [planNombre, setPlanNombre] = useState("");
   const [planCodigo, setPlanCodigo] = useState("");
   const [estadoPlan, setEstadoPlan] = useState("");
@@ -1012,6 +1014,7 @@ export default function Dashboard() {
         .select(`
           id,
           nombre,
+          logo_url,
           plan_nombre,
           plan_codigo,
           estado_plan,
@@ -1088,6 +1091,10 @@ export default function Dashboard() {
       empresa.nombre || ""
     );
     localStorage.setItem(
+      "empresaLogo",
+      empresa.logo_url || ""
+    );
+    localStorage.setItem(
       "usuarioId",
       usuario.id || ""
     );
@@ -1138,6 +1145,9 @@ export default function Dashboard() {
 
     setEmpresaNombre(
       empresa.nombre || "Empresa"
+    );
+    setEmpresaLogo(
+      empresa.logo_url || ""
     );
     setPlanNombre(
       empresa.plan_nombre || "Sin plan"
@@ -2190,15 +2200,27 @@ export default function Dashboard() {
           </div>
 
           {esGimnasio && !esMovil && (
-            <div style={s.topbarGymImagenWrap}>
-              <Image
-                src="/gym-hero-fitness.png"
-                alt="Persona fitness motivada"
-                width={140}
-                height={140}
-                priority
-                style={s.topbarGymImagen}
-              />
+            <div
+              style={s.topbarGymImagenWrap}
+              title={
+                empresaLogo
+                  ? `Logo de ${empresaNombre}`
+                  : "Configura el logo del gimnasio desde Configuración"
+              }
+            >
+              {empresaLogo ? (
+                <img
+                  src={empresaLogo}
+                  alt={`Logo de ${empresaNombre}`}
+                  style={s.topbarGymLogo}
+                />
+              ) : (
+                <div style={s.topbarGymLogoFallback}>
+                  {String(empresaNombre || "G")
+                    .charAt(0)
+                    .toUpperCase()}
+                </div>
+              )}
             </div>
           )}
 
@@ -3926,19 +3948,35 @@ const s = {
     flexShrink: 0,
     borderRadius: "50%",
     border: "4px solid #ffffff",
-    background: "#dcefe3",
+    background:
+      "linear-gradient(145deg,#f8fbf9,#e3f0e8)",
     boxShadow:
       "0 8px 20px rgba(21,74,44,.16)",
   },
 
-  topbarGymImagen: {
+  topbarGymLogo: {
     width: "100%",
     height: "100%",
-    position: "relative",
-    zIndex: 2,
-    objectFit: "cover",
-    objectPosition: "center center",
+    display: "block",
+    objectFit: "contain",
+    objectPosition: "center",
+    padding: 10,
+    background: "#ffffff",
     borderRadius: "50%",
+  },
+
+  topbarGymLogoFallback: {
+    width: "100%",
+    height: "100%",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background:
+      "linear-gradient(145deg,#113b28,#1b6a43)",
+    color: "#ffffff",
+    fontSize: 42,
+    fontWeight: 950,
+    letterSpacing: "-1px",
   },
 
   userBox: {
