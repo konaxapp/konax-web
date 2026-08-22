@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.21-AGENDA-BELLEZA-FONDOS-COLOR-FIX9";
+const VERSION = "2026.08.21-AGENDA-BELLEZA-UI-PREMIUM-FIX10";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -143,6 +143,90 @@ function rangoCoincideConFecha(horario, fecha) {
   if (horario.fecha_hasta && fecha > horario.fecha_hasta) return false;
 
   return Boolean(horario.activo);
+}
+
+
+function UiIcon({ name, size = 17, strokeWidth = 1.9 }) {
+  const props = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": "true",
+  };
+
+  if (name === "calendar") {
+    return (
+      <svg {...props}>
+        <path d="M7 3v3M17 3v3M4 9h16" />
+        <rect x="4" y="5" width="16" height="16" rx="3" />
+        <path d="M8 13h3M13 13h3M8 17h3" />
+      </svg>
+    );
+  }
+
+  if (name === "plus") {
+    return (
+      <svg {...props}>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 8v8M8 12h8" />
+      </svg>
+    );
+  }
+
+  if (name === "list") {
+    return (
+      <svg {...props}>
+        <path d="M9 7h11M9 12h11M9 17h11" />
+        <circle cx="5" cy="7" r="1" fill="currentColor" stroke="none" />
+        <circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" />
+        <circle cx="5" cy="17" r="1" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+
+  if (name === "sliders") {
+    return (
+      <svg {...props}>
+        <path d="M4 7h10M18 7h2M4 17h4M12 17h8M4 12h3M11 12h9" />
+        <circle cx="16" cy="7" r="2" />
+        <circle cx="9" cy="12" r="2" />
+        <circle cx="10" cy="17" r="2" />
+      </svg>
+    );
+  }
+
+  if (name === "refresh") {
+    return (
+      <svg {...props}>
+        <path d="M20 6v5h-5" />
+        <path d="M4 18v-5h5" />
+        <path d="M18.3 9A7 7 0 0 0 6.2 6.2L4 8M5.7 15A7 7 0 0 0 17.8 17.8L20 16" />
+      </svg>
+    );
+  }
+
+  if (name === "arrow-left") {
+    return (
+      <svg {...props}>
+        <path d="M15 18l-6-6 6-6" />
+      </svg>
+    );
+  }
+
+  if (name === "arrow-right") {
+    return (
+      <svg {...props}>
+        <path d="M9 18l6-6-6-6" />
+      </svg>
+    );
+  }
+
+  return null;
 }
 
 export default function AgendaPage() {
@@ -1691,7 +1775,9 @@ export default function AgendaPage() {
             ...(vista === "hoy" ? neo.navItemActive : {}),
           }}
         >
-          <span>▦</span>
+          <span style={neo.navIcon}>
+            <UiIcon name="calendar" />
+          </span>
           Agenda
         </button>
 
@@ -1703,7 +1789,9 @@ export default function AgendaPage() {
             ...(vista === "nueva" ? neo.navItemActive : {}),
           }}
         >
-          <span>＋</span>
+          <span style={neo.navIcon}>
+            <UiIcon name="plus" />
+          </span>
           {esSalonBelleza ? "Nueva reserva" : "Nueva reserva"}
         </button>
 
@@ -1715,7 +1803,9 @@ export default function AgendaPage() {
             ...(vista === "reservas" ? neo.navItemActive : {}),
           }}
         >
-          <span>≡</span>
+          <span style={neo.navIcon}>
+            <UiIcon name="list" />
+          </span>
           {esSalonBelleza ? "Reservas" : "Reservas"}
         </button>
 
@@ -1730,7 +1820,9 @@ export default function AgendaPage() {
                 : {}),
             }}
           >
-            <span>⚙</span>
+            <span style={neo.navIcon}>
+              <UiIcon name="sliders" />
+            </span>
             {esSalonBelleza
             ? "Servicios y horarios"
             : "Clases y horarios"}
@@ -1743,7 +1835,8 @@ export default function AgendaPage() {
           disabled={guardando}
           style={neo.navRefresh}
         >
-          {guardando ? "Actualizando..." : "↻ Actualizar"}
+          <UiIcon name="refresh" size={15} />
+          {guardando ? "Actualizando..." : "Actualizar"}
         </button>
       </section>
 
@@ -1766,7 +1859,7 @@ export default function AgendaPage() {
                   style={neo.roundButton}
                   onClick={() => moverFechaAgenda(-7)}
                 >
-                  ←
+                  <UiIcon name="arrow-left" size={17} />
                 </button>
 
                 <button
@@ -1782,7 +1875,7 @@ export default function AgendaPage() {
                   style={neo.roundButton}
                   onClick={() => moverFechaAgenda(7)}
                 >
-                  →
+                  <UiIcon name="arrow-right" size={17} />
                 </button>
               </div>
             </div>
@@ -5968,6 +6061,318 @@ const AGENDA_CSS = `
     }
   }
 
+
+  /* =========================================================
+     KONAX SALÓN · UI PREMIUM FIX10
+     Colores claramente diferenciados por módulo
+     ========================================================= */
+
+  .agenda-salon {
+    font-family:
+      "Aptos","Segoe UI Variable","Segoe UI",system-ui,sans-serif !important;
+    min-height: 100vh;
+  }
+
+  /* ---------- AGENDA: índigo / lavanda ---------- */
+  .agenda-salon.agenda-view-hoy {
+    background:
+      radial-gradient(circle at 0% 8%, rgba(99,102,241,.24), transparent 31%),
+      radial-gradient(circle at 100% 34%, rgba(167,139,250,.20), transparent 30%),
+      linear-gradient(145deg,#e8eafe 0%,#f2f0ff 48%,#e7e9fb 100%) !important;
+  }
+
+  .agenda-salon.agenda-view-hoy .agenda-d-hero {
+    background:
+      radial-gradient(circle at 82% 18%, rgba(255,255,255,.14), transparent 28%),
+      linear-gradient(125deg,#171940 0%,#3730a3 52%,#6d5bd0 100%) !important;
+    box-shadow: 0 22px 55px rgba(46,43,122,.24) !important;
+  }
+
+  .agenda-salon.agenda-view-hoy .agenda-d-nav button[style*="rgb"],
+  .agenda-salon.agenda-view-hoy .agenda-d-nav button {
+    --module-accent: #4f46e5;
+  }
+
+  /* ---------- NUEVA RESERVA: rosa / coral ---------- */
+  .agenda-salon.agenda-view-nueva {
+    background:
+      radial-gradient(circle at 3% 9%, rgba(244,114,182,.24), transparent 31%),
+      radial-gradient(circle at 98% 28%, rgba(251,146,60,.17), transparent 30%),
+      linear-gradient(145deg,#ffe7f1 0%,#fff1eb 48%,#fde3e8 100%) !important;
+  }
+
+  .agenda-salon.agenda-view-nueva .agenda-d-hero {
+    background:
+      radial-gradient(circle at 82% 18%, rgba(255,255,255,.16), transparent 28%),
+      linear-gradient(125deg,#4a1730 0%,#a33b68 52%,#e76f8c 100%) !important;
+    box-shadow: 0 22px 55px rgba(147,54,92,.23) !important;
+  }
+
+  /* ---------- RESERVAS: azul / cyan ---------- */
+  .agenda-salon.agenda-view-reservas {
+    background:
+      radial-gradient(circle at 4% 10%, rgba(14,165,233,.22), transparent 30%),
+      radial-gradient(circle at 97% 28%, rgba(34,211,238,.18), transparent 29%),
+      linear-gradient(145deg,#dff3ff 0%,#ecf8ff 48%,#dff4f7 100%) !important;
+  }
+
+  .agenda-salon.agenda-view-reservas .agenda-d-hero {
+    background:
+      radial-gradient(circle at 82% 18%, rgba(255,255,255,.15), transparent 28%),
+      linear-gradient(125deg,#082f49 0%,#0369a1 52%,#0ea5b7 100%) !important;
+    box-shadow: 0 22px 55px rgba(3,105,161,.22) !important;
+  }
+
+  /* ---------- SERVICIOS Y HORARIOS: teal / dorado ---------- */
+  .agenda-salon.agenda-view-configuracion {
+    background:
+      radial-gradient(circle at 4% 9%, rgba(16,185,129,.22), transparent 30%),
+      radial-gradient(circle at 97% 28%, rgba(245,158,11,.20), transparent 29%),
+      linear-gradient(145deg,#dcf7ed 0%,#f5f6e9 48%,#f7ead4 100%) !important;
+  }
+
+  .agenda-salon.agenda-view-configuracion .agenda-d-hero {
+    background:
+      radial-gradient(circle at 82% 18%, rgba(255,255,255,.14), transparent 28%),
+      linear-gradient(125deg,#073b36 0%,#0f766e 54%,#b7791f 115%) !important;
+    box-shadow: 0 22px 55px rgba(15,118,110,.22) !important;
+  }
+
+  /* Barra superior realmente limpia */
+  .agenda-salon .agenda-d-nav {
+    border: 1px solid rgba(255,255,255,.68) !important;
+    background: rgba(255,255,255,.76) !important;
+    backdrop-filter: blur(16px) saturate(145%);
+    -webkit-backdrop-filter: blur(16px) saturate(145%);
+    box-shadow:
+      0 12px 30px rgba(32,48,40,.10),
+      inset 0 1px 0 rgba(255,255,255,.92) !important;
+  }
+
+  .agenda-salon .agenda-d-nav button {
+    transition:
+      transform .16s ease,
+      box-shadow .16s ease,
+      background .16s ease !important;
+  }
+
+  .agenda-salon .agenda-d-nav button:hover {
+    transform: translateY(-1px);
+  }
+
+  /* Activo de cada menú: color propio, ya no siempre verde */
+  .agenda-salon.agenda-view-hoy .agenda-nav-hoy button:nth-child(1) {
+    background: linear-gradient(135deg,#4338ca,#6366f1) !important;
+    color: #fff !important;
+    box-shadow: 0 8px 18px rgba(79,70,229,.26) !important;
+  }
+
+  .agenda-salon.agenda-view-nueva .agenda-nav-nueva button:nth-child(2) {
+    background: linear-gradient(135deg,#be3d70,#ec6f91) !important;
+    color: #fff !important;
+    box-shadow: 0 8px 18px rgba(190,61,112,.24) !important;
+  }
+
+  .agenda-salon.agenda-view-reservas .agenda-nav-reservas button:nth-child(3) {
+    background: linear-gradient(135deg,#0369a1,#0ea5b7) !important;
+    color: #fff !important;
+    box-shadow: 0 8px 18px rgba(3,105,161,.24) !important;
+  }
+
+  .agenda-salon.agenda-view-configuracion .agenda-nav-configuracion button:nth-child(4) {
+    background: linear-gradient(135deg,#0f766e,#15956e) !important;
+    color: #fff !important;
+    box-shadow: 0 8px 18px rgba(15,118,110,.24) !important;
+  }
+
+  .agenda-salon .agenda-d-nav button:not([disabled]) .agenda-icon,
+  .agenda-salon .agenda-d-nav button span:first-child {
+    transition: background .16s ease;
+  }
+
+  /* Agenda: semana y paneles con lavanda clara, no verde */
+  .agenda-salon.agenda-view-hoy .agenda-d-week-shell {
+    background:
+      linear-gradient(145deg,rgba(255,255,255,.94),rgba(238,237,255,.90)) !important;
+    border: 1px solid rgba(99,102,241,.16) !important;
+    box-shadow: 0 15px 34px rgba(75,72,155,.10) !important;
+  }
+
+  .agenda-salon.agenda-view-hoy .agenda-d-week-strip button {
+    border-color: rgba(99,102,241,.15) !important;
+    background: rgba(255,255,255,.80) !important;
+  }
+
+  .agenda-salon.agenda-view-hoy .agenda-d-week-strip button[style*="linear-gradient"] {
+    background: linear-gradient(145deg,#4338ca,#6961da) !important;
+  }
+
+  .agenda-salon.agenda-view-hoy .agenda-d-command-grid > article {
+    background:
+      linear-gradient(145deg,rgba(255,255,255,.95),rgba(243,241,255,.92)) !important;
+    border-color: rgba(99,102,241,.15) !important;
+    box-shadow: 0 14px 32px rgba(75,72,155,.08) !important;
+  }
+
+  .agenda-salon.agenda-view-hoy .agenda-d-command-grid > aside {
+    background:
+      linear-gradient(145deg,#27245e,#4338a5) !important;
+    box-shadow: 0 16px 34px rgba(57,49,139,.20) !important;
+  }
+
+  /* Nueva reserva: panel rosado real */
+  .agenda-salon.agenda-view-nueva .agenda-pro-shell,
+  .agenda-salon.agenda-view-nueva .agenda-pro-panel {
+    background:
+      linear-gradient(145deg,rgba(255,255,255,.94),rgba(255,228,239,.92)) !important;
+    border-color: rgba(211,79,132,.16) !important;
+    box-shadow: 0 15px 34px rgba(156,65,100,.10) !important;
+  }
+
+  /* Reservas: panel azul claro */
+  .agenda-salon.agenda-view-reservas .agenda-pro-shell,
+  .agenda-salon.agenda-view-reservas .agenda-pro-panel {
+    background:
+      linear-gradient(145deg,rgba(255,255,255,.94),rgba(224,244,255,.92)) !important;
+    border-color: rgba(14,165,233,.16) !important;
+    box-shadow: 0 15px 34px rgba(30,123,166,.10) !important;
+  }
+
+  .agenda-salon.agenda-view-reservas .agenda-reserva-card-salon {
+    background:
+      linear-gradient(145deg,#ffffff,#eef9ff) !important;
+    border-color: rgba(14,165,233,.16) !important;
+  }
+
+  /* Configuración: más contraste y tarjetas inteligentes */
+  .agenda-salon.agenda-view-configuracion .agenda-premium-portal {
+    background:
+      linear-gradient(135deg,#fffdf7 0%,#ecfbf4 50%,#fff2d7 100%) !important;
+    border-color: rgba(15,118,110,.18) !important;
+  }
+
+  .agenda-salon.agenda-view-configuracion .config-gradient-service {
+    background:
+      linear-gradient(145deg,#e9fff5 0%,#d5f8e7 100%) !important;
+  }
+
+  .agenda-salon.agenda-view-configuracion .config-gradient-schedule {
+    background:
+      linear-gradient(145deg,#e6f8ff 0%,#d8f2f4 100%) !important;
+  }
+
+  .agenda-salon.agenda-view-configuracion .config-gradient-services-list {
+    background:
+      linear-gradient(145deg,#fff8df 0%,#ffedbb 100%) !important;
+  }
+
+  .agenda-salon.agenda-view-configuracion .config-gradient-schedules-list {
+    background:
+      linear-gradient(145deg,#f0eaff 0%,#e3d8ff 100%) !important;
+  }
+
+  /* Inputs tipo SaaS moderno */
+  .agenda-salon input,
+  .agenda-salon select,
+  .agenda-salon textarea {
+    border-color: rgba(80,104,92,.22) !important;
+    background: rgba(255,255,255,.88) !important;
+    box-shadow:
+      inset 0 1px 1px rgba(16,41,28,.03),
+      0 1px 0 rgba(255,255,255,.74) !important;
+  }
+
+  /* Semana más compacta */
+  .agenda-salon .agenda-d-week-shell {
+    padding: 12px !important;
+  }
+
+  .agenda-salon .agenda-d-week-controls button {
+    min-height: 32px !important;
+    height: 32px !important;
+  }
+
+  .agenda-salon .agenda-d-week-strip {
+    gap: 6px !important;
+  }
+
+  .agenda-salon .agenda-d-week-strip > button {
+    min-height: 62px !important;
+    padding: 6px !important;
+    border-radius: 11px !important;
+  }
+
+  .agenda-salon .agenda-d-week-strip > button strong {
+    font-size: 18px !important;
+  }
+
+  @media (max-width: 760px) {
+    .agenda-salon {
+      padding: 10px !important;
+    }
+
+    .agenda-salon .agenda-d-hero {
+      border-radius: 19px !important;
+    }
+
+    .agenda-salon .agenda-d-nav {
+      padding: 6px !important;
+      gap: 5px !important;
+      border-radius: 14px !important;
+    }
+
+    .agenda-salon .agenda-d-nav button {
+      min-height: 38px !important;
+      padding: 0 9px !important;
+      font-size: 9.5px !important;
+      border-radius: 9px !important;
+    }
+
+    .agenda-salon .agenda-d-nav button span:first-child {
+      width: 25px !important;
+      height: 25px !important;
+      border-radius: 8px !important;
+    }
+
+    .agenda-salon .agenda-d-week-shell {
+      padding: 10px !important;
+      border-radius: 15px !important;
+    }
+
+    .agenda-salon .agenda-d-week-shell h2 {
+      font-size: 14px !important;
+    }
+
+    .agenda-salon .agenda-d-week-strip {
+      grid-template-columns: repeat(7,minmax(48px,1fr)) !important;
+      overflow-x: auto !important;
+      scrollbar-width: thin;
+      padding-bottom: 4px;
+    }
+
+    .agenda-salon .agenda-d-week-strip > button {
+      min-width: 48px !important;
+      min-height: 54px !important;
+      padding: 5px 4px !important;
+      border-radius: 10px !important;
+    }
+
+    .agenda-salon .agenda-d-week-strip > button strong {
+      font-size: 16px !important;
+    }
+
+    .agenda-salon .agenda-d-week-strip > button span {
+      font-size: 7px !important;
+    }
+
+    .agenda-salon.agenda-view-nueva .agenda-pro-shell,
+    .agenda-salon.agenda-view-nueva .agenda-pro-panel,
+    .agenda-salon.agenda-view-reservas .agenda-pro-shell,
+    .agenda-salon.agenda-view-reservas .agenda-pro-panel {
+      border-radius: 16px !important;
+    }
+  }
+
 `;
 
 const neo = {
@@ -6136,6 +6541,16 @@ const neo = {
     boxShadow: "0 6px 18px rgba(15,50,31,.04)",
   },
 
+  navIcon: {
+    width: 28,
+    height: 28,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 9,
+    background: "rgba(255,255,255,.12)",
+    flex: "0 0 auto",
+  },
+
   navItem: {
     minHeight: 40,
     padding: "0 13px",
@@ -6160,29 +6575,34 @@ const neo = {
 
   navRefresh: {
     marginLeft: "auto",
-    minHeight: 38,
-    padding: "0 12px",
-    border: "1px solid #D9E4DD",
-    borderRadius: 9,
-    background: "#F7FAF8",
-    color: "#0B7A43",
+    minHeight: 40,
+    padding: "0 13px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    border: "1px solid rgba(86,107,96,.18)",
+    borderRadius: 11,
+    background: "rgba(255,255,255,.72)",
+    color: "#33453B",
     fontSize: 10,
     fontWeight: 850,
     cursor: "pointer",
     whiteSpace: "nowrap",
+    boxShadow: "0 4px 12px rgba(22,61,42,.05)",
   },
 
   weekShell: {
     maxWidth: 1480,
-    margin: "0 auto 14px",
-    padding: 16,
+    margin: "0 auto 12px",
+    padding: 13,
     border: "1px solid #DCE6E0",
     borderRadius: 18,
     background: "#fff",
   },
 
   weekHeader: {
-    marginBottom: 12,
+    marginBottom: 9,
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -6199,8 +6619,10 @@ const neo = {
   },
 
   sectionTitle: {
-    margin: "4px 0 0",
-    fontSize: 18,
+    margin: "3px 0 0",
+    fontSize: 16,
+    lineHeight: 1.2,
+    letterSpacing: "-.25px",
   },
 
   weekControls: {
@@ -6235,12 +6657,12 @@ const neo = {
   weekStrip: {
     display: "grid",
     gridTemplateColumns: "repeat(7,minmax(0,1fr))",
-    gap: 8,
+    gap: 7,
   },
 
   dayCard: {
-    minHeight: 88,
-    padding: 10,
+    minHeight: 66,
+    padding: "7px 6px",
     display: "grid",
     placeItems: "center",
     alignContent: "center",
@@ -6260,18 +6682,18 @@ const neo = {
   },
 
   dayName: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: 900,
     color: "#78867E",
   },
 
   dayNumber: {
-    fontSize: 24,
+    fontSize: 19,
     lineHeight: 1,
   },
 
   dayMonth: {
-    fontSize: 8,
+    fontSize: 7,
     color: "#89958E",
     fontWeight: 800,
   },
