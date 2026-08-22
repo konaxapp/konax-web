@@ -435,7 +435,31 @@ export default function ReportesPage() {
     resumenCaja,
   ]);
 
+  // FIX: en Gimnasio, "Últimos movimientos" usa únicamente Caja como fuente
+  // financiera para evitar mostrar la misma membresía 2 o 3 veces.
   const movimientosRecientes = useMemo(() => {
+    if (esReporteSuscripciones) {
+      return cajaPeriodo
+        .map((registro) => ({
+          id: `caja-${registro.id}`,
+          fecha: fechaCorta(
+            registro.fecha_pago || registro.fecha || registro.created_at
+          ),
+          tipo: registro.tipo || registro.concepto || "Caja",
+          detalle:
+            registro.cliente_nombre ||
+            registro.descripcion ||
+            registro.concepto ||
+            registro.numero_transaccion ||
+            "Movimiento de caja",
+          responsable:
+            registro.usuario || registro.responsable || "Sistema",
+          monto: numero(registro.monto),
+        }))
+        .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+        .slice(0, 5);
+    }
+
     const movimientosComerciales = comercialPeriodo.map((registro) => ({
       id: `comercial-${registro.id}`,
       fecha: fechaCorta(registro.fecha_inicio || registro.created_at),
@@ -453,7 +477,7 @@ export default function ReportesPage() {
       fecha: fechaCorta(
         registro.fecha_pago || registro.fecha || registro.created_at
       ),
-      tipo: registro.tipo || "Caja",
+      tipo: registro.tipo || registro.concepto || "Caja",
       detalle:
         registro.cliente_nombre ||
         registro.descripcion ||
@@ -463,33 +487,10 @@ export default function ReportesPage() {
       monto: numero(registro.monto),
     }));
 
-    const movimientosSuscripciones = esReporteSuscripciones
-      ? suscripcionesPeriodo.map((registro) => ({
-          id: `suscripcion-${registro.id}`,
-          fecha: obtenerFechaInicioSuscripcion(registro),
-          tipo: "Membresía",
-          detalle: `${obtenerNombreCliente(registro)} · ${
-            registro.plan_nombre || registro.nombre_plan || "Plan"
-          }`,
-          responsable: registro.responsable || "Sistema",
-          monto: numero(registro.monto || registro.precio || registro.total),
-        }))
-      : [];
-
-    return [
-      ...movimientosComerciales,
-      ...movimientosCaja,
-      ...movimientosSuscripciones,
-    ]
+    return [...movimientosComerciales, ...movimientosCaja]
       .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
       .slice(0, 5);
-  }, [
-    comercialPeriodo,
-    cajaPeriodo,
-    suscripcionesPeriodo,
-    esReporteSuscripciones,
-    clientes,
-  ]);
+  }, [comercialPeriodo, cajaPeriodo, esReporteSuscripciones]);
 
   const cuentasMora = useMemo(() => {
     return comercialPeriodo
@@ -720,27 +721,13 @@ export default function ReportesPage() {
         </Campo>
 
         <div style={estilos.botonesFiltros}>
-          <button
-            type="button"
-            style={estilos.botonBlanco}
-            onClick={limpiarFiltros}
-          >
+          <button type="button" style={estilos.botonBlanco} onClick={limpiarFiltros}>
             Limpiar
           </button>
-
-          <button
-            type="button"
-            style={estilos.botonTurquesa}
-            onClick={exportarExcel}
-          >
+          <button type="button" style={estilos.botonTurquesa} onClick={exportarExcel}>
             Exportar Excel
           </button>
-
-          <button
-            type="button"
-            style={estilos.botonOscuro}
-            onClick={descargarPDF}
-          >
+          <button type="button" style={estilos.botonOscuro} onClick={descargarPDF}>
             Descargar PDF
           </button>
         </div>
@@ -749,91 +736,29 @@ export default function ReportesPage() {
       {esReporteSuscripciones ? (
         <>
           <section style={estilos.indicadoresEjecutivos}>
-            <TarjetaCompacta
-              icono="🏋️"
-              titulo="Miembros activos"
-              valor={resumenGimnasio.miembrosActivos}
-              detalle="Membresías vigentes"
-              tono="verde"
-            />
-
-            <TarjetaCompacta
-              icono="📅"
-              titulo="Por vencer"
-              valor={resumenGimnasio.proximasVencer}
-              detalle="Próximos 7 días"
-              tono="amarillo"
-            />
-
-            <TarjetaCompacta
-              icono="⚠️"
-              titulo="Vencidas"
-              valor={resumenGimnasio.membresiasVencidas}
-              detalle="Requieren seguimiento"
-              tono="rojo"
-            />
-
-            <TarjetaCompacta
-              icono="💳"
-              titulo="Ingresos membresías"
-              valor={moneda(resumenGimnasio.ingresosMembresias)}
-              detalle="Mensualidades y renovaciones"
-              tono="azul"
-            />
-
-            <TarjetaCompacta
-              icono="🏦"
-              titulo="Balance de caja"
-              valor={moneda(resumenGimnasio.balance)}
-              detalle="Ingresos menos egresos"
-              tono="oscuro"
-            />
+            <TarjetaCompacta icono="🏋️" titulo="Miembros activos" valor={resumenGimnasio.miembrosActivos} detalle="Membresías vigentes" tono="verde" />
+            <TarjetaCompacta icono="📅" titulo="Por vencer" valor={resumenGimnasio.proximasVencer} detalle="Próximos 7 días" tono="amarillo" />
+            <TarjetaCompacta icono="⚠️" titulo="Vencidas" valor={resumenGimnasio.membresiasVencidas} detalle="Requieren seguimiento" tono="rojo" />
+            <TarjetaCompacta icono="💳" titulo="Ingresos membresías" valor={moneda(resumenGimnasio.ingresosMembresias)} detalle="Mensualidades y renovaciones" tono="azul" />
+            <TarjetaCompacta icono="🏦" titulo="Balance de caja" valor={moneda(resumenGimnasio.balance)} detalle="Ingresos menos egresos" tono="oscuro" />
           </section>
 
           <section style={estilos.actividadPeriodo}>
             <div style={estilos.actividadEncabezado}>
               <div>
                 <span style={estilos.miniEtiqueta}>ACTIVIDAD DEL PERÍODO</span>
-                <h2 style={estilos.actividadTitulo}>
-                  Resumen operativo
-                </h2>
+                <h2 style={estilos.actividadTitulo}>Resumen operativo</h2>
               </div>
-
-              <span style={estilos.actividadRango}>
-                {fechaDesde} → {fechaHasta}
-              </span>
+              <span style={estilos.actividadRango}>{fechaDesde} → {fechaHasta}</span>
             </div>
 
             <div style={estilos.actividadGrid}>
-              <ActividadItem
-                titulo="Renovaciones"
-                valor={resumenGimnasio.renovaciones}
-              />
-
-              <ActividadItem
-                titulo="Ingresos caja"
-                valor={moneda(resumenGimnasio.ingresosCaja)}
-              />
-
-              <ActividadItem
-                titulo="Egresos caja"
-                valor={moneda(resumenGimnasio.egresosCaja)}
-              />
-
-              <ActividadItem
-                titulo="Clientes nuevos"
-                valor={resumenGimnasio.clientesNuevos}
-              />
-
-              <ActividadItem
-                titulo="Ventas productos"
-                valor={moneda(resumenGimnasio.ventasProductos)}
-              />
-
-              <ActividadItem
-                titulo="Stock bajo"
-                valor={resumenGimnasio.productosBajoStock}
-              />
+              <ActividadItem titulo="Renovaciones" valor={resumenGimnasio.renovaciones} />
+              <ActividadItem titulo="Ingresos caja" valor={moneda(resumenGimnasio.ingresosCaja)} />
+              <ActividadItem titulo="Egresos caja" valor={moneda(resumenGimnasio.egresosCaja)} />
+              <ActividadItem titulo="Clientes nuevos" valor={resumenGimnasio.clientesNuevos} />
+              <ActividadItem titulo="Ventas productos" valor={moneda(resumenGimnasio.ventasProductos)} />
+              <ActividadItem titulo="Stock bajo" valor={resumenGimnasio.productosBajoStock} />
             </div>
           </section>
 
@@ -841,13 +766,9 @@ export default function ReportesPage() {
             <div style={estilos.cabeceraPanel}>
               <div>
                 <span style={estilos.miniEtiqueta}>SEGUIMIENTO</span>
-                <h2 style={estilos.tituloPanel}>
-                  Membresías vencidas o próximas a vencer
-                </h2>
+                <h2 style={estilos.tituloPanel}>Membresías vencidas o próximas a vencer</h2>
               </div>
-              <span style={estilos.contador}>
-                {membresiasTabla.length} registros
-              </span>
+              <span style={estilos.contador}>{membresiasTabla.length} registros</span>
             </div>
 
             <div style={estilos.tablaContenedor}>
@@ -861,14 +782,9 @@ export default function ReportesPage() {
                     <th style={estilos.thDerecha}>Días</th>
                   </tr>
                 </thead>
-
                 <tbody>
                   {membresiasTabla.length === 0 ? (
-                    <tr>
-                      <td colSpan="5" style={estilos.sinDatos}>
-                        No hay membresías vencidas ni próximas a vencer.
-                      </td>
-                    </tr>
+                    <tr><td colSpan="5" style={estilos.sinDatos}>No hay membresías vencidas ni próximas a vencer.</td></tr>
                   ) : (
                     membresiasTabla.map((registro) => (
                       <tr key={registro.id}>
@@ -876,23 +792,9 @@ export default function ReportesPage() {
                         <td style={estilos.td}>{registro.plan}</td>
                         <td style={estilos.td}>{registro.vencimiento}</td>
                         <td style={estilos.td}>
-                          <span
-                            style={
-                              textoNormalizado(registro.estado).includes("vencida")
-                                ? estilos.badgeMora
-                                : estilos.badge
-                            }
-                          >
-                            {registro.estado}
-                          </span>
+                          <span style={textoNormalizado(registro.estado).includes("vencida") ? estilos.badgeMora : estilos.badge}>{registro.estado}</span>
                         </td>
-                        <td style={estilos.tdDerecha}>
-                          {registro.dias === null
-                            ? "-"
-                            : registro.dias < 0
-                            ? `${Math.abs(registro.dias)} vencidos`
-                            : `${registro.dias} restantes`}
-                        </td>
+                        <td style={estilos.tdDerecha}>{registro.dias === null ? "-" : registro.dias < 0 ? `${Math.abs(registro.dias)} vencidos` : `${registro.dias} restantes`}</td>
                       </tr>
                     ))
                   )}
@@ -904,105 +806,33 @@ export default function ReportesPage() {
       ) : (
         <>
           <section style={estilos.tarjetas}>
-            <Tarjeta
-              icono="💳"
-              titulo="Créditos otorgados"
-              valor={moneda(resumenGeneral.montoCreditos)}
-              detalle={`${comercialPeriodo.length} operaciones en el período`}
-            />
-            <Tarjeta
-              icono="🛒"
-              titulo="Ventas registradas"
-              valor={moneda(resumenGeneral.montoVentas)}
-              detalle="Operaciones no clasificadas como crédito"
-            />
-            <Tarjeta
-              icono="🧾"
-              titulo="Cartera pendiente"
-              valor={moneda(resumenGeneral.carteraPendiente)}
-              detalle="Suma del saldo actual"
-            />
-            <Tarjeta
-              icono="⚠️"
-              titulo="Cartera vencida"
-              valor={moneda(resumenGeneral.carteraVencida)}
-              detalle={`${resumenGeneral.cuentasEnMora} cuentas con días de mora`}
-            />
-            <Tarjeta
-              icono="🏦"
-              titulo="Ingresos de caja"
-              valor={moneda(resumenGeneral.ingresosCaja)}
-              detalle="Movimientos procesados de entrada"
-            />
-            <Tarjeta
-              icono="📤"
-              titulo="Egresos de caja"
-              valor={moneda(resumenGeneral.egresosCaja)}
-              detalle="Gastos, retiros y salidas"
-            />
-            <Tarjeta
-              icono="👥"
-              titulo="Clientes nuevos"
-              valor={resumenGeneral.clientesNuevos}
-              detalle="Registrados dentro del período"
-            />
-            <Tarjeta
-              icono="📊"
-              titulo="Porcentaje de mora"
-              valor={`${resumenGeneral.porcentajeMora.toFixed(1)}%`}
-              detalle="Cartera vencida sobre cartera pendiente"
-            />
+            <Tarjeta icono="💳" titulo="Créditos otorgados" valor={moneda(resumenGeneral.montoCreditos)} detalle={`${comercialPeriodo.length} operaciones en el período`} />
+            <Tarjeta icono="🛒" titulo="Ventas registradas" valor={moneda(resumenGeneral.montoVentas)} detalle="Operaciones no clasificadas como crédito" />
+            <Tarjeta icono="🧾" titulo="Cartera pendiente" valor={moneda(resumenGeneral.carteraPendiente)} detalle="Suma del saldo actual" />
+            <Tarjeta icono="⚠️" titulo="Cartera vencida" valor={moneda(resumenGeneral.carteraVencida)} detalle={`${resumenGeneral.cuentasEnMora} cuentas con días de mora`} />
+            <Tarjeta icono="🏦" titulo="Ingresos de caja" valor={moneda(resumenGeneral.ingresosCaja)} detalle="Movimientos procesados de entrada" />
+            <Tarjeta icono="📤" titulo="Egresos de caja" valor={moneda(resumenGeneral.egresosCaja)} detalle="Gastos, retiros y salidas" />
+            <Tarjeta icono="👥" titulo="Clientes nuevos" valor={resumenGeneral.clientesNuevos} detalle="Registrados dentro del período" />
+            <Tarjeta icono="📊" titulo="Porcentaje de mora" valor={`${resumenGeneral.porcentajeMora.toFixed(1)}%`} detalle="Cartera vencida sobre cartera pendiente" />
           </section>
 
           <section style={estilos.resumenes}>
             <Panel titulo="Resumen comercial" etiqueta="CRÉDITOS Y VENTAS">
-              <Fila
-                nombre="Créditos otorgados"
-                valor={moneda(resumenGeneral.montoCreditos)}
-              />
-              <Fila
-                nombre="Ventas registradas"
-                valor={moneda(resumenGeneral.montoVentas)}
-              />
-              <Fila
-                nombre="Ticket promedio"
-                valor={moneda(resumenGeneral.ticketPromedio)}
-              />
+              <Fila nombre="Créditos otorgados" valor={moneda(resumenGeneral.montoCreditos)} />
+              <Fila nombre="Ventas registradas" valor={moneda(resumenGeneral.montoVentas)} />
+              <Fila nombre="Ticket promedio" valor={moneda(resumenGeneral.ticketPromedio)} />
               <Fila nombre="Operaciones" valor={comercialPeriodo.length} />
             </Panel>
-
             <Panel titulo="Resumen de cartera" etiqueta="COBRANZA">
-              <Fila
-                nombre="Cartera pendiente"
-                valor={moneda(resumenGeneral.carteraPendiente)}
-              />
-              <Fila
-                nombre="Cartera vencida"
-                valor={moneda(resumenGeneral.carteraVencida)}
-              />
-              <Fila
-                nombre="Cuentas en mora"
-                valor={resumenGeneral.cuentasEnMora}
-              />
-              <Fila
-                nombre="Índice de mora"
-                valor={`${resumenGeneral.porcentajeMora.toFixed(1)}%`}
-              />
+              <Fila nombre="Cartera pendiente" valor={moneda(resumenGeneral.carteraPendiente)} />
+              <Fila nombre="Cartera vencida" valor={moneda(resumenGeneral.carteraVencida)} />
+              <Fila nombre="Cuentas en mora" valor={resumenGeneral.cuentasEnMora} />
+              <Fila nombre="Índice de mora" valor={`${resumenGeneral.porcentajeMora.toFixed(1)}%`} />
             </Panel>
-
             <Panel titulo="Resumen de caja" etiqueta="CAJA">
-              <Fila
-                nombre="Ingresos"
-                valor={moneda(resumenGeneral.ingresosCaja)}
-              />
-              <Fila
-                nombre="Egresos"
-                valor={moneda(resumenGeneral.egresosCaja)}
-              />
-              <Fila
-                nombre="Balance"
-                valor={moneda(resumenGeneral.balance)}
-              />
+              <Fila nombre="Ingresos" valor={moneda(resumenGeneral.ingresosCaja)} />
+              <Fila nombre="Egresos" valor={moneda(resumenGeneral.egresosCaja)} />
+              <Fila nombre="Balance" valor={moneda(resumenGeneral.balance)} />
               <Fila nombre="Movimientos" valor={cajaPeriodo.length} />
             </Panel>
           </section>
@@ -1011,15 +841,10 @@ export default function ReportesPage() {
             <div style={estilos.cabeceraPanel}>
               <div>
                 <span style={estilos.miniEtiqueta}>MORA REAL</span>
-                <h2 style={estilos.tituloPanel}>
-                  Cuentas con días de atraso
-                </h2>
+                <h2 style={estilos.tituloPanel}>Cuentas con días de atraso</h2>
               </div>
-              <span style={estilos.contador}>
-                {cuentasMora.length} registros
-              </span>
+              <span style={estilos.contador}>{cuentasMora.length} registros</span>
             </div>
-
             <div style={estilos.tablaContenedor}>
               <table style={estilos.tabla}>
                 <thead>
@@ -1033,25 +858,15 @@ export default function ReportesPage() {
                 </thead>
                 <tbody>
                   {cuentasMora.length === 0 ? (
-                    <tr>
-                      <td colSpan="5" style={estilos.sinDatos}>
-                        No hay cuentas con días de mora en el período seleccionado.
-                      </td>
-                    </tr>
+                    <tr><td colSpan="5" style={estilos.sinDatos}>No hay cuentas con días de mora en el período seleccionado.</td></tr>
                   ) : (
                     cuentasMora.map((registro) => (
                       <tr key={registro.id}>
                         <td style={estilos.td}>{registro.cuenta}</td>
-                        <td style={estilos.td}>
-                          <span style={estilos.badgeMora}>
-                            {registro.diasMora} días
-                          </span>
-                        </td>
+                        <td style={estilos.td}><span style={estilos.badgeMora}>{registro.diasMora} días</span></td>
                         <td style={estilos.td}>{registro.estadoCobranza}</td>
                         <td style={estilos.td}>{registro.responsable}</td>
-                        <td style={estilos.tdDerecha}>
-                          {moneda(registro.saldo)}
-                        </td>
+                        <td style={estilos.tdDerecha}>{moneda(registro.saldo)}</td>
                       </tr>
                     ))
                   )}
@@ -1068,9 +883,7 @@ export default function ReportesPage() {
             <span style={estilos.miniEtiqueta}>ACTIVIDAD</span>
             <h2 style={estilos.tituloPanel}>Últimos movimientos</h2>
           </div>
-          <span style={estilos.contador}>
-            {movimientosRecientes.length} registros
-          </span>
+          <span style={estilos.contador}>{movimientosRecientes.length} registros</span>
         </div>
 
         <div style={estilos.tablaContenedor}>
@@ -1084,28 +897,17 @@ export default function ReportesPage() {
                 <th style={estilos.thDerecha}>Monto</th>
               </tr>
             </thead>
-
             <tbody>
               {movimientosRecientes.length === 0 ? (
-                <tr>
-                  <td colSpan="5" style={estilos.sinDatos}>
-                    No hay movimientos dentro del período seleccionado.
-                  </td>
-                </tr>
+                <tr><td colSpan="5" style={estilos.sinDatos}>No hay movimientos dentro del período seleccionado.</td></tr>
               ) : (
                 movimientosRecientes.map((registro) => (
                   <tr key={registro.id}>
-                    <td style={estilos.td}>
-                      {registro.fecha || "Sin fecha"}
-                    </td>
-                    <td style={estilos.td}>
-                      <span style={estilos.badge}>{registro.tipo}</span>
-                    </td>
+                    <td style={estilos.td}>{registro.fecha || "Sin fecha"}</td>
+                    <td style={estilos.td}><span style={estilos.badge}>{registro.tipo}</span></td>
                     <td style={estilos.td}>{registro.detalle}</td>
                     <td style={estilos.td}>{registro.responsable}</td>
-                    <td style={estilos.tdDerecha}>
-                      {moneda(registro.monto)}
-                    </td>
+                    <td style={estilos.tdDerecha}>{moneda(registro.monto)}</td>
                   </tr>
                 ))
               )}
@@ -1126,62 +928,22 @@ function Campo({ label, children }) {
   );
 }
 
-function TarjetaCompacta({
-  icono,
-  titulo,
-  valor,
-  detalle,
-  tono = "verde",
-}) {
+function TarjetaCompacta({ icono, titulo, valor, detalle, tono = "verde" }) {
   const tonos = {
-    verde: {
-      fondo: "#eaf7f0",
-      color: "#16834f",
-    },
-    amarillo: {
-      fondo: "#fff7df",
-      color: "#956400",
-    },
-    rojo: {
-      fondo: "#fff0ee",
-      color: "#b42318",
-    },
-    azul: {
-      fondo: "#edf5ff",
-      color: "#2867a9",
-    },
-    oscuro: {
-      fondo: "#e9efec",
-      color: "#173c2a",
-    },
+    verde: { fondo: "#eaf7f0", color: "#16834f" },
+    amarillo: { fondo: "#fff7df", color: "#956400" },
+    rojo: { fondo: "#fff0ee", color: "#b42318" },
+    azul: { fondo: "#edf5ff", color: "#2867a9" },
+    oscuro: { fondo: "#e9efec", color: "#173c2a" },
   };
-
   const tonoActual = tonos[tono] || tonos.verde;
-
   return (
     <article style={estilos.tarjetaCompacta}>
-      <div
-        style={{
-          ...estilos.iconoCompacto,
-          background: tonoActual.fondo,
-          color: tonoActual.color,
-        }}
-      >
-        {icono}
-      </div>
-
+      <div style={{ ...estilos.iconoCompacto, background: tonoActual.fondo, color: tonoActual.color }}>{icono}</div>
       <div style={estilos.tarjetaCompactaContenido}>
-        <span style={estilos.tituloTarjetaCompacta}>
-          {titulo}
-        </span>
-
-        <strong style={estilos.valorTarjetaCompacta}>
-          {valor}
-        </strong>
-
-        <span style={estilos.detalleTarjetaCompacta}>
-          {detalle}
-        </span>
+        <span style={estilos.tituloTarjetaCompacta}>{titulo}</span>
+        <strong style={estilos.valorTarjetaCompacta}>{valor}</strong>
+        <span style={estilos.detalleTarjetaCompacta}>{detalle}</span>
       </div>
     </article>
   );
@@ -1190,13 +952,8 @@ function TarjetaCompacta({
 function ActividadItem({ titulo, valor }) {
   return (
     <div style={estilos.actividadItem}>
-      <span style={estilos.actividadItemTitulo}>
-        {titulo}
-      </span>
-
-      <strong style={estilos.actividadItemValor}>
-        {valor}
-      </strong>
+      <span style={estilos.actividadItemTitulo}>{titulo}</span>
+      <strong style={estilos.actividadItemValor}>{valor}</strong>
     </div>
   );
 }
@@ -1234,449 +991,62 @@ function Fila({ nombre, valor }) {
 }
 
 const estilos = {
-  pagina: {
-    minHeight: "100vh",
-    padding: "32px",
-    background: "#f4f7f5",
-    color: "#17211c",
-    fontFamily: "Arial, sans-serif",
-  },
-  carga: {
-    minHeight: "100vh",
-    display: "grid",
-    placeItems: "center",
-    alignContent: "center",
-    gap: 14,
-    background: "#f4f7f5",
-    color: "#166534",
-    fontFamily: "Arial, sans-serif",
-  },
-  spinner: {
-    width: 42,
-    height: 42,
-    border: "5px solid #dce9e1",
-    borderTopColor: "#16834f",
-    borderRadius: "50%",
-  },
-  encabezado: {
-    maxWidth: 1500,
-    margin: "0 auto 18px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 20,
-    flexWrap: "wrap",
-  },
-  etiqueta: {
-    display: "block",
-    marginBottom: 7,
-    color: "#16834f",
-    fontSize: 12,
-    fontWeight: 900,
-    letterSpacing: 1.4,
-  },
-  titulo: {
-    margin: "0 0 9px",
-    fontSize: "clamp(30px, 4vw, 43px)",
-    lineHeight: 1.08,
-  },
-  subtitulo: {
-    margin: 0,
-    color: "#68736c",
-    fontSize: 16,
-    lineHeight: 1.55,
-  },
-  acciones: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-  error: {
-    maxWidth: 1500,
-    margin: "0 auto 20px",
-    padding: "14px 16px",
-    border: "1px solid #fecaca",
-    borderRadius: 12,
-    background: "#fef2f2",
-    color: "#991b1b",
-    fontWeight: 700,
-  },
-  filtros: {
-    maxWidth: 1500,
-    margin: "0 auto 16px",
-    padding: 14,
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
-    gap: 13,
-    alignItems: "end",
-    border: "1px solid #dce5df",
-    borderRadius: 17,
-    background: "#fff",
-    boxShadow: "0 8px 25px rgba(15, 23, 42, 0.05)",
-  },
-  campo: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 7,
-  },
-  label: {
-    color: "#506057",
-    fontSize: 13,
-    fontWeight: 800,
-  },
-  input: {
-    width: "100%",
-    minHeight: 43,
-    padding: "9px 11px",
-    boxSizing: "border-box",
-    border: "1px solid #ccd7d0",
-    borderRadius: 10,
-    background: "#fff",
-    color: "#17211c",
-    fontSize: 14,
-  },
-  botonesFiltros: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  botonBlanco: {
-    minHeight: 43,
-    padding: "9px 14px",
-    border: "1px solid #ccd7d0",
-    borderRadius: 10,
-    background: "#fff",
-    color: "#26342b",
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  botonVerde: {
-    minHeight: 43,
-    padding: "9px 16px",
-    border: "none",
-    borderRadius: 10,
-    background: "#16834f",
-    color: "#fff",
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  botonTurquesa: {
-    minHeight: 43,
-    padding: "9px 14px",
-    border: "none",
-    borderRadius: 10,
-    background: "#0f766e",
-    color: "#fff",
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  botonOscuro: {
-    minHeight: 43,
-    padding: "9px 14px",
-    border: "none",
-    borderRadius: 10,
-    background: "#111827",
-    color: "#fff",
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  indicadoresEjecutivos: {
-    maxWidth: 1500,
-    margin: "0 auto 14px",
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
-    gap: 10,
-  },
-
-  tarjetaCompacta: {
-    minHeight: 92,
-    padding: "13px 14px",
-    display: "grid",
-    gridTemplateColumns: "38px minmax(0,1fr)",
-    alignItems: "center",
-    gap: 10,
-    border: "1px solid #dce5df",
-    borderRadius: 14,
-    background: "#fff",
-    boxShadow: "0 5px 16px rgba(15, 23, 42, 0.04)",
-  },
-
-  iconoCompacto: {
-    width: 38,
-    height: 38,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: 11,
-    fontSize: 18,
-    fontWeight: 900,
-  },
-
-  tarjetaCompactaContenido: {
-    minWidth: 0,
-  },
-
-  tituloTarjetaCompacta: {
-    display: "block",
-    color: "#657169",
-    fontSize: 11,
-    fontWeight: 800,
-    lineHeight: 1.2,
-  },
-
-  valorTarjetaCompacta: {
-    display: "block",
-    marginTop: 4,
-    color: "#17211c",
-    fontSize: 20,
-    lineHeight: 1.05,
-  },
-
-  detalleTarjetaCompacta: {
-    display: "block",
-    marginTop: 4,
-    color: "#89938d",
-    fontSize: 9.5,
-    lineHeight: 1.3,
-  },
-
-  actividadPeriodo: {
-    maxWidth: 1500,
-    margin: "0 auto 16px",
-    padding: "13px 15px",
-    border: "1px solid #dce5df",
-    borderRadius: 14,
-    background: "#fff",
-    boxShadow: "0 5px 16px rgba(15, 23, 42, 0.035)",
-  },
-
-  actividadEncabezado: {
-    marginBottom: 10,
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap",
-  },
-
-  actividadTitulo: {
-    margin: 0,
-    color: "#17211c",
-    fontSize: 16,
-  },
-
-  actividadRango: {
-    padding: "5px 8px",
-    borderRadius: 999,
-    background: "#edf8f1",
-    color: "#16834f",
-    fontSize: 9,
-    fontWeight: 800,
-  },
-
-  actividadGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(135px, 1fr))",
-    gap: 7,
-  },
-
-  actividadItem: {
-    minHeight: 54,
-    padding: "8px 10px",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    gap: 3,
-    borderLeft: "3px solid #16834f",
-    borderRadius: 8,
-    background: "#f8faf9",
-  },
-
-  actividadItemTitulo: {
-    color: "#718078",
-    fontSize: 9.5,
-    fontWeight: 750,
-  },
-
-  actividadItemValor: {
-    color: "#17211c",
-    fontSize: 14,
-    lineHeight: 1.1,
-  },
-
-  tarjetas: {
-    maxWidth: 1500,
-    margin: "0 auto 22px",
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-    gap: 15,
-  },
-  tarjeta: {
-    minHeight: 137,
-    padding: 19,
-    display: "grid",
-    gridTemplateColumns: "50px 1fr",
-    gap: 13,
-    border: "1px solid #dce5df",
-    borderRadius: 17,
-    background: "#fff",
-    boxShadow: "0 8px 24px rgba(15, 23, 42, 0.05)",
-  },
-  icono: {
-    width: 50,
-    height: 50,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: 14,
-    background: "#eaf7f0",
-    fontSize: 24,
-  },
-  tituloTarjeta: {
-    margin: "0 0 7px",
-    color: "#68736c",
-    fontSize: 13,
-    fontWeight: 800,
-  },
-  valorTarjeta: {
-    display: "block",
-    marginBottom: 6,
-    fontSize: 24,
-    lineHeight: 1.12,
-  },
-  detalleTarjeta: {
-    display: "block",
-    color: "#7d8881",
-    fontSize: 12,
-    lineHeight: 1.4,
-  },
-  resumenes: {
-    maxWidth: 1500,
-    margin: "0 auto 22px",
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))",
-    gap: 16,
-  },
-  panel: {
-    padding: 22,
-    border: "1px solid #dce5df",
-    borderRadius: 17,
-    background: "#fff",
-    boxShadow: "0 8px 25px rgba(15, 23, 42, 0.05)",
-  },
-  miniEtiqueta: {
-    display: "block",
-    marginBottom: 5,
-    color: "#16834f",
-    fontSize: 11,
-    fontWeight: 900,
-    letterSpacing: 1.2,
-  },
-  tituloPanel: {
-    margin: 0,
-    fontSize: 21,
-  },
-  fila: {
-    padding: "12px 0",
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 15,
-    borderBottom: "1px solid #edf1ee",
-  },
-  nombreFila: {
-    color: "#5e6a62",
-    fontSize: 14,
-  },
-  valorFila: {
-    color: "#17211c",
-    fontSize: 14,
-  },
-  panelTabla: {
-    maxWidth: 1500,
-    margin: "0 auto 22px",
-    padding: 22,
-    border: "1px solid #dce5df",
-    borderRadius: 17,
-    background: "#fff",
-    boxShadow: "0 8px 25px rgba(15, 23, 42, 0.05)",
-  },
-  cabeceraPanel: {
-    marginBottom: 16,
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 16,
-    flexWrap: "wrap",
-  },
-  contador: {
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#edf8f1",
-    color: "#16834f",
-    fontSize: 12,
-    fontWeight: 800,
-  },
-  tablaContenedor: {
-    width: "100%",
-    overflowX: "auto",
-  },
-  tabla: {
-    width: "100%",
-    minWidth: 760,
-    borderCollapse: "collapse",
-  },
-  th: {
-    padding: "11px 12px",
-    borderBottom: "1px solid #dce5df",
-    color: "#536058",
-    fontSize: 12,
-    textAlign: "left",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  thDerecha: {
-    padding: "11px 12px",
-    borderBottom: "1px solid #dce5df",
-    color: "#536058",
-    fontSize: 12,
-    textAlign: "right",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  td: {
-    padding: "13px 12px",
-    borderBottom: "1px solid #edf1ee",
-    color: "#435047",
-    fontSize: 14,
-  },
-  tdDerecha: {
-    padding: "13px 12px",
-    borderBottom: "1px solid #edf1ee",
-    color: "#17211c",
-    fontSize: 14,
-    fontWeight: 800,
-    textAlign: "right",
-  },
-  badge: {
-    display: "inline-block",
-    padding: "5px 8px",
-    borderRadius: 999,
-    background: "#edf8f1",
-    color: "#16834f",
-    fontSize: 12,
-    fontWeight: 800,
-  },
-  badgeMora: {
-    display: "inline-block",
-    padding: "5px 8px",
-    borderRadius: 999,
-    background: "#fff1f2",
-    color: "#be123c",
-    fontSize: 12,
-    fontWeight: 800,
-  },
-  sinDatos: {
-    padding: "32px 12px",
-    color: "#7b867f",
-    fontSize: 14,
-    textAlign: "center",
-  },
+  pagina: { minHeight: "100vh", padding: "32px", background: "#f4f7f5", color: "#17211c", fontFamily: "Arial, sans-serif" },
+  carga: { minHeight: "100vh", display: "grid", placeItems: "center", alignContent: "center", gap: 14, background: "#f4f7f5", color: "#166534", fontFamily: "Arial, sans-serif" },
+  spinner: { width: 42, height: 42, border: "5px solid #dce9e1", borderTopColor: "#16834f", borderRadius: "50%" },
+  encabezado: { maxWidth: 1500, margin: "0 auto 18px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap" },
+  etiqueta: { display: "block", marginBottom: 7, color: "#16834f", fontSize: 12, fontWeight: 900, letterSpacing: 1.4 },
+  titulo: { margin: "0 0 9px", fontSize: "clamp(30px, 4vw, 43px)", lineHeight: 1.08 },
+  subtitulo: { margin: 0, color: "#68736c", fontSize: 16, lineHeight: 1.55 },
+  acciones: { display: "flex", gap: 10, flexWrap: "wrap" },
+  error: { maxWidth: 1500, margin: "0 auto 20px", padding: "14px 16px", border: "1px solid #fecaca", borderRadius: 12, background: "#fef2f2", color: "#991b1b", fontWeight: 700 },
+  filtros: { maxWidth: 1500, margin: "0 auto 16px", padding: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 13, alignItems: "end", border: "1px solid #dce5df", borderRadius: 17, background: "#fff", boxShadow: "0 8px 25px rgba(15, 23, 42, 0.05)" },
+  campo: { display: "flex", flexDirection: "column", gap: 7 },
+  label: { color: "#506057", fontSize: 13, fontWeight: 800 },
+  input: { width: "100%", minHeight: 43, padding: "9px 11px", boxSizing: "border-box", border: "1px solid #ccd7d0", borderRadius: 10, background: "#fff", color: "#17211c", fontSize: 14 },
+  botonesFiltros: { display: "flex", gap: 8, flexWrap: "wrap" },
+  botonBlanco: { minHeight: 43, padding: "9px 14px", border: "1px solid #ccd7d0", borderRadius: 10, background: "#fff", color: "#26342b", fontWeight: 800, cursor: "pointer" },
+  botonVerde: { minHeight: 43, padding: "9px 16px", border: "none", borderRadius: 10, background: "#16834f", color: "#fff", fontWeight: 800, cursor: "pointer" },
+  botonTurquesa: { minHeight: 43, padding: "9px 14px", border: "none", borderRadius: 10, background: "#0f766e", color: "#fff", fontWeight: 800, cursor: "pointer" },
+  botonOscuro: { minHeight: 43, padding: "9px 14px", border: "none", borderRadius: 10, background: "#111827", color: "#fff", fontWeight: 800, cursor: "pointer" },
+  indicadoresEjecutivos: { maxWidth: 1500, margin: "0 auto 14px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 },
+  tarjetaCompacta: { minHeight: 92, padding: "13px 14px", display: "grid", gridTemplateColumns: "38px minmax(0,1fr)", alignItems: "center", gap: 10, border: "1px solid #dce5df", borderRadius: 14, background: "#fff", boxShadow: "0 5px 16px rgba(15, 23, 42, 0.04)" },
+  iconoCompacto: { width: 38, height: 38, display: "grid", placeItems: "center", borderRadius: 11, fontSize: 18, fontWeight: 900 },
+  tarjetaCompactaContenido: { minWidth: 0 },
+  tituloTarjetaCompacta: { display: "block", color: "#657169", fontSize: 11, fontWeight: 800, lineHeight: 1.2 },
+  valorTarjetaCompacta: { display: "block", marginTop: 4, color: "#17211c", fontSize: 20, lineHeight: 1.05 },
+  detalleTarjetaCompacta: { display: "block", marginTop: 4, color: "#89938d", fontSize: 9.5, lineHeight: 1.3 },
+  actividadPeriodo: { maxWidth: 1500, margin: "0 auto 16px", padding: "13px 15px", border: "1px solid #dce5df", borderRadius: 14, background: "#fff", boxShadow: "0 5px 16px rgba(15, 23, 42, 0.035)" },
+  actividadEncabezado: { marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" },
+  actividadTitulo: { margin: 0, color: "#17211c", fontSize: 16 },
+  actividadRango: { padding: "5px 8px", borderRadius: 999, background: "#edf8f1", color: "#16834f", fontSize: 9, fontWeight: 800 },
+  actividadGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(135px, 1fr))", gap: 7 },
+  actividadItem: { minHeight: 54, padding: "8px 10px", display: "flex", flexDirection: "column", justifyContent: "center", gap: 3, borderLeft: "3px solid #16834f", borderRadius: 8, background: "#f8faf9" },
+  actividadItemTitulo: { color: "#718078", fontSize: 9.5, fontWeight: 750 },
+  actividadItemValor: { color: "#17211c", fontSize: 14, lineHeight: 1.1 },
+  tarjetas: { maxWidth: 1500, margin: "0 auto 22px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 15 },
+  tarjeta: { minHeight: 137, padding: 19, display: "grid", gridTemplateColumns: "50px 1fr", gap: 13, border: "1px solid #dce5df", borderRadius: 17, background: "#fff", boxShadow: "0 8px 24px rgba(15, 23, 42, 0.05)" },
+  icono: { width: 50, height: 50, display: "grid", placeItems: "center", borderRadius: 14, background: "#eaf7f0", fontSize: 24 },
+  tituloTarjeta: { margin: "0 0 7px", color: "#68736c", fontSize: 13, fontWeight: 800 },
+  valorTarjeta: { display: "block", marginBottom: 6, fontSize: 24, lineHeight: 1.12 },
+  detalleTarjeta: { display: "block", color: "#7d8881", fontSize: 12, lineHeight: 1.4 },
+  resumenes: { maxWidth: 1500, margin: "0 auto 22px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 16 },
+  panel: { padding: 22, border: "1px solid #dce5df", borderRadius: 17, background: "#fff", boxShadow: "0 8px 25px rgba(15, 23, 42, 0.05)" },
+  miniEtiqueta: { display: "block", marginBottom: 5, color: "#16834f", fontSize: 11, fontWeight: 900, letterSpacing: 1.2 },
+  tituloPanel: { margin: 0, fontSize: 21 },
+  fila: { padding: "12px 0", display: "flex", justifyContent: "space-between", gap: 15, borderBottom: "1px solid #edf1ee" },
+  nombreFila: { color: "#5e6a62", fontSize: 14 },
+  valorFila: { color: "#17211c", fontSize: 14 },
+  panelTabla: { maxWidth: 1500, margin: "0 auto 22px", padding: 22, border: "1px solid #dce5df", borderRadius: 17, background: "#fff", boxShadow: "0 8px 25px rgba(15, 23, 42, 0.05)" },
+  cabeceraPanel: { marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" },
+  contador: { padding: "6px 10px", borderRadius: 999, background: "#edf8f1", color: "#16834f", fontSize: 12, fontWeight: 800 },
+  tablaContenedor: { width: "100%", overflowX: "auto" },
+  tabla: { width: "100%", minWidth: 760, borderCollapse: "collapse" },
+  th: { padding: "11px 12px", borderBottom: "1px solid #dce5df", color: "#536058", fontSize: 12, textAlign: "left", textTransform: "uppercase", letterSpacing: 0.6 },
+  thDerecha: { padding: "11px 12px", borderBottom: "1px solid #dce5df", color: "#536058", fontSize: 12, textAlign: "right", textTransform: "uppercase", letterSpacing: 0.6 },
+  td: { padding: "13px 12px", borderBottom: "1px solid #edf1ee", color: "#435047", fontSize: 14 },
+  tdDerecha: { padding: "13px 12px", borderBottom: "1px solid #edf1ee", color: "#17211c", fontSize: 14, fontWeight: 800, textAlign: "right" },
+  badge: { display: "inline-block", padding: "5px 8px", borderRadius: 999, background: "#edf8f1", color: "#16834f", fontSize: 12, fontWeight: 800 },
+  badgeMora: { display: "inline-block", padding: "5px 8px", borderRadius: 999, background: "#fff1f2", color: "#be123c", fontSize: 12, fontWeight: 800 },
+  sinDatos: { padding: "32px 12px", color: "#7b867f", fontSize: 14, textAlign: "center" },
 };
