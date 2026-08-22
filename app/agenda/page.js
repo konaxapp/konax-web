@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.21-AGENDA-BELLEZA-UI-PREMIUM-FIX10";
+const VERSION = "2026.08.21-AGENDA-BELLEZA-INDIGO-LAVANDA-FIX11";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -6093,49 +6093,23 @@ const AGENDA_CSS = `
     --module-accent: #4f46e5;
   }
 
-  /* ---------- NUEVA RESERVA: rosa / coral ---------- */
-  .agenda-salon.agenda-view-nueva {
-    background:
-      radial-gradient(circle at 3% 9%, rgba(244,114,182,.24), transparent 31%),
-      radial-gradient(circle at 98% 28%, rgba(251,146,60,.17), transparent 30%),
-      linear-gradient(145deg,#ffe7f1 0%,#fff1eb 48%,#fde3e8 100%) !important;
-  }
-
-  .agenda-salon.agenda-view-nueva .agenda-d-hero {
-    background:
-      radial-gradient(circle at 82% 18%, rgba(255,255,255,.16), transparent 28%),
-      linear-gradient(125deg,#4a1730 0%,#a33b68 52%,#e76f8c 100%) !important;
-    box-shadow: 0 22px 55px rgba(147,54,92,.23) !important;
-  }
-
-  /* ---------- RESERVAS: azul / cyan ---------- */
-  .agenda-salon.agenda-view-reservas {
-    background:
-      radial-gradient(circle at 4% 10%, rgba(14,165,233,.22), transparent 30%),
-      radial-gradient(circle at 97% 28%, rgba(34,211,238,.18), transparent 29%),
-      linear-gradient(145deg,#dff3ff 0%,#ecf8ff 48%,#dff4f7 100%) !important;
-  }
-
-  .agenda-salon.agenda-view-reservas .agenda-d-hero {
-    background:
-      radial-gradient(circle at 82% 18%, rgba(255,255,255,.15), transparent 28%),
-      linear-gradient(125deg,#082f49 0%,#0369a1 52%,#0ea5b7 100%) !important;
-    box-shadow: 0 22px 55px rgba(3,105,161,.22) !important;
-  }
-
-  /* ---------- SERVICIOS Y HORARIOS: teal / dorado ---------- */
+  /* ---------- TODOS LOS MÓDULOS: índigo / lavanda ---------- */
+  .agenda-salon.agenda-view-nueva,
+  .agenda-salon.agenda-view-reservas,
   .agenda-salon.agenda-view-configuracion {
     background:
-      radial-gradient(circle at 4% 9%, rgba(16,185,129,.22), transparent 30%),
-      radial-gradient(circle at 97% 28%, rgba(245,158,11,.20), transparent 29%),
-      linear-gradient(145deg,#dcf7ed 0%,#f5f6e9 48%,#f7ead4 100%) !important;
+      radial-gradient(circle at 0% 8%, rgba(99,102,241,.24), transparent 31%),
+      radial-gradient(circle at 100% 34%, rgba(167,139,250,.20), transparent 30%),
+      linear-gradient(145deg,#e8eafe 0%,#f2f0ff 48%,#e7e9fb 100%) !important;
   }
 
+  .agenda-salon.agenda-view-nueva .agenda-d-hero,
+  .agenda-salon.agenda-view-reservas .agenda-d-hero,
   .agenda-salon.agenda-view-configuracion .agenda-d-hero {
     background:
       radial-gradient(circle at 82% 18%, rgba(255,255,255,.14), transparent 28%),
-      linear-gradient(125deg,#073b36 0%,#0f766e 54%,#b7791f 115%) !important;
-    box-shadow: 0 22px 55px rgba(15,118,110,.22) !important;
+      linear-gradient(125deg,#171940 0%,#3730a3 52%,#6d5bd0 100%) !important;
+    box-shadow: 0 22px 55px rgba(46,43,122,.24) !important;
   }
 
   /* Barra superior realmente limpia */
@@ -6167,22 +6141,12 @@ const AGENDA_CSS = `
     box-shadow: 0 8px 18px rgba(79,70,229,.26) !important;
   }
 
-  .agenda-salon.agenda-view-nueva .agenda-nav-nueva button:nth-child(2) {
-    background: linear-gradient(135deg,#be3d70,#ec6f91) !important;
-    color: #fff !important;
-    box-shadow: 0 8px 18px rgba(190,61,112,.24) !important;
-  }
-
-  .agenda-salon.agenda-view-reservas .agenda-nav-reservas button:nth-child(3) {
-    background: linear-gradient(135deg,#0369a1,#0ea5b7) !important;
-    color: #fff !important;
-    box-shadow: 0 8px 18px rgba(3,105,161,.24) !important;
-  }
-
+  .agenda-salon.agenda-view-nueva .agenda-nav-nueva button:nth-child(2),
+  .agenda-salon.agenda-view-reservas .agenda-nav-reservas button:nth-child(3),
   .agenda-salon.agenda-view-configuracion .agenda-nav-configuracion button:nth-child(4) {
-    background: linear-gradient(135deg,#0f766e,#15956e) !important;
+    background: linear-gradient(135deg,#4338ca,#6366f1) !important;
     color: #fff !important;
-    box-shadow: 0 8px 18px rgba(15,118,110,.24) !important;
+    box-shadow: 0 8px 18px rgba(79,70,229,.26) !important;
   }
 
   .agenda-salon .agenda-d-nav button:not([disabled]) .agenda-icon,
@@ -6220,55 +6184,45 @@ const AGENDA_CSS = `
     box-shadow: 0 16px 34px rgba(57,49,139,.20) !important;
   }
 
-  /* Nueva reserva: panel rosado real */
+  /* Nueva reserva y reservas: paneles índigo/lavanda */
   .agenda-salon.agenda-view-nueva .agenda-pro-shell,
-  .agenda-salon.agenda-view-nueva .agenda-pro-panel {
-    background:
-      linear-gradient(145deg,rgba(255,255,255,.94),rgba(255,228,239,.92)) !important;
-    border-color: rgba(211,79,132,.16) !important;
-    box-shadow: 0 15px 34px rgba(156,65,100,.10) !important;
-  }
-
-  /* Reservas: panel azul claro */
+  .agenda-salon.agenda-view-nueva .agenda-pro-panel,
   .agenda-salon.agenda-view-reservas .agenda-pro-shell,
   .agenda-salon.agenda-view-reservas .agenda-pro-panel {
     background:
-      linear-gradient(145deg,rgba(255,255,255,.94),rgba(224,244,255,.92)) !important;
-    border-color: rgba(14,165,233,.16) !important;
-    box-shadow: 0 15px 34px rgba(30,123,166,.10) !important;
+      linear-gradient(145deg,rgba(255,255,255,.95),rgba(239,237,255,.92)) !important;
+    border-color: rgba(99,102,241,.16) !important;
+    box-shadow: 0 15px 34px rgba(75,72,155,.10) !important;
   }
 
   .agenda-salon.agenda-view-reservas .agenda-reserva-card-salon {
     background:
-      linear-gradient(145deg,#ffffff,#eef9ff) !important;
-    border-color: rgba(14,165,233,.16) !important;
+      linear-gradient(145deg,#ffffff,#f0efff) !important;
+    border-color: rgba(99,102,241,.16) !important;
   }
 
-  /* Configuración: más contraste y tarjetas inteligentes */
+  /* Configuración: todo dentro de la misma familia índigo/lavanda */
   .agenda-salon.agenda-view-configuracion .agenda-premium-portal {
     background:
-      linear-gradient(135deg,#fffdf7 0%,#ecfbf4 50%,#fff2d7 100%) !important;
-    border-color: rgba(15,118,110,.18) !important;
+      linear-gradient(135deg,#ffffff 0%,#f1efff 52%,#e8e5ff 100%) !important;
+    border-color: rgba(99,102,241,.18) !important;
   }
 
-  .agenda-salon.agenda-view-configuracion .config-gradient-service {
-    background:
-      linear-gradient(145deg,#e9fff5 0%,#d5f8e7 100%) !important;
-  }
-
-  .agenda-salon.agenda-view-configuracion .config-gradient-schedule {
-    background:
-      linear-gradient(145deg,#e6f8ff 0%,#d8f2f4 100%) !important;
-  }
-
-  .agenda-salon.agenda-view-configuracion .config-gradient-services-list {
-    background:
-      linear-gradient(145deg,#fff8df 0%,#ffedbb 100%) !important;
-  }
-
+  .agenda-salon.agenda-view-configuracion .config-gradient-service,
+  .agenda-salon.agenda-view-configuracion .config-gradient-schedule,
+  .agenda-salon.agenda-view-configuracion .config-gradient-services-list,
   .agenda-salon.agenda-view-configuracion .config-gradient-schedules-list {
     background:
-      linear-gradient(145deg,#f0eaff 0%,#e3d8ff 100%) !important;
+      linear-gradient(145deg,#ffffff 0%,#f1efff 48%,#e7e4ff 100%) !important;
+    border-color: rgba(99,102,241,.16) !important;
+  }
+
+  .agenda-salon.agenda-view-configuracion .config-gradient-service::before,
+  .agenda-salon.agenda-view-configuracion .config-gradient-schedule::before,
+  .agenda-salon.agenda-view-configuracion .config-gradient-services-list::before,
+  .agenda-salon.agenda-view-configuracion .config-gradient-schedules-list::before {
+    background:
+      linear-gradient(90deg,#4338ca,#6366f1,#a78bfa) !important;
   }
 
   /* Inputs tipo SaaS moderno */
