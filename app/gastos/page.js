@@ -3,12 +3,27 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
+// KONAX Gastos · Fecha local corregida · 2026.08.21-FIX-LOCAL-DATE
+
+function fechaLocalActual() {
+  const ahora = new Date();
+  const anio = ahora.getFullYear();
+  const mes = String(ahora.getMonth() + 1).padStart(2, "0");
+  const dia = String(ahora.getDate()).padStart(2, "0");
+
+  return `${anio}-${mes}-${dia}`;
+}
+
+function mesLocalActual() {
+  return fechaLocalActual().slice(0, 7);
+}
+
 export default function Gastos() {
   const [gastos, setGastos] = useState([]);
   const [cargando, setCargando] = useState(false);
 
   const [formulario, setFormulario] = useState({
-    fecha: new Date().toISOString().split("T")[0],
+    fecha: fechaLocalActual(),
     categoria: "Compras",
     descripcion: "",
     monto: "",
@@ -61,7 +76,7 @@ export default function Gastos() {
 
   function limpiarFormulario() {
     setFormulario({
-      fecha: new Date().toISOString().split("T")[0],
+      fecha: fechaLocalActual(),
       categoria: "Compras",
       descripcion: "",
       monto: "",
@@ -153,8 +168,8 @@ export default function Gastos() {
     cargarGastos();
   }
 
-  const hoy = new Date().toISOString().split("T")[0];
-  const mesActual = new Date().toISOString().slice(0, 7);
+  const hoy = fechaLocalActual();
+  const mesActual = mesLocalActual();
 
   const gastosActivos = gastos.filter((g) => g.estado !== "Anulado");
   const gastosAnulados = gastos.filter((g) => g.estado === "Anulado").length;
@@ -283,10 +298,16 @@ export default function Gastos() {
           }
         }
       `}</style>
+
       <div style={contenedor}>
         <div style={hero} className="gastos-hero">
           <div style={heroInfo} className="gastos-hero-info">
-            <img src="/konax-logo.png" alt="KONAX" style={logo} className="gastos-logo" />
+            <img
+              src="/konax-logo.png"
+              alt="KONAX"
+              style={logo}
+              className="gastos-logo"
+            />
 
             <div>
               <p style={etiqueta}>Control Operativo</p>
@@ -298,7 +319,11 @@ export default function Gastos() {
             </div>
           </div>
 
-          <button onClick={volverCentroOperaciones} style={botonVolver} className="gastos-volver">
+          <button
+            onClick={volverCentroOperaciones}
+            style={botonVolver}
+            className="gastos-volver"
+          >
             ← Centro de Operaciones
           </button>
         </div>
