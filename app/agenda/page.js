@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.21-AGENDA-BELLEZA-RESERVAS-COMPACTAS-FIX5";
+const VERSION = "2026.08.21-AGENDA-BELLEZA-PROFESIONALES-FIX6";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -164,6 +164,8 @@ export default function AgendaPage() {
   const [reservas, setReservas] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [disponibilidad, setDisponibilidad] = useState([]);
+  const [profesionalesSalon, setProfesionalesSalon] = useState([]);
+  const [profesionalReservaId, setProfesionalReservaId] = useState("");
 
   const [esMovil, setEsMovil] = useState(false);
 
@@ -386,6 +388,9 @@ export default function AgendaPage() {
         cargarClientes(empresaLocal),
         cargarReservas(empresaLocal),
         cargarDisponibilidad(fechaAgenda, empresaLocal),
+        salonLocal
+          ? cargarProfesionalesSalon(empresaLocal, true)
+          : Promise.resolve(),
         adminLocal
           ? cargarConfiguracionPortal(empresaLocal)
           : Promise.resolve(),
@@ -611,6 +616,33 @@ export default function AgendaPage() {
     }));
   }
 
+  async function cargarProfesionalesSalon(
+    idEmpresa = empresaId,
+    salon = esSalonBelleza
+  ) {
+    if (!idEmpresa || !salon) {
+      setProfesionalesSalon([]);
+      return [];
+    }
+
+    const { data, error } = await supabase
+      .from("profesionales")
+      .select("id,nombre,especialidad,foto_url,servicio_ids,activo")
+      .eq("empresa_id", String(idEmpresa))
+      .eq("activo", true)
+      .order("nombre", { ascending: true });
+
+    if (error) {
+      console.error("No se pudieron cargar profesionales:", error);
+      setProfesionalesSalon([]);
+      return [];
+    }
+
+    const lista = Array.isArray(data) ? data : [];
+    setProfesionalesSalon(lista);
+    return lista;
+  }
+
   async function cargarServicios(idEmpresa = empresaId) {
     if (!idEmpresa) return;
 
@@ -707,6 +739,40 @@ export default function AgendaPage() {
     horarios.forEach((h) => mapa.set(String(h.id), h));
     return mapa;
   }, [horarios]);
+
+  const profesionalReserva = useMemo(() => {
+    return (
+      profesionalesSalon.find(
+        (profesional) =>
+          String(profesional.id) ===
+          String(profesionalReservaId)
+      ) || null
+    );
+  }, [profesionalesSalon, profesionalReservaId]);
+
+  const profesionalesParaServicio = useMemo(() => {
+    if (!esSalonBelleza) return [];
+
+    const servicioId = String(
+      horarioForm?.servicio_id || ""
+    );
+
+    return profesionalesSalon.filter((profesional) => {
+      const servicios = Array.isArray(profesional.servicio_ids)
+        ? profesional.servicio_ids.map(String)
+        : [];
+
+      return (
+        !servicioId ||
+        servicios.length === 0 ||
+        servicios.includes(servicioId)
+      );
+    });
+  }, [
+    esSalonBelleza,
+    profesionalesSalon,
+    horarioForm?.servicio_id,
+  ]);
 
   const clientesFiltrados = useMemo(() => {
     const q = normalizar(busquedaCliente);
@@ -902,6 +968,35 @@ export default function AgendaPage() {
     disponibilidad,
     esSalonBelleza,
     fechaAgenda,
+    mapaHorarios,
+  ]);
+
+  const disponibilidadReservaVisible = useMemo(() => {
+    if (!esSalonBelleza) return disponibilidad;
+
+    if (!profesionalReserva?.nombre) {
+      return disponibilidadVisible;
+    }
+
+    const nombreProfesional = normalizar(
+      profesionalReserva.nombre
+    );
+
+    return disponibilidadVisible.filter((item) => {
+      const horario = mapaHorarios.get(
+        String(item.horario_id || "")
+      );
+
+      return (
+        normalizar(horario?.instructor) ===
+        nombreProfesional
+      );
+    });
+  }, [
+    disponibilidad,
+    disponibilidadVisible,
+    esSalonBelleza,
+    profesionalReserva,
     mapaHorarios,
   ]);
 
@@ -2674,6 +2769,67 @@ export default function AgendaPage() {
                 />
               </Campo>
 
+              {esSalonBelleza && (
+                <Campo label="Profesional">
+                  <select
+                    value={profesionalReservaId}
+                    onChange={(e) => {
+                      setProfesionalReservaId(e.target.value);
+                      setHorarioSeleccionado("");
+                    }}
+                    style={s.input}
+                  >
+                    <option value="">
+                      Cualquier profesional disponible
+                    </option>
+
+                    {profesionalesSalon.map((profesional) => (
+                      <option
+                        key={profesional.id}
+                        value={profesional.id}
+                      >
+                        {profesional.nombre}
+                        {profesional.especialidad
+                          ? ` · ${profesional.especialidad}`
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+
+                  {profesionalReserva && (
+                    <div style={s.professionalSelection}>
+                      <div style={s.professionalSelectionAvatar}>
+                        {profesionalReserva.foto_url ? (
+                          <img
+                            src={profesionalReserva.foto_url}
+                            alt={profesionalReserva.nombre}
+                            style={s.professionalSelectionImg}
+                          />
+                        ) : (
+                          <span>
+                            {String(
+                              profesionalReserva.nombre || "P"
+                            )
+                              .charAt(0)
+                              .toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ minWidth: 0 }}>
+                        <strong style={s.professionalSelectionName}>
+                          {profesionalReserva.nombre}
+                        </strong>
+                        <span style={s.professionalSelectionSpecialty}>
+                          {profesionalReserva.especialidad ||
+                            "Profesional del salón"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </Campo>
+              )}
+
               <Campo
                 label={
                   esSalonBelleza
@@ -2688,7 +2844,7 @@ export default function AgendaPage() {
                 >
                   <option value="">Seleccionar</option>
                   {(esSalonBelleza
-                    ? disponibilidadVisible
+                    ? disponibilidadReservaVisible
                     : disponibilidad
                   ).map((item) => (
                     <option
@@ -2742,13 +2898,13 @@ export default function AgendaPage() {
 
             <div style={s.slotList}>
               {(esSalonBelleza
-                ? disponibilidadVisible
+                ? disponibilidadReservaVisible
                 : disponibilidad
               ).length === 0 ? (
                 <p style={s.muted}>No hay horarios para esta fecha.</p>
               ) : (
                 (esSalonBelleza
-                  ? disponibilidadVisible
+                  ? disponibilidadReservaVisible
                   : disponibilidad
                 ).map((item) => (
                   <button
@@ -3400,17 +3556,59 @@ export default function AgendaPage() {
                   label={esSalonBelleza ? "Profesional" : "Instructor"}
                   className={esSalonBelleza ? "agenda-horario-profesional" : ""}
                 >
-                  <input
-                    value={horarioForm.instructor}
-                    onChange={(e) =>
-                      setHorarioForm({
-                        ...horarioForm,
-                        instructor: e.target.value,
-                      })
-                    }
-                    style={s.input}
-                    placeholder={esSalonBelleza ? "Ana" : "Carlos"}
-                  />
+                  {esSalonBelleza ? (
+                    <select
+                      value={horarioForm.instructor}
+                      onChange={(e) =>
+                        setHorarioForm({
+                          ...horarioForm,
+                          instructor: e.target.value,
+                        })
+                      }
+                      style={s.input}
+                    >
+                      <option value="">
+                        Seleccionar profesional
+                      </option>
+
+                      {horarioForm.instructor &&
+                        !profesionalesSalon.some(
+                          (profesional) =>
+                            normalizar(profesional.nombre) ===
+                            normalizar(horarioForm.instructor)
+                        ) && (
+                          <option value={horarioForm.instructor}>
+                            {horarioForm.instructor} · horario anterior
+                          </option>
+                        )}
+
+                      {profesionalesParaServicio.map(
+                        (profesional) => (
+                          <option
+                            key={profesional.id}
+                            value={profesional.nombre}
+                          >
+                            {profesional.nombre}
+                            {profesional.especialidad
+                              ? ` · ${profesional.especialidad}`
+                              : ""}
+                          </option>
+                        )
+                      )}
+                    </select>
+                  ) : (
+                    <input
+                      value={horarioForm.instructor}
+                      onChange={(e) =>
+                        setHorarioForm({
+                          ...horarioForm,
+                          instructor: e.target.value,
+                        })
+                      }
+                      style={s.input}
+                      placeholder="Carlos"
+                    />
+                  )}
                 </Campo>
 
                 <Campo
@@ -4578,6 +4776,50 @@ const sPro = {
     color: "#17211c",
     textAlign: "left",
     cursor: "pointer",
+  },
+
+  professionalSelection: {
+    marginTop: 8,
+    padding: 9,
+    display: "flex",
+    alignItems: "center",
+    gap: 9,
+    border: "1px solid #dfe8e3",
+    borderRadius: 11,
+    background: "#f8fbf9",
+  },
+
+  professionalSelectionAvatar: {
+    width: 42,
+    height: 42,
+    minWidth: 42,
+    borderRadius: "50%",
+    display: "grid",
+    placeItems: "center",
+    overflow: "hidden",
+    background: "#e8f6ed",
+    color: "#147344",
+    fontSize: 14,
+    fontWeight: 900,
+  },
+
+  professionalSelectionImg: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+  },
+
+  professionalSelectionName: {
+    display: "block",
+    color: "#152019",
+    fontSize: 12,
+  },
+
+  professionalSelectionSpecialty: {
+    display: "block",
+    marginTop: 2,
+    color: "#758078",
+    fontSize: 10,
   },
 
   selectedClient: {
