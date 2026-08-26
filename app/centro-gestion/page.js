@@ -490,9 +490,26 @@ export default function GestionKonax() {
       0
     );
 
+  const idsEmpresasActivas = new Set(
+    empresasActivasVisibles.map((empresa) =>
+      String(empresa.id)
+    )
+  );
+
   const pagosDelMes = pagos.filter((pago) => {
-    const fecha = pago.fecha_pago || pago.created_at;
+    const fecha =
+      pago.fecha_pago || pago.created_at;
+
     if (!fecha) return false;
+
+    const perteneceEmpresaActiva =
+      idsEmpresasActivas.has(
+        String(pago.empresa_id)
+      );
+
+    if (!perteneceEmpresaActiva) {
+      return false;
+    }
 
     const fechaPago = new Date(fecha);
 
@@ -521,12 +538,28 @@ export default function GestionKonax() {
   }).length;
 
   const historialVisible = useMemo(() => {
-    return bitacora
-      .filter((item) =>
-        ACCIONES_HISTORIAL_VISIBLES.includes(item.accion)
+    const idsActivos = new Set(
+      empresasActivasVisibles.map((empresa) =>
+        String(empresa.id)
       )
+    );
+
+    return bitacora
+      .filter((item) => {
+        const accionValida =
+          ACCIONES_HISTORIAL_VISIBLES.includes(
+            item.accion
+          );
+
+        const empresaActiva =
+          idsActivos.has(
+            String(item.empresa_id)
+          );
+
+        return accionValida && empresaActiva;
+      })
       .slice(0, 50);
-  }, [bitacora]);
+  }, [bitacora, empresasActivasVisibles]);
 
   if (cargando) {
     return (
