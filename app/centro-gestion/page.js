@@ -22,6 +22,8 @@ const ACCIONES_HISTORIAL_VISIBLES = [
   "Empresa archivada",
   "Empresa reactivada desde archivo",
   "Facturación actualizada",
+  "Administración actualizada",
+  "Recuperación de contraseña enviada",
 ];
 
 function normalizar(valor) {
@@ -40,8 +42,21 @@ export default function GestionKonax() {
   const [cargando, setCargando] = useState(true);
 
   const [mostrarPago, setMostrarPago] = useState(false);
+  const [mostrarAdministrar, setMostrarAdministrar] = useState(false);
   const [mostrarReporte, setMostrarReporte] = useState(false);
   const [mostrarArchivadas, setMostrarArchivadas] = useState(false);
+
+  const [empresaAdministrar, setEmpresaAdministrar] = useState(null);
+  const [adminEmpresa, setAdminEmpresa] = useState(null);
+  const [cargandoAdminEmpresa, setCargandoAdminEmpresa] = useState(false);
+  const [guardandoAdministracion, setGuardandoAdministracion] = useState(false);
+
+  const [adminPlanNombre, setAdminPlanNombre] = useState("");
+  const [adminPlanTipo, setAdminPlanTipo] = useState("");
+  const [adminPrecio, setAdminPrecio] = useState("");
+  const [adminProximaFacturacion, setAdminProximaFacturacion] = useState("");
+  const [adminEstadoServicio, setAdminEstadoServicio] = useState("Activo");
+  const [adminEstadoPago, setAdminEstadoPago] = useState("Al día");
 
   const [empresaPago, setEmpresaPago] = useState(null);
   const [montoPago, setMontoPago] = useState("");
@@ -244,9 +259,219 @@ export default function GestionKonax() {
     );
   }
 
-  function administrarEmpresa(empresa) {
+  async function administrarEmpresa(empresa) {
     seleccionarEmpresa(empresa);
-    window.location.href = `/admin-empresa?empresa=${empresa.id}`;
+
+    setEmpresaAdministrar(empresa);
+    setAdminPlanNombre(empresa.plan_nombre || "");
+    setAdminPlanTipo(empresa.plan_tipo || "Mensual");
+    setAdminPrecio(
+      empresa.plan_precio !== null &&
+      empresa.plan_precio !== undefined
+        ? String(empresa.plan_precio)
+        : ""
+    );
+    setAdminProximaFacturacion(
+      empresa.fecha_proxima_facturacion
+        ? String(empresa.fecha_proxima_facturacion).slice(0, 10)
+        : ""
+    );
+    setAdminEstadoServicio(
+      normalizar(empresa.estado) === "suspendido"
+        ? "Suspendido"
+        : "Activo"
+    );
+    setAdminEstadoPago(
+      empresa.estado_pago || "Al día"
+    );
+
+    setAdminEmpresa(null);
+    setMostrarAdministrar(true);
+    setCargandoAdminEmpresa(true);
+
+    const { data, error } = await supabase
+      .from("usuarios")
+      .select("id,nombre,correo,rol,estado,empresa_id")
+      .eq("empresa_id", empresa.id);
+
+    if (error) {
+      console.error(
+        "No se pudo cargar el administrador:",
+        error.message
+      );
+      setCargandoAdminEmpresa(false);
+      return;
+    }
+
+    const usuarios = data || [];
+
+    const administrador =
+      usuarios.find((usuario) => {
+        const rol = normalizar(usuario.rol);
+
+        return [
+          "administrador",
+          "admin",
+          "superadmin",
+          "propietario",
+          "dueno",
+          "dueño",
+        ].includes(rol);
+      }) ||
+      usuarios[0] ||
+      null;
+
+    setAdminEmpresa(administrador);
+    setCargandoAdminEmpresa(false);
+  }
+
+  function cerrarAdministrar() {
+    setMostrarAdministrar(false);
+    setEmpresaAdministrar(null);
+    setAdminEmpresa(null);
+    setCargandoAdminEmpresa(false);
+    setGuardandoAdministracion(false);
+  }
+
+  async function guardarAdministracionEmpresa() {
+    if (!empresaAdministrar?.id) return;
+
+    const precio = Number(adminPrecio);
+
+    if (
+      adminPrecio === "" ||
+      Number.isNaN(precio) ||
+      precio < 0
+    ) {
+      alert("Ingrese un precio válido.");
+      return;
+    }
+
+    if (!adminProximaFacturacion) {
+      alert("Seleccione la próxima fecha de facturación.");
+      return;
+    }
+
+    setGuardandoAdministracion(true);
+
+    try {
+      const estadoServicio =
+        adminEstadoServicio === "Suspendido"
+          ? "Suspendido"
+          : "Activo";
+
+      const { error } = await supabase
+        .from("empresas")
+        .update({
+          plan_nombre:
+            adminPlanNombre.trim() ||
+            empresaAdministrar.plan_nombre ||
+            "",
+          plan_tipo:
+            adminPlanTipo.trim() ||
+            empresaAdministrar.plan_tipo ||
+            "Mensual",
+          plan_precio: precio,
+          fecha_proxima_facturacion:
+            adminProximaFacturacion,
+          estado: estadoServicio,
+          estado_plan: estadoServicio,
+          estado_pago: adminEstadoPago,
+        })
+        .eq("id", empresaAdministrar.id);
+
+      if (error) {
+        alert(
+          "No se pudo actualizar la empresa: " +
+            error.message
+        );
+        return;
+      }
+
+      const usuario =
+        localStorage.getItem("adminKonaxNombre") ||
+        "KONAX";
+
+      await supabase.from("bitacora_konax").insert([
+        {
+          empresa_id: empresaAdministrar.id,
+          empresa_nombre:
+            empresaAdministrar.nombre || "",
+          accion: "Administración actualizada",
+          descripcion:
+            `Precio: ${formato(precio)} · ` +
+            `Próxima facturación: ${formatoFecha(
+              adminProximaFacturacion
+            )} · ` +
+            `Servicio: ${estadoServicio} · ` +
+            `Pago: ${adminEstadoPago}.`,
+          estado_anterior:
+            empresaAdministrar.estado || null,
+          estado_nuevo: estadoServicio,
+          usuario,
+        },
+      ]);
+
+      alert("Empresa actualizada correctamente.");
+      cerrarAdministrar();
+      await cargarDatos();
+    } finally {
+      setGuardandoAdministracion(false);
+    }
+  }
+
+  async function enviarRecuperacionPassword() {
+    const correo =
+      adminEmpresa?.correo?.trim() || "";
+
+    if (!correo) {
+      alert(
+        "No encontramos un correo de administrador para esta empresa."
+      );
+      return;
+    }
+
+    const redirectTo =
+      `${window.location.origin}/restablecer-password`;
+
+    const { error } =
+      await supabase.auth.resetPasswordForEmail(
+        correo,
+        { redirectTo }
+      );
+
+    if (error) {
+      alert(
+        "No se pudo enviar el enlace de recuperación: " +
+          error.message
+      );
+      return;
+    }
+
+    const usuario =
+      localStorage.getItem("adminKonaxNombre") ||
+      "KONAX";
+
+    await supabase.from("bitacora_konax").insert([
+      {
+        empresa_id: empresaAdministrar.id,
+        empresa_nombre:
+          empresaAdministrar.nombre || "",
+        accion:
+          "Recuperación de contraseña enviada",
+        descripcion:
+          `Se envió un enlace de recuperación a ${correo}.`,
+        estado_anterior:
+          empresaAdministrar.estado || null,
+        estado_nuevo:
+          empresaAdministrar.estado || null,
+        usuario,
+      },
+    ]);
+
+    alert(
+      "Enlace de recuperación enviado al correo del administrador."
+    );
   }
 
   function abrirPlan(empresa) {
@@ -888,6 +1113,279 @@ export default function GestionKonax() {
           </>
         )}
 
+        {mostrarAdministrar && (
+          <div style={s.modalOverlay}>
+            <div
+              style={{
+                ...s.adminModal,
+                ...(esMovil ? s.adminModalMobile : {}),
+              }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="titulo-administrar-empresa"
+            >
+              <div style={s.adminModalHeader}>
+                <div>
+                  <span style={s.sectionEyebrow}>
+                    ADMINISTRACIÓN DE CLIENTE
+                  </span>
+
+                  <h2
+                    id="titulo-administrar-empresa"
+                    style={s.adminModalTitle}
+                  >
+                    {empresaAdministrar?.nombre}
+                  </h2>
+
+                  <p style={s.adminModalSubtitle}>
+                    Ajusta condiciones comerciales, facturación,
+                    servicio y acceso del administrador.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={cerrarAdministrar}
+                  style={s.closeButton}
+                  aria-label="Cerrar"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div style={s.adminSummaryGrid}>
+                <div style={s.adminSummaryBox}>
+                  <span style={s.adminSummaryLabel}>
+                    NEGOCIO
+                  </span>
+
+                  <strong style={s.adminSummaryValue}>
+                    {empresaAdministrar?.tipo_negocio || "-"}
+                  </strong>
+                </div>
+
+                <div style={s.adminSummaryBox}>
+                  <span style={s.adminSummaryLabel}>
+                    ESTADO ACTUAL
+                  </span>
+
+                  <strong style={s.adminSummaryValue}>
+                    {empresaAdministrar?.estado || "-"}
+                  </strong>
+                </div>
+              </div>
+
+              <div style={s.adminSection}>
+                <div style={s.adminSectionHeading}>
+                  <strong style={s.adminSectionTitle}>
+                    Condiciones comerciales
+                  </strong>
+
+                  <span style={s.adminSectionText}>
+                    Aquí puedes manejar un precio piloto sin cambiar
+                    la estructura técnica de módulos.
+                  </span>
+                </div>
+
+                <div style={s.adminFormGrid}>
+                  <div>
+                    <label style={s.label}>
+                      Nombre del plan
+                    </label>
+
+                    <input
+                      value={adminPlanNombre}
+                      onChange={(event) =>
+                        setAdminPlanNombre(
+                          event.target.value
+                        )
+                      }
+                      placeholder="Ej. KONAX Salón de Belleza"
+                      style={s.input}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={s.label}>
+                      Tipo comercial
+                    </label>
+
+                    <input
+                      value={adminPlanTipo}
+                      onChange={(event) =>
+                        setAdminPlanTipo(
+                          event.target.value
+                        )
+                      }
+                      placeholder="Ej. Piloto, Mensual"
+                      style={s.input}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={s.label}>
+                      Precio mensual
+                    </label>
+
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={adminPrecio}
+                      onChange={(event) =>
+                        setAdminPrecio(
+                          event.target.value
+                        )
+                      }
+                      style={s.input}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={s.label}>
+                      Próxima facturación
+                    </label>
+
+                    <input
+                      type="date"
+                      value={adminProximaFacturacion}
+                      onChange={(event) =>
+                        setAdminProximaFacturacion(
+                          event.target.value
+                        )
+                      }
+                      style={s.input}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={s.label}>
+                      Estado del servicio
+                    </label>
+
+                    <select
+                      value={adminEstadoServicio}
+                      onChange={(event) =>
+                        setAdminEstadoServicio(
+                          event.target.value
+                        )
+                      }
+                      style={s.input}
+                    >
+                      <option value="Activo">
+                        Activo
+                      </option>
+                      <option value="Suspendido">
+                        Suspendido
+                      </option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={s.label}>
+                      Estado del pago
+                    </label>
+
+                    <select
+                      value={adminEstadoPago}
+                      onChange={(event) =>
+                        setAdminEstadoPago(
+                          event.target.value
+                        )
+                      }
+                      style={s.input}
+                    >
+                      <option value="Al día">
+                        Al día
+                      </option>
+                      <option value="Pendiente">
+                        Pendiente
+                      </option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div style={s.adminSection}>
+                <div style={s.adminSectionHeading}>
+                  <strong style={s.adminSectionTitle}>
+                    Acceso del administrador
+                  </strong>
+
+                  <span style={s.adminSectionText}>
+                    KONAX no muestra ni conoce la contraseña del cliente.
+                    Solo se envía un enlace para que la persona cree una nueva.
+                  </span>
+                </div>
+
+                {cargandoAdminEmpresa ? (
+                  <div style={s.adminUserBox}>
+                    Buscando administrador...
+                  </div>
+                ) : adminEmpresa ? (
+                  <div style={s.adminUserBox}>
+                    <div style={{ minWidth: 0 }}>
+                      <span style={s.adminSummaryLabel}>
+                        ADMINISTRADOR PRINCIPAL
+                      </span>
+
+                      <strong style={s.adminUserName}>
+                        {adminEmpresa.nombre || "Administrador"}
+                      </strong>
+
+                      <span style={s.adminUserEmail}>
+                        {adminEmpresa.correo || "-"}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={enviarRecuperacionPassword}
+                      style={s.passwordButton}
+                    >
+                      Enviar enlace para cambiar contraseña
+                    </button>
+                  </div>
+                ) : (
+                  <div style={s.adminWarningBox}>
+                    No encontramos un usuario administrador vinculado
+                    a esta empresa. Puedes revisarlo desde Usuarios.
+                  </div>
+                )}
+              </div>
+
+              <div
+                style={{
+                  ...s.modalActions,
+                  ...(esMovil
+                    ? { gridTemplateColumns: "1fr" }
+                    : {}),
+                }}
+              >
+                <button
+                  type="button"
+                  style={s.saveButton}
+                  onClick={guardarAdministracionEmpresa}
+                  disabled={guardandoAdministracion}
+                >
+                  {guardandoAdministracion
+                    ? "Guardando..."
+                    : "Guardar cambios"}
+                </button>
+
+                <button
+                  type="button"
+                  style={s.cancelButton}
+                  onClick={cerrarAdministrar}
+                  disabled={guardandoAdministracion}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {mostrarPago && (
           <div style={s.modalOverlay}>
             <div style={s.modal}>
@@ -1194,7 +1692,10 @@ const s = {
     flexDirection: "column",
     border: "1px solid #dfe7e2",
     borderRadius: 18,
-    background: "#fff",
+    background:
+      "linear-gradient(155deg,#ffffff,#f9fbfa)",
+    boxShadow:
+      "0 10px 24px rgba(15,23,42,.045)",
   },
   kpiDot: {
     width: 9,
@@ -1266,14 +1767,23 @@ const s = {
   },
   companyGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(310px,1fr))",
-    gap: 12,
+    gridTemplateColumns:
+      "repeat(auto-fit,minmax(320px,560px))",
+    justifyContent: "start",
+    alignItems: "start",
+    gap: 14,
   },
   companyCard: {
-    padding: 15,
+    width: "100%",
+    maxWidth: 560,
+    padding: 17,
+    boxSizing: "border-box",
     border: "1px solid #dfe7e2",
-    borderRadius: 17,
-    background: "linear-gradient(155deg,#fff,#f7faf8)",
+    borderRadius: 18,
+    background:
+      "linear-gradient(155deg,#ffffff 0%,#f7faf8 100%)",
+    boxShadow:
+      "0 12px 28px rgba(15,23,42,.055)",
   },
   companyTop: {
     display: "grid",
@@ -1476,6 +1986,159 @@ const s = {
     placeItems: "center",
     color: "#7b877f",
   },
+  adminModal: {
+    width: 760,
+    maxWidth: "100%",
+    maxHeight: "calc(100vh - 40px)",
+    padding: 22,
+    overflowY: "auto",
+    boxSizing: "border-box",
+    border: "1px solid rgba(255,255,255,.45)",
+    borderRadius: 22,
+    background: "#ffffff",
+    boxShadow: "0 30px 90px rgba(0,0,0,.30)",
+  },
+
+  adminModalMobile: {
+    width: "100%",
+    padding: 15,
+    borderRadius: 18,
+  },
+
+  adminModalHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 16,
+    paddingBottom: 16,
+    borderBottom: "1px solid #e7ece9",
+  },
+
+  adminModalTitle: {
+    margin: 0,
+    color: "#17211c",
+    fontSize: 24,
+    lineHeight: 1.15,
+  },
+
+  adminModalSubtitle: {
+    maxWidth: 560,
+    margin: "6px 0 0",
+    color: "#748078",
+    fontSize: 10.5,
+    lineHeight: 1.5,
+  },
+
+  adminSummaryGrid: {
+    marginTop: 14,
+    display: "grid",
+    gridTemplateColumns: "repeat(2,minmax(0,1fr))",
+    gap: 9,
+  },
+
+  adminSummaryBox: {
+    padding: "11px 12px",
+    border: "1px solid #e3ebe6",
+    borderRadius: 12,
+    background: "#f8fbf9",
+  },
+
+  adminSummaryLabel: {
+    display: "block",
+    color: "#7c8981",
+    fontSize: 7.5,
+    fontWeight: 900,
+    letterSpacing: 0.7,
+  },
+
+  adminSummaryValue: {
+    display: "block",
+    marginTop: 4,
+    color: "#243129",
+    fontSize: 11.5,
+  },
+
+  adminSection: {
+    marginTop: 15,
+    padding: 15,
+    border: "1px solid #e2e9e5",
+    borderRadius: 15,
+    background:
+      "linear-gradient(155deg,#ffffff,#f8fbf9)",
+  },
+
+  adminSectionHeading: {
+    marginBottom: 12,
+  },
+
+  adminSectionTitle: {
+    display: "block",
+    color: "#17211c",
+    fontSize: 13,
+  },
+
+  adminSectionText: {
+    display: "block",
+    marginTop: 4,
+    color: "#7a867f",
+    fontSize: 9.5,
+    lineHeight: 1.45,
+  },
+
+  adminFormGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit,minmax(220px,1fr))",
+    gap: 10,
+  },
+
+  adminUserBox: {
+    padding: 12,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    border: "1px solid #cfe6d8",
+    borderRadius: 12,
+    background: "#f2fbf6",
+  },
+
+  adminUserName: {
+    display: "block",
+    marginTop: 4,
+    color: "#17211c",
+    fontSize: 12,
+  },
+
+  adminUserEmail: {
+    display: "block",
+    marginTop: 2,
+    color: "#748078",
+    fontSize: 9.5,
+  },
+
+  passwordButton: {
+    minHeight: 40,
+    padding: "9px 12px",
+    border: "1px solid #b8dcc6",
+    borderRadius: 10,
+    background: "#ffffff",
+    color: "#14683e",
+    fontSize: 9.5,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  adminWarningBox: {
+    padding: 12,
+    border: "1px solid #f1d6a9",
+    borderRadius: 12,
+    background: "#fff9ed",
+    color: "#8a5d00",
+    fontSize: 9.5,
+    lineHeight: 1.45,
+  },
+
   modalOverlay: {
     position: "fixed",
     inset: 0,
