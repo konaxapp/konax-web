@@ -1186,7 +1186,9 @@ export default function Dashboard() {
       await Promise.all([
         cargarModulosEmpresa(
           empresaId,
-          empresa.plan_codigo
+          empresa.plan_codigo,
+          empresa.tipo_negocio,
+          empresa.categoria_negocio
         ),
         cargarPermisosUsuario(
           empresaId,
@@ -1210,10 +1212,22 @@ export default function Dashboard() {
 
   async function cargarModulosEmpresa(
     empresaId,
-    codigoPlan
+    codigoPlan,
+    tipoNegocioEmpresa = "",
+    categoriaNegocioEmpresa = ""
   ) {
     const permitidos =
       construirModulosPorPlan(codigoPlan);
+
+    // Salón de Belleza: Agenda siempre disponible.
+    if (
+      esTipoSalonBelleza(
+        tipoNegocioEmpresa,
+        categoriaNegocioEmpresa
+      )
+    ) {
+      permitidos.agenda = true;
+    }
 
     const { data, error } = await supabase
       .from("empresa_modulos")
