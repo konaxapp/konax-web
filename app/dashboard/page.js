@@ -1219,7 +1219,8 @@ export default function Dashboard() {
     const permitidos =
       construirModulosPorPlan(codigoPlan);
 
-    // Salón de Belleza: Agenda siempre disponible.
+    // SALÓN DE BELLEZA:
+    // Agenda forma parte oficial del módulo Belleza.
     if (
       esTipoSalonBelleza(
         tipoNegocioEmpresa,
@@ -1458,6 +1459,16 @@ export default function Dashboard() {
           "recepcionista",
         ].includes(normalizar(usuarioRol))
       )
+    ) {
+      return true;
+    }
+
+    // SALÓN DE BELLEZA:
+    // Agenda siempre visible para el administrador.
+    if (
+      salonActual &&
+      modulo === "agenda" &&
+      esAdministrador()
     ) {
       return true;
     }
