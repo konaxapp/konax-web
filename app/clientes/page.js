@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.26-KONAX-CLIENTES-COMUNICACION-V5";
+const VERSION = "2026.08.26-KONAX-CLIENTES-COMUNICACION-V5-BELLEZA-MOBILE";
 
 export default function ClientesPage() {
   const router = useRouter();
@@ -1153,7 +1153,13 @@ Código: ${token}`;
   return (
     <main
       style={styles.pagina}
-      className={esGimnasioPerfil ? "clientes-gym-mobile" : ""}
+      className={
+        esGimnasioPerfil
+          ? "clientes-gym-mobile"
+          : esBellezaActual()
+          ? "clientes-beauty-mobile"
+          : ""
+      }
     >
       <style jsx global>{`
         @media (max-width: 900px) {
@@ -1199,6 +1205,122 @@ Código: ${token}`;
           .clientes-gym-mobile .clientes-comunicacion-toolbar,
           .clientes-gym-mobile .clientes-comunicacion-row {
             grid-template-columns: 1fr !important;
+          }
+
+          /* =====================================================
+             SALÓN DE BELLEZA · SOLO RESPONSIVE MÓVIL
+             NO modifica estilos ni flujo del perfil gimnasio.
+             ===================================================== */
+          .clientes-beauty-mobile {
+            padding: 12px !important;
+            overflow-x: hidden !important;
+          }
+
+          .clientes-beauty-mobile > div {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          .clientes-beauty-mobile .clientes-hero {
+            grid-template-columns: 1fr !important;
+            gap: 14px !important;
+            padding: 18px !important;
+            border-radius: 18px !important;
+            margin-bottom: 14px !important;
+          }
+
+          .clientes-beauty-mobile .clientes-hero h1 {
+            font-size: 29px !important;
+            line-height: 1.05 !important;
+            margin: 6px 0 7px !important;
+          }
+
+          .clientes-beauty-mobile .clientes-hero p {
+            font-size: 14px !important;
+            line-height: 1.45 !important;
+            max-width: 100% !important;
+          }
+
+          .clientes-beauty-mobile .clientes-hero > div:last-child {
+            width: 100% !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 8px !important;
+          }
+
+          .clientes-beauty-mobile .clientes-hero > div:last-child button {
+            width: 100% !important;
+          }
+
+          .clientes-beauty-mobile .clientes-form-layout {
+            display: flex !important;
+            flex-direction: column !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            gap: 14px !important;
+          }
+
+          .clientes-beauty-mobile .clientes-grid,
+          .clientes-beauty-mobile .clientes-busqueda-fila {
+            grid-template-columns: 1fr !important;
+          }
+
+          .clientes-beauty-mobile .clientes-card,
+          .clientes-beauty-mobile .clientes-side-card {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            padding: 16px !important;
+            border-radius: 18px !important;
+            box-sizing: border-box !important;
+          }
+
+          .clientes-beauty-mobile .clientes-side-card {
+            position: static !important;
+            top: auto !important;
+          }
+
+          .clientes-beauty-mobile button,
+          .clientes-beauty-mobile input,
+          .clientes-beauty-mobile select,
+          .clientes-beauty-mobile textarea {
+            max-width: 100% !important;
+            min-width: 0 !important;
+            box-sizing: border-box !important;
+          }
+
+          .clientes-beauty-mobile input,
+          .clientes-beauty-mobile select,
+          .clientes-beauty-mobile textarea {
+            font-size: 16px !important;
+          }
+
+          .clientes-beauty-mobile input[type="file"] {
+            width: 100% !important;
+            overflow: hidden !important;
+          }
+
+          .clientes-beauty-mobile label {
+            max-width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          .clientes-beauty-mobile .clientes-card > div,
+          .clientes-beauty-mobile .clientes-card > label {
+            max-width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          .clientes-beauty-mobile .clientes-busqueda-fila button {
+            width: 100% !important;
+          }
+
+          .clientes-beauty-mobile .clientes-card input[type="checkbox"] {
+            width: 20px !important;
+            min-width: 20px !important;
+            height: 20px !important;
+            flex: 0 0 20px !important;
           }
         }
       `}</style>
