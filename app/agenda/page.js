@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.26-AGENDA-BELLEZA-HORARIOS-TODOS-DIAS-FIX12";
+const VERSION = "2026.08.26-AGENDA-BELLEZA-HORARIOS-AGRUPADOS-FIX13";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -99,6 +99,70 @@ function nombreDia(numero) {
     "Viernes",
     "Sábado",
   ][Number(numero)] || "Día";
+}
+
+function resumirDias(dias = []) {
+  const orden = [1, 2, 3, 4, 5, 6, 0];
+
+  const unicos = [...new Set(
+    (dias || []).map(Number)
+  )].filter((dia) => orden.includes(dia));
+
+  const ordenados = unicos.sort(
+    (a, b) => orden.indexOf(a) - orden.indexOf(b)
+  );
+
+  if (ordenados.length === 0) {
+    return "Sin días";
+  }
+
+  if (ordenados.length === 1) {
+    return nombreDia(ordenados[0]);
+  }
+
+  const posiciones = ordenados.map(
+    (dia) => orden.indexOf(dia)
+  );
+
+  const consecutivos = posiciones.every(
+    (posicion, indice) =>
+      indice === 0 ||
+      posicion === posiciones[indice - 1] + 1
+  );
+
+  if (consecutivos) {
+    return `${nombreDia(
+      ordenados[0]
+    )} a ${nombreDia(
+      ordenados[ordenados.length - 1]
+    )}`;
+  }
+
+  return ordenados
+    .map((dia) => nombreDia(dia))
+    .join(", ");
+}
+
+function formatoDuracionServicio(minutos) {
+  const total = Math.max(
+    0,
+    Number(minutos || 0)
+  );
+
+  if (!total) return "0 min";
+
+  const horas = Math.floor(total / 60);
+  const resto = total % 60;
+
+  if (horas && resto) {
+    return `${horas} h ${resto} min`;
+  }
+
+  if (horas) {
+    return `${horas} h`;
+  }
+
+  return `${resto} min`;
 }
 
 function formatoFecha(fecha) {
@@ -259,6 +323,7 @@ export default function AgendaPage() {
   const [horarioForm, setHorarioForm] = useState(HORARIO_INICIAL);
   const [diasHorarioSalon, setDiasHorarioSalon] = useState([]);
   const [horarioEditandoId, setHorarioEditandoId] = useState(null);
+  const [horarioEditandoIds, setHorarioEditandoIds] = useState([]);
 
   const [busquedaCliente, setBusquedaCliente] = useState("");
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
@@ -998,29 +1063,201 @@ export default function AgendaPage() {
     });
   }, [fechaAgenda]);
 
-  const horariosSalonFecha = useMemo(() => {
-    if (!esSalonBelleza) return horarios;
+  const horariosSalonAgrupados = useMemo(() => {
+    if (!esSalonBelleza) return [];
 
-    const ordenDias = [1, 2, 3, 4, 5, 6, 0];
+    const grupos = new Map();
 
-    return [...horarios].sort((a, b) => {
-      const ordenA = ordenDias.indexOf(
-        Number(a.dia_semana)
-      );
-      const ordenB = ordenDias.indexOf(
-        Number(b.dia_semana)
+    horarios.forEach((horario) => {
+      const servicioId = String(
+        horario.servicio_id || ""
       );
 
-      if (ordenA !== ordenB) {
-        return ordenA - ordenB;
+      const profesional = normalizar(
+        horario.instructor || ""
+      );
+
+      const clave =
+        `${servicioId}::${profesional}`;
+
+      if (!grupos.has(clave)) {
+        grupos.set(clave, {
+          clave,
+          servicio_id: horario.servicio_id,
+          instructor: horario.instructor || "",
+          registros: [],
+        });
       }
 
-      return (
-        horaAMinutos(a.hora_inicio) -
-        horaAMinutos(b.hora_inicio)
-      );
+      grupos.get(clave).registros.push(horario);
     });
-  }, [horarios, esSalonBelleza]);
+
+    return Array.from(grupos.values())
+      .map((grupo) => {
+        const activos = grupo.registros.filter(
+          (registro) => Boolean(registro.activo)
+        );
+
+        const baseRegistros =
+          activos.length > 0
+            ? activos
+            : grupo.registros;
+
+        const dias = [
+          ...new Set(
+            baseRegistros.map(
+              (registro) =>
+                Number(registro.dia_semana)
+            )
+          ),
+        ];
+
+        const horasInicio = [
+          ...new Set(
+            baseRegistros.map((registro) =>
+              String(
+                registro.hora_inicio || ""
+              ).slice(0, 5)
+            )
+          ),
+        ].filter(Boolean);
+
+        const horasFin = [
+          ...new Set(
+            baseRegistros.map((registro) =>
+              String(
+                registro.hora_fin || ""
+              ).slice(0, 5)
+            )
+          ),
+        ].filter(Boolean);
+
+        const capacidades = [
+          ...new Set(
+            baseRegistros.map((registro) =>
+              Number(registro.capacidad || 1)
+            )
+          ),
+        ];
+
+        const fechasDesde = [
+          ...new Set(
+            baseRegistros
+              .map(
+                (registro) =>
+                  registro.fecha_desde || ""
+              )
+              .filter(Boolean)
+          ),
+        ];
+
+        const fechasHasta = [
+          ...new Set(
+            baseRegistros
+              .map(
+                (registro) =>
+                  registro.fecha_hasta || ""
+              )
+              .filter(Boolean)
+          ),
+        ];
+
+        const servicio =
+          mapaServicios.get(
+            String(grupo.servicio_id)
+          ) || null;
+
+        const horaInicio =
+          horasInicio.length === 1
+            ? horasInicio[0]
+            : "";
+
+        const horaFin =
+          horasFin.length === 1
+            ? horasFin[0]
+            : "";
+
+        const capacidad =
+          capacidades.length === 1
+            ? capacidades[0]
+            : null;
+
+        const registrosOrdenados = [
+          ...baseRegistros,
+        ].sort((a, b) => {
+          const orden = [1, 2, 3, 4, 5, 6, 0];
+
+          return (
+            orden.indexOf(
+              Number(a.dia_semana)
+            ) -
+            orden.indexOf(
+              Number(b.dia_semana)
+            )
+          );
+        });
+
+        return {
+          ...grupo,
+          ids: baseRegistros.map(
+            (registro) => registro.id
+          ),
+          todosIds: grupo.registros.map(
+            (registro) => registro.id
+          ),
+          dias,
+          diasTexto: resumirDias(dias),
+          hora_inicio: horaInicio,
+          hora_fin: horaFin,
+          horarioVariable:
+            horasInicio.length > 1 ||
+            horasFin.length > 1,
+          capacidad,
+          capacidadVariable:
+            capacidades.length > 1,
+          fecha_desde:
+            fechasDesde.length === 1
+              ? fechasDesde[0]
+              : "",
+          fecha_hasta:
+            fechasHasta.length === 1
+              ? fechasHasta[0]
+              : "",
+          activo: activos.length > 0,
+          servicio,
+          duracion_minutos: Number(
+            servicio?.duracion_minutos || 0
+          ),
+          registroBase:
+            registrosOrdenados[0] ||
+            grupo.registros[0],
+        };
+      })
+      .sort((a, b) => {
+        const nombreA = normalizar(
+          a.servicio?.nombre || ""
+        );
+        const nombreB = normalizar(
+          b.servicio?.nombre || ""
+        );
+
+        if (nombreA !== nombreB) {
+          return nombreA.localeCompare(
+            nombreB
+          );
+        }
+
+        return normalizar(
+          a.instructor || ""
+        ).localeCompare(
+          normalizar(b.instructor || "")
+        );
+      });
+  }, [
+    horarios,
+    esSalonBelleza,
+    mapaServicios,
+  ]);
 
   const disponibilidadVisible = useMemo(() => {
     if (!esSalonBelleza) return disponibilidad;
@@ -1308,7 +1545,24 @@ export default function AgendaPage() {
 
       let respuesta;
 
-      if (horarioEditandoId) {
+      if (
+        esSalonBelleza &&
+        horarioEditandoId &&
+        horarioEditandoIds.length > 0
+      ) {
+        /*
+          En salón, una tarjeta representa todos los días del mismo
+          servicio/profesional. Al editar se actualiza el horario,
+          profesional, cupos y vigencia de todos esos días a la vez.
+          Los días permanecen iguales para evitar romper reservas
+          históricas vinculadas a agenda_horarios.
+        */
+        respuesta = await supabase
+          .from("agenda_horarios")
+          .update(payloadBase)
+          .eq("empresa_id", empresaId)
+          .in("id", horarioEditandoIds);
+      } else if (horarioEditandoId) {
         const payload = {
           ...payloadBase,
           dia_semana: Number(horarioForm.dia_semana),
@@ -1357,15 +1611,21 @@ export default function AgendaPage() {
       }
 
       setHorarioEditandoId(null);
+      setHorarioEditandoIds([]);
+
       await cargarHorarios();
       await cargarDisponibilidad();
 
       if (horarioEditandoId) {
-        alert("Horario actualizado.");
+        alert(
+          esSalonBelleza
+            ? "Configuración del servicio actualizada para todos sus días."
+            : "Horario actualizado."
+        );
       } else if (esSalonBelleza) {
         alert(
           diasHorarioSalon.length > 1
-            ? "Horarios creados para los días seleccionados."
+            ? "Horario creado para todos los días seleccionados."
             : "Horario creado."
         );
       } else {
@@ -1381,9 +1641,12 @@ export default function AgendaPage() {
 
   function editarHorario(horario) {
     setHorarioEditandoId(horario.id);
+    setHorarioEditandoIds([]);
 
     if (esSalonBelleza) {
-      setDiasHorarioSalon([Number(horario.dia_semana ?? 5)]);
+      setDiasHorarioSalon([
+        Number(horario.dia_semana ?? 5),
+      ]);
     }
 
     setHorarioForm({
@@ -1399,6 +1662,69 @@ export default function AgendaPage() {
     });
   }
 
+  function editarHorarioSalon(grupo) {
+    const base =
+      grupo?.registroBase ||
+      grupo?.registros?.[0];
+
+    if (!base) return;
+
+    setHorarioEditandoId(base.id);
+    setHorarioEditandoIds(
+      Array.isArray(grupo.ids)
+        ? grupo.ids
+        : [base.id]
+    );
+
+    setDiasHorarioSalon(
+      Array.isArray(grupo.dias)
+        ? grupo.dias
+        : [Number(base.dia_semana ?? 5)]
+    );
+
+    setHorarioForm({
+      servicio_id: base.servicio_id || "",
+      dia_semana: Number(
+        base.dia_semana ?? 5
+      ),
+      hora_inicio:
+        grupo.hora_inicio ||
+        String(
+          base.hora_inicio || "09:00"
+        ).slice(0, 5),
+      hora_fin:
+        grupo.hora_fin ||
+        String(
+          base.hora_fin || "10:00"
+        ).slice(0, 5),
+      instructor:
+        grupo.instructor ||
+        base.instructor ||
+        "",
+      capacidad:
+        grupo.capacidad ??
+        Number(base.capacidad || 1),
+      fecha_desde:
+        grupo.fecha_desde ||
+        base.fecha_desde ||
+        fechaHoy(),
+      fecha_hasta:
+        grupo.fecha_hasta ||
+        base.fecha_hasta ||
+        "",
+      activo: Boolean(grupo.activo),
+    });
+
+    if (
+      grupo.horarioVariable ||
+      grupo.capacidadVariable
+    ) {
+      alert(
+        "Este servicio tenía diferencias entre días. Al guardar, KONAX unificará horario, profesional y cupos para todos los días mostrados."
+      );
+    }
+  }
+
   async function alternarHorario(horario) {
     if (!esAdmin) return;
 
@@ -1407,6 +1733,35 @@ export default function AgendaPage() {
       .update({ activo: !horario.activo })
       .eq("empresa_id", empresaId)
       .eq("id", horario.id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    await cargarHorarios();
+    await cargarDisponibilidad();
+  }
+
+  async function alternarHorarioSalon(grupo) {
+    if (!esAdmin || !grupo) return;
+
+    const ids =
+      grupo.activo
+        ? grupo.ids
+        : grupo.todosIds;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("agenda_horarios")
+      .update({
+        activo: !grupo.activo,
+      })
+      .eq("empresa_id", empresaId)
+      .in("id", ids);
 
     if (error) {
       alert(error.message);
@@ -3543,7 +3898,7 @@ export default function AgendaPage() {
               </Campo>
 
               <div style={s.formGrid} className={esSalonBelleza ? "agenda-horario-grid" : ""}>
-                {esSalonBelleza && !horarioEditandoId ? (
+                {esSalonBelleza ? (
                   <div
                     style={{
                       gridColumn: "1 / -1",
@@ -3552,7 +3907,9 @@ export default function AgendaPage() {
                       marginBottom: 2,
                     }}
                   >
-                    <span style={s.label}>Días de atención</span>
+                    <span style={s.label}>
+                      Días de atención
+                    </span>
 
                     <div
                       style={{
@@ -3570,15 +3927,22 @@ export default function AgendaPage() {
                           <button
                             key={dia}
                             type="button"
-                            onClick={() =>
+                            disabled={Boolean(
+                              horarioEditandoId
+                            )}
+                            onClick={() => {
+                              if (horarioEditandoId) {
+                                return;
+                              }
+
                               setDiasHorarioSalon((actual) =>
                                 actual.includes(dia)
                                   ? actual.filter(
                                       (item) => item !== dia
                                     )
                                   : [...actual, dia]
-                              )
-                            }
+                              );
+                            }}
                             style={{
                               minHeight: 40,
                               borderRadius: 9,
@@ -3591,9 +3955,16 @@ export default function AgendaPage() {
                               color: activo
                                 ? "#fff"
                                 : "#46534c",
+                              opacity:
+                                horarioEditandoId &&
+                                !activo
+                                  ? 0.45
+                                  : 1,
                               fontSize: 11,
                               fontWeight: 900,
-                              cursor: "pointer",
+                              cursor: horarioEditandoId
+                                ? "default"
+                                : "pointer",
                             }}
                           >
                             {nombreDia(dia).slice(0, 3)}
@@ -3609,8 +3980,11 @@ export default function AgendaPage() {
                         lineHeight: 1.4,
                       }}
                     >
-                      Selecciona únicamente los días en que este
-                      profesional atiende este servicio.
+                      {horarioEditandoId
+                        ? `Configuración agrupada: ${resumirDias(
+                            diasHorarioSalon
+                          )}. Para cambiar los días, crea una nueva configuración.`
+                        : "Selecciona los días en que este profesional atiende este servicio."}
                     </span>
                   </div>
                 ) : (
@@ -3728,7 +4102,7 @@ export default function AgendaPage() {
                 <Campo
                   label={
                     esSalonBelleza
-                      ? "Disponibilidad por horario"
+                      ? "Cupos manuales por día"
                       : "Cupos"
                   }
                   className={esSalonBelleza ? "agenda-horario-capacidad" : ""}
@@ -3745,6 +4119,21 @@ export default function AgendaPage() {
                     }
                     style={s.input}
                   />
+
+                  {esSalonBelleza && (
+                    <span
+                      style={{
+                        marginTop: 5,
+                        color: "#7a877f",
+                        fontSize: 10,
+                        lineHeight: 1.35,
+                      }}
+                    >
+                      Tú decides cuántas citas quieres aceptar
+                      por día. KONAX no calcula este número
+                      automáticamente.
+                    </span>
+                  )}
                 </Campo>
 
                 <Campo
@@ -3772,6 +4161,8 @@ export default function AgendaPage() {
                     style={s.secondaryButton}
                     onClick={() => {
                       setHorarioEditandoId(null);
+                      setHorarioEditandoIds([]);
+                      setDiasHorarioSalon([]);
                       setHorarioForm(
                         esSalonBelleza
                           ? HORARIO_SALON_INICIAL
@@ -3858,48 +4249,239 @@ export default function AgendaPage() {
               <div style={s.panelHeader}>
                 <div>
                   <span style={s.eyebrowSmall}>HORARIOS</span>
-                  <h2 style={s.panelTitle}>Horarios configurados</h2>
+                  <h2 style={s.panelTitle}>
+                    Horarios configurados
+                  </h2>
                 </div>
+
                 <span style={s.counter}>
                   {esSalonBelleza
-                    ? horariosSalonFecha.length
+                    ? horariosSalonAgrupados.length
                     : horarios.length}
                 </span>
               </div>
 
               <div style={s.stack}>
-                {(esSalonBelleza
-                  ? horariosSalonFecha
-                  : horarios
-                ).length === 0 ? (
+                {esSalonBelleza ? (
+                  horariosSalonAgrupados.length === 0 ? (
+                    <p style={s.muted}>
+                      No hay horarios configurados.
+                    </p>
+                  ) : (
+                    horariosSalonAgrupados.map((grupo) => {
+                      const servicio =
+                        grupo.servicio;
+
+                      const horarioTexto =
+                        grupo.horarioVariable
+                          ? "Horario variable según el día"
+                          : `${formatoHora(
+                              grupo.hora_inicio
+                            )} a ${formatoHora(
+                              grupo.hora_fin
+                            )}`;
+
+                      const cuposTexto =
+                        grupo.capacidadVariable
+                          ? "Cupos variables según el día"
+                          : `${grupo.capacidad || 1} ${
+                              Number(
+                                grupo.capacidad || 1
+                              ) === 1
+                                ? "cupo"
+                                : "cupos"
+                            } manuales por día`;
+
+                      return (
+                        <div
+                          key={grupo.clave}
+                          style={{
+                            ...s.listCard,
+                            alignItems: "flex-start",
+                          }}
+                          className="premium-config-card agenda-horario-resumen-card"
+                        >
+                          <div
+                            style={{
+                              minWidth: 0,
+                              flex: "1 1 420px",
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <strong>
+                                {servicio?.nombre ||
+                                  nombreServicio(
+                                    grupo.servicio_id
+                                  )}
+                              </strong>
+
+                              <span
+                                style={{
+                                  padding: "4px 7px",
+                                  borderRadius: 999,
+                                  background: grupo.activo
+                                    ? "#eaf7f0"
+                                    : "#f1f3f2",
+                                  color: grupo.activo
+                                    ? "#16834f"
+                                    : "#6f7b74",
+                                  fontSize: 8,
+                                  fontWeight: 900,
+                                }}
+                              >
+                                {grupo.activo
+                                  ? "ACTIVO"
+                                  : "INACTIVO"}
+                              </span>
+                            </div>
+
+                            <span
+                              style={{
+                                ...s.slotDetail,
+                                display: "block",
+                                marginTop: 6,
+                                color: "#514b72",
+                                fontWeight: 850,
+                              }}
+                            >
+                              {grupo.diasTexto} ·{" "}
+                              {horarioTexto}
+                            </span>
+
+                            <span
+                              style={{
+                                ...s.slotDetail,
+                                display: "block",
+                                marginTop: 5,
+                              }}
+                            >
+                              Duración:{" "}
+                              <strong>
+                                {grupo.duracion_minutos} min
+                              </strong>
+                              {" · "}
+                              {formatoDuracionServicio(
+                                grupo.duracion_minutos
+                              )}
+                              {" · "}
+                              {cuposTexto}
+                            </span>
+
+                            {grupo.instructor && (
+                              <span
+                                style={{
+                                  ...s.slotDetail,
+                                  display: "block",
+                                  marginTop: 5,
+                                }}
+                              >
+                                Profesional:{" "}
+                                <strong>
+                                  {grupo.instructor}
+                                </strong>
+                              </span>
+                            )}
+
+                            {grupo.fecha_desde && (
+                              <span
+                                style={{
+                                  ...s.slotDetail,
+                                  display: "block",
+                                  marginTop: 5,
+                                }}
+                              >
+                                Disponible desde:{" "}
+                                {formatoFecha(
+                                  grupo.fecha_desde
+                                )}
+                              </span>
+                            )}
+                          </div>
+
+                          <div
+                            style={s.inlineActions}
+                            className="premium-config-actions"
+                          >
+                            <button
+                              type="button"
+                              style={s.smallButtonPremium}
+                              onClick={() =>
+                                editarHorarioSalon(
+                                  grupo
+                                )
+                              }
+                            >
+                              Editar
+                            </button>
+
+                            <button
+                              type="button"
+                              style={
+                                grupo.activo
+                                  ? s.smallDangerPremium
+                                  : s.smallSuccessPremium
+                              }
+                              onClick={() =>
+                                alternarHorarioSalon(
+                                  grupo
+                                )
+                              }
+                            >
+                              {grupo.activo
+                                ? "Desactivar"
+                                : "Activar"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )
+                ) : horarios.length === 0 ? (
                   <p style={s.muted}>
-                    {esSalonBelleza
-                      ? "No hay horarios configurados."
-                      : "Todavía no hay horarios."}
+                    Todavía no hay horarios.
                   </p>
                 ) : (
-                  (esSalonBelleza
-                    ? horariosSalonFecha
-                    : horarios
-                  ).map((horario) => (
-                    <div key={horario.id} style={s.listCard} className="premium-config-card">
+                  horarios.map((horario) => (
+                    <div
+                      key={horario.id}
+                      style={s.listCard}
+                      className="premium-config-card"
+                    >
                       <div>
-                        <strong>{nombreServicio(horario.servicio_id)}</strong>
+                        <strong>
+                          {nombreServicio(
+                            horario.servicio_id
+                          )}
+                        </strong>
+
                         <span style={s.slotDetail}>
-                          {nombreDia(horario.dia_semana)} ·{" "}
-                          {formatoHora(horario.hora_inicio)} ·{" "}
-                          {horario.capacidad}{" "}
-                          {esSalonBelleza
-                            ? "espacio(s) por horario"
-                            : "cupos"}
+                          {nombreDia(
+                            horario.dia_semana
+                          )} ·{" "}
+                          {formatoHora(
+                            horario.hora_inicio
+                          )} ·{" "}
+                          {horario.capacidad} cupos
                         </span>
                       </div>
 
-                      <div style={s.inlineActions} className="premium-config-actions">
+                      <div
+                        style={s.inlineActions}
+                        className="premium-config-actions"
+                      >
                         <button
                           type="button"
                           style={s.smallButtonPremium}
-                          onClick={() => editarHorario(horario)}
+                          onClick={() =>
+                            editarHorario(horario)
+                          }
                         >
                           Editar
                         </button>
@@ -3907,11 +4489,17 @@ export default function AgendaPage() {
                         <button
                           type="button"
                           style={
-                            horario.activo ? s.smallDangerPremium : s.smallSuccessPremium
+                            horario.activo
+                              ? s.smallDangerPremium
+                              : s.smallSuccessPremium
                           }
-                          onClick={() => alternarHorario(horario)}
+                          onClick={() =>
+                            alternarHorario(horario)
+                          }
                         >
-                          {horario.activo ? "Desactivar" : "Activar"}
+                          {horario.activo
+                            ? "Desactivar"
+                            : "Activar"}
                         </button>
                       </div>
                     </div>
@@ -6073,6 +6661,25 @@ const AGENDA_CSS = `
     }
   }
 
+
+
+  /* =========================================================
+     HORARIOS AGRUPADOS · SALÓN FIX13
+     Una tarjeta por servicio/profesional.
+     ========================================================= */
+  .agenda-horario-resumen-card {
+    min-height: 0 !important;
+  }
+
+  @media (max-width: 760px) {
+    .agenda-horario-resumen-card {
+      gap: 12px !important;
+    }
+
+    .agenda-horario-resumen-card .premium-config-actions {
+      width: 100% !important;
+    }
+  }
 
   /* =========================================================
      KONAX SALÓN · UI PREMIUM FIX10
