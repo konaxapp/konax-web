@@ -2,11 +2,11 @@
 
 // KONAX · Cierre automático por inactividad
 // VERSION 2026.08.27
-// Tiempo: 5 minutos
+// Tiempo máximo sin actividad: 5 minutos
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "../lib/supabase";
 
 const TIEMPO_INACTIVIDAD = 5 * 60 * 1000;
 const CLAVE_ULTIMA_ACTIVIDAD = "konaxUltimaActividad";
@@ -49,8 +49,6 @@ export default function SessionInactivityGuard() {
       return;
     }
 
-    // Si por alguna razón no existe la marca de actividad,
-    // comenzamos a contar desde este momento.
     if (!localStorage.getItem(CLAVE_ULTIMA_ACTIVIDAD)) {
       localStorage.setItem(
         CLAVE_ULTIMA_ACTIVIDAD,
@@ -86,9 +84,6 @@ export default function SessionInactivityGuard() {
       manejarVisibilidad
     );
 
-    // Verificación adicional.
-    // Sirve cuando el navegador ralentiza temporizadores
-    // mientras la pestaña está en segundo plano.
     const intervalo = window.setInterval(() => {
       verificarInactividad();
     }, 15000);
@@ -155,8 +150,6 @@ export default function SessionInactivityGuard() {
 
     const ahora = Date.now();
 
-    // Evitamos escribir en localStorage cientos de veces
-    // por segundo.
     if (
       ahora -
         ultimaActualizacionRef.current <
@@ -244,7 +237,6 @@ export default function SessionInactivityGuard() {
     );
 
     try {
-      // Cerramos solamente la sesión de este navegador.
       await supabase.auth.signOut({
         scope: "local",
       });
@@ -255,8 +247,6 @@ export default function SessionInactivityGuard() {
       );
     }
 
-    // Esta bandera permite que el login explique
-    // por qué se cerró la sesión.
     sessionStorage.setItem(
       "konaxCierreSesionMotivo",
       "inactividad"
@@ -308,9 +298,7 @@ export default function SessionInactivityGuard() {
       return;
     }
 
-    window.location.replace(
-      "/login"
-    );
+    window.location.replace("/login");
   }
 
   return null;
