@@ -1,4 +1,5 @@
 import KonaxMobileNav from "../components/KonaxMobileNav";
+import SessionInactivityGuard from "../components/SessionInactivityGuard";
 
 export const metadata = {
   title: {
@@ -45,7 +46,12 @@ export default function RootLayout({ children }) {
           background: "#f5f7fb",
         }}
       >
+        {/* Seguridad global KONAX */}
+        <SessionInactivityGuard />
+
+        {/* Navegación móvil */}
         <KonaxMobileNav />
+
         {children}
       </body>
     </html>
