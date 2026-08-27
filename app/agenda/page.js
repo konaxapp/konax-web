@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.26-AGENDA-BELLEZA-HORARIOS-AGRUPADOS-FIX13";
+const VERSION = "2026.08.26-AGENDA-BELLEZA-HORARIOS-COMPACTOS-FIX14";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -6669,15 +6669,37 @@ const AGENDA_CSS = `
      ========================================================= */
   .agenda-horario-resumen-card {
     min-height: 0 !important;
+    height: auto !important;
+  }
+
+  .agenda-horario-resumen-card > div:first-child {
+    flex-basis: auto !important;
   }
 
   @media (max-width: 760px) {
     .agenda-horario-resumen-card {
-      gap: 12px !important;
+      min-height: 0 !important;
+      height: auto !important;
+      justify-content: flex-start !important;
+      align-items: stretch !important;
+      gap: 10px !important;
+      padding: 13px !important;
+    }
+
+    .agenda-horario-resumen-card > div:first-child {
+      width: 100% !important;
+      flex: 0 0 auto !important;
+      min-height: 0 !important;
     }
 
     .agenda-horario-resumen-card .premium-config-actions {
       width: 100% !important;
+      margin-top: 4px !important;
+      flex: 0 0 auto !important;
+    }
+
+    .agenda-horario-resumen-card .premium-config-actions button {
+      min-height: 38px !important;
     }
   }
 
