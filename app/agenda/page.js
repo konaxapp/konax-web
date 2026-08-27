@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.26-AGENDA-BELLEZA-HORARIOS-COMPACTOS-FIX14";
+const VERSION = "2026.08.26-AGENDA-BELLEZA-EDITAR-SCROLL-MOVIL-FIX15";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -1465,6 +1465,23 @@ export default function AgendaPage() {
     }
   }
 
+  function subirAEditor(id) {
+    if (typeof window === "undefined") return;
+
+    window.requestAnimationFrame(() => {
+      setTimeout(() => {
+        const elemento = document.getElementById(id);
+
+        if (!elemento) return;
+
+        elemento.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 80);
+    });
+  }
+
   function editarServicio(servicio) {
     setServicioEditandoId(servicio.id);
     setServicioForm({
@@ -1478,6 +1495,8 @@ export default function AgendaPage() {
       precio: Number(servicio.precio || 0),
       activo: Boolean(servicio.activo),
     });
+
+    subirAEditor("editor-servicio-salon");
   }
 
   async function alternarServicio(servicio) {
@@ -1660,6 +1679,8 @@ export default function AgendaPage() {
       fecha_hasta: horario.fecha_hasta || "",
       activo: Boolean(horario.activo),
     });
+
+    subirAEditor("editor-horario-salon");
   }
 
   function editarHorarioSalon(grupo) {
@@ -1714,6 +1735,8 @@ export default function AgendaPage() {
         "",
       activo: Boolean(grupo.activo),
     });
+
+    subirAEditor("editor-horario-salon");
 
     if (
       grupo.horarioVariable ||
@@ -3668,7 +3691,11 @@ export default function AgendaPage() {
           </section>
 
           <section style={s.twoColumns} className="premium-config-grid premium-create-grid">
-            <article style={s.panel} className="config-gradient-card config-gradient-service">
+            <article
+              id="editor-servicio-salon"
+              style={{ ...s.panel, scrollMarginTop: 82 }}
+              className="config-gradient-card config-gradient-service"
+            >
               <span style={s.eyebrowSmall}>CONFIGURACIÓN</span>
               <h2 style={s.panelTitle}>
                 {servicioEditandoId
@@ -3863,7 +3890,11 @@ export default function AgendaPage() {
               </div>
             </article>
 
-            <article style={s.panel} className="agenda-horario-panel config-gradient-card config-gradient-schedule">
+            <article
+              id="editor-horario-salon"
+              style={{ ...s.panel, scrollMarginTop: 82 }}
+              className="agenda-horario-panel config-gradient-card config-gradient-schedule"
+            >
               <span style={s.eyebrowSmall}>HORARIO</span>
               <h2 style={s.panelTitle}>
                 {horarioEditandoId ? "Editar horario" : "Nuevo horario"}
