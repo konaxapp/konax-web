@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.21-AGENDA-BELLEZA-INDIGO-LAVANDA-FIX11";
+const VERSION = "2026.08.26-AGENDA-BELLEZA-HORARIOS-TODOS-DIAS-FIX12";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -1001,14 +1001,26 @@ export default function AgendaPage() {
   const horariosSalonFecha = useMemo(() => {
     if (!esSalonBelleza) return horarios;
 
-    return horarios
-      .filter((horario) => rangoCoincideConFecha(horario, fechaAgenda))
-      .sort(
-        (a, b) =>
-          horaAMinutos(a.hora_inicio) -
-          horaAMinutos(b.hora_inicio)
+    const ordenDias = [1, 2, 3, 4, 5, 6, 0];
+
+    return [...horarios].sort((a, b) => {
+      const ordenA = ordenDias.indexOf(
+        Number(a.dia_semana)
       );
-  }, [horarios, esSalonBelleza, fechaAgenda]);
+      const ordenB = ordenDias.indexOf(
+        Number(b.dia_semana)
+      );
+
+      if (ordenA !== ordenB) {
+        return ordenA - ordenB;
+      }
+
+      return (
+        horaAMinutos(a.hora_inicio) -
+        horaAMinutos(b.hora_inicio)
+      );
+    });
+  }, [horarios, esSalonBelleza]);
 
   const disponibilidadVisible = useMemo(() => {
     if (!esSalonBelleza) return disponibilidad;
@@ -3862,7 +3874,7 @@ export default function AgendaPage() {
                 ).length === 0 ? (
                   <p style={s.muted}>
                     {esSalonBelleza
-                      ? "No hay horarios configurados para el día seleccionado."
+                      ? "No hay horarios configurados."
                       : "Todavía no hay horarios."}
                   </p>
                 ) : (
