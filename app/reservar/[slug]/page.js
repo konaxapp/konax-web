@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.21-PORTAL-ADAPTATIVO-GYM-WOD-V1";
+const VERSION = "2026.08.26-PORTAL-PROFESIONALES-SERVICIO-FIX2";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -156,6 +156,8 @@ export default function ReservaPublicaAutoservicioPage() {
 
   const [fecha, setFecha] = useState(fechaISO());
   const [horarios, setHorarios] = useState([]);
+  const [profesionalesServicio, setProfesionalesServicio] = useState([]);
+  const [cargandoProfesionales, setCargandoProfesionales] = useState(false);
   const [servicioFiltro, setServicioFiltro] = useState("todos");
   const [servicioSeleccionado, setServicioSeleccionado] = useState(null);
   const [profesionalSeleccionado, setProfesionalSeleccionado] =
@@ -280,6 +282,38 @@ export default function ReservaPublicaAutoservicioPage() {
     setCargandoHorarios(false);
   }
 
+  async function cargarProfesionalesServicio(servicioId) {
+    if (!perfilBelleza || !servicioId) {
+      setProfesionalesServicio([]);
+      return [];
+    }
+
+    setCargandoProfesionales(true);
+
+    const { data, error: rpcError } = await supabase.rpc(
+      "obtener_profesionales_servicio_publico",
+      {
+        p_slug: slug,
+        p_servicio_id: String(servicioId),
+      }
+    );
+
+    if (rpcError) {
+      console.error(
+        "No se pudieron cargar profesionales del servicio:",
+        rpcError
+      );
+      setProfesionalesServicio([]);
+      setCargandoProfesionales(false);
+      return [];
+    }
+
+    const lista = Array.isArray(data) ? data : [];
+    setProfesionalesServicio(lista);
+    setCargandoProfesionales(false);
+    return lista;
+  }
+
 
   async function cargarWodPublico(fechaWod, servicioId) {
     if (!perfilGimnasio || !fechaWod || !servicioId) {
@@ -359,6 +393,33 @@ export default function ReservaPublicaAutoservicioPage() {
   const profesionales = useMemo(() => {
     if (!servicioSeleccionado) return [];
 
+    /*
+      SALÓN DE BELLEZA:
+      Los profesionales salen del perfil profesional y de los
+      servicios asignados, no solamente de agenda_horarios.
+      Así un profesional aparece en el paso 2 si está activo y
+      tiene este servicio asignado.
+
+      GIMNASIO / compatibilidad:
+      Se mantiene la lógica anterior basada en instructores de
+      los horarios disponibles.
+    */
+    if (perfilBelleza) {
+      return profesionalesServicio.map((prof) => {
+        const nombreProfesional = String(
+          prof.nombre || ""
+        ).trim();
+
+        return {
+          id: normalizar(nombreProfesional),
+          profesionalId: prof.id,
+          nombre: nombreProfesional,
+          especialidad: prof.especialidad || "Profesional",
+          fotoUrl: prof.foto_url || "",
+        };
+      });
+    }
+
     const mapa = new Map();
 
     horarios
@@ -380,12 +441,19 @@ export default function ReservaPublicaAutoservicioPage() {
           mapa.set(clave, {
             id: clave,
             nombre: nombreProfesional,
+            especialidad: "Instructor",
+            fotoUrl: "",
           });
         }
       });
 
     return Array.from(mapa.values());
-  }, [horarios, servicioSeleccionado]);
+  }, [
+    horarios,
+    servicioSeleccionado,
+    perfilBelleza,
+    profesionalesServicio,
+  ]);
 
   const slotsDisponibles = useMemo(() => {
     if (!servicioSeleccionado) return [];
@@ -523,12 +591,19 @@ export default function ReservaPublicaAutoservicioPage() {
     return Array.from(grupos.values());
   }, [horariosVisibles]);
 
-  function elegirServicio(servicio) {
+  async function elegirServicio(servicio) {
     setServicioSeleccionado(servicio);
     setServicioFiltro(servicio.id);
     setProfesionalSeleccionado("sin-preferencia");
     setHorarioSeleccionado(null);
     setError("");
+
+    if (perfilBelleza) {
+      await cargarProfesionalesServicio(servicio.id);
+    } else {
+      setProfesionalesServicio([]);
+    }
+
     setPaso(2);
   }
 
@@ -559,6 +634,7 @@ export default function ReservaPublicaAutoservicioPage() {
     setPaso(1);
     setServicioSeleccionado(null);
     setServicioFiltro("todos");
+    setProfesionalesServicio([]);
     setProfesionalSeleccionado("sin-preferencia");
     setHorarioSeleccionado(null);
     setReservaConfirmada(null);
@@ -1161,33 +1237,57 @@ export default function ReservaPublicaAutoservicioPage() {
                     </span>
                   </button>
 
-                  {profesionales.map((profesional) => (
-                    <button
-                      key={profesional.id}
-                      type="button"
-                      className="kp-prof"
-                      onClick={() =>
-                        elegirProfesional(profesional.id)
-                      }
-                    >
-                      <span className="kp-avatar">
-                        {inicialNombre(profesional.nombre)}
-                      </span>
+                  {cargandoProfesionales ? (
+                    <div className="kp-prof-loading">
+                      Consultando profesionales...
+                    </div>
+                  ) : (
+                    profesionales.map((profesional) => (
+                      <button
+                        key={
+                          profesional.profesionalId ||
+                          profesional.id
+                        }
+                        type="button"
+                        className="kp-prof"
+                        onClick={() =>
+                          elegirProfesional(
+                            profesional.id
+                          )
+                        }
+                      >
+                        <span className="kp-avatar">
+                          {profesional.fotoUrl ? (
+                            <img
+                              src={profesional.fotoUrl}
+                              alt={profesional.nombre}
+                              className="kp-avatar-img"
+                            />
+                          ) : (
+                            inicialNombre(
+                              profesional.nombre
+                            )
+                          )}
+                        </span>
 
-                      <span className="kp-prof-info">
-                        <strong>{profesional.nombre}</strong>
-                        <small>
-                          {perfilBelleza
-                            ? "Profesional"
-                            : "Instructor"}
-                        </small>
-                      </span>
+                        <span className="kp-prof-info">
+                          <strong>
+                            {profesional.nombre}
+                          </strong>
+                          <small>
+                            {profesional.especialidad ||
+                              (perfilBelleza
+                                ? "Profesional"
+                                : "Instructor")}
+                          </small>
+                        </span>
 
-                      <span className="kp-select">
-                        Seleccionar
-                      </span>
-                    </button>
-                  ))}
+                        <span className="kp-select">
+                          Seleccionar
+                        </span>
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -1274,7 +1374,10 @@ export default function ReservaPublicaAutoservicioPage() {
                   </div>
                 ) : slotsDisponibles.length === 0 ? (
                   <div className="kp-empty">
-                    No hay horas disponibles para esta fecha.
+                    {profesionalSeleccionado ===
+                    "sin-preferencia"
+                      ? "No hay horas disponibles para esta fecha."
+                      : "Este profesional no tiene horas disponibles para esta fecha. Puedes elegir otra fecha o volver y seleccionar otro profesional."}
                   </div>
                 ) : (
                   <div className="kp-time-cards">
@@ -2231,6 +2334,24 @@ const CSS = `
     width: 50px;
     height: 50px;
     font-size: 18px;
+    overflow: hidden;
+  }
+
+  .kp-avatar-img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+  }
+
+  .kp-prof-loading {
+    padding: 16px;
+    border: 1px dashed #d5ddd8;
+    border-radius: 15px;
+    background: #fafcfb;
+    color: #748078;
+    text-align: center;
+    font-size: 12px;
   }
 
   .kp-prof-info {
@@ -3076,7 +3197,8 @@ const CSS = `
     color: #7f8b84;
   }
 
-  .kp-dark .kp-empty {
+  .kp-dark .kp-empty,
+  .kp-dark .kp-prof-loading {
     background: #101813;
     color: #aeb9b2;
     border-color: #34443a;
