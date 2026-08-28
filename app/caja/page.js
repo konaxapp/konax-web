@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION_CAJA_GIMNASIO = "2026.08.15-N-PAGO-AGENDA-ATOMICO";
+const VERSION_CAJA_GIMNASIO = "2026.08.27-CAJA-ACTUALIZAR-FIX1";
 
 function obtenerFechaPanama(fecha = new Date()) {
   const fechaObjeto =
@@ -166,6 +166,7 @@ export default function Caja() {
 
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
+  const [actualizandoCaja, setActualizandoCaja] = useState(false);
   const [mostrarOtrosCobros, setMostrarOtrosCobros] =
     useState(false);
   const [suscripcionFlujoId, setSuscripcionFlujoId] =
@@ -283,6 +284,35 @@ export default function Caja() {
       );
     } finally {
       setCargando(false);
+    }
+  }
+
+  async function actualizarCaja() {
+    const empresaId = obtenerEmpresaId();
+
+    if (!empresaId || actualizandoCaja) return;
+
+    setActualizandoCaja(true);
+
+    try {
+      await Promise.all([
+        cargarEmpresa(empresaId),
+        cargarVendedores(empresaId),
+        cargarProductos(empresaId),
+        cargarMovimientos(
+          empresaId,
+          fechaDesde,
+          fechaHasta
+        ),
+      ]);
+    } catch (error) {
+      console.error("Error actualizando Caja:", error);
+      alert(
+        "No se pudo actualizar Caja: " +
+          (error?.message || "Error desconocido.")
+      );
+    } finally {
+      setActualizandoCaja(false);
     }
   }
 
@@ -3435,7 +3465,29 @@ export default function Caja() {
             </div>
           </div>
 
-          <button onClick={volverDashboard} style={estiloResponsivo(estilos.botonVolver, estilosDesktop.botonVolver)}>← Centro de Operaciones</button>
+          <div style={estilos.topbarAcciones}>
+            <button
+              type="button"
+              onClick={actualizarCaja}
+              disabled={actualizandoCaja}
+              style={estiloResponsivo(
+                estilos.botonActualizar,
+                estilosDesktop.botonActualizar
+              )}
+            >
+              {actualizandoCaja ? "Actualizando..." : "↻ Actualizar"}
+            </button>
+
+            <button
+              onClick={volverDashboard}
+              style={estiloResponsivo(
+                estilos.botonVolver,
+                estilosDesktop.botonVolver
+              )}
+            >
+              ← Centro de Operaciones
+            </button>
+          </div>
         </header>
 
         <div style={estiloResponsivo(estilos.contenido, estilosDesktop.contenido)}>
@@ -3466,6 +3518,9 @@ export default function Caja() {
                       }
                       style={estilos.input}
                     />
+                    <small style={estilos.fechaAyuda}>
+                      Fecha que tendrá el cobro al registrarse.
+                    </small>
                   </div>
                 </div>
 
@@ -4657,6 +4712,11 @@ const estilosDesktop = {
     padding:"0 13px",
     fontSize:"11px"
   },
+  botonActualizar:{
+    minHeight:"36px",
+    padding:"0 13px",
+    fontSize:"11px"
+  },
   contenido:{
     padding:"10px 12px"
   },
@@ -4884,7 +4944,10 @@ const estilos={
   loadingLogo:{width:"220px",maxWidth:"75%"},loadingTitulo:{fontSize:"20px"},
   topbar:{minHeight:"92px",padding:"16px 22px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:"18px",flexWrap:"wrap",background:"linear-gradient(120deg,#06331f 0%,#0b4d2d 54%,#0d6c3c 100%)",color:"#fff",boxShadow:"0 10px 28px rgba(11,66,40,.22)"},
   topbarMarca:{display:"flex",alignItems:"center",gap:"16px",minWidth:0,flexWrap:"wrap",flex:"1 1 720px"},topbarLogoCard:{display:"grid",placeItems:"center",padding:"12px 18px",minHeight:"74px",borderRadius:"22px",background:"#ffffff",border:"1px solid rgba(255,255,255,.16)",boxShadow:"0 10px 24px rgba(0,0,0,.18)",flexShrink:0},topbarLogo:{width:"205px",height:"62px",objectFit:"contain",display:"block"},topbarSeparador:{width:"1px",height:"42px",background:"rgba(255,255,255,.22)"},topbarModulo:{fontSize:"13px",fontWeight:900,color:"#79e2a4",whiteSpace:"nowrap",letterSpacing:".3px"},topbarEmpresa:{margin:0,fontSize:"24px",lineHeight:1.05},topbarTexto:{margin:"4px 0 0",fontSize:"12px",color:"#e0f2e7",maxWidth:"420px"},
+  topbarAcciones:{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap",justifyContent:"flex-end"},
+  botonActualizar:{minHeight:"44px",padding:"0 18px",borderRadius:"12px",border:"1px solid rgba(255,255,255,.28)",background:"rgba(255,255,255,.10)",color:"#fff",fontWeight:850,cursor:"pointer",flexShrink:0},
   botonVolver:{minHeight:"44px",padding:"0 18px",borderRadius:"12px",border:"1px solid #20bc69",background:"rgba(0,0,0,.12)",color:"#fff",fontWeight:800,cursor:"pointer",flexShrink:0},
+  fechaAyuda:{display:"block",maxWidth:"210px",color:"#6d7a72",fontSize:"9px",lineHeight:1.3},
   contenido:{padding:"18px"},
   kpisGrid:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:"14px",marginBottom:"14px"},
   kpiCard:{display:"grid",gridTemplateColumns:"64px 1fr",gap:"14px",alignItems:"center",padding:"18px",border:"1px solid #e1e9e4",borderRadius:"16px",background:"#fff",boxShadow:"0 8px 22px rgba(24,79,49,.08)"},
