@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.26-PORTAL-PROFESIONALES-SERVICIO-FIX2";
+const VERSION = "2026.08.27-PORTAL-CALENDARIO-2026-FIX4";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -105,14 +105,17 @@ function claveSlot(item) {
 }
 
 
-function proximosDias(cantidad = 8) {
+function fechasHastaFinDeAnio2026() {
   const lista = [];
   const hoy = new Date();
+  hoy.setHours(12, 0, 0, 0);
 
-  for (let i = 0; i < cantidad; i += 1) {
-    const d = new Date(hoy);
-    d.setDate(hoy.getDate() + i);
-    lista.push(fechaISO(d));
+  const fin = new Date("2026-12-31T12:00:00");
+  const cursor = new Date(hoy);
+
+  while (cursor <= fin) {
+    lista.push(fechaISO(cursor));
+    cursor.setDate(cursor.getDate() + 1);
   }
 
   return lista;
@@ -156,6 +159,8 @@ export default function ReservaPublicaAutoservicioPage() {
 
   const [fecha, setFecha] = useState(fechaISO());
   const [horarios, setHorarios] = useState([]);
+  const [serviciosCatalogo, setServiciosCatalogo] = useState([]);
+  const [cargandoServicios, setCargandoServicios] = useState(false);
   const [profesionalesServicio, setProfesionalesServicio] = useState([]);
   const [cargandoProfesionales, setCargandoProfesionales] = useState(false);
   const [servicioFiltro, setServicioFiltro] = useState("todos");
@@ -180,7 +185,7 @@ export default function ReservaPublicaAutoservicioPage() {
 
   const perfilBelleza = esBelleza(portal);
   const perfilGimnasio = esGimnasio(portal);
-  const dias = useMemo(() => proximosDias(8), []);
+  const dias = useMemo(() => fechasHastaFinDeAnio2026(), []);
 
   useEffect(() => {
     if (!slug) return;
@@ -255,7 +260,36 @@ export default function ReservaPublicaAutoservicioPage() {
       : identidadData;
 
     setIdentidadEmpresa(identidad || null);
+
+    await cargarServiciosPublicos();
+
     setCargando(false);
+  }
+
+  async function cargarServiciosPublicos() {
+    setCargandoServicios(true);
+
+    const { data, error: rpcError } = await supabase.rpc(
+      "obtener_servicios_agenda_publica",
+      {
+        p_slug: slug,
+      }
+    );
+
+    if (rpcError) {
+      console.error(
+        "No se pudieron cargar los servicios públicos:",
+        rpcError
+      );
+      setServiciosCatalogo([]);
+      setCargandoServicios(false);
+      return [];
+    }
+
+    const lista = Array.isArray(data) ? data : [];
+    setServiciosCatalogo(lista);
+    setCargandoServicios(false);
+    return lista;
   }
 
   async function cargarDisponibilidad(fechaSeleccionada) {
@@ -372,6 +406,26 @@ export default function ReservaPublicaAutoservicioPage() {
   }
 
   const servicios = useMemo(() => {
+    /*
+      SALÓN DE BELLEZA:
+      El PASO 1 usa el catálogo público de servicios y ya no depende
+      de que el servicio tenga un slot disponible en la fecha actual.
+
+      GIMNASIO / compatibilidad:
+      Se conserva la lógica anterior basada en la disponibilidad del día.
+    */
+    if (perfilBelleza && serviciosCatalogo.length > 0) {
+      return serviciosCatalogo.map((item) => ({
+        id: String(item.id),
+        nombre: item.nombre,
+        descripcion: item.descripcion || "",
+        imagenUrl: item.imagen_url || "",
+        precio: Number(item.precio || 0),
+        requierePago: Boolean(item.requiere_pago),
+        duracion: Number(item.duracion_minutos || 60),
+      }));
+    }
+
     const mapa = new Map();
 
     horarios.forEach((item) => {
@@ -380,6 +434,7 @@ export default function ReservaPublicaAutoservicioPage() {
           id: String(item.servicio_id),
           nombre: item.servicio_nombre,
           descripcion: item.descripcion || "",
+          imagenUrl: item.imagen_url || "",
           precio: Number(item.precio || 0),
           requierePago: Boolean(item.requiere_pago),
           duracion: Number(item.duracion_minutos || 60),
@@ -388,7 +443,11 @@ export default function ReservaPublicaAutoservicioPage() {
     });
 
     return Array.from(mapa.values());
-  }, [horarios]);
+  }, [
+    horarios,
+    serviciosCatalogo,
+    perfilBelleza,
+  ]);
 
   const profesionales = useMemo(() => {
     if (!servicioSeleccionado) return [];
@@ -508,7 +567,7 @@ export default function ReservaPublicaAutoservicioPage() {
     setBuscandoFechas(true);
 
     try {
-      const candidatos = proximosDias(14);
+      const candidatos = fechasHastaFinDeAnio2026();
       const resultados = [];
 
       for (const dia of candidatos) {
@@ -524,17 +583,10 @@ export default function ReservaPublicaAutoservicioPage() {
           resultados.push(dia);
         }
 
-        if (resultados.length >= 8) break;
       }
 
       setFechasConDisponibilidad(resultados);
 
-      if (
-        resultados.length > 0 &&
-        !resultados.includes(fecha)
-      ) {
-        setFecha(resultados[0]);
-      }
     } finally {
       setBuscandoFechas(false);
     }
@@ -1097,7 +1149,7 @@ export default function ReservaPublicaAutoservicioPage() {
                     : "Selecciona el servicio que deseas."}
                 </p>
 
-                {cargandoHorarios ? (
+                {cargandoServicios || cargandoHorarios ? (
                   <div className="kp-empty">
                     Consultando servicios...
                   </div>
@@ -1106,7 +1158,7 @@ export default function ReservaPublicaAutoservicioPage() {
                     <strong>
                       {perfilGimnasio
                         ? "No hay clases disponibles hoy."
-                        : "No hay servicios disponibles hoy."}
+                        : "No hay servicios activos disponibles."}
                     </strong>
                     <span>
                       {buscandoFechas
@@ -1115,7 +1167,7 @@ export default function ReservaPublicaAutoservicioPage() {
                         ? ` Próxima fecha disponible: ${formatoFecha(
                             fechasConDisponibilidad[0]
                           )}.`
-                        : " No hay fechas disponibles en los próximos días."}
+                        : " No hay fechas disponibles hasta el cierre del año."}
                     </span>
 
                     {fechasConDisponibilidad.length > 0 && (
@@ -1154,20 +1206,29 @@ export default function ReservaPublicaAutoservicioPage() {
                         key={servicio.id}
                         className="kp-service"
                       >
-                        <div className="kp-service-icon">
-                          {perfilGimnasio
-                            ? normalizar(servicio.nombre).includes("cross")
-                              ? "🏋"
-                              : normalizar(servicio.nombre).includes("yoga")
-                              ? "🧘"
-                              : "💪"
-                            : normalizar(servicio.nombre).includes("manicure") ||
-                              normalizar(servicio.nombre).includes("uña")
-                            ? "💅"
-                            : normalizar(servicio.nombre).includes("color")
-                            ? "👩"
-                            : "✂"}
-                        </div>
+                        {servicio.imagenUrl ? (
+                          <div className="kp-service-image">
+                            <img
+                              src={servicio.imagenUrl}
+                              alt={servicio.nombre}
+                            />
+                          </div>
+                        ) : (
+                          <div className="kp-service-icon">
+                            {perfilGimnasio
+                              ? normalizar(servicio.nombre).includes("cross")
+                                ? "🏋"
+                                : normalizar(servicio.nombre).includes("yoga")
+                                ? "🧘"
+                                : "💪"
+                              : normalizar(servicio.nombre).includes("manicure") ||
+                                normalizar(servicio.nombre).includes("uña")
+                              ? "💅"
+                              : normalizar(servicio.nombre).includes("color")
+                              ? "👩"
+                              : "✂"}
+                          </div>
+                        )}
 
                         <div className="kp-service-info">
                           <strong>{servicio.nombre}</strong>
@@ -1331,10 +1392,7 @@ export default function ReservaPublicaAutoservicioPage() {
 
                 <div className="kp-date-strip-wrap">
                   <div className="kp-date-strip">
-                    {(fechasConDisponibilidad.length > 0
-                      ? fechasConDisponibilidad
-                      : dias
-                    ).map((dia) => {
+                    {dias.map((dia) => {
                       const activo = dia === fecha;
                       const d = new Date(`${dia}T12:00:00`);
 
@@ -1344,6 +1402,10 @@ export default function ReservaPublicaAutoservicioPage() {
                           type="button"
                           className={`kp-date-pill ${
                             activo ? "active" : ""
+                          } ${
+                            fechasConDisponibilidad.includes(dia)
+                              ? "available"
+                              : ""
                           }`}
                           onClick={() => elegirFecha(dia)}
                         >
@@ -1360,6 +1422,11 @@ export default function ReservaPublicaAutoservicioPage() {
                               month: "short",
                             }).format(d)}
                           </span>
+
+                          <i
+                            className="kp-date-dot"
+                            aria-hidden="true"
+                          />
                         </button>
                       );
                     })}
@@ -2224,15 +2291,32 @@ const CSS = `
   }
 
   .kp-service {
-    padding: 14px;
+    padding: 12px;
     display: grid;
-    grid-template-columns: 56px minmax(0,1fr) auto;
+    grid-template-columns: 96px minmax(0,1fr) auto;
     gap: 12px;
     align-items: center;
     border: 1px solid #dbe4df;
     border-radius: 18px;
     background: #ffffff;
     box-shadow: 0 5px 14px rgba(20,38,28,.04);
+    overflow: hidden;
+  }
+
+  .kp-service-image {
+    width: 96px;
+    height: 82px;
+    overflow: hidden;
+    border-radius: 14px;
+    background: #eef2ef;
+    border: 1px solid #e2e8e4;
+  }
+
+  .kp-service-image img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
   }
 
   .kp-service-icon,
@@ -2437,7 +2521,7 @@ const CSS = `
 
   .kp-date-pill {
     min-width: 78px;
-    height: 104px;
+    height: 112px;
     padding: 8px 6px;
     display: grid;
     place-items: center;
@@ -2465,6 +2549,22 @@ const CSS = `
     background: #0b7041;
     color: #ffffff;
     box-shadow: 0 8px 18px rgba(11,112,65,.18);
+  }
+
+  .kp-date-dot {
+    width: 6px;
+    height: 6px;
+    display: block;
+    border-radius: 50%;
+    background: transparent;
+  }
+
+  .kp-date-pill.available .kp-date-dot {
+    background: #0b7041;
+  }
+
+  .kp-date-pill.active .kp-date-dot {
+    background: #ffffff;
   }
 
   .kp-time-title {
@@ -3251,7 +3351,19 @@ const CSS = `
     }
 
     .kp-service {
-      grid-template-columns: 46px minmax(0,1fr);
+      grid-template-columns: 88px minmax(0,1fr);
+      align-items: start;
+    }
+
+    .kp-service-image {
+      width: 88px;
+      height: 82px;
+    }
+
+    .kp-service-icon {
+      width: 54px;
+      height: 54px;
+      align-self: center;
     }
 
     .kp-service > button {
