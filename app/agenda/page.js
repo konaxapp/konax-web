@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.27-AGENDA-IMAGEN-SERVICIO-FIX16";
+const VERSION = "2026.08.27-AGENDA-IMAGEN-RESERVA-PORTAL-FIX17";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -976,9 +976,17 @@ export default function AgendaPage() {
           estado === estadoBuscado;
 
         const texto = normalizar(
-          `${cliente?.nombre || ""} ${cliente?.cedula || ""} ${
-            cliente?.telefono || ""
-          } ${servicio?.nombre || ""} ${reserva.fecha_reserva || ""}`
+          `
+            ${reserva.nombre_reserva || ""}
+            ${reserva.telefono_reserva || ""}
+            ${reserva.telefono || ""}
+            ${cliente?.nombre || ""}
+            ${cliente?.cedula || ""}
+            ${cliente?.telefono || ""}
+            ${servicio?.nombre || ""}
+            ${reserva.fecha_reserva || ""}
+            ${reserva.estado || ""}
+          `
         );
 
         const cumpleBusqueda = !q || texto.includes(q);
@@ -1944,8 +1952,8 @@ export default function AgendaPage() {
     }
   }
 
-  function cobrarReserva(reserva) {
-    if (!reserva?.id || !reserva?.cliente_id) {
+  async function cobrarReserva(reserva) {
+    if (!reserva?.id) {
       alert("No se pudo identificar la reserva.");
       return;
     }
@@ -1960,8 +1968,66 @@ export default function AgendaPage() {
       return;
     }
 
+    let clienteId = reserva.cliente_id || "";
+
+    /*
+      Las reservas del portal público pueden llegar con
+      nombre_reserva / telefono_reserva aunque cliente_id no
+      esté disponible todavía en el estado local de la pantalla.
+      Intentamos localizar al cliente antes de bloquear el cobro.
+    */
+    if (!clienteId) {
+      const telefonoPortal = String(
+        reserva.telefono_reserva ||
+          reserva.telefono ||
+          ""
+      ).trim();
+
+      const nombrePortal = String(
+        reserva.nombre_reserva || ""
+      ).trim();
+
+      try {
+        if (telefonoPortal) {
+          const { data: clienteTelefono } = await supabase
+            .from("clientes")
+            .select("id")
+            .eq("empresa_id", empresaId)
+            .eq("telefono", telefonoPortal)
+            .limit(1)
+            .maybeSingle();
+
+          clienteId = clienteTelefono?.id || "";
+        }
+
+        if (!clienteId && nombrePortal) {
+          const { data: clienteNombre } = await supabase
+            .from("clientes")
+            .select("id")
+            .eq("empresa_id", empresaId)
+            .ilike("nombre", nombrePortal)
+            .limit(1)
+            .maybeSingle();
+
+          clienteId = clienteNombre?.id || "";
+        }
+      } catch (err) {
+        console.error(
+          "No se pudo localizar el cliente de la reserva pública:",
+          err
+        );
+      }
+    }
+
+    if (!clienteId) {
+      alert(
+        "La cita está pendiente de pago, pero todavía no tiene un cliente vinculado. Actualiza Agenda y vuelve a intentar."
+      );
+      return;
+    }
+
     const parametros = new URLSearchParams({
-      clienteId: String(reserva.cliente_id),
+      clienteId: String(clienteId),
       agendaReservaId: String(reserva.id),
       flujo: "agenda",
     });
