@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.27-ADMIN-PLAN-ACTIVO-ELEGANTE-FIX1";
+const VERSION = "2026.08.27-ADMIN-PLAN-FECHA-PAGO-FIX2";
 
 const OPCIONES = [
   { nombre: "Crear Nueva Empresa", ruta: "/empresas", icono: "building" },
@@ -208,44 +208,65 @@ export default function Admin() {
   }
 
   async function activarPlan(empresa) {
-    const hoy = fechaPanama();
-    const vencimientoSugerido = sumarMes(hoy);
+    /*
+      IMPORTANTE:
+      La fecha del plan NO se toma del día en que el administrador
+      pulsa este botón.
 
-    const fechaInicio = window.prompt(
-      `Inicio del plan activo para ${empresa.nombre}:`,
-      hoy
+      Debe ser la fecha real del pago / inicio comercial del plan.
+      Ejemplo:
+        pago: 2026-08-26
+        próximo vencimiento mensual: 2026-09-26
+    */
+
+    const fechaPagoPlan = window.prompt(
+      `Fecha real del pago / inicio del plan de ${empresa.nombre}\n\n` +
+        "Escriba la fecha en formato AAAA-MM-DD.\n" +
+        "Ejemplo: 2026-08-26",
+      ""
     );
 
-    if (fechaInicio === null) return;
+    if (fechaPagoPlan === null) return;
+
+    const fechaInicio = fechaPagoPlan.trim();
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaInicio)) {
-      alert("Ingrese la fecha con formato AAAA-MM-DD.");
+      alert(
+        "Ingrese la fecha real del pago con formato AAAA-MM-DD.\n\nEjemplo: 2026-08-26"
+      );
       return;
     }
 
-    const fechaVencimiento = window.prompt(
-      `Vencimiento del plan para ${empresa.nombre}:`,
+    const vencimientoSugerido = sumarMes(fechaInicio);
+
+    const fechaVencimientoTexto = window.prompt(
+      `Próximo vencimiento del plan de ${empresa.nombre}\n\n` +
+        `KONAX calculó un mes desde ${formatoFecha(fechaInicio)}.\n` +
+        "Puede corregirlo si el plan tiene otra duración.",
       vencimientoSugerido
     );
 
-    if (fechaVencimiento === null) return;
+    if (fechaVencimientoTexto === null) return;
+
+    const fechaVencimiento = fechaVencimientoTexto.trim();
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaVencimiento)) {
-      alert("Ingrese la fecha con formato AAAA-MM-DD.");
+      alert("Ingrese el vencimiento con formato AAAA-MM-DD.");
       return;
     }
 
     if (fechaVencimiento <= fechaInicio) {
-      alert("El vencimiento debe ser posterior a la fecha de inicio.");
+      alert("El vencimiento debe ser posterior a la fecha del pago.");
       return;
     }
 
     const confirmar = window.confirm(
-      `CONFIRMAR ACTIVACIÓN\n\n` +
-        `${empresa.nombre}\n` +
-        `Inicio: ${formatoFecha(fechaInicio)}\n` +
-        `Vencimiento: ${formatoFecha(fechaVencimiento)}\n\n` +
-        "Usa esta acción cuando el cliente ya pagó. La prueba dejará de gobernar el acceso y la empresa pasará a ACTIVO."
+      `CONFIRMAR PLAN ACTIVO\n\n` +
+        `${empresa.nombre}\n\n` +
+        `Fecha del pago / inicio: ${formatoFecha(fechaInicio)}\n` +
+        `Próximo vencimiento: ${formatoFecha(fechaVencimiento)}\n\n` +
+        "La empresa dejará de estar en período de prueba y pasará a ACTIVO.\n" +
+        "Los días restantes de prueba dejarán de aplicar."
     );
 
     if (!confirmar) return;
@@ -266,11 +287,13 @@ export default function Admin() {
 
     if (error) {
       setProcesandoId("");
+
       alert(
         "No se pudo activar el plan.\n\n" +
           error.message +
-          "\n\nVerifica que el SQL activar_plan_empresa_desde_prueba esté creado en Supabase."
+          "\n\nVerifique que la función activar_plan_empresa_desde_prueba exista en Supabase."
       );
+
       return;
     }
 
@@ -284,11 +307,10 @@ export default function Admin() {
     setProcesandoId("");
 
     alert(
-      `${empresa.nombre} ya está ACTIVA.\n\n` +
-        `Plan: ${formatoFecha(fechaInicio)} → ${formatoFecha(
-          fechaVencimiento
-        )}\n\n` +
-        "Los días restantes de prueba ya no aplican."
+      `${empresa.nombre} quedó ACTIVA.\n\n` +
+        `Inicio del plan: ${formatoFecha(fechaInicio)}\n` +
+        `Próximo vencimiento: ${formatoFecha(fechaVencimiento)}\n\n` +
+        "Los días de prueba ya no aplican."
     );
   }
 
@@ -706,8 +728,8 @@ export default function Admin() {
               </h2>
 
               <p style={styles.seccionTexto}>
-                Convierte una prueba en plan activo cuando el cliente
-                realiza el pago.
+                Convierte una prueba en plan activo usando la fecha real del pago.
+                La aceptación del piloto queda solo como historial.
               </p>
             </div>
 
@@ -823,7 +845,7 @@ export default function Admin() {
 
                     <div style={styles.detallesMobileGrid}>
                       <DetalleMobile
-                        etiqueta="Aceptación"
+                        etiqueta="Aceptación piloto"
                         valor={formatoFecha(
                           empresa.fecha_aceptacion_piloto
                         )}
@@ -894,13 +916,13 @@ export default function Admin() {
                       Estado
                     </th>
                     <th style={{ ...styles.th, width: "12%" }}>
-                      Aceptación
+                      Aceptación piloto
                     </th>
                     <th style={{ ...styles.th, width: "12%" }}>
-                      Inicio
+                      Inicio comercial
                     </th>
                     <th style={{ ...styles.th, width: "12%" }}>
-                      Vencimiento
+                      Próx. vencimiento
                     </th>
                     <th style={{ ...styles.th, width: "9%" }}>
                       Días
