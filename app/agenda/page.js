@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.26-AGENDA-BELLEZA-EDITAR-SCROLL-MOVIL-FIX15";
+const VERSION = "2026.08.27-AGENDA-IMAGEN-SERVICIO-FIX16";
 
 const SERVICIO_INICIAL = {
   nombre: "",
   descripcion: "",
+  imagen_url: "",
   tipo: "clase_grupal",
   duracion_minutos: 60,
   capacidad_default: 5,
@@ -319,6 +320,7 @@ export default function AgendaPage() {
 
   const [servicioForm, setServicioForm] = useState(SERVICIO_INICIAL);
   const [servicioEditandoId, setServicioEditandoId] = useState(null);
+  const [subiendoImagenServicio, setSubiendoImagenServicio] = useState(false);
 
   const [horarioForm, setHorarioForm] = useState(HORARIO_INICIAL);
   const [diasHorarioSalon, setDiasHorarioSalon] = useState([]);
@@ -1385,6 +1387,87 @@ export default function AgendaPage() {
     }
   }
 
+  async function subirImagenServicio(archivo) {
+    if (!archivo) return;
+
+    if (!empresaId) {
+      alert("No se pudo identificar la empresa.");
+      return;
+    }
+
+    if (!String(archivo.type || "").startsWith("image/")) {
+      alert("Selecciona una imagen válida.");
+      return;
+    }
+
+    const MAX_MB = 5;
+    const maxBytes = MAX_MB * 1024 * 1024;
+
+    if (archivo.size > maxBytes) {
+      alert(`La imagen no puede superar ${MAX_MB} MB.`);
+      return;
+    }
+
+    setSubiendoImagenServicio(true);
+    setError("");
+
+    try {
+      const extension =
+        String(archivo.name || "")
+          .split(".")
+          .pop()
+          ?.toLowerCase()
+          .replace(/[^a-z0-9]/g, "") || "jpg";
+
+      const nombreSeguro = String(archivo.name || "servicio")
+        .replace(/\.[^/.]+$/, "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 50) || "servicio";
+
+      const ruta =
+        `${empresaId}/${Date.now()}-${nombreSeguro}.${extension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("servicios-agenda")
+        .upload(ruta, archivo, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: archivo.type || undefined,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicData } = supabase.storage
+        .from("servicios-agenda")
+        .getPublicUrl(ruta);
+
+      const urlPublica = publicData?.publicUrl || "";
+
+      if (!urlPublica) {
+        throw new Error(
+          "La imagen se subió, pero no se pudo obtener el enlace público."
+        );
+      }
+
+      setServicioForm((actual) => ({
+        ...actual,
+        imagen_url: urlPublica,
+      }));
+    } catch (err) {
+      console.error("Error subiendo imagen del servicio:", err);
+      setError(
+        err?.message ||
+          "No se pudo subir la imagen del servicio."
+      );
+    } finally {
+      setSubiendoImagenServicio(false);
+    }
+  }
+
   async function guardarServicio() {
     if (!esAdmin) {
       alert(
@@ -1422,6 +1505,7 @@ export default function AgendaPage() {
         empresa_id: empresaId,
         nombre: servicioForm.nombre.trim(),
         descripcion: servicioForm.descripcion.trim() || null,
+        imagen_url: servicioForm.imagen_url?.trim() || null,
         tipo: servicioForm.tipo,
         duracion_minutos: Number(servicioForm.duracion_minutos || 60),
         capacidad_default: Number(servicioForm.capacidad_default || 1),
@@ -1487,6 +1571,7 @@ export default function AgendaPage() {
     setServicioForm({
       nombre: servicio.nombre || "",
       descripcion: servicio.descripcion || "",
+      imagen_url: servicio.imagen_url || "",
       tipo: servicio.tipo || "clase_grupal",
       duracion_minutos: Number(servicio.duracion_minutos || 60),
       capacidad_default: Number(servicio.capacidad_default || 1),
@@ -3795,6 +3880,141 @@ export default function AgendaPage() {
                 />
               </Campo>
 
+              <Campo label="Imagen ilustrativa del servicio">
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 10,
+                    padding: 12,
+                    border: "1px solid rgba(99,102,241,.16)",
+                    borderRadius: 14,
+                    background: "rgba(255,255,255,.72)",
+                  }}
+                >
+                  {servicioForm.imagen_url ? (
+                    <div
+                      style={{
+                        position: "relative",
+                        width: "100%",
+                        maxWidth: 360,
+                        aspectRatio: "16 / 9",
+                        overflow: "hidden",
+                        borderRadius: 13,
+                        background: "#eef1f4",
+                        border: "1px solid #e0e5e2",
+                      }}
+                    >
+                      <img
+                        src={servicioForm.imagen_url}
+                        alt={
+                          servicioForm.nombre
+                            ? `Imagen de ${servicioForm.nombre}`
+                            : "Imagen del servicio"
+                        }
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          display: "block",
+                          objectFit: "cover",
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        width: "100%",
+                        maxWidth: 360,
+                        minHeight: 130,
+                        display: "grid",
+                        placeItems: "center",
+                        padding: 18,
+                        border: "1px dashed #cbd5d0",
+                        borderRadius: 13,
+                        background: "#f8faf9",
+                        color: "#738078",
+                        textAlign: "center",
+                        fontSize: 11,
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      La imagen aparecerá en el portal público de reservas.
+                    </div>
+                  )}
+
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/avif"
+                    disabled={subiendoImagenServicio}
+                    onChange={async (e) => {
+                      const archivo = e.target.files?.[0];
+
+                      if (archivo) {
+                        await subirImagenServicio(archivo);
+                      }
+
+                      e.target.value = "";
+                    }}
+                    style={s.input}
+                  />
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: "#748078",
+                        fontSize: 10,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      JPG, PNG, WEBP o AVIF · máximo 5 MB.
+                    </span>
+
+                    {subiendoImagenServicio && (
+                      <strong
+                        style={{
+                          color: "#4338ca",
+                          fontSize: 10,
+                        }}
+                      >
+                        Subiendo imagen...
+                      </strong>
+                    )}
+
+                    {servicioForm.imagen_url && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setServicioForm((actual) => ({
+                            ...actual,
+                            imagen_url: "",
+                          }))
+                        }
+                        style={{
+                          marginLeft: "auto",
+                          minHeight: 34,
+                          padding: "0 11px",
+                          border: "1px solid #efc7c7",
+                          borderRadius: 9,
+                          background: "#fff7f7",
+                          color: "#b42318",
+                          fontSize: 10,
+                          fontWeight: 900,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Quitar imagen
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </Campo>
+
               <Campo label="Modalidad de reserva">
                 {esSalonBelleza ? (
                   <select value="pago_local" disabled style={s.input}>
@@ -3883,9 +4103,13 @@ export default function AgendaPage() {
                   type="button"
                   style={s.primaryButton}
                   onClick={guardarServicio}
-                  disabled={guardando}
+                  disabled={guardando || subiendoImagenServicio}
                 >
-                  {servicioEditandoId ? "Guardar cambios" : "Crear servicio"}
+                  {subiendoImagenServicio
+                    ? "Subiendo imagen..."
+                    : servicioEditandoId
+                    ? "Guardar cambios"
+                    : "Crear servicio"}
                 </button>
               </div>
             </article>
@@ -4237,8 +4461,52 @@ export default function AgendaPage() {
                 ) : (
                   servicios.map((servicio) => (
                     <div key={servicio.id} style={s.listCard} className="premium-config-card">
-                      <div>
-                        <strong>{servicio.nombre}</strong>
+                      <div
+                        style={{
+                          minWidth: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 11,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 58,
+                            height: 58,
+                            flex: "0 0 58px",
+                            overflow: "hidden",
+                            display: "grid",
+                            placeItems: "center",
+                            borderRadius: 12,
+                            border: "1px solid #e1e7e3",
+                            background: "#f3f5f4",
+                          }}
+                        >
+                          {servicio.imagen_url ? (
+                            <img
+                              src={servicio.imagen_url}
+                              alt={servicio.nombre || "Servicio"}
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                display: "block",
+                                objectFit: "cover",
+                              }}
+                            />
+                          ) : (
+                            <span
+                              style={{
+                                color: "#89958e",
+                                fontSize: 20,
+                              }}
+                            >
+                              ✦
+                            </span>
+                          )}
+                        </div>
+
+                        <div style={{ minWidth: 0 }}>
+                          <strong>{servicio.nombre}</strong>
                         <span style={s.slotDetail}>
                           {esSalonBelleza
                             ? servicio.tipo === "cita_individual"
@@ -4249,6 +4517,7 @@ export default function AgendaPage() {
                             : "Clase grupal"}{" "}
                           · {servicio.duracion_minutos} min
                         </span>
+                        </div>
                       </div>
 
                       <div style={s.inlineActions} className="premium-config-actions">
