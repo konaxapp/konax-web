@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.27-ADMIN-PLAN-FECHA-PAGO-FIX2";
+const VERSION = "2026.08.28-ADMIN-ARCHIVAR-RESTAURAR-FIX3";
 
 const OPCIONES = [
   { nombre: "Crear Nueva Empresa", ruta: "/empresas", icono: "building" },
@@ -58,6 +58,7 @@ export default function Admin() {
   const [cargando, setCargando] = useState(true);
   const [procesandoId, setProcesandoId] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("Todos");
+  const [vistaEmpresas, setVistaEmpresas] = useState("vigentes");
   const [busqueda, setBusqueda] = useState("");
 
   const [esMovil, setEsMovil] = useState(false);
@@ -97,20 +98,58 @@ export default function Admin() {
   async function cargarEmpresas() {
     setCargando(true);
 
-    const { data, error } = await supabase
-      .from("vista_control_pruebas")
-      .select("*")
-      .order("nombre", { ascending: true });
+    try {
+      const [respuestaVista, respuestaArchivo] = await Promise.all([
+        supabase
+          .from("vista_control_pruebas")
+          .select("*")
+          .order("nombre", { ascending: true }),
 
-    if (error) {
-      alert("Error cargando control comercial: " + error.message);
+        supabase
+          .from("empresas")
+          .select("id, archivada, fecha_archivada")
+          .order("nombre", { ascending: true }),
+      ]);
+
+      if (respuestaVista.error) {
+        throw new Error(
+          "Error cargando control comercial: " +
+            respuestaVista.error.message
+        );
+      }
+
+      if (respuestaArchivo.error) {
+        throw new Error(
+          "Error cargando estado de archivo: " +
+            respuestaArchivo.error.message
+        );
+      }
+
+      const archivoPorId = new Map(
+        (respuestaArchivo.data || []).map((item) => [
+          String(item.id),
+          item,
+        ])
+      );
+
+      const lista = (respuestaVista.data || []).map((empresa) => {
+        const archivo = archivoPorId.get(String(empresa.id));
+
+        return {
+          ...empresa,
+          archivada: Boolean(archivo?.archivada),
+          fecha_archivada: archivo?.fecha_archivada || null,
+        };
+      });
+
+      setEmpresas(lista);
+    } catch (error) {
+      console.error(error);
+      alert(error?.message || "No se pudieron cargar las empresas.");
       setEmpresas([]);
+    } finally {
       setCargando(false);
-      return;
     }
-
-    setEmpresas(data || []);
-    setCargando(false);
   }
 
   function cerrarSesion() {
@@ -314,6 +353,54 @@ export default function Admin() {
     );
   }
 
+  async function cambiarArchivoEmpresa(empresa, archivar) {
+    if (!empresa?.id || procesandoId) return;
+
+    const confirmar = window.confirm(
+      archivar
+        ? `¿Archivar ${empresa.nombre}?\n\nLa empresa dejará de aparecer en la vista principal, pero NO se eliminarán sus datos. Podrás restaurarla después.`
+        : `¿Restaurar ${empresa.nombre}?\n\nLa empresa volverá a aparecer en la vista principal.`
+    );
+
+    if (!confirmar) return;
+
+    const adminId = localStorage.getItem("adminKonaxId") || null;
+
+    setProcesandoId(empresa.id);
+
+    const { data, error } = await supabase.rpc(
+      "cambiar_archivo_empresa",
+      {
+        p_empresa_id: empresa.id,
+        p_archivar: archivar,
+        p_usuario_konax: adminId,
+      }
+    );
+
+    if (error) {
+      setProcesandoId("");
+      alert(
+        `${archivar ? "No se pudo archivar" : "No se pudo restaurar"} la empresa.\n\n${error.message}`
+      );
+      return;
+    }
+
+    if (data && data.ok === false) {
+      setProcesandoId("");
+      alert(data.mensaje || "Supabase no confirmó la operación.");
+      return;
+    }
+
+    await cargarEmpresas();
+    setProcesandoId("");
+
+    alert(
+      archivar
+        ? `${empresa.nombre} fue archivada. Sus datos siguen guardados.`
+        : `${empresa.nombre} fue restaurada correctamente.`
+    );
+  }
+
   function configurarUsuariosModulos(empresa) {
     localStorage.setItem("empresaAdminCreadaId", empresa.id);
     localStorage.setItem(
@@ -495,6 +582,15 @@ export default function Admin() {
     const termino = busqueda.trim().toLowerCase();
 
     return empresas.filter((empresa) => {
+      const estaArchivada = Boolean(empresa.archivada);
+
+      const coincideVista =
+        vistaEmpresas === "todas"
+          ? true
+          : vistaEmpresas === "archivadas"
+          ? estaArchivada
+          : !estaArchivada;
+
       const coincideEstado =
         filtroEstado === "Todos" ||
         empresa.estado_suscripcion === filtroEstado;
@@ -505,23 +601,32 @@ export default function Admin() {
           .toLowerCase()
           .includes(termino);
 
-      return coincideEstado && coincideBusqueda;
+      return coincideVista && coincideEstado && coincideBusqueda;
     });
-  }, [empresas, filtroEstado, busqueda]);
+  }, [empresas, filtroEstado, busqueda, vistaEmpresas]);
 
-  const totalEmpresas = empresas.length;
 
-  const pendientes = empresas.filter(
+  const empresasVigentes = empresas.filter(
+    (item) => !item.archivada
+  );
+
+  const totalEmpresas = empresasVigentes.length;
+
+  const pendientes = empresasVigentes.filter(
     (item) =>
       item.estado_suscripcion === "pendiente_inicio_prueba"
   ).length;
 
-  const pruebasActivas = empresas.filter(
+  const pruebasActivas = empresasVigentes.filter(
     (item) => item.estado_suscripcion === "prueba"
   ).length;
 
-  const clientesActivos = empresas.filter(
+  const clientesActivos = empresasVigentes.filter(
     (item) => item.estado_suscripcion === "activo"
+  ).length;
+
+  const totalArchivadas = empresas.filter(
+    (item) => item.archivada
   ).length;
 
   return (
@@ -739,6 +844,52 @@ export default function Admin() {
                 ...(esMovil ? styles.headerAccionesMobile : {}),
               }}
             >
+              <div
+                style={{
+                  ...styles.segmentosVista,
+                  ...(esMovil ? styles.segmentosVistaMobile : {}),
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setVistaEmpresas("vigentes")}
+                  style={{
+                    ...styles.segmentoVista,
+                    ...(vistaEmpresas === "vigentes"
+                      ? styles.segmentoVistaActivo
+                      : {}),
+                  }}
+                >
+                  Vigentes
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setVistaEmpresas("archivadas")}
+                  style={{
+                    ...styles.segmentoVista,
+                    ...(vistaEmpresas === "archivadas"
+                      ? styles.segmentoVistaActivo
+                      : {}),
+                  }}
+                >
+                  Archivadas ({totalArchivadas})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setVistaEmpresas("todas")}
+                  style={{
+                    ...styles.segmentoVista,
+                    ...(vistaEmpresas === "todas"
+                      ? styles.segmentoVistaActivo
+                      : {}),
+                  }}
+                >
+                  Todas
+                </button>
+              </div>
+
               <input
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
@@ -899,6 +1050,35 @@ export default function Admin() {
                         <Icon name="users" size={16} />
                         Usuarios y módulos
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          cambiarArchivoEmpresa(
+                            empresa,
+                            !empresa.archivada
+                          )
+                        }
+                        disabled={procesandoId === empresa.id}
+                        style={{
+                          ...(empresa.archivada
+                            ? styles.botonRestaurarMobile
+                            : styles.botonArchivarMobile),
+                          ...(procesandoId === empresa.id
+                            ? styles.botonDeshabilitado
+                            : {}),
+                        }}
+                      >
+                        <Icon
+                          name={empresa.archivada ? "restore" : "archive"}
+                          size={16}
+                        />
+                        {procesandoId === empresa.id
+                          ? "Procesando..."
+                          : empresa.archivada
+                          ? "Restaurar empresa"
+                          : "Archivar empresa"}
+                      </button>
                     </div>
                   </article>
                 );
@@ -1027,6 +1207,31 @@ export default function Admin() {
                             >
                               <Icon name="users" size={15} />
                               Gestionar
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                cambiarArchivoEmpresa(
+                                  empresa,
+                                  !empresa.archivada
+                                )
+                              }
+                              disabled={procesandoId === empresa.id}
+                              style={{
+                                ...(empresa.archivada
+                                  ? styles.botonRestaurar
+                                  : styles.botonArchivar),
+                                ...(procesandoId === empresa.id
+                                  ? styles.botonDeshabilitado
+                                  : {}),
+                              }}
+                            >
+                              <Icon
+                                name={empresa.archivada ? "restore" : "archive"}
+                                size={14}
+                              />
+                              {empresa.archivada ? "Restaurar" : "Archivar"}
                             </button>
                           </div>
                         </td>
@@ -1287,6 +1492,19 @@ function Icon({ name, size = 20 }) {
       <>
         <circle cx="11" cy="11" r="7" />
         <path d="M20 20l-4-4" />
+      </>
+    ),
+    archive: (
+      <>
+        <path d="M4 7h16M5 7l1 13h12l1-13" />
+        <path d="M9 11h6M8 4h8l1 3H7l1-3z" />
+      </>
+    ),
+    restore: (
+      <>
+        <path d="M4 7h16M5 7l1 13h12l1-13" />
+        <path d="M9 11h6" />
+        <path d="M12 17v-4M10 15l2-2 2 2" />
       </>
     ),
     users: (
@@ -1884,6 +2102,41 @@ const styles = {
     gridTemplateColumns: "1fr",
   },
 
+  segmentosVista: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 3,
+    padding: 3,
+    border: "1px solid #E4E7EC",
+    borderRadius: 11,
+    background: "#F8FAFC",
+  },
+
+  segmentosVistaMobile: {
+    width: "100%",
+    display: "grid",
+    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+  },
+
+  segmentoVista: {
+    minHeight: 32,
+    padding: "6px 9px",
+    border: 0,
+    borderRadius: 8,
+    background: "transparent",
+    color: "#667085",
+    fontSize: 9,
+    fontWeight: 800,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+
+  segmentoVistaActivo: {
+    background: "#FFFFFF",
+    color: "#101828",
+    boxShadow: "0 2px 6px rgba(15,23,42,.08)",
+  },
+
   inputBuscar: {
     minHeight: 40,
     minWidth: 190,
@@ -2112,6 +2365,70 @@ const styles = {
     fontWeight: 900,
     cursor: "pointer",
     boxShadow: "0 6px 14px rgba(5,150,105,.18)",
+  },
+
+  botonArchivar: {
+    minHeight: 32,
+    padding: "7px 9px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    border: "1px solid #FECACA",
+    borderRadius: 9,
+    background: "#FFF7F7",
+    color: "#B42318",
+    fontSize: 8.4,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  botonRestaurar: {
+    minHeight: 32,
+    padding: "7px 9px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    border: "1px solid #A7F3D0",
+    borderRadius: 9,
+    background: "#ECFDF5",
+    color: "#047857",
+    fontSize: 8.4,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  botonArchivarMobile: {
+    width: "100%",
+    minHeight: 42,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    border: "1px solid #FECACA",
+    borderRadius: 10,
+    background: "#FFF7F7",
+    color: "#B42318",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  botonRestaurarMobile: {
+    width: "100%",
+    minHeight: 42,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    border: "1px solid #A7F3D0",
+    borderRadius: 10,
+    background: "#ECFDF5",
+    color: "#047857",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "pointer",
   },
 
   estadoActivoFinal: {
