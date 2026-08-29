@@ -1920,25 +1920,9 @@ export default function Dashboard() {
     bloqueado,
   ]);
 
-  if (cargando) {
-    return (
-      <div style={s.loading}>
-        <img
-          src="/konax-logo.png"
-          alt="KONAX"
-          style={s.loadingLogo}
-        />
-
-        <strong style={s.loadingTitle}>
-          Preparando tu espacio de trabajo
-        </strong>
-
-        <span style={s.loadingText}>
-          Validando empresa, plan y permisos.
-        </span>
-      </div>
-    );
-  }
+  // Pantalla completa de carga eliminada.
+  // El Dashboard renderiza directamente su estructura normal
+  // mientras se validan empresa, plan y permisos.
 
   if (bloqueado) {
     return (
