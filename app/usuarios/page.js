@@ -1,7 +1,7 @@
 "use client";
 
 // KONAX Usuarios y Roles
-// VERSION 2026.08.26-INVITACION-CORREO
+// VERSION 2026.08.29-INVITACION-CORREO-MODO-PRUEBA
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -138,6 +138,44 @@ function esTipoGimnasio(
     "academia",
     "club",
   ].some((palabra) => texto.includes(palabra));
+}
+
+function generarCorreoPrueba(correoBase, empresaId = "") {
+  const correoLimpio = String(correoBase || "")
+    .trim()
+    .toLowerCase();
+
+  const posicionArroba = correoLimpio.lastIndexOf("@");
+
+  if (posicionArroba <= 0) {
+    return correoLimpio;
+  }
+
+  const localOriginal = correoLimpio.slice(0, posicionArroba);
+  const dominio = correoLimpio.slice(posicionArroba + 1);
+
+  // Si el usuario escribió previamente un +alias,
+  // tomamos solamente el correo base.
+  const localBase = localOriginal.split("+")[0];
+
+  const empresaCorta = String(empresaId || "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 5)
+    .toLowerCase();
+
+  const tiempo = Date.now().toString(36);
+  const aleatorio = Math.random()
+    .toString(36)
+    .slice(2, 6);
+
+  const sufijo = [
+    "konax",
+    empresaCorta || "demo",
+    tiempo,
+    aleatorio,
+  ].join("-");
+
+  return `${localBase}+${sufijo}@${dominio}`;
 }
 
 function construirModulosPorPlan({
@@ -295,6 +333,21 @@ export default function Usuarios() {
   const [correo, setCorreo] = useState("");
   const [rolId, setRolId] = useState("");
   const [busqueda, setBusqueda] = useState("");
+
+  // ==========================================================
+  // MODO PRUEBA
+  // Permite utilizar el mismo buzón generando un +alias único.
+  // Ejemplo:
+  // correo@gmail.com
+  // correo+konax-demo-xxxx@gmail.com
+  // ==========================================================
+  const [modoPrueba, setModoPrueba] =
+    useState(false);
+
+  const [
+    ultimoCorreoPrueba,
+    setUltimoCorreoPrueba,
+  ] = useState("");
 
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] =
@@ -954,9 +1007,18 @@ export default function Usuarios() {
   }
 
   // ==========================================================
-  // NUEVO FLUJO
-  // Ya NO recibe ni crea contraseña.
-  // Envía una invitación por correo mediante Edge Function.
+  // INVITACIÓN DE USUARIO
+  //
+  // Modo normal:
+  // envía exactamente el correo escrito.
+  //
+  // Modo prueba:
+  // genera automáticamente un correo tipo:
+  // micorreo+konax-demo-xxxx@gmail.com
+  //
+  // Supabase lo considera un correo nuevo.
+  // Gmail y otros proveedores compatibles con +alias
+  // lo reciben en el mismo buzón.
   // ==========================================================
 
   async function crearUsuario() {
@@ -965,7 +1027,7 @@ export default function Usuarios() {
     const nombreLimpio =
       nombre.trim();
 
-    const correoLimpio =
+    const correoBase =
       correo.trim().toLowerCase();
 
     const rolSeleccionado =
@@ -983,8 +1045,8 @@ export default function Usuarios() {
     }
 
     if (
-      !correoLimpio ||
-      !correoLimpio.includes("@")
+      !correoBase ||
+      !correoBase.includes("@")
     ) {
       alert(
         "Ingrese un correo válido."
@@ -997,6 +1059,21 @@ export default function Usuarios() {
         "Seleccione un rol válido."
       );
       return;
+    }
+
+    const correoLimpio = modoPrueba
+      ? generarCorreoPrueba(
+          correoBase,
+          empresaId
+        )
+      : correoBase;
+
+    if (modoPrueba) {
+      setUltimoCorreoPrueba(
+        correoLimpio
+      );
+    } else {
+      setUltimoCorreoPrueba("");
     }
 
     setGuardando(true);
@@ -1066,13 +1143,30 @@ export default function Usuarios() {
         return;
       }
 
-      alert(
-        data.message ||
-          "Invitación enviada correctamente."
-      );
+      if (modoPrueba) {
+        alert(
+          "Usuario de prueba creado correctamente.\n\n" +
+          "Correo base: " +
+          correoBase +
+          "\n\nCorreo utilizado por KONAX: " +
+          correoLimpio +
+          "\n\nLa invitación debe llegar al mismo buzón si tu proveedor acepta alias con +."
+        );
+      } else {
+        alert(
+          data.message ||
+            "Invitación enviada correctamente."
+        );
+      }
 
       setNombre("");
-      setCorreo("");
+
+      // En modo normal limpiamos el correo.
+      // En modo prueba lo dejamos escrito para poder
+      // crear otra prueba rápidamente con el mismo buzón.
+      if (!modoPrueba) {
+        setCorreo("");
+      }
 
       await cargarUsuarios(
         empresaId
@@ -1357,6 +1451,15 @@ export default function Usuarios() {
       ? "Perfil Lavandería"
       : "Perfil General";
 
+  const correoPruebaPreview =
+    modoPrueba &&
+    correo.trim().includes("@")
+      ? generarCorreoPrueba(
+          correo.trim(),
+          empresaId
+        )
+      : "";
+
   if (cargando) {
     return (
       <div className="cargando">
@@ -1563,6 +1666,72 @@ export default function Usuarios() {
               contraseña.
             </p>
 
+            <div className="modo-prueba-box">
+              <div className="modo-prueba-info">
+                <div className="modo-prueba-icono">
+                  🧪
+                </div>
+
+                <div>
+                  <strong>
+                    Modo prueba
+                  </strong>
+
+                  <p>
+                    Úsalo para demos. Puedes escribir siempre
+                    el mismo correo y KONAX generará un alias
+                    único para evitar el mensaje de correo ya
+                    utilizado.
+                  </p>
+                </div>
+              </div>
+
+              <label className="toggle-prueba">
+                <input
+                  type="checkbox"
+                  checked={modoPrueba}
+                  onChange={(e) => {
+                    setModoPrueba(
+                      e.target.checked
+                    );
+
+                    if (!e.target.checked) {
+                      setUltimoCorreoPrueba("");
+                    }
+                  }}
+                />
+
+                <span>
+                  {modoPrueba
+                    ? "Modo prueba activado"
+                    : "Activar modo prueba"}
+                </span>
+              </label>
+            </div>
+
+            {modoPrueba && (
+              <div className="aviso-prueba">
+                <strong>
+                  Puedes reutilizar tu mismo correo.
+                </strong>
+
+                <span>
+                  Por ejemplo, si escribes
+                  {" "}
+                  <b>correo@gmail.com</b>,
+                  KONAX enviará la invitación usando
+                  un correo interno con
+                  {" "}
+                  <b>+konax</b>.
+                </span>
+
+                <small>
+                  Recomendado con Gmail o proveedores
+                  compatibles con alias usando el signo +.
+                </small>
+              </div>
+            )}
+
             <div className="grid">
               <label>
                 Nombre
@@ -1574,12 +1743,18 @@ export default function Usuarios() {
                       e.target.value
                     )
                   }
-                  placeholder="Nombre del usuario"
+                  placeholder={
+                    modoPrueba
+                      ? "Ej. Usuario Demo"
+                      : "Nombre del usuario"
+                  }
                 />
               </label>
 
               <label>
-                Correo
+                {modoPrueba
+                  ? "Correo base para pruebas"
+                  : "Correo"}
 
                 <input
                   type="email"
@@ -1589,7 +1764,11 @@ export default function Usuarios() {
                       e.target.value
                     )
                   }
-                  placeholder="usuario@empresa.com"
+                  placeholder={
+                    modoPrueba
+                      ? "micorreo@gmail.com"
+                      : "usuario@empresa.com"
+                  }
                 />
               </label>
 
@@ -1618,13 +1797,45 @@ export default function Usuarios() {
               </label>
             </div>
 
+            {modoPrueba &&
+              correoPruebaPreview && (
+                <div className="preview-correo">
+                  <span>
+                    KONAX generará automáticamente
+                    un alias único al enviar.
+                  </span>
+
+                  <small>
+                    El alias cambia en cada
+                    invitación para que Supabase
+                    lo considere un usuario nuevo.
+                  </small>
+                </div>
+              )}
+
+            {ultimoCorreoPrueba && (
+              <div className="ultimo-correo">
+                <span>
+                  Último correo de prueba creado:
+                </span>
+
+                <strong>
+                  {ultimoCorreoPrueba}
+                </strong>
+              </div>
+            )}
+
             <button
               className="crear"
               onClick={crearUsuario}
               disabled={guardando}
             >
               {guardando
-                ? "Enviando invitación..."
+                ? modoPrueba
+                  ? "Creando usuario de prueba..."
+                  : "Enviando invitación..."
+                : modoPrueba
+                ? "Crear usuario de prueba"
                 : "Enviar invitación"}
             </button>
           </section>
@@ -2031,6 +2242,114 @@ export default function Usuarios() {
           line-height: 1.55;
         }
 
+        .modo-prueba-box {
+          margin-bottom: 16px;
+          padding: 15px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          border: 1px solid #c7d8cc;
+          border-radius: 14px;
+          background: #f7faf8;
+        }
+
+        .modo-prueba-info {
+          min-width: 0;
+          display: grid;
+          grid-template-columns: 42px minmax(0, 1fr);
+          align-items: center;
+          gap: 11px;
+        }
+
+        .modo-prueba-icono {
+          width: 42px;
+          height: 42px;
+          display: grid;
+          place-items: center;
+          border-radius: 12px;
+          background: #ffffff;
+          border: 1px solid #e0e8e3;
+          font-size: 20px;
+        }
+
+        .modo-prueba-info p {
+          margin: 4px 0 0;
+          color: #647168;
+          font-size: 12px;
+          line-height: 1.45;
+        }
+
+        .toggle-prueba {
+          min-width: 190px;
+          padding: 10px 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          border: 1px solid #b8c9be;
+          border-radius: 11px;
+          background: white;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .toggle-prueba input {
+          width: 17px;
+          height: 17px;
+          min-height: 0;
+          padding: 0;
+          margin: 0;
+          accent-color: #16a34a;
+          cursor: pointer;
+        }
+
+        .aviso-prueba {
+          margin: -4px 0 16px;
+          padding: 13px 14px;
+          display: grid;
+          gap: 5px;
+          border: 1px solid #86efac;
+          border-radius: 12px;
+          background: #ecfdf5;
+          color: #14532d;
+        }
+
+        .aviso-prueba span {
+          font-size: 12px;
+          line-height: 1.45;
+        }
+
+        .aviso-prueba small {
+          color: #4f6b59;
+          font-size: 11px;
+        }
+
+        .preview-correo {
+          margin-top: 12px;
+          padding: 11px 13px;
+          display: grid;
+          gap: 3px;
+          border-radius: 10px;
+          background: #f3f7f4;
+          color: #34463b;
+          font-size: 11px;
+        }
+
+        .ultimo-correo {
+          margin-top: 12px;
+          padding: 11px 13px;
+          display: grid;
+          gap: 4px;
+          border: 1px solid #bbf7d0;
+          border-radius: 10px;
+          background: #f0fdf4;
+          color: #166534;
+          font-size: 11px;
+          word-break: break-all;
+        }
+
         .grid {
           display: grid;
           grid-template-columns: repeat(
@@ -2190,6 +2509,15 @@ export default function Usuarios() {
 
           .permisos {
             position: static;
+          }
+
+          .modo-prueba-box {
+            display: grid;
+          }
+
+          .toggle-prueba {
+            width: 100%;
+            min-width: 0;
           }
 
           input,
