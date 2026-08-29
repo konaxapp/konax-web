@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.27-AGENDA-IMAGEN-RESERVA-PORTAL-FIX17";
+const VERSION = "2026.08.29-AGENDA-EDITAR-DIAS-HORARIO-FIX18";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -1632,7 +1632,6 @@ export default function AgendaPage() {
 
     if (
       esSalonBelleza &&
-      !horarioEditandoId &&
       diasHorarioSalon.length === 0
     ) {
       alert("Selecciona por lo menos un día.");
@@ -1663,17 +1662,92 @@ export default function AgendaPage() {
         horarioEditandoIds.length > 0
       ) {
         /*
-          En salón, una tarjeta representa todos los días del mismo
-          servicio/profesional. Al editar se actualiza el horario,
-          profesional, cupos y vigencia de todos esos días a la vez.
-          Los días permanecen iguales para evitar romper reservas
-          históricas vinculadas a agenda_horarios.
+          SALÓN · EDICIÓN DE DÍAS
+          --------------------------------------------------------
+          Una tarjeta puede representar varios registros de
+          agenda_horarios, uno por cada día.
+
+          Al editar:
+          - los días seleccionados quedan activos;
+          - los días nuevos se crean;
+          - los días quitados se desactivan, NO se borran.
+
+          Así conservamos cualquier reserva histórica que todavía
+          esté vinculada al horario antiguo y, al mismo tiempo,
+          permitimos cambiar los días desde la misma configuración.
         */
-        respuesta = await supabase
-          .from("agenda_horarios")
-          .update(payloadBase)
-          .eq("empresa_id", empresaId)
-          .in("id", horarioEditandoIds);
+        const diasSeleccionados = [
+          ...new Set(diasHorarioSalon.map(Number)),
+        ];
+
+        const idsEdicion = new Set(
+          horarioEditandoIds.map(String)
+        );
+
+        const registrosEdicion = horarios.filter(
+          (registro) =>
+            idsEdicion.has(String(registro.id))
+        );
+
+        const diasExistentes = new Set(
+          registrosEdicion.map((registro) =>
+            Number(registro.dia_semana)
+          )
+        );
+
+        const resultadosActualizacion =
+          await Promise.all(
+            registrosEdicion.map((registro) => {
+              const dia = Number(
+                registro.dia_semana
+              );
+
+              return supabase
+                .from("agenda_horarios")
+                .update({
+                  ...payloadBase,
+                  dia_semana: dia,
+                  activo:
+                    diasSeleccionados.includes(dia)
+                      ? Boolean(horarioForm.activo)
+                      : false,
+                })
+                .eq("empresa_id", empresaId)
+                .eq("id", registro.id);
+            })
+          );
+
+        const errorActualizacion =
+          resultadosActualizacion.find(
+            (resultado) => resultado?.error
+          )?.error || null;
+
+        if (errorActualizacion) {
+          respuesta = {
+            error: errorActualizacion,
+          };
+        } else {
+          const diasNuevos =
+            diasSeleccionados.filter(
+              (dia) => !diasExistentes.has(dia)
+            );
+
+          if (diasNuevos.length > 0) {
+            respuesta = await supabase
+              .from("agenda_horarios")
+              .insert(
+                diasNuevos.map((dia) => ({
+                  ...payloadBase,
+                  dia_semana: Number(dia),
+                  activo: Boolean(
+                    horarioForm.activo
+                  ),
+                }))
+              );
+          } else {
+            respuesta = { error: null };
+          }
+        }
       } else if (horarioEditandoId) {
         const payload = {
           ...payloadBase,
@@ -1731,7 +1805,7 @@ export default function AgendaPage() {
       if (horarioEditandoId) {
         alert(
           esSalonBelleza
-            ? "Configuración del servicio actualizada para todos sus días."
+            ? "Configuración actualizada para los días seleccionados."
             : "Horario actualizado."
         );
       } else if (esSalonBelleza) {
@@ -1785,7 +1859,9 @@ export default function AgendaPage() {
 
     setHorarioEditandoId(base.id);
     setHorarioEditandoIds(
-      Array.isArray(grupo.ids)
+      Array.isArray(grupo.todosIds)
+        ? grupo.todosIds
+        : Array.isArray(grupo.ids)
         ? grupo.ids
         : [base.id]
     );
@@ -4248,14 +4324,7 @@ export default function AgendaPage() {
                           <button
                             key={dia}
                             type="button"
-                            disabled={Boolean(
-                              horarioEditandoId
-                            )}
                             onClick={() => {
-                              if (horarioEditandoId) {
-                                return;
-                              }
-
                               setDiasHorarioSalon((actual) =>
                                 actual.includes(dia)
                                   ? actual.filter(
@@ -4276,16 +4345,10 @@ export default function AgendaPage() {
                               color: activo
                                 ? "#fff"
                                 : "#46534c",
-                              opacity:
-                                horarioEditandoId &&
-                                !activo
-                                  ? 0.45
-                                  : 1,
+                              opacity: 1,
                               fontSize: 11,
                               fontWeight: 900,
-                              cursor: horarioEditandoId
-                                ? "default"
-                                : "pointer",
+                              cursor: "pointer",
                             }}
                           >
                             {nombreDia(dia).slice(0, 3)}
@@ -4302,9 +4365,9 @@ export default function AgendaPage() {
                       }}
                     >
                       {horarioEditandoId
-                        ? `Configuración agrupada: ${resumirDias(
+                        ? `Días actuales: ${resumirDias(
                             diasHorarioSalon
-                          )}. Para cambiar los días, crea una nueva configuración.`
+                          )}. Puedes agregar o quitar días antes de guardar los cambios.`
                         : "Selecciona los días en que este profesional atiende este servicio."}
                     </span>
                   </div>
