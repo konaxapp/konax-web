@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.26-KONAX-CLIENTES-COMUNICACION-V5-BELLEZA-MOBILE";
+const VERSION = "2026.08.29-KONAX-CLIENTES-COMERCIO-V1";
 
 export default function ClientesPage() {
   const router = useRouter();
@@ -65,6 +65,13 @@ export default function ClientesPage() {
   const [clienteSeleccionadoId, setClienteSeleccionadoId] = useState("");
   const [clienteSeleccionadoNombre, setClienteSeleccionadoNombre] =
     useState("");
+
+  // COMERCIO · FICHA SIMPLE / SALDO
+  const [saldoComercio, setSaldoComercio] = useState(0);
+  const [cuentasPendientesComercio, setCuentasPendientesComercio] = useState(0);
+  const [ultimaCompraComercio, setUltimaCompraComercio] = useState("");
+  const [ultimoPagoComercio, setUltimoPagoComercio] = useState(null);
+  const [cargandoFichaComercio, setCargandoFichaComercio] = useState(false);
 
   // COMUNICACIÓN CON ALUMNOS / CLIENTES
   const [alumnosComunicacion, setAlumnosComunicacion] = useState([]);
@@ -167,6 +174,21 @@ export default function ClientesPage() {
       "estetica",
       "barberia",
       "spa",
+    ].some((x) => texto.includes(x));
+  }
+
+  function esComercioActual() {
+    const texto = normalizar(`${tipoNegocio} ${categoriaNegocio}`);
+    return [
+      "comercio",
+      "venta de textiles",
+      "textiles",
+      "perfumeria",
+      "ropa",
+      "variedades",
+      "venta por catalogo",
+      "articulos para el hogar",
+      "comercio general",
     ].some((x) => texto.includes(x));
   }
 
@@ -284,7 +306,17 @@ export default function ClientesPage() {
       tipo.includes("spa") ||
       categoria.includes("belleza");
 
-    const soloCliente = negocioDeMembresias || negocioBelleza;
+    const negocioComercio =
+      tipo.includes("comercio") ||
+      categoria.includes("comercio") ||
+      tipo.includes("textil") ||
+      tipo.includes("perfumeria") ||
+      tipo.includes("ropa") ||
+      tipo.includes("variedades") ||
+      tipo.includes("catalogo") ||
+      tipo.includes("articulos para el hogar");
+
+    const soloCliente = negocioDeMembresias || negocioBelleza || negocioComercio;
 
     setTipoNegocio(empresa.tipo_negocio || "");
     setCategoriaNegocio(empresa.categoria_negocio || "");
@@ -607,6 +639,10 @@ Código: ${token}`;
     setResultadosCliente([]);
     setClienteSeleccionadoId("");
     setClienteSeleccionadoNombre("");
+    setSaldoComercio(0);
+    setCuentasPendientesComercio(0);
+    setUltimaCompraComercio("");
+    setUltimoPagoComercio(null);
   }
 
   function normalizarTelefonoWhatsapp(valor) {
@@ -630,6 +666,251 @@ Código: ${token}`;
     }
 
     return `https://app.konax.net/alumno/${encodeURIComponent(portalAlumnoSlug)}`;
+  }
+
+  function whatsappClave(valor) {
+    const digitos = String(valor || "").replace(/\D/g, "");
+    if (!digitos) return "";
+    return digitos.startsWith("507") && digitos.length >= 11
+      ? digitos.slice(-8)
+      : digitos.slice(-8);
+  }
+
+  function mostrarWhatsappComercio(valor) {
+    const clave = whatsappClave(valor);
+    if (clave.length !== 8) return valor || "";
+    return `${clave.slice(0, 4)}-${clave.slice(4)}`;
+  }
+
+  async function buscarClienteComercio() {
+    const empresaId = obtenerEmpresaId();
+    const termino = busquedaCliente.trim();
+
+    if (!empresaId || !termino) {
+      alert("Escriba el WhatsApp o nombre del cliente.");
+      return;
+    }
+
+    setBuscandoCliente(true);
+    setResultadosCliente([]);
+
+    try {
+      const terminoSeguro = termino.replace(/,/g, " ");
+      const { data, error } = await supabase
+        .from("clientes")
+        .select("id, nombre, telefono, direccion, estado, cedula")
+        .eq("empresa_id", empresaId)
+        .or(`nombre.ilike.%${terminoSeguro}%,telefono.ilike.%${terminoSeguro}%`)
+        .order("nombre", { ascending: true })
+        .limit(20);
+
+      if (error) throw error;
+
+      const claveBuscada = whatsappClave(termino);
+      const lista = (data || []).filter((cliente) => {
+        if (!claveBuscada || claveBuscada.length < 6) return true;
+        return whatsappClave(cliente.telefono).includes(claveBuscada);
+      });
+
+      setResultadosCliente(lista);
+
+      if (lista.length === 0) {
+        alert("No se encontró ningún cliente con ese WhatsApp o nombre.");
+      }
+    } catch (error) {
+      alert(
+        "No se pudo buscar el cliente: " +
+          (error?.message || "Error desconocido")
+      );
+    } finally {
+      setBuscandoCliente(false);
+    }
+  }
+
+  async function cargarFichaComercio(clienteId) {
+    const empresaId = obtenerEmpresaId();
+    if (!empresaId || !clienteId) return;
+
+    setCargandoFichaComercio(true);
+
+    try {
+      const { data: saldo, error: errorSaldo } = await supabase
+        .from("comercio_saldos_clientes")
+        .select("saldo_total, cuentas_pendientes, ultima_compra")
+        .eq("empresa_id", empresaId)
+        .eq("cliente_id", clienteId)
+        .maybeSingle();
+
+      if (errorSaldo) throw errorSaldo;
+
+      const { data: pago, error: errorPago } = await supabase
+        .from("comercio_pagos")
+        .select("monto, fecha_pago, metodo_pago")
+        .eq("empresa_id", empresaId)
+        .eq("cliente_id", clienteId)
+        .order("fecha_pago", { ascending: false })
+        .order("creado_en", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (errorPago) throw errorPago;
+
+      setSaldoComercio(Number(saldo?.saldo_total || 0));
+      setCuentasPendientesComercio(Number(saldo?.cuentas_pendientes || 0));
+      setUltimaCompraComercio(saldo?.ultima_compra || "");
+      setUltimoPagoComercio(pago || null);
+    } catch (error) {
+      setSaldoComercio(0);
+      setCuentasPendientesComercio(0);
+      setUltimaCompraComercio("");
+      setUltimoPagoComercio(null);
+      alert(
+        "No se pudo cargar el saldo del cliente: " +
+          (error?.message || "Error desconocido")
+      );
+    } finally {
+      setCargandoFichaComercio(false);
+    }
+  }
+
+  async function usarClienteComercio(cliente) {
+    setClienteSeleccionadoId(cliente.id);
+    setClienteSeleccionadoNombre(cliente.nombre || "");
+    setCedula(cliente.cedula || "");
+    setNombre(cliente.nombre || "");
+    setTelefono(cliente.telefono || "");
+    setDireccion(cliente.direccion || "");
+    setEstadoCliente(cliente.estado || "Activo");
+    setResultadosCliente([]);
+    setBusquedaCliente(cliente.telefono || cliente.nombre || "");
+    await cargarFichaComercio(cliente.id);
+  }
+
+  function nuevoClienteComercio() {
+    limpiarFormulario();
+    setSaldoComercio(0);
+    setCuentasPendientesComercio(0);
+    setUltimaCompraComercio("");
+    setUltimoPagoComercio(null);
+  }
+
+  async function guardarClienteComercio() {
+    if (guardando) return;
+
+    const sesion = await validarSesionAntesDeGuardar();
+    if (!sesion) return;
+
+    const { empresaId } = sesion;
+    const nombreFinal = nombre.trim();
+    const telefonoClave = whatsappClave(telefono);
+    const direccionFinal = direccion.trim();
+
+    if (!nombreFinal || !telefonoClave || !direccionFinal) {
+      alert("Complete nombre, WhatsApp y dirección.");
+      return;
+    }
+
+    if (telefonoClave.length !== 8) {
+      alert("Ingrese un número de WhatsApp válido de 8 dígitos.");
+      return;
+    }
+
+    setGuardando(true);
+
+    try {
+      const { data: candidatos, error: errorBusqueda } = await supabase
+        .from("clientes")
+        .select("id, nombre, telefono")
+        .eq("empresa_id", empresaId)
+        .not("telefono", "is", null);
+
+      if (errorBusqueda) throw errorBusqueda;
+
+      const duplicado = (candidatos || []).find(
+        (cliente) =>
+          cliente.id !== clienteSeleccionadoId &&
+          whatsappClave(cliente.telefono) === telefonoClave
+      );
+
+      if (duplicado) {
+        alert(
+          `Ese WhatsApp ya pertenece a ${duplicado.nombre || "otro cliente"}. Búsquelo antes de crear una ficha nueva.`
+        );
+        return;
+      }
+
+      const payload = {
+        empresa_id: empresaId,
+        // La tabla histórica de clientes usa cédula como clave única.
+        // Comercio no pide cédula al usuario: generamos una identificación
+        // interna estable basada en empresa + WhatsApp.
+        cedula:
+          cedula.trim() ||
+          `COM-${String(empresaId).slice(0, 8)}-${telefonoClave}`,
+        nombre: nombreFinal,
+        telefono: telefonoClave,
+        telefono_secundario: clienteSeleccionadoId
+          ? telefonoSecundario.trim()
+          : "",
+        direccion: direccionFinal,
+        correo: clienteSeleccionadoId ? correo.trim() : "",
+        referencia_nombre: clienteSeleccionadoId
+          ? referenciaNombre.trim()
+          : "",
+        referencia_telefono: clienteSeleccionadoId
+          ? referenciaTelefono.trim()
+          : "",
+        estado: estadoCliente || "Activo",
+        observacion: clienteSeleccionadoId ? observacionCliente.trim() : "",
+        acceso_portal: clienteSeleccionadoId ? Boolean(accesoPortal) : false,
+        auth_user_id: clienteSeleccionadoId ? authUserId || null : null,
+        foto_url: clienteSeleccionadoId ? fotoUrl.trim() || null : null,
+        qr_token: clienteSeleccionadoId ? qrToken || null : null,
+      };
+
+      let clienteGuardado;
+
+      if (clienteSeleccionadoId) {
+        const { data, error } = await supabase
+          .from("clientes")
+          .update(payload)
+          .eq("id", clienteSeleccionadoId)
+          .eq("empresa_id", empresaId)
+          .select("id, nombre, telefono, direccion, estado")
+          .single();
+
+        if (error) throw error;
+        clienteGuardado = data;
+      } else {
+        const { data, error } = await supabase
+          .from("clientes")
+          .insert([payload])
+          .select("id, nombre, telefono, direccion, estado")
+          .single();
+
+        if (error) throw error;
+        clienteGuardado = data;
+      }
+
+      setClienteSeleccionadoId(clienteGuardado.id);
+      setClienteSeleccionadoNombre(clienteGuardado.nombre || "");
+      setTelefono(clienteGuardado.telefono || telefonoClave);
+      setBusquedaCliente(clienteGuardado.telefono || telefonoClave);
+      await cargarFichaComercio(clienteGuardado.id);
+
+      alert(
+        clienteSeleccionadoId
+          ? "Cliente actualizado correctamente."
+          : "Cliente registrado correctamente."
+      );
+    } catch (error) {
+      alert(
+        "No se pudo guardar el cliente: " +
+          (error?.message || "Error desconocido")
+      );
+    } finally {
+      setGuardando(false);
+    }
   }
 
   async function cargarAlumnosComunicacion() {
@@ -1111,6 +1392,7 @@ Código: ${token}`;
   }
 
   const esGimnasioPerfil = esGimnasioActual();
+  const esComercioPerfil = esComercioActual();
 
   const alumnosComunicacionFiltrados = alumnosComunicacion.filter((cliente) => {
     const filtro = normalizar(filtroComunicacion);
@@ -1146,6 +1428,265 @@ Código: ${token}`;
       <main style={styles.cargando}>
         <div style={styles.spinner} />
         <strong>Validando acceso...</strong>
+      </main>
+    );
+  }
+
+  if (esComercioPerfil) {
+    const saldoFormateado = Number(saldoComercio || 0).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+    const ultimoPagoTexto = ultimoPagoComercio
+      ? `$${Number(ultimoPagoComercio.monto || 0).toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} · ${ultimoPagoComercio.fecha_pago || "Sin fecha"}`
+      : "Sin pagos registrados";
+
+    return (
+      <main style={styles.paginaComercio} className="clientes-comercio-mobile">
+        <style jsx global>{`
+          @media (max-width: 900px) {
+            .clientes-comercio-mobile {
+              padding: 12px !important;
+              overflow-x: hidden !important;
+            }
+
+            .clientes-comercio-mobile .comercio-hero,
+            .clientes-comercio-mobile .comercio-layout,
+            .clientes-comercio-mobile .comercio-grid,
+            .clientes-comercio-mobile .comercio-search {
+              grid-template-columns: 1fr !important;
+            }
+
+            .clientes-comercio-mobile .comercio-card {
+              padding: 16px !important;
+              border-radius: 18px !important;
+            }
+
+            .clientes-comercio-mobile input,
+            .clientes-comercio-mobile textarea,
+            .clientes-comercio-mobile select,
+            .clientes-comercio-mobile button {
+              width: 100% !important;
+              max-width: 100% !important;
+              box-sizing: border-box !important;
+            }
+
+            .clientes-comercio-mobile input,
+            .clientes-comercio-mobile textarea,
+            .clientes-comercio-mobile select {
+              font-size: 16px !important;
+            }
+
+            .clientes-comercio-mobile .comercio-results button {
+              grid-template-columns: 1fr !important;
+            }
+          }
+        `}</style>
+
+        <div style={styles.contenedorComercio}>
+          <section style={styles.heroComercio} className="comercio-hero">
+            <div>
+              <span style={styles.eyebrowComercio}>KONAX · COMERCIO</span>
+              <h1 style={styles.tituloComercio}>Clientes</h1>
+              <p style={styles.subtituloComercio}>
+                Registra al cliente por su WhatsApp y consulta su saldo sin
+                depender de libretas.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              style={styles.botonVolverComercio}
+              onClick={volverCentroOperaciones}
+            >
+              ← Volver al panel
+            </button>
+          </section>
+
+          <section style={styles.busquedaComercio} className="comercio-card">
+            <div style={styles.encabezadoComercioSimple}>
+              <div>
+                <span style={styles.etiquetaComercio}>BUSCAR CLIENTE</span>
+                <h2 style={styles.tituloSeccionComercio}>WhatsApp o nombre</h2>
+                <p style={styles.textoComercio}>
+                  El número de WhatsApp es el identificador principal del cliente.
+                </p>
+              </div>
+            </div>
+
+            <div style={styles.busquedaFilaComercio} className="comercio-search">
+              <input
+                value={busquedaCliente}
+                onChange={(e) => setBusquedaCliente(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") buscarClienteComercio();
+                }}
+                placeholder="Ej. 6123-4567 o Luis Rodríguez"
+                style={styles.inputComercio}
+              />
+
+              <button
+                type="button"
+                style={styles.botonBuscarComercio}
+                onClick={buscarClienteComercio}
+                disabled={buscandoCliente}
+              >
+                {buscandoCliente ? "Buscando..." : "Buscar"}
+              </button>
+
+              <button
+                type="button"
+                style={styles.botonNuevoComercio}
+                onClick={nuevoClienteComercio}
+              >
+                + Nuevo cliente
+              </button>
+            </div>
+
+            {resultadosCliente.length > 0 && (
+              <div style={styles.resultadosComercio} className="comercio-results">
+                {resultadosCliente.map((cliente) => (
+                  <button
+                    key={cliente.id}
+                    type="button"
+                    style={styles.resultadoComercioItem}
+                    onClick={() => usarClienteComercio(cliente)}
+                  >
+                    <strong>{cliente.nombre || "Sin nombre"}</strong>
+                    <span>{mostrarWhatsappComercio(cliente.telefono)}</span>
+                    <span>{cliente.direccion || "Sin dirección"}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section style={styles.layoutComercio} className="comercio-layout">
+            <article style={styles.cardComercio} className="comercio-card">
+              <div style={styles.cabeceraFichaComercio}>
+                <div>
+                  <span style={styles.etiquetaComercio}>
+                    {clienteSeleccionadoId ? "EDITAR CLIENTE" : "NUEVO CLIENTE"}
+                  </span>
+                  <h2 style={styles.tituloSeccionComercio}>
+                    Información del cliente
+                  </h2>
+                  <p style={styles.textoComercio}>
+                    Solo los datos necesarios para vender y cobrar.
+                  </p>
+                </div>
+              </div>
+
+              <div style={styles.gridComercio} className="comercio-grid">
+                <Campo label="Nombre *">
+                  <input
+                    value={nombre}
+                    onChange={(e) => setNombre(e.target.value)}
+                    placeholder="Nombre del cliente"
+                    style={styles.inputComercio}
+                  />
+                </Campo>
+
+                <Campo label="WhatsApp *">
+                  <input
+                    value={telefono}
+                    onChange={(e) => setTelefono(e.target.value)}
+                    placeholder="6123-4567"
+                    inputMode="tel"
+                    style={styles.inputComercio}
+                  />
+                </Campo>
+              </div>
+
+              <Campo label="Dirección *">
+                <textarea
+                  value={direccion}
+                  onChange={(e) => setDireccion(e.target.value)}
+                  placeholder="Sector, barriada o referencia para ubicar al cliente"
+                  style={styles.textareaComercio}
+                />
+              </Campo>
+
+              <div style={styles.accionesComercio}>
+                <button
+                  type="button"
+                  style={styles.botonGuardarComercio}
+                  onClick={guardarClienteComercio}
+                  disabled={guardando}
+                >
+                  {guardando
+                    ? "Guardando..."
+                    : clienteSeleccionadoId
+                    ? "Actualizar cliente"
+                    : "Guardar cliente"}
+                </button>
+
+                <button
+                  type="button"
+                  style={styles.botonLimpiarComercio}
+                  onClick={nuevoClienteComercio}
+                  disabled={guardando}
+                >
+                  Limpiar
+                </button>
+              </div>
+            </article>
+
+            <aside style={styles.fichaSaldoComercio} className="comercio-card">
+              <span style={styles.etiquetaComercio}>FICHA DEL CLIENTE</span>
+
+              <h2 style={styles.nombreFichaComercio}>
+                {nombre.trim() || "Cliente nuevo"}
+              </h2>
+
+              <div style={styles.whatsappFichaComercio}>
+                {telefono
+                  ? mostrarWhatsappComercio(telefono)
+                  : "WhatsApp pendiente"}
+              </div>
+
+              <div style={styles.saldoBoxComercio}>
+                <span style={styles.saldoLabelComercio}>SALDO PENDIENTE</span>
+                <strong style={styles.saldoNumeroComercio}>
+                  {cargandoFichaComercio ? "..." : `$${saldoFormateado}`}
+                </strong>
+                <span style={styles.cuentasComercio}>
+                  {cuentasPendientesComercio} cuenta(s) pendiente(s)
+                </span>
+              </div>
+
+              <div style={styles.detallesFichaComercio}>
+                <ResumenFila
+                  label="Dirección"
+                  value={direccion.trim() || "Pendiente"}
+                />
+                <ResumenFila
+                  label="Última compra"
+                  value={ultimaCompraComercio || "Sin compras registradas"}
+                />
+                <ResumenFila label="Último pago" value={ultimoPagoTexto} />
+                <ResumenFila label="Estado" value={estadoCliente || "Activo"} />
+              </div>
+
+              {!clienteSeleccionadoId && (
+                <div style={styles.avisoComercio}>
+                  Guarda el cliente para comenzar a registrar sus ventas y pagos.
+                </div>
+              )}
+
+              {clienteSeleccionadoId && (
+                <div style={styles.avisoComercioActivo}>
+                  Cliente listo. El siguiente módulo conectará aquí las ventas,
+                  abonos y envío de saldo por WhatsApp.
+                </div>
+              )}
+            </aside>
+          </section>
+        </div>
       </main>
     );
   }
@@ -3090,4 +3631,308 @@ const styles = {
     cursor: "pointer",
     padding: "0 16px",
   },
+
+  // ==========================================================
+  // COMERCIO · ESTILOS AISLADOS
+  // ==========================================================
+  paginaComercio: {
+    minHeight: "100vh",
+    padding: 28,
+    background:
+      "radial-gradient(circle at top right, rgba(25,118,210,.09), transparent 34%), #f4f7f8",
+    color: "#172126",
+    fontFamily:
+      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  },
+
+  contenedorComercio: {
+    maxWidth: 1280,
+    margin: "0 auto",
+  },
+
+  heroComercio: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) auto",
+    gap: 18,
+    alignItems: "center",
+    padding: 26,
+    marginBottom: 18,
+    borderRadius: 24,
+    background: "linear-gradient(135deg, #0f2430, #163d4e)",
+    color: "#fff",
+    boxShadow: "0 18px 44px rgba(15,36,48,.14)",
+  },
+
+  eyebrowComercio: {
+    display: "block",
+    fontSize: 10,
+    fontWeight: 900,
+    letterSpacing: 1.4,
+    color: "#9eddeb",
+  },
+
+  tituloComercio: {
+    margin: "7px 0 5px",
+    fontSize: 34,
+    lineHeight: 1.05,
+  },
+
+  subtituloComercio: {
+    margin: 0,
+    maxWidth: 660,
+    color: "#d5e5eb",
+    fontSize: 14,
+    lineHeight: 1.55,
+  },
+
+  botonVolverComercio: {
+    minHeight: 44,
+    padding: "0 16px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,.18)",
+    background: "rgba(255,255,255,.08)",
+    color: "#fff",
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  busquedaComercio: {
+    padding: 22,
+    marginBottom: 18,
+    borderRadius: 22,
+    border: "1px solid #e0e8ec",
+    background: "#fff",
+    boxShadow: "0 10px 30px rgba(20,49,62,.06)",
+  },
+
+  encabezadoComercioSimple: {
+    marginBottom: 14,
+  },
+
+  etiquetaComercio: {
+    display: "block",
+    fontSize: 10,
+    fontWeight: 950,
+    letterSpacing: 1.2,
+    color: "#157a93",
+  },
+
+  tituloSeccionComercio: {
+    margin: "4px 0 4px",
+    fontSize: 22,
+    lineHeight: 1.15,
+  },
+
+  textoComercio: {
+    margin: 0,
+    color: "#6c7b82",
+    fontSize: 13,
+    lineHeight: 1.5,
+  },
+
+  busquedaFilaComercio: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) auto auto",
+    gap: 10,
+  },
+
+  inputComercio: {
+    width: "100%",
+    minHeight: 46,
+    boxSizing: "border-box",
+    border: "1px solid #d7e2e7",
+    borderRadius: 12,
+    padding: "0 13px",
+    outline: "none",
+    background: "#fff",
+    color: "#172126",
+  },
+
+  textareaComercio: {
+    width: "100%",
+    minHeight: 96,
+    boxSizing: "border-box",
+    resize: "vertical",
+    border: "1px solid #d7e2e7",
+    borderRadius: 12,
+    padding: 13,
+    outline: "none",
+    fontFamily: "inherit",
+  },
+
+  botonBuscarComercio: {
+    minHeight: 46,
+    padding: "0 18px",
+    border: 0,
+    borderRadius: 12,
+    background: "#153b4b",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  botonNuevoComercio: {
+    minHeight: 46,
+    padding: "0 18px",
+    border: "1px solid #d2e0e5",
+    borderRadius: 12,
+    background: "#fff",
+    color: "#244650",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  resultadosComercio: {
+    display: "grid",
+    gap: 8,
+    marginTop: 12,
+  },
+
+  resultadoComercioItem: {
+    display: "grid",
+    gridTemplateColumns: "1.2fr .8fr 1.5fr",
+    gap: 10,
+    alignItems: "center",
+    padding: 13,
+    border: "1px solid #e0e8ec",
+    borderRadius: 13,
+    background: "#f9fbfc",
+    color: "#263940",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  layoutComercio: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) 370px",
+    gap: 18,
+    alignItems: "start",
+  },
+
+  cardComercio: {
+    padding: 24,
+    borderRadius: 22,
+    border: "1px solid #e0e8ec",
+    background: "#fff",
+    boxShadow: "0 10px 30px rgba(20,49,62,.06)",
+  },
+
+  cabeceraFichaComercio: {
+    paddingBottom: 16,
+    marginBottom: 18,
+    borderBottom: "1px solid #edf2f4",
+  },
+
+  gridComercio: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0,1fr))",
+    gap: 16,
+  },
+
+  accionesComercio: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    marginTop: 4,
+  },
+
+  botonGuardarComercio: {
+    minHeight: 46,
+    padding: "0 20px",
+    border: 0,
+    borderRadius: 12,
+    background: "#157a93",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  botonLimpiarComercio: {
+    minHeight: 46,
+    padding: "0 18px",
+    border: "1px solid #d7e2e7",
+    borderRadius: 12,
+    background: "#fff",
+    color: "#3f5962",
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  fichaSaldoComercio: {
+    position: "sticky",
+    top: 18,
+    padding: 22,
+    borderRadius: 22,
+    border: "1px solid #dce7eb",
+    background: "#fff",
+    boxShadow: "0 12px 34px rgba(20,49,62,.08)",
+  },
+
+  nombreFichaComercio: {
+    margin: "7px 0 3px",
+    fontSize: 24,
+    lineHeight: 1.15,
+  },
+
+  whatsappFichaComercio: {
+    marginBottom: 16,
+    color: "#6c7b82",
+    fontSize: 13,
+    fontWeight: 750,
+  },
+
+  saldoBoxComercio: {
+    display: "grid",
+    gap: 4,
+    padding: 18,
+    marginBottom: 15,
+    borderRadius: 18,
+    background: "linear-gradient(135deg, #eef8fb, #f7fbfc)",
+    border: "1px solid #d3e9ef",
+  },
+
+  saldoLabelComercio: {
+    color: "#157a93",
+    fontSize: 10,
+    fontWeight: 950,
+    letterSpacing: 1,
+  },
+
+  saldoNumeroComercio: {
+    fontSize: 36,
+    lineHeight: 1.05,
+    color: "#102f3a",
+  },
+
+  cuentasComercio: {
+    color: "#71838a",
+    fontSize: 11,
+    fontWeight: 750,
+  },
+
+  detallesFichaComercio: {
+    display: "grid",
+  },
+
+  avisoComercio: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 13,
+    background: "#f4f7f8",
+    color: "#62747b",
+    fontSize: 12,
+    lineHeight: 1.5,
+  },
+
+  avisoComercioActivo: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 13,
+    background: "#eef8f3",
+    border: "1px solid #d2ebdd",
+    color: "#2d6849",
+    fontSize: 12,
+    lineHeight: 1.5,
+  },
+
 };
