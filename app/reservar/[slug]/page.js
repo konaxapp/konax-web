@@ -1757,33 +1757,6 @@ export default function ReservaPublicaAutoservicioPage() {
           </section>
         )}
 
-        {!tokenUrl && paso < 5 && paso !== 3 && paso !== 4 && (
-          <button
-            type="button"
-            className="kp-reserve-now"
-            onClick={() => {
-              document
-                .getElementById("flujo-reserva")
-                ?.scrollIntoView({
-                  behavior: "smooth",
-                  block: "start",
-                });
-
-              if (paso === 3 && horarioSeleccionado) {
-                continuarFechaHora();
-              }
-            }}
-          >
-            <span>ϟ</span>
-            <strong>
-              {paso === 3 && horarioSeleccionado
-                ? "Continuar"
-                : "Reservar ahora"}
-            </strong>
-            <span>→</span>
-          </button>
-        )}
-
         {!(paso === 3 && horarioSeleccionado) && (
         <nav className="kp-bottom-nav">
           <button
