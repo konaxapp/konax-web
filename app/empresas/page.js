@@ -56,6 +56,7 @@ const CATEGORIAS = {
     "Repuestos",
     "Boutique",
     "Mueblería",
+    "Comercio general",
   ],
   Servicios: [
     "Lavandería",
@@ -91,15 +92,13 @@ export default function Empresas() {
   const [guardando, setGuardando] = useState(false);
 
   const [esMovil, setEsMovil] = useState(false);
-  const [menuMovilAbierto, setMenuMovilAbierto] =
-    useState(false);
+  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
 
   useEffect(() => {
     cargarEmpresas();
 
     const actualizarVista = () => {
       const movil = window.innerWidth <= 920;
-
       setEsMovil(movil);
 
       if (!movil) {
@@ -108,17 +107,10 @@ export default function Empresas() {
     };
 
     actualizarVista();
-
-    window.addEventListener(
-      "resize",
-      actualizarVista
-    );
+    window.addEventListener("resize", actualizarVista);
 
     return () => {
-      window.removeEventListener(
-        "resize",
-        actualizarVista
-      );
+      window.removeEventListener("resize", actualizarVista);
     };
   }, []);
 
@@ -128,15 +120,10 @@ export default function Empresas() {
     const { data, error } = await supabase
       .from("empresas")
       .select("*")
-      .order("created_at", {
-        ascending: false,
-      });
+      .order("created_at", { ascending: false });
 
     if (error) {
-      alert(
-        "Error cargando empresas: " +
-          error.message
-      );
+      alert("Error cargando empresas: " + error.message);
       setEmpresas([]);
       setCargandoEmpresas(false);
       return;
@@ -155,46 +142,18 @@ export default function Empresas() {
     setTipoNegocio("");
   }
 
-  function guardarEmpresaEnLocalStorage(
-    empresa
-  ) {
-    localStorage.setItem(
-      "empresaAdminCreadaId",
-      empresa.id
-    );
-    localStorage.setItem(
-      "empresaAdminCreadaNombre",
-      empresa.nombre || ""
-    );
-    localStorage.setItem(
-      "categoriaNegocioAdmin",
-      empresa.categoria_negocio || ""
-    );
-    localStorage.setItem(
-      "tipoNegocioAdmin",
-      empresa.tipo_negocio || ""
-    );
-
-    localStorage.setItem(
-      "empresaId",
-      empresa.id
-    );
-    localStorage.setItem(
-      "empresaNombre",
-      empresa.nombre || ""
-    );
+  function guardarEmpresaEnLocalStorage(empresa) {
+    localStorage.setItem("empresaAdminCreadaId", empresa.id);
+    localStorage.setItem("empresaAdminCreadaNombre", empresa.nombre || "");
+    localStorage.setItem("categoriaNegocioAdmin", empresa.categoria_negocio || "");
+    localStorage.setItem("tipoNegocioAdmin", empresa.tipo_negocio || "");
+    localStorage.setItem("empresaId", empresa.id);
+    localStorage.setItem("empresaNombre", empresa.nombre || "");
   }
 
   async function guardarEmpresa() {
-    if (
-      !nombre.trim() ||
-      !telefono.trim() ||
-      !categoria ||
-      !tipoNegocio
-    ) {
-      alert(
-        "Complete nombre, teléfono, categoría y tipo de negocio."
-      );
+    if (!nombre.trim() || !telefono.trim() || !categoria || !tipoNegocio) {
+      alert("Complete nombre, teléfono, categoría y tipo de negocio.");
       return;
     }
 
@@ -230,38 +189,29 @@ export default function Empresas() {
 
     if (error) {
       setGuardando(false);
-      alert(
-        "Error al guardar empresa: " +
-          error.message
-      );
+      alert("Error al guardar empresa: " + error.message);
       return;
     }
 
-    const { error: errorBitacora } =
-      await supabase
-        .from("bitacora_konax")
-        .insert([
-          {
-            empresa_id: data.id,
-            empresa_nombre: data.nombre,
-            accion: "Empresa creada",
-            descripcion:
-              `Se creó la empresa ${data.nombre} en KONAX. ` +
-              "Pendiente de asignar plan.",
-            estado_anterior: null,
-            estado_nuevo: "Activo",
-            usuario:
-              localStorage.getItem(
-                "adminKonaxNombre"
-              ) || "KONAX",
-          },
-        ]);
+    const { error: errorBitacora } = await supabase
+      .from("bitacora_konax")
+      .insert([
+        {
+          empresa_id: data.id,
+          empresa_nombre: data.nombre,
+          accion: "Empresa creada",
+          descripcion:
+            `Se creó la empresa ${data.nombre} en KONAX. ` +
+            "Pendiente de asignar plan.",
+          estado_anterior: null,
+          estado_nuevo: "Activo",
+          usuario:
+            localStorage.getItem("adminKonaxNombre") || "KONAX",
+        },
+      ]);
 
     if (errorBitacora) {
-      console.error(
-        "No se pudo registrar la bitácora:",
-        errorBitacora
-      );
+      console.error("No se pudo registrar la bitácora:", errorBitacora);
     }
 
     guardarEmpresaEnLocalStorage(data);
@@ -270,20 +220,13 @@ export default function Empresas() {
 
     setGuardando(false);
 
-    alert(
-      "Empresa creada correctamente. Ahora selecciona el plan."
-    );
-
+    alert("Empresa creada correctamente. Ahora selecciona el plan.");
     window.location.href = "/planes";
   }
 
   function seleccionarEmpresa(empresa) {
     guardarEmpresaEnLocalStorage(empresa);
-
-    alert(
-      "Empresa seleccionada: " +
-        empresa.nombre
-    );
+    alert("Empresa seleccionada: " + empresa.nombre);
   }
 
   function irPlan(empresa) {
@@ -298,17 +241,14 @@ export default function Empresas() {
 
   function irAdministrarEmpresa(empresa) {
     guardarEmpresaEnLocalStorage(empresa);
-
-    window.location.href =
-      `/admin-empresa?empresa=${empresa.id}`;
+    window.location.href = `/admin-empresa?empresa=${empresa.id}`;
   }
 
   function formatoFecha(fecha) {
     if (!fecha) return "-";
 
     const texto = String(fecha).slice(0, 10);
-    const [year, month, day] =
-      texto.split("-");
+    const [year, month, day] = texto.split("-");
 
     if (!year || !month || !day) {
       return fecha;
@@ -318,10 +258,7 @@ export default function Empresas() {
   }
 
   function empresaActiva(empresa) {
-    return (
-      empresa.estado === "Activo" ||
-      empresa.estado === "Activa"
-    );
+    return empresa.estado === "Activo" || empresa.estado === "Activa";
   }
 
   return (
@@ -338,27 +275,17 @@ export default function Empresas() {
             <button
               type="button"
               onClick={() =>
-                setMenuMovilAbierto(
-                  (actual) => !actual
-                )
+                setMenuMovilAbierto((actual) => !actual)
               }
               style={s.mobileMenuButton}
-              aria-expanded={
-                menuMovilAbierto
-              }
+              aria-expanded={menuMovilAbierto}
             >
               <Icon
-                name={
-                  menuMovilAbierto
-                    ? "close"
-                    : "menu"
-                }
+                name={menuMovilAbierto ? "close" : "menu"}
                 size={21}
               />
 
-              {menuMovilAbierto
-                ? "Cerrar"
-                : "Menú"}
+              {menuMovilAbierto ? "Cerrar" : "Menú"}
             </button>
           </div>
 
@@ -368,18 +295,11 @@ export default function Empresas() {
                 <Link
                   key={item.ruta}
                   href={item.ruta}
-                  onClick={() =>
-                    setMenuMovilAbierto(false)
-                  }
+                  onClick={() => setMenuMovilAbierto(false)}
                   style={s.mobileMenuItem}
                 >
-                  <span
-                    style={s.mobileMenuIcon}
-                  >
-                    <Icon
-                      name={item.icono}
-                      size={18}
-                    />
+                  <span style={s.mobileMenuIcon}>
+                    <Icon name={item.icono} size={18} />
                   </span>
 
                   <span>{item.nombre}</span>
@@ -393,17 +313,13 @@ export default function Empresas() {
       <main
         style={{
           ...s.main,
-          ...(esMovil
-            ? s.mainMobile
-            : {}),
+          ...(esMovil ? s.mainMobile : {}),
         }}
       >
         <section
           style={{
             ...s.hero,
-            ...(esMovil
-              ? s.heroMobile
-              : {}),
+            ...(esMovil ? s.heroMobile : {}),
           }}
         >
           <div style={s.heroGlowOne} />
@@ -417,9 +333,7 @@ export default function Empresas() {
             <h1
               style={{
                 ...s.heroTitle,
-                ...(esMovil
-                  ? s.heroTitleMobile
-                  : {}),
+                ...(esMovil ? s.heroTitleMobile : {}),
               }}
             >
               Crear Nueva Empresa
@@ -428,15 +342,11 @@ export default function Empresas() {
             <p
               style={{
                 ...s.heroText,
-                ...(esMovil
-                  ? s.heroTextMobile
-                  : {}),
+                ...(esMovil ? s.heroTextMobile : {}),
               }}
             >
-              Registra la empresa, asigna el
-              plan, crea el usuario
-              administrador y configura sus
-              módulos.
+              Registra la empresa, asigna el plan, crea el usuario
+              administrador y configura sus módulos.
             </p>
           </div>
 
@@ -454,9 +364,7 @@ export default function Empresas() {
         <section
           style={{
             ...s.flowGrid,
-            ...(esMovil
-              ? s.flowGridMobile
-              : {}),
+            ...(esMovil ? s.flowGridMobile : {}),
           }}
         >
           <FlowStep
@@ -487,9 +395,7 @@ export default function Empresas() {
         <section
           style={{
             ...s.formCard,
-            ...(esMovil
-              ? s.formCardMobile
-              : {}),
+            ...(esMovil ? s.formCardMobile : {}),
           }}
         >
           <div style={s.sectionHeader}>
@@ -501,38 +407,28 @@ export default function Empresas() {
               <h2
                 style={{
                   ...s.sectionTitle,
-                  ...(esMovil
-                    ? s.sectionTitleMobile
-                    : {}),
+                  ...(esMovil ? s.sectionTitleMobile : {}),
                 }}
               >
                 Nueva Empresa Cliente
               </h2>
 
               <p style={s.sectionText}>
-                Complete los datos principales
-                del negocio.
+                Complete los datos principales del negocio.
               </p>
             </div>
 
             <button
               type="button"
               onClick={() =>
-                setMostrarEmpresas(
-                  (actual) => !actual
-                )
+                setMostrarEmpresas((actual) => !actual)
               }
               style={{
                 ...s.showCompaniesButton,
-                ...(esMovil
-                  ? s.fullWidthButton
-                  : {}),
+                ...(esMovil ? s.fullWidthButton : {}),
               }}
             >
-              <Icon
-                name="list"
-                size={17}
-              />
+              <Icon name="list" size={17} />
 
               {mostrarEmpresas
                 ? "Ocultar empresas"
@@ -543,9 +439,7 @@ export default function Empresas() {
           <div
             style={{
               ...s.formGrid,
-              ...(esMovil
-                ? s.formGridMobile
-                : {}),
+              ...(esMovil ? s.formGridMobile : {}),
             }}
           >
             <Campo label="Nombre de la empresa *">
@@ -553,11 +447,7 @@ export default function Empresas() {
                 type="text"
                 placeholder="Ej. Lavandería El Sol"
                 value={nombre}
-                onChange={(event) =>
-                  setNombre(
-                    event.target.value
-                  )
-                }
+                onChange={(event) => setNombre(event.target.value)}
                 style={s.input}
               />
             </Campo>
@@ -568,11 +458,7 @@ export default function Empresas() {
                 inputMode="tel"
                 placeholder="Ej. 6000-0000"
                 value={telefono}
-                onChange={(event) =>
-                  setTelefono(
-                    event.target.value
-                  )
-                }
+                onChange={(event) => setTelefono(event.target.value)}
                 style={s.input}
               />
             </Campo>
@@ -583,11 +469,7 @@ export default function Empresas() {
                 inputMode="email"
                 placeholder="empresa@correo.com"
                 value={correo}
-                onChange={(event) =>
-                  setCorreo(
-                    event.target.value
-                  )
-                }
+                onChange={(event) => setCorreo(event.target.value)}
                 style={s.input}
               />
             </Campo>
@@ -597,11 +479,7 @@ export default function Empresas() {
                 type="text"
                 placeholder="Dirección del negocio"
                 value={direccion}
-                onChange={(event) =>
-                  setDireccion(
-                    event.target.value
-                  )
-                }
+                onChange={(event) => setDireccion(event.target.value)}
                 style={s.input}
               />
             </Campo>
@@ -610,9 +488,7 @@ export default function Empresas() {
               <select
                 value={categoria}
                 onChange={(event) => {
-                  setCategoria(
-                    event.target.value
-                  );
+                  setCategoria(event.target.value);
                   setTipoNegocio("");
                 }}
                 style={s.input}
@@ -621,13 +497,8 @@ export default function Empresas() {
                   Seleccione una categoría
                 </option>
 
-                {Object.keys(
-                  CATEGORIAS
-                ).map((item) => (
-                  <option
-                    key={item}
-                    value={item}
-                  >
+                {Object.keys(CATEGORIAS).map((item) => (
+                  <option key={item} value={item}>
                     {item}
                   </option>
                 ))}
@@ -638,27 +509,20 @@ export default function Empresas() {
               <select
                 value={tipoNegocio}
                 onChange={(event) =>
-                  setTipoNegocio(
-                    event.target.value
-                  )
+                  setTipoNegocio(event.target.value)
                 }
                 style={{
                   ...s.input,
-                  ...(!categoria
-                    ? s.inputDisabled
-                    : {}),
+                  ...(!categoria ? s.inputDisabled : {}),
                 }}
                 disabled={!categoria}
               >
                 <option value="">
-                  Seleccione el tipo de
-                  negocio
+                  Seleccione el tipo de negocio
                 </option>
 
                 {categoria &&
-                  CATEGORIAS[
-                    categoria
-                  ].map((negocio) => (
+                  CATEGORIAS[categoria].map((negocio) => (
                     <option
                       key={negocio}
                       value={negocio}
@@ -673,9 +537,7 @@ export default function Empresas() {
           <div
             style={{
               ...s.formActions,
-              ...(esMovil
-                ? s.formActionsMobile
-                : {}),
+              ...(esMovil ? s.formActionsMobile : {}),
             }}
           >
             <button
@@ -683,16 +545,11 @@ export default function Empresas() {
               onClick={guardarEmpresa}
               style={{
                 ...s.createButton,
-                ...(guardando
-                  ? s.disabledButton
-                  : {}),
+                ...(guardando ? s.disabledButton : {}),
               }}
               disabled={guardando}
             >
-              <Icon
-                name="plus"
-                size={18}
-              />
+              <Icon name="plus" size={18} />
 
               {guardando
                 ? "Guardando..."
@@ -708,14 +565,8 @@ export default function Empresas() {
               Limpiar
             </button>
 
-            <Link
-              href="/admin"
-              style={s.backButton}
-            >
-              <Icon
-                name="arrowBack"
-                size={17}
-              />
+            <Link href="/admin" style={s.backButton}>
+              <Icon name="arrowBack" size={17} />
               Volver al Admin
             </Link>
           </div>
@@ -725,9 +576,7 @@ export default function Empresas() {
           <section
             style={{
               ...s.companiesCard,
-              ...(esMovil
-                ? s.companiesCardMobile
-                : {}),
+              ...(esMovil ? s.companiesCardMobile : {}),
             }}
           >
             <div style={s.sectionHeader}>
@@ -739,17 +588,14 @@ export default function Empresas() {
                 <h2
                   style={{
                     ...s.sectionTitle,
-                    ...(esMovil
-                      ? s.sectionTitleMobile
-                      : {}),
+                    ...(esMovil ? s.sectionTitleMobile : {}),
                   }}
                 >
                   Empresas Registradas
                 </h2>
 
                 <p style={s.sectionText}>
-                  Selecciona una empresa para
-                  continuar con su plan,
+                  Selecciona una empresa para continuar con su plan,
                   administrador o módulos.
                 </p>
               </div>
@@ -759,16 +605,11 @@ export default function Empresas() {
                 onClick={cargarEmpresas}
                 style={{
                   ...s.refreshButton,
-                  ...(esMovil
-                    ? s.fullWidthButton
-                    : {}),
+                  ...(esMovil ? s.fullWidthButton : {}),
                 }}
                 disabled={cargandoEmpresas}
               >
-                <Icon
-                  name="refresh"
-                  size={17}
-                />
+                <Icon name="refresh" size={17} />
 
                 {cargandoEmpresas
                   ? "Actualizando..."
@@ -791,58 +632,25 @@ export default function Empresas() {
                     key={empresa.id}
                     style={s.mobileCompanyCard}
                   >
-                    <div
-                      style={
-                        s.mobileCompanyTop
-                      }
-                    >
-                      <div
-                        style={
-                          s.mobileIdentity
-                        }
-                      >
-                        <div
-                          style={
-                            s.companyInitial
-                          }
-                        >
-                          {String(
-                            empresa.nombre ||
-                              "E"
-                          )
+                    <div style={s.mobileCompanyTop}>
+                      <div style={s.mobileIdentity}>
+                        <div style={s.companyInitial}>
+                          {String(empresa.nombre || "E")
                             .charAt(0)
                             .toUpperCase()}
                         </div>
 
-                        <div
-                          style={{
-                            minWidth: 0,
-                          }}
-                        >
-                          <strong
-                            style={
-                              s.mobileCompanyName
-                            }
-                          >
+                        <div style={{ minWidth: 0 }}>
+                          <strong style={s.mobileCompanyName}>
                             {empresa.nombre}
                           </strong>
 
-                          <span
-                            style={
-                              s.mobileCompanyText
-                            }
-                          >
-                            {empresa.correo ||
-                              "-"}
+                          <span style={s.mobileCompanyText}>
+                            {empresa.correo || "-"}
                           </span>
 
-                          <span
-                            style={
-                              s.mobileCompanyText
-                            }
-                          >
-                            {empresa.telefono ||
-                              "-"}
+                          <span style={s.mobileCompanyText}>
+                            {empresa.telefono || "-"}
                           </span>
                         </div>
                       </div>
@@ -850,45 +658,29 @@ export default function Empresas() {
                       <span
                         style={{
                           ...s.statusBadge,
-                          ...(empresaActiva(
-                            empresa
-                          )
+                          ...(empresaActiva(empresa)
                             ? s.statusActive
                             : s.statusInactive),
                         }}
                       >
-                        {empresa.estado ||
-                          "Activo"}
+                        {empresa.estado || "Activo"}
                       </span>
                     </div>
 
-                    <div
-                      style={
-                        s.mobileDetailsGrid
-                      }
-                    >
+                    <div style={s.mobileDetailsGrid}>
                       <Detail
                         label="Negocio"
-                        value={
-                          empresa.tipo_negocio ||
-                          "-"
-                        }
+                        value={empresa.tipo_negocio || "-"}
                       />
 
                       <Detail
                         label="Plan"
-                        value={
-                          empresa.plan_nombre ||
-                          "Sin plan"
-                        }
+                        value={empresa.plan_nombre || "Sin plan"}
                       />
 
                       <Detail
                         label="Pago"
-                        value={
-                          empresa.estado_pago ||
-                          "Pendiente"
-                        }
+                        value={empresa.estado_pago || "Pendiente"}
                       />
 
                       <Detail
@@ -908,20 +700,12 @@ export default function Empresas() {
                       />
                     </div>
 
-                    <div
-                      style={
-                        s.mobileActions
-                      }
-                    >
+                    <div style={s.mobileActions}>
                       <button
                         type="button"
-                        style={
-                          s.mobileAdminButton
-                        }
+                        style={s.mobileAdminButton}
                         onClick={() =>
-                          irAdministrarEmpresa(
-                            empresa
-                          )
+                          irAdministrarEmpresa(empresa)
                         }
                       >
                         Administrar
@@ -929,25 +713,17 @@ export default function Empresas() {
 
                       <button
                         type="button"
-                        style={
-                          s.mobilePlanButton
-                        }
-                        onClick={() =>
-                          irPlan(empresa)
-                        }
+                        style={s.mobilePlanButton}
+                        onClick={() => irPlan(empresa)}
                       >
                         Plan
                       </button>
 
                       <button
                         type="button"
-                        style={
-                          s.mobileUserButton
-                        }
+                        style={s.mobileUserButton}
                         onClick={() =>
-                          irUsuarioPrincipal(
-                            empresa
-                          )
+                          irUsuarioPrincipal(empresa)
                         }
                       >
                         Usuario administrador
@@ -955,13 +731,9 @@ export default function Empresas() {
 
                       <button
                         type="button"
-                        style={
-                          s.mobileSelectButton
-                        }
+                        style={s.mobileSelectButton}
                         onClick={() =>
-                          seleccionarEmpresa(
-                            empresa
-                          )
+                          seleccionarEmpresa(empresa)
                         }
                       >
                         Seleccionar
@@ -975,190 +747,126 @@ export default function Empresas() {
                 <table style={s.table}>
                   <thead>
                     <tr>
-                      <th style={s.th}>
-                        Empresa
-                      </th>
-                      <th style={s.th}>
-                        Teléfono
-                      </th>
-                      <th style={s.th}>
-                        Negocio
-                      </th>
-                      <th style={s.th}>
-                        Plan
-                      </th>
-                      <th style={s.th}>
-                        Pago
-                      </th>
-                      <th style={s.th}>
-                        Servicio
-                      </th>
-                      <th style={s.th}>
-                        Facturación
-                      </th>
-                      <th style={s.th}>
-                        Configuración
-                      </th>
-                      <th style={s.th}>
-                        Acciones
-                      </th>
+                      <th style={s.th}>Empresa</th>
+                      <th style={s.th}>Teléfono</th>
+                      <th style={s.th}>Negocio</th>
+                      <th style={s.th}>Plan</th>
+                      <th style={s.th}>Pago</th>
+                      <th style={s.th}>Servicio</th>
+                      <th style={s.th}>Facturación</th>
+                      <th style={s.th}>Configuración</th>
+                      <th style={s.th}>Acciones</th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {empresas.map(
-                      (empresa) => (
-                        <tr key={empresa.id}>
-                          <td style={s.td}>
-                            <strong
-                              style={
-                                s.tableCompanyName
+                    {empresas.map((empresa) => (
+                      <tr key={empresa.id}>
+                        <td style={s.td}>
+                          <strong style={s.tableCompanyName}>
+                            {empresa.nombre}
+                          </strong>
+
+                          <span style={s.tableSmallText}>
+                            {empresa.correo || "-"}
+                          </span>
+                        </td>
+
+                        <td style={s.td}>
+                          {empresa.telefono || "-"}
+                        </td>
+
+                        <td style={s.td}>
+                          {empresa.categoria_negocio || "-"}
+
+                          <span style={s.tableSmallText}>
+                            {empresa.tipo_negocio || "-"}
+                          </span>
+                        </td>
+
+                        <td style={s.td}>
+                          {empresa.plan_nombre || "Sin plan"}
+                        </td>
+
+                        <td style={s.td}>
+                          {empresa.estado_pago || "Pendiente"}
+                        </td>
+
+                        <td style={s.td}>
+                          <span
+                            style={{
+                              ...s.statusBadge,
+                              ...(empresaActiva(empresa)
+                                ? s.statusActive
+                                : s.statusInactive),
+                            }}
+                          >
+                            {empresa.estado || "Activo"}
+                          </span>
+                        </td>
+
+                        <td style={s.td}>
+                          {formatoFecha(
+                            empresa.fecha_proxima_facturacion
+                          )}
+                        </td>
+
+                        <td style={s.td}>
+                          {empresa.configuracion_completa
+                            ? "Completa"
+                            : "Pendiente"}
+                        </td>
+
+                        <td style={s.td}>
+                          <div style={s.tableActions}>
+                            <button
+                              type="button"
+                              style={s.adminButton}
+                              onClick={() =>
+                                irAdministrarEmpresa(empresa)
                               }
                             >
-                              {empresa.nombre}
-                            </strong>
+                              Administrar
+                            </button>
 
-                            <span
-                              style={
-                                s.tableSmallText
+                            <button
+                              type="button"
+                              style={s.planButton}
+                              onClick={() => irPlan(empresa)}
+                            >
+                              Plan
+                            </button>
+
+                            <button
+                              type="button"
+                              style={s.userButton}
+                              onClick={() =>
+                                irUsuarioPrincipal(empresa)
                               }
                             >
-                              {empresa.correo ||
-                                "-"}
-                            </span>
-                          </td>
+                              Usuario
+                            </button>
 
-                          <td style={s.td}>
-                            {empresa.telefono ||
-                              "-"}
-                          </td>
-
-                          <td style={s.td}>
-                            {empresa.categoria_negocio ||
-                              "-"}
-
-                            <span
-                              style={
-                                s.tableSmallText
+                            <button
+                              type="button"
+                              style={s.selectButton}
+                              onClick={() =>
+                                seleccionarEmpresa(empresa)
                               }
                             >
-                              {empresa.tipo_negocio ||
-                                "-"}
-                            </span>
-                          </td>
-
-                          <td style={s.td}>
-                            {empresa.plan_nombre ||
-                              "Sin plan"}
-                          </td>
-
-                          <td style={s.td}>
-                            {empresa.estado_pago ||
-                              "Pendiente"}
-                          </td>
-
-                          <td style={s.td}>
-                            <span
-                              style={{
-                                ...s.statusBadge,
-                                ...(empresaActiva(
-                                  empresa
-                                )
-                                  ? s.statusActive
-                                  : s.statusInactive),
-                              }}
-                            >
-                              {empresa.estado ||
-                                "Activo"}
-                            </span>
-                          </td>
-
-                          <td style={s.td}>
-                            {formatoFecha(
-                              empresa.fecha_proxima_facturacion
-                            )}
-                          </td>
-
-                          <td style={s.td}>
-                            {empresa.configuracion_completa
-                              ? "Completa"
-                              : "Pendiente"}
-                          </td>
-
-                          <td style={s.td}>
-                            <div
-                              style={
-                                s.tableActions
-                              }
-                            >
-                              <button
-                                type="button"
-                                style={
-                                  s.adminButton
-                                }
-                                onClick={() =>
-                                  irAdministrarEmpresa(
-                                    empresa
-                                  )
-                                }
-                              >
-                                Administrar
-                              </button>
-
-                              <button
-                                type="button"
-                                style={
-                                  s.planButton
-                                }
-                                onClick={() =>
-                                  irPlan(
-                                    empresa
-                                  )
-                                }
-                              >
-                                Plan
-                              </button>
-
-                              <button
-                                type="button"
-                                style={
-                                  s.userButton
-                                }
-                                onClick={() =>
-                                  irUsuarioPrincipal(
-                                    empresa
-                                  )
-                                }
-                              >
-                                Usuario
-                              </button>
-
-                              <button
-                                type="button"
-                                style={
-                                  s.selectButton
-                                }
-                                onClick={() =>
-                                  seleccionarEmpresa(
-                                    empresa
-                                  )
-                                }
-                              >
-                                Seleccionar
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    )}
+                              Seleccionar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
             )}
 
             <p style={s.note}>
-              Usa “Administrar” para configurar
-              módulos, roles, usuarios y
+              Usa “Administrar” para configurar módulos, roles, usuarios y
               permisos de la empresa.
             </p>
           </section>
@@ -1180,11 +888,7 @@ function Campo({ label, children }) {
   );
 }
 
-function FlowStep({
-  numero,
-  titulo,
-  texto,
-}) {
+function FlowStep({ numero, titulo, texto }) {
   return (
     <article style={s.flowCard}>
       <span style={s.flowNumber}>
@@ -1234,34 +938,10 @@ function Icon({ name, size = 20 }) {
   const icons = {
     dashboard: (
       <>
-        <rect
-          x="3"
-          y="3"
-          width="7"
-          height="7"
-          rx="1"
-        />
-        <rect
-          x="14"
-          y="3"
-          width="7"
-          height="7"
-          rx="1"
-        />
-        <rect
-          x="3"
-          y="14"
-          width="7"
-          height="7"
-          rx="1"
-        />
-        <rect
-          x="14"
-          y="14"
-          width="7"
-          height="7"
-          rx="1"
-        />
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
       </>
     ),
     building: (
@@ -1272,46 +952,16 @@ function Icon({ name, size = 20 }) {
     ),
     briefcase: (
       <>
-        <rect
-          x="3"
-          y="7"
-          width="18"
-          height="13"
-          rx="2"
-        />
+        <rect x="3" y="7" width="18" height="13" rx="2" />
         <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18" />
       </>
     ),
     modules: (
       <>
-        <rect
-          x="3"
-          y="3"
-          width="7"
-          height="7"
-          rx="1"
-        />
-        <rect
-          x="14"
-          y="3"
-          width="7"
-          height="7"
-          rx="1"
-        />
-        <rect
-          x="3"
-          y="14"
-          width="7"
-          height="7"
-          rx="1"
-        />
-        <rect
-          x="14"
-          y="14"
-          width="7"
-          height="7"
-          rx="1"
-        />
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
       </>
     ),
     chart: (
@@ -1323,27 +973,9 @@ function Icon({ name, size = 20 }) {
     list: (
       <>
         <path d="M9 6h11M9 12h11M9 18h11" />
-        <circle
-          cx="4"
-          cy="6"
-          r="1"
-          fill="currentColor"
-          stroke="none"
-        />
-        <circle
-          cx="4"
-          cy="12"
-          r="1"
-          fill="currentColor"
-          stroke="none"
-        />
-        <circle
-          cx="4"
-          cy="18"
-          r="1"
-          fill="currentColor"
-          stroke="none"
-        />
+        <circle cx="4" cy="6" r="1" fill="currentColor" stroke="none" />
+        <circle cx="4" cy="12" r="1" fill="currentColor" stroke="none" />
+        <circle cx="4" cy="18" r="1" fill="currentColor" stroke="none" />
       </>
     ),
     plus: (
@@ -1377,8 +1009,7 @@ function Icon({ name, size = 20 }) {
 
   return (
     <svg {...props}>
-      {icons[name] ||
-        icons.dashboard}
+      {icons[name] || icons.dashboard}
     </svg>
   );
 }
@@ -1413,17 +1044,13 @@ const s = {
     zIndex: 70,
     padding: "10px 22px 10px 13px",
     display: "grid",
-    gridTemplateColumns:
-      "minmax(0,1fr) auto",
+    gridTemplateColumns: "minmax(0,1fr) auto",
     alignItems: "center",
     gap: 12,
-    borderBottom:
-      "1px solid #dce6e0",
-    background:
-      "rgba(255,255,255,.96)",
+    borderBottom: "1px solid #dce6e0",
+    background: "rgba(255,255,255,.96)",
     backdropFilter: "blur(13px)",
-    boxShadow:
-      "0 7px 24px rgba(28,52,39,.07)",
+    boxShadow: "0 7px 24px rgba(28,52,39,.07)",
   },
 
   mobileLogo: {
@@ -1441,16 +1068,13 @@ const s = {
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    border:
-      "1px solid rgba(255,255,255,.15)",
+    border: "1px solid rgba(255,255,255,.15)",
     borderRadius: 14,
-    background:
-      "linear-gradient(135deg,#173c2a,#0f6a3d)",
+    background: "linear-gradient(135deg,#173c2a,#0f6a3d)",
     color: "#ffffff",
     fontWeight: 850,
     cursor: "pointer",
-    boxShadow:
-      "0 10px 22px rgba(23,60,42,.18)",
+    boxShadow: "0 10px 22px rgba(23,60,42,.18)",
   },
 
   mobileMenu: {
@@ -1459,8 +1083,7 @@ const s = {
     left: 10,
     right: 10,
     zIndex: 80,
-    maxHeight:
-      "calc(100vh - 80px)",
+    maxHeight: "calc(100vh - 80px)",
     padding: 11,
     display: "grid",
     gap: 8,
@@ -1468,20 +1091,17 @@ const s = {
     border: "1px solid #dce6e0",
     borderRadius: 19,
     background: "#ffffff",
-    boxShadow:
-      "0 26px 65px rgba(15,23,42,.22)",
+    boxShadow: "0 26px 65px rgba(15,23,42,.22)",
   },
 
   mobileMenuItem: {
     minHeight: 48,
     padding: "9px 11px",
     display: "grid",
-    gridTemplateColumns:
-      "34px minmax(0,1fr)",
+    gridTemplateColumns: "34px minmax(0,1fr)",
     alignItems: "center",
     gap: 10,
-    border:
-      "1px solid #edf1ee",
+    border: "1px solid #edf1ee",
     borderRadius: 13,
     background: "#ffffff",
     color: "#1d2b23",
@@ -1514,8 +1134,7 @@ const s = {
     background:
       "linear-gradient(135deg,#07100b 0%,#103421 55%,#16834f 100%)",
     color: "#ffffff",
-    boxShadow:
-      "0 22px 52px rgba(11,48,29,.17)",
+    boxShadow: "0 22px 52px rgba(11,48,29,.17)",
   },
 
   heroMobile: {
@@ -1532,8 +1151,7 @@ const s = {
     top: -150,
     right: -65,
     borderRadius: "50%",
-    background:
-      "rgba(125,220,171,.11)",
+    background: "rgba(125,220,171,.11)",
   },
 
   heroGlowTwo: {
@@ -1542,8 +1160,7 @@ const s = {
     height: 170,
     bottom: -115,
     left: "44%",
-    border:
-      "1px solid rgba(255,255,255,.11)",
+    border: "1px solid rgba(255,255,255,.11)",
     borderRadius: "50%",
   },
 
@@ -1565,8 +1182,7 @@ const s = {
     maxWidth: 780,
     margin: "0 0 10px",
     color: "#ffffff",
-    fontSize:
-      "clamp(33px,4vw,49px)",
+    fontSize: "clamp(33px,4vw,49px)",
     lineHeight: 1.03,
     letterSpacing: -1,
   },
@@ -1602,8 +1218,7 @@ const s = {
     boxSizing: "border-box",
     borderRadius: 18,
     background: "#ffffff",
-    boxShadow:
-      "0 16px 36px rgba(0,0,0,.18)",
+    boxShadow: "0 16px 36px rgba(0,0,0,.18)",
   },
 
   heroLogo: {
@@ -1615,29 +1230,25 @@ const s = {
   flowGrid: {
     marginBottom: 14,
     display: "grid",
-    gridTemplateColumns:
-      "repeat(4,minmax(0,1fr))",
+    gridTemplateColumns: "repeat(4,minmax(0,1fr))",
     gap: 10,
   },
 
   flowGridMobile: {
-    gridTemplateColumns:
-      "repeat(2,minmax(0,1fr))",
+    gridTemplateColumns: "repeat(2,minmax(0,1fr))",
   },
 
   flowCard: {
     minHeight: 78,
     padding: 13,
     display: "grid",
-    gridTemplateColumns:
-      "36px minmax(0,1fr)",
+    gridTemplateColumns: "36px minmax(0,1fr)",
     alignItems: "center",
     gap: 9,
     border: "1px solid #dfe7e2",
     borderRadius: 15,
     background: "#ffffff",
-    boxShadow:
-      "0 8px 22px rgba(15,23,42,.045)",
+    boxShadow: "0 8px 22px rgba(15,23,42,.045)",
   },
 
   flowNumber: {
@@ -1672,8 +1283,7 @@ const s = {
     border: "1px solid #dfe7e2",
     borderRadius: 21,
     background: "#ffffff",
-    boxShadow:
-      "0 12px 34px rgba(15,23,42,.05)",
+    boxShadow: "0 12px 34px rgba(15,23,42,.05)",
   },
 
   formCardMobile: {
@@ -1686,8 +1296,7 @@ const s = {
     border: "1px solid #dfe7e2",
     borderRadius: 21,
     background: "#ffffff",
-    boxShadow:
-      "0 12px 34px rgba(15,23,42,.05)",
+    boxShadow: "0 12px 34px rgba(15,23,42,.05)",
   },
 
   companiesCardMobile: {
@@ -1740,8 +1349,7 @@ const s = {
     gap: 7,
     border: "1px solid #c8d5cd",
     borderRadius: 11,
-    background:
-      "linear-gradient(145deg,#ffffff,#f2f6f3)",
+    background: "linear-gradient(145deg,#ffffff,#f2f6f3)",
     color: "#26342c",
     fontSize: 10.5,
     fontWeight: 850,
@@ -1770,8 +1378,7 @@ const s = {
 
   formGrid: {
     display: "grid",
-    gridTemplateColumns:
-      "repeat(3,minmax(0,1fr))",
+    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
     gap: 13,
   },
 
@@ -1831,14 +1438,12 @@ const s = {
     gap: 8,
     border: "none",
     borderRadius: 11,
-    background:
-      "linear-gradient(135deg,#16834f,#0f6a3d)",
+    background: "linear-gradient(135deg,#16834f,#0f6a3d)",
     color: "#ffffff",
     fontSize: 11,
     fontWeight: 900,
     cursor: "pointer",
-    boxShadow:
-      "0 8px 19px rgba(22,131,79,.16)",
+    boxShadow: "0 8px 19px rgba(22,131,79,.16)",
   },
 
   clearButton: {
@@ -1862,8 +1467,7 @@ const s = {
     gap: 7,
     border: "1px solid #16241c",
     borderRadius: 11,
-    background:
-      "linear-gradient(135deg,#17211c,#263a2e)",
+    background: "linear-gradient(135deg,#17211c,#263a2e)",
     color: "#ffffff",
     fontSize: 11,
     fontWeight: 850,
@@ -2004,16 +1608,13 @@ const s = {
     padding: 14,
     border: "1px solid #dfe7e2",
     borderRadius: 17,
-    background:
-      "linear-gradient(155deg,#ffffff,#f7faf8)",
-    boxShadow:
-      "0 10px 25px rgba(15,23,42,.05)",
+    background: "linear-gradient(155deg,#ffffff,#f7faf8)",
+    boxShadow: "0 10px 25px rgba(15,23,42,.05)",
   },
 
   mobileCompanyTop: {
     display: "grid",
-    gridTemplateColumns:
-      "minmax(0,1fr) auto",
+    gridTemplateColumns: "minmax(0,1fr) auto",
     alignItems: "start",
     gap: 9,
   },
@@ -2021,8 +1622,7 @@ const s = {
   mobileIdentity: {
     minWidth: 0,
     display: "grid",
-    gridTemplateColumns:
-      "43px minmax(0,1fr)",
+    gridTemplateColumns: "43px minmax(0,1fr)",
     alignItems: "center",
     gap: 10,
   },
@@ -2033,8 +1633,7 @@ const s = {
     display: "grid",
     placeItems: "center",
     borderRadius: 13,
-    background:
-      "linear-gradient(145deg,#e8f7ee,#d9efe2)",
+    background: "linear-gradient(145deg,#e8f7ee,#d9efe2)",
     color: "#16834f",
     fontWeight: 950,
   },
@@ -2062,8 +1661,7 @@ const s = {
   mobileDetailsGrid: {
     marginTop: 12,
     display: "grid",
-    gridTemplateColumns:
-      "repeat(2,minmax(0,1fr))",
+    gridTemplateColumns: "repeat(2,minmax(0,1fr))",
     gap: 8,
   },
 
@@ -2099,8 +1697,7 @@ const s = {
     marginTop: 11,
     paddingTop: 11,
     display: "grid",
-    gridTemplateColumns:
-      "1fr 1fr",
+    gridTemplateColumns: "1fr 1fr",
     gap: 7,
     borderTop: "1px solid #e7ece9",
   },
