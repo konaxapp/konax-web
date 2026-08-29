@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.27-PORTAL-CALENDARIO-2026-FIX4";
+const VERSION = "2026.08.28-PORTAL-CARGA-RAPIDA-FIX5";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -248,21 +248,23 @@ export default function ReservaPublicaAutoservicioPage() {
 
     setPortal(data);
 
-    const { data: identidadData } = await supabase.rpc(
-      "obtener_identidad_empresa_publica",
-      {
-        p_slug: slug,
-      }
-    );
+    const [respuestaIdentidad] = await Promise.all([
+      supabase.rpc(
+        "obtener_identidad_empresa_publica",
+        {
+          p_slug: slug,
+        }
+      ),
+      cargarServiciosPublicos(),
+    ]);
+
+    const identidadData = respuestaIdentidad?.data;
 
     const identidad = Array.isArray(identidadData)
       ? identidadData[0]
       : identidadData;
 
     setIdentidadEmpresa(identidad || null);
-
-    await cargarServiciosPublicos();
-
     setCargando(false);
   }
 
@@ -868,19 +870,86 @@ export default function ReservaPublicaAutoservicioPage() {
 
   if (cargando) {
     return (
-      <main className="kp-loading">
-        <img src="/konax-logo.png" alt="KONAX" />
-        <strong>Preparando agenda...</strong>
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background: "#f5f7f6",
+          fontFamily:
+            'Inter, system-ui, "Segoe UI", sans-serif',
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            justifyItems: "center",
+            gap: 12,
+            padding: 24,
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              width: 34,
+              height: 34,
+              display: "block",
+              border: "3px solid #dbe6df",
+              borderTopColor: "#0b7041",
+              borderRadius: "50%",
+              animation: "kpSpin .75s linear infinite",
+            }}
+          />
+
+          <strong
+            style={{
+              color: "#365347",
+              fontSize: 13,
+              fontWeight: 800,
+            }}
+          >
+            Preparando tu agenda...
+          </strong>
+
+          <style>{`
+            @keyframes kpSpin {
+              to { transform: rotate(360deg); }
+            }
+          `}</style>
+        </div>
       </main>
     );
   }
 
   if (!portal?.ok) {
     return (
-      <main className="kp-loading">
-        <div className="kp-error-card">
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          padding: 20,
+          background: "#f5f7f6",
+          fontFamily:
+            'Inter, system-ui, "Segoe UI", sans-serif',
+        }}
+      >
+        <div
+          style={{
+            width: "min(420px,100%)",
+            padding: 18,
+            display: "grid",
+            gap: 7,
+            border: "1px solid #f2b8b3",
+            borderRadius: 16,
+            background: "#fff1ef",
+            color: "#8a1c12",
+          }}
+        >
           <strong>Reservas no disponibles</strong>
-          <span>{error}</span>
+          <span style={{ fontSize: 13, lineHeight: 1.45 }}>
+            {error}
+          </span>
         </div>
       </main>
     );
@@ -3143,10 +3212,6 @@ const CSS = `
     background: #f5f7f6;
     color: #0b7041;
     font-family: Inter, system-ui, "Segoe UI", sans-serif;
-  }
-
-  .kp-loading img {
-    width: 115px;
   }
 
 
