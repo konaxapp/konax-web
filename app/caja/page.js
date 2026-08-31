@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION_CAJA_GIMNASIO = "2026.08.27-CAJA-ACTUALIZAR-FIX1";
+const VERSION_CAJA_GIMNASIO = "2026.08.31-CAJA-MOBILE-NO-OVERFLOW-FIX3";
 
 function obtenerFechaPanama(fecha = new Date()) {
   const fechaObjeto =
@@ -200,6 +200,52 @@ export default function Caja() {
 
   useEffect(() => {
     iniciarCaja();
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const id = "konax-caja-mobile-width-fix";
+    if (document.getElementById(id)) return;
+
+    const style = document.createElement("style");
+    style.id = id;
+    style.textContent = `
+      html, body, #__next {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: clip;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      @media (max-width: 899px) {
+        *, *::before, *::after {
+          box-sizing: border-box;
+        }
+
+        input,
+        select,
+        textarea,
+        button {
+          max-width: 100%;
+          min-width: 0;
+        }
+
+        main {
+          width: 100%;
+          max-width: 100vw;
+          overflow-x: clip;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+
+    return () => {
+      document.getElementById(id)?.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -4753,6 +4799,10 @@ const estilosDesktop = {
     borderRadius:"15px"
   },
   gymCobroEncabezado:{
+    display:"flex",
+    alignItems:"end",
+    justifyContent:"space-between",
+    flexWrap:"wrap",
     marginBottom:"7px",
     gap:"8px"
   },
@@ -4855,6 +4905,7 @@ const estilosDesktop = {
     fontSize:"18px"
   },
   gymAccionesCobro:{
+    gridTemplateColumns:"minmax(0,1fr) minmax(110px,.25fr)",
     marginTop:"8px",
     gap:"7px"
   },
@@ -4938,8 +4989,8 @@ const estilos={
     boxShadow:"0 0 0 2px rgba(22,131,79,.08)"
   },
 
-  pagina:{minHeight:"100vh",background:"#f4f7f5",color:"#17211b",fontFamily:"Inter,Arial,system-ui,sans-serif"},
-  shell:{minHeight:"100vh"},
+  pagina:{minHeight:"100vh",width:"100%",maxWidth:"100vw",overflowX:"clip",background:"#f4f7f5",color:"#17211b",fontFamily:"Inter,Arial,system-ui,sans-serif",boxSizing:"border-box"},
+  shell:{minHeight:"100vh",width:"100%",maxWidth:"100%",overflowX:"clip",boxSizing:"border-box"},
   loading:{minHeight:"100vh",display:"grid",placeItems:"center",alignContent:"center",gap:"10px",background:"#f4f7f5"},
   loadingLogo:{width:"220px",maxWidth:"75%"},loadingTitulo:{fontSize:"20px"},
   topbar:{minHeight:"92px",padding:"16px 22px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:"18px",flexWrap:"wrap",background:"linear-gradient(120deg,#06331f 0%,#0b4d2d 54%,#0d6c3c 100%)",color:"#fff",boxShadow:"0 10px 28px rgba(11,66,40,.22)"},
@@ -4948,8 +4999,8 @@ const estilos={
   botonActualizar:{minHeight:"44px",padding:"0 18px",borderRadius:"12px",border:"1px solid rgba(255,255,255,.28)",background:"rgba(255,255,255,.10)",color:"#fff",fontWeight:850,cursor:"pointer",flexShrink:0},
   botonVolver:{minHeight:"44px",padding:"0 18px",borderRadius:"12px",border:"1px solid #20bc69",background:"rgba(0,0,0,.12)",color:"#fff",fontWeight:800,cursor:"pointer",flexShrink:0},
   fechaAyuda:{display:"block",maxWidth:"210px",color:"#6d7a72",fontSize:"9px",lineHeight:1.3},
-  contenido:{padding:"18px"},
-  kpisGrid:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:"14px",marginBottom:"14px"},
+  contenido:{width:"100%",maxWidth:"100%",padding:"14px 12px 24px",boxSizing:"border-box",overflowX:"hidden"},
+  kpisGrid:{width:"100%",minWidth:0,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(220px,100%),1fr))",gap:"12px",marginBottom:"12px",boxSizing:"border-box"},
   kpiCard:{display:"grid",gridTemplateColumns:"64px 1fr",gap:"14px",alignItems:"center",padding:"18px",border:"1px solid #e1e9e4",borderRadius:"16px",background:"#fff",boxShadow:"0 8px 22px rgba(24,79,49,.08)"},
   kpiDestacado:{display:"grid",gridTemplateColumns:"64px 1fr",gap:"14px",alignItems:"center",padding:"18px",border:"1px solid rgba(255,255,255,.18)",borderRadius:"16px",background:"linear-gradient(135deg,#13924e,#06733a)",color:"#fff",boxShadow:"0 12px 26px rgba(9,118,59,.24)"},
   kpiIcono:{width:"56px",height:"56px",display:"grid",placeItems:"center",borderRadius:"50%",background:"#e8f7ed",color:"#0c8b45",fontSize:"26px",fontWeight:900},kpiIconoDigital:{width:"56px",height:"56px",display:"grid",placeItems:"center",borderRadius:"18px",background:"#f0eaff",color:"#6f42d9",fontSize:"26px",fontWeight:900},
@@ -4958,30 +5009,40 @@ const estilos={
   panel:{padding:"16px",border:"1px solid #dfe7e2",borderRadius:"15px",background:"#fff",boxShadow:"0 7px 18px rgba(18,66,42,.06)"},panelTabla:{marginTop:"12px",padding:"16px",border:"1px solid #dfe7e2",borderRadius:"15px",background:"#fff",boxShadow:"0 7px 18px rgba(18,66,42,.06)"},
   tituloPanel:{display:"flex",alignItems:"center",gap:"12px",marginBottom:"14px"},tituloPanelIcono:{width:"34px",height:"34px",display:"grid",placeItems:"center",borderRadius:"10px",background:"linear-gradient(180deg,#eff8f2,#e3f3e8)",border:"1px solid #d5e8dc",fontSize:"18px",boxShadow:"0 4px 10px rgba(10,155,75,.08)"},tituloPanelTexto:{margin:0,fontSize:"18px"},
   nuevoMovimientoGrid:{display:"grid",gridTemplateColumns:"190px minmax(0,1fr)",gap:"16px",alignItems:"start"},tabsMovimiento:{display:"flex",flexWrap:"wrap",gap:"8px",marginTop:"2px"},tab:{minHeight:"40px",padding:"0 14px",border:"1px solid #dce5df",borderRadius:"10px",background:"#fff",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"},tabActivo:{minHeight:"40px",padding:"0 14px",border:"1px solid #0b8644",borderRadius:"10px",background:"linear-gradient(135deg,#18a45b,#08763d)",color:"#fff",fontWeight:900,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 8px 18px rgba(9,118,59,.18)"},
-  campo:{display:"flex",flexDirection:"column",gap:"6px"},label:{fontSize:"12px",fontWeight:800,color:"#283a31"},input:{width:"100%",minHeight:"42px",padding:"10px 12px",boxSizing:"border-box",border:"1px solid #d7dfda",borderRadius:"10px",background:"#fff",color:"#17211b",outline:"none",fontSize:"13px"},inputReadOnly:{width:"100%",minHeight:"42px",padding:"10px 12px",boxSizing:"border-box",border:"1px solid #d7e5dc",borderRadius:"10px",background:"linear-gradient(180deg,#f4f9f6,#edf5f0)",color:"#163c28",fontWeight:900},inputResponsable:{width:"100%",minHeight:"42px",padding:"9px 10px",boxSizing:"border-box",border:"1px solid #d7e5dc",borderRadius:"10px",background:"linear-gradient(180deg,#f4f9f6,#edf5f0)",color:"#163c28",fontWeight:800,fontSize:"11px",textOverflow:"ellipsis"},
+  campo:{display:"flex",flexDirection:"column",gap:"6px"},label:{fontSize:"12px",fontWeight:800,color:"#283a31"},input:{width:"100%",maxWidth:"100%",minWidth:0,minHeight:"42px",padding:"10px 12px",boxSizing:"border-box",border:"1px solid #d7dfda",borderRadius:"10px",background:"#fff",color:"#17211b",outline:"none",fontSize:"13px"},inputReadOnly:{width:"100%",minHeight:"42px",padding:"10px 12px",boxSizing:"border-box",border:"1px solid #d7e5dc",borderRadius:"10px",background:"linear-gradient(180deg,#f4f9f6,#edf5f0)",color:"#163c28",fontWeight:900},inputResponsable:{width:"100%",minHeight:"42px",padding:"9px 10px",boxSizing:"border-box",border:"1px solid #d7e5dc",borderRadius:"10px",background:"linear-gradient(180deg,#f4f9f6,#edf5f0)",color:"#163c28",fontWeight:800,fontSize:"11px",textOverflow:"ellipsis"},
   buscarClienteFila:{display:"grid",gridTemplateColumns:"1fr 44px",gap:0},botonBuscar:{border:"none",borderRadius:"0 8px 8px 0",background:"linear-gradient(135deg,#159552,#08743c)",color:"#fff",fontSize:"22px",cursor:"pointer"},resultadosBox:{display:"grid",gap:"8px",marginTop:"10px"},resultadoItem:{padding:"10px 12px",display:"flex",justifyContent:"space-between",border:"1px solid #dde6e0",borderRadius:"8px",background:"#fff",cursor:"pointer"},
   clienteCard:{marginTop:"10px",padding:"14px",border:"1px solid #dce5df",borderRadius:"12px",background:"#fff"},clienteDatosFila:{display:"grid",gridTemplateColumns:"64px minmax(0,1fr) minmax(220px,300px)",gap:"14px",alignItems:"center"},avatarCliente:{width:"58px",height:"58px",display:"grid",placeItems:"center",borderRadius:"50%",background:"linear-gradient(180deg,#e9f8ee,#d4efdf)",color:"#098f47",fontSize:"28px"},clienteInfo:{display:"grid",gap:"3px",fontSize:"12px",color:"#4d5952"},clienteNombre:{fontSize:"17px",color:"#17211b"},cuentaSelectorWrap:{display:"grid",gap:"6px"},cuentaStats:{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:"10px",marginTop:"14px"},miniStat:{padding:"13px",display:"grid",gap:"6px",border:"1px solid #e1e7e3",borderRadius:"10px",background:"linear-gradient(180deg,#fff,#fafcfb)",fontSize:"12px"},miniStatResaltado:{padding:"13px",display:"grid",gap:"6px",border:"1px solid #f1e2b9",borderRadius:"10px",background:"linear-gradient(180deg,#fffdf5,#fff7dc)",fontSize:"12px"},estadoActivo:{color:"#0a8d46"},
   productoGrid:{display:"grid",gridTemplateColumns:"minmax(150px,.9fr) minmax(210px,1.35fr) minmax(80px,.55fr) minmax(105px,.7fr)",gap:"12px",alignItems:"start"},codigoProductoBloque:{display:"grid",gap:"10px",minWidth:0},miniaturaProductoCampo:{display:"flex",flexDirection:"column",gap:"6px",alignItems:"flex-start"},miniaturaProductoBox:{width:"72px",height:"58px",display:"grid",placeItems:"center",overflow:"hidden",border:"1px solid #d7dfda",borderRadius:"10px",background:"#f6f8f7"},miniaturaProducto:{width:"100%",height:"100%",objectFit:"cover",display:"block"},miniaturaSinImagen:{width:"100%",height:"100%",placeItems:"center",fontSize:"24px",color:"#7d8a82"},cobroGrid:{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:"12px"},accionesFila:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px",marginTop:"14px"},botonPrincipal:{minHeight:"42px",border:"none",borderRadius:"8px",background:"linear-gradient(135deg,#159552,#08743c)",color:"#fff",fontWeight:900,cursor:"pointer"},botonLimpiar:{minHeight:"42px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff",color:"#17211b",fontWeight:850,cursor:"pointer"},
-  tablaHeaderRow:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"14px",flexWrap:"wrap"},filtrosInline:{display:"flex",alignItems:"center",gap:"8px",fontSize:"12px"},inputCompacto:{minHeight:"36px",padding:"7px 10px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff"},inputBuscarTabla:{minHeight:"36px",minWidth:"280px",padding:"7px 10px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff"},botonBuscarMovimientos:{width:"38px",height:"36px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff",cursor:"pointer"},botonHoy:{minHeight:"36px",padding:"0 16px",border:"1px solid #159552",borderRadius:"8px",background:"#fff",color:"#08743c",fontWeight:850,cursor:"pointer"},
+  tablaHeaderRow:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"14px",flexWrap:"wrap"},filtrosInline:{display:"flex",alignItems:"center",gap:"8px",fontSize:"12px"},inputCompacto:{width:"100%",maxWidth:"100%",minWidth:0,minHeight:"36px",padding:"7px 10px",boxSizing:"border-box",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff"},inputBuscarTabla:{minHeight:"36px",minWidth:"280px",padding:"7px 10px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff"},botonBuscarMovimientos:{width:"38px",height:"36px",border:"1px solid #d8e0dc",borderRadius:"8px",background:"#fff",cursor:"pointer"},botonHoy:{minHeight:"36px",padding:"0 16px",border:"1px solid #159552",borderRadius:"8px",background:"#fff",color:"#08743c",fontWeight:850,cursor:"pointer"},
   tablaBox:{overflowX:"auto",border:"1px solid #dfe7e2",borderRadius:"10px"},tabla:{width:"100%",minWidth:"1150px",borderCollapse:"collapse"},th:{padding:"11px",background:"linear-gradient(180deg,#f3faf5,#edf6f0)",color:"#1e3327",textAlign:"left",fontSize:"12px",fontWeight:900,whiteSpace:"nowrap"},td:{padding:"10px 11px",borderBottom:"1px solid #edf1ee",fontSize:"12px",whiteSpace:"nowrap"},tdResponsable:{maxWidth:"145px",padding:"8px 9px",borderBottom:"1px solid #edf1ee",fontSize:"10.5px",lineHeight:1.25,whiteSpace:"normal",overflowWrap:"anywhere",verticalAlign:"middle"},tdVacio:{padding:"28px",textAlign:"center",color:"#6b7280"},badgeTipo:{padding:"4px 9px",borderRadius:"999px",background:"#e7f7ed",color:"#0d8244",fontWeight:800},badgeEstado:{color:"#0a8d46",fontWeight:800},
 
   gymCajaLayout:{
-    display:"block"
+    display:"block",
+    width:"100%",
+    maxWidth:"100%",
+    minWidth:0,
+    boxSizing:"border-box"
   },
   gymCobroPanel:{
     width:"100%",
-    padding:"18px",
+    maxWidth:"100%",
+    minWidth:0,
+    padding:"16px 14px",
     border:"1px solid #dfe7e2",
     borderRadius:"20px",
     background:"#fff",
-    boxShadow:"0 12px 30px rgba(18,66,42,.07)"
+    boxShadow:"0 12px 30px rgba(18,66,42,.07)",
+    boxSizing:"border-box",
+    overflow:"hidden"
   },
   gymCobroEncabezado:{
-    display:"flex",
-    alignItems:"end",
-    justifyContent:"space-between",
-    gap:"14px",
-    flexWrap:"wrap",
+    display:"grid",
+    gridTemplateColumns:"minmax(0,1fr)",
+    alignItems:"stretch",
+    gap:"10px",
+    width:"100%",
+    maxWidth:"100%",
+    minWidth:0,
     marginBottom:"12px"
   },
   gymEyebrow:{
@@ -5005,11 +5066,17 @@ const estilos={
   },
   gymFechaCompacta:{
     display:"grid",
+    width:"100%",
+    maxWidth:"100%",
+    minWidth:0,
     gap:"6px"
   },
   gymAccionesPrincipales:{
     display:"grid",
-    gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",
+    width:"100%",
+    maxWidth:"100%",
+    minWidth:0,
+    gridTemplateColumns:"repeat(auto-fit,minmax(min(180px,100%),1fr))",
     gap:"10px",
     marginBottom:"10px"
   },
@@ -5124,8 +5191,11 @@ const estilos={
     fontWeight:800
   },
   gymBloque:{
+    width:"100%",
+    maxWidth:"100%",
+    minWidth:0,
     marginTop:"12px",
-    padding:"16px",
+    padding:"14px",
     border:"1px solid #e0e8e3",
     borderRadius:"16px",
     background:"#fff"
@@ -5152,6 +5222,9 @@ const estilos={
   },
   gymBuscarFila:{
     display:"grid",
+    width:"100%",
+    maxWidth:"100%",
+    minWidth:0,
     gridTemplateColumns:"minmax(0,1fr) auto",
     gap:"8px"
   },
@@ -5333,7 +5406,9 @@ const estilos={
   },
   gymPagoGrid:{
     display:"grid",
-    gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",
+    width:"100%",
+    minWidth:0,
+    gridTemplateColumns:"repeat(auto-fit,minmax(min(180px,100%),1fr))",
     gap:"10px"
   },
   gymMontoInput:{
@@ -5443,8 +5518,11 @@ const estilos={
     lineHeight:1.45
   },
   gymMovimientosPanel:{
+    width:"100%",
+    maxWidth:"100%",
+    minWidth:0,
     marginTop:"14px",
-    padding:"18px",
+    padding:"16px 14px",
     border:"1px solid #dfe7e2",
     borderRadius:"18px",
     background:"#fff",
