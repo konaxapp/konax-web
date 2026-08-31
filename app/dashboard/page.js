@@ -2,7 +2,7 @@
 
 // DASHBOARD KONAX - GIMNASIO + SALÓN DE BELLEZA - MOBILE HEADER CLEAN - 2026-08-20
 
-// KONAX Dashboard · Reportes gimnasio habilitados · Versión 2026.08.07-S
+// KONAX Dashboard · Gimnasio + Dashboard Inteligente Belleza · Versión 2026.08.30-BI1
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -881,6 +881,21 @@ export default function Dashboard() {
   const [alumnosGimnasio, setAlumnosGimnasio] =
     useState([]);
 
+  // DASHBOARD INTELIGENTE · BELLEZA
+  // Estos datos vienen de la RPC de solo lectura
+  // public.obtener_dashboard_inteligente_belleza(uuid).
+  const [resumenBelleza, setResumenBelleza] = useState({
+    citas_hoy: 0,
+    ingresos_programados: 0,
+    cancelaciones_30_dias: 0,
+    clientes_por_recuperar: 0,
+    mensaje_konax: "",
+  });
+  const [cargandoResumenBelleza, setCargandoResumenBelleza] =
+    useState(false);
+  const [avisoResumenBelleza, setAvisoResumenBelleza] =
+    useState("");
+
   useEffect(() => {
     cargarDashboard();
 
@@ -1208,6 +1223,15 @@ export default function Dashboard() {
     ) {
       cargarResumenGimnasio(empresaId);
     }
+
+    if (
+      esTipoSalonBelleza(
+        empresa.tipo_negocio,
+        empresa.categoria_negocio
+      )
+    ) {
+      cargarResumenBelleza(empresaId);
+    }
   }
 
   async function cargarModulosEmpresa(
@@ -1365,6 +1389,49 @@ export default function Dashboard() {
     );
 
     setCargandoResumenGimnasio(false);
+  }
+
+  async function cargarResumenBelleza(empresaId) {
+    setCargandoResumenBelleza(true);
+    setAvisoResumenBelleza("");
+
+    const { data, error } = await supabase.rpc(
+      "obtener_dashboard_inteligente_belleza",
+      {
+        p_empresa_id: empresaId,
+      }
+    );
+
+    if (error) {
+      console.error(
+        "No se pudo cargar el Dashboard Inteligente de Belleza:",
+        error
+      );
+
+      setAvisoResumenBelleza(
+        "No fue posible actualizar el resumen del salón en este momento."
+      );
+      setCargandoResumenBelleza(false);
+      return;
+    }
+
+    const fila = Array.isArray(data) ? data[0] : data;
+
+    setResumenBelleza({
+      citas_hoy: Number(fila?.citas_hoy || 0),
+      ingresos_programados: Number(
+        fila?.ingresos_programados || 0
+      ),
+      cancelaciones_30_dias: Number(
+        fila?.cancelaciones_30_dias || 0
+      ),
+      clientes_por_recuperar: Number(
+        fila?.clientes_por_recuperar || 0
+      ),
+      mensaje_konax: String(fila?.mensaje_konax || ""),
+    });
+
+    setCargandoResumenBelleza(false);
   }
 
   function puedeVer(
@@ -2508,6 +2575,14 @@ export default function Dashboard() {
               router.push(ruta)
             }
           />
+        ) : esSalonBelleza ? (
+          <DashboardBelleza
+            empresaNombre={empresaNombre}
+            resumen={resumenBelleza}
+            cargandoResumen={cargandoResumenBelleza}
+            avisoResumen={avisoResumenBelleza}
+            esMovil={esMovil}
+          />
         ) : (
           <>
             <section
@@ -2715,6 +2790,311 @@ export default function Dashboard() {
         )}
       </main>
     </div>
+  );
+}
+
+function DashboardBelleza({
+  empresaNombre,
+  resumen,
+  cargandoResumen,
+  avisoResumen,
+  esMovil,
+}) {
+  const dinero = (valor) => {
+    const numero = Number(valor || 0);
+
+    return new Intl.NumberFormat("es-PA", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Number.isFinite(numero) ? numero : 0);
+  };
+
+  const tarjetas = [
+    {
+      etiqueta: "CITAS DE HOY",
+      valor: cargandoResumen ? "—" : String(resumen?.citas_hoy ?? 0),
+      detalle: "Reservas activas programadas para hoy.",
+      icono: "◷",
+    },
+    {
+      etiqueta: "INGRESOS PROGRAMADOS",
+      valor: cargandoResumen
+        ? "—"
+        : dinero(resumen?.ingresos_programados),
+      detalle: "Valor estimado de las citas de hoy.",
+      icono: "$",
+    },
+    {
+      etiqueta: "CANCELACIONES · 30 DÍAS",
+      valor: cargandoResumen
+        ? "—"
+        : String(resumen?.cancelaciones_30_dias ?? 0),
+      detalle: "Citas canceladas durante los últimos 30 días.",
+      icono: "×",
+    },
+    {
+      etiqueta: "CLIENTES POR RECUPERAR",
+      valor: cargandoResumen
+        ? "—"
+        : String(resumen?.clientes_por_recuperar ?? 0),
+      detalle: "Más de 45 días sin una cita no cancelada.",
+      icono: "↺",
+    },
+  ];
+
+  const mensaje = cargandoResumen
+    ? "Analizando la operación de hoy…"
+    : avisoResumen
+    ? avisoResumen
+    : resumen?.mensaje_konax ||
+      "KONAX todavía no tiene novedades relevantes para mostrar hoy.";
+
+  return (
+    <section
+      style={{
+        display: "grid",
+        gap: esMovil ? 14 : 18,
+      }}
+    >
+      <article
+        style={{
+          position: "relative",
+          overflow: "hidden",
+          borderRadius: esMovil ? 22 : 28,
+          padding: esMovil ? "22px 18px" : "28px 30px",
+          background:
+            "linear-gradient(135deg, #071c2c 0%, #0c2d3d 68%, #0b3a3a 100%)",
+          boxShadow: "0 18px 48px rgba(7, 28, 44, 0.16)",
+          color: "#ffffff",
+        }}
+      >
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            width: 220,
+            height: 220,
+            borderRadius: "50%",
+            right: -80,
+            top: -105,
+            background: "rgba(38, 208, 154, 0.12)",
+          }}
+        />
+
+        <div style={{ position: "relative", zIndex: 1 }}>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 11,
+              lineHeight: 1,
+              fontWeight: 900,
+              letterSpacing: "0.13em",
+              color: "#72e1bb",
+              marginBottom: 10,
+            }}
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: "#34d399",
+                boxShadow: "0 0 0 4px rgba(52, 211, 153, 0.10)",
+              }}
+            />
+            ESTADO DEL NEGOCIO
+          </span>
+
+          <h2
+            style={{
+              margin: 0,
+              fontSize: esMovil ? 26 : 34,
+              lineHeight: 1.08,
+              fontWeight: 950,
+              letterSpacing: "-0.035em",
+            }}
+          >
+            Control diario de tu salón
+          </h2>
+
+          <p
+            style={{
+              margin: "10px 0 0",
+              maxWidth: 680,
+              fontSize: esMovil ? 13.5 : 15,
+              lineHeight: 1.65,
+              color: "rgba(255,255,255,0.72)",
+            }}
+          >
+            {empresaNombre || "Tu salón"} · Lo importante de hoy, en un solo lugar.
+          </p>
+        </div>
+      </article>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: esMovil
+            ? "repeat(2, minmax(0, 1fr))"
+            : "repeat(4, minmax(0, 1fr))",
+          gap: esMovil ? 10 : 14,
+        }}
+      >
+        {tarjetas.map((item) => (
+          <article
+            key={item.etiqueta}
+            style={{
+              minWidth: 0,
+              minHeight: esMovil ? 145 : 160,
+              border: "1px solid #e5ebef",
+              borderRadius: esMovil ? 18 : 22,
+              padding: esMovil ? "15px 13px" : "19px 18px",
+              background: "#ffffff",
+              boxShadow: "0 10px 28px rgba(15, 23, 42, 0.055)",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: esMovil ? 9.5 : 10.5,
+                  lineHeight: 1.25,
+                  fontWeight: 900,
+                  letterSpacing: "0.075em",
+                  color: "#64748b",
+                }}
+              >
+                {item.etiqueta}
+              </span>
+
+              <span
+                aria-hidden="true"
+                style={{
+                  flex: "0 0 auto",
+                  width: esMovil ? 30 : 34,
+                  height: esMovil ? 30 : 34,
+                  borderRadius: 11,
+                  display: "grid",
+                  placeItems: "center",
+                  background: "#ecfdf5",
+                  color: "#087f5b",
+                  fontSize: 16,
+                  fontWeight: 950,
+                }}
+              >
+                {item.icono}
+              </span>
+            </div>
+
+            <strong
+              style={{
+                display: "block",
+                marginTop: esMovil ? 14 : 18,
+                fontSize: esMovil ? 24 : 30,
+                lineHeight: 1,
+                letterSpacing: "-0.035em",
+                color: "#0f2433",
+                fontWeight: 950,
+                overflowWrap: "anywhere",
+              }}
+            >
+              {item.valor}
+            </strong>
+
+            <p
+              style={{
+                margin: "auto 0 0",
+                paddingTop: 12,
+                fontSize: esMovil ? 10.5 : 12,
+                lineHeight: 1.45,
+                color: "#7b8794",
+              }}
+            >
+              {item.detalle}
+            </p>
+          </article>
+        ))}
+      </div>
+
+      <article
+        style={{
+          position: "relative",
+          overflow: "hidden",
+          borderRadius: esMovil ? 20 : 24,
+          border: "1px solid #d9eee7",
+          background:
+            "linear-gradient(135deg, #f5fffb 0%, #ffffff 68%)",
+          padding: esMovil ? "19px 17px" : "24px 26px",
+          boxShadow: "0 10px 28px rgba(15, 23, 42, 0.045)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: esMovil ? 12 : 16,
+          }}
+        >
+          <div
+            aria-hidden="true"
+            style={{
+              width: esMovil ? 38 : 44,
+              height: esMovil ? 38 : 44,
+              flex: "0 0 auto",
+              borderRadius: 14,
+              display: "grid",
+              placeItems: "center",
+              background: "#0d8b67",
+              color: "white",
+              fontWeight: 950,
+              fontSize: esMovil ? 17 : 19,
+              boxShadow: "0 8px 18px rgba(13, 139, 103, 0.18)",
+            }}
+          >
+            K
+          </div>
+
+          <div style={{ minWidth: 0 }}>
+            <span
+              style={{
+                display: "block",
+                color: "#0b7a5b",
+                fontSize: 10.5,
+                fontWeight: 950,
+                letterSpacing: "0.11em",
+                marginBottom: 7,
+              }}
+            >
+              KONAX TE INFORMA
+            </span>
+
+            <p
+              style={{
+                margin: 0,
+                color: avisoResumen ? "#8a5b16" : "#183746",
+                fontSize: esMovil ? 13.5 : 15,
+                lineHeight: 1.65,
+                fontWeight: 650,
+              }}
+            >
+              {mensaje}
+            </p>
+          </div>
+        </div>
+      </article>
+    </section>
   );
 }
 
