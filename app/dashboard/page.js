@@ -2,7 +2,7 @@
 
 // DASHBOARD KONAX - GIMNASIO + SALÓN DE BELLEZA - MOBILE HEADER CLEAN - 2026-08-20
 
-// KONAX Dashboard · Gimnasio + Dashboard Inteligente Belleza · Versión 2026.08.31-NO-LOGIN-FLASH
+// KONAX Dashboard · Gimnasio + Dashboard Inteligente Belleza · Versión 2026.08.31-BOTTOM-NAV
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -2126,169 +2126,10 @@ export default function Dashboard() {
           ...(esMovil ? s.mainMobile : {}),
         }}
       >
-        {/* IMPORTANTE:
-            Gimnasio usa únicamente el menú móvil global de app/layout.js.
-            El menú móvil interno del Dashboard se conserva para los demás perfiles,
-            por lo que Salón de Belleza y otros módulos no se modifican. */}
-        {esMovil && !esGimnasio && (
-          <>
-            <div style={s.mobileBar}>
-              <img
-                src="/konax-logo.png"
-                alt="KONAX"
-                style={s.mobileLogo}
-              />
-
-              <button
-                type="button"
-                onClick={() =>
-                  setMenuMovilAbierto(
-                    (actual) => !actual
-                  )
-                }
-                style={s.mobileMenuButton}
-                aria-label={
-                  menuMovilAbierto
-                    ? "Cerrar menú"
-                    : "Abrir menú"
-                }
-                aria-expanded={menuMovilAbierto}
-              >
-                <span style={s.hamburgerIcon}>
-                  {menuMovilAbierto ? "×" : "☰"}
-                </span>
-
-                {menuMovilAbierto ? "Cerrar" : "Menú"}
-              </button>
-            </div>
-
-            {menuMovilAbierto && (
-              <>
-                <div
-                  onClick={() =>
-                    setMenuMovilAbierto(false)
-                  }
-                  style={{
-                    position: "fixed",
-                    inset: 0,
-                    zIndex: 55,
-                    background: "rgba(7,16,11,.34)",
-                    backdropFilter: "blur(2px)",
-                  }}
-                  aria-hidden="true"
-                />
-
-                <nav
-                  style={s.mobileMenu}
-                  aria-label="Menú principal"
-                >
-                  <div
-                    style={{
-                      padding: "7px 8px 11px",
-                      borderBottom:
-                        "1px solid #e4ebe7",
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "block",
-                        color: "#16834f",
-                        fontSize: 9,
-                        fontWeight: 900,
-                        letterSpacing: 1.2,
-                      }}
-                    >
-                      {etiquetaPanel}
-                    </span>
-
-                    <strong
-                      style={{
-                        display: "block",
-                        marginTop: 4,
-                        color: "#142019",
-                        fontSize: 16,
-                        lineHeight: 1.25,
-                      }}
-                    >
-                      {empresaNombre}
-                    </strong>
-
-                    <span
-                      style={{
-                        display: "block",
-                        marginTop: 3,
-                        color: "#78857d",
-                        fontSize: 11,
-                      }}
-                    >
-                      {usuarioNombre || "Usuario"}
-                      {" · "}
-                      {usuarioRol || "Sin rol"}
-                    </span>
-                  </div>
-
-                  {modulosMenu.map((item) => (
-                    <button
-                      key={`${item.codigo}-${item.ruta}`}
-                      type="button"
-                      onClick={() => {
-                        setMenuMovilAbierto(false);
-                        router.push(item.ruta);
-                      }}
-                      style={{
-                        ...s.mobileMenuItem,
-                        ...(item.codigo === "dashboard"
-                          ? s.mobileMenuItemActivo
-                          : {}),
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 30,
-                          height: 30,
-                          display: "grid",
-                          placeItems: "center",
-                          borderRadius: 9,
-                          background:
-                            item.codigo === "dashboard"
-                              ? "#dff3e7"
-                              : "#edf8f1",
-                          color: "#16834f",
-                          fontSize: 17,
-                          lineHeight: 1,
-                        }}
-                      >
-                        {item.icono}
-                      </span>
-
-                      <span
-                        style={{
-                          minWidth: 0,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {item.nombre}
-                      </span>
-                    </button>
-                  ))}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuMovilAbierto(false);
-                      cerrarSesion();
-                    }}
-                    style={s.mobileLogout}
-                  >
-                    ↪ Cerrar sesión
-                  </button>
-                </nav>
-              </>
-            )}
-          </>
-        )}
+        {/* Navegación móvil global:
+            en móvil se usa la barra inferior tipo app desde
+            components/KonaxMobileNav. No renderizamos un segundo
+            menú/hamburguesa dentro del Dashboard. */}
 
         <header
           className="dashboard-topbar"
