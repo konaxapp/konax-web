@@ -2,7 +2,7 @@
 
 // DASHBOARD KONAX - GIMNASIO + SALÓN DE BELLEZA - MOBILE HEADER CLEAN - 2026-08-20
 
-// KONAX Dashboard · Gimnasio + Dashboard Inteligente Belleza · Versión 2026.08.30-BI1
+// KONAX Dashboard · Gimnasio + Dashboard Inteligente Belleza · Versión 2026.08.31-NO-LOGIN-FLASH
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -1991,9 +1991,27 @@ export default function Dashboard() {
     bloqueado,
   ]);
 
-  // Pantalla completa de carga eliminada.
-  // El Dashboard renderiza directamente su estructura normal
-  // mientras se validan empresa, plan y permisos.
+  // Evita el "flash" del Dashboard genérico después del login.
+  // Mientras todavía se valida la empresa y el tipo de negocio,
+  // no renderizamos ninguna variante del Dashboard.
+  // Así nunca aparece por milisegundos "Control total de tu negocio"
+  // antes de cargar la vista correcta (Belleza, Gimnasio, etc.).
+  if (cargando) {
+    return (
+      <div
+        aria-busy="true"
+        aria-label="Cargando Dashboard KONAX"
+        style={{
+          minHeight: "100vh",
+          width: "100%",
+          maxWidth: "100vw",
+          overflow: "hidden",
+          background:
+            "linear-gradient(180deg,#f8faf9 0%,#f1f5f2 100%)",
+        }}
+      />
+    );
+  }
 
   if (bloqueado) {
     return (
