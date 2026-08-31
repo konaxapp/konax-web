@@ -837,6 +837,8 @@ export default function Dashboard() {
 
   const [empresaNombre, setEmpresaNombre] =
     useState("");
+  const [empresaLogoUrl, setEmpresaLogoUrl] =
+    useState("");
   const [planNombre, setPlanNombre] = useState("");
   const [planCodigo, setPlanCodigo] = useState("");
   const [estadoPlan, setEstadoPlan] = useState("");
@@ -1027,6 +1029,7 @@ export default function Dashboard() {
         .select(`
           id,
           nombre,
+          logo_url,
           plan_nombre,
           plan_codigo,
           estado_plan,
@@ -1154,6 +1157,7 @@ export default function Dashboard() {
     setEmpresaNombre(
       empresa.nombre || "Empresa"
     );
+    setEmpresaLogoUrl(empresa.logo_url || "");
     setPlanNombre(
       empresa.plan_nombre || "Sin plan"
     );
@@ -2078,7 +2082,7 @@ export default function Dashboard() {
     : esGimnasio
     ? `Control de alumnos y membresías · ${fechaPanel}`
     : esSalonBelleza
-    ? `Clientes, agenda y caja · ${fechaPanel}`
+    ? fechaPanel
     : `Panel general · ${fechaPanel}`;
 
   return (
@@ -2277,19 +2281,104 @@ export default function Dashboard() {
               : {}),
           }}
         >
-          <div>
-            <span style={s.eyebrow}>
-              {etiquetaPanel}
-            </span>
+          {esSalonBelleza ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: esMovil ? 13 : 16,
+                minWidth: 0,
+                flex: 1,
+              }}
+            >
+              <div
+                style={{
+                  width: esMovil ? 58 : 68,
+                  height: esMovil ? 58 : 68,
+                  flex: "0 0 auto",
+                  borderRadius: esMovil ? 17 : 20,
+                  overflow: "hidden",
+                  display: "grid",
+                  placeItems: "center",
+                  background: "linear-gradient(145deg,#edf9f3,#ffffff)",
+                  border: "1px solid #d9e9e0",
+                  boxShadow: "0 8px 20px rgba(15, 48, 34, .06)",
+                  color: "#0b6c4f",
+                  fontSize: esMovil ? 23 : 28,
+                  fontWeight: 950,
+                }}
+              >
+                {empresaLogoUrl ? (
+                  <img
+                    src={empresaLogoUrl}
+                    alt={`Logo de ${empresaNombre}`}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "contain",
+                      background: "#ffffff",
+                    }}
+                  />
+                ) : (
+                  "K"
+                )}
+              </div>
 
-            <h1 style={s.pageTitle}>
-              {empresaNombre}
-            </h1>
+              <div style={{ minWidth: 0 }}>
+                <span
+                  style={{
+                    display: "block",
+                    marginBottom: 4,
+                    color: "#14835e",
+                    fontSize: esMovil ? 9.5 : 10.5,
+                    fontWeight: 900,
+                    letterSpacing: "0.11em",
+                  }}
+                >
+                  SALÓN DE BELLEZA
+                </span>
 
-            <span style={s.pageSubtitle}>
-              {subtituloPanel}
-            </span>
-          </div>
+                <h1
+                  style={{
+                    ...s.pageTitle,
+                    margin: 0,
+                    fontSize: esMovil ? 19 : 26,
+                    lineHeight: 1.15,
+                  }}
+                >
+                  {empresaNombre}
+                </h1>
+
+                <strong
+                  style={{
+                    display: "block",
+                    marginTop: 7,
+                    color: "#0f5138",
+                    fontSize: esMovil ? 17 : 21,
+                    lineHeight: 1.2,
+                    fontWeight: 900,
+                    textTransform: "capitalize",
+                  }}
+                >
+                  {subtituloPanel}
+                </strong>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <span style={s.eyebrow}>
+                {etiquetaPanel}
+              </span>
+
+              <h1 style={s.pageTitle}>
+                {empresaNombre}
+              </h1>
+
+              <span style={s.pageSubtitle}>
+                {subtituloPanel}
+              </span>
+            </div>
+          )}
 
           {esGimnasio && !esMovil && (
             <div style={s.topbarGymImagenWrap}>
@@ -2304,32 +2393,34 @@ export default function Dashboard() {
             </div>
           )}
 
-          <div
-            style={{
-              ...s.userBox,
-              ...(esMovil
-                ? s.userBoxMobile
-                : {}),
-            }}
-          >
-            <div style={s.avatar}>
-              {String(
-                usuarioNombre || "U"
-              )
-                .charAt(0)
-                .toUpperCase()}
-            </div>
+          {!esSalonBelleza && (
+            <div
+              style={{
+                ...s.userBox,
+                ...(esMovil
+                  ? s.userBoxMobile
+                  : {}),
+              }}
+            >
+              <div style={s.avatar}>
+                {String(
+                  usuarioNombre || "U"
+                )
+                  .charAt(0)
+                  .toUpperCase()}
+              </div>
 
-            <div>
-              <strong style={s.userName}>
-                {usuarioNombre || "Usuario"}
-              </strong>
+              <div>
+                <strong style={s.userName}>
+                  {usuarioNombre || "Usuario"}
+                </strong>
 
-              <span style={s.userRole}>
-                {usuarioRol || "Sin rol"}
-              </span>
+                <span style={s.userRole}>
+                  {usuarioRol || "Sin rol"}
+                </span>
+              </div>
             </div>
-          </div>
+          )}
         </header>
 
         {pendienteInicio && (
@@ -2578,6 +2669,7 @@ export default function Dashboard() {
         ) : esSalonBelleza ? (
           <DashboardBelleza
             empresaNombre={empresaNombre}
+            empresaLogoUrl={empresaLogoUrl}
             resumen={resumenBelleza}
             cargandoResumen={cargandoResumenBelleza}
             avisoResumen={avisoResumenBelleza}
@@ -2795,11 +2887,21 @@ export default function Dashboard() {
 
 function DashboardBelleza({
   empresaNombre,
+  empresaLogoUrl,
   resumen,
   cargandoResumen,
   avisoResumen,
   esMovil,
 }) {
+  const [mostrarBienvenida, setMostrarBienvenida] = useState(true);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setMostrarBienvenida(false);
+    }, 2600);
+
+    return () => window.clearTimeout(timer);
+  }, []);
   const dinero = (valor) => {
     const numero = Number(valor || 0);
 
@@ -2858,82 +2960,44 @@ function DashboardBelleza({
         gap: esMovil ? 14 : 18,
       }}
     >
-      <article
-        style={{
-          position: "relative",
-          overflow: "hidden",
-          borderRadius: esMovil ? 22 : 28,
-          padding: esMovil ? "22px 18px" : "28px 30px",
-          background:
-            "linear-gradient(135deg, #071c2c 0%, #0c2d3d 68%, #0b3a3a 100%)",
-          boxShadow: "0 18px 48px rgba(7, 28, 44, 0.16)",
-          color: "#ffffff",
-        }}
-      >
+      {mostrarBienvenida && (
         <div
-          aria-hidden="true"
+          role="status"
+          aria-live="polite"
           style={{
-            position: "absolute",
-            width: 220,
-            height: 220,
-            borderRadius: "50%",
-            right: -80,
-            top: -105,
-            background: "rgba(38, 208, 154, 0.12)",
+            display: "flex",
+            alignItems: "center",
+            gap: 11,
+            border: "1px solid #d7eee3",
+            borderRadius: esMovil ? 16 : 18,
+            padding: esMovil ? "12px 14px" : "13px 16px",
+            background: "linear-gradient(135deg,#f4fff9,#ffffff)",
+            boxShadow: "0 8px 24px rgba(15, 93, 67, .06)",
+            color: "#123428",
+            animation: "konaxWelcomeIn .28s ease-out",
           }}
-        />
-
-        <div style={{ position: "relative", zIndex: 1 }}>
+        >
           <span
+            aria-hidden="true"
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 11,
-              lineHeight: 1,
-              fontWeight: 900,
-              letterSpacing: "0.13em",
-              color: "#72e1bb",
-              marginBottom: 10,
-            }}
-          >
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: "50%",
-                background: "#34d399",
-                boxShadow: "0 0 0 4px rgba(52, 211, 153, 0.10)",
-              }}
-            />
-            ESTADO DEL NEGOCIO
-          </span>
-
-          <h2
-            style={{
-              margin: 0,
-              fontSize: esMovil ? 26 : 34,
-              lineHeight: 1.08,
+              width: 30,
+              height: 30,
+              borderRadius: 10,
+              display: "grid",
+              placeItems: "center",
+              background: "#0c8b62",
+              color: "#fff",
+              fontSize: 15,
               fontWeight: 950,
-              letterSpacing: "-0.035em",
             }}
           >
-            Control diario de tu salón
-          </h2>
-
-          <p
-            style={{
-              margin: "10px 0 0",
-              maxWidth: 680,
-              fontSize: esMovil ? 13.5 : 15,
-              lineHeight: 1.65,
-              color: "rgba(255,255,255,0.72)",
-            }}
-          >
-            {empresaNombre || "Tu salón"} · Lo importante de hoy, en un solo lugar.
-          </p>
+            ✓
+          </span>
+          <strong style={{ fontSize: esMovil ? 13.5 : 15, fontWeight: 900 }}>
+            Bienvenido a KONAX
+          </strong>
         </div>
-      </article>
+      )}
 
       <div
         style={{
@@ -4115,6 +4179,11 @@ function Info({
 
 
 const DASHBOARD_RESPONSIVE_CSS = `
+@keyframes konaxWelcomeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
   .dashboard-konax-page,
   .dashboard-konax-page * {
     box-sizing: border-box;
