@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION_CAJA_GIMNASIO = "2026.08.31-CAJA-MOBILE-NO-OVERFLOW-FIX3";
+const VERSION_CAJA_GIMNASIO = "2026.08.31-CAJA-MOBILE-HEADER-COMPACTO-FIX4";
 
 function obtenerFechaPanama(fecha = new Date()) {
   const fechaObjeto =
@@ -4993,11 +4993,11 @@ const estilos={
   shell:{minHeight:"100vh",width:"100%",maxWidth:"100%",overflowX:"clip",boxSizing:"border-box"},
   loading:{minHeight:"100vh",display:"grid",placeItems:"center",alignContent:"center",gap:"10px",background:"#f4f7f5"},
   loadingLogo:{width:"220px",maxWidth:"75%"},loadingTitulo:{fontSize:"20px"},
-  topbar:{minHeight:"92px",padding:"16px 22px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:"18px",flexWrap:"wrap",background:"linear-gradient(120deg,#06331f 0%,#0b4d2d 54%,#0d6c3c 100%)",color:"#fff",boxShadow:"0 10px 28px rgba(11,66,40,.22)"},
-  topbarMarca:{display:"flex",alignItems:"center",gap:"16px",minWidth:0,flexWrap:"wrap",flex:"1 1 720px"},topbarLogoCard:{display:"grid",placeItems:"center",padding:"12px 18px",minHeight:"74px",borderRadius:"22px",background:"#ffffff",border:"1px solid rgba(255,255,255,.16)",boxShadow:"0 10px 24px rgba(0,0,0,.18)",flexShrink:0},topbarLogo:{width:"205px",height:"62px",objectFit:"contain",display:"block"},topbarSeparador:{width:"1px",height:"42px",background:"rgba(255,255,255,.22)"},topbarModulo:{fontSize:"13px",fontWeight:900,color:"#79e2a4",whiteSpace:"nowrap",letterSpacing:".3px"},topbarEmpresa:{margin:0,fontSize:"24px",lineHeight:1.05},topbarTexto:{margin:"4px 0 0",fontSize:"12px",color:"#e0f2e7",maxWidth:"420px"},
-  topbarAcciones:{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap",justifyContent:"flex-end"},
-  botonActualizar:{minHeight:"44px",padding:"0 18px",borderRadius:"12px",border:"1px solid rgba(255,255,255,.28)",background:"rgba(255,255,255,.10)",color:"#fff",fontWeight:850,cursor:"pointer",flexShrink:0},
-  botonVolver:{minHeight:"44px",padding:"0 18px",borderRadius:"12px",border:"1px solid #20bc69",background:"rgba(0,0,0,.12)",color:"#fff",fontWeight:800,cursor:"pointer",flexShrink:0},
+  topbar:{minHeight:"0",padding:"14px 14px 13px",display:"grid",gridTemplateColumns:"1fr",justifyContent:"stretch",alignItems:"start",gap:"11px",background:"linear-gradient(120deg,#06331f 0%,#0b4d2d 54%,#0d6c3c 100%)",color:"#fff",boxShadow:"0 8px 22px rgba(11,66,40,.18)"},
+  topbarMarca:{display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",alignItems:"center",gap:"10px 12px",minWidth:0,width:"100%"},topbarLogoCard:{display:"grid",placeItems:"center",padding:"6px 10px",minHeight:"0",borderRadius:"14px",background:"#ffffff",border:"1px solid rgba(255,255,255,.16)",boxShadow:"0 6px 16px rgba(0,0,0,.14)",flexShrink:0},topbarLogo:{width:"118px",height:"38px",objectFit:"contain",display:"block"},topbarSeparador:{display:"none"},topbarModulo:{fontSize:"10px",fontWeight:900,color:"#79e2a4",whiteSpace:"normal",letterSpacing:".25px"},topbarEmpresa:{margin:"2px 0 0",fontSize:"21px",lineHeight:1.04},topbarTexto:{margin:"4px 0 0",fontSize:"11px",lineHeight:1.35,color:"#e0f2e7",maxWidth:"100%"},
+  topbarAcciones:{display:"grid",gridTemplateColumns:"1fr 1fr",alignItems:"stretch",gap:"8px",width:"100%"},
+  botonActualizar:{minHeight:"40px",padding:"0 10px",borderRadius:"11px",border:"1px solid rgba(255,255,255,.28)",background:"rgba(255,255,255,.10)",color:"#fff",fontSize:"12px",fontWeight:850,cursor:"pointer",width:"100%"},
+  botonVolver:{minHeight:"40px",padding:"0 10px",borderRadius:"11px",border:"1px solid #20bc69",background:"rgba(0,0,0,.12)",color:"#fff",fontSize:"12px",fontWeight:800,cursor:"pointer",width:"100%"},
   fechaAyuda:{display:"block",maxWidth:"210px",color:"#6d7a72",fontSize:"9px",lineHeight:1.3},
   contenido:{width:"100%",maxWidth:"100%",padding:"14px 12px 24px",boxSizing:"border-box",overflowX:"hidden"},
   kpisGrid:{width:"100%",minWidth:0,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(220px,100%),1fr))",gap:"12px",marginBottom:"12px",boxSizing:"border-box"},
