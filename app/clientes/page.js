@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.29-KONAX-CLIENTES-COMERCIO-V1";
+const VERSION = "2026.08.31-KONAX-CLIENTES-MOBILE-CLEAN";
 
 export default function ClientesPage() {
   const router = useRouter();
@@ -1869,7 +1869,6 @@ Código: ${token}`;
       <div style={styles.contenedor}>
         <section style={styles.hero} className="clientes-hero">
           <div>
-            <span style={styles.eyebrow}>KONAX · {VERSION}</span>
             <h1 style={styles.titulo}>{tituloPrincipal}</h1>
             <p style={styles.subtitulo}>{subtituloPrincipal}</p>
           </div>
