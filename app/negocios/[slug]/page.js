@@ -8,26 +8,21 @@ export default function PortalPublicoNegocio() {
   const params = useParams();
 
   const slug = useMemo(() => {
-    const valor = params?.slug;
-
-    if (Array.isArray(valor)) {
-      return valor[0] || "";
-    }
-
-    return valor || "";
+    const value = params?.slug;
+    if (Array.isArray(value)) return value[0] || "";
+    return value || "";
   }, [params]);
 
   const [empresa, setEmpresa] = useState(null);
   const [servicios, setServicios] = useState([]);
   const [fotos, setFotos] = useState([]);
+  const [tab, setTab] = useState("servicios");
 
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (slug) {
-      cargarPortal();
-    }
+    if (slug) cargarPortal();
   }, [slug]);
 
   async function cargarPortal() {
@@ -35,55 +30,45 @@ export default function PortalPublicoNegocio() {
     setError("");
 
     try {
-      const { data: empresaData, error: empresaError } =
-        await supabase
-          .from("empresas")
-          .select(`
-            id,
-            nombre,
-            descripcion_publica,
-            slug_publico,
-            logo_url,
-            telefono,
-            correo,
-            direccion,
-            provincia,
-            distrito,
-            corregimiento,
-            latitud,
-            longitud,
-            categoria_negocio,
-            marketplace_publicado,
-            marketplace_estado
-          `)
-          .ilike("slug_publico", slug)
-          .maybeSingle();
+      const { data: empresaData, error: empresaError } = await supabase
+        .from("empresas")
+        .select(`
+          id,
+          nombre,
+          descripcion_publica,
+          slug_publico,
+          logo_url,
+          telefono,
+          correo,
+          direccion,
+          provincia,
+          distrito,
+          corregimiento,
+          latitud,
+          longitud,
+          categoria_negocio,
+          marketplace_publicado,
+          marketplace_estado
+        `)
+        .ilike("slug_publico", slug)
+        .maybeSingle();
 
-      if (empresaError) {
-        throw empresaError;
-      }
+      if (empresaError) throw empresaError;
 
       if (!empresaData) {
-        throw new Error(
-          "No encontramos este negocio en KONAX."
-        );
+        throw new Error("No encontramos este negocio en KONAX.");
       }
 
       if (
         empresaData.marketplace_publicado !== true ||
         empresaData.marketplace_estado !== "publicado"
       ) {
-        throw new Error(
-          "Este negocio todavía no está publicado."
-        );
+        throw new Error("Este negocio todavía no está publicado.");
       }
 
       setEmpresa(empresaData);
 
-      const [
-        serviciosRespuesta,
-        fotosRespuesta,
-      ] = await Promise.all([
+      const [serviciosResp, fotosResp] = await Promise.all([
         supabase
           .from("agenda_servicios")
           .select(`
@@ -93,13 +78,12 @@ export default function PortalPublicoNegocio() {
             precio,
             duracion_minutos,
             tipo,
-            activo
+            activo,
+            imagen_url
           `)
           .eq("empresa_id", empresaData.id)
           .eq("activo", true)
-          .order("nombre", {
-            ascending: true,
-          }),
+          .order("nombre", { ascending: true }),
 
         supabase
           .from("empresa_marketplace_fotos")
@@ -112,39 +96,22 @@ export default function PortalPublicoNegocio() {
           `)
           .eq("empresa_id", empresaData.id)
           .eq("activo", true)
-          .order("orden", {
-            ascending: true,
-          }),
+          .order("orden", { ascending: true }),
       ]);
 
-      if (serviciosRespuesta.error) {
-        console.error(
-          "Error cargando servicios:",
-          serviciosRespuesta.error
-        );
+      if (serviciosResp.error) {
+        console.error(serviciosResp.error);
       }
 
-      if (fotosRespuesta.error) {
-        console.error(
-          "Error cargando fotos:",
-          fotosRespuesta.error
-        );
+      if (fotosResp.error) {
+        console.error(fotosResp.error);
       }
 
-      setServicios(
-        serviciosRespuesta.data || []
-      );
-
-      setFotos(
-        fotosRespuesta.data || []
-      );
-    } catch (error) {
-      console.error(error);
-
-      setError(
-        error?.message ||
-          "No se pudo cargar este negocio."
-      );
+      setServicios(serviciosResp.data || []);
+      setFotos(fotosResp.data || []);
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || "No se pudo cargar este negocio.");
     } finally {
       setCargando(false);
     }
@@ -153,89 +120,27 @@ export default function PortalPublicoNegocio() {
   function reservarGeneral() {
     if (!empresa?.slug_publico) return;
 
-    /*
-      POR AHORA:
-      Este botón queda preparado.
-
-      Cuando confirmemos la ruta exacta
-      del portal actual de reservas,
-      sustituimos esta dirección.
-
-      Ejemplo final:
-      /reservar/salon-katherine
-    */
-
-    window.location.href =
-      `/reservar/${empresa.slug_publico}`;
+    window.location.href = `/reservar/${empresa.slug_publico}`;
   }
 
   function reservarServicio(servicio) {
-    if (
-      !empresa?.slug_publico ||
-      !servicio?.id
-    ) {
-      return;
-    }
-
-    /*
-      Dejamos el servicio en query string.
-
-      Luego el portal actual de reservas
-      puede leer servicio_id y abrir
-      directamente ese servicio.
-    */
+    if (!empresa?.slug_publico || !servicio?.id) return;
 
     window.location.href =
       `/reservar/${empresa.slug_publico}` +
-      `?servicio_id=${encodeURIComponent(
-        servicio.id
-      )}`;
+      `?servicio_id=${encodeURIComponent(servicio.id)}`;
   }
 
   function abrirWhatsApp() {
-    const telefono = String(
-      empresa?.telefono || ""
-    ).replace(/\D/g, "");
+    const telefono = String(empresa?.telefono || "").replace(/\D/g, "");
 
     if (!telefono) return;
 
-    const numero =
-      telefono.startsWith("507")
-        ? telefono
-        : `507${telefono}`;
+    const numero = telefono.startsWith("507")
+      ? telefono
+      : `507${telefono}`;
 
-    window.open(
-      `https://wa.me/${numero}`,
-      "_blank"
-    );
-  }
-
-  function compartir() {
-    const url = window.location.href;
-
-    if (navigator.share) {
-      navigator
-        .share({
-          title:
-            empresa?.nombre ||
-            "KONAX Negocios",
-          text:
-            empresa?.nombre ||
-            "Mira este negocio en KONAX",
-          url,
-        })
-        .catch(() => {});
-
-      return;
-    }
-
-    navigator.clipboard
-      ?.writeText(url)
-      .then(() => {
-        alert(
-          "Enlace copiado."
-        );
-      });
+    window.open(`https://wa.me/${numero}`, "_blank");
   }
 
   function abrirMapa() {
@@ -247,7 +152,6 @@ export default function PortalPublicoNegocio() {
         `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
         "_blank"
       );
-
       return;
     }
 
@@ -271,47 +175,57 @@ export default function PortalPublicoNegocio() {
     );
   }
 
+  async function compartir() {
+    const url = window.location.href;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: empresa?.nombre || "KONAX Negocios",
+          text: empresa?.nombre || "Mira este negocio en KONAX",
+          url,
+        });
+      } catch {}
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      alert("Enlace copiado.");
+    } catch {}
+  }
+
   if (cargando) {
     return (
-      <main className="kp-loading">
+      <main className="kn-loading">
         <style>{CSS}</style>
 
-        <img
-          src="/konax-logo.png"
-          alt="KONAX"
-        />
+        <img src="/konax-logo.png" alt="KONAX" />
 
-        <div className="kp-spinner" />
+        <div className="kn-spinner" />
 
-        <strong>
-          Cargando negocio...
-        </strong>
+        <strong>Cargando negocio...</strong>
       </main>
     );
   }
 
   if (error || !empresa) {
     return (
-      <main className="kp-error-page">
+      <main className="kn-error-page">
         <style>{CSS}</style>
 
         <img
           src="/konax-logo.png"
           alt="KONAX"
-          className="kp-error-logo"
+          className="kn-error-logo"
         />
 
-        <div className="kp-error-card">
-          <span>!</span>
+        <div className="kn-error-card">
+          <div className="kn-error-circle">!</div>
 
-          <h1>
-            Negocio no disponible
-          </h1>
+          <h1>Negocio no disponible</h1>
 
-          <p>
-            {error ||
-              "No encontramos este negocio."}
-          </p>
+          <p>{error || "No encontramos este negocio."}</p>
 
           <button
             type="button"
@@ -327,22 +241,22 @@ export default function PortalPublicoNegocio() {
   }
 
   const fotoPortada =
-    fotos?.[0]?.url || "";
+    fotos?.find((foto) => foto.tipo === "portada")?.url ||
+    fotos?.[0]?.url ||
+    "";
+
+  const galeria = fotos.filter((foto) => foto.url !== fotoPortada);
 
   return (
-    <main className="kp-page">
+    <main className="kn-page">
       <style>{CSS}</style>
 
-      <header className="kp-topbar">
-        <img
-          src="/konax-logo.png"
-          alt="KONAX"
-          className="kp-konax-logo"
-        />
+      <header className="kn-top">
+        <img src="/konax-logo.png" alt="KONAX" />
 
         <button
           type="button"
-          className="kp-share"
+          className="kn-share-top"
           onClick={compartir}
           aria-label="Compartir"
         >
@@ -350,382 +264,344 @@ export default function PortalPublicoNegocio() {
         </button>
       </header>
 
-      <section className="kp-hero">
+      <section className="kn-cover-wrap">
         {fotoPortada ? (
           <img
             src={fotoPortada}
             alt={empresa.nombre}
-            className="kp-cover"
+            className="kn-cover"
           />
         ) : (
-          <div className="kp-cover-empty">
-            <span>
-              {empresa.categoria_negocio
-                ? "KONAX NEGOCIOS"
-                : "KONAX"}
-            </span>
+          <div className="kn-cover-fallback">
+            <span>KONAX NEGOCIOS</span>
           </div>
         )}
 
-        <div className="kp-overlay" />
-
-        <div className="kp-business-head">
-          <div className="kp-logo-box">
-            {empresa.logo_url ? (
-              <img
-                src={empresa.logo_url}
-                alt={empresa.nombre}
-              />
-            ) : (
-              <strong>
-                {String(
-                  empresa.nombre || "K"
-                )
-                  .charAt(0)
-                  .toUpperCase()}
-              </strong>
-            )}
-          </div>
-
-          <div className="kp-business-info">
-            {empresa.categoria_negocio && (
-              <span className="kp-category">
-                {empresa.categoria_negocio}
-              </span>
-            )}
-
-            <h1>
-              {empresa.nombre}
-            </h1>
-
-            {(empresa.provincia ||
-              empresa.distrito) && (
-              <button
-                type="button"
-                className="kp-location-inline"
-                onClick={abrirMapa}
-              >
-                ⌖{" "}
-                {[
-                  empresa.distrito,
-                  empresa.provincia,
-                ]
-                  .filter(Boolean)
-                  .join(", ")}
-              </button>
-            )}
-          </div>
-        </div>
+        <div className="kn-cover-shade" />
       </section>
 
-      <section className="kp-main">
-        <button
-          type="button"
-          className="kp-reserve-main"
-          onClick={reservarGeneral}
-        >
-          <span>Reservar ahora</span>
-
-          <strong>→</strong>
-        </button>
-
-        <div className="kp-quick-actions">
-          {empresa.telefono && (
-            <button
-              type="button"
-              onClick={abrirWhatsApp}
-            >
-              <span>◉</span>
-
-              <small>
-                WhatsApp
-              </small>
-            </button>
+      <section className="kn-profile">
+        <div className="kn-logo">
+          {empresa.logo_url ? (
+            <img src={empresa.logo_url} alt={empresa.nombre} />
+          ) : (
+            <strong>
+              {String(empresa.nombre || "K")
+                .charAt(0)
+                .toUpperCase()}
+            </strong>
           )}
+        </div>
 
-          {(empresa.direccion ||
-            empresa.latitud) && (
-            <button
-              type="button"
-              onClick={abrirMapa}
-            >
-              <span>⌖</span>
+        <div className="kn-profile-actions">
+          <button type="button" onClick={abrirWhatsApp}>
+            💬
+          </button>
 
-              <small>
-                Cómo llegar
-              </small>
-            </button>
-          )}
+          <button type="button" onClick={abrirMapa}>
+            ⌖
+          </button>
 
-          <button
-            type="button"
-            onClick={compartir}
-          >
-            <span>↗</span>
-
-            <small>
-              Compartir
-            </small>
+          <button type="button" onClick={compartir}>
+            ↗
           </button>
         </div>
 
-        {empresa.descripcion_publica && (
-          <section className="kp-section">
-            <div className="kp-section-title">
-              <span>
-                Sobre nosotros
-              </span>
-
-              <h2>
-                Conoce el negocio
-              </h2>
-            </div>
-
-            <p className="kp-description">
-              {
-                empresa.descripcion_publica
-              }
-            </p>
-          </section>
-        )}
-
-        <section className="kp-section">
-          <div className="kp-section-title">
-            <span>
-              Reserva en línea
+        <div className="kn-profile-copy">
+          {empresa.categoria_negocio && (
+            <span className="kn-category">
+              {empresa.categoria_negocio}
             </span>
+          )}
 
-            <h2>
-              Servicios
-            </h2>
+          <h1>{empresa.nombre}</h1>
 
-            <p>
-              Selecciona el servicio que
-              deseas reservar.
-            </p>
+          <div className="kn-subline">
+            <span>★ Nuevo</span>
+
+            {(empresa.distrito || empresa.provincia) && (
+              <>
+                <b>·</b>
+
+                <button type="button" onClick={abrirMapa}>
+                  {[
+                    empresa.distrito,
+                    empresa.provincia,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
+                </button>
+              </>
+            )}
           </div>
+        </div>
 
-          {servicios.length === 0 ? (
-            <div className="kp-empty">
-              Este negocio todavía no ha
-              publicado servicios.
+        <button
+          type="button"
+          className="kn-main-cta"
+          onClick={reservarGeneral}
+        >
+          Reservar cita
+        </button>
+      </section>
+
+      <nav className="kn-tabs">
+        <button
+          type="button"
+          className={tab === "servicios" ? "active" : ""}
+          onClick={() => setTab("servicios")}
+        >
+          Servicios
+        </button>
+
+        <button
+          type="button"
+          className={tab === "equipo" ? "active" : ""}
+          onClick={() => setTab("equipo")}
+        >
+          Equipo
+        </button>
+
+        <button
+          type="button"
+          className={tab === "info" ? "active" : ""}
+          onClick={() => setTab("info")}
+        >
+          Información
+        </button>
+      </nav>
+
+      <section className="kn-content">
+        {tab === "servicios" && (
+          <>
+            <div className="kn-heading">
+              <span>Reserva en línea</span>
+              <h2>Servicios</h2>
             </div>
-          ) : (
-            <div className="kp-services">
-              {servicios.map(
-                (servicio) => (
+
+            {servicios.length === 0 ? (
+              <div className="kn-empty">
+                Este negocio todavía no ha publicado servicios.
+              </div>
+            ) : (
+              <div className="kn-services">
+                {servicios.map((servicio) => (
                   <article
                     key={servicio.id}
-                    className="kp-service-card"
+                    className="kn-service-card"
                   >
-                    <div className="kp-service-content">
-                      <span className="kp-service-type">
-                        {servicio.tipo ||
-                          empresa.categoria_negocio ||
-                          "Servicio"}
-                      </span>
+                    <div className="kn-service-photo">
+                      {servicio.imagen_url ? (
+                        <img
+                          src={servicio.imagen_url}
+                          alt={servicio.nombre}
+                        />
+                      ) : (
+                        <div className="kn-service-photo-empty">
+                          <span>K</span>
+                        </div>
+                      )}
+                    </div>
 
-                      <h3>
-                        {servicio.nombre}
-                      </h3>
+                    <div className="kn-service-body">
+                      <div className="kn-service-top">
+                        <div>
+                          <small>
+                            {servicio.tipo ||
+                              empresa.categoria_negocio ||
+                              "Servicio"}
+                          </small>
+
+                          <h3>{servicio.nombre}</h3>
+                        </div>
+
+                        <strong>
+                          B/.{" "}
+                          {Number(servicio.precio || 0).toFixed(2)}
+                        </strong>
+                      </div>
 
                       {servicio.descripcion && (
-                        <p>
-                          {
-                            servicio.descripcion
-                          }
-                        </p>
+                        <p>{servicio.descripcion}</p>
                       )}
 
-                      <div className="kp-service-meta">
+                      <div className="kn-service-bottom">
                         <span>
                           ◷{" "}
                           {Number(
-                            servicio.duracion_minutos ||
-                              60
+                            servicio.duracion_minutos || 60
                           )}{" "}
                           min
                         </span>
 
-                        <strong>
-                          B/.{" "}
-                          {Number(
-                            servicio.precio ||
-                              0
-                          ).toFixed(2)}
-                        </strong>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            reservarServicio(servicio)
+                          }
+                        >
+                          Reservar
+                        </button>
                       </div>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        reservarServicio(
-                          servicio
-                        )
-                      }
-                    >
-                      Reservar
-                    </button>
                   </article>
-                )
-              )}
-            </div>
-          )}
-        </section>
+                ))}
+              </div>
+            )}
 
-        {fotos.length > 0 && (
-          <section className="kp-section">
-            <div className="kp-section-title">
-              <span>
-                Nuestro espacio
-              </span>
+            {empresa.descripcion_publica && (
+              <section className="kn-section">
+                <div className="kn-heading">
+                  <span>Sobre nosotros</span>
+                  <h2>Conoce el negocio</h2>
+                </div>
 
-              <h2>
-                Galería
-              </h2>
-            </div>
+                <div className="kn-about-card">
+                  <p>{empresa.descripcion_publica}</p>
+                </div>
+              </section>
+            )}
 
-            <div className="kp-gallery">
-              {fotos.map(
-                (foto, index) => (
-                  <img
-                    key={foto.id || index}
-                    src={foto.url}
-                    alt={`${empresa.nombre} ${
-                      index + 1
-                    }`}
-                  />
-                )
-              )}
-            </div>
+            {fotos.length > 0 && (
+              <section className="kn-section">
+                <div className="kn-heading">
+                  <span>Nuestro espacio</span>
+                  <h2>Galería</h2>
+                </div>
+
+                <div className="kn-gallery-feature">
+                  <div className="kn-gallery-main">
+                    <img
+                      src={fotoPortada || fotos[0]?.url}
+                      alt={empresa.nombre}
+                    />
+                  </div>
+
+                  <div className="kn-gallery-side">
+                    {(galeria.length > 0 ? galeria : fotos)
+                      .slice(0, 2)
+                      .map((foto, index) => (
+                        <img
+                          key={foto.id || index}
+                          src={foto.url}
+                          alt={`${empresa.nombre} ${index + 1}`}
+                        />
+                      ))}
+                  </div>
+                </div>
+              </section>
+            )}
+          </>
+        )}
+
+        {tab === "equipo" && (
+          <section className="kn-tab-placeholder">
+            <div className="kn-icon-placeholder">👤</div>
+
+            <h2>Equipo</h2>
+
+            <p>
+              Aquí mostraremos los profesionales o colaboradores
+              disponibles para reservar.
+            </p>
           </section>
         )}
 
-        <section className="kp-section">
-          <div className="kp-section-title">
-            <span>
-              Información
-            </span>
+        {tab === "info" && (
+          <>
+            <div className="kn-heading">
+              <span>Información</span>
+              <h2>Sobre el negocio</h2>
+            </div>
 
-            <h2>
-              Encuéntranos
-            </h2>
-          </div>
+            <div className="kn-info-card">
+              {empresa.direccion && (
+                <button
+                  type="button"
+                  className="kn-info-row"
+                  onClick={abrirMapa}
+                >
+                  <span className="kn-info-icon">⌖</span>
 
-          <div className="kp-info-card">
-            {empresa.direccion && (
-              <button
-                type="button"
-                className="kp-info-row"
-                onClick={abrirMapa}
-              >
-                <span className="kp-info-icon">
-                  ⌖
-                </span>
+                  <div>
+                    <small>Dirección</small>
+                    <strong>{empresa.direccion}</strong>
 
-                <div>
-                  <small>
-                    Dirección
-                  </small>
+                    <p>
+                      {[
+                        empresa.corregimiento,
+                        empresa.distrito,
+                        empresa.provincia,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </p>
+                  </div>
 
-                  <strong>
-                    {
-                      empresa.direccion
-                    }
-                  </strong>
+                  <b>›</b>
+                </button>
+              )}
 
-                  <p>
-                    {[
-                      empresa.corregimiento,
-                      empresa.distrito,
-                      empresa.provincia,
-                    ]
-                      .filter(Boolean)
-                      .join(", ")}
-                  </p>
+              {empresa.telefono && (
+                <button
+                  type="button"
+                  className="kn-info-row"
+                  onClick={abrirWhatsApp}
+                >
+                  <span className="kn-info-icon">💬</span>
+
+                  <div>
+                    <small>WhatsApp</small>
+                    <strong>{empresa.telefono}</strong>
+                  </div>
+
+                  <b>›</b>
+                </button>
+              )}
+
+              {empresa.correo && (
+                <div className="kn-info-row">
+                  <span className="kn-info-icon">✉</span>
+
+                  <div>
+                    <small>Correo</small>
+                    <strong>{empresa.correo}</strong>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {empresa.descripcion_publica && (
+              <section className="kn-section">
+                <div className="kn-heading">
+                  <span>Descripción</span>
+                  <h2>Sobre nosotros</h2>
                 </div>
 
-                <b>›</b>
-              </button>
-            )}
-
-            {empresa.telefono && (
-              <button
-                type="button"
-                className="kp-info-row"
-                onClick={abrirWhatsApp}
-              >
-                <span className="kp-info-icon">
-                  ☎
-                </span>
-
-                <div>
-                  <small>
-                    Teléfono / WhatsApp
-                  </small>
-
-                  <strong>
-                    {
-                      empresa.telefono
-                    }
-                  </strong>
+                <div className="kn-about-card">
+                  <p>{empresa.descripcion_publica}</p>
                 </div>
-
-                <b>›</b>
-              </button>
+              </section>
             )}
+          </>
+        )}
 
-            {empresa.correo && (
-              <div className="kp-info-row">
-                <span className="kp-info-icon">
-                  ✉
-                </span>
+        <div className="kn-powered">
+          <img src="/konax-logo.png" alt="KONAX" />
 
-                <div>
-                  <small>
-                    Correo
-                  </small>
-
-                  <strong>
-                    {
-                      empresa.correo
-                    }
-                  </strong>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <div className="kp-marketplace-note">
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-          />
-
-          <p>
-            Reserva este negocio de forma
-            rápida y segura con KONAX.
-          </p>
+          <span>
+            Reservas y gestión digital con KONAX
+          </span>
         </div>
       </section>
 
-      <div className="kp-bottom-reserve">
+      <div className="kn-bottom">
         <div>
-          <small>
-            Reserva en línea
-          </small>
-
-          <strong>
-            {empresa.nombre}
-          </strong>
+          <small>Reserva en línea</small>
+          <strong>{empresa.nombre}</strong>
         </div>
 
-        <button
-          type="button"
-          onClick={reservarGeneral}
-        >
+        <button type="button" onClick={reservarGeneral}>
           Reservar
         </button>
       </div>
@@ -742,9 +618,12 @@ html,
 body {
   margin: 0;
   width: 100%;
-  max-width: 100%;
   overflow-x: hidden;
-  background: #f4f6f5;
+  background: #f5f6f5;
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
 }
 
 button {
@@ -752,1076 +631,955 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
-.kp-page {
+.kn-page {
   min-height: 100vh;
-  padding-bottom: 95px;
-
-  background:
-    linear-gradient(
-      180deg,
-      #ffffff 0%,
-      #f4f7f5 100%
-    );
-
+  padding-bottom: 90px;
+  background: #f6f7f6;
   color: #18221c;
-
-  font-family:
-    Arial,
-    Helvetica,
-    sans-serif;
 }
 
-.kp-topbar {
-  height: 58px;
-
-  padding:
-    8px 14px;
+.kn-top {
+  height: 56px;
+  padding: 7px 14px;
 
   display: grid;
-
-  grid-template-columns:
-    40px 1fr 40px;
-
+  grid-template-columns: 40px 1fr 40px;
   align-items: center;
 
   position: sticky;
-
   top: 0;
+  z-index: 50;
 
-  z-index: 40;
-
-  background:
-    rgba(255,255,255,.97);
-
-  border-bottom:
-    1px solid #e5ebe7;
-
-  backdrop-filter:
-    blur(14px);
+  background: rgba(255,255,255,.97);
+  border-bottom: 1px solid #e5e8e6;
+  backdrop-filter: blur(12px);
 }
 
-.kp-konax-logo {
-  width: 115px;
-
-  max-height: 32px;
-
-  object-fit: contain;
-
-  justify-self: center;
-
+.kn-top img {
   grid-column: 2;
+  width: 112px;
+  max-height: 30px;
+  object-fit: contain;
+  justify-self: center;
 }
 
-.kp-share {
+.kn-share-top {
+  grid-column: 3;
+
   width: 36px;
   height: 36px;
 
-  grid-column: 3;
-
-  border:
-    1px solid #dce5df;
-
-  border-radius: 12px;
+  border: 1px solid #dfe4e1;
+  border-radius: 50%;
 
   background: #fff;
+  color: #167348;
 
-  color: #087a47;
-
-  font-size: 18px;
-
+  font-size: 17px;
   font-weight: 900;
-
   cursor: pointer;
 }
 
-/* HERO */
-
-.kp-hero {
-  min-height: 280px;
-
+.kn-cover-wrap {
+  height: 220px;
   position: relative;
-
   overflow: hidden;
-
-  background: #1d2d24;
+  background: #dfe5e1;
 }
 
-.kp-cover {
+.kn-cover {
   width: 100%;
-  height: 310px;
-
-  object-fit: cover;
-
+  height: 100%;
   display: block;
+  object-fit: cover;
 }
 
-.kp-cover-empty {
+.kn-cover-fallback {
   width: 100%;
-  height: 300px;
+  height: 100%;
 
   display: grid;
-
   place-items: center;
 
   background:
     radial-gradient(
       circle at 20% 20%,
-      rgba(35,190,108,.28),
-      transparent 33%
+      rgba(58,151,102,.20),
+      transparent 38%
     ),
     linear-gradient(
       145deg,
-      #173428,
-      #0b6d42
+      #dfe8e3,
+      #bdd2c5
     );
 
-  color:
-    rgba(255,255,255,.60);
-
+  color: rgba(30,80,55,.35);
   font-size: 11px;
-
   font-weight: 900;
-
   letter-spacing: 2px;
 }
 
-.kp-overlay {
+.kn-cover-shade {
   position: absolute;
-
   inset: 0;
 
   background:
     linear-gradient(
       180deg,
-      rgba(0,0,0,.02) 20%,
-      rgba(8,19,12,.82) 100%
+      rgba(0,0,0,0) 45%,
+      rgba(0,0,0,.30) 100%
     );
-
-  pointer-events: none;
 }
 
-.kp-business-head {
-  width:
-    min(100%, 680px);
+.kn-profile {
+  width: min(100%, 720px);
+  margin: 0 auto;
 
-  padding:
-    0 18px 23px;
+  padding: 0 15px 16px;
 
-  position: absolute;
+  position: relative;
 
-  left: 50%;
-
-  bottom: 0;
-
-  transform:
-    translateX(-50%);
-
-  display: flex;
-
-  align-items: flex-end;
-
-  gap: 14px;
-
-  z-index: 3;
+  background: #fff;
+  border-bottom: 1px solid #e8ebe9;
 }
 
-.kp-logo-box {
-  width: 78px;
-  height: 78px;
+.kn-logo {
+  width: 82px;
+  height: 82px;
 
-  flex:
-    0 0 auto;
+  margin-top: -41px;
 
-  border:
-    4px solid #fff;
+  position: relative;
+  z-index: 4;
 
+  border: 4px solid #fff;
   border-radius: 22px;
 
-  display: grid;
-
-  place-items: center;
-
   overflow: hidden;
+
+  display: grid;
+  place-items: center;
 
   background: #fff;
 
   box-shadow:
-    0 8px 25px
-    rgba(0,0,0,.18);
+    0 8px 22px rgba(25,50,35,.16);
 }
 
-.kp-logo-box img {
+.kn-logo img {
   width: 100%;
   height: 100%;
-
   object-fit: contain;
 }
 
-.kp-logo-box strong {
-  color: #087a47;
-
+.kn-logo strong {
   font-size: 32px;
-
-  font-weight: 900;
+  color: #138052;
 }
 
-.kp-business-info {
-  min-width: 0;
+.kn-profile-actions {
+  position: absolute;
+  right: 15px;
+  top: 11px;
 
-  flex: 1;
+  display: flex;
+  gap: 7px;
 }
 
-.kp-category {
+.kn-profile-actions button {
+  width: 37px;
+  height: 37px;
+
+  border: 1px solid #dfe5e1;
+  border-radius: 50%;
+
+  background: #fff;
+  color: #176f48;
+
+  display: grid;
+  place-items: center;
+
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.kn-profile-copy {
+  padding-top: 13px;
+}
+
+.kn-category {
   display: inline-block;
 
   margin-bottom: 5px;
-
-  padding:
-    5px 9px;
+  padding: 4px 8px;
 
   border-radius: 999px;
 
-  background:
-    rgba(255,255,255,.16);
-
-  color: #fff;
+  background: #eef6f1;
+  color: #147a4d;
 
   font-size: 9px;
-
   font-weight: 900;
-
-  backdrop-filter:
-    blur(8px);
 }
 
-.kp-business-info h1 {
-  margin:
-    0 0 5px;
+.kn-profile-copy h1 {
+  margin: 0 0 7px;
 
-  color: #fff;
+  font-size: 27px;
+  line-height: 1.05;
+  letter-spacing: -.6px;
 
-  font-size:
-    clamp(
-      26px,
-      8vw,
-      40px
-    );
-
-  line-height: 1;
-
-  letter-spacing: -1px;
+  color: #19231d;
 }
 
-.kp-location-inline {
+.kn-subline {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+
+  color: #737f78;
+
+  font-size: 10px;
+}
+
+.kn-subline span {
+  color: #57675d;
+  font-weight: 800;
+}
+
+.kn-subline b {
+  color: #b3bbb6;
+}
+
+.kn-subline button {
   padding: 0;
-
   border: 0;
-
   background: transparent;
 
-  color:
-    rgba(255,255,255,.82);
-
-  font-size: 11px;
-
-  font-weight: 700;
-
+  color: #737f78;
+  font-size: 10px;
   cursor: pointer;
 }
 
-/* MAIN */
-
-.kp-main {
-  width:
-    min(100%, 680px);
-
-  margin:
-    0 auto;
-
-  padding:
-    15px 13px 30px;
-}
-
-.kp-reserve-main {
+.kn-main-cta {
   width: 100%;
+  height: 47px;
 
-  height: 55px;
-
-  padding:
-    0 18px;
+  margin-top: 15px;
 
   border: 0;
+  border-radius: 14px;
 
-  border-radius: 16px;
-
-  display: flex;
-
-  align-items: center;
-
-  justify-content: center;
-
-  gap: 12px;
-
-  background:
-    linear-gradient(
-      135deg,
-      #076c40,
-      #0b8d50,
-      #13ad61
-    );
-
+  background: #117c4d;
   color: #fff;
 
-  font-size: 15px;
-
+  font-size: 13px;
   font-weight: 900;
 
   box-shadow:
-    0 10px 24px
-    rgba(8,130,73,.20);
+    0 7px 16px rgba(20,125,77,.16);
 
   cursor: pointer;
 }
 
-.kp-reserve-main strong {
-  font-size: 21px;
-}
-
-/* QUICK ACTIONS */
-
-.kp-quick-actions {
-  margin-top: 12px;
+.kn-tabs {
+  width: min(100%, 720px);
+  margin: 0 auto;
 
   display: grid;
+  grid-template-columns: repeat(3,1fr);
 
-  grid-template-columns:
-    repeat(3,minmax(0,1fr));
+  position: sticky;
+  top: 56px;
+  z-index: 40;
+
+  background: #fff;
+  border-bottom: 1px solid #e4e8e5;
+}
+
+.kn-tabs button {
+  height: 48px;
+
+  border: 0;
+  border-bottom: 2px solid transparent;
+
+  background: #fff;
+  color: #747e78;
+
+  font-size: 10px;
+  font-weight: 850;
+
+  cursor: pointer;
+}
+
+.kn-tabs button.active {
+  color: #14764a;
+  border-bottom-color: #14764a;
+}
+
+.kn-content {
+  width: min(100%, 720px);
+  margin: 0 auto;
+
+  padding: 20px 13px 28px;
+}
+
+.kn-heading {
+  margin-bottom: 12px;
+}
+
+.kn-heading span {
+  color: #15794c;
+
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.kn-heading h2 {
+  margin: 3px 0 0;
+
+  color: #1d2821;
+
+  font-size: 22px;
+  line-height: 1.08;
+  letter-spacing: -.4px;
+}
+
+.kn-services {
+  display: grid;
+  gap: 10px;
+}
+
+.kn-service-card {
+  min-height: 116px;
+
+  display: grid;
+  grid-template-columns: 105px minmax(0,1fr);
+
+  overflow: hidden;
+
+  border: 1px solid #e0e6e2;
+  border-radius: 17px;
+
+  background: #fff;
+
+  box-shadow:
+    0 5px 15px rgba(25,55,38,.04);
+}
+
+.kn-service-photo {
+  min-height: 116px;
+  background: #eef1ef;
+}
+
+.kn-service-photo img {
+  width: 100%;
+  height: 100%;
+
+  display: block;
+  object-fit: cover;
+}
+
+.kn-service-photo-empty {
+  width: 100%;
+  height: 100%;
+
+  display: grid;
+  place-items: center;
+
+  background:
+    linear-gradient(
+      145deg,
+      #edf4f0,
+      #d9e7de
+    );
+}
+
+.kn-service-photo-empty span {
+  width: 37px;
+  height: 37px;
+
+  border-radius: 50%;
+
+  display: grid;
+  place-items: center;
+
+  background: #fff;
+  color: #148052;
+
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.kn-service-body {
+  min-width: 0;
+
+  padding: 11px 11px 10px;
+
+  display: grid;
+  align-content: space-between;
+}
+
+.kn-service-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kn-service-top > div {
+  min-width: 0;
+}
+
+.kn-service-top small {
+  color: #188054;
+
+  font-size: 7px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.kn-service-top h3 {
+  margin: 3px 0 0;
+
+  color: #222d26;
+
+  font-size: 14px;
+  line-height: 1.12;
+}
+
+.kn-service-top strong {
+  flex: 0 0 auto;
+
+  color: #166e48;
+
+  font-size: 12px;
+}
+
+.kn-service-body p {
+  margin: 6px 0;
+
+  color: #78827c;
+
+  font-size: 9px;
+  line-height: 1.35;
+
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kn-service-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 
   gap: 8px;
 }
 
-.kp-quick-actions button {
-  min-height: 67px;
+.kn-service-bottom span {
+  color: #7b857f;
 
-  padding:
-    8px;
+  font-size: 9px;
+}
 
-  border:
-    1px solid #dde6e0;
+.kn-service-bottom button {
+  height: 31px;
 
-  border-radius: 15px;
+  padding: 0 11px;
 
-  display: grid;
+  border: 1px solid #178251;
+  border-radius: 10px;
 
-  place-items: center;
+  background: #f1f8f4;
+  color: #14764a;
 
-  gap: 3px;
-
-  background: #fff;
-
-  color: #435248;
+  font-size: 9px;
+  font-weight: 900;
 
   cursor: pointer;
 }
 
-.kp-quick-actions button > span {
-  color: #087a47;
-
-  font-size: 18px;
-
-  font-weight: 900;
+.kn-section {
+  padding-top: 27px;
 }
 
-.kp-quick-actions small {
-  font-size: 9px;
+.kn-about-card {
+  padding: 15px;
 
-  font-weight: 850;
-}
-
-/* SECTIONS */
-
-.kp-section {
-  padding:
-    28px 2px 0;
-}
-
-.kp-section-title {
-  margin-bottom: 13px;
-}
-
-.kp-section-title > span {
-  color: #087a47;
-
-  font-size: 9px;
-
-  font-weight: 900;
-
-  letter-spacing: 1.1px;
-
-  text-transform: uppercase;
-}
-
-.kp-section-title h2 {
-  margin:
-    4px 0 3px;
-
-  color: #19241e;
-
-  font-size: 24px;
-
-  line-height: 1.05;
-
-  letter-spacing: -.5px;
-}
-
-.kp-section-title p {
-  margin: 0;
-
-  color: #78837d;
-
-  font-size: 11px;
-}
-
-.kp-description {
-  margin: 0;
-
-  padding:
-    15px;
-
-  border:
-    1px solid #e0e7e3;
-
+  border: 1px solid #e1e6e3;
   border-radius: 16px;
 
   background: #fff;
+}
 
-  color: #56645b;
+.kn-about-card p {
+  margin: 0;
 
-  font-size: 12px;
+  color: #626f67;
 
+  font-size: 11px;
   line-height: 1.6;
 }
 
-/* SERVICES */
-
-.kp-services {
-  display: grid;
-
-  gap: 10px;
-}
-
-.kp-service-card {
-  padding:
-    15px;
-
-  border:
-    1px solid #dde6e0;
-
-  border-radius: 18px;
+.kn-gallery-feature {
+  height: 210px;
 
   display: grid;
-
-  grid-template-columns:
-    minmax(0,1fr)
-    auto;
-
-  gap: 12px;
-
-  align-items: center;
-
-  background: #fff;
-
-  box-shadow:
-    0 5px 15px
-    rgba(25,60,39,.04);
-}
-
-.kp-service-content {
-  min-width: 0;
-}
-
-.kp-service-type {
-  color: #09804b;
-
-  font-size: 8px;
-
-  font-weight: 900;
-
-  text-transform: uppercase;
-
-  letter-spacing: .8px;
-}
-
-.kp-service-content h3 {
-  margin:
-    4px 0 5px;
-
-  color: #1c2721;
-
-  font-size: 16px;
-}
-
-.kp-service-content p {
-  margin:
-    0 0 8px;
-
-  color: #758079;
-
-  font-size: 10px;
-
-  line-height: 1.4;
-}
-
-.kp-service-meta {
-  display: flex;
-
-  align-items: center;
-
-  gap: 12px;
-
-  flex-wrap: wrap;
-}
-
-.kp-service-meta span {
-  color: #6e7a72;
-
-  font-size: 10px;
-}
-
-.kp-service-meta strong {
-  color: #087a47;
-
-  font-size: 13px;
-}
-
-.kp-service-card > button {
-  min-width: 81px;
-
-  height: 39px;
-
-  padding:
-    0 12px;
-
-  border:
-    1px solid #0b824c;
-
-  border-radius: 12px;
-
-  background: #edf9f2;
-
-  color: #087a47;
-
-  font-size: 11px;
-
-  font-weight: 900;
-
-  cursor: pointer;
-}
-
-.kp-empty {
-  padding:
-    20px 15px;
-
-  border:
-    1px dashed #cbd6cf;
-
-  border-radius: 16px;
-
-  background: #fff;
-
-  color: #7c8781;
-
-  text-align: center;
-
-  font-size: 11px;
-}
-
-/* GALLERY */
-
-.kp-gallery {
-  display: grid;
-
-  grid-template-columns:
-    repeat(3,minmax(0,1fr));
+  grid-template-columns: 1.55fr .8fr;
 
   gap: 7px;
 }
 
-.kp-gallery img {
-  width: 100%;
-
-  aspect-ratio: 1;
-
-  object-fit: cover;
-
-  border-radius: 14px;
-
-  border:
-    1px solid #e0e7e3;
+.kn-gallery-main,
+.kn-gallery-side {
+  min-width: 0;
+  min-height: 0;
 }
 
-/* INFO */
+.kn-gallery-main img {
+  width: 100%;
+  height: 100%;
 
-.kp-info-card {
+  display: block;
+  object-fit: cover;
+
+  border-radius: 16px;
+}
+
+.kn-gallery-side {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 7px;
+}
+
+.kn-gallery-side img {
+  width: 100%;
+  height: 100%;
+
+  min-height: 0;
+
+  display: block;
+  object-fit: cover;
+
+  border-radius: 13px;
+}
+
+.kn-info-card {
   overflow: hidden;
 
-  border:
-    1px solid #dde6e0;
-
-  border-radius: 18px;
+  border: 1px solid #e0e6e2;
+  border-radius: 17px;
 
   background: #fff;
 }
 
-.kp-info-row {
+.kn-info-row {
   width: 100%;
 
-  min-height: 67px;
-
-  padding:
-    11px 13px;
+  min-height: 64px;
+  padding: 10px 12px;
 
   border: 0;
-
-  border-bottom:
-    1px solid #edf1ef;
+  border-bottom: 1px solid #edf0ee;
 
   display: grid;
-
-  grid-template-columns:
-    36px
-    minmax(0,1fr)
-    auto;
+  grid-template-columns: 37px minmax(0,1fr) auto;
 
   gap: 10px;
-
   align-items: center;
 
   background: #fff;
 
-  color: #26332b;
-
   text-align: left;
+  color: #26322b;
 }
 
-.kp-info-row:last-child {
+.kn-info-row:last-child {
   border-bottom: 0;
 }
 
-button.kp-info-row {
+button.kn-info-row {
   cursor: pointer;
 }
 
-.kp-info-icon {
+.kn-info-icon {
   width: 35px;
   height: 35px;
 
   border-radius: 11px;
 
   display: grid;
-
   place-items: center;
 
-  background: #edf8f2;
-
-  color: #087a47;
-
-  font-size: 17px;
+  background: #eef6f1;
+  color: #16764b;
 }
 
-.kp-info-row > div {
+.kn-info-row > div {
   min-width: 0;
-
   display: grid;
-
   gap: 2px;
 }
 
-.kp-info-row small {
-  color: #87918b;
-
-  font-size: 8px;
-
-  font-weight: 800;
-
+.kn-info-row small {
+  color: #8b958f;
+  font-size: 7px;
+  font-weight: 900;
   text-transform: uppercase;
 }
 
-.kp-info-row strong {
-  color: #26332b;
-
-  font-size: 11px;
-
+.kn-info-row strong {
+  color: #26322b;
+  font-size: 10px;
   word-break: break-word;
 }
 
-.kp-info-row p {
+.kn-info-row p {
   margin: 0;
-
-  color: #758179;
-
+  color: #7e8982;
   font-size: 9px;
 }
 
-.kp-info-row > b {
-  color: #9aa39e;
-
-  font-size: 20px;
+.kn-info-row > b {
+  color: #a8b0ab;
+  font-size: 19px;
 }
 
-/* KONAX NOTE */
+.kn-tab-placeholder {
+  min-height: 280px;
 
-.kp-marketplace-note {
-  margin-top: 29px;
+  padding: 40px 22px;
 
-  padding:
-    17px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
 
-  border-radius: 17px;
+  text-align: center;
 
-  display: flex;
+  border: 1px solid #e1e6e3;
+  border-radius: 18px;
 
-  align-items: center;
-
-  gap: 12px;
-
-  background: #eaf7f0;
+  background: #fff;
 }
 
-.kp-marketplace-note img {
-  width: 80px;
+.kn-icon-placeholder {
+  width: 52px;
+  height: 52px;
+
+  margin-bottom: 10px;
+
+  border-radius: 50%;
+
+  display: grid;
+  place-items: center;
+
+  background: #eef6f1;
+
+  font-size: 21px;
 }
 
-.kp-marketplace-note p {
+.kn-tab-placeholder h2 {
+  margin: 0 0 6px;
+
+  color: #27332c;
+
+  font-size: 19px;
+}
+
+.kn-tab-placeholder p {
   margin: 0;
 
-  color: #5f6d64;
+  max-width: 280px;
+
+  color: #7b857f;
 
   font-size: 10px;
-
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
-/* BOTTOM */
+.kn-empty {
+  padding: 22px 14px;
 
-.kp-bottom-reserve {
-  min-height: 72px;
+  border: 1px dashed #cfd7d2;
+  border-radius: 16px;
+
+  background: #fff;
+
+  color: #7d8781;
+  text-align: center;
+
+  font-size: 10px;
+}
+
+.kn-powered {
+  margin-top: 30px;
+
+  padding: 15px;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 9px;
+
+  border-top: 1px solid #e3e7e4;
+}
+
+.kn-powered img {
+  width: 72px;
+}
+
+.kn-powered span {
+  color: #88928c;
+  font-size: 8px;
+}
+
+.kn-bottom {
+  min-height: 70px;
 
   padding:
-    9px 14px
-    max(
-      9px,
-      env(safe-area-inset-bottom)
-    );
-
-  display: grid;
-
-  grid-template-columns:
-    minmax(0,1fr)
-    auto;
-
-  gap: 10px;
-
-  align-items: center;
+    9px 13px
+    max(9px, env(safe-area-inset-bottom));
 
   position: fixed;
-
   left: 0;
-
   right: 0;
-
   bottom: 0;
 
-  z-index: 50;
+  z-index: 60;
 
-  border-top:
-    1px solid #dde5e0;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 10px;
+  align-items: center;
 
-  background:
-    rgba(255,255,255,.96);
+  background: rgba(255,255,255,.98);
+  border-top: 1px solid #dee4e0;
 
   box-shadow:
-    0 -5px 20px
-    rgba(25,55,38,.07);
+    0 -5px 18px rgba(20,45,30,.06);
 
-  backdrop-filter:
-    blur(14px);
+  backdrop-filter: blur(12px);
 }
 
-.kp-bottom-reserve > div {
+.kn-bottom > div {
   min-width: 0;
-
   display: grid;
 }
 
-.kp-bottom-reserve small {
-  color: #8a938e;
+.kn-bottom small {
+  color: #929b95;
 
-  font-size: 8px;
-
+  font-size: 7px;
+  font-weight: 800;
   text-transform: uppercase;
-
-  font-weight: 850;
 }
 
-.kp-bottom-reserve strong {
+.kn-bottom strong {
   overflow: hidden;
-
   text-overflow: ellipsis;
-
   white-space: nowrap;
 
-  color: #243129;
-
-  font-size: 12px;
+  color: #28342d;
+  font-size: 11px;
 }
 
-.kp-bottom-reserve button {
-  height: 43px;
+.kn-bottom button {
+  height: 42px;
 
-  padding:
-    0 18px;
+  padding: 0 18px;
 
   border: 0;
+  border-radius: 12px;
 
-  border-radius: 13px;
-
-  background:
-    linear-gradient(
-      135deg,
-      #087443,
-      #0ca158
-    );
-
+  background: #117d4d;
   color: #fff;
 
-  font-size: 12px;
-
+  font-size: 11px;
   font-weight: 900;
 
   cursor: pointer;
 }
 
-/* LOADING */
-
-.kp-loading {
+.kn-loading {
   min-height: 100vh;
 
   display: grid;
-
   place-content: center;
-
   justify-items: center;
+  gap: 13px;
 
-  gap: 14px;
-
-  background: #f4f7f5;
-
-  color: #405047;
-
-  font-family:
-    Arial,
-    sans-serif;
+  background: #f4f6f5;
+  color: #47554c;
 }
 
-.kp-loading img {
-  width: 130px;
+.kn-loading img {
+  width: 125px;
 }
 
-.kp-loading strong {
-  font-size: 12px;
+.kn-loading strong {
+  font-size: 11px;
 }
 
-.kp-spinner {
+.kn-spinner {
   width: 30px;
   height: 30px;
 
-  border:
-    3px solid #dce6e0;
-
-  border-top-color:
-    #0b804a;
-
+  border: 3px solid #dce5df;
+  border-top-color: #147c4d;
   border-radius: 50%;
 
-  animation:
-    kp-spin .8s
-    linear infinite;
+  animation: kn-spin .8s linear infinite;
 }
 
-@keyframes kp-spin {
+@keyframes kn-spin {
   to {
-    transform:
-      rotate(360deg);
+    transform: rotate(360deg);
   }
 }
 
-/* ERROR */
-
-.kp-error-page {
+.kn-error-page {
   min-height: 100vh;
 
-  padding:
-    30px 16px;
+  padding: 30px 16px;
 
   display: grid;
-
   place-content: center;
-
   justify-items: center;
 
-  background: #f4f7f5;
-
-  font-family:
-    Arial,
-    sans-serif;
+  background: #f4f6f5;
 }
 
-.kp-error-logo {
+.kn-error-logo {
   width: 120px;
-
-  margin-bottom: 18px;
+  margin-bottom: 17px;
 }
 
-.kp-error-card {
-  width:
-    min(100%, 390px);
+.kn-error-card {
+  width: min(100%, 390px);
 
-  padding:
-    26px 20px;
+  padding: 24px 19px;
 
-  border:
-    1px solid #e0e7e3;
-
-  border-radius: 22px;
+  border: 1px solid #e1e6e3;
+  border-radius: 20px;
 
   background: #fff;
 
   text-align: center;
 }
 
-.kp-error-card > span {
-  width: 48px;
-  height: 48px;
+.kn-error-circle {
+  width: 46px;
+  height: 46px;
 
-  margin:
-    0 auto 12px;
+  margin: 0 auto 11px;
 
   border-radius: 50%;
 
   display: grid;
-
   place-items: center;
 
-  background: #fff2f2;
+  background: #fff1f1;
+  color: #a73333;
 
-  color: #a72d2d;
-
-  font-size: 22px;
-
+  font-size: 20px;
   font-weight: 900;
 }
 
-.kp-error-card h1 {
-  margin:
-    0 0 7px;
+.kn-error-card h1 {
+  margin: 0 0 6px;
 
-  color: #26332b;
-
-  font-size: 22px;
+  color: #27332c;
+  font-size: 21px;
 }
 
-.kp-error-card p {
-  margin:
-    0 0 17px;
+.kn-error-card p {
+  margin: 0 0 16px;
 
-  color: #758079;
-
-  font-size: 11px;
-
-  line-height: 1.5;
+  color: #7b857f;
+  font-size: 10px;
+  line-height: 1.45;
 }
 
-.kp-error-card button {
-  height: 44px;
+.kn-error-card button {
+  height: 42px;
 
-  padding:
-    0 16px;
+  padding: 0 15px;
 
   border: 0;
+  border-radius: 12px;
 
-  border-radius: 13px;
-
-  background: #087a47;
-
+  background: #147c4d;
   color: #fff;
 
   font-weight: 900;
 }
 
-@media (min-width: 700px) {
-  .kp-cover,
-  .kp-cover-empty {
-    height: 390px;
+@media (min-width: 720px) {
+  .kn-cover-wrap {
+    width: 720px;
+    height: 280px;
+    margin: 0 auto;
   }
 
-  .kp-business-head {
-    padding-bottom: 28px;
+  .kn-profile {
+    border-left: 1px solid #e7ebe8;
+    border-right: 1px solid #e7ebe8;
   }
 
-  .kp-main {
-    padding-top: 20px;
+  .kn-tabs {
+    border-left: 1px solid #e7ebe8;
+    border-right: 1px solid #e7ebe8;
   }
 
-  .kp-bottom-reserve {
-    width: 680px;
+  .kn-content {
+    background: #f6f7f6;
+  }
+
+  .kn-bottom {
+    width: 720px;
 
     left: 50%;
-
     right: auto;
 
-    transform:
-      translateX(-50%);
+    transform: translateX(-50%);
 
-    border-left:
-      1px solid #dde5e0;
+    border-left: 1px solid #dee4e0;
+    border-right: 1px solid #dee4e0;
 
-    border-right:
-      1px solid #dde5e0;
-
-    border-radius:
-      18px 18px 0 0;
+    border-radius: 17px 17px 0 0;
   }
 }
 
-@media (max-width: 360px) {
-  .kp-business-head {
-    padding-left: 13px;
-    padding-right: 13px;
+@media (max-width: 380px) {
+  .kn-cover-wrap {
+    height: 195px;
   }
 
-  .kp-logo-box {
-    width: 68px;
-    height: 68px;
-
-    border-radius: 19px;
+  .kn-logo {
+    width: 72px;
+    height: 72px;
+    margin-top: -36px;
   }
 
-  .kp-business-info h1 {
-    font-size: 25px;
+  .kn-profile-copy h1 {
+    font-size: 24px;
   }
 
-  .kp-service-card {
-    grid-template-columns: 1fr;
+  .kn-service-card {
+    grid-template-columns: 92px minmax(0,1fr);
   }
 
-  .kp-service-card > button {
-    width: 100%;
+  .kn-service-photo {
+    min-height: 108px;
   }
 
-  .kp-gallery {
-    grid-template-columns:
-      repeat(2,minmax(0,1fr));
+  .kn-gallery-feature {
+    height: 185px;
   }
 }
 `;
