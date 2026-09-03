@@ -5,7 +5,7 @@ import { supabase } from "../../lib/supabase";
 
 // KONAX Configuración
 // Perfil empresarial + Gimnasio + Belleza + KONAX Agenda $10
-// Version 2026.09.02-AGENDA-BASICA-CONFIG-2-HORARIO-LOCAL
+// Version 2026.09.03-AGENDA-CONFIG-3-HORARIO-MAPS
 
 const PLAN_INICIAL = {
   nombre: "",
@@ -993,6 +993,27 @@ export default function AdminConfiguracion() {
     );
   }
 
+  function obtenerGoogleMapsUrl(direccion = empresa?.direccion) {
+    const texto = String(direccion || "").trim();
+
+    if (!texto) return "";
+
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      texto
+    )}`;
+  }
+
+  function abrirDireccionGoogleMaps() {
+    const url = obtenerGoogleMapsUrl();
+
+    if (!url) {
+      alert("Primero escriba la dirección del negocio.");
+      return;
+    }
+
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   // =========================================================
   // PERFIL / EMPRESA / PROFESIONALES / GIMNASIO EXISTENTES
   // =========================================================
@@ -1927,6 +1948,29 @@ export default function AdminConfiguracion() {
                     }
                     placeholder="Ej. Calle principal, La Chorrera, Panamá Oeste"
                   />
+
+                  <div style={S.mapsHelper}>
+                    <div style={{ minWidth: 0 }}>
+                      <strong style={S.mapsHelperTitle}>
+                        Google Maps
+                      </strong>
+
+                      <p style={S.mutedSmall}>
+                        KONAX usará esta misma dirección para que el
+                        cliente pueda abrir la ubicación y tocar
+                        “Cómo llegar” desde el sitio de reservas.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      style={S.mapsButton}
+                      onClick={abrirDireccionGoogleMaps}
+                      disabled={!String(empresa?.direccion || "").trim()}
+                    >
+                      Ver en Google Maps ↗
+                    </button>
+                  </div>
                 </Campo>
 
                 <div style={S.actions}>
@@ -4541,6 +4585,35 @@ const S = {
     background: "#111827",
     color: "#fff",
     overflowWrap: "anywhere",
+  },
+
+  mapsHelper: {
+    marginTop: 10,
+    padding: 12,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    border: "1px solid #dce9e2",
+    borderRadius: 13,
+    background: "#f7fbf8",
+  },
+
+  mapsHelperTitle: {
+    color: "#174d37",
+    fontSize: 13,
+  },
+
+  mapsButton: {
+    minHeight: 40,
+    padding: "0 14px",
+    border: "1px solid #bcdcc9",
+    borderRadius: 11,
+    background: "#ffffff",
+    color: "#0b7041",
+    fontWeight: 900,
+    cursor: "pointer",
   },
 
   businessHoursBox: {
