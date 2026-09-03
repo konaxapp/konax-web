@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V5-MAPS-COVER-SCROLL";
+const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V6-PARALLAX-SCROLL";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -1067,6 +1067,96 @@ export default function ReservaPublicaAutoservicioPage() {
     if (!tokenGestion || typeof window === "undefined") return "";
     return `${window.location.origin}/reservar/${slug}?cita=${tokenGestion}`;
   }
+
+  // =========================================================
+  // PORTADA MÓVIL · SCROLL REAL + PARALLAX SUAVE
+  // La portada forma parte del documento: al deslizar hacia
+  // arriba debe desaparecer como en el ejemplo de referencia.
+  // La imagen interior se mueve ligeramente para evitar que se
+  // perciba como un fondo estático.
+  // =========================================================
+  useEffect(() => {
+    if (cargando || paso !== 1 || typeof window === "undefined") {
+      return;
+    }
+
+    let frame = 0;
+    let cover = null;
+    let image = null;
+
+    function actualizarPortada() {
+      frame = 0;
+
+      if (!cover || !image) return;
+
+      const rect = cover.getBoundingClientRect();
+      const altoVentana =
+        window.innerHeight ||
+        document.documentElement.clientHeight ||
+        800;
+
+      // Fuera de pantalla: no hace falta seguir transformando.
+      if (rect.bottom < -80 || rect.top > altoVentana + 80) {
+        return;
+      }
+
+      // Cuando la página sube, la imagen se desplaza un poco
+      // más lento que la tarjeta para crear el efecto del video.
+      const desplazamiento = Math.max(
+        -24,
+        Math.min(34, -rect.top * 0.13)
+      );
+
+      image.style.transform =
+        `translate3d(0, ${desplazamiento}px, 0) scale(1.10)`;
+    }
+
+    function solicitarActualizacion() {
+      if (frame) return;
+
+      frame = window.requestAnimationFrame(actualizarPortada);
+    }
+
+    const iniciar = window.requestAnimationFrame(() => {
+      cover = document.querySelector(".kp-cover");
+      image = cover?.querySelector(".kp-cover-image") || null;
+
+      if (!cover || !image) return;
+
+      actualizarPortada();
+
+      window.addEventListener("scroll", solicitarActualizacion, {
+        passive: true,
+      });
+
+      window.addEventListener("resize", solicitarActualizacion, {
+        passive: true,
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(iniciar);
+
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+
+      window.removeEventListener("scroll", solicitarActualizacion);
+      window.removeEventListener("resize", solicitarActualizacion);
+
+      if (image) {
+        image.style.transform = "";
+      }
+    };
+  }, [
+    cargando,
+    paso,
+    tabPortal,
+    identidadEmpresa,
+    perfilPublicoLocal,
+    portal?.portada_url,
+    portal?.imagen_portada_url,
+  ]);
 
   if (cargando) {
     return (
@@ -4026,7 +4116,7 @@ const CSS = `
 
   .kp-public-profile {
     margin: -18px;
-    overflow: hidden;
+    overflow: visible;
     border-radius: 24px;
     background: #ffffff;
   }
@@ -4036,13 +4126,18 @@ const CSS = `
      Las pestañas sí permanecen visibles al llegar arriba.
   */
   .kp-cover {
-    position: relative;
+    position: relative !important;
+    top: auto !important;
+    inset: auto !important;
     min-height: 420px;
     padding: 20px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     overflow: hidden;
+    border-radius: 24px 24px 0 0;
+    touch-action: pan-y;
+    overscroll-behavior-y: auto;
     color: #ffffff;
     background:
       radial-gradient(circle at 80% 20%, rgba(48,182,127,.28), transparent 30%),
@@ -4053,15 +4148,18 @@ const CSS = `
 
   .kp-cover-image {
     position: absolute;
-    inset: 0;
+    inset: -6% 0;
     z-index: 0;
     width: 100%;
-    height: 100%;
+    height: 112%;
     object-fit: cover;
     object-position: center center;
-    transform: scale(1.015);
+    transform: translate3d(0,0,0) scale(1.10);
+    transform-origin: center center;
+    will-change: transform;
     pointer-events: none;
     user-select: none;
+    -webkit-user-drag: none;
   }
 
   .kp-cover-overlay {
@@ -4204,7 +4302,7 @@ const CSS = `
 
   .kp-profile-tabs {
     position: sticky;
-    top: 70px;
+    top: 66px;
     z-index: 15;
     min-height: 68px;
     padding: 0 18px;
@@ -5225,12 +5323,15 @@ const CSS = `
 
     .kp-public-profile {
       margin: -15px;
+      overflow: visible;
       border-radius: 21px;
     }
 
     .kp-cover {
       min-height: 390px;
       padding: 18px;
+      border-radius: 21px 21px 0 0;
+      touch-action: pan-y;
     }
 
     .kp-cover-content {
