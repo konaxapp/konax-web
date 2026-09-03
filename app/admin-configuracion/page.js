@@ -5,7 +5,7 @@ import { supabase } from "../../lib/supabase";
 
 // KONAX Configuración
 // Perfil empresarial + Gimnasio + Belleza + KONAX Agenda $10
-// Version 2026.09.02-AGENDA-BASICA-CONFIG-1
+// Version 2026.09.02-AGENDA-BASICA-CONFIG-2-HORARIO-LOCAL
 
 const PLAN_INICIAL = {
   nombre: "",
@@ -65,6 +65,16 @@ const DIAS = [
   { valor: 6, nombre: "Sábado" },
   { valor: 0, nombre: "Domingo" },
 ];
+
+function crearHorarioLocalInicial() {
+  return DIAS.map((dia) => ({
+    dia_semana: dia.valor,
+    nombre: dia.nombre,
+    hora_apertura: "09:00",
+    hora_cierre: "18:00",
+    cerrado: dia.valor === 0,
+  }));
+}
 
 function normalizar(valor) {
   return String(valor || "")
@@ -203,6 +213,12 @@ export default function AdminConfiguracion() {
   const [cargandoPortal, setCargandoPortal] = useState(false);
   const [guardandoPortal, setGuardandoPortal] = useState(false);
 
+  const [horariosLocal, setHorariosLocal] = useState(
+    crearHorarioLocalInicial()
+  );
+  const [cargandoHorariosLocal, setCargandoHorariosLocal] = useState(false);
+  const [guardandoHorariosLocal, setGuardandoHorariosLocal] = useState(false);
+
   const gimnasio = useMemo(() => esNegocioGimnasio(empresa), [empresa]);
   const salonBelleza = useMemo(() => esNegocioSalonBelleza(empresa), [empresa]);
   const agendaBasica = useMemo(() => esPlanAgendaBasica(empresa), [empresa]);
@@ -299,6 +315,8 @@ export default function AdminConfiguracion() {
 
     setUsuario(ru.data || null);
     setEmpresa(empresaData);
+
+    await cargarHorariosLocal(eId);
 
     // Sincroniza el plan con el Mobile Nav.
     if (empresaData) {
@@ -402,6 +420,123 @@ export default function AdminConfiguracion() {
     }
 
     setProfesionales(data || []);
+  }
+
+  // =========================================================
+  // HORARIO COMERCIAL DEL LOCAL
+  // Tabla: empresa_horarios
+  // Independiente de agenda_horarios.
+  // =========================================================
+
+  async function cargarHorariosLocal(id = empresaId()) {
+    if (!id) return;
+
+    setCargandoHorariosLocal(true);
+
+    const { data, error } = await supabase
+      .from("empresa_horarios")
+      .select("dia_semana,hora_apertura,hora_cierre,cerrado")
+      .eq("empresa_id", id);
+
+    setCargandoHorariosLocal(false);
+
+    if (error) {
+      console.error("Error cargando horario del local:", error);
+      setHorariosLocal(crearHorarioLocalInicial());
+      return;
+    }
+
+    const guardados = data || [];
+    const base = crearHorarioLocalInicial();
+
+    setHorariosLocal(
+      base.map((dia) => {
+        const encontrado = guardados.find(
+          (item) => Number(item.dia_semana) === Number(dia.dia_semana)
+        );
+
+        if (!encontrado) return dia;
+
+        return {
+          ...dia,
+          hora_apertura: horaCorta(
+            encontrado.hora_apertura || dia.hora_apertura
+          ),
+          hora_cierre: horaCorta(
+            encontrado.hora_cierre || dia.hora_cierre
+          ),
+          cerrado: Boolean(encontrado.cerrado),
+        };
+      })
+    );
+  }
+
+  function actualizarHorarioLocal(diaSemana, campo, valor) {
+    setHorariosLocal((actuales) =>
+      actuales.map((item) =>
+        Number(item.dia_semana) === Number(diaSemana)
+          ? { ...item, [campo]: valor }
+          : item
+      )
+    );
+  }
+
+  async function guardarHorariosLocal() {
+    const eId = empresaId();
+
+    if (!eId || guardandoHorariosLocal) return;
+
+    for (const horario of horariosLocal) {
+      if (horario.cerrado) continue;
+
+      if (!horario.hora_apertura || !horario.hora_cierre) {
+        alert(`Complete el horario de ${horario.nombre}.`);
+        return;
+      }
+
+      if (horario.hora_cierre <= horario.hora_apertura) {
+        alert(
+          `La hora de cierre de ${horario.nombre} debe ser posterior a la hora de apertura.`
+        );
+        return;
+      }
+    }
+
+    const ahora = new Date().toISOString();
+
+    const payload = horariosLocal.map((horario) => ({
+      empresa_id: eId,
+      dia_semana: Number(horario.dia_semana),
+      hora_apertura: horario.cerrado
+        ? null
+        : horario.hora_apertura,
+      hora_cierre: horario.cerrado
+        ? null
+        : horario.hora_cierre,
+      cerrado: Boolean(horario.cerrado),
+      updated_at: ahora,
+    }));
+
+    setGuardandoHorariosLocal(true);
+
+    const { error } = await supabase
+      .from("empresa_horarios")
+      .upsert(payload, {
+        onConflict: "empresa_id,dia_semana",
+      });
+
+    setGuardandoHorariosLocal(false);
+
+    if (error) {
+      alert(
+        "No se pudo guardar el horario del local: " +
+          error.message
+      );
+      return;
+    }
+
+    alert("Horario del local actualizado correctamente.");
+    await cargarHorariosLocal(eId);
   }
 
   // =========================================================
@@ -1790,18 +1925,149 @@ export default function AdminConfiguracion() {
                         e.target.value
                       )
                     }
+                    placeholder="Ej. Calle principal, La Chorrera, Panamá Oeste"
                   />
                 </Campo>
 
-                <button
-                  style={S.primary}
-                  onClick={guardarEmpresa}
+                <div style={S.actions}>
+                  <button
+                    style={S.primary}
+                    onClick={guardarEmpresa}
+                    disabled={guardando}
+                  >
+                    {guardando
+                      ? "Guardando..."
+                      : "Guardar negocio"}
+                  </button>
+                </div>
+
+                <div style={S.businessHoursBox} className="business-hours-box">
+                  <div style={S.businessHoursHead}>
+                    <div>
+                      <span style={S.businessHoursEyebrow}>
+                        HORARIO DEL LOCAL
+                      </span>
+
+                      <h3 style={S.businessHoursTitle}>
+                        Horario comercial
+                      </h3>
+
+                      <p style={S.muted}>
+                        Este es el horario que verán tus clientes
+                        en el sitio público de reservas.
+                      </p>
+                    </div>
+
+                    <span style={S.businessHoursBadge}>
+                      ◷ Público
+                    </span>
+                  </div>
+
+                  {cargandoHorariosLocal ? (
+                    <div style={S.empty}>
+                      Cargando horario del local...
+                    </div>
+                  ) : (
+                    <div className="business-hours-list">
+                      {horariosLocal.map((horario) => (
+                        <div
+                          key={horario.dia_semana}
+                          style={S.businessHourRow}
+                          className="business-hour-row"
+                        >
+                          <strong style={S.businessHourDay}>
+                            {horario.nombre}
+                          </strong>
+
+                          <label style={S.closedToggle}>
+                            <input
+                              type="checkbox"
+                              checked={Boolean(horario.cerrado)}
+                              onChange={(e) =>
+                                actualizarHorarioLocal(
+                                  horario.dia_semana,
+                                  "cerrado",
+                                  e.target.checked
+                                )
+                              }
+                            />
+                            <span>Cerrado</span>
+                          </label>
+
+                          <div
+                            style={S.businessHourTimes}
+                            className="business-hour-times"
+                          >
+                            <input
+                              style={{
+                                ...S.input,
+                                background: horario.cerrado
+                                  ? "#f3f4f6"
+                                  : "#fff",
+                              }}
+                              type="time"
+                              value={horario.hora_apertura}
+                              disabled={horario.cerrado}
+                              onChange={(e) =>
+                                actualizarHorarioLocal(
+                                  horario.dia_semana,
+                                  "hora_apertura",
+                                  e.target.value
+                                )
+                              }
+                            />
+
+                            <span style={S.hourSeparator}>a</span>
+
+                            <input
+                              style={{
+                                ...S.input,
+                                background: horario.cerrado
+                                  ? "#f3f4f6"
+                                  : "#fff",
+                              }}
+                              type="time"
+                              value={horario.hora_cierre}
+                              disabled={horario.cerrado}
+                              onChange={(e) =>
+                                actualizarHorarioLocal(
+                                  horario.dia_semana,
+                                  "hora_cierre",
+                                  e.target.value
+                                )
+                              }
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    style={S.greenPrimary}
+                    onClick={guardarHorariosLocal}
+                    disabled={
+                      guardandoHorariosLocal || cargandoHorariosLocal
+                    }
+                  >
+                    {guardandoHorariosLocal
+                      ? "Guardando horario..."
+                      : "Guardar horario del local"}
+                  </button>
+                </div>
+
+                {/* Guardar negocio se muestra arriba del horario comercial */}
+                {false && (
+                  <button
+                    style={S.primary}
+                    onClick={guardarEmpresa}
                   disabled={guardando}
                 >
                   {guardando
                     ? "Guardando..."
                     : "Guardar negocio"}
-                </button>
+                  </button>
+                )}
               </Card>
             )}
 
@@ -3440,6 +3706,26 @@ const CSS = `
     grid-template-columns: auto minmax(0,1fr);
   }
 
+
+  .business-hours-list {
+    display: grid;
+    gap: 9px;
+  }
+
+  .business-hour-row {
+    display: grid;
+    grid-template-columns: 120px 100px minmax(0,1fr);
+    gap: 12px;
+    align-items: center;
+  }
+
+  .business-hour-times {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
+    gap: 8px;
+    align-items: center;
+  }
+
   @media(max-width:900px) {
     html,
     body {
@@ -3559,6 +3845,18 @@ const CSS = `
 
     .slug-input {
       grid-template-columns: 1fr !important;
+    }
+
+    .business-hour-row {
+      grid-template-columns: 1fr auto !important;
+      gap: 8px !important;
+      padding: 12px 0 !important;
+      border-bottom: 1px solid #e5e7eb !important;
+    }
+
+    .business-hour-times {
+      grid-column: 1 / -1 !important;
+      grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) !important;
     }
 
     .config-page input,
@@ -4243,6 +4541,88 @@ const S = {
     background: "#111827",
     color: "#fff",
     overflowWrap: "anywhere",
+  },
+
+  businessHoursBox: {
+    marginTop: 24,
+    padding: 18,
+    border: "1px solid #d8e7df",
+    borderRadius: 18,
+    background:
+      "linear-gradient(135deg,#fbfdfc,#f1faf5)",
+  },
+
+  businessHoursHead: {
+    marginBottom: 16,
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 14,
+    flexWrap: "wrap",
+  },
+
+  businessHoursEyebrow: {
+    color: "#0d7b57",
+    fontSize: 10,
+    fontWeight: 950,
+    letterSpacing: 1,
+  },
+
+  businessHoursTitle: {
+    margin: "5px 0 2px",
+    color: "#123427",
+    fontSize: 21,
+  },
+
+  businessHoursBadge: {
+    padding: "7px 11px",
+    borderRadius: 999,
+    background: "#dcfce7",
+    color: "#166534",
+    fontSize: 11,
+    fontWeight: 900,
+  },
+
+  businessHourRow: {
+    padding: "10px 0",
+    borderBottom: "1px solid #e5ede8",
+  },
+
+  businessHourDay: {
+    color: "#1f3c31",
+    fontSize: 13,
+  },
+
+  businessHourTimes: {
+    minWidth: 0,
+  },
+
+  closedToggle: {
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+    color: "#5f6d66",
+    fontSize: 12,
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
+  hourSeparator: {
+    color: "#7a8780",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+
+  greenPrimary: {
+    marginTop: 18,
+    minHeight: 44,
+    padding: "0 18px",
+    border: 0,
+    borderRadius: 12,
+    background: "#0b7041",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
   },
 
   directNotice: {
