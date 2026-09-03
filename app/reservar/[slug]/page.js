@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.08.28-PORTAL-CARGA-RAPIDA-FIX5";
+const VERSION = "2026.09.02-PORTAL-PREMIUM-KONAX";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -104,6 +104,15 @@ function claveSlot(item) {
   ).slice(0, 5)}`;
 }
 
+function franjaDeHora(hora) {
+  const [h = "0"] = String(hora || "").split(":");
+  const numero = Number(h);
+
+  if (numero < 12) return "manana";
+  if (numero < 18) return "tarde";
+  return "noche";
+}
+
 
 function fechasHastaFinDeAnio2026() {
   const lista = [];
@@ -168,6 +177,7 @@ export default function ReservaPublicaAutoservicioPage() {
   const [profesionalSeleccionado, setProfesionalSeleccionado] =
     useState("sin-preferencia");
   const [horarioSeleccionado, setHorarioSeleccionado] = useState(null);
+  const [franjaHorario, setFranjaHorario] = useState("manana");
 
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
@@ -539,6 +549,48 @@ export default function ReservaPublicaAutoservicioPage() {
     profesionalSeleccionado,
   ]);
 
+  const slotsPorFranja = useMemo(() => {
+    const grupos = {
+      manana: [],
+      tarde: [],
+      noche: [],
+    };
+
+    slotsDisponibles.forEach((slot) => {
+      grupos[franjaDeHora(slot.hora_inicio)].push(slot);
+    });
+
+    return grupos;
+  }, [slotsDisponibles]);
+
+  const slotsFranjaVisible = useMemo(
+    () => slotsPorFranja[franjaHorario] || [],
+    [slotsPorFranja, franjaHorario]
+  );
+
+  useEffect(() => {
+    if (slotsDisponibles.length === 0) return;
+
+    const actualTiene =
+      (slotsPorFranja[franjaHorario] || []).length > 0;
+
+    if (actualTiene) return;
+
+    if (slotsPorFranja.manana.length > 0) {
+      setFranjaHorario("manana");
+      return;
+    }
+
+    if (slotsPorFranja.tarde.length > 0) {
+      setFranjaHorario("tarde");
+      return;
+    }
+
+    if (slotsPorFranja.noche.length > 0) {
+      setFranjaHorario("noche");
+    }
+  }, [slotsDisponibles, slotsPorFranja, franjaHorario]);
+
   const serviciosFechaActual = useMemo(() => {
     const mapa = new Map();
 
@@ -650,6 +702,7 @@ export default function ReservaPublicaAutoservicioPage() {
     setServicioFiltro(servicio.id);
     setProfesionalSeleccionado("sin-preferencia");
     setHorarioSeleccionado(null);
+    setFranjaHorario("manana");
     setError("");
 
     if (perfilBelleza) {
@@ -664,6 +717,7 @@ export default function ReservaPublicaAutoservicioPage() {
   function elegirProfesional(valor) {
     setProfesionalSeleccionado(valor);
     setHorarioSeleccionado(null);
+    setFranjaHorario("manana");
     setError("");
     setPaso(3);
   }
@@ -671,6 +725,7 @@ export default function ReservaPublicaAutoservicioPage() {
   function elegirFecha(valor) {
     setFecha(valor);
     setHorarioSeleccionado(null);
+    setFranjaHorario("manana");
     setError("");
   }
 
@@ -691,6 +746,7 @@ export default function ReservaPublicaAutoservicioPage() {
     setProfesionalesServicio([]);
     setProfesionalSeleccionado("sin-preferencia");
     setHorarioSeleccionado(null);
+    setFranjaHorario("manana");
     setReservaConfirmada(null);
     setTokenGestion("");
     setFecha(fechaISO());
@@ -1357,9 +1413,15 @@ export default function ReservaPublicaAutoservicioPage() {
 
                     <span className="kp-prof-info">
                       <strong>
-                        {perfilGimnasio ? "Cualquier instructor" : "Sin preferencia"}
+                        {perfilGimnasio
+                          ? "Cualquier instructor"
+                          : "Cualquier profesional"}
                       </strong>
-                      <small>Máxima disponibilidad</small>
+                      <small>
+                        {perfilGimnasio
+                          ? "KONAX te muestra la mejor disponibilidad"
+                          : "KONAX asigna una opción disponible"}
+                      </small>
                     </span>
 
                     <span className="kp-select">
@@ -1502,7 +1564,16 @@ export default function ReservaPublicaAutoservicioPage() {
                   </div>
                 </div>
 
-                <h3 className="kp-time-title">Escoge una hora</h3>
+                <div className="kp-time-heading">
+                  <div>
+                    <span className="kp-section-kicker">HORARIOS DISPONIBLES</span>
+                    <h3 className="kp-time-title">Elige la hora que prefieras</h3>
+                  </div>
+
+                  <span className="kp-date-caption">
+                    {fechaCorta(fecha)}
+                  </span>
+                </div>
 
                 {cargandoHorarios ? (
                   <div className="kp-empty">
@@ -1516,48 +1587,106 @@ export default function ReservaPublicaAutoservicioPage() {
                       : "Este profesional no tiene horas disponibles para esta fecha. Puedes elegir otra fecha o volver y seleccionar otro profesional."}
                   </div>
                 ) : (
-                  <div className="kp-time-cards">
-                    {slotsDisponibles.map((slot) => {
-                      const activo =
-                        claveSlot(horarioSeleccionado) ===
-                        claveSlot(slot);
+                  <>
+                    <div className="kp-period-tabs">
+                      {[
+                        ["manana", "Mañana"],
+                        ["tarde", "Tarde"],
+                        ["noche", "Noche"],
+                      ].map(([codigo, label]) => {
+                        const cantidad =
+                          slotsPorFranja[codigo]?.length || 0;
 
-                      return (
-                        <button
-                          key={claveSlot(slot)}
-                          type="button"
-                          className={`kp-time-card ${
-                            activo ? "active" : ""
-                          }`}
-                          onClick={() =>
-                            setHorarioSeleccionado(slot)
-                          }
-                        >
-                          {formatoHora(slot.hora_inicio)}
-                        </button>
-                      );
-                    })}
-                  </div>
+                        return (
+                          <button
+                            key={codigo}
+                            type="button"
+                            className={
+                              franjaHorario === codigo
+                                ? "active"
+                                : ""
+                            }
+                            onClick={() => {
+                              setFranjaHorario(codigo);
+                              setHorarioSeleccionado(null);
+                            }}
+                          >
+                            <span>{label}</span>
+                            <b>{cantidad}</b>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {slotsFranjaVisible.length === 0 ? (
+                      <div className="kp-period-empty">
+                        No hay horarios disponibles en esta franja.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="kp-slot-count">
+                          <strong>
+                            {slotsFranjaVisible.length}{" "}
+                            {slotsFranjaVisible.length === 1
+                              ? "horario disponible"
+                              : "horarios disponibles"}
+                          </strong>
+                          <span>
+                            Duración {servicioSeleccionado.duracion} min
+                          </span>
+                        </div>
+
+                        <div className="kp-time-cards">
+                          {slotsFranjaVisible.map((slot) => {
+                            const activo =
+                              claveSlot(horarioSeleccionado) ===
+                              claveSlot(slot);
+
+                            return (
+                              <button
+                                key={claveSlot(slot)}
+                                type="button"
+                                className={`kp-time-card ${
+                                  activo ? "active" : ""
+                                }`}
+                                onClick={() =>
+                                  setHorarioSeleccionado(slot)
+                                }
+                              >
+                                {formatoHora(slot.hora_inicio)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </>
                 )}
 
                 {horarioSeleccionado && (
-                  <button
-                    type="button"
-                    className="kp-continue kp-continue-fixed"
-                    onClick={continuarFechaHora}
-                  >
-                    <span className="kp-continue-detail">
-                      {servicioSeleccionado.requierePago
-                        ? `${dinero(
-                            servicioSeleccionado.precio
-                          )} · ${servicioSeleccionado.duracion} min`
-                        : `${servicioSeleccionado.duracion} min`}
-                    </span>
+                  <div className="kp-continue-fixed">
+                    <div className="kp-continue-summary">
+                      <span>RESUMEN</span>
+                      <strong>
+                        {servicioSeleccionado.requierePago
+                          ? dinero(servicioSeleccionado.precio)
+                          : `${servicioSeleccionado.duracion} min`}
+                      </strong>
+                      <small>
+                        {formatoHora(horarioSeleccionado.hora_inicio)}
+                        {" · "}
+                        {profesionalResumen}
+                      </small>
+                    </div>
 
-                    <strong className="kp-continue-action">
-                      Continuar <b>›</b>
-                    </strong>
-                  </button>
+                    <button
+                      type="button"
+                      className="kp-continue-action"
+                      onClick={continuarFechaHora}
+                    >
+                      Siguiente <b>›</b>
+                    </button>
+                  </div>
                 )}
               </div>
             )}
@@ -1578,7 +1707,7 @@ export default function ReservaPublicaAutoservicioPage() {
                     PASO 4 DE 4
                   </span>
 
-                  <h2>Resumen de tu reserva</h2>
+                  <h2>Completa tu reserva</h2>
 
                   <div className="kp-summary">
                     <ResumenFila
@@ -1618,7 +1747,7 @@ export default function ReservaPublicaAutoservicioPage() {
                   </div>
 
                   <div className="kp-note">
-                    Completa tus datos para finalizar la reserva.
+                    Revisa los detalles y completa tus datos para confirmar.
                   </div>
 
                   <form
@@ -1643,7 +1772,7 @@ export default function ReservaPublicaAutoservicioPage() {
                         onChange={(e) =>
                           setTelefono(e.target.value)
                         }
-                        placeholder="6000-0000"
+                        placeholder="+507 6000-0000"
                       />
                     </label>
 
@@ -1664,7 +1793,7 @@ export default function ReservaPublicaAutoservicioPage() {
                     >
                       {guardando
                         ? "Reservando..."
-                        : "Reservar ahora →"}
+                        : "Confirmar reserva"}
                     </button>
                   </form>
                 </div>
@@ -3188,6 +3317,517 @@ const CSS = `
   }
 
 
+
+  /* =========================================================
+     KONAX PORTAL PREMIUM · 2026.09.02
+     Diseño claro, sobrio y enfocado en conversión móvil.
+     ========================================================= */
+
+  .kp-page {
+    background:
+      radial-gradient(circle at 50% -120px, rgba(22,132,95,.08), transparent 340px),
+      #f7f9f8;
+    color: #10261d;
+  }
+
+  .kp-shell {
+    width: min(720px, 100%);
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .kp-topbar {
+    min-height: 70px;
+    margin-left: -16px;
+    margin-right: -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+    border-bottom-color: rgba(16,38,29,.08);
+    box-shadow: 0 6px 22px rgba(16,38,29,.04);
+  }
+
+  .kp-back {
+    border: 1px solid #e3e9e5;
+    color: #16372a;
+    box-shadow: 0 3px 10px rgba(16,38,29,.04);
+  }
+
+  .kp-top-icons button {
+    background: #f5f8f6;
+    color: #335246;
+  }
+
+  .kp-top-icons button.active {
+    border-color: #bcdccc;
+    background: #eaf7f1;
+    color: #087a55;
+  }
+
+  .kp-flow,
+  .kp-manage {
+    padding: 18px;
+    border-color: #e1e8e4;
+    border-radius: 24px;
+    box-shadow: 0 16px 44px rgba(16,38,29,.055);
+  }
+
+  .kp-business-window {
+    padding: 14px;
+    border-color: #e4eae6;
+    border-radius: 20px;
+    box-shadow: none;
+  }
+
+  .kp-business-window-info strong {
+    color: #10261d;
+    font-size: 18px;
+    font-weight: 850;
+  }
+
+  .kp-business-window-info span {
+    color: #708078;
+  }
+
+  .kp-stepper {
+    padding: 16px 12px 13px;
+    border-color: #e5ebe7;
+    border-radius: 20px;
+    background: #fbfcfb;
+  }
+
+  .kp-step-circle.active {
+    background: #087a55;
+    box-shadow: 0 7px 18px rgba(8,122,85,.22);
+  }
+
+  .kp-step-circle.done {
+    background: #e6f5ee;
+    color: #087a55;
+  }
+
+  .kp-step-line.done {
+    background: #16845f;
+  }
+
+  .kp-eyebrow-dark,
+  .kp-section-kicker {
+    color: #16845f;
+  }
+
+  .kp-flow h2,
+  .kp-manage h2 {
+    color: #10261d;
+    font-weight: 900;
+    letter-spacing: -.45px;
+  }
+
+  .kp-muted {
+    color: #68786f;
+    line-height: 1.5;
+  }
+
+  .kp-service {
+    border-color: #e0e7e3;
+    border-radius: 20px;
+    box-shadow: 0 7px 22px rgba(16,38,29,.045);
+  }
+
+  .kp-service-info strong {
+    color: #10261d;
+    font-weight: 850;
+  }
+
+  .kp-service-info b {
+    color: #087a55;
+  }
+
+  .kp-service > button {
+    background: #087a55;
+    box-shadow: 0 6px 14px rgba(8,122,85,.16);
+  }
+
+  .kp-blue-link,
+  .kp-link {
+    color: #16845f;
+  }
+
+  .kp-selected-service {
+    border: 1px solid #dce9e2;
+    background: #f5faf7;
+  }
+
+  .kp-prof {
+    min-height: 84px;
+    padding: 14px;
+    border-color: #dfe7e2;
+    border-radius: 20px;
+    box-shadow: 0 5px 18px rgba(16,38,29,.035);
+    transition:
+      transform .16s ease,
+      border-color .16s ease,
+      box-shadow .16s ease,
+      background .16s ease;
+  }
+
+  .kp-prof:hover,
+  .kp-prof:focus-visible {
+    transform: translateY(-1px);
+    border-color: #9fd0b9;
+    background: #fbfefc;
+    box-shadow: 0 9px 24px rgba(16,38,29,.07);
+    outline: none;
+  }
+
+  .kp-avatar {
+    width: 54px;
+    height: 54px;
+    border: 2px solid #d8eee3;
+    background: #ecf8f2;
+    color: #087a55;
+  }
+
+  .kp-prof-info strong {
+    color: #10261d;
+    font-size: 15px;
+    font-weight: 900;
+  }
+
+  .kp-prof-info small {
+    color: #738078;
+    line-height: 1.35;
+  }
+
+  .kp-select {
+    min-width: 92px;
+    border-color: #cfe4da;
+    background: #f3faf6;
+    color: #087a55;
+  }
+
+  .kp-booking-business {
+    border-color: #e1e8e4;
+    background: #fbfcfb;
+  }
+
+  .kp-date-strip-wrap {
+    margin-top: 14px;
+  }
+
+  .kp-date-pill {
+    min-width: 76px;
+    height: 106px;
+    border-color: #dfe7e2;
+    color: #44584d;
+    box-shadow: 0 4px 12px rgba(16,38,29,.025);
+  }
+
+  .kp-date-pill.active {
+    border-color: #087a55;
+    background: #087a55;
+    box-shadow: 0 9px 22px rgba(8,122,85,.20);
+  }
+
+  .kp-date-pill.available:not(.active) .kp-date-dot {
+    background: #27a574;
+  }
+
+  .kp-time-heading {
+    margin: 24px 0 12px;
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .kp-section-kicker {
+    display: block;
+    margin-bottom: 3px;
+    font-size: 9px;
+    font-weight: 950;
+    letter-spacing: 1.2px;
+  }
+
+  .kp-time-title {
+    margin: 0 !important;
+    color: #10261d;
+    font-size: 20px !important;
+    line-height: 1.2;
+  }
+
+  .kp-date-caption {
+    flex: 0 0 auto;
+    padding: 6px 9px;
+    border-radius: 999px;
+    background: #f0f6f3;
+    color: #567066;
+    font-size: 10px;
+    font-weight: 850;
+    text-transform: capitalize;
+  }
+
+  .kp-period-tabs {
+    margin: 0 0 16px;
+    padding: 5px;
+    display: grid;
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 5px;
+    border: 1px solid #dde6e1;
+    border-radius: 17px;
+    background: #f7faf8;
+  }
+
+  .kp-period-tabs button {
+    min-width: 0;
+    min-height: 52px;
+    padding: 6px 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 0;
+    border-radius: 13px;
+    background: transparent;
+    color: #617168;
+    cursor: pointer;
+  }
+
+  .kp-period-tabs button span {
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .kp-period-tabs button b {
+    min-width: 23px;
+    height: 23px;
+    padding: 0 6px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: #e8eeea;
+    color: #63736a;
+    font-size: 10px;
+  }
+
+  .kp-period-tabs button.active {
+    background: #087a55;
+    color: #ffffff;
+    box-shadow: 0 7px 16px rgba(8,122,85,.18);
+  }
+
+  .kp-period-tabs button.active b {
+    background: rgba(255,255,255,.18);
+    color: #ffffff;
+  }
+
+  .kp-period-empty {
+    padding: 18px;
+    border: 1px dashed #d8e1dc;
+    border-radius: 16px;
+    background: #fbfcfb;
+    color: #75827b;
+    text-align: center;
+    font-size: 12px;
+  }
+
+  .kp-slot-count {
+    margin: 2px 0 11px;
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .kp-slot-count strong {
+    color: #10261d;
+    font-size: 14px;
+  }
+
+  .kp-slot-count span {
+    color: #738078;
+    font-size: 11px;
+  }
+
+  .kp-time-cards {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 10px;
+    padding-bottom: 116px;
+  }
+
+  .kp-time-card {
+    min-height: 62px;
+    padding: 0 10px;
+    justify-content: center;
+    border-color: #dce5e0;
+    border-radius: 15px;
+    color: #173127;
+    font-size: 16px;
+    font-weight: 850;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(16,38,29,.025);
+  }
+
+  .kp-time-card.active {
+    border: 1px solid #087a55;
+    background: #eaf7f1;
+    color: #087a55;
+    box-shadow: inset 0 0 0 1px #087a55;
+  }
+
+  .kp-continue-fixed {
+    position: fixed;
+    left: 50%;
+    bottom: 14px;
+    transform: translateX(-50%);
+    z-index: 95;
+    width: min(620px, calc(100% - 28px));
+    min-height: 86px;
+    margin: 0;
+    padding: 12px 12px 12px 16px;
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid #e0e7e3;
+    border-radius: 22px;
+    background: rgba(255,255,255,.98);
+    color: #10261d;
+    box-shadow: 0 14px 40px rgba(16,38,29,.16);
+    backdrop-filter: blur(14px);
+  }
+
+  .kp-continue-summary {
+    min-width: 0;
+    display: grid;
+    gap: 1px;
+  }
+
+  .kp-continue-summary > span {
+    color: #728078;
+    font-size: 8.5px;
+    font-weight: 950;
+    letter-spacing: 1px;
+  }
+
+  .kp-continue-summary > strong {
+    color: #10261d;
+    font-size: 21px;
+    line-height: 1.1;
+  }
+
+  .kp-continue-summary > small {
+    max-width: 220px;
+    overflow: hidden;
+    color: #66766d;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kp-continue-action {
+    min-width: 132px;
+    min-height: 58px;
+    padding: 0 17px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    border: 0;
+    border-radius: 16px;
+    background: #087a55;
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 950;
+    box-shadow: 0 8px 20px rgba(8,122,85,.22);
+    cursor: pointer;
+  }
+
+  .kp-continue-action b {
+    font-size: 23px;
+    line-height: 1;
+    font-weight: 500;
+  }
+
+  .kp-summary {
+    padding: 16px;
+    border-color: #e0e8e3;
+    background: #f8faf9;
+  }
+
+  .kp-summary-row {
+    padding: 2px 0;
+  }
+
+  .kp-summary-row strong.accent {
+    color: #087a55;
+  }
+
+  .kp-note {
+    background: #f0f7f3;
+    color: #4f675b;
+  }
+
+  .kp-form {
+    gap: 14px;
+  }
+
+  .kp-form label > span {
+    color: #2d4439;
+    font-size: 12px;
+  }
+
+  .kp-form input,
+  .kp-form textarea,
+  .kp-cancel-box input {
+    min-height: 54px;
+    padding-left: 14px;
+    padding-right: 14px;
+    border-color: #cfdad4;
+    border-radius: 15px;
+    color: #10261d;
+    outline: none;
+    transition:
+      border-color .16s ease,
+      box-shadow .16s ease;
+  }
+
+  .kp-form input:focus,
+  .kp-form textarea:focus,
+  .kp-cancel-box input:focus {
+    border-color: #6cb696;
+    box-shadow: 0 0 0 4px rgba(22,132,95,.10);
+  }
+
+  .kp-confirm {
+    min-height: 56px;
+    border-radius: 16px;
+    background: #087a55;
+    box-shadow: 0 8px 20px rgba(8,122,85,.18);
+  }
+
+  .kp-secondary {
+    border-color: #9ccbb6;
+    color: #087a55;
+  }
+
+  .kp-bottom-nav {
+    border-color: #e1e8e4;
+    background: rgba(255,255,255,.985);
+    box-shadow: 0 10px 30px rgba(16,38,29,.10);
+  }
+
+  .kp-bottom-nav button {
+    color: #607168;
+  }
+
+  .kp-bottom-nav button:focus-visible {
+    color: #087a55;
+    outline: none;
+  }
+
+  .kp-footer {
+    color: #8b9891;
+  }
+
   .kp-dark {
     background:
       radial-gradient(circle at top right, rgba(20,163,95,.08), transparent 30%),
@@ -3364,7 +4004,122 @@ const CSS = `
     color: #49d98a;
   }
 
+
+  .kp-dark .kp-time-heading .kp-time-title,
+  .kp-dark .kp-slot-count strong,
+  .kp-dark .kp-continue-summary > strong {
+    color: #ffffff;
+  }
+
+  .kp-dark .kp-date-caption,
+  .kp-dark .kp-period-tabs,
+  .kp-dark .kp-period-empty {
+    background: #101813;
+    border-color: #304138;
+    color: #aeb9b2;
+  }
+
+  .kp-dark .kp-period-tabs button {
+    color: #aeb9b2;
+  }
+
+  .kp-dark .kp-period-tabs button b {
+    background: #25332c;
+    color: #b9c5be;
+  }
+
+  .kp-dark .kp-period-tabs button.active {
+    background: #16845f;
+    color: #ffffff;
+  }
+
+  .kp-dark .kp-period-tabs button.active b {
+    background: rgba(255,255,255,.16);
+    color: #ffffff;
+  }
+
+  .kp-dark .kp-slot-count span,
+  .kp-dark .kp-continue-summary > span,
+  .kp-dark .kp-continue-summary > small {
+    color: #aeb9b2;
+  }
+
+  .kp-dark .kp-continue-fixed {
+    background: rgba(15,23,19,.98);
+    border-color: #2b3a32;
+    color: #ffffff;
+  }
+
+  .kp-dark .kp-continue-action {
+    background: #16845f;
+    color: #ffffff;
+  }
+
   @media (max-width: 520px) {
+    .kp-flow,
+    .kp-manage {
+      padding: 15px;
+      border-radius: 21px;
+    }
+
+    .kp-stepper {
+      margin-left: -2px;
+      margin-right: -2px;
+      padding-left: 8px;
+      padding-right: 8px;
+    }
+
+    .kp-step-circle {
+      width: 31px;
+      height: 31px;
+    }
+
+    .kp-date-strip-wrap {
+      margin-left: -15px;
+      margin-right: -15px;
+      padding-left: 15px;
+      padding-right: 15px;
+    }
+
+    .kp-date-pill {
+      min-width: 72px;
+      height: 102px;
+    }
+
+    .kp-time-heading {
+      align-items: flex-start;
+    }
+
+    .kp-date-caption {
+      margin-top: 1px;
+    }
+
+    .kp-period-tabs button {
+      min-height: 50px;
+      gap: 4px;
+    }
+
+    .kp-period-tabs button span {
+      font-size: 11px;
+    }
+
+    .kp-time-card {
+      min-height: 58px;
+      font-size: 15px;
+    }
+
+    .kp-continue-fixed {
+      width: calc(100% - 24px);
+      min-height: 82px;
+      bottom: 10px;
+      padding: 10px 10px 10px 14px;
+    }
+
+    .kp-continue-action {
+      min-width: 122px;
+      min-height: 56px;
+      padding: 0 14px;
+    }
     .kp-continue-fixed {
       width: calc(100% - 28px);
       bottom: 12px;
