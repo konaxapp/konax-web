@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.09.02-PORTAL-PUBLICO-PREMIUM-V3";
+const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V4-DATOS-LOCAL";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -157,6 +157,23 @@ function formatoEntero(valor) {
   return new Intl.NumberFormat("es-PA").format(Number(valor || 0));
 }
 
+
+function formatearHoraLocalPublica(valor) {
+  if (!valor) return "";
+
+  const partes = String(valor).slice(0, 5).split(":");
+  const horas = Number(partes[0] || 0);
+  const minutos = Number(partes[1] || 0);
+
+  const fecha = new Date(2000, 0, 1, horas, minutos);
+
+  return new Intl.DateTimeFormat("es-PA", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(fecha);
+}
+
 export default function ReservaPublicaAutoservicioPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -169,6 +186,7 @@ export default function ReservaPublicaAutoservicioPage() {
 
   const [portal, setPortal] = useState(null);
   const [identidadEmpresa, setIdentidadEmpresa] = useState(null);
+  const [perfilPublicoLocal, setPerfilPublicoLocal] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [cargandoHorarios, setCargandoHorarios] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -276,9 +294,19 @@ export default function ReservaPublicaAutoservicioPage() {
 
     setPortal(data);
 
-    const [respuestaIdentidad, serviciosBase] = await Promise.all([
+    const [
+      respuestaIdentidad,
+      respuestaPerfilPublico,
+      serviciosBase,
+    ] = await Promise.all([
       supabase.rpc(
         "obtener_identidad_empresa_publica",
+        {
+          p_slug: slug,
+        }
+      ),
+      supabase.rpc(
+        "obtener_perfil_publico_agenda",
         {
           p_slug: slug,
         }
@@ -293,6 +321,23 @@ export default function ReservaPublicaAutoservicioPage() {
       : identidadData;
 
     setIdentidadEmpresa(identidad || null);
+
+    if (respuestaPerfilPublico?.error) {
+      console.warn(
+        "No se pudo cargar el perfil público del local:",
+        respuestaPerfilPublico.error
+      );
+      setPerfilPublicoLocal(null);
+    } else {
+      const perfilData = respuestaPerfilPublico?.data;
+      const perfil = Array.isArray(perfilData)
+        ? perfilData[0]
+        : perfilData;
+
+      setPerfilPublicoLocal(
+        perfil?.ok === false ? null : perfil || null
+      );
+    }
 
     if (esBelleza(data) && Array.isArray(serviciosBase) && serviciosBase.length > 0) {
       cargarEquipoPortal(serviciosBase);
@@ -1111,6 +1156,7 @@ export default function ReservaPublicaAutoservicioPage() {
   }
 
   const nombreNegocio =
+    perfilPublicoLocal?.empresa_nombre ||
     identidadEmpresa?.empresa_nombre ||
     portal.titulo_publico ||
     portal.empresa_nombre ||
@@ -1133,6 +1179,7 @@ export default function ReservaPublicaAutoservicioPage() {
     "";
 
   const direccionNegocio =
+    perfilPublicoLocal?.direccion ||
     identidadEmpresa?.direccion ||
     portal?.direccion ||
     "";
@@ -1143,10 +1190,34 @@ export default function ReservaPublicaAutoservicioPage() {
     portal?.tipo_negocio ||
     (perfilGimnasio ? "Gimnasio" : perfilBelleza ? "Belleza" : "Negocio");
 
-  const horarioPublico =
-    identidadEmpresa?.horario_hoy ||
-    portal?.horario_hoy ||
-    "";
+  const horarioPublico = (() => {
+    if (perfilPublicoLocal?.horario_configurado) {
+      if (perfilPublicoLocal?.cerrado_hoy) {
+        return "Cerrado hoy";
+      }
+
+      const apertura = formatearHoraLocalPublica(
+        perfilPublicoLocal?.hora_apertura
+      );
+      const cierre = formatearHoraLocalPublica(
+        perfilPublicoLocal?.hora_cierre
+      );
+
+      if (apertura && cierre) {
+        return `${
+          perfilPublicoLocal?.abierto_ahora
+            ? "Abierto ahora"
+            : "Horario de hoy"
+        } · ${apertura} – ${cierre}`;
+      }
+    }
+
+    return (
+      identidadEmpresa?.horario_hoy ||
+      portal?.horario_hoy ||
+      ""
+    );
+  })();
 
   return (
     <main className={`kp-page ${tema === "oscuro" ? "kp-dark" : ""}`}>
