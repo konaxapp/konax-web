@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.09.02-PORTAL-PUBLICO-PREMIUM-V2";
+const VERSION = "2026.09.02-PORTAL-PUBLICO-PREMIUM-V3";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -141,6 +141,20 @@ function fechaCorta(iso) {
 
 function inicialNombre(nombre) {
   return String(nombre || "?").trim().charAt(0).toUpperCase();
+}
+
+function obtenerCitasEjecutadas(servicio) {
+  return Number(
+    servicio?.citas_ejecutadas ??
+      servicio?.reservas_ejecutadas ??
+      servicio?.total_ejecutadas ??
+      servicio?.total_reservas_ejecutadas ??
+      0
+  );
+}
+
+function formatoEntero(valor) {
+  return new Intl.NumberFormat("es-PA").format(Number(valor || 0));
 }
 
 export default function ReservaPublicaAutoservicioPage() {
@@ -497,6 +511,7 @@ export default function ReservaPublicaAutoservicioPage() {
         precio: Number(item.precio || 0),
         requierePago: Boolean(item.requiere_pago),
         duracion: Number(item.duracion_minutos || 60),
+        citasEjecutadas: obtenerCitasEjecutadas(item),
       }));
     }
 
@@ -512,6 +527,7 @@ export default function ReservaPublicaAutoservicioPage() {
           precio: Number(item.precio || 0),
           requierePago: Boolean(item.requiere_pago),
           duracion: Number(item.duracion_minutos || 60),
+          citasEjecutadas: obtenerCitasEjecutadas(item),
         });
       }
     });
@@ -522,6 +538,26 @@ export default function ReservaPublicaAutoservicioPage() {
     serviciosCatalogo,
     perfilBelleza,
   ]);
+
+  const serviciosOrdenadosPorDemanda = useMemo(() => {
+    return [...servicios].sort((a, b) => {
+      const porReservas =
+        Number(b.citasEjecutadas || 0) -
+        Number(a.citasEjecutadas || 0);
+
+      if (porReservas !== 0) return porReservas;
+
+      return String(a.nombre || "").localeCompare(
+        String(b.nombre || ""),
+        "es"
+      );
+    });
+  }, [servicios]);
+
+  const serviciosMasPedidos = useMemo(
+    () => serviciosOrdenadosPorDemanda.slice(0, 3),
+    [serviciosOrdenadosPorDemanda]
+  );
 
   const profesionales = useMemo(() => {
     if (!servicioSeleccionado) return [];
@@ -1428,19 +1464,6 @@ export default function ReservaPublicaAutoservicioPage() {
                       </section>
                     )}
 
-                    <div className="kp-section-title-row">
-                      <div>
-                        <span className="kp-section-kicker">
-                          {perfilGimnasio ? "PROGRAMAS DISPONIBLES" : "SERVICIOS"}
-                        </span>
-                        <h2>
-                          {perfilGimnasio
-                            ? "Reserva tu próxima clase"
-                            : "Elige lo que necesitas"}
-                        </h2>
-                      </div>
-                    </div>
-
                     {cargandoServicios || cargandoHorarios ? (
                       <div className="kp-empty">
                         Consultando servicios...
@@ -1452,65 +1475,167 @@ export default function ReservaPublicaAutoservicioPage() {
                             ? "No hay clases disponibles hoy."
                             : "No hay servicios activos disponibles."}
                         </strong>
-                        <span>
-                          {buscandoFechas
-                            ? " Buscando próximas fechas..."
-                            : fechasConDisponibilidad.length > 0
-                            ? ` Próxima fecha disponible: ${formatoFecha(
-                                fechasConDisponibilidad[0]
-                              )}.`
-                            : " No hay fechas disponibles hasta el cierre del año."}
-                        </span>
                       </div>
                     ) : (
-                      <div className="kp-service-list kp-public-services">
-                        {servicios.map((servicio) => (
-                          <article
-                            key={servicio.id}
-                            className="kp-service kp-public-service"
-                          >
-                            {servicio.imagenUrl ? (
-                              <div className="kp-service-image">
-                                <img
-                                  src={servicio.imagenUrl}
-                                  alt={servicio.nombre}
-                                />
-                              </div>
-                            ) : (
-                              <div className="kp-service-icon">
-                                {perfilGimnasio
-                                  ? "●"
-                                  : normalizar(servicio.nombre).includes("manicure") ||
-                                    normalizar(servicio.nombre).includes("uña")
-                                  ? "✦"
-                                  : normalizar(servicio.nombre).includes("color")
-                                  ? "◐"
-                                  : "✂"}
-                              </div>
-                            )}
-
-                            <div className="kp-service-info">
-                              <strong>{servicio.nombre}</strong>
-                              <span>{servicio.duracion} min</span>
-
-                              {servicio.descripcion && (
-                                <small>{servicio.descripcion}</small>
-                              )}
-
-                              {servicio.requierePago && (
-                                <b>{dinero(servicio.precio)}</b>
-                              )}
+                      <>
+                        <section className="kp-popular-section">
+                          <div className="kp-popular-heading">
+                            <div>
+                              <span className="kp-section-kicker">MÁS RESERVADOS</span>
+                              <h2>Lo más pedido aquí</h2>
                             </div>
 
                             <button
                               type="button"
-                              onClick={() => elegirServicio(servicio)}
+                              className="kp-view-all"
+                              onClick={() =>
+                                document
+                                  .getElementById("todos-los-servicios")
+                                  ?.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "start",
+                                  })
+                              }
                             >
-                              Reservar
+                              Ver todos <span>→</span>
                             </button>
-                          </article>
-                        ))}
-                      </div>
+                          </div>
+
+                          <div className="kp-popular-list">
+                            {serviciosMasPedidos.map((servicio, index) => (
+                              <article
+                                key={`popular-${servicio.id}`}
+                                className={`kp-popular-card ${
+                                  index === 0 ? "first" : ""
+                                }`}
+                              >
+                                <div className="kp-rank-badge">
+                                  N.º {index + 1} EN RESERVAS
+                                </div>
+
+                                <div className="kp-popular-media">
+                                  {servicio.imagenUrl ? (
+                                    <img
+                                      src={servicio.imagenUrl}
+                                      alt={servicio.nombre}
+                                    />
+                                  ) : (
+                                    <div className="kp-popular-placeholder">
+                                      {perfilGimnasio ? "◉" : "✦"}
+                                    </div>
+                                  )}
+
+                                  <div className="kp-executed-chip">
+                                    <span>✓</span>
+                                    <strong>
+                                      {formatoEntero(servicio.citasEjecutadas)}
+                                    </strong>
+                                    <small>citas ejecutadas</small>
+                                  </div>
+                                </div>
+
+                                <div className="kp-popular-info">
+                                  <strong className="kp-popular-name">
+                                    {servicio.nombre}
+                                  </strong>
+
+                                  <span className="kp-popular-meta">
+                                    {servicio.duracion} min
+                                  </span>
+
+                                  {servicio.requierePago && (
+                                    <div className="kp-popular-price">
+                                      <small>Precio desde</small>
+                                      <strong>
+                                        {dinero(servicio.precio)}
+                                      </strong>
+                                    </div>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    onClick={() => elegirServicio(servicio)}
+                                  >
+                                    Reservar
+                                  </button>
+                                </div>
+                              </article>
+                            ))}
+                          </div>
+                        </section>
+
+                        <section
+                          id="todos-los-servicios"
+                          className="kp-all-services"
+                        >
+                          <div className="kp-all-services-title">
+                            <div>
+                              <span className="kp-section-kicker">
+                                CATÁLOGO COMPLETO
+                              </span>
+                              <h2>
+                                {perfilGimnasio
+                                  ? "Todas las clases"
+                                  : "Todos los servicios"}
+                              </h2>
+                            </div>
+
+                            <span className="kp-service-total">
+                              {servicios.length}
+                            </span>
+                          </div>
+
+                          <div className="kp-service-list kp-public-services">
+                            {servicios.map((servicio) => (
+                              <article
+                                key={servicio.id}
+                                className="kp-service kp-public-service"
+                              >
+                                {servicio.imagenUrl ? (
+                                  <div className="kp-service-image">
+                                    <img
+                                      src={servicio.imagenUrl}
+                                      alt={servicio.nombre}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="kp-service-icon">
+                                    {perfilGimnasio ? "●" : "✦"}
+                                  </div>
+                                )}
+
+                                <div className="kp-service-info">
+                                  <strong>{servicio.nombre}</strong>
+
+                                  <span>
+                                    {servicio.duracion} min
+                                    {servicio.citasEjecutadas > 0
+                                      ? ` · ${formatoEntero(
+                                          servicio.citasEjecutadas
+                                        )} citas ejecutadas`
+                                      : ""}
+                                  </span>
+
+                                  {servicio.descripcion && (
+                                    <small>{servicio.descripcion}</small>
+                                  )}
+
+                                  {servicio.requierePago && (
+                                    <b>{dinero(servicio.precio)}</b>
+                                  )}
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => elegirServicio(servicio)}
+                                >
+                                  Reservar
+                                </button>
+                              </article>
+                            ))}
+                          </div>
+                        </section>
+                      </>
                     )}
                   </div>
                 )}
@@ -2379,7 +2504,7 @@ const CSS = `
     padding-bottom: 150px;
     background: #f5f7f6;
     color: #152019;
-    font-family: Inter, system-ui, "Segoe UI", sans-serif;
+    font-family: "Avenir Next", "Segoe UI Variable", "Segoe UI", Inter, system-ui, sans-serif;
   }
 
   .kp-shell {
@@ -3541,6 +3666,268 @@ const CSS = `
 
 
 
+
+  /* =========================================================
+     RANKING DE SERVICIOS + TIPOGRAFÍA PREMIUM
+     ========================================================= */
+
+  .kp-page {
+    font-family:
+      "Avenir Next",
+      "Segoe UI Variable",
+      "Segoe UI",
+      Inter,
+      system-ui,
+      sans-serif;
+    letter-spacing: -.012em;
+  }
+
+  .kp-cover h1,
+  .kp-profile-section h2,
+  .kp-popular-heading h2,
+  .kp-all-services-title h2,
+  .kp-flow h2 {
+    font-weight: 800;
+    letter-spacing: -.045em;
+  }
+
+  .kp-popular-section {
+    margin-top: 6px;
+  }
+
+  .kp-popular-heading,
+  .kp-all-services-title {
+    margin-bottom: 15px;
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 14px;
+  }
+
+  .kp-popular-heading h2,
+  .kp-all-services-title h2 {
+    margin: 4px 0 0;
+    color: #10261d;
+    font-size: 29px;
+    line-height: 1.02;
+  }
+
+  .kp-view-all {
+    flex: 0 0 auto;
+    padding: 7px 0;
+    border: 0;
+    background: transparent;
+    color: #087a55;
+    font-size: 12px;
+    font-weight: 850;
+    cursor: pointer;
+  }
+
+  .kp-view-all span {
+    margin-left: 3px;
+    font-size: 17px;
+  }
+
+  .kp-popular-list {
+    display: grid;
+    gap: 14px;
+  }
+
+  .kp-popular-card {
+    position: relative;
+    min-height: 220px;
+    padding: 12px;
+    display: grid;
+    grid-template-columns: 43% minmax(0,1fr);
+    gap: 14px;
+    overflow: hidden;
+    border: 1px solid #dfe7e2;
+    border-radius: 22px;
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(16,38,29,.045);
+  }
+
+  .kp-popular-card.first {
+    border-color: #b9d9ca;
+    box-shadow:
+      0 10px 30px rgba(16,38,29,.055),
+      inset 4px 0 0 #087a55;
+  }
+
+  .kp-rank-badge {
+    position: absolute;
+    z-index: 4;
+    top: 12px;
+    left: 12px;
+    min-height: 31px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    border-radius: 10px 10px 10px 3px;
+    background: #087a55;
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 950;
+    letter-spacing: .75px;
+  }
+
+  .kp-popular-card:not(.first) .kp-rank-badge {
+    background: #66756d;
+  }
+
+  .kp-popular-media {
+    position: relative;
+    min-height: 196px;
+    overflow: hidden;
+    border-radius: 17px;
+    background: #edf3ef;
+  }
+
+  .kp-popular-media > img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+  }
+
+  .kp-popular-placeholder {
+    width: 100%;
+    height: 100%;
+    min-height: 196px;
+    display: grid;
+    place-items: center;
+    background: #eaf5ef;
+    color: #087a55;
+    font-size: 42px;
+  }
+
+  .kp-executed-chip {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    max-width: calc(100% - 16px);
+    padding: 7px 9px;
+    display: grid;
+    grid-template-columns: auto auto;
+    align-items: center;
+    column-gap: 5px;
+    border: 1px solid rgba(255,255,255,.20);
+    border-radius: 10px;
+    background: rgba(12,25,19,.74);
+    color: #ffffff;
+    backdrop-filter: blur(8px);
+  }
+
+  .kp-executed-chip > span {
+    grid-row: 1 / 3;
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255,255,255,.75);
+    border-radius: 50%;
+    font-size: 10px;
+  }
+
+  .kp-executed-chip strong {
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .kp-executed-chip small {
+    color: rgba(255,255,255,.88);
+    font-size: 8.5px;
+    line-height: 1.1;
+  }
+
+  .kp-popular-info {
+    min-width: 0;
+    padding: 35px 2px 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .kp-popular-name {
+    color: #10261d;
+    font-size: 18px;
+    font-weight: 900;
+    line-height: 1.08;
+  }
+
+  .kp-popular-meta {
+    margin-top: 7px;
+    color: #68776f;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .kp-popular-price {
+    margin-top: auto;
+    padding-top: 18px;
+    display: grid;
+    gap: 2px;
+  }
+
+  .kp-popular-price small {
+    color: #748078;
+    font-size: 9px;
+    font-weight: 750;
+  }
+
+  .kp-popular-price strong {
+    color: #087a55;
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .kp-popular-info > button {
+    width: 100%;
+    min-height: 43px;
+    margin-top: 12px;
+    border: 0;
+    border-radius: 14px;
+    background: #087a55;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+  }
+
+  .kp-all-services {
+    margin-top: 36px;
+    scroll-margin-top: 150px;
+  }
+
+  .kp-service-total {
+    min-width: 34px;
+    height: 34px;
+    padding: 0 9px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: #eaf7f1;
+    color: #087a55;
+    font-size: 11px;
+    font-weight: 950;
+  }
+
+  .kp-dark .kp-popular-heading h2,
+  .kp-dark .kp-all-services-title h2,
+  .kp-dark .kp-popular-name {
+    color: #ffffff;
+  }
+
+  .kp-dark .kp-popular-card {
+    border-color: #2b3a32;
+    background: #111b16;
+  }
+
+  .kp-dark .kp-service-total {
+    background: #173c29;
+    color: #75e2a4;
+  }
+
   /* =========================================================
      PERFIL PÚBLICO DEL NEGOCIO · PORTADA + TABS
      ========================================================= */
@@ -4653,6 +5040,51 @@ const CSS = `
   }
 
   @media (max-width: 520px) {
+    .kp-popular-heading h2,
+    .kp-all-services-title h2 {
+      font-size: 25px;
+    }
+
+    .kp-popular-card {
+      min-height: 200px;
+      grid-template-columns: 44% minmax(0,1fr);
+      gap: 11px;
+      padding: 10px;
+      border-radius: 20px;
+    }
+
+    .kp-rank-badge {
+      top: 10px;
+      left: 10px;
+      min-height: 29px;
+      padding: 0 10px;
+      font-size: 8px;
+    }
+
+    .kp-popular-media,
+    .kp-popular-placeholder {
+      min-height: 180px;
+    }
+
+    .kp-popular-info {
+      padding-top: 34px;
+    }
+
+    .kp-popular-name {
+      font-size: 16px;
+    }
+
+    .kp-popular-price strong {
+      font-size: 18px;
+    }
+
+    .kp-executed-chip {
+      left: 6px;
+      right: 6px;
+      bottom: 6px;
+      max-width: none;
+    }
+
     .kp-public-profile {
       margin: -15px;
       border-radius: 21px;
