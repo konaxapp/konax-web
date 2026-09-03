@@ -1,7 +1,7 @@
 "use client";
 
 // KONAX Usuarios y Roles
-// VERSION 2026.08.29-INVITACION-CORREO-MODO-PRUEBA
+// VERSION 2026.09.02-AGENDA-MODULO
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -9,6 +9,7 @@ import { supabase } from "../../lib/supabase";
 
 const MODULOS_GENERALES = [
   ["dashboard", "Inicio / Resumen", "Panel", "📊"],
+  ["agenda", "Agenda", "Agenda", "📅"],
   ["reportes", "Reportes", "Panel", "📚"],
   ["clientes", "Clientes", "Clientes", "👥"],
   ["vista_cliente", "Vista Cliente", "Clientes", "📄"],
@@ -21,16 +22,22 @@ const MODULOS_GENERALES = [
   ["gastos", "Gastos", "Caja", "🧮"],
   ["recargos", "Recargos", "Caja", "⚠️"],
   ["inventario", "Inventario", "Inventario", "📦"],
-  [
-    "movimientos_inventario",
-    "Movimientos de inventario",
-    "Inventario",
-    "🔄",
-  ],
+  ["movimientos_inventario", "Movimientos de inventario", "Inventario", "🔄"],
   ["ventas", "Ventas", "Ventas", "🛒"],
   ["dashboard_ventas", "Centro de Ventas", "Ventas", "📈"],
   ["suscripciones", "Suscripciones", "Ventas", "🔁"],
   ["usuarios", "Usuarios y Roles", "Administración", "🔐"],
+  ["configuracion", "Configuración", "Administración", "⚙️"],
+].map(([codigo, nombre, grupo, icono]) => ({
+  codigo,
+  nombre,
+  grupo,
+  icono,
+}));
+
+const MODULOS_AGENDA = [
+  ["dashboard", "Inicio / Resumen", "Agenda", "📊"],
+  ["agenda", "Agenda", "Agenda", "📅"],
   ["configuracion", "Configuración", "Administración", "⚙️"],
 ].map(([codigo, nombre, grupo, icono]) => ({
   codigo,
@@ -60,6 +67,7 @@ const MODULOS_GIMNASIO = [
   ["clientes", "Alumnos", "Gimnasio", "👥"],
   ["suscripciones", "Membresías", "Gimnasio", "🔁"],
   ["checkin_gimnasio", "Check-in", "Gimnasio", "✅"],
+  ["agenda", "Agenda", "Gimnasio", "📅"],
   ["caja", "Caja y pagos", "Gimnasio", "💵"],
   ["vista_cliente", "Historial del alumno", "Gimnasio", "🕘"],
   ["reportes", "Reportes", "Gimnasio", "📚"],
@@ -75,6 +83,12 @@ const MODULOS_GIMNASIO = [
 const OBLIGATORIOS_BASE = [
   "dashboard",
   "usuarios",
+  "configuracion",
+];
+
+const OBLIGATORIOS_AGENDA = [
+  "dashboard",
+  "agenda",
   "configuracion",
 ];
 
@@ -96,6 +110,7 @@ const OBLIGATORIOS_GIMNASIO = [
 ];
 
 const COLUMNAS_EMPRESA = {
+  agenda: "agenda",
   clientes: "clientes",
   vista_cliente: "vista_cliente",
   creditos: "venta_credito",
@@ -123,21 +138,20 @@ function normalizar(valor) {
     .replace(/\s+/g, "_");
 }
 
-function esTipoGimnasio(
-  tipoNegocio,
-  categoriaNegocio = ""
-) {
+function esPlanAgenda(codigoPlan) {
+  return ["agenda", "agenda_basica", "konax_agenda"].includes(
+    normalizar(codigoPlan)
+  );
+}
+
+function esTipoGimnasio(tipoNegocio, categoriaNegocio = "") {
   const texto = normalizar(
     `${tipoNegocio || ""} ${categoriaNegocio || ""}`
   );
 
-  return [
-    "gimnasio",
-    "gym",
-    "fitness",
-    "academia",
-    "club",
-  ].some((palabra) => texto.includes(palabra));
+  return ["gimnasio", "gym", "fitness", "academia", "club"].some(
+    (palabra) => texto.includes(palabra)
+  );
 }
 
 function generarCorreoPrueba(correoBase, empresaId = "") {
@@ -153,9 +167,6 @@ function generarCorreoPrueba(correoBase, empresaId = "") {
 
   const localOriginal = correoLimpio.slice(0, posicionArroba);
   const dominio = correoLimpio.slice(posicionArroba + 1);
-
-  // Si el usuario escribió previamente un +alias,
-  // tomamos solamente el correo base.
   const localBase = localOriginal.split("+")[0];
 
   const empresaCorta = String(empresaId || "")
@@ -164,9 +175,7 @@ function generarCorreoPrueba(correoBase, empresaId = "") {
     .toLowerCase();
 
   const tiempo = Date.now().toString(36);
-  const aleatorio = Math.random()
-    .toString(36)
-    .slice(2, 6);
+  const aleatorio = Math.random().toString(36).slice(2, 6);
 
   const sufijo = [
     "konax",
@@ -181,21 +190,30 @@ function generarCorreoPrueba(correoBase, empresaId = "") {
 function construirModulosPorPlan({
   codigoPlan,
   modulos,
+  esAgenda,
   esLavanderia,
   esGimnasio,
 }) {
   const codigo = normalizar(codigoPlan);
 
   const base = Object.fromEntries(
-    modulos.map((modulo) => [
-      modulo.codigo,
-      false,
-    ])
+    modulos.map((modulo) => [modulo.codigo, false])
   );
 
   base.dashboard = true;
   base.usuarios = true;
   base.configuracion = true;
+
+  // KONAX AGENDA debe tener prioridad sobre el tipo de negocio.
+  if (esAgenda || esPlanAgenda(codigo)) {
+    return {
+      ...base,
+      dashboard: true,
+      agenda: true,
+      usuarios: false,
+      configuracion: true,
+    };
+  }
 
   if (esGimnasio) {
     return {
@@ -204,6 +222,7 @@ function construirModulosPorPlan({
       clientes: true,
       suscripciones: true,
       checkin_gimnasio: true,
+      agenda: true,
       caja: true,
       vista_cliente: true,
       reportes: true,
@@ -212,10 +231,7 @@ function construirModulosPorPlan({
     };
   }
 
-  if (
-    esLavanderia ||
-    codigo === "lavanderia_piloto"
-  ) {
+  if (esLavanderia || codigo === "lavanderia_piloto") {
     return {
       ...base,
       dashboard: true,
@@ -261,15 +277,13 @@ function construirModulosPorPlan({
       gastos: true,
       recargos: true,
       suscripciones: true,
+      agenda: true,
     };
   }
 
   if (codigo === "pro") {
     return Object.fromEntries(
-      modulos.map((modulo) => [
-        modulo.codigo,
-        true,
-      ])
+      modulos.map((modulo) => [modulo.codigo, true])
     );
   }
 
@@ -280,78 +294,38 @@ export default function Usuarios() {
   const router = useRouter();
 
   const [empresaId, setEmpresaId] = useState("");
-  const [empresaNombre, setEmpresaNombre] =
-    useState("");
+  const [empresaNombre, setEmpresaNombre] = useState("");
   const [planNombre, setPlanNombre] = useState("");
   const [planCodigo, setPlanCodigo] = useState("");
-  const [tipoNegocio, setTipoNegocio] =
-    useState("");
-  const [
-    categoriaNegocio,
-    setCategoriaNegocio,
-  ] = useState("");
+  const [tipoNegocio, setTipoNegocio] = useState("");
+  const [categoriaNegocio, setCategoriaNegocio] = useState("");
 
-  const [esLavanderia, setEsLavanderia] =
-    useState(false);
+  const [esAgenda, setEsAgenda] = useState(false);
+  const [esLavanderia, setEsLavanderia] = useState(false);
+  const [esGimnasio, setEsGimnasio] = useState(false);
 
-  const [esGimnasio, setEsGimnasio] =
-    useState(false);
+  const [modulosObligatorios, setModulosObligatorios] =
+    useState(OBLIGATORIOS_BASE);
 
-  const [
-    modulosObligatorios,
-    setModulosObligatorios,
-  ] = useState(OBLIGATORIOS_BASE);
-
-  const [modulos, setModulos] = useState(
-    MODULOS_GENERALES
-  );
-
-  const [
-    modulosPermitidos,
-    setModulosPermitidos,
-  ] = useState({});
-
-  const [
-    modulosEmpresa,
-    setModulosEmpresa,
-  ] = useState({});
+  const [modulos, setModulos] = useState(MODULOS_GENERALES);
+  const [modulosPermitidos, setModulosPermitidos] = useState({});
+  const [modulosEmpresa, setModulosEmpresa] = useState({});
 
   const [roles, setRoles] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
-
-  const [
-    usuarioSeleccionado,
-    setUsuarioSeleccionado,
-  ] = useState(null);
-
-  const [
-    permisosUsuario,
-    setPermisosUsuario,
-  ] = useState({});
+  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
+  const [permisosUsuario, setPermisosUsuario] = useState({});
 
   const [nombre, setNombre] = useState("");
   const [correo, setCorreo] = useState("");
   const [rolId, setRolId] = useState("");
   const [busqueda, setBusqueda] = useState("");
 
-  // ==========================================================
-  // MODO PRUEBA
-  // Permite utilizar el mismo buzón generando un +alias único.
-  // Ejemplo:
-  // correo@gmail.com
-  // correo+konax-demo-xxxx@gmail.com
-  // ==========================================================
-  const [modoPrueba, setModoPrueba] =
-    useState(false);
-
-  const [
-    ultimoCorreoPrueba,
-    setUltimoCorreoPrueba,
-  ] = useState("");
+  const [modoPrueba, setModoPrueba] = useState(false);
+  const [ultimoCorreoPrueba, setUltimoCorreoPrueba] = useState("");
 
   const [cargando, setCargando] = useState(true);
-  const [guardando, setGuardando] =
-    useState(false);
+  const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
     inicializar();
@@ -386,13 +360,10 @@ export default function Usuarios() {
   }
 
   async function inicializar() {
-    const empresaSesion =
-      localStorage.getItem("empresaId");
-
-    const empresaConfiguracion =
-      localStorage.getItem(
-        "empresaAdminCreadaId"
-      );
+    const empresaSesion = localStorage.getItem("empresaId");
+    const empresaConfiguracion = localStorage.getItem(
+      "empresaAdminCreadaId"
+    );
 
     const rolSesion = normalizar(
       localStorage.getItem("usuarioRol") ||
@@ -420,19 +391,14 @@ export default function Usuarios() {
 
     if (!id) {
       alert("No hay empresa seleccionada.");
-      router.replace(
-        esSuperadmin ? "/admin" : "/login"
-      );
+      router.replace(esSuperadmin ? "/admin" : "/login");
       return;
     }
 
     setEmpresaId(id);
     setCargando(true);
 
-    const {
-      data: empresa,
-      error: errorEmpresa,
-    } = await supabase
+    const { data: empresa, error: errorEmpresa } = await supabase
       .from("empresas")
       .select(`
         id,
@@ -448,34 +414,36 @@ export default function Usuarios() {
     if (errorEmpresa || !empresa) {
       alert(
         "No fue posible cargar la empresa: " +
-          (
-            errorEmpresa?.message ||
-            "Empresa no encontrada."
-          )
+          (errorEmpresa?.message || "Empresa no encontrada.")
       );
-
       setCargando(false);
       return;
     }
 
+    const perfilAgenda = esPlanAgenda(empresa.plan_codigo);
+
     const perfilLavanderia =
-      normalizar(empresa.plan_codigo) ===
-        "lavanderia_piloto" ||
-      normalizar(empresa.tipo_negocio) ===
-        "lavanderia";
+      normalizar(empresa.plan_codigo) === "lavanderia_piloto" ||
+      normalizar(empresa.tipo_negocio) === "lavanderia";
 
     const perfilGimnasio = esTipoGimnasio(
       empresa.tipo_negocio,
       empresa.categoria_negocio
     );
 
-    const catalogo = perfilLavanderia
+    // Agenda tiene prioridad. Un salón/spa/barbería con plan Agenda
+    // no recibe el catálogo completo del tipo de negocio.
+    const catalogo = perfilAgenda
+      ? MODULOS_AGENDA
+      : perfilLavanderia
       ? MODULOS_LAVANDERIA
       : perfilGimnasio
       ? MODULOS_GIMNASIO
       : MODULOS_GENERALES;
 
-    const obligatorios = perfilLavanderia
+    const obligatorios = perfilAgenda
+      ? OBLIGATORIOS_AGENDA
+      : perfilLavanderia
       ? OBLIGATORIOS_LAVANDERIA
       : perfilGimnasio
       ? OBLIGATORIOS_GIMNASIO
@@ -484,44 +452,26 @@ export default function Usuarios() {
     const permitidos = construirModulosPorPlan({
       codigoPlan: empresa.plan_codigo,
       modulos: catalogo,
+      esAgenda: perfilAgenda,
       esLavanderia: perfilLavanderia,
       esGimnasio: perfilGimnasio,
     });
 
     setModulos(catalogo);
     setModulosObligatorios(obligatorios);
+    setEmpresaNombre(empresa.nombre || "Empresa");
+    setPlanNombre(empresa.plan_nombre || "Sin plan");
+    setPlanCodigo(empresa.plan_codigo || "");
+    setTipoNegocio(empresa.tipo_negocio || "");
+    setCategoriaNegocio(empresa.categoria_negocio || "");
 
-    setEmpresaNombre(
-      empresa.nombre || "Empresa"
-    );
-
-    setPlanNombre(
-      empresa.plan_nombre || "Sin plan"
-    );
-
-    setPlanCodigo(
-      empresa.plan_codigo || ""
-    );
-
-    setTipoNegocio(
-      empresa.tipo_negocio || ""
-    );
-
-    setCategoriaNegocio(
-      empresa.categoria_negocio || ""
-    );
-
+    setEsAgenda(perfilAgenda);
     setEsLavanderia(perfilLavanderia);
     setEsGimnasio(perfilGimnasio);
     setModulosPermitidos(permitidos);
 
     await Promise.all([
-      cargarModulosEmpresa(
-        id,
-        permitidos,
-        catalogo,
-        obligatorios
-      ),
+      cargarModulosEmpresa(id, permitidos, catalogo, obligatorios),
       cargarRoles(perfilGimnasio),
       cargarUsuarios(id),
     ]);
@@ -542,11 +492,7 @@ export default function Usuarios() {
       .maybeSingle();
 
     if (error) {
-      alert(
-        "Error cargando módulos: " +
-          error.message
-      );
-
+      alert("Error cargando módulos: " + error.message);
       setModulosEmpresa(permitidos);
       return;
     }
@@ -554,57 +500,44 @@ export default function Usuarios() {
     const mapa = {};
 
     catalogo.forEach((modulo) => {
-      const permitido = Boolean(
-        permitidos[modulo.codigo]
-      );
+      const permitido = Boolean(permitidos[modulo.codigo]);
 
       if (!permitido) {
         mapa[modulo.codigo] = false;
         return;
       }
 
-      if (
-        obligatorios.includes(modulo.codigo)
-      ) {
+      if (obligatorios.includes(modulo.codigo)) {
         mapa[modulo.codigo] = true;
         return;
       }
 
-      const columna =
-        COLUMNAS_EMPRESA[modulo.codigo];
+      const columna = COLUMNAS_EMPRESA[modulo.codigo];
 
       if (!columna || !data) {
         mapa[modulo.codigo] = true;
         return;
       }
 
-      mapa[modulo.codigo] =
-        Object.prototype.hasOwnProperty.call(
-          data,
-          columna
-        )
-          ? Boolean(data[columna])
-          : true;
+      mapa[modulo.codigo] = Object.prototype.hasOwnProperty.call(
+        data,
+        columna
+      )
+        ? Boolean(data[columna])
+        : true;
     });
 
     setModulosEmpresa(mapa);
   }
 
-  async function cargarRoles(
-    perfilGimnasio = esGimnasio
-  ) {
+  async function cargarRoles(perfilGimnasio = esGimnasio) {
     const { data, error } = await supabase
       .from("roles_konax")
       .select("*")
-      .order("nombre", {
-        ascending: true,
-      });
+      .order("nombre", { ascending: true });
 
     if (error) {
-      alert(
-        "Error cargando roles: " +
-          error.message
-      );
+      alert("Error cargando roles: " + error.message);
       return;
     }
 
@@ -612,57 +545,37 @@ export default function Usuarios() {
 
     if (perfilGimnasio) {
       lista = lista.filter((rol) =>
-        [
-          "administrador",
-          "vendedor",
-        ].includes(
-          normalizar(rol.nombre)
-        )
+        ["administrador", "vendedor"].includes(normalizar(rol.nombre))
       );
     }
 
     setRoles(lista);
 
     const administrador = lista.find(
-      (rol) =>
-        normalizar(rol.nombre) ===
-        "administrador"
+      (rol) => normalizar(rol.nombre) === "administrador"
     );
 
-    setRolId(
-      administrador?.id ||
-        lista[0]?.id ||
-        ""
-    );
+    setRolId(administrador?.id || lista[0]?.id || "");
   }
 
-  async function cargarUsuarios(
-    id = empresaId
-  ) {
+  async function cargarUsuarios(id = empresaId) {
     if (!id) return;
 
     const { data, error } = await supabase
       .from("usuarios")
       .select("*")
       .eq("empresa_id", id)
-      .order("created_at", {
-        ascending: true,
-      });
+      .order("created_at", { ascending: true });
 
     if (error) {
-      alert(
-        "Error cargando usuarios: " +
-          error.message
-      );
+      alert("Error cargando usuarios: " + error.message);
       return;
     }
 
     setUsuarios(data || []);
   }
 
-  async function seleccionarUsuario(
-    usuario
-  ) {
+  async function seleccionarUsuario(usuario) {
     setUsuarioSeleccionado(usuario);
 
     const { data, error } = await supabase
@@ -672,52 +585,39 @@ export default function Usuarios() {
       .eq("usuario_id", usuario.id);
 
     if (error) {
-      alert(
-        "Error cargando permisos: " +
-          error.message
-      );
+      alert("Error cargando permisos: " + error.message);
       return;
     }
 
     const mapa = {};
 
     (data || []).forEach((item) => {
-      mapa[item.permiso] =
-        Boolean(item.activo);
+      mapa[item.permiso] = Boolean(item.activo);
     });
 
     setPermisosUsuario(mapa);
   }
 
-  async function alternarModuloEmpresa(
-    modulo
-  ) {
-    const permitido = Boolean(
-      modulosPermitidos[modulo.codigo]
-    );
+  async function alternarModuloEmpresa(modulo) {
+    const permitido = Boolean(modulosPermitidos[modulo.codigo]);
 
     if (!permitido) {
-      alert(
-        `"${modulo.nombre}" no está incluido en ${planNombre}.`
-      );
+      alert(`"${modulo.nombre}" no está incluido en ${planNombre}.`);
       return;
     }
 
-    if (
-      modulosObligatorios.includes(
-        modulo.codigo
-      )
-    ) {
+    if (modulosObligatorios.includes(modulo.codigo)) {
       alert(
-        esGimnasio
+        esAgenda
+          ? "Este módulo forma parte obligatoria del plan KONAX Agenda."
+          : esGimnasio
           ? "Este módulo forma parte del perfil obligatorio del gimnasio."
           : "Este módulo es obligatorio."
       );
       return;
     }
 
-    const columna =
-      COLUMNAS_EMPRESA[modulo.codigo];
+    const columna = COLUMNAS_EMPRESA[modulo.codigo];
 
     if (!columna) {
       alert(
@@ -726,47 +626,32 @@ export default function Usuarios() {
       return;
     }
 
-    const nuevoEstado = !Boolean(
-      modulosEmpresa[modulo.codigo]
+    const nuevoEstado = !Boolean(modulosEmpresa[modulo.codigo]);
+
+    const { error } = await supabase.from("empresa_modulos").upsert(
+      {
+        empresa_id: empresaId,
+        [columna]: nuevoEstado,
+      },
+      {
+        onConflict: "empresa_id",
+      }
     );
 
-    const { error } = await supabase
-      .from("empresa_modulos")
-      .upsert(
-        {
-          empresa_id: empresaId,
-          [columna]: nuevoEstado,
-        },
-        {
-          onConflict: "empresa_id",
-        }
-      );
-
     if (error) {
-      alert(
-        "Error actualizando módulo: " +
-          error.message
-      );
+      alert("Error actualizando módulo: " + error.message);
       return;
     }
 
-    const relacionados = Object.entries(
-      COLUMNAS_EMPRESA
-    )
-      .filter(
-        ([, columnaRelacionada]) =>
-          columnaRelacionada === columna
-      )
+    const relacionados = Object.entries(COLUMNAS_EMPRESA)
+      .filter(([, columnaRelacionada]) => columnaRelacionada === columna)
       .map(([codigo]) => codigo);
 
     setModulosEmpresa((previo) => {
-      const siguiente = {
-        ...previo,
-      };
+      const siguiente = { ...previo };
 
       relacionados.forEach((codigo) => {
-        siguiente[codigo] =
-          nuevoEstado;
+        siguiente[codigo] = nuevoEstado;
       });
 
       return siguiente;
@@ -777,14 +662,10 @@ export default function Usuarios() {
         .from("permisos_usuarios_empresa")
         .update({
           activo: false,
-          updated_at:
-            new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .eq("empresa_id", empresaId)
-        .in(
-          "permiso",
-          relacionados
-        );
+        .in("permiso", relacionados);
     }
   }
 
@@ -795,13 +676,9 @@ export default function Usuarios() {
     }
 
     if (esGimnasio) {
-      const rolUsuario = normalizar(
-        usuarioSeleccionado.rol
-      );
+      const rolUsuario = normalizar(usuarioSeleccionado.rol);
 
-      if (
-        rolUsuario === "administrador"
-      ) {
+      if (rolUsuario === "administrador") {
         alert(
           "El Administrador del gimnasio mantiene acceso a todos los módulos del perfil."
         );
@@ -825,177 +702,112 @@ export default function Usuarios() {
       }
     }
 
-    if (
-      !modulosPermitidos[
-        modulo.codigo
-      ]
-    ) {
-      alert(
-        `"${modulo.nombre}" no está incluido en el plan.`
-      );
+    if (!modulosPermitidos[modulo.codigo]) {
+      alert(`"${modulo.nombre}" no está incluido en el plan.`);
       return;
     }
 
-    if (
-      !modulosEmpresa[
-        modulo.codigo
-      ]
-    ) {
-      alert(
-        `"${modulo.nombre}" está desactivado para la empresa.`
-      );
+    if (!modulosEmpresa[modulo.codigo]) {
+      alert(`"${modulo.nombre}" está desactivado para la empresa.`);
       return;
     }
 
-    const nuevoEstado = !Boolean(
-      permisosUsuario[
-        modulo.codigo
-      ]
-    );
+    const nuevoEstado = !Boolean(permisosUsuario[modulo.codigo]);
 
     const { error } = await supabase
-      .from(
-        "permisos_usuarios_empresa"
-      )
+      .from("permisos_usuarios_empresa")
       .upsert(
         {
           empresa_id: empresaId,
-          usuario_id:
-            usuarioSeleccionado.id,
+          usuario_id: usuarioSeleccionado.id,
           permiso: modulo.codigo,
           activo: nuevoEstado,
-          updated_at:
-            new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         },
         {
-          onConflict:
-            "empresa_id,usuario_id,permiso",
+          onConflict: "empresa_id,usuario_id,permiso",
         }
       );
 
     if (error) {
-      alert(
-        "Error actualizando permiso: " +
-          error.message
-      );
+      alert("Error actualizando permiso: " + error.message);
       return;
     }
 
     setPermisosUsuario((previo) => ({
       ...previo,
-      [modulo.codigo]:
-        nuevoEstado,
+      [modulo.codigo]: nuevoEstado,
     }));
   }
 
-  async function cambiarTodosPermisos(
-    activo
-  ) {
+  async function cambiarTodosPermisos(activo) {
     if (!usuarioSeleccionado) {
       alert("Seleccione un usuario.");
       return;
     }
 
-    const registros = modulos.map(
-      (modulo) => ({
-        empresa_id: empresaId,
-        usuario_id:
-          usuarioSeleccionado.id,
-        permiso: modulo.codigo,
-        activo:
-          activo &&
-          Boolean(
-            modulosPermitidos[
-              modulo.codigo
-            ]
-          ) &&
-          Boolean(
-            modulosEmpresa[
-              modulo.codigo
-            ]
-          ),
-        updated_at:
-          new Date().toISOString(),
-      })
-    );
+    const registros = modulos.map((modulo) => ({
+      empresa_id: empresaId,
+      usuario_id: usuarioSeleccionado.id,
+      permiso: modulo.codigo,
+      activo:
+        activo &&
+        Boolean(modulosPermitidos[modulo.codigo]) &&
+        Boolean(modulosEmpresa[modulo.codigo]),
+      updated_at: new Date().toISOString(),
+    }));
 
     const { error } = await supabase
-      .from(
-        "permisos_usuarios_empresa"
-      )
+      .from("permisos_usuarios_empresa")
       .upsert(registros, {
-        onConflict:
-          "empresa_id,usuario_id,permiso",
+        onConflict: "empresa_id,usuario_id,permiso",
       });
 
     if (error) {
-      alert(
-        "Error actualizando permisos: " +
-          error.message
-      );
+      alert("Error actualizando permisos: " + error.message);
       return;
     }
 
     const mapa = {};
 
     registros.forEach((registro) => {
-      mapa[registro.permiso] =
-        registro.activo;
+      mapa[registro.permiso] = registro.activo;
     });
 
     setPermisosUsuario(mapa);
   }
 
-  async function aplicarPermisosInicialesGimnasio(
-    usuario,
-    nombreRol
-  ) {
-    if (
-      !esGimnasio ||
-      !usuario?.id
-    ) {
+  async function aplicarPermisosInicialesGimnasio(usuario, nombreRol) {
+    if (!esGimnasio || !usuario?.id) {
       return;
     }
 
     const rol = normalizar(nombreRol);
+    const esAdmin = rol === "administrador";
+    const esVendedor = rol === "vendedor";
 
-    const esAdmin =
-      rol === "administrador";
-
-    const esVendedor =
-      rol === "vendedor";
-
-    const registros =
-      MODULOS_GIMNASIO.map(
-        (modulo) => ({
-          empresa_id: empresaId,
-          usuario_id: usuario.id,
-          permiso: modulo.codigo,
-          activo: esAdmin
-            ? true
-            : esVendedor
-            ? [
-                "dashboard",
-                "clientes",
-                "suscripciones",
-                "checkin_gimnasio",
-                "caja",
-              ].includes(
-                modulo.codigo
-              )
-            : false,
-          updated_at:
-            new Date().toISOString(),
-        })
-      );
+    const registros = MODULOS_GIMNASIO.map((modulo) => ({
+      empresa_id: empresaId,
+      usuario_id: usuario.id,
+      permiso: modulo.codigo,
+      activo: esAdmin
+        ? true
+        : esVendedor
+        ? [
+            "dashboard",
+            "clientes",
+            "suscripciones",
+            "checkin_gimnasio",
+            "caja",
+          ].includes(modulo.codigo)
+        : false,
+      updated_at: new Date().toISOString(),
+    }));
 
     const { error } = await supabase
-      .from(
-        "permisos_usuarios_empresa"
-      )
+      .from("permisos_usuarios_empresa")
       .upsert(registros, {
-        onConflict:
-          "empresa_id,usuario_id,permiso",
+        onConflict: "empresa_id,usuario_id,permiso",
       });
 
     if (error) {
@@ -1006,72 +818,71 @@ export default function Usuarios() {
     }
   }
 
-  // ==========================================================
-  // INVITACIÓN DE USUARIO
-  //
-  // Modo normal:
-  // envía exactamente el correo escrito.
-  //
-  // Modo prueba:
-  // genera automáticamente un correo tipo:
-  // micorreo+konax-demo-xxxx@gmail.com
-  //
-  // Supabase lo considera un correo nuevo.
-  // Gmail y otros proveedores compatibles con +alias
-  // lo reciben en el mismo buzón.
-  // ==========================================================
+  async function aplicarPermisosInicialesAgenda(usuario, nombreRol) {
+    if (!esAgenda || !usuario?.id) {
+      return;
+    }
+
+    const esAdmin =
+      normalizar(nombreRol) === "administrador";
+
+    const registros = MODULOS_AGENDA.map((modulo) => ({
+      empresa_id: empresaId,
+      usuario_id: usuario.id,
+      permiso: modulo.codigo,
+      activo: esAdmin
+        ? ["dashboard", "agenda", "configuracion"].includes(
+            modulo.codigo
+          )
+        : modulo.codigo === "dashboard",
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error } = await supabase
+      .from("permisos_usuarios_empresa")
+      .upsert(registros, {
+        onConflict: "empresa_id,usuario_id,permiso",
+      });
+
+    if (error) {
+      throw new Error(
+        "El usuario fue creado, pero no se pudieron aplicar sus permisos iniciales de Agenda: " +
+          error.message
+      );
+    }
+  }
 
   async function crearUsuario() {
     if (guardando) return;
 
-    const nombreLimpio =
-      nombre.trim();
+    const nombreLimpio = nombre.trim();
+    const correoBase = correo.trim().toLowerCase();
 
-    const correoBase =
-      correo.trim().toLowerCase();
-
-    const rolSeleccionado =
-      roles.find(
-        (rol) =>
-          String(rol.id) ===
-          String(rolId)
-      );
+    const rolSeleccionado = roles.find(
+      (rol) => String(rol.id) === String(rolId)
+    );
 
     if (!nombreLimpio) {
-      alert(
-        "Ingrese el nombre del usuario."
-      );
+      alert("Ingrese el nombre del usuario.");
       return;
     }
 
-    if (
-      !correoBase ||
-      !correoBase.includes("@")
-    ) {
-      alert(
-        "Ingrese un correo válido."
-      );
+    if (!correoBase || !correoBase.includes("@")) {
+      alert("Ingrese un correo válido.");
       return;
     }
 
     if (!rolSeleccionado) {
-      alert(
-        "Seleccione un rol válido."
-      );
+      alert("Seleccione un rol válido.");
       return;
     }
 
     const correoLimpio = modoPrueba
-      ? generarCorreoPrueba(
-          correoBase,
-          empresaId
-        )
+      ? generarCorreoPrueba(correoBase, empresaId)
       : correoBase;
 
     if (modoPrueba) {
-      setUltimoCorreoPrueba(
-        correoLimpio
-      );
+      setUltimoCorreoPrueba(correoLimpio);
     } else {
       setUltimoCorreoPrueba("");
     }
@@ -1082,52 +893,40 @@ export default function Usuarios() {
       const {
         data: { session },
         error: errorSesion,
-      } =
-        await supabase.auth.getSession();
+      } = await supabase.auth.getSession();
 
-      if (
-        errorSesion ||
-        !session?.access_token
-      ) {
+      if (errorSesion || !session?.access_token) {
         alert(
           "No se pudo validar la sesión segura. Cierre sesión, vuelva a ingresar y pruebe nuevamente."
         );
         return;
       }
 
-      const { data, error } =
-        await supabase.functions.invoke(
-          "crear-usuario-konax",
-          {
-            body: {
-              empresa_id: empresaId,
-              nombre: nombreLimpio,
-              correo: correoLimpio,
-              rol:
-                rolSeleccionado.nombre,
-              rol_id:
-                rolSeleccionado.id,
-            },
-
-            headers: {
-              Authorization:
-                `Bearer ${session.access_token}`,
-            },
-          }
-        );
+      const { data, error } = await supabase.functions.invoke(
+        "crear-usuario-konax",
+        {
+          body: {
+            empresa_id: empresaId,
+            nombre: nombreLimpio,
+            correo: correoLimpio,
+            rol: rolSeleccionado.nombre,
+            rol_id: rolSeleccionado.id,
+          },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
 
       if (error) {
         let detalle =
-          error.message ||
-          "No se pudo enviar la invitación.";
+          error.message || "No se pudo enviar la invitación.";
 
         try {
-          const contexto =
-            await error.context?.json();
+          const contexto = await error.context?.json();
 
           if (contexto?.error) {
-            detalle =
-              contexto.error;
+            detalle = contexto.error;
           }
         } catch {}
 
@@ -1136,61 +935,50 @@ export default function Usuarios() {
       }
 
       if (!data?.ok) {
-        alert(
-          data?.error ||
-            "No se pudo enviar la invitación."
-        );
+        alert(data?.error || "No se pudo enviar la invitación.");
         return;
       }
 
       if (modoPrueba) {
         alert(
           "Usuario de prueba creado correctamente.\n\n" +
-          "Correo base: " +
-          correoBase +
-          "\n\nCorreo utilizado por KONAX: " +
-          correoLimpio +
-          "\n\nLa invitación debe llegar al mismo buzón si tu proveedor acepta alias con +."
+            "Correo base: " +
+            correoBase +
+            "\n\nCorreo utilizado por KONAX: " +
+            correoLimpio +
+            "\n\nLa invitación debe llegar al mismo buzón si tu proveedor acepta alias con +."
         );
       } else {
-        alert(
-          data.message ||
-            "Invitación enviada correctamente."
-        );
+        alert(data.message || "Invitación enviada correctamente.");
       }
 
       setNombre("");
 
-      // En modo normal limpiamos el correo.
-      // En modo prueba lo dejamos escrito para poder
-      // crear otra prueba rápidamente con el mismo buzón.
       if (!modoPrueba) {
         setCorreo("");
       }
 
-      await cargarUsuarios(
-        empresaId
-      );
+      await cargarUsuarios(empresaId);
 
       if (data.usuario) {
-        if (esGimnasio) {
+        if (esAgenda) {
+          await aplicarPermisosInicialesAgenda(
+            data.usuario,
+            rolSeleccionado.nombre
+          );
+        } else if (esGimnasio) {
           await aplicarPermisosInicialesGimnasio(
             data.usuario,
             rolSeleccionado.nombre
           );
         }
 
-        await seleccionarUsuario(
-          data.usuario
-        );
+        await seleccionarUsuario(data.usuario);
       }
     } catch (error) {
       alert(
         "No se pudo enviar la invitación: " +
-          (
-            error?.message ||
-            "Error desconocido."
-          )
+          (error?.message || "Error desconocido.")
       );
     } finally {
       setGuardando(false);
@@ -1198,19 +986,14 @@ export default function Usuarios() {
   }
 
   async function finalizarConfiguracion() {
-    const administrador =
-      usuarios.find(
-        (usuario) =>
-          normalizar(usuario.rol) ===
-            "administrador" &&
-          normalizar(usuario.estado) ===
-            "activo"
-      );
+    const administrador = usuarios.find(
+      (usuario) =>
+        normalizar(usuario.rol) === "administrador" &&
+        normalizar(usuario.estado) === "activo"
+    );
 
     if (!administrador) {
-      alert(
-        "Debe existir al menos un administrador activo."
-      );
+      alert("Debe existir al menos un administrador activo.");
       return;
     }
 
@@ -1219,9 +1002,27 @@ export default function Usuarios() {
     try {
       let payload;
 
-      if (esGimnasio) {
+      if (esAgenda) {
         payload = {
           empresa_id: empresaId,
+          agenda: true,
+          clientes: false,
+          vista_cliente: false,
+          venta_credito: false,
+          caja: false,
+          control_caja: false,
+          cobranza: false,
+          dashboard_cobros: false,
+          inventario: false,
+          dashboard_ventas: false,
+          suscripciones: false,
+          recargos: false,
+          egresos: false,
+        };
+      } else if (esGimnasio) {
+        payload = {
+          empresa_id: empresaId,
+          agenda: true,
           clientes: true,
           vista_cliente: true,
           venta_credito: false,
@@ -1238,14 +1039,11 @@ export default function Usuarios() {
       } else if (esLavanderia) {
         payload = {
           empresa_id: empresaId,
-          clientes: Boolean(
-            modulosEmpresa.clientes
-          ),
+          agenda: false,
+          clientes: Boolean(modulosEmpresa.clientes),
           vista_cliente: false,
           venta_credito: false,
-          caja: Boolean(
-            modulosEmpresa.caja
-          ),
+          caja: Boolean(modulosEmpresa.caja),
           control_caja: false,
           cobranza: false,
           dashboard_cobros: false,
@@ -1259,73 +1057,43 @@ export default function Usuarios() {
         payload = {
           empresa_id: empresaId,
 
-          clientes: Boolean(
-            modulosEmpresa.clientes
-          ),
+          agenda: Boolean(modulosEmpresa.agenda),
 
-          vista_cliente: Boolean(
-            modulosEmpresa.vista_cliente
-          ),
+          clientes: Boolean(modulosEmpresa.clientes),
+
+          vista_cliente: Boolean(modulosEmpresa.vista_cliente),
 
           venta_credito:
-            Boolean(
-              modulosEmpresa.creditos
-            ) ||
-            Boolean(
-              modulosEmpresa.ventas
-            ),
+            Boolean(modulosEmpresa.creditos) ||
+            Boolean(modulosEmpresa.ventas),
 
-          caja: Boolean(
-            modulosEmpresa.caja
-          ),
+          caja: Boolean(modulosEmpresa.caja),
 
-          control_caja: Boolean(
-            modulosEmpresa.control_caja
-          ),
+          control_caja: Boolean(modulosEmpresa.control_caja),
 
-          cobranza: Boolean(
-            modulosEmpresa.cobranza
-          ),
+          cobranza: Boolean(modulosEmpresa.cobranza),
 
           dashboard_cobros:
-            Boolean(
-              modulosEmpresa.dashboard_cobros
-            ) ||
-            Boolean(
-              modulosEmpresa.reportes
-            ),
+            Boolean(modulosEmpresa.dashboard_cobros) ||
+            Boolean(modulosEmpresa.reportes),
 
           inventario:
-            Boolean(
-              modulosEmpresa.inventario
-            ) ||
-            Boolean(
-              modulosEmpresa.movimientos_inventario
-            ),
+            Boolean(modulosEmpresa.inventario) ||
+            Boolean(modulosEmpresa.movimientos_inventario),
 
-          dashboard_ventas:
-            Boolean(
-              modulosEmpresa.dashboard_ventas
-            ),
-
-          suscripciones:
-            Boolean(
-              modulosEmpresa.suscripciones
-            ),
-
-          recargos: Boolean(
-            modulosEmpresa.recargos
+          dashboard_ventas: Boolean(
+            modulosEmpresa.dashboard_ventas
           ),
 
-          egresos: Boolean(
-            modulosEmpresa.gastos
-          ),
+          suscripciones: Boolean(modulosEmpresa.suscripciones),
+
+          recargos: Boolean(modulosEmpresa.recargos),
+
+          egresos: Boolean(modulosEmpresa.gastos),
         };
       }
 
-      const {
-        error: errorModulos,
-      } = await supabase
+      const { error: errorModulos } = await supabase
         .from("empresa_modulos")
         .upsert(payload, {
           onConflict: "empresa_id",
@@ -1335,46 +1103,33 @@ export default function Usuarios() {
         throw errorModulos;
       }
 
-      const {
-        error: errorEmpresa,
-      } = await supabase
+      const { error: errorEmpresa } = await supabase
         .from("empresas")
         .update({
-          configuracion_completa:
-            true,
+          configuracion_completa: true,
         })
-        .eq(
-          "id",
-          empresaId
-        );
+        .eq("id", empresaId);
 
       if (errorEmpresa) {
         throw errorEmpresa;
       }
 
       alert(
-        esGimnasio
+        esAgenda
+          ? "Perfil KONAX Agenda aplicado correctamente. Agenda y Configuración quedaron habilitados."
+          : esGimnasio
           ? "Perfil de gimnasio aplicado correctamente. Los módulos que no corresponden quedaron desactivados."
           : "Configuración finalizada correctamente."
       );
 
-      const tieneSesionAdminMaster =
-        Boolean(
-          localStorage.getItem(
-            "adminKonaxId"
-          )
-        );
+      const tieneSesionAdminMaster = Boolean(
+        localStorage.getItem("adminKonaxId")
+      );
 
       const rolActual = normalizar(
-        localStorage.getItem(
-          "usuarioRol"
-        ) ||
-          localStorage.getItem(
-            "adminKonaxRol"
-          ) ||
-          localStorage.getItem(
-            "adminKonaxRole"
-          )
+        localStorage.getItem("usuarioRol") ||
+          localStorage.getItem("adminKonaxRol") ||
+          localStorage.getItem("adminKonaxRole")
       );
 
       const esAdminMaster =
@@ -1386,91 +1141,60 @@ export default function Usuarios() {
           "administrador_master",
         ].includes(rolActual);
 
-      router.replace(
-        esAdminMaster
-          ? "/admin"
-          : "/dashboard"
-      );
+      router.replace(esAdminMaster ? "/admin" : "/dashboard");
     } catch (error) {
       alert(
         "No se pudo finalizar la configuración: " +
-          (
-            error.message ||
-            "Error desconocido"
-          )
+          (error.message || "Error desconocido")
       );
     } finally {
       setGuardando(false);
     }
   }
 
-  const usuariosFiltrados =
-    useMemo(() => {
-      const texto =
-        normalizar(busqueda);
+  const usuariosFiltrados = useMemo(() => {
+    const texto = normalizar(busqueda);
 
-      if (!texto) {
-        return usuarios;
-      }
+    if (!texto) {
+      return usuarios;
+    }
 
-      return usuarios.filter(
-        (usuario) =>
-          normalizar(
-            `${usuario.nombre} ${usuario.correo} ${usuario.rol}`
-          ).includes(texto)
-      );
-    }, [usuarios, busqueda]);
+    return usuarios.filter((usuario) =>
+      normalizar(
+        `${usuario.nombre} ${usuario.correo} ${usuario.rol}`
+      ).includes(texto)
+    );
+  }, [usuarios, busqueda]);
 
   const grupos = useMemo(() => {
-    return modulos.reduce(
-      (resultado, modulo) => {
-        if (
-          !resultado[
-            modulo.grupo
-          ]
-        ) {
-          resultado[
-            modulo.grupo
-          ] = [];
-        }
+    return modulos.reduce((resultado, modulo) => {
+      if (!resultado[modulo.grupo]) {
+        resultado[modulo.grupo] = [];
+      }
 
-        resultado[
-          modulo.grupo
-        ].push(modulo);
-
-        return resultado;
-      },
-      {}
-    );
+      resultado[modulo.grupo].push(modulo);
+      return resultado;
+    }, {});
   }, [modulos]);
 
-  const nombrePerfil =
-    esGimnasio
-      ? "Perfil Gimnasio"
-      : esLavanderia
-      ? "Perfil Lavandería"
-      : "Perfil General";
+  const nombrePerfil = esAgenda
+    ? "Perfil Agenda"
+    : esGimnasio
+    ? "Perfil Gimnasio"
+    : esLavanderia
+    ? "Perfil Lavandería"
+    : "Perfil General";
 
   const correoPruebaPreview =
-    modoPrueba &&
-    correo.trim().includes("@")
-      ? generarCorreoPrueba(
-          correo.trim(),
-          empresaId
-        )
+    modoPrueba && correo.trim().includes("@")
+      ? generarCorreoPrueba(correo.trim(), empresaId)
       : "";
 
   if (cargando) {
     return (
       <div className="cargando">
-        <img
-          src="/konax-logo.png"
-          alt="KONAX"
-        />
-
-        <strong>
-          Preparando usuarios y módulos...
-        </strong>
+        <img src="/konax-logo.png" alt="KONAX" />
+        <strong>Preparando usuarios y módulos...</strong>
       </div>
     );
   }
@@ -1478,78 +1202,54 @@ export default function Usuarios() {
   return (
     <main className="pagina">
       <header className="hero">
-        <img
-          src="/konax-logo.png"
-          alt="KONAX"
-        />
+        <img src="/konax-logo.png" alt="KONAX" />
 
         <div>
-          <span>
-            ADMINISTRACIÓN DE EMPRESA
-          </span>
+          <span>ADMINISTRACIÓN DE EMPRESA</span>
 
-          <h1>
-            Usuarios, roles y módulos
-          </h1>
+          <h1>Usuarios, roles y módulos</h1>
 
           <p>
-            Empresa:{" "}
-            <strong>
-              {empresaNombre}
-            </strong>
-
+            Empresa: <strong>{empresaNombre}</strong>
             <br />
-
-            Plan:{" "}
-            <strong>
-              {planNombre ||
-                planCodigo}
-            </strong>
-
+            Plan: <strong>{planNombre || planCodigo}</strong>
             <br />
-
-            Configuración:{" "}
-            <strong>
-              {nombrePerfil}
-            </strong>
+            Configuración: <strong>{nombrePerfil}</strong>
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={
-            volverSegunContexto
-          }
-        >
+        <button type="button" onClick={volverSegunContexto}>
           ← Volver
         </button>
       </header>
 
-      {esGimnasio && (
+      {esAgenda && (
         <section className="aviso-perfil">
-          <div className="aviso-icono">
-            🏋️
-          </div>
+          <div className="aviso-icono">📅</div>
 
           <div>
-            <strong>
-              Configuración especializada
-              para gimnasio
-            </strong>
-
+            <strong>Configuración especializada para KONAX Agenda</strong>
             <p>
-              El perfil del gimnasio
-              utiliza únicamente los
-              módulos operativos
-              necesarios. Para crear
-              usuarios se muestran solo
-              dos roles: Administrador y
-              Vendedor. El Administrador
-              tiene acceso completo al
-              perfil y el Vendedor queda
-              con acceso a Panel,
-              Alumnos, Membresías,
-              Check-in y Caja.
+              Este plan utiliza únicamente Inicio, Agenda y Configuración.
+              El tipo de negocio se conserva, pero no habilita los módulos
+              completos de Belleza, Gimnasio u otras modalidades.
+            </p>
+          </div>
+        </section>
+      )}
+
+      {esGimnasio && !esAgenda && (
+        <section className="aviso-perfil">
+          <div className="aviso-icono">🏋️</div>
+
+          <div>
+            <strong>Configuración especializada para gimnasio</strong>
+            <p>
+              El perfil del gimnasio utiliza únicamente los módulos
+              operativos necesarios. Para crear usuarios se muestran solo
+              dos roles: Administrador y Vendedor. El Administrador tiene
+              acceso completo al perfil y el Vendedor queda con acceso a
+              Panel, Alumnos, Membresías, Check-in y Caja.
             </p>
           </div>
         </section>
@@ -1558,130 +1258,92 @@ export default function Usuarios() {
       <section className="card">
         <div className="titulo-card">
           <div>
-            <h2>
-              Módulos de la empresa
-            </h2>
+            <h2>Módulos de la empresa</h2>
 
             <p>
-              {esGimnasio
+              {esAgenda
+                ? "KONAX Agenda habilita únicamente Agenda y Configuración."
+                : esGimnasio
                 ? "Estos son los módulos operativos del perfil gimnasio."
                 : "Activa únicamente las funciones que utilizará esta empresa."}
             </p>
           </div>
 
-          <span className="perfil">
-            {nombrePerfil}
-          </span>
+          <span className="perfil">{nombrePerfil}</span>
         </div>
 
         <div className="modulos">
-          {modulos.map(
-            (modulo) => {
-              const permitido =
-                Boolean(
-                  modulosPermitidos[
-                    modulo.codigo
-                  ]
-                );
+          {modulos.map((modulo) => {
+            const permitido = Boolean(
+              modulosPermitidos[modulo.codigo]
+            );
 
-              const activo =
-                Boolean(
-                  modulosEmpresa[
-                    modulo.codigo
-                  ]
-                );
+            const activo = Boolean(
+              modulosEmpresa[modulo.codigo]
+            );
 
-              const obligatorio =
-                modulosObligatorios.includes(
-                  modulo.codigo
-                );
+            const obligatorio = modulosObligatorios.includes(
+              modulo.codigo
+            );
 
-              return (
-                <button
-                  key={
-                    modulo.codigo
-                  }
-                  type="button"
-                  onClick={() =>
-                    alternarModuloEmpresa(
-                      modulo
-                    )
-                  }
-                  className={
-                    !permitido
-                      ? "modulo bloqueado"
+            return (
+              <button
+                key={modulo.codigo}
+                type="button"
+                onClick={() => alternarModuloEmpresa(modulo)}
+                className={
+                  !permitido
+                    ? "modulo bloqueado"
+                    : activo
+                    ? "modulo activo"
+                    : "modulo"
+                }
+              >
+                <span className="icono">{modulo.icono}</span>
+
+                <span className="texto">
+                  <strong>{modulo.nombre}</strong>
+
+                  <small>
+                    {!permitido
+                      ? "No incluido en el plan"
+                      : obligatorio
+                      ? "Activo en el perfil"
                       : activo
-                      ? "modulo activo"
-                      : "modulo"
-                  }
-                >
-                  <span className="icono">
-                    {modulo.icono}
-                  </span>
+                      ? "Activo para la empresa"
+                      : "Desactivado"}
+                  </small>
+                </span>
 
-                  <span className="texto">
-                    <strong>
-                      {modulo.nombre}
-                    </strong>
-
-                    <small>
-                      {!permitido
-                        ? "No incluido en el plan"
-                        : obligatorio
-                        ? "Activo en el perfil"
-                        : activo
-                        ? "Activo para la empresa"
-                        : "Desactivado"}
-                    </small>
-                  </span>
-
-                  <span
-                    className={
-                      activo
-                        ? "switch on"
-                        : "switch"
-                    }
-                  >
-                    <span />
-                  </span>
-                </button>
-              );
-            }
-          )}
+                <span className={activo ? "switch on" : "switch"}>
+                  <span />
+                </span>
+              </button>
+            );
+          })}
         </div>
       </section>
 
       <div className="principal">
         <div>
           <section className="card">
-            <h2>
-              Invitar usuario
-            </h2>
+            <h2>Invitar usuario</h2>
 
             <p className="texto-ayuda">
-              Ingresa el nombre, correo y
-              rol. KONAX enviará una
-              invitación para que la
-              persona cree su propia
-              contraseña.
+              Ingresa el nombre, correo y rol. KONAX enviará una
+              invitación para que la persona cree su propia contraseña.
             </p>
 
             <div className="modo-prueba-box">
               <div className="modo-prueba-info">
-                <div className="modo-prueba-icono">
-                  🧪
-                </div>
+                <div className="modo-prueba-icono">🧪</div>
 
                 <div>
-                  <strong>
-                    Modo prueba
-                  </strong>
-
+                  <strong>Modo prueba</strong>
                   <p>
-                    Úsalo para demos. Puedes escribir siempre
-                    el mismo correo y KONAX generará un alias
-                    único para evitar el mensaje de correo ya
-                    utilizado.
+                    Úsalo para demos. Puedes escribir siempre el mismo
+                    correo y KONAX generará un alias único para evitar el
+                    mensaje de correo ya utilizado.
                   </p>
                 </div>
               </div>
@@ -1691,9 +1353,7 @@ export default function Usuarios() {
                   type="checkbox"
                   checked={modoPrueba}
                   onChange={(e) => {
-                    setModoPrueba(
-                      e.target.checked
-                    );
+                    setModoPrueba(e.target.checked);
 
                     if (!e.target.checked) {
                       setUltimoCorreoPrueba("");
@@ -1711,23 +1371,17 @@ export default function Usuarios() {
 
             {modoPrueba && (
               <div className="aviso-prueba">
-                <strong>
-                  Puedes reutilizar tu mismo correo.
-                </strong>
+                <strong>Puedes reutilizar tu mismo correo.</strong>
 
                 <span>
-                  Por ejemplo, si escribes
-                  {" "}
-                  <b>correo@gmail.com</b>,
-                  KONAX enviará la invitación usando
-                  un correo interno con
-                  {" "}
-                  <b>+konax</b>.
+                  Por ejemplo, si escribes <b>correo@gmail.com</b>,
+                  KONAX enviará la invitación usando un correo interno
+                  con <b>+konax</b>.
                 </span>
 
                 <small>
-                  Recomendado con Gmail o proveedores
-                  compatibles con alias usando el signo +.
+                  Recomendado con Gmail o proveedores compatibles con
+                  alias usando el signo +.
                 </small>
               </div>
             )}
@@ -1735,14 +1389,9 @@ export default function Usuarios() {
             <div className="grid">
               <label>
                 Nombre
-
                 <input
                   value={nombre}
-                  onChange={(e) =>
-                    setNombre(
-                      e.target.value
-                    )
-                  }
+                  onChange={(e) => setNombre(e.target.value)}
                   placeholder={
                     modoPrueba
                       ? "Ej. Usuario Demo"
@@ -1752,18 +1401,12 @@ export default function Usuarios() {
               </label>
 
               <label>
-                {modoPrueba
-                  ? "Correo base para pruebas"
-                  : "Correo"}
+                {modoPrueba ? "Correo base para pruebas" : "Correo"}
 
                 <input
                   type="email"
                   value={correo}
-                  onChange={(e) =>
-                    setCorreo(
-                      e.target.value
-                    )
-                  }
+                  onChange={(e) => setCorreo(e.target.value)}
                   placeholder={
                     modoPrueba
                       ? "micorreo@gmail.com"
@@ -1774,54 +1417,36 @@ export default function Usuarios() {
 
               <label>
                 Rol
-
                 <select
                   value={rolId}
-                  onChange={(e) =>
-                    setRolId(
-                      e.target.value
-                    )
-                  }
+                  onChange={(e) => setRolId(e.target.value)}
                 >
-                  {roles.map(
-                    (rol) => (
-                      <option
-                        key={rol.id}
-                        value={rol.id}
-                      >
-                        {rol.nombre}
-                      </option>
-                    )
-                  )}
+                  {roles.map((rol) => (
+                    <option key={rol.id} value={rol.id}>
+                      {rol.nombre}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>
 
-            {modoPrueba &&
-              correoPruebaPreview && (
-                <div className="preview-correo">
-                  <span>
-                    KONAX generará automáticamente
-                    un alias único al enviar.
-                  </span>
-
-                  <small>
-                    El alias cambia en cada
-                    invitación para que Supabase
-                    lo considere un usuario nuevo.
-                  </small>
-                </div>
-              )}
+            {modoPrueba && correoPruebaPreview && (
+              <div className="preview-correo">
+                <span>
+                  KONAX generará automáticamente un alias único al
+                  enviar.
+                </span>
+                <small>
+                  El alias cambia en cada invitación para que Supabase
+                  lo considere un usuario nuevo.
+                </small>
+              </div>
+            )}
 
             {ultimoCorreoPrueba && (
               <div className="ultimo-correo">
-                <span>
-                  Último correo de prueba creado:
-                </span>
-
-                <strong>
-                  {ultimoCorreoPrueba}
-                </strong>
+                <span>Último correo de prueba creado:</span>
+                <strong>{ultimoCorreoPrueba}</strong>
               </div>
             )}
 
@@ -1841,63 +1466,42 @@ export default function Usuarios() {
           </section>
 
           <section className="card">
-            <h2>
-              Usuarios de la empresa
-            </h2>
+            <h2>Usuarios de la empresa</h2>
 
             <input
               className="buscar"
               value={busqueda}
-              onChange={(e) =>
-                setBusqueda(
-                  e.target.value
-                )
-              }
+              onChange={(e) => setBusqueda(e.target.value)}
               placeholder="Buscar usuario..."
             />
 
             <div className="usuarios">
-              {usuariosFiltrados.map(
-                (usuario) => (
-                  <button
-                    key={usuario.id}
-                    onClick={() =>
-                      seleccionarUsuario(
-                        usuario
-                      )
-                    }
-                    className={
-                      usuarioSeleccionado?.id ===
-                      usuario.id
-                        ? "usuario seleccionado"
-                        : "usuario"
-                    }
-                  >
-                    <strong>
-                      {usuario.nombre}
-                    </strong>
-
-                    <span>
-                      {usuario.correo}
-                    </span>
-
-                    <small>
-                      {usuario.rol}
-                    </small>
-                  </button>
-                )
-              )}
+              {usuariosFiltrados.map((usuario) => (
+                <button
+                  key={usuario.id}
+                  onClick={() => seleccionarUsuario(usuario)}
+                  className={
+                    usuarioSeleccionado?.id === usuario.id
+                      ? "usuario seleccionado"
+                      : "usuario"
+                  }
+                >
+                  <strong>{usuario.nombre}</strong>
+                  <span>{usuario.correo}</span>
+                  <small>{usuario.rol}</small>
+                </button>
+              ))}
             </div>
 
             <button
               className="finalizar"
-              onClick={
-                finalizarConfiguracion
-              }
+              onClick={finalizarConfiguracion}
               disabled={guardando}
             >
               {guardando
                 ? "Guardando..."
+                : esAgenda
+                ? "Aplicar perfil KONAX Agenda"
                 : esGimnasio
                 ? "Aplicar perfil de gimnasio"
                 : "Finalizar configuración"}
@@ -1906,128 +1510,69 @@ export default function Usuarios() {
         </div>
 
         <aside className="card permisos">
-          <h2>
-            Permisos del usuario
-          </h2>
+          <h2>Permisos del usuario</h2>
 
           {!usuarioSeleccionado ? (
-            <p>
-              Selecciona un usuario para
-              configurar sus permisos.
-            </p>
+            <p>Selecciona un usuario para configurar sus permisos.</p>
           ) : (
             <>
-              <strong>
-                {
-                  usuarioSeleccionado.nombre
-                }
-              </strong>
+              <strong>{usuarioSeleccionado.nombre}</strong>
 
               <div className="acciones">
-                <button
-                  onClick={() =>
-                    cambiarTodosPermisos(
-                      true
-                    )
-                  }
-                >
+                <button onClick={() => cambiarTodosPermisos(true)}>
                   Activar permitidos
                 </button>
 
-                <button
-                  onClick={() =>
-                    cambiarTodosPermisos(
-                      false
-                    )
-                  }
-                >
+                <button onClick={() => cambiarTodosPermisos(false)}>
                   Desactivar todo
                 </button>
               </div>
 
-              {Object.entries(
-                grupos
-              ).map(
-                ([grupo, lista]) => (
-                  <section
-                    key={grupo}
-                    className="grupo"
-                  >
-                    <h3>
-                      {grupo}
-                    </h3>
+              {Object.entries(grupos).map(([grupo, lista]) => (
+                <section key={grupo} className="grupo">
+                  <h3>{grupo}</h3>
 
-                    {lista.map(
-                      (modulo) => {
-                        const habilitado =
-                          Boolean(
-                            modulosPermitidos[
-                              modulo.codigo
-                            ]
-                          ) &&
-                          Boolean(
-                            modulosEmpresa[
-                              modulo.codigo
-                            ]
-                          );
+                  {lista.map((modulo) => {
+                    const habilitado =
+                      Boolean(modulosPermitidos[modulo.codigo]) &&
+                      Boolean(modulosEmpresa[modulo.codigo]);
 
-                        const activo =
-                          Boolean(
-                            permisosUsuario[
-                              modulo.codigo
-                            ]
-                          );
+                    const activo = Boolean(
+                      permisosUsuario[modulo.codigo]
+                    );
 
-                        return (
-                          <button
-                            key={
-                              modulo.codigo
-                            }
-                            onClick={() =>
-                              alternarPermiso(
-                                modulo
-                              )
-                            }
-                            className={
-                              !habilitado
-                                ? "permiso bloqueado"
-                                : activo
-                                ? "permiso activo"
-                                : "permiso"
-                            }
-                          >
-                            <span>
-                              <strong>
-                                {
-                                  modulo.nombre
-                                }
-                              </strong>
+                    return (
+                      <button
+                        key={modulo.codigo}
+                        onClick={() => alternarPermiso(modulo)}
+                        className={
+                          !habilitado
+                            ? "permiso bloqueado"
+                            : activo
+                            ? "permiso activo"
+                            : "permiso"
+                        }
+                      >
+                        <span>
+                          <strong>{modulo.nombre}</strong>
 
-                              <small>
-                                {!habilitado
-                                  ? "No disponible"
-                                  : activo
-                                  ? "Permitido"
-                                  : "Sin permiso"}
-                              </small>
-                            </span>
+                          <small>
+                            {!habilitado
+                              ? "No disponible"
+                              : activo
+                              ? "Permitido"
+                              : "Sin permiso"}
+                          </small>
+                        </span>
 
-                            <span
-                              className={
-                                activo
-                                  ? "switch on"
-                                  : "switch"
-                              }
-                            >
-                              <span />
-                            </span>
-                          </button>
-                        );
-                      }
-                    )}
-                  </section>
-                )
-              )}
+                        <span className={activo ? "switch on" : "switch"}>
+                          <span />
+                        </span>
+                      </button>
+                    );
+                  })}
+                </section>
+              ))}
             </>
           )}
         </aside>
@@ -2054,11 +1599,7 @@ export default function Usuarios() {
           gap: 18px;
           align-items: center;
           border-radius: 20px;
-          background: linear-gradient(
-            135deg,
-            #111827,
-            #064e3b
-          );
+          background: linear-gradient(135deg, #111827, #064e3b);
           color: white;
         }
 
@@ -2158,10 +1699,7 @@ export default function Usuarios() {
         .modulos {
           margin-top: 16px;
           display: grid;
-          grid-template-columns: repeat(
-            auto-fit,
-            minmax(230px, 1fr)
-          );
+          grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
           gap: 10px;
         }
 
@@ -2169,10 +1707,7 @@ export default function Usuarios() {
         .permiso {
           padding: 13px;
           display: grid;
-          grid-template-columns:
-            30px
-            1fr
-            46px;
+          grid-template-columns: 30px 1fr 46px;
           gap: 10px;
           align-items: center;
           border: 1px solid #d1d5db;
@@ -2228,9 +1763,7 @@ export default function Usuarios() {
           max-width: 1450px;
           margin: auto;
           display: grid;
-          grid-template-columns:
-            minmax(0, 1fr)
-            minmax(360px, 0.8fr);
+          grid-template-columns: minmax(0, 1fr) minmax(360px, 0.8fr);
           gap: 18px;
           align-items: start;
         }
@@ -2352,10 +1885,7 @@ export default function Usuarios() {
 
         .grid {
           display: grid;
-          grid-template-columns: repeat(
-            2,
-            minmax(0, 1fr)
-          );
+          grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 14px;
         }
 
@@ -2404,10 +1934,7 @@ export default function Usuarios() {
 
         .usuarios {
           display: grid;
-          grid-template-columns: repeat(
-            auto-fit,
-            minmax(190px, 1fr)
-          );
+          grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
           gap: 10px;
         }
 
@@ -2529,3 +2056,4 @@ export default function Usuarios() {
     </main>
   );
 }
+
