@@ -1,7 +1,107 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { supabase } from "../../lib/supabase";
+
+// KONAX Sidebar Desktop
+// VERSION 2026.09.02-EMPRESA-MODULOS
+//
+// REGLA:
+// empresa_modulos es la autoridad para decidir qué módulos
+// aparecen en el menú de la empresa.
+//
+// El componente sigue recibiendo "items" desde Dashboard u otra pantalla,
+// pero antes de mostrarlos los filtra con los valores reales guardados
+// en empresa_modulos.
+//
+// Inicio y Configuración quedan siempre visibles.
+// Usuarios y Roles se conserva visible porque actualmente no existe
+// una columna propia "usuarios" en empresa_modulos.
+
+const COLUMNAS_EMPRESA = {
+  agenda: "agenda",
+  clientes: "clientes",
+  vista_cliente: "vista_cliente",
+  creditos: "venta_credito",
+  ventas: "venta_credito",
+  caja: "caja",
+  control_caja: "control_caja",
+  cobranza: "cobranza",
+  gestor_cobros: "cobranza",
+  dashboard_cobros: "dashboard_cobros",
+  reportes: "dashboard_cobros",
+  inventario: "inventario",
+  movimientos_inventario: "inventario",
+  dashboard_ventas: "dashboard_ventas",
+  suscripciones: "suscripciones",
+  recargos: "recargos",
+  gastos: "egresos",
+};
+
+const CODIGOS_BASE = new Set([
+  "dashboard",
+  "configuracion",
+  "usuarios",
+]);
+
+function normalizar(valor) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_");
+}
+
+function codigoDesdeRuta(ruta = "") {
+  const limpia = String(ruta || "")
+    .split("?")[0]
+    .split("#")[0]
+    .replace(/^\/+|\/+$/g, "");
+
+  const primeraParte = limpia.split("/")[0] || "";
+
+  const mapa = {
+    dashboard: "dashboard",
+    agenda: "agenda",
+    clientes: "clientes",
+    "vista-cliente": "vista_cliente",
+    vista_cliente: "vista_cliente",
+    creditos: "creditos",
+    credito: "creditos",
+    cobranza: "cobranza",
+    "dashboard-cobros": "dashboard_cobros",
+    dashboard_cobros: "dashboard_cobros",
+    "gestor-cobros": "gestor_cobros",
+    gestor_cobros: "gestor_cobros",
+    caja: "caja",
+    "control-caja": "control_caja",
+    control_caja: "control_caja",
+    gastos: "gastos",
+    recargos: "recargos",
+    inventario: "inventario",
+    "movimientos-inventario": "movimientos_inventario",
+    movimientos_inventario: "movimientos_inventario",
+    ventas: "ventas",
+    "dashboard-ventas": "dashboard_ventas",
+    dashboard_ventas: "dashboard_ventas",
+    suscripciones: "suscripciones",
+    usuarios: "usuarios",
+    "admin-configuracion": "configuracion",
+    configuracion: "configuracion",
+  };
+
+  return mapa[primeraParte] || normalizar(primeraParte);
+}
+
+function obtenerCodigoModulo(item) {
+  if (item?.codigo) {
+    return normalizar(item.codigo);
+  }
+
+  return codigoDesdeRuta(item?.ruta || "");
+}
 
 export default function SidebarKonax({
   items = [],
@@ -10,7 +110,96 @@ export default function SidebarKonax({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+
   const [itemHover, setItemHover] = useState("");
+  const [modulosEmpresa, setModulosEmpresa] = useState(null);
+  const [cargandoModulos, setCargandoModulos] = useState(true);
+
+  useEffect(() => {
+    cargarModulosEmpresa();
+  }, []);
+
+  async function cargarModulosEmpresa() {
+    try {
+      const empresaId =
+        localStorage.getItem("empresaId") ||
+        localStorage.getItem("empresaAdminCreadaId");
+
+      if (!empresaId) {
+        // Si por alguna razón todavía no existe empresaId,
+        // no ocultamos el menú para no dejar al usuario atrapado.
+        setModulosEmpresa(null);
+        setCargandoModulos(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("empresa_modulos")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+
+      if (error) {
+        console.error(
+          "KONAX: no se pudieron cargar empresa_modulos:",
+          error
+        );
+
+        // Ante un error de lectura, conservamos los items recibidos.
+        setModulosEmpresa(null);
+        setCargandoModulos(false);
+        return;
+      }
+
+      setModulosEmpresa(data || {});
+    } catch (error) {
+      console.error(
+        "KONAX: error cargando módulos del sidebar:",
+        error
+      );
+
+      setModulosEmpresa(null);
+    } finally {
+      setCargandoModulos(false);
+    }
+  }
+
+  const itemsVisibles = useMemo(() => {
+    // Mientras carga, evitamos que aparezca por un instante
+    // el menú completo y luego desaparezca.
+    if (cargandoModulos) {
+      return [];
+    }
+
+    // Si no fue posible leer empresa_modulos, conservamos
+    // el comportamiento anterior para no romper navegación.
+    if (modulosEmpresa === null) {
+      return items;
+    }
+
+    return items.filter((item) => {
+      const codigo = obtenerCodigoModulo(item);
+
+      if (!codigo) {
+        return true;
+      }
+
+      if (CODIGOS_BASE.has(codigo)) {
+        return true;
+      }
+
+      const columna = COLUMNAS_EMPRESA[codigo];
+
+      // Si todavía no existe una columna/control conocido para ese módulo,
+      // lo dejamos visible para no dañar perfiles especiales existentes
+      // como lavandería o gimnasio.
+      if (!columna) {
+        return true;
+      }
+
+      return Boolean(modulosEmpresa[columna]);
+    });
+  }, [items, modulosEmpresa, cargandoModulos]);
 
   function estaActivo(item) {
     if (tituloActivo) {
@@ -65,7 +254,7 @@ export default function SidebarKonax({
         <div style={s.divider} />
 
         <nav style={s.menu}>
-          {items.map((item) => {
+          {itemsVisibles.map((item) => {
             const activo = estaActivo(item);
             const clave = obtenerClave(item);
             const hover = itemHover === clave;
