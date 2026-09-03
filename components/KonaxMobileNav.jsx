@@ -1,7 +1,9 @@
 "use client";
 
-// KONAX Mobile Nav · Barra inferior estilo app · 2026.09.02-AGENDA-BASICA-1
-// Agrega modalidad/plan "agenda_basica" sin tocar Gimnasio, Belleza completa ni planes generales.
+// KONAX Mobile Nav · Barra inferior estilo app · 2026.09.02-AGENDA-PLAN-2
+// KONAX Agenda se separa por plan_codigo, no por tipo de negocio.
+// Si plan_codigo = agenda / agenda_basica / konax_agenda,
+// la navegación móvil muestra únicamente Inicio, Agenda y Configuración.
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -28,6 +30,7 @@ function esAdministrador(rol) {
 
 function esGimnasio(tipo, categoria = "") {
   const texto = normalizar(`${tipo || ""} ${categoria || ""}`);
+
   return ["gimnasio", "gym", "fitness", "academia", "club"].some((p) =>
     texto.includes(p)
   );
@@ -35,6 +38,7 @@ function esGimnasio(tipo, categoria = "") {
 
 function esBelleza(tipo, categoria = "") {
   const texto = normalizar(`${tipo || ""} ${categoria || ""}`);
+
   return [
     "belleza",
     "salon",
@@ -47,16 +51,16 @@ function esBelleza(tipo, categoria = "") {
   ].some((p) => texto.includes(p));
 }
 
-function esPlanAgendaBasica(plan = "", modalidad = "") {
-  const texto = normalizar(`${plan || ""} ${modalidad || ""}`);
+function esPlanAgenda(plan = "") {
+  const codigo = normalizar(plan);
 
   return [
+    "agenda",
     "agenda_basica",
     "konax_agenda",
-    "agenda",
     "agenda_10",
     "plan_agenda",
-  ].some((p) => texto.includes(p));
+  ].includes(codigo);
 }
 
 const RUTAS_SIN_MENU = [
@@ -71,32 +75,12 @@ const RUTAS_SIN_MENU = [
   "/negocios",
 ];
 
-// PLAN DE $10 · KONAX AGENDA
-// Estas rutas apuntan a secciones de Configuración que construiremos/ajustaremos
-// para que el cliente administre su mini sitio de reservas.
-const MENU_AGENDA_BASICA = [
+// PLAN KONAX AGENDA
+// El tipo de negocio puede seguir siendo Belleza, Spa, Barbería, Clínica, etc.
+// El acceso reducido se decide exclusivamente por plan_codigo.
+const MENU_AGENDA = [
   { nombre: "Inicio", ruta: "/dashboard", icono: "⌂" },
   { nombre: "Agenda", ruta: "/agenda", icono: "▣" },
-  {
-    nombre: "Servicios",
-    ruta: "/admin-configuracion?seccion=servicios",
-    icono: "✦",
-  },
-  {
-    nombre: "Profesionales",
-    ruta: "/admin-configuracion?seccion=profesionales",
-    icono: "♙",
-  },
-  {
-    nombre: "Horarios",
-    ruta: "/admin-configuracion?seccion=horarios",
-    icono: "◷",
-  },
-  {
-    nombre: "Mi sitio de reservas",
-    ruta: "/admin-configuracion?seccion=sitio-reservas",
-    icono: "↗",
-  },
   {
     nombre: "Configuración",
     ruta: "/admin-configuracion",
@@ -110,34 +94,62 @@ const MENU_BELLEZA = [
   { nombre: "Agenda", ruta: "/agenda", icono: "▣" },
   { nombre: "Caja", ruta: "/caja", icono: "$" },
   { nombre: "Gastos", ruta: "/gastos", icono: "−" },
-  { nombre: "Reporte financiero", ruta: "/reporte-financiero", icono: "▥" },
+  {
+    nombre: "Reporte financiero",
+    ruta: "/reporte-financiero",
+    icono: "▥",
+  },
   {
     nombre: "Profesionales",
     ruta: "/admin-configuracion?seccion=profesionales",
     icono: "♙",
   },
-  { nombre: "Configuración", ruta: "/admin-configuracion", icono: "⚙" },
+  {
+    nombre: "Configuración",
+    ruta: "/admin-configuracion",
+    icono: "⚙",
+  },
 ];
 
 const MENU_GIMNASIO_ADMIN = [
   { nombre: "Dashboard", ruta: "/dashboard", icono: "⌂" },
   { nombre: "Alumnos", ruta: "/clientes", icono: "♙" },
   { nombre: "Membresías", ruta: "/suscripciones", icono: "▣" },
-  { nombre: "Check-in", ruta: "/gimnasio/check-in", icono: "✓" },
+  {
+    nombre: "Check-in",
+    ruta: "/gimnasio/check-in",
+    icono: "✓",
+  },
   { nombre: "Agenda", ruta: "/agenda", icono: "◷" },
   { nombre: "Caja", ruta: "/caja", icono: "$" },
   { nombre: "Gastos", ruta: "/gastos", icono: "−" },
   { nombre: "Reportes", ruta: "/reportes", icono: "▥" },
-  { nombre: "Reporte financiero", ruta: "/reporte-financiero", icono: "▥" },
-  { nombre: "Usuarios y Roles", ruta: "/usuarios", icono: "♙" },
-  { nombre: "Configuración", ruta: "/admin-configuracion", icono: "⚙" },
+  {
+    nombre: "Reporte financiero",
+    ruta: "/reporte-financiero",
+    icono: "▥",
+  },
+  {
+    nombre: "Usuarios y Roles",
+    ruta: "/usuarios",
+    icono: "♙",
+  },
+  {
+    nombre: "Configuración",
+    ruta: "/admin-configuracion",
+    icono: "⚙",
+  },
 ];
 
 const MENU_GIMNASIO_OPERATIVO = [
   { nombre: "Dashboard", ruta: "/dashboard", icono: "⌂" },
   { nombre: "Alumnos", ruta: "/clientes", icono: "♙" },
   { nombre: "Membresías", ruta: "/suscripciones", icono: "▣" },
-  { nombre: "Check-in", ruta: "/gimnasio/check-in", icono: "✓" },
+  {
+    nombre: "Check-in",
+    ruta: "/gimnasio/check-in",
+    icono: "✓",
+  },
   { nombre: "Agenda", ruta: "/agenda", icono: "◷" },
   { nombre: "Caja", ruta: "/caja", icono: "$" },
 ];
@@ -146,7 +158,11 @@ const MENU_GENERAL = [
   { nombre: "Dashboard", ruta: "/dashboard", icono: "⌂" },
   { nombre: "Clientes", ruta: "/clientes", icono: "♙" },
   { nombre: "Caja", ruta: "/caja", icono: "$" },
-  { nombre: "Configuración", ruta: "/admin-configuracion", icono: "⚙" },
+  {
+    nombre: "Configuración",
+    ruta: "/admin-configuracion",
+    icono: "⚙",
+  },
 ];
 
 function Icono({ tipo }) {
@@ -193,25 +209,6 @@ function Icono({ tipo }) {
     );
   }
 
-  if (tipo === "servicios") {
-    return (
-      <svg {...props}>
-        <path d="M12 3v18" />
-        <path d="M3 12h18" />
-        <circle cx="12" cy="12" r="8" />
-      </svg>
-    );
-  }
-
-  if (tipo === "profesionales") {
-    return (
-      <svg {...props}>
-        <circle cx="12" cy="8" r="3.5" />
-        <path d="M5 21c.7-4.4 3-6.5 7-6.5s6.3 2.1 7 6.5" />
-      </svg>
-    );
-  }
-
   if (tipo === "caja") {
     return (
       <svg {...props}>
@@ -219,6 +216,15 @@ function Icono({ tipo }) {
         <path d="M3 10h18" />
         <path d="M15 15h3" />
         <circle cx="9" cy="15" r="2.4" />
+      </svg>
+    );
+  }
+
+  if (tipo === "configuracion") {
+    return (
+      <svg {...props}>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-4v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H3v-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3V3h4v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 21 10h.1v4H21a1.7 1.7 0 0 0-1.6 1Z" />
       </svg>
     );
   }
@@ -237,13 +243,13 @@ export default function KonaxMobileNav() {
   const [listo, setListo] = useState(false);
   const [mostrar, setMostrar] = useState(false);
   const [abierto, setAbierto] = useState(false);
+
   const [empresaNombre, setEmpresaNombre] = useState("");
   const [usuarioNombre, setUsuarioNombre] = useState("");
   const [rolUsuario, setRolUsuario] = useState("");
   const [tipoNegocio, setTipoNegocio] = useState("");
   const [categoriaNegocio, setCategoriaNegocio] = useState("");
   const [planEmpresa, setPlanEmpresa] = useState("");
-  const [modalidadEmpresa, setModalidadEmpresa] = useState("");
 
   useEffect(() => {
     let activo = true;
@@ -258,6 +264,7 @@ export default function KonaxMobileNav() {
 
       if (esRutaSinMenu) {
         if (!activo) return;
+
         setMostrar(false);
         setAbierto(false);
         setListo(true);
@@ -286,24 +293,24 @@ export default function KonaxMobileNav() {
         data.session.user.id ||
         "";
 
-      const tipo =
+      if (!empresaId || !usuarioId) {
+        setMostrar(false);
+        setAbierto(false);
+        setListo(true);
+        return;
+      }
+
+      let tipo =
         localStorage.getItem("tipoNegocio") ||
         localStorage.getItem("tipo_negocio") ||
         "";
 
-      const categoria =
+      let categoria =
         localStorage.getItem("categoriaNegocio") ||
         localStorage.getItem("categoria_negocio") ||
         "";
 
-      const rol =
-        localStorage.getItem("usuarioRol") ||
-        localStorage.getItem("rolUsuario") ||
-        "";
-
-      // Lee varias claves para no romper la implementación actual.
-      // Cuando definamos la columna definitiva del plan, podemos dejar una sola.
-      const plan =
+      let plan =
         localStorage.getItem("planCodigo") ||
         localStorage.getItem("plan_codigo") ||
         localStorage.getItem("planEmpresa") ||
@@ -311,20 +318,67 @@ export default function KonaxMobileNav() {
         localStorage.getItem("plan") ||
         "";
 
-      const modalidad =
-        localStorage.getItem("modalidad") ||
-        localStorage.getItem("modalidadEmpresa") ||
-        localStorage.getItem("modalidad_empresa") ||
+      let nombreEmpresa =
+        localStorage.getItem("empresaNombre") || "KONAX";
+
+      const rol =
+        localStorage.getItem("usuarioRol") ||
+        localStorage.getItem("rolUsuario") ||
         "";
 
-      setMostrar(Boolean(empresaId && usuarioId));
-      setEmpresaNombre(localStorage.getItem("empresaNombre") || "KONAX");
-      setUsuarioNombre(localStorage.getItem("usuarioNombre") || "Usuario");
+      /*
+        IMPORTANTE:
+        La navegación móvil consulta la empresa real en Supabase.
+        Así no depende solamente de un plan viejo guardado en localStorage.
+
+        Si la empresa tiene:
+          tipo_negocio = Belleza
+          plan_codigo = agenda
+
+        prevalece Agenda.
+      */
+      const { data: empresa, error: errorEmpresa } = await supabase
+        .from("empresas")
+        .select(`
+          id,
+          nombre,
+          plan_codigo,
+          plan_nombre,
+          tipo_negocio,
+          categoria_negocio
+        `)
+        .eq("id", empresaId)
+        .maybeSingle();
+
+      if (!errorEmpresa && empresa) {
+        tipo = empresa.tipo_negocio || tipo;
+        categoria = empresa.categoria_negocio || categoria;
+        plan = empresa.plan_codigo || plan;
+        nombreEmpresa = empresa.nombre || nombreEmpresa;
+
+        localStorage.setItem("tipoNegocio", tipo || "");
+        localStorage.setItem("categoriaNegocio", categoria || "");
+        localStorage.setItem("planCodigo", plan || "");
+        localStorage.setItem("planNombre", empresa.plan_nombre || "");
+        localStorage.setItem("empresaNombre", nombreEmpresa || "");
+      } else if (errorEmpresa) {
+        console.warn(
+          "KONAX Mobile Nav: no se pudo refrescar la empresa. Se usará localStorage.",
+          errorEmpresa
+        );
+      }
+
+      if (!activo) return;
+
+      setMostrar(true);
+      setEmpresaNombre(nombreEmpresa);
+      setUsuarioNombre(
+        localStorage.getItem("usuarioNombre") || "Usuario"
+      );
       setRolUsuario(rol);
       setTipoNegocio(tipo);
       setCategoriaNegocio(categoria);
       setPlanEmpresa(plan);
-      setModalidadEmpresa(modalidad);
       setListo(true);
     }
 
@@ -376,22 +430,19 @@ export default function KonaxMobileNav() {
     }
 
     document.body.style.overflow = "hidden";
+
     return () => {
       document.body.style.overflow = "";
     };
   }, [abierto]);
 
-  const gimnasio = esGimnasio(tipoNegocio, categoriaNegocio);
-  const belleza = esBelleza(tipoNegocio, categoriaNegocio);
-
-  // IMPORTANTE:
-  // Primero comprobamos agenda básica.
-  // Así un salón/barbería/spa con plan de $10 NO entra al menú completo de Belleza.
-  const agendaBasica = esPlanAgendaBasica(planEmpresa, modalidadEmpresa);
+  const agenda = esPlanAgenda(planEmpresa);
+  const gimnasio = !agenda && esGimnasio(tipoNegocio, categoriaNegocio);
+  const belleza = !agenda && esBelleza(tipoNegocio, categoriaNegocio);
 
   const menuVisible = useMemo(() => {
-    if (agendaBasica) {
-      return MENU_AGENDA_BASICA;
+    if (agenda) {
+      return MENU_AGENDA;
     }
 
     if (gimnasio) {
@@ -400,49 +451,71 @@ export default function KonaxMobileNav() {
         : MENU_GIMNASIO_OPERATIVO;
     }
 
-    if (belleza) return MENU_BELLEZA;
+    if (belleza) {
+      return MENU_BELLEZA;
+    }
 
     return MENU_GENERAL;
-  }, [agendaBasica, gimnasio, belleza, rolUsuario]);
+  }, [agenda, gimnasio, belleza, rolUsuario]);
 
   const tabs = useMemo(() => {
-    if (agendaBasica) {
+    if (agenda) {
       return [
-        { nombre: "Inicio", ruta: "/dashboard", tipo: "home" },
-        { nombre: "Agenda", ruta: "/agenda", tipo: "agenda" },
         {
-          nombre: "Servicios",
-          ruta: "/admin-configuracion?seccion=servicios",
-          tipo: "servicios",
+          nombre: "Inicio",
+          ruta: "/dashboard",
+          tipo: "home",
         },
         {
-          nombre: "Profesionales",
-          ruta: "/admin-configuracion?seccion=profesionales",
-          tipo: "profesionales",
+          nombre: "Agenda",
+          ruta: "/agenda",
+          tipo: "agenda",
         },
-        { nombre: "Menú", ruta: "", tipo: "menu" },
+        {
+          nombre: "Configuración",
+          ruta: "/admin-configuracion",
+          tipo: "configuracion",
+        },
       ];
     }
 
     return [
-      { nombre: "Inicio", ruta: "/dashboard", tipo: "home" },
+      {
+        nombre: "Inicio",
+        ruta: "/dashboard",
+        tipo: "home",
+      },
       {
         nombre: gimnasio ? "Alumnos" : "Clientes",
         ruta: "/clientes",
         tipo: "clientes",
       },
-      { nombre: "Agenda", ruta: "/agenda", tipo: "agenda" },
-      { nombre: "Caja", ruta: "/caja", tipo: "caja" },
-      { nombre: "Menú", ruta: "", tipo: "menu" },
+      {
+        nombre: "Agenda",
+        ruta: "/agenda",
+        tipo: "agenda",
+      },
+      {
+        nombre: "Caja",
+        ruta: "/caja",
+        tipo: "caja",
+      },
+      {
+        nombre: "Menú",
+        ruta: "",
+        tipo: "menu",
+      },
     ];
-  }, [agendaBasica, gimnasio]);
+  }, [agenda, gimnasio]);
 
   function estaActivo(ruta) {
     if (!ruta) return false;
 
     const rutaBase = ruta.split("?")[0];
 
-    if (rutaBase === "/dashboard") return pathname === "/dashboard";
+    if (rutaBase === "/dashboard") {
+      return pathname === "/dashboard";
+    }
 
     return pathname === rutaBase || pathname.startsWith(`${rutaBase}/`);
   }
@@ -469,7 +542,9 @@ export default function KonaxMobileNav() {
     router.refresh();
   }
 
-  if (!listo || !mostrar) return null;
+  if (!listo || !mostrar) {
+    return null;
+  }
 
   return (
     <>
@@ -502,10 +577,18 @@ export default function KonaxMobileNav() {
       `}</style>
 
       <div className="konax-mobile-nav-root">
-        <nav style={s.bottomBar} aria-label="Navegación principal móvil">
+        <nav
+          style={{
+            ...s.bottomBar,
+            gridTemplateColumns: `repeat(${tabs.length},minmax(0,1fr))`,
+          }}
+          aria-label="Navegación principal móvil"
+        >
           {tabs.map((item) => {
             const activo =
-              item.tipo === "menu" ? abierto : estaActivo(item.ruta);
+              item.tipo === "menu"
+                ? abierto
+                : estaActivo(item.ruta);
 
             return (
               <button
@@ -521,7 +604,9 @@ export default function KonaxMobileNav() {
                   ...(activo ? s.tabActivo : {}),
                 }}
                 aria-current={
-                  activo && item.tipo !== "menu" ? "page" : undefined
+                  activo && item.tipo !== "menu"
+                    ? "page"
+                    : undefined
                 }
               >
                 <span
@@ -533,14 +618,19 @@ export default function KonaxMobileNav() {
                   <Icono tipo={item.tipo} />
                 </span>
 
-                <span style={s.tabLabel}>{item.nombre}</span>
+                <span style={s.tabLabel}>
+                  {item.nombre}
+                </span>
               </button>
             );
           })}
         </nav>
 
-        {abierto && (
-          <div style={s.overlay} onClick={() => setAbierto(false)}>
+        {abierto && !agenda && (
+          <div
+            style={s.overlay}
+            onClick={() => setAbierto(false)}
+          >
             <aside
               style={s.sheet}
               onClick={(event) => event.stopPropagation()}
@@ -551,27 +641,21 @@ export default function KonaxMobileNav() {
               <div style={s.sheetHeader}>
                 <div style={{ minWidth: 0 }}>
                   <span style={s.sheetEyebrow}>
-                    {agendaBasica
-                      ? "KONAX · AGENDA"
-                      : belleza
+                    {belleza
                       ? "KONAX · SALÓN DE BELLEZA"
                       : gimnasio
                       ? "KONAX · GIMNASIO"
                       : "KONAX"}
                   </span>
 
-                  <strong style={s.sheetEmpresa}>{empresaNombre}</strong>
+                  <strong style={s.sheetEmpresa}>
+                    {empresaNombre}
+                  </strong>
 
                   <small style={s.sheetUsuario}>
                     {usuarioNombre}
                     {rolUsuario ? ` · ${rolUsuario}` : ""}
                   </small>
-
-                  {agendaBasica && (
-                    <small style={s.planTag}>
-                      Plan Agenda · sitio de reservas incluido
-                    </small>
-                  )}
                 </div>
 
                 <button
@@ -599,15 +683,25 @@ export default function KonaxMobileNav() {
                         ...(activo ? s.menuItemActivo : {}),
                       }}
                     >
-                      <span style={s.menuIcon}>{item.icono}</span>
-                      <span style={s.menuTexto}>{item.nombre}</span>
+                      <span style={s.menuIcon}>
+                        {item.icono}
+                      </span>
+
+                      <span style={s.menuTexto}>
+                        {item.nombre}
+                      </span>
+
                       <span style={s.menuArrow}>›</span>
                     </button>
                   );
                 })}
               </div>
 
-              <button type="button" onClick={cerrarSesion} style={s.logout}>
+              <button
+                type="button"
+                onClick={cerrarSesion}
+                style={s.logout}
+              >
                 Cerrar sesión
               </button>
             </aside>
@@ -629,7 +723,6 @@ const s = {
     padding:
       "6px max(6px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left))",
     display: "grid",
-    gridTemplateColumns: "repeat(5,minmax(0,1fr))",
     alignItems: "end",
     borderTop: "1px solid #dce5df",
     background: "rgba(255,255,255,.97)",
@@ -695,7 +788,8 @@ const s = {
   sheet: {
     width: "100%",
     maxHeight: "82dvh",
-    padding: "8px 14px calc(18px + env(safe-area-inset-bottom))",
+    padding:
+      "8px 14px calc(18px + env(safe-area-inset-bottom))",
     borderRadius: "24px 24px 0 0",
     background: "#ffffff",
     boxShadow: "0 -20px 60px rgba(15,23,42,.22)",
@@ -741,17 +835,6 @@ const s = {
     marginTop: 4,
     color: "#7a8780",
     fontSize: 10,
-  },
-
-  planTag: {
-    display: "inline-flex",
-    marginTop: 7,
-    padding: "5px 8px",
-    borderRadius: 999,
-    background: "#eaf8f1",
-    color: "#0d7b57",
-    fontSize: 8.5,
-    fontWeight: 850,
   },
 
   cerrar: {
