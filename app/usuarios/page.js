@@ -1,7 +1,19 @@
 "use client";
 
 // KONAX Usuarios y Roles
-// VERSION 2026.09.02-AGENDA-MODULO
+// VERSION 2026.09.02-MODULOS-MANUALES
+//
+// REGLA PRINCIPAL:
+// - plan_codigo / plan_nombre = referencia comercial.
+// - empresa_modulos = decide qué módulos tiene activos la empresa.
+// - Los módulos se activan y desactivan manualmente desde esta pantalla.
+// - El plan NO bloquea ni activa automáticamente los módulos.
+// - Inicio y Configuración permanecen como base del sistema.
+//
+// IMPORTANTE:
+// Este archivo conserva los perfiles especiales de Lavandería y Gimnasio
+// para mostrar sus módulos propios, pero la activación dentro de cada catálogo
+// se realiza manualmente.
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -27,17 +39,6 @@ const MODULOS_GENERALES = [
   ["dashboard_ventas", "Centro de Ventas", "Ventas", "📈"],
   ["suscripciones", "Suscripciones", "Ventas", "🔁"],
   ["usuarios", "Usuarios y Roles", "Administración", "🔐"],
-  ["configuracion", "Configuración", "Administración", "⚙️"],
-].map(([codigo, nombre, grupo, icono]) => ({
-  codigo,
-  nombre,
-  grupo,
-  icono,
-}));
-
-const MODULOS_AGENDA = [
-  ["dashboard", "Inicio / Resumen", "Agenda", "📊"],
-  ["agenda", "Agenda", "Agenda", "📅"],
   ["configuracion", "Configuración", "Administración", "⚙️"],
 ].map(([codigo, nombre, grupo, icono]) => ({
   codigo,
@@ -80,35 +81,12 @@ const MODULOS_GIMNASIO = [
   icono,
 }));
 
-const OBLIGATORIOS_BASE = [
-  "dashboard",
-  "usuarios",
-  "configuracion",
-];
+// Inicio y Configuración son la base del sistema.
+// Agenda, Caja, Clientes, Inventario, etc. se manejan manualmente.
+const OBLIGATORIOS_BASE = ["dashboard", "configuracion"];
 
-const OBLIGATORIOS_AGENDA = [
-  "dashboard",
-  "agenda",
-  "configuracion",
-];
-
-const OBLIGATORIOS_LAVANDERIA = [
-  ...OBLIGATORIOS_BASE,
-  "nuevo_pedido",
-  "pedidos_lavanderia",
-  "historial_lavanderia",
-];
-
-const OBLIGATORIOS_GIMNASIO = [
-  ...OBLIGATORIOS_BASE,
-  "clientes",
-  "suscripciones",
-  "checkin_gimnasio",
-  "caja",
-  "vista_cliente",
-  "reportes",
-];
-
+// Estos módulos comparten columnas en empresa_modulos.
+// Cuando dos módulos dependen de la misma columna, se activan/desactivan juntos.
 const COLUMNAS_EMPRESA = {
   agenda: "agenda",
   clientes: "clientes",
@@ -138,12 +116,6 @@ function normalizar(valor) {
     .replace(/\s+/g, "_");
 }
 
-function esPlanAgenda(codigoPlan) {
-  return ["agenda", "agenda_basica", "konax_agenda"].includes(
-    normalizar(codigoPlan)
-  );
-}
-
 function esTipoGimnasio(tipoNegocio, categoriaNegocio = "") {
   const texto = normalizar(
     `${tipoNegocio || ""} ${categoriaNegocio || ""}`
@@ -152,6 +124,14 @@ function esTipoGimnasio(tipoNegocio, categoriaNegocio = "") {
   return ["gimnasio", "gym", "fitness", "academia", "club"].some(
     (palabra) => texto.includes(palabra)
   );
+}
+
+function esTipoLavanderia(tipoNegocio, categoriaNegocio = "", planCodigo = "") {
+  const texto = normalizar(
+    `${tipoNegocio || ""} ${categoriaNegocio || ""} ${planCodigo || ""}`
+  );
+
+  return texto.includes("lavanderia");
 }
 
 function generarCorreoPrueba(correoBase, empresaId = "") {
@@ -187,107 +167,12 @@ function generarCorreoPrueba(correoBase, empresaId = "") {
   return `${localBase}+${sufijo}@${dominio}`;
 }
 
-function construirModulosPorPlan({
-  codigoPlan,
-  modulos,
-  esAgenda,
-  esLavanderia,
-  esGimnasio,
-}) {
-  const codigo = normalizar(codigoPlan);
-
-  const base = Object.fromEntries(
-    modulos.map((modulo) => [modulo.codigo, false])
+// El plan ya NO decide cuáles módulos están permitidos.
+// Todo módulo del catálogo de esa empresa puede configurarse manualmente.
+function construirModulosPermitidos(modulos) {
+  return Object.fromEntries(
+    modulos.map((modulo) => [modulo.codigo, true])
   );
-
-  base.dashboard = true;
-  base.usuarios = true;
-  base.configuracion = true;
-
-  // KONAX AGENDA debe tener prioridad sobre el tipo de negocio.
-  if (esAgenda || esPlanAgenda(codigo)) {
-    return {
-      ...base,
-      dashboard: true,
-      agenda: true,
-      usuarios: false,
-      configuracion: true,
-    };
-  }
-
-  if (esGimnasio) {
-    return {
-      ...base,
-      dashboard: true,
-      clientes: true,
-      suscripciones: true,
-      checkin_gimnasio: true,
-      agenda: true,
-      caja: true,
-      vista_cliente: true,
-      reportes: true,
-      usuarios: true,
-      configuracion: true,
-    };
-  }
-
-  if (esLavanderia || codigo === "lavanderia_piloto") {
-    return {
-      ...base,
-      dashboard: true,
-      nuevo_pedido: true,
-      pedidos_lavanderia: true,
-      clientes: true,
-      caja: true,
-      historial_lavanderia: true,
-      usuarios: true,
-      configuracion: true,
-    };
-  }
-
-  if (codigo === "cobros") {
-    return {
-      ...base,
-      clientes: true,
-      vista_cliente: true,
-      caja: true,
-      cobranza: true,
-      dashboard_cobros: true,
-      gestor_cobros: true,
-      reportes: true,
-    };
-  }
-
-  if (codigo === "ventas_gestion") {
-    return {
-      ...base,
-      clientes: true,
-      vista_cliente: true,
-      creditos: true,
-      caja: true,
-      control_caja: true,
-      cobranza: true,
-      dashboard_cobros: true,
-      gestor_cobros: true,
-      reportes: true,
-      inventario: true,
-      movimientos_inventario: true,
-      ventas: true,
-      dashboard_ventas: true,
-      gastos: true,
-      recargos: true,
-      suscripciones: true,
-      agenda: true,
-    };
-  }
-
-  if (codigo === "pro") {
-    return Object.fromEntries(
-      modulos.map((modulo) => [modulo.codigo, true])
-    );
-  }
-
-  return base;
 }
 
 export default function Usuarios() {
@@ -300,12 +185,8 @@ export default function Usuarios() {
   const [tipoNegocio, setTipoNegocio] = useState("");
   const [categoriaNegocio, setCategoriaNegocio] = useState("");
 
-  const [esAgenda, setEsAgenda] = useState(false);
   const [esLavanderia, setEsLavanderia] = useState(false);
   const [esGimnasio, setEsGimnasio] = useState(false);
-
-  const [modulosObligatorios, setModulosObligatorios] =
-    useState(OBLIGATORIOS_BASE);
 
   const [modulos, setModulos] = useState(MODULOS_GENERALES);
   const [modulosPermitidos, setModulosPermitidos] = useState({});
@@ -420,58 +301,48 @@ export default function Usuarios() {
       return;
     }
 
-    const perfilAgenda = esPlanAgenda(empresa.plan_codigo);
-
-    const perfilLavanderia =
-      normalizar(empresa.plan_codigo) === "lavanderia_piloto" ||
-      normalizar(empresa.tipo_negocio) === "lavanderia";
+    const perfilLavanderia = esTipoLavanderia(
+      empresa.tipo_negocio,
+      empresa.categoria_negocio,
+      empresa.plan_codigo
+    );
 
     const perfilGimnasio = esTipoGimnasio(
       empresa.tipo_negocio,
       empresa.categoria_negocio
     );
 
-    // Agenda tiene prioridad. Un salón/spa/barbería con plan Agenda
-    // no recibe el catálogo completo del tipo de negocio.
-    const catalogo = perfilAgenda
-      ? MODULOS_AGENDA
-      : perfilLavanderia
+    /*
+      REGLA:
+      - El tipo de negocio decide qué catálogo especial necesita.
+      - El plan NO decide qué módulos se pueden activar.
+      - Una empresa de Belleza con plan Agenda seguirá usando
+        MODULOS_GENERALES y tú decides manualmente si dejas:
+          Inicio + Agenda + Configuración
+        o si además habilitas:
+          Clientes + Caja + Gastos + Inventario + etc.
+    */
+    const catalogo = perfilLavanderia
       ? MODULOS_LAVANDERIA
       : perfilGimnasio
       ? MODULOS_GIMNASIO
       : MODULOS_GENERALES;
 
-    const obligatorios = perfilAgenda
-      ? OBLIGATORIOS_AGENDA
-      : perfilLavanderia
-      ? OBLIGATORIOS_LAVANDERIA
-      : perfilGimnasio
-      ? OBLIGATORIOS_GIMNASIO
-      : OBLIGATORIOS_BASE;
-
-    const permitidos = construirModulosPorPlan({
-      codigoPlan: empresa.plan_codigo,
-      modulos: catalogo,
-      esAgenda: perfilAgenda,
-      esLavanderia: perfilLavanderia,
-      esGimnasio: perfilGimnasio,
-    });
+    const permitidos = construirModulosPermitidos(catalogo);
 
     setModulos(catalogo);
-    setModulosObligatorios(obligatorios);
     setEmpresaNombre(empresa.nombre || "Empresa");
     setPlanNombre(empresa.plan_nombre || "Sin plan");
     setPlanCodigo(empresa.plan_codigo || "");
     setTipoNegocio(empresa.tipo_negocio || "");
     setCategoriaNegocio(empresa.categoria_negocio || "");
 
-    setEsAgenda(perfilAgenda);
     setEsLavanderia(perfilLavanderia);
     setEsGimnasio(perfilGimnasio);
     setModulosPermitidos(permitidos);
 
     await Promise.all([
-      cargarModulosEmpresa(id, permitidos, catalogo, obligatorios),
+      cargarModulosEmpresa(id, permitidos, catalogo),
       cargarRoles(perfilGimnasio),
       cargarUsuarios(id),
     ]);
@@ -482,8 +353,7 @@ export default function Usuarios() {
   async function cargarModulosEmpresa(
     id,
     permitidos,
-    catalogo,
-    obligatorios
+    catalogo
   ) {
     const { data, error } = await supabase
       .from("empresa_modulos")
@@ -493,29 +363,50 @@ export default function Usuarios() {
 
     if (error) {
       alert("Error cargando módulos: " + error.message);
-      setModulosEmpresa(permitidos);
+
+      const respaldo = {};
+      catalogo.forEach((modulo) => {
+        respaldo[modulo.codigo] =
+          OBLIGATORIOS_BASE.includes(modulo.codigo);
+      });
+
+      setModulosEmpresa(respaldo);
       return;
     }
 
     const mapa = {};
 
     catalogo.forEach((modulo) => {
-      const permitido = Boolean(permitidos[modulo.codigo]);
-
-      if (!permitido) {
+      if (!permitidos[modulo.codigo]) {
         mapa[modulo.codigo] = false;
         return;
       }
 
-      if (obligatorios.includes(modulo.codigo)) {
+      if (OBLIGATORIOS_BASE.includes(modulo.codigo)) {
         mapa[modulo.codigo] = true;
         return;
       }
 
       const columna = COLUMNAS_EMPRESA[modulo.codigo];
 
-      if (!columna || !data) {
-        mapa[modulo.codigo] = true;
+      /*
+        Módulos sin columna propia:
+        - dashboard y configuracion son base.
+        - usuarios se mantiene disponible para administración,
+          pero no se fuerza como módulo operativo del negocio.
+        - módulos especiales de nicho que todavía no tienen columna
+          continúan visibles sin alterar la estructura actual.
+      */
+      if (!columna) {
+        mapa[modulo.codigo] =
+          modulo.codigo === "usuarios"
+            ? true
+            : Boolean(data);
+        return;
+      }
+
+      if (!data) {
+        mapa[modulo.codigo] = false;
         return;
       }
 
@@ -524,7 +415,7 @@ export default function Usuarios() {
         columna
       )
         ? Boolean(data[columna])
-        : true;
+        : false;
     });
 
     setModulosEmpresa(mapa);
@@ -599,20 +490,11 @@ export default function Usuarios() {
   }
 
   async function alternarModuloEmpresa(modulo) {
-    const permitido = Boolean(modulosPermitidos[modulo.codigo]);
-
-    if (!permitido) {
-      alert(`"${modulo.nombre}" no está incluido en ${planNombre}.`);
-      return;
-    }
-
-    if (modulosObligatorios.includes(modulo.codigo)) {
+    if (OBLIGATORIOS_BASE.includes(modulo.codigo)) {
       alert(
-        esAgenda
-          ? "Este módulo forma parte obligatoria del plan KONAX Agenda."
-          : esGimnasio
-          ? "Este módulo forma parte del perfil obligatorio del gimnasio."
-          : "Este módulo es obligatorio."
+        modulo.codigo === "dashboard"
+          ? "Inicio / Resumen es parte base de KONAX y permanece activo."
+          : "Configuración es parte base de KONAX y permanece activa."
       );
       return;
     }
@@ -621,22 +503,25 @@ export default function Usuarios() {
 
     if (!columna) {
       alert(
-        `El módulo "${modulo.nombre}" se administra mediante permisos de usuario.`
+        `El módulo "${modulo.nombre}" todavía no tiene una columna propia en empresa_modulos. ` +
+          "Por seguridad no se modificó la base de datos."
       );
       return;
     }
 
     const nuevoEstado = !Boolean(modulosEmpresa[modulo.codigo]);
 
-    const { error } = await supabase.from("empresa_modulos").upsert(
-      {
-        empresa_id: empresaId,
-        [columna]: nuevoEstado,
-      },
-      {
-        onConflict: "empresa_id",
-      }
-    );
+    const { error } = await supabase
+      .from("empresa_modulos")
+      .upsert(
+        {
+          empresa_id: empresaId,
+          [columna]: nuevoEstado,
+        },
+        {
+          onConflict: "empresa_id",
+        }
+      );
 
     if (error) {
       alert("Error actualizando módulo: " + error.message);
@@ -675,12 +560,17 @@ export default function Usuarios() {
       return;
     }
 
+    if (!modulosEmpresa[modulo.codigo]) {
+      alert(`"${modulo.nombre}" está desactivado para la empresa.`);
+      return;
+    }
+
     if (esGimnasio) {
       const rolUsuario = normalizar(usuarioSeleccionado.rol);
 
       if (rolUsuario === "administrador") {
         alert(
-          "El Administrador del gimnasio mantiene acceso a todos los módulos del perfil."
+          "El Administrador del gimnasio mantiene acceso a todos los módulos que estén activos para la empresa."
         );
         return;
       }
@@ -696,20 +586,10 @@ export default function Usuarios() {
         ].includes(modulo.codigo)
       ) {
         alert(
-          "El Vendedor del gimnasio puede usar Panel, Alumnos, Membresías, Check-in y Caja. Los módulos administrativos permanecen restringidos."
+          "El Vendedor del gimnasio puede usar Panel, Alumnos, Membresías, Check-in y Caja cuando esos módulos estén activos para la empresa."
         );
         return;
       }
-    }
-
-    if (!modulosPermitidos[modulo.codigo]) {
-      alert(`"${modulo.nombre}" no está incluido en el plan.`);
-      return;
-    }
-
-    if (!modulosEmpresa[modulo.codigo]) {
-      alert(`"${modulo.nombre}" está desactivado para la empresa.`);
-      return;
     }
 
     const nuevoEstado = !Boolean(permisosUsuario[modulo.codigo]);
@@ -751,9 +631,7 @@ export default function Usuarios() {
       usuario_id: usuarioSeleccionado.id,
       permiso: modulo.codigo,
       activo:
-        activo &&
-        Boolean(modulosPermitidos[modulo.codigo]) &&
-        Boolean(modulosEmpresa[modulo.codigo]),
+        activo && Boolean(modulosEmpresa[modulo.codigo]),
       updated_at: new Date().toISOString(),
     }));
 
@@ -786,23 +664,33 @@ export default function Usuarios() {
     const esAdmin = rol === "administrador";
     const esVendedor = rol === "vendedor";
 
-    const registros = MODULOS_GIMNASIO.map((modulo) => ({
-      empresa_id: empresaId,
-      usuario_id: usuario.id,
-      permiso: modulo.codigo,
-      activo: esAdmin
-        ? true
-        : esVendedor
-        ? [
-            "dashboard",
-            "clientes",
-            "suscripciones",
-            "checkin_gimnasio",
-            "caja",
-          ].includes(modulo.codigo)
-        : false,
-      updated_at: new Date().toISOString(),
-    }));
+    const registros = MODULOS_GIMNASIO.map((modulo) => {
+      const moduloActivoEmpresa = Boolean(
+        modulosEmpresa[modulo.codigo]
+      );
+
+      let permitidoRol = false;
+
+      if (esAdmin) {
+        permitidoRol = true;
+      } else if (esVendedor) {
+        permitidoRol = [
+          "dashboard",
+          "clientes",
+          "suscripciones",
+          "checkin_gimnasio",
+          "caja",
+        ].includes(modulo.codigo);
+      }
+
+      return {
+        empresa_id: empresaId,
+        usuario_id: usuario.id,
+        permiso: modulo.codigo,
+        activo: moduloActivoEmpresa && permitidoRol,
+        updated_at: new Date().toISOString(),
+      };
+    });
 
     const { error } = await supabase
       .from("permisos_usuarios_empresa")
@@ -818,23 +706,20 @@ export default function Usuarios() {
     }
   }
 
-  async function aplicarPermisosInicialesAgenda(usuario, nombreRol) {
-    if (!esAgenda || !usuario?.id) {
+  async function aplicarPermisosInicialesGeneral(usuario, nombreRol) {
+    if (!usuario?.id || esGimnasio) {
       return;
     }
 
     const esAdmin =
       normalizar(nombreRol) === "administrador";
 
-    const registros = MODULOS_AGENDA.map((modulo) => ({
+    const registros = modulos.map((modulo) => ({
       empresa_id: empresaId,
       usuario_id: usuario.id,
       permiso: modulo.codigo,
-      activo: esAdmin
-        ? ["dashboard", "agenda", "configuracion"].includes(
-            modulo.codigo
-          )
-        : modulo.codigo === "dashboard",
+      activo:
+        esAdmin && Boolean(modulosEmpresa[modulo.codigo]),
       updated_at: new Date().toISOString(),
     }));
 
@@ -846,7 +731,7 @@ export default function Usuarios() {
 
     if (error) {
       throw new Error(
-        "El usuario fue creado, pero no se pudieron aplicar sus permisos iniciales de Agenda: " +
+        "El usuario fue creado, pero no se pudieron aplicar sus permisos iniciales: " +
           error.message
       );
     }
@@ -961,13 +846,13 @@ export default function Usuarios() {
       await cargarUsuarios(empresaId);
 
       if (data.usuario) {
-        if (esAgenda) {
-          await aplicarPermisosInicialesAgenda(
+        if (esGimnasio) {
+          await aplicarPermisosInicialesGimnasio(
             data.usuario,
             rolSeleccionado.nombre
           );
-        } else if (esGimnasio) {
-          await aplicarPermisosInicialesGimnasio(
+        } else {
+          await aplicarPermisosInicialesGeneral(
             data.usuario,
             rolSeleccionado.nombre
           );
@@ -1000,98 +885,47 @@ export default function Usuarios() {
     setGuardando(true);
 
     try {
-      let payload;
+      /*
+        Aquí NO se aplica ningún paquete por plan.
+        Se guarda exactamente lo que tú dejaste encendido/apagado.
+      */
+      const payload = {
+        empresa_id: empresaId,
 
-      if (esAgenda) {
-        payload = {
-          empresa_id: empresaId,
-          agenda: true,
-          clientes: false,
-          vista_cliente: false,
-          venta_credito: false,
-          caja: false,
-          control_caja: false,
-          cobranza: false,
-          dashboard_cobros: false,
-          inventario: false,
-          dashboard_ventas: false,
-          suscripciones: false,
-          recargos: false,
-          egresos: false,
-        };
-      } else if (esGimnasio) {
-        payload = {
-          empresa_id: empresaId,
-          agenda: true,
-          clientes: true,
-          vista_cliente: true,
-          venta_credito: false,
-          caja: true,
-          control_caja: false,
-          cobranza: false,
-          dashboard_cobros: true,
-          inventario: false,
-          dashboard_ventas: false,
-          suscripciones: true,
-          recargos: false,
-          egresos: false,
-        };
-      } else if (esLavanderia) {
-        payload = {
-          empresa_id: empresaId,
-          agenda: false,
-          clientes: Boolean(modulosEmpresa.clientes),
-          vista_cliente: false,
-          venta_credito: false,
-          caja: Boolean(modulosEmpresa.caja),
-          control_caja: false,
-          cobranza: false,
-          dashboard_cobros: false,
-          inventario: false,
-          dashboard_ventas: false,
-          suscripciones: false,
-          recargos: false,
-          egresos: false,
-        };
-      } else {
-        payload = {
-          empresa_id: empresaId,
+        agenda: Boolean(modulosEmpresa.agenda),
 
-          agenda: Boolean(modulosEmpresa.agenda),
+        clientes: Boolean(modulosEmpresa.clientes),
 
-          clientes: Boolean(modulosEmpresa.clientes),
+        vista_cliente: Boolean(modulosEmpresa.vista_cliente),
 
-          vista_cliente: Boolean(modulosEmpresa.vista_cliente),
+        venta_credito:
+          Boolean(modulosEmpresa.creditos) ||
+          Boolean(modulosEmpresa.ventas),
 
-          venta_credito:
-            Boolean(modulosEmpresa.creditos) ||
-            Boolean(modulosEmpresa.ventas),
+        caja: Boolean(modulosEmpresa.caja),
 
-          caja: Boolean(modulosEmpresa.caja),
+        control_caja: Boolean(modulosEmpresa.control_caja),
 
-          control_caja: Boolean(modulosEmpresa.control_caja),
+        cobranza: Boolean(modulosEmpresa.cobranza),
 
-          cobranza: Boolean(modulosEmpresa.cobranza),
+        dashboard_cobros:
+          Boolean(modulosEmpresa.dashboard_cobros) ||
+          Boolean(modulosEmpresa.reportes),
 
-          dashboard_cobros:
-            Boolean(modulosEmpresa.dashboard_cobros) ||
-            Boolean(modulosEmpresa.reportes),
+        inventario:
+          Boolean(modulosEmpresa.inventario) ||
+          Boolean(modulosEmpresa.movimientos_inventario),
 
-          inventario:
-            Boolean(modulosEmpresa.inventario) ||
-            Boolean(modulosEmpresa.movimientos_inventario),
+        dashboard_ventas: Boolean(
+          modulosEmpresa.dashboard_ventas
+        ),
 
-          dashboard_ventas: Boolean(
-            modulosEmpresa.dashboard_ventas
-          ),
+        suscripciones: Boolean(modulosEmpresa.suscripciones),
 
-          suscripciones: Boolean(modulosEmpresa.suscripciones),
+        recargos: Boolean(modulosEmpresa.recargos),
 
-          recargos: Boolean(modulosEmpresa.recargos),
-
-          egresos: Boolean(modulosEmpresa.gastos),
-        };
-      }
+        egresos: Boolean(modulosEmpresa.gastos),
+      };
 
       const { error: errorModulos } = await supabase
         .from("empresa_modulos")
@@ -1115,11 +949,7 @@ export default function Usuarios() {
       }
 
       alert(
-        esAgenda
-          ? "Perfil KONAX Agenda aplicado correctamente. Agenda y Configuración quedaron habilitados."
-          : esGimnasio
-          ? "Perfil de gimnasio aplicado correctamente. Los módulos que no corresponden quedaron desactivados."
-          : "Configuración finalizada correctamente."
+        "Configuración guardada correctamente. Los módulos activos de la empresa quedaron exactamente como los seleccionaste."
       );
 
       const tieneSesionAdminMaster = Boolean(
@@ -1177,13 +1007,11 @@ export default function Usuarios() {
     }, {});
   }, [modulos]);
 
-  const nombrePerfil = esAgenda
-    ? "Perfil Agenda"
-    : esGimnasio
+  const nombrePerfil = esGimnasio
     ? "Perfil Gimnasio"
     : esLavanderia
     ? "Perfil Lavandería"
-    : "Perfil General";
+    : "Módulos manuales";
 
   const correoPruebaPreview =
     modoPrueba && correo.trim().includes("@")
@@ -1212,7 +1040,7 @@ export default function Usuarios() {
           <p>
             Empresa: <strong>{empresaNombre}</strong>
             <br />
-            Plan: <strong>{planNombre || planCodigo}</strong>
+            Plan comercial: <strong>{planNombre || planCodigo}</strong>
             <br />
             Configuración: <strong>{nombrePerfil}</strong>
           </p>
@@ -1223,37 +1051,20 @@ export default function Usuarios() {
         </button>
       </header>
 
-      {esAgenda && (
-        <section className="aviso-perfil">
-          <div className="aviso-icono">📅</div>
+      <section className="aviso-perfil">
+        <div className="aviso-icono">🎛️</div>
 
-          <div>
-            <strong>Configuración especializada para KONAX Agenda</strong>
-            <p>
-              Este plan utiliza únicamente Inicio, Agenda y Configuración.
-              El tipo de negocio se conserva, pero no habilita los módulos
-              completos de Belleza, Gimnasio u otras modalidades.
-            </p>
-          </div>
-        </section>
-      )}
-
-      {esGimnasio && !esAgenda && (
-        <section className="aviso-perfil">
-          <div className="aviso-icono">🏋️</div>
-
-          <div>
-            <strong>Configuración especializada para gimnasio</strong>
-            <p>
-              El perfil del gimnasio utiliza únicamente los módulos
-              operativos necesarios. Para crear usuarios se muestran solo
-              dos roles: Administrador y Vendedor. El Administrador tiene
-              acceso completo al perfil y el Vendedor queda con acceso a
-              Panel, Alumnos, Membresías, Check-in y Caja.
-            </p>
-          </div>
-        </section>
-      )}
+        <div>
+          <strong>Activación manual de módulos</strong>
+          <p>
+            El plan comercial ya no decide qué módulos quedan activos.
+            Activa solamente las funciones que tendrá esta empresa.
+            Por ejemplo, para un salón con KONAX Agenda puedes dejar
+            únicamente Inicio, Agenda y Configuración. Si después compra
+            Caja, Clientes o Inventario, los activas aquí sin crear otra empresa.
+          </p>
+        </div>
+      </section>
 
       <section className="card">
         <div className="titulo-card">
@@ -1261,11 +1072,8 @@ export default function Usuarios() {
             <h2>Módulos de la empresa</h2>
 
             <p>
-              {esAgenda
-                ? "KONAX Agenda habilita únicamente Agenda y Configuración."
-                : esGimnasio
-                ? "Estos son los módulos operativos del perfil gimnasio."
-                : "Activa únicamente las funciones que utilizará esta empresa."}
+              Activa o desactiva manualmente las funciones que utilizará
+              esta empresa. Inicio y Configuración permanecen como base.
             </p>
           </div>
 
@@ -1274,17 +1082,17 @@ export default function Usuarios() {
 
         <div className="modulos">
           {modulos.map((modulo) => {
-            const permitido = Boolean(
-              modulosPermitidos[modulo.codigo]
-            );
-
             const activo = Boolean(
               modulosEmpresa[modulo.codigo]
             );
 
-            const obligatorio = modulosObligatorios.includes(
+            const obligatorio = OBLIGATORIOS_BASE.includes(
               modulo.codigo
             );
+
+            const tieneColumna =
+              Boolean(COLUMNAS_EMPRESA[modulo.codigo]) ||
+              obligatorio;
 
             return (
               <button
@@ -1292,9 +1100,7 @@ export default function Usuarios() {
                 type="button"
                 onClick={() => alternarModuloEmpresa(modulo)}
                 className={
-                  !permitido
-                    ? "modulo bloqueado"
-                    : activo
+                  activo
                     ? "modulo activo"
                     : "modulo"
                 }
@@ -1305,10 +1111,10 @@ export default function Usuarios() {
                   <strong>{modulo.nombre}</strong>
 
                   <small>
-                    {!permitido
-                      ? "No incluido en el plan"
-                      : obligatorio
-                      ? "Activo en el perfil"
+                    {obligatorio
+                      ? "Base de KONAX"
+                      : !tieneColumna
+                      ? "Sin control individual en empresa_modulos"
                       : activo
                       ? "Activo para la empresa"
                       : "Desactivado"}
@@ -1500,11 +1306,7 @@ export default function Usuarios() {
             >
               {guardando
                 ? "Guardando..."
-                : esAgenda
-                ? "Aplicar perfil KONAX Agenda"
-                : esGimnasio
-                ? "Aplicar perfil de gimnasio"
-                : "Finalizar configuración"}
+                : "Guardar módulos de la empresa"}
             </button>
           </section>
         </div>
@@ -1520,7 +1322,7 @@ export default function Usuarios() {
 
               <div className="acciones">
                 <button onClick={() => cambiarTodosPermisos(true)}>
-                  Activar permitidos
+                  Activar módulos de la empresa
                 </button>
 
                 <button onClick={() => cambiarTodosPermisos(false)}>
@@ -1533,9 +1335,9 @@ export default function Usuarios() {
                   <h3>{grupo}</h3>
 
                   {lista.map((modulo) => {
-                    const habilitado =
-                      Boolean(modulosPermitidos[modulo.codigo]) &&
-                      Boolean(modulosEmpresa[modulo.codigo]);
+                    const habilitado = Boolean(
+                      modulosEmpresa[modulo.codigo]
+                    );
 
                     const activo = Boolean(
                       permisosUsuario[modulo.codigo]
@@ -1558,7 +1360,7 @@ export default function Usuarios() {
 
                           <small>
                             {!habilitado
-                              ? "No disponible"
+                              ? "Desactivado para la empresa"
                               : activo
                               ? "Permitido"
                               : "Sin permiso"}
@@ -2056,4 +1858,3 @@ export default function Usuarios() {
     </main>
   );
 }
-
