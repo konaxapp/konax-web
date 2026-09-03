@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V10-PORTADA-FLUJO-NATIVO";
+const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V11-BLANCO-NEGRO";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -1572,8 +1572,8 @@ export default function ReservaPublicaAutoservicioPage() {
                         <section className="kp-popular-section">
                           <div className="kp-popular-heading">
                             <div>
-                              <span className="kp-section-kicker">MÁS RESERVADOS</span>
-                              <h2>Lo más pedido aquí</h2>
+                              <span className="kp-section-kicker kp-section-kicker-black">SERVICIOS DESTACADOS</span>
+                              <h2>Más reservados</h2>
                             </div>
 
                             <button
@@ -1647,7 +1647,7 @@ export default function ReservaPublicaAutoservicioPage() {
                                     type="button"
                                     onClick={() => elegirServicio(servicio)}
                                   >
-                                    Reservar
+                                    RESERVAR
                                   </button>
                                 </div>
                               </article>
@@ -1720,7 +1720,7 @@ export default function ReservaPublicaAutoservicioPage() {
                                   type="button"
                                   onClick={() => elegirServicio(servicio)}
                                 >
-                                  Reservar
+                                  RESERVAR
                                 </button>
                               </article>
                             ))}
@@ -5426,4 +5426,109 @@ const CSS = `
       width: 100%;
     }
   }
+
+  /* =========================================================
+     PORTAL SERVICIOS · BLANCO + NEGRO
+     ========================================================= */
+
+  .kp-profile-tabs button.active {
+    color: #111111;
+  }
+
+  .kp-profile-tabs button.active::after {
+    background: #111111;
+  }
+
+  .kp-section-kicker-black {
+    color: #111111 !important;
+  }
+
+  .kp-popular-heading h2,
+  .kp-all-services-title h2 {
+    color: #111111;
+  }
+
+  .kp-view-all {
+    color: #111111;
+  }
+
+  .kp-popular-card,
+  .kp-popular-card.first {
+    border-color: #d8d8d8;
+    background: #ffffff;
+    box-shadow: 0 7px 20px rgba(0,0,0,.045);
+  }
+
+  .kp-popular-card.first {
+    box-shadow: 0 8px 24px rgba(0,0,0,.055);
+  }
+
+  .kp-rank-badge,
+  .kp-popular-card:not(.first) .kp-rank-badge {
+    background: #111111;
+    color: #ffffff;
+  }
+
+  .kp-popular-placeholder {
+    background: #f3f3f3;
+    color: #111111;
+  }
+
+  .kp-popular-name {
+    color: #111111;
+  }
+
+  .kp-popular-meta,
+  .kp-popular-price small {
+    color: #6b6b6b;
+  }
+
+  .kp-popular-price strong {
+    color: #111111;
+  }
+
+  .kp-popular-info > button {
+    background: #111111;
+    color: #ffffff;
+    border-radius: 12px;
+    box-shadow: none;
+    text-transform: uppercase;
+    letter-spacing: .35px;
+  }
+
+  .kp-service-total {
+    background: #f1f1f1;
+    color: #111111;
+  }
+
+  .kp-public-service {
+    border-color: #dddddd;
+    background: #ffffff;
+  }
+
+  .kp-public-service .kp-service-info strong,
+  .kp-public-service .kp-service-info b {
+    color: #111111;
+  }
+
+  .kp-public-service > button {
+    background: #111111;
+    color: #ffffff;
+    border-radius: 12px;
+    box-shadow: none;
+    text-transform: uppercase;
+    letter-spacing: .35px;
+  }
+
+  .kp-public-service .kp-service-icon {
+    background: #111111;
+    color: #ffffff;
+    box-shadow: none;
+  }
+
+  .kp-executed-chip {
+    background: rgba(15,15,15,.82);
+    border-color: rgba(255,255,255,.22);
+  }
+
 `;
