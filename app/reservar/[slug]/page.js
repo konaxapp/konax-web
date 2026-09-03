@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V9-FIX-CLIENT-EXCEPTION";
+const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V10-PORTADA-FLUJO-NATIVO";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -197,7 +197,6 @@ export default function ReservaPublicaAutoservicioPage() {
   const [mostrarAvisoMiCita, setMostrarAvisoMiCita] = useState(false);
 
   const [tabPortal, setTabPortal] = useState("servicios");
-  const [mostrarCabeceraCompacta, setMostrarCabeceraCompacta] = useState(false);
   const [equipoPortal, setEquipoPortal] = useState([]);
   const [cargandoEquipoPortal, setCargandoEquipoPortal] = useState(false);
 
@@ -1069,62 +1068,6 @@ export default function ReservaPublicaAutoservicioPage() {
     return `${window.location.origin}/reservar/${slug}?cita=${tokenGestion}`;
   }
 
-  // =========================================================
-  // PORTADA COMO WEIBOOK
-  // - La imagen/portada sube de forma NATIVA con el scroll.
-  // - NO hay parallax ni posición fija.
-  // - El nombre compacto aparece SOLO cuando la portada ya
-  //   salió de la parte superior, evitando duplicados.
-  // =========================================================
-  useEffect(() => {
-    if (cargando || paso !== 1 || typeof window === "undefined") {
-      setMostrarCabeceraCompacta(false);
-      return;
-    }
-
-    let raf = 0;
-
-    const revisar = () => {
-      raf = 0;
-
-      const cover = document.querySelector(".kp-cover");
-
-      if (!cover) {
-        setMostrarCabeceraCompacta(false);
-        return;
-      }
-
-      const rect = cover.getBoundingClientRect();
-
-      // 76px aprox. corresponde a la barra superior de KONAX.
-      // La cabecera compacta aparece cuando la portada ya pasó.
-      setMostrarCabeceraCompacta(rect.bottom <= 86);
-    };
-
-    const alScroll = () => {
-      if (raf) return;
-      raf = window.requestAnimationFrame(revisar);
-    };
-
-    revisar();
-
-    window.addEventListener("scroll", alScroll, { passive: true });
-    window.addEventListener("resize", alScroll, { passive: true });
-
-    return () => {
-      if (raf) window.cancelAnimationFrame(raf);
-      window.removeEventListener("scroll", alScroll);
-      window.removeEventListener("resize", alScroll);
-    };
-  }, [
-    cargando,
-    paso,
-    identidadEmpresa?.portada_url,
-    identidadEmpresa?.logo_url,
-    portal?.portada_url,
-    portal?.imagen_portada_url,
-  ]);
-
   if (cargando) {
     return (
       <main
@@ -1505,139 +1448,87 @@ export default function ReservaPublicaAutoservicioPage() {
                 <section
                   className={`kp-cover ${portadaNegocio ? "has-image" : ""}`}
                 >
-                  {portadaNegocio && (
-                    <>
-                      <img
-                        src={portadaNegocio}
-                        alt={`Portada de ${nombreNegocio}`}
-                        className="kp-cover-image"
-                      />
-                      <div className="kp-cover-overlay" />
-                    </>
-                  )}
-
-                  <div className="kp-cover-top">
-                    <span className="kp-powered">Reservas con KONAX</span>
-
-                    <button
-                      type="button"
-                      className="kp-share"
-                      onClick={async () => {
-                        const url = window.location.href;
-
-                        if (navigator.share) {
-                          try {
-                            await navigator.share({
-                              title: nombreNegocio,
-                              text: `Reserva en ${nombreNegocio}`,
-                              url,
-                            });
-                          } catch {}
-                          return;
-                        }
-
-                        try {
-                          await navigator.clipboard.writeText(url);
-                          alert("Enlace copiado.");
-                        } catch {}
-                      }}
-                      aria-label="Compartir"
-                    >
-                      ↗
-                    </button>
-                  </div>
-
-                  {!portadaNegocio && (
-                    <div className="kp-cover-pattern">
+                  {portadaNegocio ? (
+                    <img
+                      src={portadaNegocio}
+                      alt={`Portada de ${nombreNegocio}`}
+                      className="kp-cover-image"
+                    />
+                  ) : (
+                    <div className="kp-cover-fallback">
                       <span>K</span>
                     </div>
                   )}
 
-                  <div className="kp-cover-content">
-                    <span className="kp-category-badge">
-                      {categoriaNegocio}
-                    </span>
+                  <div className="kp-cover-overlay" />
 
-                    <h1>{nombreNegocio}</h1>
+                  <div className="kp-cover-ui">
+                    <div className="kp-cover-top">
+                      <span className="kp-powered">Reservas con KONAX</span>
 
-                    {direccionNegocio && (
-                      <a
-                        className="kp-profile-meta kp-map-link"
-                        href={googleMapsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={`Cómo llegar a ${nombreNegocio} en Google Maps`}
+                      <button
+                        type="button"
+                        className="kp-share"
+                        onClick={async () => {
+                          const url = window.location.href;
+
+                          if (navigator.share) {
+                            try {
+                              await navigator.share({
+                                title: nombreNegocio,
+                                text: `Reserva en ${nombreNegocio}`,
+                                url,
+                              });
+                            } catch {}
+                            return;
+                          }
+
+                          try {
+                            await navigator.clipboard.writeText(url);
+                            alert("Enlace copiado.");
+                          } catch {}
+                        }}
+                        aria-label="Compartir"
                       >
-                        <span className="kp-meta-icon">⌖</span>
+                        ↗
+                      </button>
+                    </div>
 
-                        <span className="kp-map-copy">
-                          <span>{direccionNegocio}</span>
-                          <strong>Cómo llegar ↗</strong>
-                        </span>
-                      </a>
-                    )}
+                    <div className="kp-cover-content">
+                      <span className="kp-category-badge">
+                        {categoriaNegocio}
+                      </span>
 
-                    {horarioPublico && (
-                      <div className="kp-profile-meta">
-                        <span className="kp-meta-icon">◷</span>
-                        <span>{horarioPublico}</span>
-                      </div>
-                    )}
-                  </div>
-                </section>
-
-                {mostrarCabeceraCompacta && (
-                  <section className="kp-scroll-identity">
-                    <div className="kp-scroll-identity-main">
-                      <h2>{nombreNegocio}</h2>
+                      <h1>{nombreNegocio}</h1>
 
                       {direccionNegocio && (
                         <a
+                          className="kp-profile-meta kp-map-link"
                           href={googleMapsUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="kp-scroll-location"
+                          aria-label={`Cómo llegar a ${nombreNegocio} en Google Maps`}
                         >
-                          <span>⌖</span>
-                          <span>{direccionNegocio}</span>
+                          <span className="kp-meta-icon">⌖</span>
+
+                          <span className="kp-map-copy">
+                            <span>{direccionNegocio}</span>
+                            <strong>Cómo llegar ↗</strong>
+                          </span>
                         </a>
                       )}
+
+                      {horarioPublico && (
+                        <div className="kp-profile-meta">
+                          <span className="kp-meta-icon">◷</span>
+                          <span>{horarioPublico}</span>
+                        </div>
+                      )}
                     </div>
+                  </div>
+                </section>
 
-                    <button
-                      type="button"
-                      className="kp-scroll-share"
-                      onClick={async () => {
-                        const url = window.location.href;
-
-                        if (navigator.share) {
-                          try {
-                            await navigator.share({
-                              title: nombreNegocio,
-                              text: `Reserva en ${nombreNegocio}`,
-                              url,
-                            });
-                          } catch {}
-                          return;
-                        }
-
-                        try {
-                          await navigator.clipboard.writeText(url);
-                          alert("Enlace copiado.");
-                        } catch {}
-                      }}
-                      aria-label="Compartir negocio"
-                    >
-                      ↗
-                    </button>
-                  </section>
-                )}
-
-                <nav
-                  className={`kp-profile-tabs ${
-                    mostrarCabeceraCompacta ? "with-compact" : ""
-                  }`}
-                >
+                <nav className="kp-profile-tabs">
                   {[
                     ["servicios", perfilGimnasio ? "Clases" : "Servicios"],
                     ["equipo", perfilGimnasio ? "Instructores" : "Equipo"],
@@ -4140,47 +4031,54 @@ const CSS = `
   }
 
   /*
-     SCROLL NATIVO REAL:
-     portada + imagen forman un solo bloque del documento.
-     Ninguna de las dos usa sticky/fixed.
-     La cabecera blanca se crea únicamente al salir la portada.
+     PORTADA EN FLUJO NORMAL:
+     La FOTO es un elemento normal del documento.
+     Al deslizar la página, foto + texto suben juntos.
+     La portada NO usa sticky, fixed, parallax ni background fijo.
   */
   .kp-cover {
-    position: relative !important;
-    top: auto !important;
-    right: auto !important;
-    bottom: auto !important;
-    left: auto !important;
-    min-height: 420px;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+    position: relative;
+    width: 100%;
+    padding: 0;
     overflow: hidden;
     border-radius: 24px 24px 0 0;
+    background: #0d3b2a;
     touch-action: pan-y;
-    overscroll-behavior-y: auto;
-    color: #ffffff;
-    background:
-      radial-gradient(circle at 80% 20%, rgba(48,182,127,.28), transparent 30%),
-      linear-gradient(145deg,#0d3b2a,#081d15);
-    background-position: center;
-    background-size: cover;
   }
 
   .kp-cover-image {
-    position: absolute;
-    inset: 0;
+    position: relative;
     z-index: 0;
+    display: block;
     width: 100%;
-    height: 100%;
+    height: 430px;
     object-fit: cover;
     object-position: center center;
-    transform: none !important;
-    will-change: auto;
+    transform: none;
     pointer-events: none;
     user-select: none;
     -webkit-user-drag: none;
+  }
+
+  .kp-cover-fallback {
+    position: relative;
+    z-index: 0;
+    width: 100%;
+    height: 430px;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 80% 20%, rgba(48,182,127,.28), transparent 30%),
+      linear-gradient(145deg,#0d3b2a,#081d15);
+  }
+
+  .kp-cover-fallback span {
+    transform: rotate(-10deg);
+    color: rgba(255,255,255,.055);
+    font-size: 300px;
+    font-weight: 950;
+    line-height: 1;
   }
 
   .kp-cover-overlay {
@@ -4191,19 +4089,29 @@ const CSS = `
     background:
       linear-gradient(
         180deg,
-        rgba(7,25,18,.08) 8%,
-        rgba(7,25,18,.18) 42%,
-        rgba(7,25,18,.86) 100%
+        rgba(7,25,18,.07) 8%,
+        rgba(7,25,18,.16) 42%,
+        rgba(7,25,18,.88) 100%
       );
   }
 
-  .kp-cover-top {
-    position: relative;
+  .kp-cover-ui {
+    position: absolute;
+    inset: 0;
     z-index: 2;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+
+  .kp-cover-top {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    pointer-events: auto;
   }
 
   .kp-powered {
@@ -4231,30 +4139,12 @@ const CSS = `
     font-weight: 900;
     cursor: pointer;
     box-shadow: 0 8px 24px rgba(0,0,0,.16);
-  }
-
-  .kp-cover-pattern {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    pointer-events: none;
-    overflow: hidden;
-  }
-
-  .kp-cover-pattern span {
-    transform: rotate(-10deg);
-    color: rgba(255,255,255,.055);
-    font-size: 340px;
-    font-weight: 950;
-    line-height: 1;
+    pointer-events: auto;
   }
 
   .kp-cover-content {
-    position: relative;
-    z-index: 2;
     max-width: 560px;
-    padding-top: 90px;
+    pointer-events: auto;
   }
 
   .kp-category-badge {
@@ -4321,74 +4211,6 @@ const CSS = `
     letter-spacing: .1px;
   }
 
-  .kp-scroll-identity {
-    position: sticky;
-    top: 66px;
-    z-index: 22;
-    min-height: 92px;
-    padding: 16px 20px 13px;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
-    border-bottom: 1px solid #edf0ee;
-    background: rgba(255,255,255,.985);
-    backdrop-filter: blur(12px);
-    animation: kpCompactIn .14s ease-out;
-  }
-
-  @keyframes kpCompactIn {
-    from {
-      opacity: 0;
-      transform: translateY(-5px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .kp-scroll-identity-main {
-    min-width: 0;
-  }
-
-  .kp-scroll-identity h2 {
-    margin: 0;
-    color: #102b22;
-    font-size: clamp(30px,7vw,44px);
-    line-height: 1.04;
-    letter-spacing: -1.1px;
-    font-weight: 900;
-  }
-
-  .kp-scroll-location {
-    margin-top: 10px;
-    display: inline-flex;
-    align-items: flex-start;
-    gap: 7px;
-    max-width: 100%;
-    color: #64746c;
-    text-decoration: none;
-    font-size: 12px;
-    font-weight: 750;
-    line-height: 1.4;
-  }
-
-  .kp-scroll-share {
-    width: 42px;
-    height: 42px;
-    flex: 0 0 42px;
-    display: grid;
-    place-items: center;
-    border: 1px solid #dfe6e2;
-    border-radius: 50%;
-    background: #ffffff;
-    color: #17382b;
-    font-size: 20px;
-    font-weight: 900;
-    cursor: pointer;
-  }
-
   .kp-profile-tabs {
     position: sticky;
     top: 66px;
@@ -4403,9 +4225,6 @@ const CSS = `
     backdrop-filter: blur(12px);
   }
 
-  .kp-profile-tabs.with-compact {
-    top: 158px;
-  }
 
   .kp-profile-tabs button {
     position: relative;
@@ -5287,7 +5106,6 @@ const CSS = `
 
 
   .kp-dark .kp-public-profile,
-  .kp-dark .kp-scroll-identity,
   .kp-dark .kp-profile-tabs,
   .kp-dark .kp-profile-section,
   .kp-dark .kp-team-card,
@@ -5296,24 +5114,6 @@ const CSS = `
     border-color: #2b3a32;
   }
 
-  .kp-dark .kp-scroll-identity {
-    border-bottom-color: #25352d;
-    background: #111b16;
-  }
-
-  .kp-dark .kp-scroll-identity h2 {
-    color: #f3f7f5;
-  }
-
-  .kp-dark .kp-scroll-location {
-    color: #a7b3ad;
-  }
-
-  .kp-dark .kp-scroll-share {
-    border-color: #31453a;
-    background: #17231d;
-    color: #f3f7f5;
-  }
 
   .kp-dark .kp-profile-tabs {
     border-color: #2b3a32;
@@ -5441,31 +5241,19 @@ const CSS = `
     }
 
     .kp-cover {
-      min-height: 390px;
-      padding: 18px;
       border-radius: 21px 21px 0 0;
       touch-action: pan-y;
     }
 
-    .kp-scroll-identity {
-      top: 66px;
-      min-height: 84px;
-      padding: 12px 18px 10px;
+    .kp-cover-image,
+    .kp-cover-fallback {
+      height: 390px;
     }
 
-    .kp-scroll-identity h2 {
-      font-size: 27px;
-      line-height: 1.02;
+    .kp-cover-ui {
+      padding: 18px;
     }
 
-    .kp-scroll-location {
-      margin-top: 6px;
-      font-size: 11px;
-    }
-
-    .kp-profile-tabs.with-compact {
-      top: 150px;
-    }
 
     .kp-cover-content {
       padding-top: 110px;
