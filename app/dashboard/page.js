@@ -2,7 +2,7 @@
 
 // DASHBOARD KONAX - GIMNASIO + SALÓN DE BELLEZA - MOBILE HEADER CLEAN - 2026-08-20
 
-// KONAX Dashboard · Gimnasio + Dashboard Inteligente Belleza · Versión 2026.08.31-BOTTOM-NAV
+// KONAX Dashboard · Gimnasio + Belleza + KONAX Agenda · Versión 2026.09.02-AGENDA
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -19,6 +19,16 @@ function normalizar(valor) {
     .toLowerCase()
     .trim()
     .replace(/\s+/g, "_");
+}
+
+function esPlanAgenda(codigoPlan) {
+  const codigo = normalizar(codigoPlan);
+
+  return [
+    "agenda",
+    "agenda_basica",
+    "konax_agenda",
+  ].includes(codigo);
 }
 
 function esTipoGimnasio(tipoNegocio, categoriaNegocio = "") {
@@ -126,6 +136,19 @@ function construirModulosPorPlan(codigoPlan) {
     usuarios: true,
     configuracion: true,
   };
+
+  // KONAX AGENDA:
+  // Plan liviano de $10. Solo habilita Agenda y Configuración.
+  // Dashboard se mantiene activo únicamente como pantalla de entrada.
+  if (esPlanAgenda(codigo)) {
+    return {
+      ...base,
+      dashboard: true,
+      agenda: true,
+      usuarios: false,
+      configuracion: true,
+    };
+  }
 
   if (codigo === "lavanderia_piloto") {
     return {
@@ -1229,6 +1252,7 @@ export default function Dashboard() {
     }
 
     if (
+      !esPlanAgenda(empresa.plan_codigo) &&
       esTipoSalonBelleza(
         empresa.tipo_negocio,
         empresa.categoria_negocio
@@ -1468,6 +1492,38 @@ export default function Dashboard() {
       normalizar(planCodigo) === "lavanderia_piloto" ||
       normalizar(tipoNegocio) === "lavanderia";
 
+    const agendaActual = esPlanAgenda(planCodigo);
+
+    /*
+      KONAX AGENDA:
+      Este plan debe permanecer aislado de las reglas especiales
+      de Gimnasio, Belleza y Lavandería. Solo permite Dashboard
+      como entrada, Agenda y Configuración.
+    */
+    if (agendaActual) {
+      if (
+        !["dashboard", "agenda", "configuracion"].includes(
+          modulo
+        )
+      ) {
+        return false;
+      }
+
+      if (!Boolean(modulos?.[modulo])) {
+        return false;
+      }
+
+      if (esAdministrador()) {
+        return true;
+      }
+
+      if (modulo === "dashboard") {
+        return true;
+      }
+
+      return permisosUsuario.includes(permiso);
+    }
+
     /*
       REPORTE FINANCIERO:
       Disponible para los perfiles operativos que lo necesitan.
@@ -1570,6 +1626,8 @@ export default function Dashboard() {
     );
   }
 
+  const esAgenda = esPlanAgenda(planCodigo);
+
   const esLavanderia =
     normalizar(planCodigo) ===
       "lavanderia_piloto" ||
@@ -1586,6 +1644,23 @@ export default function Dashboard() {
   );
 
   const modulosMenu = useMemo(() => {
+    const listaAgenda = [
+      [
+        "Agenda",
+        "/agenda",
+        "agenda",
+        "agenda",
+        "📅",
+      ],
+      [
+        "Configuración",
+        "/admin-configuracion",
+        "configuracion",
+        "configuracion",
+        "⚙",
+      ],
+    ];
+
     const listaLavanderia = [
       [
         "Panel",
@@ -1900,7 +1975,9 @@ export default function Dashboard() {
       ],
     ];
 
-    const listaBase = esLavanderia
+    const listaBase = esAgenda
+      ? listaAgenda
+      : esLavanderia
       ? listaLavanderia
       : esGimnasio
       ? listaGimnasio
@@ -1909,7 +1986,10 @@ export default function Dashboard() {
       : listaGeneral;
 
     const lista =
-      (esLavanderia || esGimnasio || esSalonBelleza) &&
+      (esAgenda ||
+        esLavanderia ||
+        esGimnasio ||
+        esSalonBelleza) &&
       !esAdministrador()
         ? listaBase.filter(
             ([, , codigo]) =>
@@ -1940,6 +2020,7 @@ export default function Dashboard() {
     permisosUsuario,
     usuarioRol,
     bloqueado,
+    esAgenda,
     esLavanderia,
     esGimnasio,
     esSalonBelleza,
@@ -2087,7 +2168,9 @@ export default function Dashboard() {
     }
   ).format(new Date());
 
-  const etiquetaPanel = esLavanderia
+  const etiquetaPanel = esAgenda
+    ? "KONAX AGENDA"
+    : esLavanderia
     ? "KONAX LAVANDERÍA"
     : esGimnasio
     ? "KONAX GIMNASIOS"
@@ -2095,7 +2178,9 @@ export default function Dashboard() {
     ? "KONAX SALÓN DE BELLEZA"
     : "PANEL EMPRESARIAL";
 
-  const subtituloPanel = esLavanderia
+  const subtituloPanel = esAgenda
+    ? `Agenda y reservas · ${fechaPanel}`
+    : esLavanderia
     ? `Operación diaria · ${fechaPanel}`
     : esGimnasio
     ? `Control de alumnos y membresías · ${fechaPanel}`
@@ -2418,7 +2503,16 @@ export default function Dashboard() {
           </section>
         )}
 
-        {esLavanderia ? (
+        {esAgenda ? (
+          <DashboardAgenda
+            empresaNombre={empresaNombre}
+            planNombre={planNombre}
+            esMovil={esMovil}
+            onNavigate={(ruta) =>
+              router.push(ruta)
+            }
+          />
+        ) : esLavanderia ? (
           <>
             <section
               style={{
@@ -2741,6 +2835,180 @@ export default function Dashboard() {
         )}
       </main>
     </div>
+  );
+}
+
+function DashboardAgenda({
+  empresaNombre,
+  planNombre,
+  esMovil,
+  onNavigate,
+}) {
+  const accesos = [
+    {
+      titulo: "Agenda",
+      detalle:
+        "Consulta, crea y administra las citas y reservas del negocio.",
+      ruta: "/agenda",
+      icono: "📅",
+    },
+    {
+      titulo: "Configuración",
+      detalle:
+        "Administra negocio, servicios, profesionales, horarios y sitio de reservas.",
+      ruta: "/admin-configuracion",
+      icono: "⚙",
+    },
+  ];
+
+  return (
+    <section
+      style={{
+        maxWidth: 1440,
+        margin: "0 auto",
+        display: "grid",
+        gap: esMovil ? 13 : 18,
+      }}
+    >
+      <article
+        style={{
+          padding: esMovil ? "22px 18px" : "30px 32px",
+          border: "1px solid #d9e8df",
+          borderRadius: esMovil ? 19 : 23,
+          background:
+            "linear-gradient(135deg,#ffffff 0%,#edf9f2 100%)",
+          boxShadow:
+            "0 12px 30px rgba(17,60,38,.07)",
+        }}
+      >
+        <span
+          style={{
+            display: "inline-flex",
+            padding: "6px 10px",
+            borderRadius: 999,
+            background: "#e7f7ed",
+            color: "#137548",
+            fontSize: 9,
+            fontWeight: 950,
+            letterSpacing: 1.1,
+          }}
+        >
+          KONAX AGENDA
+        </span>
+
+        <h2
+          style={{
+            margin: "12px 0 8px",
+            color: "#142019",
+            fontSize: esMovil ? 28 : 38,
+            lineHeight: 1.05,
+            letterSpacing: "-.8px",
+          }}
+        >
+          {empresaNombre}
+        </h2>
+
+        <p
+          style={{
+            maxWidth: 680,
+            margin: 0,
+            color: "#6d7b72",
+            fontSize: esMovil ? 12.5 : 14,
+            lineHeight: 1.6,
+          }}
+        >
+          Tu plan está enfocado en agenda y reservas. Desde aquí
+          puedes abrir la agenda o configurar los datos necesarios
+          para tu sitio de reservas.
+        </p>
+
+        <div
+          style={{
+            marginTop: 14,
+            color: "#16834f",
+            fontSize: 10.5,
+            fontWeight: 850,
+          }}
+        >
+          {planNombre || "KONAX Agenda"}
+        </div>
+      </article>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: esMovil
+            ? "1fr"
+            : "repeat(2,minmax(0,1fr))",
+          gap: esMovil ? 11 : 14,
+        }}
+      >
+        {accesos.map((item) => (
+          <button
+            key={item.ruta}
+            type="button"
+            onClick={() => onNavigate(item.ruta)}
+            style={{
+              minHeight: esMovil ? 118 : 145,
+              padding: esMovil ? 16 : 20,
+              display: "grid",
+              gridTemplateColumns: "48px minmax(0,1fr)",
+              alignItems: "center",
+              gap: 14,
+              border: "1px solid #dfe7e2",
+              borderRadius: esMovil ? 17 : 20,
+              background: "#ffffff",
+              color: "#142019",
+              textAlign: "left",
+              fontFamily: "inherit",
+              cursor: "pointer",
+              boxShadow:
+                "0 10px 26px rgba(24,54,37,.05)",
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                width: 48,
+                height: 48,
+                display: "grid",
+                placeItems: "center",
+                borderRadius: 14,
+                background: "#eaf8ef",
+                color: "#16834f",
+                fontSize: 21,
+                fontWeight: 900,
+              }}
+            >
+              {item.icono}
+            </span>
+
+            <span style={{ minWidth: 0 }}>
+              <strong
+                style={{
+                  display: "block",
+                  fontSize: esMovil ? 16 : 18,
+                  marginBottom: 5,
+                }}
+              >
+                {item.titulo}
+              </strong>
+
+              <small
+                style={{
+                  display: "block",
+                  color: "#748078",
+                  fontSize: esMovil ? 10.5 : 11.5,
+                  lineHeight: 1.45,
+                }}
+              >
+                {item.detalle}
+              </small>
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 
