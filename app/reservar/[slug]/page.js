@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V7-SCROLL-NATIVO";
+const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V8-COVER-SCROLL-CORREGIDO";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -197,6 +197,7 @@ export default function ReservaPublicaAutoservicioPage() {
   const [mostrarAvisoMiCita, setMostrarAvisoMiCita] = useState(false);
 
   const [tabPortal, setTabPortal] = useState("servicios");
+  const [mostrarCabeceraCompacta, setMostrarCabeceraCompacta] = useState(false);
   const [equipoPortal, setEquipoPortal] = useState([]);
   const [cargandoEquipoPortal, setCargandoEquipoPortal] = useState(false);
 
@@ -1068,6 +1069,55 @@ export default function ReservaPublicaAutoservicioPage() {
     return `${window.location.origin}/reservar/${slug}?cita=${tokenGestion}`;
   }
 
+  // =========================================================
+  // PORTADA COMO WEIBOOK
+  // - La imagen/portada sube de forma NATIVA con el scroll.
+  // - NO hay parallax ni posición fija.
+  // - El nombre compacto aparece SOLO cuando la portada ya
+  //   salió de la parte superior, evitando duplicados.
+  // =========================================================
+  useEffect(() => {
+    if (cargando || paso !== 1 || typeof window === "undefined") {
+      setMostrarCabeceraCompacta(false);
+      return;
+    }
+
+    let raf = 0;
+
+    const revisar = () => {
+      raf = 0;
+
+      const cover = document.querySelector(".kp-cover");
+
+      if (!cover) {
+        setMostrarCabeceraCompacta(false);
+        return;
+      }
+
+      const rect = cover.getBoundingClientRect();
+
+      // 76px aprox. corresponde a la barra superior de KONAX.
+      // La cabecera compacta aparece cuando la portada ya pasó.
+      setMostrarCabeceraCompacta(rect.bottom <= 86);
+    };
+
+    const alScroll = () => {
+      if (raf) return;
+      raf = window.requestAnimationFrame(revisar);
+    };
+
+    revisar();
+
+    window.addEventListener("scroll", alScroll, { passive: true });
+    window.addEventListener("resize", alScroll, { passive: true });
+
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", alScroll);
+      window.removeEventListener("resize", alScroll);
+    };
+  }, [cargando, paso, portadaNegocio]);
+
   if (cargando) {
     return (
       <main
@@ -1529,52 +1579,58 @@ export default function ReservaPublicaAutoservicioPage() {
                   </div>
                 </section>
 
-                <section className="kp-scroll-identity">
-                  <div className="kp-scroll-identity-main">
-                    <h2>{nombreNegocio}</h2>
+                {mostrarCabeceraCompacta && (
+                  <section className="kp-scroll-identity">
+                    <div className="kp-scroll-identity-main">
+                      <h2>{nombreNegocio}</h2>
 
-                    {direccionNegocio && (
-                      <a
-                        href={googleMapsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="kp-scroll-location"
-                      >
-                        <span>⌖</span>
-                        <span>{direccionNegocio}</span>
-                      </a>
-                    )}
-                  </div>
+                      {direccionNegocio && (
+                        <a
+                          href={googleMapsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="kp-scroll-location"
+                        >
+                          <span>⌖</span>
+                          <span>{direccionNegocio}</span>
+                        </a>
+                      )}
+                    </div>
 
-                  <button
-                    type="button"
-                    className="kp-scroll-share"
-                    onClick={async () => {
-                      const url = window.location.href;
+                    <button
+                      type="button"
+                      className="kp-scroll-share"
+                      onClick={async () => {
+                        const url = window.location.href;
 
-                      if (navigator.share) {
+                        if (navigator.share) {
+                          try {
+                            await navigator.share({
+                              title: nombreNegocio,
+                              text: `Reserva en ${nombreNegocio}`,
+                              url,
+                            });
+                          } catch {}
+                          return;
+                        }
+
                         try {
-                          await navigator.share({
-                            title: nombreNegocio,
-                            text: `Reserva en ${nombreNegocio}`,
-                            url,
-                          });
+                          await navigator.clipboard.writeText(url);
+                          alert("Enlace copiado.");
                         } catch {}
-                        return;
-                      }
+                      }}
+                      aria-label="Compartir negocio"
+                    >
+                      ↗
+                    </button>
+                  </section>
+                )}
 
-                      try {
-                        await navigator.clipboard.writeText(url);
-                        alert("Enlace copiado.");
-                      } catch {}
-                    }}
-                    aria-label="Compartir negocio"
-                  >
-                    ↗
-                  </button>
-                </section>
-
-                <nav className="kp-profile-tabs">
+                <nav
+                  className={`kp-profile-tabs ${
+                    mostrarCabeceraCompacta ? "with-compact" : ""
+                  }`}
+                >
                   {[
                     ["servicios", perfilGimnasio ? "Clases" : "Servicios"],
                     ["equipo", perfilGimnasio ? "Instructores" : "Equipo"],
@@ -4077,14 +4133,17 @@ const CSS = `
   }
 
   /*
-     SCROLL NATIVO:
-     la portada y su imagen se mueven juntas con el documento.
-     No hay parallax ni compensación visual que deje la imagen "pegada".
+     SCROLL NATIVO REAL:
+     portada + imagen forman un solo bloque del documento.
+     Ninguna de las dos usa sticky/fixed.
+     La cabecera blanca se crea únicamente al salir la portada.
   */
   .kp-cover {
     position: relative !important;
     top: auto !important;
-    inset: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
     min-height: 420px;
     padding: 20px;
     display: flex;
@@ -4256,13 +4315,30 @@ const CSS = `
   }
 
   .kp-scroll-identity {
-    padding: 25px 20px 18px;
+    position: sticky;
+    top: 66px;
+    z-index: 22;
+    min-height: 92px;
+    padding: 16px 20px 13px;
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: 16px;
     border-bottom: 1px solid #edf0ee;
-    background: #ffffff;
+    background: rgba(255,255,255,.985);
+    backdrop-filter: blur(12px);
+    animation: kpCompactIn .14s ease-out;
+  }
+
+  @keyframes kpCompactIn {
+    from {
+      opacity: 0;
+      transform: translateY(-5px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .kp-scroll-identity-main {
@@ -4318,6 +4394,10 @@ const CSS = `
     border-bottom: 1px solid #e4e9e6;
     background: rgba(255,255,255,.97);
     backdrop-filter: blur(12px);
+  }
+
+  .kp-profile-tabs.with-compact {
+    top: 158px;
   }
 
   .kp-profile-tabs button {
@@ -5361,11 +5441,23 @@ const CSS = `
     }
 
     .kp-scroll-identity {
-      padding: 22px 18px 14px;
+      top: 66px;
+      min-height: 84px;
+      padding: 12px 18px 10px;
     }
 
     .kp-scroll-identity h2 {
-      font-size: 34px;
+      font-size: 27px;
+      line-height: 1.02;
+    }
+
+    .kp-scroll-location {
+      margin-top: 6px;
+      font-size: 11px;
+    }
+
+    .kp-profile-tabs.with-compact {
+      top: 150px;
     }
 
     .kp-cover-content {
