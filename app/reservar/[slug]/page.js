@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V8-COVER-SCROLL-CORREGIDO";
+const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V9-FIX-CLIENT-EXCEPTION";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -1116,7 +1116,14 @@ export default function ReservaPublicaAutoservicioPage() {
       window.removeEventListener("scroll", alScroll);
       window.removeEventListener("resize", alScroll);
     };
-  }, [cargando, paso, portadaNegocio]);
+  }, [
+    cargando,
+    paso,
+    identidadEmpresa?.portada_url,
+    identidadEmpresa?.logo_url,
+    portal?.portada_url,
+    portal?.imagen_portada_url,
+  ]);
 
   if (cargando) {
     return (
