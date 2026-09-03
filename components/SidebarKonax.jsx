@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "../lib/supabase";
 
 // KONAX Sidebar Desktop
 // VERSION 2026.09.02-EMPRESA-MODULOS
