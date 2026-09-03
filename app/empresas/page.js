@@ -68,6 +68,11 @@ const CATEGORIAS = {
     "Veterinaria",
     "Clínica",
     "Belleza",
+    "Salón de belleza",
+    "Barbería",
+    "Peluquería",
+    "Estética",
+    "Spa",
     "Consultoría",
   ],
   Educación: [
