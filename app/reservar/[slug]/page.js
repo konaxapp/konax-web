@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V4-DATOS-LOCAL";
+const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V5-MAPS-COVER-SCROLL";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -1184,6 +1184,13 @@ export default function ReservaPublicaAutoservicioPage() {
     portal?.direccion ||
     "";
 
+
+  const googleMapsUrl = direccionNegocio
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        direccionNegocio
+      )}`
+    : "";
+
   const categoriaNegocio =
     identidadEmpresa?.categoria_negocio ||
     portal?.categoria_negocio ||
@@ -1440,14 +1447,18 @@ export default function ReservaPublicaAutoservicioPage() {
               <div className="kp-public-profile">
                 <section
                   className={`kp-cover ${portadaNegocio ? "has-image" : ""}`}
-                  style={
-                    portadaNegocio
-                      ? {
-                          backgroundImage: `linear-gradient(180deg, rgba(7,25,18,.08) 10%, rgba(7,25,18,.82) 100%), url("${portadaNegocio}")`,
-                        }
-                      : undefined
-                  }
                 >
+                  {portadaNegocio && (
+                    <>
+                      <img
+                        src={portadaNegocio}
+                        alt={`Portada de ${nombreNegocio}`}
+                        className="kp-cover-image"
+                      />
+                      <div className="kp-cover-overlay" />
+                    </>
+                  )}
+
                   <div className="kp-cover-top">
                     <span className="kp-powered">Reservas con KONAX</span>
 
@@ -1493,10 +1504,20 @@ export default function ReservaPublicaAutoservicioPage() {
                     <h1>{nombreNegocio}</h1>
 
                     {direccionNegocio && (
-                      <div className="kp-profile-meta">
+                      <a
+                        className="kp-profile-meta kp-map-link"
+                        href={googleMapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Cómo llegar a ${nombreNegocio} en Google Maps`}
+                      >
                         <span className="kp-meta-icon">⌖</span>
-                        <span>{direccionNegocio}</span>
-                      </div>
+
+                        <span className="kp-map-copy">
+                          <span>{direccionNegocio}</span>
+                          <strong>Cómo llegar ↗</strong>
+                        </span>
+                      </a>
                     )}
 
                     {horarioPublico && (
@@ -4010,9 +4031,13 @@ const CSS = `
     background: #ffffff;
   }
 
+  /*
+     La portada NO es sticky: sube y baja con el scroll como en el ejemplo.
+     Las pestañas sí permanecen visibles al llegar arriba.
+  */
   .kp-cover {
     position: relative;
-    min-height: 460px;
+    min-height: 420px;
     padding: 20px;
     display: flex;
     flex-direction: column;
@@ -4026,9 +4051,31 @@ const CSS = `
     background-size: cover;
   }
 
-  .kp-cover.has-image {
-    background-position: center;
-    background-size: cover;
+  .kp-cover-image {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center center;
+    transform: scale(1.015);
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .kp-cover-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+      linear-gradient(
+        180deg,
+        rgba(7,25,18,.08) 8%,
+        rgba(7,25,18,.18) 42%,
+        rgba(7,25,18,.86) 100%
+      );
   }
 
   .kp-cover-top {
@@ -4133,6 +4180,26 @@ const CSS = `
     flex: 0 0 auto;
     font-size: 18px;
     line-height: 1.2;
+  }
+
+  .kp-map-link {
+    width: fit-content;
+    max-width: 100%;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .kp-map-copy {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .kp-map-copy strong {
+    color: #d7ffdf;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .1px;
   }
 
   .kp-profile-tabs {
@@ -5162,7 +5229,7 @@ const CSS = `
     }
 
     .kp-cover {
-      min-height: 430px;
+      min-height: 390px;
       padding: 18px;
     }
 
