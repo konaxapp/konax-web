@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V6-PARALLAX-SCROLL";
+const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V7-SCROLL-NATIVO";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -1068,96 +1068,6 @@ export default function ReservaPublicaAutoservicioPage() {
     return `${window.location.origin}/reservar/${slug}?cita=${tokenGestion}`;
   }
 
-  // =========================================================
-  // PORTADA MÓVIL · SCROLL REAL + PARALLAX SUAVE
-  // La portada forma parte del documento: al deslizar hacia
-  // arriba debe desaparecer como en el ejemplo de referencia.
-  // La imagen interior se mueve ligeramente para evitar que se
-  // perciba como un fondo estático.
-  // =========================================================
-  useEffect(() => {
-    if (cargando || paso !== 1 || typeof window === "undefined") {
-      return;
-    }
-
-    let frame = 0;
-    let cover = null;
-    let image = null;
-
-    function actualizarPortada() {
-      frame = 0;
-
-      if (!cover || !image) return;
-
-      const rect = cover.getBoundingClientRect();
-      const altoVentana =
-        window.innerHeight ||
-        document.documentElement.clientHeight ||
-        800;
-
-      // Fuera de pantalla: no hace falta seguir transformando.
-      if (rect.bottom < -80 || rect.top > altoVentana + 80) {
-        return;
-      }
-
-      // Cuando la página sube, la imagen se desplaza un poco
-      // más lento que la tarjeta para crear el efecto del video.
-      const desplazamiento = Math.max(
-        -24,
-        Math.min(34, -rect.top * 0.13)
-      );
-
-      image.style.transform =
-        `translate3d(0, ${desplazamiento}px, 0) scale(1.10)`;
-    }
-
-    function solicitarActualizacion() {
-      if (frame) return;
-
-      frame = window.requestAnimationFrame(actualizarPortada);
-    }
-
-    const iniciar = window.requestAnimationFrame(() => {
-      cover = document.querySelector(".kp-cover");
-      image = cover?.querySelector(".kp-cover-image") || null;
-
-      if (!cover || !image) return;
-
-      actualizarPortada();
-
-      window.addEventListener("scroll", solicitarActualizacion, {
-        passive: true,
-      });
-
-      window.addEventListener("resize", solicitarActualizacion, {
-        passive: true,
-      });
-    });
-
-    return () => {
-      window.cancelAnimationFrame(iniciar);
-
-      if (frame) {
-        window.cancelAnimationFrame(frame);
-      }
-
-      window.removeEventListener("scroll", solicitarActualizacion);
-      window.removeEventListener("resize", solicitarActualizacion);
-
-      if (image) {
-        image.style.transform = "";
-      }
-    };
-  }, [
-    cargando,
-    paso,
-    tabPortal,
-    identidadEmpresa,
-    perfilPublicoLocal,
-    portal?.portada_url,
-    portal?.imagen_portada_url,
-  ]);
-
   if (cargando) {
     return (
       <main
@@ -1617,6 +1527,51 @@ export default function ReservaPublicaAutoservicioPage() {
                       </div>
                     )}
                   </div>
+                </section>
+
+                <section className="kp-scroll-identity">
+                  <div className="kp-scroll-identity-main">
+                    <h2>{nombreNegocio}</h2>
+
+                    {direccionNegocio && (
+                      <a
+                        href={googleMapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="kp-scroll-location"
+                      >
+                        <span>⌖</span>
+                        <span>{direccionNegocio}</span>
+                      </a>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    className="kp-scroll-share"
+                    onClick={async () => {
+                      const url = window.location.href;
+
+                      if (navigator.share) {
+                        try {
+                          await navigator.share({
+                            title: nombreNegocio,
+                            text: `Reserva en ${nombreNegocio}`,
+                            url,
+                          });
+                        } catch {}
+                        return;
+                      }
+
+                      try {
+                        await navigator.clipboard.writeText(url);
+                        alert("Enlace copiado.");
+                      } catch {}
+                    }}
+                    aria-label="Compartir negocio"
+                  >
+                    ↗
+                  </button>
                 </section>
 
                 <nav className="kp-profile-tabs">
@@ -4122,8 +4077,9 @@ const CSS = `
   }
 
   /*
-     La portada NO es sticky: sube y baja con el scroll como en el ejemplo.
-     Las pestañas sí permanecen visibles al llegar arriba.
+     SCROLL NATIVO:
+     la portada y su imagen se mueven juntas con el documento.
+     No hay parallax ni compensación visual que deje la imagen "pegada".
   */
   .kp-cover {
     position: relative !important;
@@ -4148,15 +4104,14 @@ const CSS = `
 
   .kp-cover-image {
     position: absolute;
-    inset: -6% 0;
+    inset: 0;
     z-index: 0;
     width: 100%;
-    height: 112%;
+    height: 100%;
     object-fit: cover;
     object-position: center center;
-    transform: translate3d(0,0,0) scale(1.10);
-    transform-origin: center center;
-    will-change: transform;
+    transform: none !important;
+    will-change: auto;
     pointer-events: none;
     user-select: none;
     -webkit-user-drag: none;
@@ -4298,6 +4253,57 @@ const CSS = `
     font-size: 11px;
     font-weight: 900;
     letter-spacing: .1px;
+  }
+
+  .kp-scroll-identity {
+    padding: 25px 20px 18px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid #edf0ee;
+    background: #ffffff;
+  }
+
+  .kp-scroll-identity-main {
+    min-width: 0;
+  }
+
+  .kp-scroll-identity h2 {
+    margin: 0;
+    color: #102b22;
+    font-size: clamp(30px,7vw,44px);
+    line-height: 1.04;
+    letter-spacing: -1.1px;
+    font-weight: 900;
+  }
+
+  .kp-scroll-location {
+    margin-top: 10px;
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 7px;
+    max-width: 100%;
+    color: #64746c;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 750;
+    line-height: 1.4;
+  }
+
+  .kp-scroll-share {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    display: grid;
+    place-items: center;
+    border: 1px solid #dfe6e2;
+    border-radius: 50%;
+    background: #ffffff;
+    color: #17382b;
+    font-size: 20px;
+    font-weight: 900;
+    cursor: pointer;
   }
 
   .kp-profile-tabs {
@@ -5194,12 +5200,32 @@ const CSS = `
 
 
   .kp-dark .kp-public-profile,
+  .kp-dark .kp-scroll-identity,
   .kp-dark .kp-profile-tabs,
   .kp-dark .kp-profile-section,
   .kp-dark .kp-team-card,
   .kp-dark .kp-reviews-empty {
     background: #0f1713;
     border-color: #2b3a32;
+  }
+
+  .kp-dark .kp-scroll-identity {
+    border-bottom-color: #25352d;
+    background: #111b16;
+  }
+
+  .kp-dark .kp-scroll-identity h2 {
+    color: #f3f7f5;
+  }
+
+  .kp-dark .kp-scroll-location {
+    color: #a7b3ad;
+  }
+
+  .kp-dark .kp-scroll-share {
+    border-color: #31453a;
+    background: #17231d;
+    color: #f3f7f5;
   }
 
   .kp-dark .kp-profile-tabs {
@@ -5332,6 +5358,14 @@ const CSS = `
       padding: 18px;
       border-radius: 21px 21px 0 0;
       touch-action: pan-y;
+    }
+
+    .kp-scroll-identity {
+      padding: 22px 18px 14px;
+    }
+
+    .kp-scroll-identity h2 {
+      font-size: 34px;
     }
 
     .kp-cover-content {
