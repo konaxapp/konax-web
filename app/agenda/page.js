@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.08.29-AGENDA-EDITAR-DIAS-HORARIO-FIX18";
+const VERSION = "2026.09.04-AGENDA-TEXTO-DINAMICO-BELLEZA-FIX19";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -79,6 +79,34 @@ function esTipoSalonBelleza(tipoNegocio, categoriaNegocio = "") {
     "barberia",
     "spa",
   ].some((palabra) => texto.includes(palabra));
+}
+
+function obtenerPerfilBellezaTexto(tipoNegocio, categoriaNegocio = "") {
+  const texto = normalizar(
+    `${tipoNegocio || ""} ${categoriaNegocio || ""}`
+  );
+
+  if (texto.includes("barberia")) {
+    return {
+      corto: "barbería",
+      conArticulo: "la barbería",
+      titulo: "Barbería",
+    };
+  }
+
+  if (texto.includes("spa")) {
+    return {
+      corto: "spa",
+      conArticulo: "el spa",
+      titulo: "Spa",
+    };
+  }
+
+  return {
+    corto: "salón",
+    conArticulo: "el salón",
+    titulo: "Salón",
+  };
 }
 
 function formatoHora(hora) {
@@ -304,6 +332,11 @@ export default function AgendaPage() {
   const [rol, setRol] = useState("");
   const [esAdmin, setEsAdmin] = useState(false);
   const [esSalonBelleza, setEsSalonBelleza] = useState(false);
+  const [perfilBellezaTexto, setPerfilBellezaTexto] = useState({
+    corto: "salón",
+    conArticulo: "el salón",
+    titulo: "Salón",
+  });
 
   const [vista, setVista] = useState("hoy");
   const [fechaAgenda, setFechaAgenda] = useState(fechaHoy());
@@ -516,6 +549,12 @@ export default function AgendaPage() {
       setRol(rolLocal);
       setEsAdmin(adminLocal);
       setEsSalonBelleza(salonLocal);
+      setPerfilBellezaTexto(
+        obtenerPerfilBellezaTexto(
+          tipoNegocioLocal,
+          categoriaNegocioLocal
+        )
+      );
 
       if (salonLocal) {
         setServicioForm(SERVICIO_SALON_INICIAL);
@@ -663,7 +702,7 @@ export default function AgendaPage() {
     if (!enlace) return;
 
     const texto = esSalonBelleza
-      ? `Reserva tu cita en el salón aquí:\n${enlace}`
+      ? `Reserva tu cita en ${perfilBellezaTexto.conArticulo} aquí:\n${enlace}`
       : `Reserva tu clase o servicio aquí:\n${enlace}`;
 
     window.open(
@@ -1480,7 +1519,7 @@ export default function AgendaPage() {
     if (!esAdmin) {
       alert(
         esSalonBelleza
-          ? "Solo el administrador puede configurar los servicios del salón."
+          ? `Solo el administrador puede configurar los servicios de ${perfilBellezaTexto.conArticulo}.`
           : "Solo el administrador puede configurar servicios o clases."
       );
       return;
@@ -1489,7 +1528,7 @@ export default function AgendaPage() {
     if (!servicioForm.nombre.trim()) {
       alert(
         esSalonBelleza
-          ? "Escribe el nombre del servicio del salón."
+          ? `Escribe el nombre del servicio de ${perfilBellezaTexto.conArticulo}.`
           : "Escribe el nombre del servicio o clase."
       );
       return;
@@ -3542,7 +3581,7 @@ export default function AgendaPage() {
                         </strong>
                         <span style={s.professionalSelectionSpecialty}>
                           {profesionalReserva.especialidad ||
-                            "Profesional del salón"}
+                            `Profesional de ${perfilBellezaTexto.conArticulo}`}
                         </span>
                       </div>
                     </div>
@@ -3687,7 +3726,7 @@ export default function AgendaPage() {
               </h2>
               <p style={{ ...s.muted, margin: "6px 0 0" }}>
                 {esSalonBelleza
-                  ? "Consulta, filtra y administra las citas del salón."
+                  ? `Consulta, filtra y administra las citas de ${perfilBellezaTexto.conArticulo}.`
                   : "Consulta reservas, asistencia, pendientes de pago y cancelaciones."}
               </p>
             </div>
@@ -3928,7 +3967,7 @@ export default function AgendaPage() {
                 {servicioEditandoId
                   ? "Editar servicio"
                   : esSalonBelleza
-                  ? "Nuevo servicio del salón"
+                  ? `Nuevo servicio de ${perfilBellezaTexto.corto}`
                   : "Nueva clase o servicio"}
               </h2>
 
@@ -4161,7 +4200,7 @@ export default function AgendaPage() {
                 {esSalonBelleza ? (
                   <select value="pago_local" disabled style={s.input}>
                     <option value="pago_local">
-                      Servicio del salón · Cobro en Caja
+                      {`Servicio de ${perfilBellezaTexto.corto} · Cobro en Caja`}
                     </option>
                   </select>
                 ) : (
@@ -4577,7 +4616,7 @@ export default function AgendaPage() {
                   <span style={s.eyebrowSmall}>SERVICIOS</span>
                   <h2 style={s.panelTitle}>
                     {esSalonBelleza
-                      ? "Servicios del salón"
+                      ? `Servicios de ${perfilBellezaTexto.corto}`
                       : "Clases y servicios"}
                   </h2>
                 </div>
@@ -4941,7 +4980,7 @@ export default function AgendaPage() {
       )}
 
       <footer style={s.footer}>
-        {esSalonBelleza ? "KONAX Salón · Agenda" : "KONAX Agenda"} · {VERSION} · Rol: {rol || "Usuario"}
+        {esSalonBelleza ? `KONAX ${perfilBellezaTexto.titulo} · Agenda` : "KONAX Agenda"} · {VERSION} · Rol: {rol || "Usuario"}
       </footer>
     </main>
   );
