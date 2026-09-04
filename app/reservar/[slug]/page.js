@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V12-RESENAS-REALES";
+const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V13-PERFIL-PROFESIONAL";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -213,6 +213,12 @@ export default function ReservaPublicaAutoservicioPage() {
   const [tabPortal, setTabPortal] = useState("servicios");
   const [equipoPortal, setEquipoPortal] = useState([]);
   const [cargandoEquipoPortal, setCargandoEquipoPortal] = useState(false);
+
+  const [perfilProfesionalAbierto, setPerfilProfesionalAbierto] = useState(null);
+  const [perfilProfesionalDetalle, setPerfilProfesionalDetalle] = useState(null);
+  const [tabPerfilProfesional, setTabPerfilProfesional] = useState("perfil");
+  const [cargandoPerfilProfesional, setCargandoPerfilProfesional] = useState(false);
+  const [resumenProfesionales, setResumenProfesionales] = useState({});
 
   const [paso, setPaso] = useState(1);
 
@@ -514,9 +520,108 @@ export default function ReservaPublicaAutoservicioPage() {
     const lista = Array.isArray(data) ? data : [];
     setProfesionalesServicio(lista);
     setCargandoProfesionales(false);
+
+    cargarResumenProfesionales(lista);
+
     return lista;
   }
 
+
+  async function cargarResumenProfesionales(lista = []) {
+    const profesionalesConId = (Array.isArray(lista) ? lista : []).filter(
+      (prof) => prof?.id
+    );
+
+    if (profesionalesConId.length === 0) return;
+
+    try {
+      const respuestas = await Promise.all(
+        profesionalesConId.map((prof) =>
+          supabase.rpc(
+            "obtener_perfil_profesional_publico",
+            {
+              p_slug: slug,
+              p_profesional_id: String(prof.id),
+            }
+          )
+        )
+      );
+
+      const nuevoMapa = {};
+
+      respuestas.forEach((respuesta, index) => {
+        const prof = profesionalesConId[index];
+        const data = respuesta?.data;
+
+        if (!respuesta?.error && data?.ok) {
+          nuevoMapa[String(prof.id)] = data;
+        }
+      });
+
+      setResumenProfesionales((actual) => ({
+        ...actual,
+        ...nuevoMapa,
+      }));
+    } catch (err) {
+      console.warn(
+        "No se pudieron cargar los resúmenes públicos de profesionales:",
+        err
+      );
+    }
+  }
+
+  async function abrirPerfilProfesional(profesional) {
+    if (!profesional?.profesionalId) return;
+
+    const id = String(profesional.profesionalId);
+    const resumen = resumenProfesionales[id] || null;
+
+    setPerfilProfesionalAbierto(profesional);
+    setPerfilProfesionalDetalle(resumen);
+    setTabPerfilProfesional("perfil");
+    setCargandoPerfilProfesional(true);
+
+    const { data, error: rpcError } = await supabase.rpc(
+      "obtener_perfil_profesional_publico",
+      {
+        p_slug: slug,
+        p_profesional_id: id,
+      }
+    );
+
+    setCargandoPerfilProfesional(false);
+
+    if (rpcError || !data?.ok) {
+      console.warn(
+        "No se pudo cargar el perfil público del profesional:",
+        rpcError || data
+      );
+
+      if (!resumen) {
+        setPerfilProfesionalDetalle({
+          ok: false,
+          mensaje:
+            data?.mensaje ||
+            "El perfil del profesional no está disponible.",
+        });
+      }
+
+      return;
+    }
+
+    setPerfilProfesionalDetalle(data);
+    setResumenProfesionales((actual) => ({
+      ...actual,
+      [id]: data,
+    }));
+  }
+
+  function cerrarPerfilProfesional() {
+    setPerfilProfesionalAbierto(null);
+    setPerfilProfesionalDetalle(null);
+    setTabPerfilProfesional("perfil");
+    setCargandoPerfilProfesional(false);
+  }
 
   async function cargarWodPublico(fechaWod, servicioId) {
     if (!perfilGimnasio || !fechaWod || !servicioId) {
@@ -784,12 +889,24 @@ export default function ReservaPublicaAutoservicioPage() {
           prof.nombre || ""
         ).trim();
 
+        const resumen =
+          resumenProfesionales[String(prof.id)] || {};
+
         return {
           id: normalizar(nombreProfesional),
           profesionalId: prof.id,
           nombre: nombreProfesional,
           especialidad: prof.especialidad || "Profesional",
           fotoUrl: prof.foto_url || "",
+          promedioCalificacion: Number(
+            resumen?.promedio_calificacion || 0
+          ),
+          totalResenas: Number(
+            resumen?.total_resenas || 0
+          ),
+          citasCompletadas: Number(
+            resumen?.citas_completadas || 0
+          ),
         };
       });
     }
@@ -827,6 +944,7 @@ export default function ReservaPublicaAutoservicioPage() {
     servicioSeleccionado,
     perfilBelleza,
     profesionalesServicio,
+    resumenProfesionales,
   ]);
 
   const slotsDisponibles = useMemo(() => {
@@ -2231,18 +2349,12 @@ export default function ReservaPublicaAutoservicioPage() {
                     </div>
                   ) : (
                     profesionales.map((profesional) => (
-                      <button
+                      <article
                         key={
                           profesional.profesionalId ||
                           profesional.id
                         }
-                        type="button"
-                        className="kp-prof"
-                        onClick={() =>
-                          elegirProfesional(
-                            profesional.id
-                          )
-                        }
+                        className="kp-prof kp-prof-card"
                       >
                         <span className="kp-avatar">
                           {profesional.fotoUrl ? (
@@ -2262,18 +2374,57 @@ export default function ReservaPublicaAutoservicioPage() {
                           <strong>
                             {profesional.nombre}
                           </strong>
+
                           <small>
                             {profesional.especialidad ||
                               (perfilBelleza
                                 ? "Profesional"
                                 : "Instructor")}
                           </small>
+
+                          {profesional.totalResenas > 0 && (
+                            <span className="kp-prof-rating">
+                              ★{" "}
+                              {profesional.promedioCalificacion.toFixed(
+                                1
+                              )}
+                              <small>
+                                {" "}
+                                ({formatoEntero(
+                                  profesional.totalResenas
+                                )})
+                              </small>
+                            </span>
+                          )}
+
+                          {perfilBelleza &&
+                            profesional.profesionalId && (
+                              <button
+                                type="button"
+                                className="kp-prof-profile-link"
+                                onClick={() =>
+                                  abrirPerfilProfesional(
+                                    profesional
+                                  )
+                                }
+                              >
+                                Ver perfil
+                              </button>
+                            )}
                         </span>
 
-                        <span className="kp-select">
+                        <button
+                          type="button"
+                          className="kp-select"
+                          onClick={() =>
+                            elegirProfesional(
+                              profesional.id
+                            )
+                          }
+                        >
                           Seleccionar
-                        </span>
-                      </button>
+                        </button>
+                      </article>
                     ))
                   )}
                 </div>
@@ -2771,6 +2922,360 @@ export default function ReservaPublicaAutoservicioPage() {
                 Cerrar
               </button>
             </div>
+          </div>
+        )}
+
+        {perfilProfesionalAbierto && (
+          <div
+            className="kp-pro-profile-overlay"
+            onClick={cerrarPerfilProfesional}
+          >
+            <section
+              className="kp-pro-profile-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="kp-pro-profile-topbar">
+                <span>Perfil profesional</span>
+
+                <button
+                  type="button"
+                  onClick={cerrarPerfilProfesional}
+                  aria-label="Cerrar perfil"
+                >
+                  ×
+                </button>
+              </div>
+
+              {cargandoPerfilProfesional &&
+              !perfilProfesionalDetalle ? (
+                <div className="kp-pro-profile-loading">
+                  Consultando perfil...
+                </div>
+              ) : perfilProfesionalDetalle?.ok ? (
+                <>
+                  <section className="kp-pro-profile-hero">
+                    <div className="kp-pro-profile-photo">
+                      {perfilProfesionalDetalle?.foto_url ? (
+                        <img
+                          src={perfilProfesionalDetalle.foto_url}
+                          alt={
+                            perfilProfesionalDetalle?.nombre ||
+                            perfilProfesionalAbierto?.nombre ||
+                            "Profesional"
+                          }
+                        />
+                      ) : (
+                        <span>
+                          {inicialNombre(
+                            perfilProfesionalDetalle?.nombre ||
+                              perfilProfesionalAbierto?.nombre
+                          )}
+                        </span>
+                      )}
+                    </div>
+
+                    <h2>
+                      {perfilProfesionalDetalle?.nombre ||
+                        perfilProfesionalAbierto?.nombre}
+                    </h2>
+
+                    <p>
+                      {perfilProfesionalDetalle?.especialidad ||
+                        perfilProfesionalAbierto?.especialidad ||
+                        "Profesional"}
+                    </p>
+
+                    {Number(
+                      perfilProfesionalDetalle?.total_resenas || 0
+                    ) > 0 ? (
+                      <div className="kp-pro-profile-rating">
+                        <strong>
+                          ★{" "}
+                          {Number(
+                            perfilProfesionalDetalle?.promedio_calificacion ||
+                              0
+                          ).toFixed(1)}
+                        </strong>
+                        <span>
+                          (
+                          {formatoEntero(
+                            perfilProfesionalDetalle?.total_resenas ||
+                              0
+                          )}
+                          )
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="kp-pro-profile-no-rating">
+                        Aún sin reseñas
+                      </div>
+                    )}
+
+                    {perfilProfesionalDetalle?.ubicacion && (
+                      <span className="kp-pro-profile-location">
+                        ⌖ {perfilProfesionalDetalle.ubicacion}
+                      </span>
+                    )}
+                  </section>
+
+                  <nav className="kp-pro-profile-tabs">
+                    {[
+                      ["perfil", "Perfil", null],
+                      [
+                        "portafolio",
+                        "Portafolio",
+                        Number(
+                          perfilProfesionalDetalle?.total_portafolio ||
+                            0
+                        ),
+                      ],
+                      [
+                        "resenas",
+                        "Reseñas",
+                        Number(
+                          perfilProfesionalDetalle?.total_resenas || 0
+                        ),
+                      ],
+                    ].map(([codigo, label, cantidad]) => (
+                      <button
+                        key={codigo}
+                        type="button"
+                        className={
+                          tabPerfilProfesional === codigo
+                            ? "active"
+                            : ""
+                        }
+                        onClick={() =>
+                          setTabPerfilProfesional(codigo)
+                        }
+                      >
+                        {label}
+                        {cantidad !== null && (
+                          <span>{formatoEntero(cantidad)}</span>
+                        )}
+                      </button>
+                    ))}
+                  </nav>
+
+                  <div className="kp-pro-profile-body">
+                    {tabPerfilProfesional === "perfil" && (
+                      <>
+                        <div className="kp-pro-stats">
+                          <div>
+                            <span>Citas completadas</span>
+                            <strong>
+                              {formatoEntero(
+                                perfilProfesionalDetalle?.citas_completadas ||
+                                  0
+                              )}
+                            </strong>
+                          </div>
+
+                          <div>
+                            <span>Clientes atendidos</span>
+                            <strong>
+                              {formatoEntero(
+                                perfilProfesionalDetalle?.clientes_atendidos ||
+                                  0
+                              )}
+                            </strong>
+                          </div>
+                        </div>
+
+                        <section className="kp-pro-about">
+                          <h3>Acerca de</h3>
+
+                          <p>
+                            {perfilProfesionalDetalle?.bio ||
+                              "Este profesional todavía no ha agregado una presentación pública."}
+                          </p>
+                        </section>
+
+                        {Array.isArray(
+                          perfilProfesionalDetalle?.idiomas
+                        ) &&
+                          perfilProfesionalDetalle.idiomas.length >
+                            0 && (
+                            <section className="kp-pro-languages">
+                              <h3>Idiomas</h3>
+
+                              <div>
+                                {perfilProfesionalDetalle.idiomas.map(
+                                  (idioma) => (
+                                    <span key={idioma}>
+                                      {idioma}
+                                    </span>
+                                  )
+                                )}
+                              </div>
+                            </section>
+                          )}
+                      </>
+                    )}
+
+                    {tabPerfilProfesional === "portafolio" && (
+                      <section className="kp-pro-portfolio">
+                        <div className="kp-pro-tab-heading">
+                          <h3>Portafolio</h3>
+                          <span>
+                            {formatoEntero(
+                              perfilProfesionalDetalle?.total_portafolio ||
+                                0
+                            )}
+                          </span>
+                        </div>
+
+                        {Array.isArray(
+                          perfilProfesionalDetalle?.portafolio
+                        ) &&
+                        perfilProfesionalDetalle.portafolio.length >
+                          0 ? (
+                          <div className="kp-pro-portfolio-grid">
+                            {perfilProfesionalDetalle.portafolio.map(
+                              (item, index) => (
+                                <figure
+                                  key={
+                                    item?.id ||
+                                    `${item?.imagen_url}-${index}`
+                                  }
+                                >
+                                  <img
+                                    src={item.imagen_url}
+                                    alt={
+                                      item?.descripcion ||
+                                      `Trabajo ${index + 1}`
+                                    }
+                                  />
+
+                                  {item?.descripcion && (
+                                    <figcaption>
+                                      {item.descripcion}
+                                    </figcaption>
+                                  )}
+                                </figure>
+                              )
+                            )}
+                          </div>
+                        ) : (
+                          <div className="kp-pro-empty">
+                            Este profesional todavía no ha publicado trabajos
+                            en su portafolio.
+                          </div>
+                        )}
+                      </section>
+                    )}
+
+                    {tabPerfilProfesional === "resenas" && (
+                      <section className="kp-pro-reviews">
+                        {Number(
+                          perfilProfesionalDetalle?.total_resenas || 0
+                        ) > 0 ? (
+                          <>
+                            <div className="kp-pro-review-score">
+                              <strong>
+                                {Number(
+                                  perfilProfesionalDetalle?.promedio_calificacion ||
+                                    0
+                                ).toFixed(1)}
+                              </strong>
+                              <span>★</span>
+                              <small>
+                                {formatoEntero(
+                                  perfilProfesionalDetalle?.total_resenas ||
+                                    0
+                                )}{" "}
+                                {Number(
+                                  perfilProfesionalDetalle?.total_resenas ||
+                                    0
+                                ) === 1
+                                  ? "reseña verificada"
+                                  : "reseñas verificadas"}
+                              </small>
+                            </div>
+
+                            <div className="kp-pro-review-list">
+                              {(
+                                perfilProfesionalDetalle?.resenas || []
+                              ).map((resena) => (
+                                <article
+                                  key={resena.id}
+                                  className="kp-pro-review-card"
+                                >
+                                  <div>
+                                    <strong>
+                                      {"★".repeat(
+                                        Number(
+                                          resena.calificacion || 0
+                                        )
+                                      )}
+                                    </strong>
+
+                                    <small>
+                                      {formatoFechaResena(
+                                        resena.fecha
+                                      )}
+                                    </small>
+                                  </div>
+
+                                  {resena.comentario && (
+                                    <p>{resena.comentario}</p>
+                                  )}
+
+                                  {resena.servicio && (
+                                    <span>
+                                      {resena.servicio}
+                                    </span>
+                                  )}
+
+                                  <em>
+                                    ✓ Cita verificada por KONAX
+                                  </em>
+                                </article>
+                              ))}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="kp-pro-empty">
+                            Este profesional todavía no tiene reseñas
+                            verificadas.
+                          </div>
+                        )}
+                      </section>
+                    )}
+                  </div>
+
+                  <div className="kp-pro-profile-action">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const idSeleccion =
+                          perfilProfesionalAbierto?.id;
+
+                        cerrarPerfilProfesional();
+
+                        if (idSeleccion) {
+                          elegirProfesional(idSeleccion);
+                        }
+                      }}
+                    >
+                      SELECCIONAR A{" "}
+                      {String(
+                        perfilProfesionalDetalle?.nombre ||
+                          perfilProfesionalAbierto?.nombre ||
+                          "PROFESIONAL"
+                      )
+                        .split(" ")[0]
+                        .toUpperCase()}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="kp-pro-profile-loading">
+                  {perfilProfesionalDetalle?.mensaje ||
+                    "El perfil del profesional no está disponible."}
+                </div>
+              )}
+            </section>
           </div>
         )}
 
@@ -6233,5 +6738,613 @@ const CSS = `
       height: 42px;
     }
   }
+
+
+  /* =========================================================
+     PERFIL PROFESIONAL · BLANCO + NEGRO · V13
+     ========================================================= */
+
+  .kp-prof-card {
+    cursor: default;
+  }
+
+  .kp-prof-card:hover,
+  .kp-prof-card:focus-within {
+    transform: none;
+    border-color: #cfcfcf;
+    background: #ffffff;
+    box-shadow: 0 7px 20px rgba(0,0,0,.045);
+  }
+
+  .kp-prof-card .kp-avatar {
+    border-color: #e1e1e1;
+    background: #f3f3f3;
+    color: #111111;
+  }
+
+  .kp-prof-card .kp-prof-info {
+    align-self: center;
+  }
+
+  .kp-prof-card .kp-prof-info strong {
+    color: #111111;
+  }
+
+  .kp-prof-card .kp-prof-info small {
+    color: #747474;
+  }
+
+  .kp-prof-rating {
+    margin-top: 3px;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    color: #111111;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .kp-prof-rating small {
+    color: #777777 !important;
+    font-size: 10px !important;
+    font-weight: 700;
+  }
+
+  .kp-prof-profile-link {
+    width: fit-content;
+    margin-top: 4px;
+    padding: 0 0 2px;
+    border: 0;
+    border-bottom: 1px solid #111111;
+    background: transparent;
+    color: #111111;
+    font-size: 11px;
+    font-weight: 850;
+    cursor: pointer;
+  }
+
+  .kp-prof-card .kp-select {
+    min-width: 104px;
+    min-height: 38px;
+    border: 0;
+    border-radius: 12px;
+    background: #111111;
+    color: #ffffff;
+    box-shadow: none;
+    cursor: pointer;
+  }
+
+  .kp-pro-profile-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 180;
+    padding: 18px;
+    display: grid;
+    place-items: center;
+    background: rgba(0,0,0,.56);
+    backdrop-filter: blur(5px);
+  }
+
+  .kp-pro-profile-modal {
+    width: min(680px,100%);
+    max-height: calc(100vh - 36px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid #dedede;
+    border-radius: 26px;
+    background: #ffffff;
+    color: #111111;
+    box-shadow: 0 30px 80px rgba(0,0,0,.28);
+  }
+
+  .kp-pro-profile-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    min-height: 58px;
+    padding: 10px 14px 10px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid #eeeeee;
+    background: rgba(255,255,255,.97);
+    backdrop-filter: blur(12px);
+  }
+
+  .kp-pro-profile-topbar > span {
+    color: #111111;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: .25px;
+    text-transform: uppercase;
+  }
+
+  .kp-pro-profile-topbar button {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border: 1px solid #dddddd;
+    border-radius: 50%;
+    background: #ffffff;
+    color: #111111;
+    font-size: 25px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .kp-pro-profile-loading {
+    min-height: 260px;
+    padding: 32px 20px;
+    display: grid;
+    place-items: center;
+    color: #777777;
+    text-align: center;
+    font-size: 13px;
+  }
+
+  .kp-pro-profile-hero {
+    padding: 28px 22px 22px;
+    display: grid;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .kp-pro-profile-photo {
+    width: 150px;
+    height: 150px;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    border: 1px solid #dedede;
+    border-radius: 50%;
+    background: #f3f3f3;
+    color: #111111;
+    font-size: 48px;
+    font-weight: 950;
+  }
+
+  .kp-pro-profile-photo img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+  }
+
+  .kp-pro-profile-hero h2 {
+    margin: 15px 0 3px;
+    color: #111111;
+    font-size: 30px;
+    line-height: 1;
+    letter-spacing: -.7px;
+  }
+
+  .kp-pro-profile-hero > p {
+    margin: 0;
+    color: #555555;
+    font-size: 14px;
+  }
+
+  .kp-pro-profile-rating {
+    margin-top: 9px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #111111;
+  }
+
+  .kp-pro-profile-rating strong {
+    font-size: 15px;
+    font-weight: 900;
+  }
+
+  .kp-pro-profile-rating span {
+    color: #7b7b7b;
+    font-size: 11px;
+  }
+
+  .kp-pro-profile-no-rating {
+    margin-top: 9px;
+    color: #7a7a7a;
+    font-size: 11px;
+    font-weight: 750;
+  }
+
+  .kp-pro-profile-location {
+    margin-top: 8px;
+    color: #777777;
+    font-size: 11px;
+  }
+
+  .kp-pro-profile-tabs {
+    padding: 0 18px 16px;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    border-bottom: 1px solid #eeeeee;
+  }
+
+  .kp-pro-profile-tabs button {
+    min-height: 40px;
+    padding: 0 15px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid #dadada;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #222222;
+    font-size: 11px;
+    font-weight: 850;
+    cursor: pointer;
+  }
+
+  .kp-pro-profile-tabs button span {
+    min-width: 21px;
+    height: 21px;
+    padding: 0 6px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: #f0f0f0;
+    color: #444444;
+    font-size: 9px;
+  }
+
+  .kp-pro-profile-tabs button.active {
+    border-color: #111111;
+    background: #111111;
+    color: #ffffff;
+  }
+
+  .kp-pro-profile-tabs button.active span {
+    background: #ffffff;
+    color: #111111;
+  }
+
+  .kp-pro-profile-body {
+    padding: 22px;
+  }
+
+  .kp-pro-stats {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 10px;
+  }
+
+  .kp-pro-stats > div {
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid #e3e3e3;
+    border-radius: 15px;
+    background: #fafafa;
+  }
+
+  .kp-pro-stats span {
+    color: #555555;
+    font-size: 11px;
+    font-weight: 750;
+  }
+
+  .kp-pro-stats strong {
+    color: #111111;
+    font-size: 19px;
+  }
+
+  .kp-pro-about,
+  .kp-pro-languages {
+    margin-top: 24px;
+  }
+
+  .kp-pro-about h3,
+  .kp-pro-languages h3,
+  .kp-pro-portfolio h3 {
+    margin: 0 0 9px;
+    color: #111111;
+    font-size: 18px;
+  }
+
+  .kp-pro-about p {
+    margin: 0;
+    color: #444444;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+  .kp-pro-languages > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .kp-pro-languages span {
+    padding: 8px 11px;
+    border: 1px solid #dddddd;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #333333;
+    font-size: 10px;
+    font-weight: 750;
+  }
+
+  .kp-pro-tab-heading {
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .kp-pro-tab-heading h3 {
+    margin: 0;
+  }
+
+  .kp-pro-tab-heading > span {
+    min-width: 24px;
+    height: 24px;
+    padding: 0 7px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: #f0f0f0;
+    color: #333333;
+    font-size: 9px;
+    font-weight: 900;
+  }
+
+  .kp-pro-portfolio-grid {
+    display: grid;
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 8px;
+  }
+
+  .kp-pro-portfolio-grid figure {
+    position: relative;
+    min-width: 0;
+    margin: 0;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    border: 1px solid #e0e0e0;
+    border-radius: 14px;
+    background: #f3f3f3;
+  }
+
+  .kp-pro-portfolio-grid figure:first-child {
+    grid-column: span 2;
+    grid-row: span 2;
+  }
+
+  .kp-pro-portfolio-grid img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+  }
+
+  .kp-pro-portfolio-grid figcaption {
+    position: absolute;
+    left: 7px;
+    right: 7px;
+    bottom: 7px;
+    padding: 6px 8px;
+    overflow: hidden;
+    border-radius: 8px;
+    background: rgba(0,0,0,.68);
+    color: #ffffff;
+    font-size: 8px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kp-pro-empty {
+    padding: 30px 20px;
+    border: 1px dashed #d8d8d8;
+    border-radius: 17px;
+    background: #fafafa;
+    color: #777777;
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .kp-pro-review-score {
+    padding: 4px 0 18px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    border-bottom: 1px solid #eeeeee;
+  }
+
+  .kp-pro-review-score > strong {
+    color: #111111;
+    font-size: 42px;
+    line-height: 1;
+  }
+
+  .kp-pro-review-score > span {
+    color: #111111;
+    font-size: 24px;
+  }
+
+  .kp-pro-review-score > small {
+    margin-left: 3px;
+    color: #747474;
+    font-size: 10px;
+  }
+
+  .kp-pro-review-list {
+    margin-top: 14px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .kp-pro-review-card {
+    padding: 14px;
+    border: 1px solid #e1e1e1;
+    border-radius: 16px;
+    background: #ffffff;
+  }
+
+  .kp-pro-review-card > div:first-child {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .kp-pro-review-card > div:first-child strong {
+    color: #111111;
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+
+  .kp-pro-review-card > div:first-child small {
+    color: #888888;
+    font-size: 9px;
+  }
+
+  .kp-pro-review-card p {
+    margin: 9px 0;
+    color: #333333;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .kp-pro-review-card > span,
+  .kp-pro-review-card > em {
+    display: block;
+    margin-top: 5px;
+    color: #777777;
+    font-size: 9px;
+    font-style: normal;
+  }
+
+  .kp-pro-review-card > em {
+    color: #111111;
+    font-weight: 750;
+  }
+
+  .kp-pro-profile-action {
+    position: sticky;
+    bottom: 0;
+    z-index: 8;
+    padding: 12px 18px 16px;
+    border-top: 1px solid #eeeeee;
+    background: rgba(255,255,255,.97);
+    backdrop-filter: blur(12px);
+  }
+
+  .kp-pro-profile-action button {
+    width: 100%;
+    min-height: 52px;
+    border: 0;
+    border-radius: 14px;
+    background: #111111;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 950;
+    letter-spacing: .35px;
+    cursor: pointer;
+  }
+
+  @media (max-width: 520px) {
+    .kp-prof-card {
+      grid-template-columns: 54px minmax(0,1fr) auto;
+      align-items: center;
+    }
+
+    .kp-prof-card .kp-select {
+      grid-column: auto;
+      width: auto;
+      min-width: 92px;
+    }
+
+    .kp-pro-profile-overlay {
+      padding: 0;
+      align-items: end;
+    }
+
+    .kp-pro-profile-modal {
+      width: 100%;
+      max-height: 94vh;
+      border-radius: 24px 24px 0 0;
+      border-bottom: 0;
+    }
+
+    .kp-pro-profile-photo {
+      width: 126px;
+      height: 126px;
+    }
+
+    .kp-pro-profile-hero h2 {
+      font-size: 27px;
+    }
+
+    .kp-pro-profile-tabs {
+      padding-left: 12px;
+      padding-right: 12px;
+      overflow-x: auto;
+      justify-content: flex-start;
+      scrollbar-width: none;
+    }
+
+    .kp-pro-profile-tabs button {
+      flex: 0 0 auto;
+    }
+
+    .kp-pro-profile-body {
+      padding: 18px 15px 22px;
+    }
+
+    .kp-pro-stats {
+      grid-template-columns: 1fr;
+    }
+
+    .kp-pro-portfolio-grid {
+      gap: 6px;
+    }
+  }
+
+  .kp-dark .kp-pro-profile-modal,
+  .kp-dark .kp-pro-profile-topbar,
+  .kp-dark .kp-pro-profile-action,
+  .kp-dark .kp-pro-profile-tabs button,
+  .kp-dark .kp-pro-review-card,
+  .kp-dark .kp-pro-languages span {
+    background: #111111;
+    color: #ffffff;
+    border-color: #333333;
+  }
+
+  .kp-dark .kp-pro-profile-hero h2,
+  .kp-dark .kp-pro-profile-topbar > span,
+  .kp-dark .kp-pro-stats strong,
+  .kp-dark .kp-pro-about h3,
+  .kp-dark .kp-pro-languages h3,
+  .kp-dark .kp-pro-portfolio h3,
+  .kp-dark .kp-pro-review-score > strong,
+  .kp-dark .kp-pro-review-score > span,
+  .kp-dark .kp-pro-review-card p,
+  .kp-dark .kp-pro-review-card > em {
+    color: #ffffff;
+  }
+
+  .kp-dark .kp-pro-stats > div,
+  .kp-dark .kp-pro-empty {
+    border-color: #333333;
+    background: #171717;
+  }
+
+  .kp-dark .kp-pro-profile-tabs button.active,
+  .kp-dark .kp-pro-profile-action button,
+  .kp-dark .kp-prof-card .kp-select {
+    background: #ffffff;
+    color: #111111;
+  }
+
 
 `;
