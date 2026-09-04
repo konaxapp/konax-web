@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V13-PERFIL-PROFESIONAL";
+const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V14-PERFIL-INTERESES-RESENAS";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -170,6 +170,41 @@ function formatoFechaResena(valor) {
     month: "short",
     year: "numeric",
   }).format(fecha);
+}
+
+function inicialesResena(nombre) {
+  const partes = String(nombre || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!partes.length) return "C";
+
+  if (partes.length === 1) {
+    return partes[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${partes[0]?.[0] || ""}${
+    partes[partes.length - 1]?.[0] || ""
+  }`.toUpperCase();
+}
+
+function haceCuantoResena(valor) {
+  if (!valor) return "";
+
+  const fecha = new Date(valor);
+
+  if (Number.isNaN(fecha.getTime())) return "";
+
+  const dias = Math.floor(
+    (Date.now() - fecha.getTime()) / 86400000
+  );
+
+  if (dias <= 0) return "Hoy";
+  if (dias === 1) return "Hace 1 día";
+  if (dias < 30) return `Hace ${dias} días`;
+
+  return formatoFechaResena(valor);
 }
 
 function formatearHoraLocalPublica(valor) {
@@ -3110,6 +3145,26 @@ export default function ReservaPublicaAutoservicioPage() {
                               </div>
                             </section>
                           )}
+
+                        {Array.isArray(
+                          perfilProfesionalDetalle?.intereses
+                        ) &&
+                          perfilProfesionalDetalle.intereses.length >
+                            0 && (
+                            <section className="kp-pro-interests">
+                              <h3>Intereses</h3>
+
+                              <div>
+                                {perfilProfesionalDetalle.intereses.map(
+                                  (interes) => (
+                                    <span key={interes}>
+                                      {interes}
+                                    </span>
+                                  )
+                                )}
+                              </div>
+                            </section>
+                          )}
                       </>
                     )}
 
@@ -3199,33 +3254,88 @@ export default function ReservaPublicaAutoservicioPage() {
                               ).map((resena) => (
                                 <article
                                   key={resena.id}
-                                  className="kp-pro-review-card"
+                                  className="kp-pro-review-card kp-pro-review-card-v14"
                                 >
-                                  <div>
-                                    <strong>
-                                      {"★".repeat(
-                                        Number(
-                                          resena.calificacion || 0
-                                        )
+                                  <div className="kp-pro-review-client">
+                                    <span className="kp-pro-review-avatar">
+                                      {inicialesResena(
+                                        resena.cliente_nombre ||
+                                          "Cliente"
                                       )}
-                                    </strong>
+                                    </span>
 
-                                    <small>
-                                      {formatoFechaResena(
-                                        resena.fecha
-                                      )}
-                                    </small>
+                                    <div>
+                                      <strong>
+                                        {resena.cliente_nombre ||
+                                          "Cliente"}
+                                      </strong>
+
+                                      <span className="kp-pro-review-stars">
+                                        {"★".repeat(
+                                          Math.max(
+                                            0,
+                                            Math.min(
+                                              5,
+                                              Number(
+                                                resena.calificacion ||
+                                                  0
+                                              )
+                                            )
+                                          )
+                                        )}
+                                        <i>
+                                          {"★".repeat(
+                                            Math.max(
+                                              0,
+                                              5 -
+                                                Math.min(
+                                                  5,
+                                                  Number(
+                                                    resena.calificacion ||
+                                                      0
+                                                  )
+                                                )
+                                            )
+                                          )}
+                                        </i>
+                                      </span>
+                                    </div>
                                   </div>
 
                                   {resena.comentario && (
                                     <p>{resena.comentario}</p>
                                   )}
 
-                                  {resena.servicio && (
+                                  <div className="kp-pro-review-meta-v14">
                                     <span>
-                                      {resena.servicio}
+                                      {haceCuantoResena(
+                                        resena.fecha
+                                      )}
                                     </span>
-                                  )}
+
+                                    {Number(
+                                      resena.total_servicios_cliente ||
+                                        0
+                                    ) > 0 && (
+                                      <span>
+                                        ·{" "}
+                                        {formatoEntero(
+                                          resena.total_servicios_cliente
+                                        )}{" "}
+                                        {Number(
+                                          resena.total_servicios_cliente
+                                        ) === 1
+                                          ? "servicio"
+                                          : "servicios"}
+                                      </span>
+                                    )}
+
+                                    {resena.servicio && (
+                                      <span>
+                                        · {resena.servicio}
+                                      </span>
+                                    )}
+                                  </div>
 
                                   <em>
                                     ✓ Cita verificada por KONAX
@@ -7346,5 +7456,134 @@ const CSS = `
     color: #111111;
   }
 
+
+
+  /* =========================================================
+     PERFIL PROFESIONAL V14 · INTERESES + RESEÑAS CON CLIENTE
+     ========================================================= */
+
+  .kp-pro-interests {
+    margin-top: 22px;
+  }
+
+  .kp-pro-interests h3 {
+    margin: 0 0 10px;
+    color: #111111;
+    font-size: 18px;
+  }
+
+  .kp-pro-interests > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .kp-pro-interests span {
+    padding: 7px 11px;
+    border: 1px solid #dddddd;
+    border-radius: 999px;
+    background: #f7f7f7;
+    color: #333333;
+    font-size: 11px;
+    font-weight: 750;
+  }
+
+  .kp-pro-review-card-v14 {
+    padding: 18px 0;
+    border: 0;
+    border-top: 1px solid #ececec;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .kp-pro-review-card-v14:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .kp-pro-review-client {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 11px !important;
+  }
+
+  .kp-pro-review-avatar {
+    width: 48px;
+    height: 48px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #f0f0f0;
+    color: #4b5563;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .kp-pro-review-client > div {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+
+  .kp-pro-review-client > div > strong {
+    color: #111111 !important;
+    font-size: 14px !important;
+    letter-spacing: 0 !important;
+  }
+
+  .kp-pro-review-stars {
+    color: #111111;
+    font-size: 13px;
+    letter-spacing: 1px;
+  }
+
+  .kp-pro-review-stars i {
+    color: #d7d7d7;
+    font-style: normal;
+  }
+
+  .kp-pro-review-card-v14 > p {
+    margin: 12px 0 7px;
+    color: #333333;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .kp-pro-review-meta-v14 {
+    display: flex !important;
+    justify-content: flex-start !important;
+    flex-wrap: wrap;
+    gap: 5px;
+    color: #8a8a8a;
+    font-size: 9.5px;
+  }
+
+  .kp-pro-review-card-v14 > em {
+    display: block;
+    margin-top: 8px;
+    color: #555555;
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 800;
+  }
+
+  .kp-dark .kp-pro-interests h3,
+  .kp-dark .kp-pro-review-client > div > strong,
+  .kp-dark .kp-pro-review-card-v14 > p {
+    color: #ffffff !important;
+  }
+
+  .kp-dark .kp-pro-interests span,
+  .kp-dark .kp-pro-review-avatar {
+    border-color: #353535;
+    background: #1c1c1c;
+    color: #eeeeee;
+  }
+
+  .kp-dark .kp-pro-review-card-v14 {
+    border-top-color: #333333;
+  }
 
 `;
