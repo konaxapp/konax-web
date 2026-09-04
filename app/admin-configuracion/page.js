@@ -5,7 +5,7 @@ import { supabase } from "../../lib/supabase";
 
 // KONAX Configuración
 // Perfil empresarial + Gimnasio + Belleza + KONAX Agenda $10
-// Version 2026.09.03-AGENDA-CONFIG-3-HORARIO-MAPS
+// Version 2026.09.03-AGENDA-CONFIG-4-PERFIL-PORTAFOLIO-RESENAS
 
 const PLAN_INICIAL = {
   nombre: "",
@@ -27,6 +27,13 @@ const PROFESIONAL_INICIAL = {
   foto_url: "",
   servicio_ids: [],
   activo: true,
+};
+
+const PERFIL_PROFESIONAL_PUBLICO_INICIAL = {
+  bio: "",
+  idiomasTexto: "",
+  interesesTexto: "",
+  visible: true,
 };
 
 const SERVICIO_INICIAL = {
@@ -153,6 +160,78 @@ function nuevoProfesional() {
   return { ...PROFESIONAL_INICIAL, servicio_ids: [] };
 }
 
+function nuevoPerfilProfesionalPublico() {
+  return { ...PERFIL_PROFESIONAL_PUBLICO_INICIAL };
+}
+
+function arrayDesdeTexto(valor) {
+  return String(valor || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+}
+
+function textoDesdeArray(valor) {
+  return Array.isArray(valor)
+    ? valor.filter(Boolean).join(", ")
+    : "";
+}
+
+function iniciales(nombre) {
+  const partes = String(nombre || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!partes.length) return "P";
+
+  if (partes.length === 1) {
+    return partes[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${partes[0]?.[0] || ""}${
+    partes[partes.length - 1]?.[0] || ""
+  }`.toUpperCase();
+}
+
+function formatoEntero(valor) {
+  return new Intl.NumberFormat("es-PA").format(
+    Number(valor || 0)
+  );
+}
+
+function formatoFechaResena(valor) {
+  if (!valor) return "";
+
+  const fecha = new Date(valor);
+
+  if (Number.isNaN(fecha.getTime())) return "";
+
+  return new Intl.DateTimeFormat("es-PA", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(fecha);
+}
+
+function haceCuanto(valor) {
+  if (!valor) return "";
+
+  const fecha = new Date(valor);
+
+  if (Number.isNaN(fecha.getTime())) return "";
+
+  const diferencia = Date.now() - fecha.getTime();
+  const dias = Math.floor(diferencia / 86400000);
+
+  if (dias <= 0) return "Hoy";
+  if (dias === 1) return "Hace 1 día";
+  if (dias < 30) return `Hace ${dias} días`;
+
+  return formatoFechaResena(valor);
+}
+
 function fechaHoy() {
   const ahora = new Date();
   const y = ahora.getFullYear();
@@ -192,6 +271,21 @@ export default function AdminConfiguracion() {
   const [subiendoFotoProfesional, setSubiendoFotoProfesional] = useState(false);
   const [profesionalEditandoId, setProfesionalEditandoId] = useState("");
   const [formProfesional, setFormProfesional] = useState(nuevoProfesional());
+
+  const [tabProfesional, setTabProfesional] = useState("perfil");
+  const [perfilProfesionalPublico, setPerfilProfesionalPublico] =
+    useState(nuevoPerfilProfesionalPublico());
+  const [perfilProfesionalPortal, setPerfilProfesionalPortal] =
+    useState(null);
+  const [portafolioProfesional, setPortafolioProfesional] =
+    useState([]);
+  const [cargandoDetalleProfesional, setCargandoDetalleProfesional] =
+    useState(false);
+  const [archivoPortafolio, setArchivoPortafolio] = useState(null);
+  const [descripcionPortafolio, setDescripcionPortafolio] =
+    useState("");
+  const [subiendoPortafolio, setSubiendoPortafolio] =
+    useState(false);
 
   // KONAX AGENDA $10
   const [serviciosAgenda, setServiciosAgenda] = useState([]);
@@ -1034,6 +1128,13 @@ export default function AdminConfiguracion() {
     setFormProfesional((p) => ({ ...p, [campo]: valor }));
   }
 
+  function actualizarPerfilProfesionalPublico(campo, valor) {
+    setPerfilProfesionalPublico((p) => ({
+      ...p,
+      [campo]: valor,
+    }));
+  }
+
   async function guardarPerfil() {
     if (!usuario?.id) return;
 
@@ -1215,9 +1316,115 @@ export default function AdminConfiguracion() {
   function limpiarProfesional() {
     setProfesionalEditandoId("");
     setFormProfesional(nuevoProfesional());
+    setPerfilProfesionalPublico(
+      nuevoPerfilProfesionalPublico()
+    );
+    setPerfilProfesionalPortal(null);
+    setPortafolioProfesional([]);
+    setArchivoPortafolio(null);
+    setDescripcionPortafolio("");
+    setTabProfesional("perfil");
   }
 
-  function editarProfesional(prof) {
+  async function cargarDetalleProfesional(
+    profesionalId,
+    empresaActual = empresa
+  ) {
+    const eId = empresaId();
+
+    if (!eId || !profesionalId) return;
+
+    setCargandoDetalleProfesional(true);
+
+    try {
+      const [perfilRespuesta, portafolioRespuesta] =
+        await Promise.all([
+          supabase
+            .from("profesionales_perfil_publico")
+            .select("*")
+            .eq("empresa_id", eId)
+            .eq("profesional_id", profesionalId)
+            .maybeSingle(),
+
+          supabase
+            .from("profesionales_portafolio")
+            .select("*")
+            .eq("empresa_id", eId)
+            .eq("profesional_id", profesionalId)
+            .order("orden", { ascending: true })
+            .order("created_at", { ascending: false }),
+        ]);
+
+      if (perfilRespuesta.error) {
+        console.warn(
+          "No se pudo cargar el perfil público:",
+          perfilRespuesta.error
+        );
+      }
+
+      const perfilDb = perfilRespuesta.data || null;
+
+      setPerfilProfesionalPublico({
+        bio: perfilDb?.bio || "",
+        idiomasTexto: textoDesdeArray(
+          perfilDb?.idiomas
+        ),
+        interesesTexto: textoDesdeArray(
+          perfilDb?.intereses
+        ),
+        visible: perfilDb?.visible !== false,
+      });
+
+      if (portafolioRespuesta.error) {
+        console.warn(
+          "No se pudo cargar el portafolio:",
+          portafolioRespuesta.error
+        );
+        setPortafolioProfesional([]);
+      } else {
+        setPortafolioProfesional(
+          Array.isArray(portafolioRespuesta.data)
+            ? portafolioRespuesta.data
+            : []
+        );
+      }
+
+      const slug =
+        empresaActual?.agenda_slug ||
+        portalConfig?.slug ||
+        "";
+
+      if (slug) {
+        const { data, error: rpcError } =
+          await supabase.rpc(
+            "obtener_perfil_profesional_publico",
+            {
+              p_slug: slug,
+              p_profesional_id: profesionalId,
+            }
+          );
+
+        if (!rpcError && data?.ok) {
+          setPerfilProfesionalPortal(data);
+        } else {
+          setPerfilProfesionalPortal(null);
+
+          if (rpcError) {
+            console.warn(
+              "No se pudo cargar el perfil público del profesional:",
+              rpcError
+            );
+          }
+        }
+      } else {
+        setPerfilProfesionalPortal(null);
+      }
+    } finally {
+      setCargandoDetalleProfesional(false);
+    }
+  }
+
+  async function editarProfesional(prof) {
     setProfesionalEditandoId(prof.id);
 
     setFormProfesional({
@@ -1232,8 +1439,19 @@ export default function AdminConfiguracion() {
       activo: prof.activo !== false,
     });
 
+    setPerfilProfesionalPublico(
+      nuevoPerfilProfesionalPublico()
+    );
+    setPerfilProfesionalPortal(null);
+    setPortafolioProfesional([]);
+    setArchivoPortafolio(null);
+    setDescripcionPortafolio("");
+    setTabProfesional("perfil");
+
     setSeccion("profesionales");
     window.scrollTo({ top: 0, behavior: "smooth" });
+
+    await cargarDetalleProfesional(prof.id);
   }
 
   function alternarServicio(id) {
@@ -1320,13 +1538,17 @@ export default function AdminConfiguracion() {
       empresa_id: String(eId),
       nombre,
       especialidad:
-        String(formProfesional.especialidad || "").trim() || null,
+        String(formProfesional.especialidad || "").trim() ||
+        null,
       telefono:
-        String(formProfesional.telefono || "").trim() || null,
+        String(formProfesional.telefono || "").trim() ||
+        null,
       correo:
-        String(formProfesional.correo || "").trim() || null,
+        String(formProfesional.correo || "").trim() ||
+        null,
       foto_url:
-        String(formProfesional.foto_url || "").trim() || null,
+        String(formProfesional.foto_url || "").trim() ||
+        null,
       servicio_ids: formProfesional.servicio_ids.map(String),
       activo: Boolean(formProfesional.activo),
       updated_at: new Date().toISOString(),
@@ -1334,34 +1556,294 @@ export default function AdminConfiguracion() {
 
     setGuardandoProfesional(true);
 
-    const respuesta = profesionalEditandoId
-      ? await supabase
+    try {
+      let idFinal = profesionalEditandoId;
+
+      if (profesionalEditandoId) {
+        const respuesta = await supabase
           .from("profesionales")
           .update(payload)
           .eq("id", profesionalEditandoId)
-          .eq("empresa_id", String(eId))
-      : await supabase
+          .eq("empresa_id", String(eId));
+
+        if (respuesta.error) {
+          throw respuesta.error;
+        }
+      } else {
+        const respuesta = await supabase
           .from("profesionales")
-          .insert([payload]);
+          .insert([payload])
+          .select("id")
+          .single();
 
-    setGuardandoProfesional(false);
+        if (respuesta.error) {
+          throw respuesta.error;
+        }
 
-    if (respuesta.error) {
+        idFinal = respuesta.data?.id || "";
+
+        if (!idFinal) {
+          throw new Error(
+            "No se pudo obtener el ID del profesional."
+          );
+        }
+
+        setProfesionalEditandoId(idFinal);
+      }
+
+      const perfilPayload = {
+        profesional_id: idFinal,
+        empresa_id: eId,
+        bio:
+          String(
+            perfilProfesionalPublico.bio || ""
+          ).trim() || null,
+        idiomas: arrayDesdeTexto(
+          perfilProfesionalPublico.idiomasTexto
+        ),
+        intereses: arrayDesdeTexto(
+          perfilProfesionalPublico.interesesTexto
+        ),
+        visible: Boolean(
+          perfilProfesionalPublico.visible
+        ),
+        updated_at: new Date().toISOString(),
+      };
+
+      const perfilRespuesta = await supabase
+        .from("profesionales_perfil_publico")
+        .upsert(perfilPayload, {
+          onConflict: "profesional_id",
+        });
+
+      if (perfilRespuesta.error) {
+        throw perfilRespuesta.error;
+      }
+
+      alert(
+        profesionalEditandoId
+          ? "Perfil profesional actualizado."
+          : "Perfil profesional creado. Ya puedes cargar su portafolio."
+      );
+
+      await cargarProfesionales(eId);
+      await cargarDetalleProfesional(idFinal);
+
+      setTabProfesional("perfil");
+    } catch (error) {
       alert(
         "No se pudo guardar el profesional: " +
-          respuesta.error.message
+          (error?.message || "Error inesperado")
+      );
+    } finally {
+      setGuardandoProfesional(false);
+    }
+  }
+
+  async function subirImagenPortafolio() {
+    const eId = empresaId();
+
+    if (!eId || !profesionalEditandoId) {
+      alert(
+        "Primero guarde el profesional antes de agregar el portafolio."
       );
       return;
     }
 
-    alert(
+    if (!archivoPortafolio) {
+      alert("Seleccione una imagen.");
+      return;
+    }
+
+    if (!archivoPortafolio.type?.startsWith("image/")) {
+      alert("El archivo debe ser una imagen.");
+      return;
+    }
+
+    if (archivoPortafolio.size > 8 * 1024 * 1024) {
+      alert("La imagen no puede pesar más de 8 MB.");
+      return;
+    }
+
+    setSubiendoPortafolio(true);
+
+    try {
+      const ext = extensionArchivo(archivoPortafolio);
+
+      const ruta =
+        `empresas/${eId}/portafolio/` +
+        `${profesionalEditandoId}/` +
+        `${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}.${ext}`;
+
+      const up = await supabase.storage
+        .from("profesionales")
+        .upload(ruta, archivoPortafolio, {
+          upsert: false,
+          cacheControl: "3600",
+          contentType:
+            archivoPortafolio.type || undefined,
+        });
+
+      if (up.error) throw up.error;
+
+      const { data } = supabase.storage
+        .from("profesionales")
+        .getPublicUrl(ruta);
+
+      const { error } = await supabase
+        .from("profesionales_portafolio")
+        .insert([
+          {
+            empresa_id: eId,
+            profesional_id: profesionalEditandoId,
+            imagen_url: data.publicUrl,
+            descripcion:
+              String(
+                descripcionPortafolio || ""
+              ).trim() || null,
+            orden: portafolioProfesional.length,
+            activo: true,
+          },
+        ]);
+
+      if (error) throw error;
+
+      setArchivoPortafolio(null);
+      setDescripcionPortafolio("");
+
+      const input =
+        document.getElementById(
+          "archivo-portafolio-profesional"
+        );
+
+      if (input) input.value = "";
+
+      await cargarDetalleProfesional(
+        profesionalEditandoId
+      );
+
+      alert("Trabajo agregado al portafolio.");
+    } catch (error) {
+      alert(
+        "No se pudo agregar al portafolio: " +
+          (error?.message || "Error inesperado")
+      );
+    } finally {
+      setSubiendoPortafolio(false);
+    }
+  }
+
+  async function cambiarVisibilidadPortafolio(item) {
+    if (!item?.id) return;
+
+    const { error } = await supabase
+      .from("profesionales_portafolio")
+      .update({
+        activo: !Boolean(item.activo),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", item.id)
+      .eq("empresa_id", empresaId());
+
+    if (error) {
+      alert(
+        "No se pudo cambiar la visibilidad: " +
+          error.message
+      );
+      return;
+    }
+
+    await cargarDetalleProfesional(
       profesionalEditandoId
-        ? "Perfil profesional actualizado."
-        : "Perfil profesional creado."
+    );
+  }
+
+  async function cambiarOrdenPortafolio(
+    item,
+    movimiento
+  ) {
+    if (!item?.id) return;
+
+    const ordenSiguiente = Math.max(
+      0,
+      Number(item.orden || 0) + movimiento
     );
 
-    limpiarProfesional();
-    await cargarProfesionales(eId);
+    const { error } = await supabase
+      .from("profesionales_portafolio")
+      .update({
+        orden: ordenSiguiente,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", item.id)
+      .eq("empresa_id", empresaId());
+
+    if (error) {
+      alert(
+        "No se pudo cambiar el orden: " +
+          error.message
+      );
+      return;
+    }
+
+    await cargarDetalleProfesional(
+      profesionalEditandoId
+    );
+  }
+
+  async function eliminarPortafolio(item) {
+    if (!item?.id) return;
+
+    if (
+      !window.confirm(
+        "¿Desea eliminar esta imagen del portafolio?"
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("profesionales_portafolio")
+        .delete()
+        .eq("id", item.id)
+        .eq("empresa_id", empresaId());
+
+      if (error) throw error;
+
+      const url = String(item.imagen_url || "");
+      const marcador =
+        "/storage/v1/object/public/profesionales/";
+
+      const posicion = url.indexOf(marcador);
+
+      if (posicion >= 0) {
+        const ruta = decodeURIComponent(
+          url
+            .slice(posicion + marcador.length)
+            .split("?")[0]
+        );
+
+        if (ruta) {
+          await supabase.storage
+            .from("profesionales")
+            .remove([ruta]);
+        }
+      }
+
+      await cargarDetalleProfesional(
+        profesionalEditandoId
+      );
+
+      alert("Imagen eliminada del portafolio.");
+    } catch (error) {
+      alert(
+        "No se pudo eliminar la imagen: " +
+          (error?.message || "Error inesperado")
+      );
+    }
   }
 
   async function cambiarEstadoProfesional(prof) {
@@ -1383,8 +1865,21 @@ export default function AdminConfiguracion() {
     setGuardandoProfesional(false);
 
     if (error) {
-      alert("No se pudo cambiar el estado: " + error.message);
+      alert(
+        "No se pudo cambiar el estado: " +
+          error.message
+      );
       return;
+    }
+
+    if (
+      String(prof.id) ===
+      String(profesionalEditandoId)
+    ) {
+      setFormProfesional((p) => ({
+        ...p,
+        activo: !Boolean(prof.activo),
+      }));
     }
 
     await cargarProfesionales(eId);
@@ -2348,7 +2843,8 @@ export default function AdminConfiguracion() {
             )}
 
             {/* =====================================================
-                PROFESIONALES · Belleza completa y Agenda $10
+                PROFESIONALES · Perfil + Portafolio + Reseñas
+                Se mantiene dentro de Configuración.
             ====================================================== */}
 
             {seccion === "profesionales" &&
@@ -2360,7 +2856,11 @@ export default function AdminConfiguracion() {
                         ? "Editar profesional"
                         : "Nuevo profesional"
                     }
-                    descripcion="Configura quién atiende, su foto y los servicios que puede realizar."
+                    descripcion={
+                      profesionalEditandoId
+                        ? "Administra su perfil público, portafolio, reseñas y servicios."
+                        : "Configura quién atiende, su foto y los servicios que puede realizar."
+                    }
                     icono="👥"
                   >
                     <div
@@ -2388,14 +2888,17 @@ export default function AdminConfiguracion() {
                         )}
                       </div>
 
-                      <div>
+                      <div style={{ minWidth: 0 }}>
                         <strong style={{ fontSize: 17 }}>
-                          Foto del profesional
+                          {formProfesional.nombre ||
+                            "Foto del profesional"}
                         </strong>
 
                         <p style={S.muted}>
-                          La foto ayudará al cliente a
-                          identificar quién lo atenderá.
+                          {profesionalEditandoId
+                            ? formProfesional.especialidad ||
+                              "Configura cómo aparecerá en el portal de reservas."
+                            : "La foto ayudará al cliente a identificar quién lo atenderá."}
                         </p>
 
                         <label style={S.greenLabel}>
@@ -2419,163 +2922,883 @@ export default function AdminConfiguracion() {
                       </div>
                     </div>
 
-                    <div
-                      style={S.twoCols}
-                      className="two-cols"
-                    >
-                      <Campo label="Nombre *">
-                        <input
-                          style={S.input}
-                          value={
-                            formProfesional.nombre
-                          }
-                          onChange={(e) =>
-                            actualizarProfesional(
-                              "nombre",
-                              e.target.value
-                            )
-                          }
-                          placeholder="Ej. Ana López"
-                        />
-                      </Campo>
+                    {profesionalEditandoId && (
+                      <div
+                        className="professional-tabs"
+                        style={S.profTabs}
+                      >
+                        {[
+                          ["perfil", "Perfil", null],
+                          [
+                            "portafolio",
+                            "Portafolio",
+                            portafolioProfesional.length,
+                          ],
+                          [
+                            "resenas",
+                            "Reseñas",
+                            Number(
+                              perfilProfesionalPortal?.total_resenas ||
+                                0
+                            ),
+                          ],
+                        ].map(
+                          ([
+                            codigo,
+                            texto,
+                            cantidad,
+                          ]) => (
+                            <button
+                              key={codigo}
+                              type="button"
+                              style={
+                                tabProfesional === codigo
+                                  ? S.profTabActive
+                                  : S.profTab
+                              }
+                              onClick={() =>
+                                setTabProfesional(
+                                  codigo
+                                )
+                              }
+                            >
+                              <span>{texto}</span>
 
-                      <Campo label="Especialidad">
-                        <input
-                          style={S.input}
-                          value={
-                            formProfesional.especialidad
-                          }
-                          onChange={(e) =>
-                            actualizarProfesional(
-                              "especialidad",
-                              e.target.value
-                            )
-                          }
-                          placeholder="Ej. Estilista / Barbero"
-                        />
-                      </Campo>
-
-                      <Campo label="Teléfono">
-                        <input
-                          style={S.input}
-                          value={
-                            formProfesional.telefono
-                          }
-                          onChange={(e) =>
-                            actualizarProfesional(
-                              "telefono",
-                              e.target.value
-                            )
-                          }
-                        />
-                      </Campo>
-
-                      <Campo label="Correo">
-                        <input
-                          style={S.input}
-                          type="email"
-                          value={
-                            formProfesional.correo
-                          }
-                          onChange={(e) =>
-                            actualizarProfesional(
-                              "correo",
-                              e.target.value
-                            )
-                          }
-                        />
-                      </Campo>
-
-                      <Campo label="Estado">
-                        <select
-                          style={S.input}
-                          value={
-                            formProfesional.activo
-                              ? "Activo"
-                              : "Inactivo"
-                          }
-                          onChange={(e) =>
-                            actualizarProfesional(
-                              "activo",
-                              e.target.value ===
-                                "Activo"
-                            )
-                          }
-                        >
-                          <option>Activo</option>
-                          <option>Inactivo</option>
-                        </select>
-                      </Campo>
-                    </div>
-
-                    <Campo label="Servicios que realiza">
-                      {serviciosSalon.length === 0 ? (
-                        <div style={S.empty}>
-                          Primero crea por lo menos
-                          un servicio.
-                        </div>
-                      ) : (
-                        <div className="service-grid">
-                          {serviciosSalon.map(
-                            (servicio) => {
-                              const activo =
-                                formProfesional.servicio_ids.includes(
-                                  String(
-                                    servicio.id
-                                  )
-                                );
-
-                              return (
-                                <button
-                                  key={servicio.id}
-                                  type="button"
+                              {cantidad !== null && (
+                                <b
                                   style={
-                                    activo
-                                      ? S.serviceActive
-                                      : S.service
-                                  }
-                                  onClick={() =>
-                                    alternarServicio(
-                                      servicio.id
-                                    )
+                                    tabProfesional ===
+                                    codigo
+                                      ? S.profTabCountActive
+                                      : S.profTabCount
                                   }
                                 >
-                                  {activo
-                                    ? "✓"
-                                    : "+"}{" "}
-                                  {servicio.nombre}
-                                </button>
-                              );
+                                  {formatoEntero(
+                                    cantidad
+                                  )}
+                                </b>
+                              )}
+                            </button>
+                          )
+                        )}
+                      </div>
+                    )}
+
+                    {cargandoDetalleProfesional ? (
+                      <div style={S.empty}>
+                        Cargando perfil profesional...
+                      </div>
+                    ) : tabProfesional === "perfil" ? (
+                      <>
+                        <div
+                          style={S.twoCols}
+                          className="two-cols"
+                        >
+                          <Campo label="Nombre *">
+                            <input
+                              style={S.input}
+                              value={
+                                formProfesional.nombre
+                              }
+                              onChange={(e) =>
+                                actualizarProfesional(
+                                  "nombre",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Ej. Ana López"
+                            />
+                          </Campo>
+
+                          <Campo label="Especialidad">
+                            <input
+                              style={S.input}
+                              value={
+                                formProfesional.especialidad
+                              }
+                              onChange={(e) =>
+                                actualizarProfesional(
+                                  "especialidad",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Ej. Estilista / Barbero"
+                            />
+                          </Campo>
+
+                          <Campo label="Teléfono">
+                            <input
+                              style={S.input}
+                              value={
+                                formProfesional.telefono
+                              }
+                              onChange={(e) =>
+                                actualizarProfesional(
+                                  "telefono",
+                                  e.target.value
+                                )
+                              }
+                            />
+                          </Campo>
+
+                          <Campo label="Correo">
+                            <input
+                              style={S.input}
+                              type="email"
+                              value={
+                                formProfesional.correo
+                              }
+                              onChange={(e) =>
+                                actualizarProfesional(
+                                  "correo",
+                                  e.target.value
+                                )
+                              }
+                            />
+                          </Campo>
+
+                          <Campo label="Estado">
+                            <select
+                              style={S.input}
+                              value={
+                                formProfesional.activo
+                                  ? "Activo"
+                                  : "Inactivo"
+                              }
+                              onChange={(e) =>
+                                actualizarProfesional(
+                                  "activo",
+                                  e.target.value ===
+                                    "Activo"
+                                )
+                              }
+                            >
+                              <option>Activo</option>
+                              <option>Inactivo</option>
+                            </select>
+                          </Campo>
+
+                          <Campo label="Visible en el portal">
+                            <select
+                              style={S.input}
+                              value={
+                                perfilProfesionalPublico.visible
+                                  ? "Visible"
+                                  : "Oculto"
+                              }
+                              onChange={(e) =>
+                                actualizarPerfilProfesionalPublico(
+                                  "visible",
+                                  e.target.value ===
+                                    "Visible"
+                                )
+                              }
+                            >
+                              <option>Visible</option>
+                              <option>Oculto</option>
+                            </select>
+                          </Campo>
+                        </div>
+
+                        <div
+                          style={S.publicProfileBox}
+                          className="professional-public-box"
+                        >
+                          <div
+                            style={
+                              S.publicProfileHead
                             }
+                          >
+                            <div>
+                              <span
+                                style={
+                                  S.publicProfileEyebrow
+                                }
+                              >
+                                PERFIL PÚBLICO
+                              </span>
+
+                              <h3
+                                style={
+                                  S.publicProfileTitle
+                                }
+                              >
+                                Acerca de
+                              </h3>
+
+                              <p style={S.muted}>
+                                Esta información aparece
+                                cuando el cliente toca
+                                “Ver perfil”.
+                              </p>
+                            </div>
+
+                            <span
+                              style={
+                                perfilProfesionalPublico.visible
+                                  ? S.publicVisible
+                                  : S.publicHidden
+                              }
+                            >
+                              {perfilProfesionalPublico.visible
+                                ? "Visible"
+                                : "Oculto"}
+                            </span>
+                          </div>
+
+                          <Campo label="Biografía / Acerca de">
+                            <textarea
+                              style={S.textarea}
+                              value={
+                                perfilProfesionalPublico.bio
+                              }
+                              onChange={(e) =>
+                                actualizarPerfilProfesionalPublico(
+                                  "bio",
+                                  e.target.value
+                                )
+                              }
+                              maxLength={1200}
+                              placeholder="Ej. Barbero profesional con experiencia en fades, cortes clásicos y arreglos de barba. Mi prioridad es brindar un servicio preciso y una buena experiencia."
+                            />
+                          </Campo>
+
+                          <div
+                            style={S.twoCols}
+                            className="two-cols"
+                          >
+                            <Campo label="Idiomas">
+                              <input
+                                style={S.input}
+                                value={
+                                  perfilProfesionalPublico.idiomasTexto
+                                }
+                                onChange={(e) =>
+                                  actualizarPerfilProfesionalPublico(
+                                    "idiomasTexto",
+                                    e.target.value
+                                  )
+                                }
+                                placeholder="Español, Inglés"
+                              />
+
+                              <p style={S.fieldHelp}>
+                                Sepáralos con comas.
+                              </p>
+                            </Campo>
+
+                            <Campo label="Intereses">
+                              <input
+                                style={S.input}
+                                value={
+                                  perfilProfesionalPublico.interesesTexto
+                                }
+                                onChange={(e) =>
+                                  actualizarPerfilProfesionalPublico(
+                                    "interesesTexto",
+                                    e.target.value
+                                  )
+                                }
+                                placeholder="Conversar, Cuidado de la piel, Fútbol"
+                              />
+
+                              <p style={S.fieldHelp}>
+                                Aparecen como etiquetas en
+                                el perfil público.
+                              </p>
+                            </Campo>
+                          </div>
+
+                          {profesionalEditandoId &&
+                            perfilProfesionalPortal?.ok && (
+                              <div
+                                style={
+                                  S.profStatsGrid
+                                }
+                                className="professional-stats"
+                              >
+                                <div
+                                  style={
+                                    S.profStatCard
+                                  }
+                                >
+                                  <strong>
+                                    {formatoEntero(
+                                      perfilProfesionalPortal?.citas_completadas ||
+                                        0
+                                    )}
+                                  </strong>
+                                  <span>
+                                    Citas completadas
+                                  </span>
+                                </div>
+
+                                <div
+                                  style={
+                                    S.profStatCard
+                                  }
+                                >
+                                  <strong>
+                                    {formatoEntero(
+                                      perfilProfesionalPortal?.clientes_atendidos ||
+                                        0
+                                    )}
+                                  </strong>
+                                  <span>
+                                    Clientes atendidos
+                                  </span>
+                                </div>
+
+                                <div
+                                  style={
+                                    S.profStatCard
+                                  }
+                                >
+                                  <strong>
+                                    {formatoEntero(
+                                      perfilProfesionalPortal?.total_resenas ||
+                                        0
+                                    )}
+                                  </strong>
+                                  <span>
+                                    Reseñas
+                                  </span>
+                                </div>
+
+                                <div
+                                  style={
+                                    S.profStatCard
+                                  }
+                                >
+                                  <strong>
+                                    {Number(
+                                      perfilProfesionalPortal?.promedio_calificacion ||
+                                        0
+                                    ) > 0
+                                      ? `${Number(
+                                          perfilProfesionalPortal?.promedio_calificacion
+                                        ).toFixed(
+                                          1
+                                        )} ★`
+                                      : "—"}
+                                  </strong>
+                                  <span>
+                                    Calificación
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                        </div>
+
+                        <Campo label="Servicios que realiza">
+                          {serviciosSalon.length === 0 ? (
+                            <div style={S.empty}>
+                              Primero crea por lo menos
+                              un servicio.
+                            </div>
+                          ) : (
+                            <div className="service-grid">
+                              {serviciosSalon.map(
+                                (servicio) => {
+                                  const activo =
+                                    formProfesional.servicio_ids.includes(
+                                      String(
+                                        servicio.id
+                                      )
+                                    );
+
+                                  return (
+                                    <button
+                                      key={servicio.id}
+                                      type="button"
+                                      style={
+                                        activo
+                                          ? S.serviceActive
+                                          : S.service
+                                      }
+                                      onClick={() =>
+                                        alternarServicio(
+                                          servicio.id
+                                        )
+                                      }
+                                    >
+                                      {activo
+                                        ? "✓"
+                                        : "+"}{" "}
+                                      {
+                                        servicio.nombre
+                                      }
+                                    </button>
+                                  );
+                                }
+                              )}
+                            </div>
+                          )}
+                        </Campo>
+
+                        <div style={S.actions}>
+                          <button
+                            style={S.primary}
+                            onClick={
+                              guardarProfesional
+                            }
+                            disabled={
+                              guardandoProfesional
+                            }
+                          >
+                            {guardandoProfesional
+                              ? "Guardando..."
+                              : profesionalEditandoId
+                              ? "Guardar perfil"
+                              : "Crear profesional"}
+                          </button>
+
+                          {profesionalEditandoId && (
+                            <button
+                              style={S.secondary}
+                              onClick={
+                                limpiarProfesional
+                              }
+                            >
+                              Cerrar edición
+                            </button>
                           )}
                         </div>
-                      )}
-                    </Campo>
-
-                    <div style={S.actions}>
-                      <button
-                        style={S.primary}
-                        onClick={guardarProfesional}
-                        disabled={guardandoProfesional}
-                      >
-                        {guardandoProfesional
-                          ? "Guardando..."
-                          : profesionalEditandoId
-                          ? "Actualizar profesional"
-                          : "Crear profesional"}
-                      </button>
-
-                      {profesionalEditandoId && (
-                        <button
-                          style={S.secondary}
-                          onClick={
-                            limpiarProfesional
+                      </>
+                    ) : tabProfesional ===
+                      "portafolio" ? (
+                      <div>
+                        <div
+                          style={
+                            S.portfolioUploadBox
                           }
                         >
-                          Cancelar edición
-                        </button>
-                      )}
-                    </div>
+                          <div>
+                            <span
+                              style={
+                                S.publicProfileEyebrow
+                              }
+                            >
+                              PORTAFOLIO
+                            </span>
+
+                            <h3
+                              style={
+                                S.publicProfileTitle
+                              }
+                            >
+                              Trabajos del profesional
+                            </h3>
+
+                            <p style={S.muted}>
+                              Sube fotos reales de cortes,
+                              peinados, uñas, tratamientos
+                              o trabajos realizados.
+                            </p>
+                          </div>
+
+                          <div
+                            style={S.twoCols}
+                            className="two-cols"
+                          >
+                            <Campo label="Imagen">
+                              <input
+                                id="archivo-portafolio-profesional"
+                                style={S.input}
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                onChange={(e) =>
+                                  setArchivoPortafolio(
+                                    e.target
+                                      .files?.[0] ||
+                                      null
+                                  )
+                                }
+                              />
+                            </Campo>
+
+                            <Campo label="Descripción (opcional)">
+                              <input
+                                style={S.input}
+                                value={
+                                  descripcionPortafolio
+                                }
+                                onChange={(e) =>
+                                  setDescripcionPortafolio(
+                                    e.target.value
+                                  )
+                                }
+                                placeholder="Ej. Fade bajo + arreglo de barba"
+                              />
+                            </Campo>
+                          </div>
+
+                          <button
+                            type="button"
+                            style={S.primary}
+                            onClick={
+                              subirImagenPortafolio
+                            }
+                            disabled={
+                              subiendoPortafolio
+                            }
+                          >
+                            {subiendoPortafolio
+                              ? "Subiendo..."
+                              : "Agregar al portafolio"}
+                          </button>
+                        </div>
+
+                        <div style={{ height: 16 }} />
+
+                        {portafolioProfesional.length ===
+                        0 ? (
+                          <div style={S.empty}>
+                            Este profesional todavía no
+                            tiene trabajos en su
+                            portafolio.
+                          </div>
+                        ) : (
+                          <div
+                            className="professional-portfolio-grid"
+                            style={
+                              S.profPortfolioGrid
+                            }
+                          >
+                            {portafolioProfesional.map(
+                              (item) => (
+                                <article
+                                  key={item.id}
+                                  style={{
+                                    ...S.profPortfolioCard,
+                                    opacity:
+                                      item.activo
+                                        ? 1
+                                        : 0.55,
+                                  }}
+                                >
+                                  <img
+                                    src={
+                                      item.imagen_url
+                                    }
+                                    alt={
+                                      item.descripcion ||
+                                      "Trabajo del profesional"
+                                    }
+                                    style={
+                                      S.profPortfolioImage
+                                    }
+                                  />
+
+                                  <div
+                                    style={
+                                      S.profPortfolioBody
+                                    }
+                                  >
+                                    <strong>
+                                      {item.descripcion ||
+                                        "Trabajo del profesional"}
+                                    </strong>
+
+                                    <span
+                                      style={
+                                        S.mutedSmall
+                                      }
+                                    >
+                                      Orden{" "}
+                                      {Number(
+                                        item.orden ||
+                                          0
+                                      )}{" "}
+                                      ·{" "}
+                                      {item.activo
+                                        ? "Visible"
+                                        : "Oculto"}
+                                    </span>
+
+                                    <div
+                                      style={
+                                        S.actions
+                                      }
+                                    >
+                                      <button
+                                        type="button"
+                                        style={
+                                          S.portfolioMini
+                                        }
+                                        onClick={() =>
+                                          cambiarOrdenPortafolio(
+                                            item,
+                                            -1
+                                          )
+                                        }
+                                      >
+                                        ↑
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        style={
+                                          S.portfolioMini
+                                        }
+                                        onClick={() =>
+                                          cambiarOrdenPortafolio(
+                                            item,
+                                            1
+                                          )
+                                        }
+                                      >
+                                        ↓
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        style={
+                                          S.portfolioMini
+                                        }
+                                        onClick={() =>
+                                          cambiarVisibilidadPortafolio(
+                                            item
+                                          )
+                                        }
+                                      >
+                                        {item.activo
+                                          ? "Ocultar"
+                                          : "Mostrar"}
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        style={
+                                          S.portfolioDelete
+                                        }
+                                        onClick={() =>
+                                          eliminarPortafolio(
+                                            item
+                                          )
+                                        }
+                                      >
+                                        Eliminar
+                                      </button>
+                                    </div>
+                                  </div>
+                                </article>
+                              )
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div>
+                        <div
+                          style={
+                            S.reviewsAdminHead
+                          }
+                        >
+                          <div>
+                            <span
+                              style={
+                                S.publicProfileEyebrow
+                              }
+                            >
+                              RESEÑAS VERIFICADAS
+                            </span>
+
+                            <h3
+                              style={
+                                S.publicProfileTitle
+                              }
+                            >
+                              Opiniones sobre{" "}
+                              {formProfesional.nombre ||
+                                "el profesional"}
+                            </h3>
+
+                            <p style={S.muted}>
+                              Estas reseñas vienen
+                              únicamente de citas reales
+                              marcadas como ASISTIÓ.
+                            </p>
+                          </div>
+
+                          <div
+                            style={
+                              S.reviewsScoreBox
+                            }
+                          >
+                            <strong>
+                              {Number(
+                                perfilProfesionalPortal?.total_resenas ||
+                                  0
+                              ) > 0
+                                ? Number(
+                                    perfilProfesionalPortal?.promedio_calificacion ||
+                                      0
+                                  ).toFixed(1)
+                                : "—"}
+                            </strong>
+
+                            <span>★</span>
+
+                            <small>
+                              {formatoEntero(
+                                perfilProfesionalPortal?.total_resenas ||
+                                  0
+                              )}{" "}
+                              reseñas
+                            </small>
+                          </div>
+                        </div>
+
+                        {!perfilProfesionalPortal?.ok ||
+                        !Array.isArray(
+                          perfilProfesionalPortal?.resenas
+                        ) ||
+                        perfilProfesionalPortal.resenas
+                          .length === 0 ? (
+                          <div style={S.empty}>
+                            Este profesional todavía no
+                            tiene reseñas verificadas.
+                          </div>
+                        ) : (
+                          <div
+                            style={
+                              S.reviewsAdminList
+                            }
+                          >
+                            {perfilProfesionalPortal.resenas.map(
+                              (resena) => (
+                                <article
+                                  key={resena.id}
+                                  style={
+                                    S.reviewAdminCard
+                                  }
+                                >
+                                  <div
+                                    style={
+                                      S.reviewAdminTop
+                                    }
+                                  >
+                                    <div
+                                      style={
+                                        S.reviewClientAvatar
+                                      }
+                                    >
+                                      {iniciales(
+                                        resena.cliente_nombre ||
+                                          "Cliente"
+                                      )}
+                                    </div>
+
+                                    <div
+                                      style={{
+                                        minWidth: 0,
+                                      }}
+                                    >
+                                      <strong>
+                                        {resena.cliente_nombre ||
+                                          "Cliente"}
+                                      </strong>
+
+                                      <div
+                                        style={
+                                          S.reviewStars
+                                        }
+                                      >
+                                        {"★".repeat(
+                                          Math.max(
+                                            0,
+                                            Math.min(
+                                              5,
+                                              Number(
+                                                resena.calificacion ||
+                                                  0
+                                              )
+                                            )
+                                          )
+                                        )}
+                                        <span>
+                                          {"★".repeat(
+                                            Math.max(
+                                              0,
+                                              5 -
+                                                Math.min(
+                                                  5,
+                                                  Number(
+                                                    resena.calificacion ||
+                                                      0
+                                                  )
+                                                )
+                                            )
+                                          )}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {resena.comentario && (
+                                    <p
+                                      style={
+                                        S.reviewComment
+                                      }
+                                    >
+                                      {
+                                        resena.comentario
+                                      }
+                                    </p>
+                                  )}
+
+                                  <div
+                                    style={
+                                      S.reviewMeta
+                                    }
+                                  >
+                                    <span>
+                                      {haceCuanto(
+                                        resena.fecha
+                                      )}
+                                    </span>
+
+                                    {Number(
+                                      resena.total_servicios_cliente ||
+                                        0
+                                    ) > 0 && (
+                                      <span>
+                                        ·{" "}
+                                        {formatoEntero(
+                                          resena.total_servicios_cliente
+                                        )}{" "}
+                                        {Number(
+                                          resena.total_servicios_cliente
+                                        ) === 1
+                                          ? "servicio"
+                                          : "servicios"}
+                                      </span>
+                                    )}
+
+                                    {resena.servicio && (
+                                      <span>
+                                        ·{" "}
+                                        {resena.servicio}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <span
+                                    style={
+                                      S.reviewVerified
+                                    }
+                                  >
+                                    ✓ Cita verificada por
+                                    KONAX
+                                  </span>
+                                </article>
+                              )
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </Card>
 
                   <div style={{ height: 16 }} />
@@ -2709,7 +3932,7 @@ export default function AdminConfiguracion() {
                                     )
                                   }
                                 >
-                                  Editar
+                                  Editar perfil
                                 </button>
 
                                 <button
@@ -3919,6 +5142,52 @@ const CSS = `
       grid-template-columns: 1fr !important;
     }
   }
+
+  /* =========================================================
+     PERFIL PROFESIONAL · PERFIL / PORTAFOLIO / RESEÑAS
+     ========================================================= */
+
+  .professional-tabs {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .professional-portfolio-grid {
+    width: 100%;
+  }
+
+  @media(max-width:900px) {
+    .professional-tabs {
+      display: flex !important;
+      flex-wrap: nowrap !important;
+      padding-bottom: 4px !important;
+    }
+
+    .professional-tabs > button {
+      flex: 0 0 auto !important;
+    }
+
+    .professional-public-box {
+      padding: 14px !important;
+    }
+
+    .professional-stats {
+      grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+    }
+
+    .professional-portfolio-grid {
+      grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+    }
+  }
+
+  @media(max-width:520px) {
+    .professional-stats,
+    .professional-portfolio-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+
 `;
 
 const S = {
@@ -4709,4 +5978,282 @@ const S = {
     color: "#0d704f",
     fontSize: 12,
   },
+
+  profTabs: {
+    marginBottom: 22,
+    padding: 5,
+    display: "flex",
+    gap: 6,
+    border: "1px solid #e5e7eb",
+    borderRadius: 15,
+    background: "#f8fafc",
+  },
+
+  profTab: {
+    minHeight: 44,
+    padding: "0 14px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    border: 0,
+    borderRadius: 11,
+    background: "transparent",
+    color: "#6b7280",
+    fontSize: 12,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  profTabActive: {
+    minHeight: 44,
+    padding: "0 14px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    border: 0,
+    borderRadius: 11,
+    background: "#111827",
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  profTabCount: {
+    minWidth: 24,
+    height: 24,
+    padding: "0 7px",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 999,
+    background: "#e5e7eb",
+    color: "#4b5563",
+    fontSize: 9,
+  },
+
+  profTabCountActive: {
+    minWidth: 24,
+    height: 24,
+    padding: "0 7px",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 999,
+    background: "rgba(255,255,255,.16)",
+    color: "#ffffff",
+    fontSize: 9,
+  },
+
+  publicProfileBox: {
+    marginBottom: 20,
+    padding: 18,
+    border: "1px solid #dfe3e7",
+    borderRadius: 18,
+    background: "#fafafa",
+  },
+
+  publicProfileHead: {
+    marginBottom: 16,
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 14,
+    flexWrap: "wrap",
+  },
+
+  publicProfileEyebrow: {
+    color: "#4b5563",
+    fontSize: 9,
+    fontWeight: 950,
+    letterSpacing: 1,
+  },
+
+  publicProfileTitle: {
+    margin: "5px 0 3px",
+    color: "#111827",
+    fontSize: 20,
+  },
+
+  publicVisible: {
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#111827",
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: 900,
+  },
+
+  publicHidden: {
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#e5e7eb",
+    color: "#6b7280",
+    fontSize: 10,
+    fontWeight: 900,
+  },
+
+  fieldHelp: {
+    margin: "5px 0 0",
+    color: "#8a8f98",
+    fontSize: 10,
+    lineHeight: 1.4,
+  },
+
+  profStatsGrid: {
+    marginTop: 4,
+    display: "grid",
+    gridTemplateColumns: "repeat(4,minmax(0,1fr))",
+    gap: 9,
+  },
+
+  profStatCard: {
+    padding: 13,
+    display: "grid",
+    gap: 4,
+    border: "1px solid #dedede",
+    borderRadius: 13,
+    background: "#ffffff",
+  },
+
+  portfolioUploadBox: {
+    padding: 18,
+    border: "1px solid #dfe3e7",
+    borderRadius: 18,
+    background: "#fafafa",
+  },
+
+  profPortfolioGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+    gap: 12,
+  },
+
+  profPortfolioCard: {
+    overflow: "hidden",
+    border: "1px solid #dedede",
+    borderRadius: 16,
+    background: "#ffffff",
+  },
+
+  profPortfolioImage: {
+    width: "100%",
+    aspectRatio: "1 / 1",
+    display: "block",
+    objectFit: "cover",
+    background: "#f3f4f6",
+  },
+
+  profPortfolioBody: {
+    padding: 11,
+    display: "grid",
+    gap: 6,
+  },
+
+  portfolioMini: {
+    minHeight: 32,
+    padding: "0 9px",
+    border: "1px solid #d1d5db",
+    borderRadius: 8,
+    background: "#ffffff",
+    color: "#374151",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  portfolioDelete: {
+    minHeight: 32,
+    padding: "0 9px",
+    border: "1px solid #fecaca",
+    borderRadius: 8,
+    background: "#fff5f5",
+    color: "#b42318",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  reviewsAdminHead: {
+    marginBottom: 18,
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 14,
+    flexWrap: "wrap",
+  },
+
+  reviewsScoreBox: {
+    minWidth: 115,
+    padding: 12,
+    display: "grid",
+    gridTemplateColumns: "auto auto",
+    alignItems: "center",
+    justifyContent: "end",
+    gap: "2px 5px",
+    border: "1px solid #dedede",
+    borderRadius: 14,
+    background: "#ffffff",
+  },
+
+  reviewsAdminList: {
+    display: "grid",
+    gap: 0,
+  },
+
+  reviewAdminCard: {
+    padding: "18px 0",
+    borderTop: "1px solid #ececec",
+  },
+
+  reviewAdminTop: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  reviewClientAvatar: {
+    width: 50,
+    height: 50,
+    minWidth: 50,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background: "#f0f0f0",
+    color: "#4b5563",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+
+  reviewStars: {
+    marginTop: 3,
+    color: "#111827",
+    fontSize: 13,
+    letterSpacing: 1,
+  },
+
+  reviewComment: {
+    maxWidth: 820,
+    margin: "12px 0 7px",
+    color: "#374151",
+    fontSize: 13,
+    lineHeight: 1.6,
+  },
+
+  reviewMeta: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 5,
+    color: "#9ca3af",
+    fontSize: 10,
+  },
+
+  reviewVerified: {
+    display: "block",
+    marginTop: 8,
+    color: "#4b5563",
+    fontSize: 9,
+    fontWeight: 850,
+  },
+
 };
