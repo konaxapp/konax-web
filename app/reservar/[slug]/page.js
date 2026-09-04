@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V11-BLANCO-NEGRO";
+const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V12-RESENAS-REALES";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -158,6 +158,20 @@ function formatoEntero(valor) {
 }
 
 
+function formatoFechaResena(valor) {
+  if (!valor) return "";
+
+  const fecha = new Date(valor);
+
+  if (Number.isNaN(fecha.getTime())) return "";
+
+  return new Intl.DateTimeFormat("es-PA", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(fecha);
+}
+
 function formatearHoraLocalPublica(valor) {
   if (!valor) return "";
 
@@ -222,6 +236,26 @@ export default function ReservaPublicaAutoservicioPage() {
   const [tokenGestion, setTokenGestion] = useState("");
 
   const [miCita, setMiCita] = useState(null);
+
+  const [estadoResena, setEstadoResena] = useState(null);
+  const [resenasPublicas, setResenasPublicas] = useState({
+    ok: true,
+    total_resenas: 0,
+    promedio: 0,
+    estrellas_5: 0,
+    estrellas_4: 0,
+    estrellas_3: 0,
+    estrellas_2: 0,
+    estrellas_1: 0,
+    resenas: [],
+  });
+  const [cargandoResenas, setCargandoResenas] = useState(false);
+  const [calificacionNegocio, setCalificacionNegocio] = useState(0);
+  const [calificacionProfesional, setCalificacionProfesional] = useState(0);
+  const [comentarioResena, setComentarioResena] = useState("");
+  const [enviandoResena, setEnviandoResena] = useState(false);
+  const [resenaEnviada, setResenaEnviada] = useState(false);
+
   const [telefonoGestion, setTelefonoGestion] = useState("");
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
   const [cancelando, setCancelando] = useState(false);
@@ -342,6 +376,8 @@ export default function ReservaPublicaAutoservicioPage() {
     if (esBelleza(data) && Array.isArray(serviciosBase) && serviciosBase.length > 0) {
       cargarEquipoPortal(serviciosBase);
     }
+
+    await cargarResenasPublicas();
 
     setCargando(false);
   }
@@ -509,6 +545,128 @@ export default function ReservaPublicaAutoservicioPage() {
     setCargandoWod(false);
   }
 
+  async function cargarResenasPublicas() {
+    if (!slug) return;
+
+    setCargandoResenas(true);
+
+    const { data, error: rpcError } = await supabase.rpc(
+      "obtener_resenas_agenda_publica",
+      {
+        p_slug: slug,
+      }
+    );
+
+    if (rpcError || !data?.ok) {
+      console.warn(
+        "No se pudieron cargar las reseñas públicas:",
+        rpcError || data
+      );
+
+      setResenasPublicas({
+        ok: true,
+        total_resenas: 0,
+        promedio: 0,
+        estrellas_5: 0,
+        estrellas_4: 0,
+        estrellas_3: 0,
+        estrellas_2: 0,
+        estrellas_1: 0,
+        resenas: [],
+      });
+
+      setCargandoResenas(false);
+      return;
+    }
+
+    setResenasPublicas({
+      ...data,
+      resenas: Array.isArray(data.resenas) ? data.resenas : [],
+    });
+
+    setCargandoResenas(false);
+  }
+
+  async function cargarEstadoResena(token = tokenUrl) {
+    if (!token) {
+      setEstadoResena(null);
+      return;
+    }
+
+    const { data, error: rpcError } = await supabase.rpc(
+      "obtener_estado_resena_agenda_publica",
+      {
+        p_slug: slug,
+        p_token: token,
+      }
+    );
+
+    if (rpcError || !data?.ok) {
+      console.warn(
+        "No se pudo consultar el estado de la reseña:",
+        rpcError || data
+      );
+      setEstadoResena(null);
+      return;
+    }
+
+    setEstadoResena(data);
+  }
+
+  async function enviarResena() {
+    if (!tokenUrl || enviandoResena) return;
+
+    if (calificacionNegocio < 1 || calificacionNegocio > 5) {
+      setError("Selecciona de 1 a 5 estrellas para el negocio.");
+      return;
+    }
+
+    if (
+      estadoResena?.profesional_id &&
+      (calificacionProfesional < 1 ||
+        calificacionProfesional > 5)
+    ) {
+      setError("Selecciona de 1 a 5 estrellas para el profesional.");
+      return;
+    }
+
+    setEnviandoResena(true);
+    setError("");
+
+    const { data, error: rpcError } = await supabase.rpc(
+      "enviar_resena_agenda_publica",
+      {
+        p_slug: slug,
+        p_token: tokenUrl,
+        p_calificacion_negocio: calificacionNegocio,
+        p_calificacion_profesional:
+          estadoResena?.profesional_id
+            ? calificacionProfesional
+            : null,
+        p_comentario: comentarioResena.trim() || null,
+      }
+    );
+
+    setEnviandoResena(false);
+
+    if (rpcError || !data?.ok) {
+      setError(
+        mensajeError(rpcError) ||
+          data?.mensaje ||
+          "No se pudo enviar la reseña."
+      );
+      return;
+    }
+
+    setResenaEnviada(true);
+    setComentarioResena("");
+
+    await Promise.all([
+      cargarEstadoResena(tokenUrl),
+      cargarResenasPublicas(),
+    ]);
+  }
+
   async function cargarMiCita(token = tokenUrl) {
     if (!token) return;
 
@@ -532,6 +690,8 @@ export default function ReservaPublicaAutoservicioPage() {
 
     setMiCita(data);
     if (data.fecha) setFecha(String(data.fecha).slice(0, 10));
+
+    await cargarEstadoResena(token);
 
     if (perfilGimnasio && data.servicio_id && data.fecha) {
       await cargarWodPublico(data.fecha, data.servicio_id);
@@ -1420,6 +1580,79 @@ export default function ReservaPublicaAutoservicioPage() {
               </div>
             )}
 
+            {estadoResena?.ya_reseno ? (
+              <section className="kp-review-done">
+                <div className="kp-review-done-icon">★</div>
+                <div>
+                  <strong>Gracias por tu reseña</strong>
+                  <p>
+                    Esta cita ya fue calificada y tu opinión forma parte
+                    de las reseñas verificadas de KONAX.
+                  </p>
+                </div>
+              </section>
+            ) : estadoResena?.puede_resenar ? (
+              <section className="kp-review-form-box">
+                <span className="kp-section-kicker kp-section-kicker-black">
+                  CITA COMPLETADA
+                </span>
+
+                <h3>Califica tu experiencia</h3>
+
+                <p className="kp-review-help">
+                  Tu reseña está vinculada a una cita real marcada como
+                  ASISTIÓ.
+                </p>
+
+                <EstrellasSelector
+                  label={`¿Cómo estuvo tu experiencia con ${nombreNegocio}?`}
+                  valor={calificacionNegocio}
+                  onChange={setCalificacionNegocio}
+                />
+
+                {estadoResena?.profesional_id && (
+                  <EstrellasSelector
+                    label={`¿Cómo te atendió ${
+                      estadoResena?.profesional_nombre || "el profesional"
+                    }?`}
+                    valor={calificacionProfesional}
+                    onChange={setCalificacionProfesional}
+                  />
+                )}
+
+                <label className="kp-review-comment">
+                  <span>Cuéntanos tu experiencia (opcional)</span>
+                  <textarea
+                    value={comentarioResena}
+                    onChange={(e) =>
+                      setComentarioResena(e.target.value)
+                    }
+                    placeholder="Ej. Excelente atención, puntualidad y resultado."
+                    maxLength={700}
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  className="kp-review-submit"
+                  onClick={enviarResena}
+                  disabled={enviandoResena}
+                >
+                  {enviandoResena
+                    ? "ENVIANDO..."
+                    : "ENVIAR RESEÑA"}
+                </button>
+              </section>
+            ) : resenaEnviada ? (
+              <section className="kp-review-done">
+                <div className="kp-review-done-icon">★</div>
+                <div>
+                  <strong>Reseña enviada</strong>
+                  <p>Gracias por compartir tu experiencia.</p>
+                </div>
+              </section>
+            ) : null}
+
             <button
               type="button"
               className="kp-secondary"
@@ -1777,17 +2010,142 @@ export default function ReservaPublicaAutoservicioPage() {
 
                 {tabPortal === "resenas" && (
                   <div className="kp-profile-section">
-                    <span className="kp-section-kicker">RESEÑAS</span>
+                    <span className="kp-section-kicker kp-section-kicker-black">
+                      RESEÑAS VERIFICADAS
+                    </span>
                     <h2>Opiniones de clientes</h2>
 
-                    <div className="kp-reviews-empty">
-                      <div className="kp-reviews-icon">★</div>
-                      <strong>Reseñas verificadas próximamente</strong>
-                      <p>
-                        KONAX mostrará aquí únicamente reseñas reales del negocio.
-                        No se publican calificaciones inventadas.
-                      </p>
-                    </div>
+                    {cargandoResenas ? (
+                      <div className="kp-empty">
+                        Consultando reseñas...
+                      </div>
+                    ) : Number(resenasPublicas?.total_resenas || 0) === 0 ? (
+                      <div className="kp-reviews-empty">
+                        <div className="kp-reviews-icon">★</div>
+                        <strong>Aún no hay reseñas verificadas</strong>
+                        <p>
+                          Las opiniones aparecerán cuando clientes con una
+                          cita completada califiquen su experiencia.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <section className="kp-review-summary">
+                          <div className="kp-review-score">
+                            <strong>
+                              {Number(
+                                resenasPublicas?.promedio || 0
+                              ).toFixed(1)}
+                            </strong>
+                            <div className="kp-review-score-stars">
+                              ★★★★★
+                            </div>
+                            <span>
+                              {formatoEntero(
+                                resenasPublicas?.total_resenas || 0
+                              )}{" "}
+                              {Number(
+                                resenasPublicas?.total_resenas || 0
+                              ) === 1
+                                ? "reseña verificada"
+                                : "reseñas verificadas"}
+                            </span>
+                          </div>
+
+                          <div className="kp-review-bars">
+                            {[5, 4, 3, 2, 1].map((estrella) => {
+                              const total = Number(
+                                resenasPublicas?.total_resenas || 0
+                              );
+
+                              const cantidad = Number(
+                                resenasPublicas?.[
+                                  `estrellas_${estrella}`
+                                ] || 0
+                              );
+
+                              const porcentaje =
+                                total > 0
+                                  ? Math.round(
+                                      (cantidad / total) * 100
+                                    )
+                                  : 0;
+
+                              return (
+                                <div
+                                  key={estrella}
+                                  className="kp-review-bar-row"
+                                >
+                                  <span>{estrella} ★</span>
+
+                                  <div className="kp-review-bar-track">
+                                    <i
+                                      style={{
+                                        width: `${porcentaje}%`,
+                                      }}
+                                    />
+                                  </div>
+
+                                  <b>{cantidad}</b>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </section>
+
+                        <div className="kp-review-list">
+                          {(resenasPublicas?.resenas || []).map(
+                            (resena) => (
+                              <article
+                                key={resena.id}
+                                className="kp-review-card"
+                              >
+                                <div className="kp-review-card-top">
+                                  <span className="kp-review-card-stars">
+                                    {"★".repeat(
+                                      Number(
+                                        resena.calificacion || 0
+                                      )
+                                    )}
+                                    <i>
+                                      {"★".repeat(
+                                        Math.max(
+                                          0,
+                                          5 -
+                                            Number(
+                                              resena.calificacion || 0
+                                            )
+                                        )
+                                      )}
+                                    </i>
+                                  </span>
+
+                                  <small>
+                                    {formatoFechaResena(
+                                      resena.fecha
+                                    )}
+                                  </small>
+                                </div>
+
+                                {resena.comentario && (
+                                  <p>{resena.comentario}</p>
+                                )}
+
+                                {resena.servicio && (
+                                  <span className="kp-review-service">
+                                    Servicio: {resena.servicio}
+                                  </span>
+                                )}
+
+                                <span className="kp-review-verified">
+                                  ✓ Cita verificada por KONAX
+                                </span>
+                              </article>
+                            )
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -2485,6 +2843,42 @@ function Stepper({ paso, gimnasio = false }) {
   );
 }
 
+
+function EstrellasSelector({
+  label,
+  valor,
+  onChange,
+}) {
+  return (
+    <div className="kp-stars-field">
+      <span>{label}</span>
+
+      <div
+        className="kp-stars-selector"
+        role="radiogroup"
+        aria-label={label}
+      >
+        {[1, 2, 3, 4, 5].map((estrella) => (
+          <button
+            key={estrella}
+            type="button"
+            className={
+              estrella <= valor ? "active" : ""
+            }
+            onClick={() => onChange(estrella)}
+            role="radio"
+            aria-checked={estrella === valor}
+            aria-label={`${estrella} ${
+              estrella === 1 ? "estrella" : "estrellas"
+            }`}
+          >
+            ★
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function WodPublico({ wod }) {
   if (!wod?.ok) return null;
@@ -5529,6 +5923,315 @@ const CSS = `
   .kp-executed-chip {
     background: rgba(15,15,15,.82);
     border-color: rgba(255,255,255,.22);
+  }
+
+
+  /* =========================================================
+     RESEÑAS VERIFICADAS · KONAX
+     ========================================================= */
+
+  .kp-review-form-box {
+    margin: 18px 0;
+    padding: 18px;
+    border: 1px solid #d8d8d8;
+    border-radius: 20px;
+    background: #ffffff;
+  }
+
+  .kp-review-form-box h3 {
+    margin: 5px 0 5px;
+    color: #111111;
+    font-size: 24px;
+    line-height: 1.05;
+  }
+
+  .kp-review-help {
+    margin: 0 0 18px;
+    color: #6c6c6c;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .kp-stars-field {
+    margin-top: 16px;
+    display: grid;
+    gap: 8px;
+  }
+
+  .kp-stars-field > span {
+    color: #222222;
+    font-size: 13px;
+    font-weight: 850;
+  }
+
+  .kp-stars-selector {
+    display: flex;
+    gap: 6px;
+  }
+
+  .kp-stars-selector button {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 1px solid #dedede;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #c8c8c8;
+    font-size: 25px;
+    cursor: pointer;
+  }
+
+  .kp-stars-selector button.active {
+    border-color: #111111;
+    background: #111111;
+    color: #ffffff;
+  }
+
+  .kp-review-comment {
+    margin-top: 18px;
+    display: grid;
+    gap: 7px;
+  }
+
+  .kp-review-comment > span {
+    color: #222222;
+    font-size: 12px;
+    font-weight: 850;
+  }
+
+  .kp-review-comment textarea {
+    width: 100%;
+    min-height: 100px;
+    padding: 12px 13px;
+    resize: vertical;
+    border: 1px solid #d6d6d6;
+    border-radius: 14px;
+    background: #ffffff;
+    color: #111111;
+    font-size: 16px;
+    outline: none;
+  }
+
+  .kp-review-comment textarea:focus {
+    border-color: #111111;
+    box-shadow: 0 0 0 3px rgba(0,0,0,.06);
+  }
+
+  .kp-review-submit {
+    width: 100%;
+    min-height: 50px;
+    margin-top: 15px;
+    border: 0;
+    border-radius: 14px;
+    background: #111111;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 950;
+    letter-spacing: .4px;
+    cursor: pointer;
+  }
+
+  .kp-review-submit:disabled {
+    opacity: .55;
+    cursor: wait;
+  }
+
+  .kp-review-done {
+    margin: 18px 0;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 48px minmax(0,1fr);
+    gap: 12px;
+    align-items: center;
+    border: 1px solid #d8d8d8;
+    border-radius: 18px;
+    background: #f8f8f8;
+  }
+
+  .kp-review-done-icon {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #111111;
+    color: #ffffff;
+    font-size: 22px;
+  }
+
+  .kp-review-done strong {
+    color: #111111;
+  }
+
+  .kp-review-done p {
+    margin: 4px 0 0;
+    color: #686868;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .kp-review-summary {
+    margin-top: 18px;
+    padding: 18px;
+    display: grid;
+    grid-template-columns: 150px minmax(0,1fr);
+    gap: 22px;
+    align-items: center;
+    border: 1px solid #dedede;
+    border-radius: 20px;
+    background: #ffffff;
+  }
+
+  .kp-review-score {
+    display: grid;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .kp-review-score > strong {
+    color: #111111;
+    font-size: 46px;
+    line-height: 1;
+  }
+
+  .kp-review-score-stars {
+    margin-top: 6px;
+    color: #111111;
+    font-size: 16px;
+    letter-spacing: 2px;
+  }
+
+  .kp-review-score > span {
+    margin-top: 6px;
+    color: #737373;
+    font-size: 10px;
+    font-weight: 750;
+  }
+
+  .kp-review-bars {
+    display: grid;
+    gap: 7px;
+  }
+
+  .kp-review-bar-row {
+    display: grid;
+    grid-template-columns: 34px minmax(0,1fr) 26px;
+    gap: 8px;
+    align-items: center;
+    color: #5f5f5f;
+    font-size: 10px;
+  }
+
+  .kp-review-bar-track {
+    height: 7px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #eeeeee;
+  }
+
+  .kp-review-bar-track i {
+    height: 100%;
+    display: block;
+    border-radius: inherit;
+    background: #111111;
+  }
+
+  .kp-review-bar-row b {
+    color: #111111;
+    text-align: right;
+  }
+
+  .kp-review-list {
+    margin-top: 15px;
+    display: grid;
+    gap: 11px;
+  }
+
+  .kp-review-card {
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 17px;
+    background: #ffffff;
+  }
+
+  .kp-review-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .kp-review-card-stars {
+    color: #111111;
+    letter-spacing: 1px;
+    font-size: 13px;
+  }
+
+  .kp-review-card-stars i {
+    color: #d8d8d8;
+    font-style: normal;
+  }
+
+  .kp-review-card-top small {
+    color: #858585;
+    font-size: 9px;
+  }
+
+  .kp-review-card p {
+    margin: 10px 0;
+    color: #353535;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .kp-review-service,
+  .kp-review-verified {
+    display: block;
+    margin-top: 6px;
+    color: #777777;
+    font-size: 9.5px;
+    font-weight: 750;
+  }
+
+  .kp-review-verified {
+    color: #111111;
+  }
+
+  .kp-dark .kp-review-form-box,
+  .kp-dark .kp-review-summary,
+  .kp-dark .kp-review-card,
+  .kp-dark .kp-review-comment textarea {
+    border-color: #353535;
+    background: #121212;
+    color: #ffffff;
+  }
+
+  .kp-dark .kp-review-form-box h3,
+  .kp-dark .kp-stars-field > span,
+  .kp-dark .kp-review-comment > span,
+  .kp-dark .kp-review-score > strong,
+  .kp-dark .kp-review-bar-row b,
+  .kp-dark .kp-review-card p,
+  .kp-dark .kp-review-verified {
+    color: #ffffff;
+  }
+
+  @media (max-width: 520px) {
+    .kp-review-summary {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    .kp-review-score > strong {
+      font-size: 42px;
+    }
+
+    .kp-stars-selector button {
+      width: 42px;
+      height: 42px;
+    }
   }
 
 `;
