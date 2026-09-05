@@ -1279,156 +1279,206 @@ export default function GestionKonax() {
               }
             />
           ) : (
-            <div style={s.companyGrid}>
-              {empresasFiltradas.map((empresa) => (
-                <article key={empresa.id} style={s.companyCard}>
-                  <div style={s.companyTop}>
-                    <div style={s.companyIdentity}>
-                      <div style={s.companyInitial}>
-                        {String(empresa.nombre || "E")
-                          .charAt(0)
-                          .toUpperCase()}
+            <div
+              style={{
+                ...s.companyGrid,
+                ...(esMovil ? s.companyGridMobile : {}),
+              }}
+            >
+              {empresasFiltradas.map((empresa) => {
+                const esDemo = esDemoEmpresa(empresa);
+                const demoVencido = esDemoVencido(empresa);
+                const fechaClave = esDemo
+                  ? empresa.fecha_fin_prueba
+                  : empresa.fecha_proxima_facturacion;
+
+                return (
+                  <article key={empresa.id} style={s.companyCard}>
+                    <div style={s.companyAccent} />
+
+                    <div style={s.companyTop}>
+                      <div style={s.companyIdentity}>
+                        <div style={s.companyInitial}>
+                          {String(empresa.nombre || "E")
+                            .charAt(0)
+                            .toUpperCase()}
+                        </div>
+
+                        <div style={{ minWidth: 0 }}>
+                          <strong style={s.companyName}>
+                            {empresa.nombre}
+                          </strong>
+
+                          <div style={s.companyContactRow}>
+                            <span style={s.companyContact}>
+                              {empresa.correo || "Sin correo"}
+                            </span>
+
+                            <span style={s.companyContactDot}>•</span>
+
+                            <span style={s.companyContact}>
+                              {empresa.telefono || "Sin teléfono"}
+                            </span>
+                          </div>
+                        </div>
                       </div>
 
-                      <div style={{ minWidth: 0 }}>
-                        <strong style={s.companyName}>
-                          {empresa.nombre}
-                        </strong>
-                        <span style={s.companyContact}>
-                          {empresa.correo || "-"}
-                        </span>
-                        <span style={s.companyContact}>
-                          {empresa.telefono || "-"}
-                        </span>
+                      <div style={s.badgeStack}>
+                        <SubscriptionBadge
+                          value={etiquetaSuscripcion(empresa)}
+                        />
+
+                        <ServiceBadge
+                          active={estadoServicioActivo(empresa)}
+                          value={
+                            empresa.archivada
+                              ? "Archivada"
+                              : empresa.estado || "Activo"
+                          }
+                        />
                       </div>
                     </div>
 
-                    <div style={s.badgeStack}>
-                      <SubscriptionBadge value={etiquetaSuscripcion(empresa)} />
+                    <div
+                      style={{
+                        ...s.planSummary,
+                        ...(esMovil ? s.planSummaryMobile : {}),
+                      }}
+                    >
+                      <div style={s.planSummaryMain}>
+                        <span style={s.planSummaryLabel}>PLAN ACTUAL</span>
+                        <strong style={s.planSummaryName}>
+                          {empresa.plan_nombre || "Sin plan asignado"}
+                        </strong>
+                        <span style={s.planSummaryType}>
+                          {empresa.plan_tipo || "Mensual"}
+                        </span>
+                      </div>
 
-                      <ServiceBadge
-                        active={estadoServicioActivo(empresa)}
+                      <div style={s.planPriceBox}>
+                        <span style={s.planPriceLabel}>PRECIO</span>
+                        <strong style={s.planPriceValue}>
+                          {formato(empresa.plan_precio)}
+                        </strong>
+                        <span style={s.planPricePeriod}>por mes</span>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        ...s.detailsGrid,
+                        ...(esMovil ? s.detailsGridMobile : {}),
+                      }}
+                    >
+                      <Detail
+                        label="Suscripción"
+                        value={etiquetaSuscripcion(empresa)}
+                      />
+
+                      <Detail
+                        label="Estado de pago"
+                        value={empresa.estado_pago || "Pendiente"}
+                      />
+
+                      <Detail
+                        label={esDemo ? "Fin del demo" : "Próxima facturación"}
+                        value={formatoFecha(fechaClave)}
+                      />
+
+                      <Detail
+                        label="Vencimiento"
                         value={
-                          empresa.archivada
-                            ? "Archivada"
-                            : empresa.estado || "Activo"
+                          esDemo
+                            ? demoVencido
+                              ? "Demo vencido"
+                              : textoVencimiento(empresa.fecha_fin_prueba)
+                            : textoVencimiento(
+                                empresa.fecha_proxima_facturacion
+                              )
+                        }
+                        accent={
+                          demoVencido ||
+                          obtenerDiasParaVencer(fechaClave) <= 7
                         }
                       />
+
+                      <Detail
+                        label="Tipo de negocio"
+                        value={empresa.tipo_negocio || "-"}
+                      />
+
+                      <Detail
+                        label="Estado del servicio"
+                        value={empresa.estado || "-"}
+                      />
                     </div>
-                  </div>
 
-                  <div style={s.detailsGrid}>
-                    <Detail
-                      label="Plan"
-                      value={empresa.plan_nombre || "Sin plan"}
-                    />
-                    <Detail
-                      label="Precio"
-                      value={formato(empresa.plan_precio)}
-                      accent
-                    />
-                    <Detail
-                      label="Suscripción"
-                      value={etiquetaSuscripcion(empresa)}
-                    />
-                    <Detail
-                      label="Pago"
-                      value={empresa.estado_pago || "Pendiente"}
-                    />
-                    <Detail
-                      label={
-                        esDemoEmpresa(empresa)
-                          ? "Fin del demo"
-                          : "Próxima facturación"
-                      }
-                      value={formatoFecha(
-                        esDemoEmpresa(empresa)
-                          ? empresa.fecha_fin_prueba
-                          : empresa.fecha_proxima_facturacion
-                      )}
-                    />
-                    <Detail
-                      label="Vencimiento"
-                      value={
-                        esDemoEmpresa(empresa)
-                          ? esDemoVencido(empresa)
-                            ? "Demo vencido"
-                            : textoVencimiento(empresa.fecha_fin_prueba)
-                          : textoVencimiento(
-                              empresa.fecha_proxima_facturacion
-                            )
-                      }
-                    />
-                    <Detail
-                      label="Negocio"
-                      value={empresa.tipo_negocio || "-"}
-                    />
-                    <Detail
-                      label="Estado"
-                      value={empresa.estado || "-"}
-                    />
-                  </div>
-
-                  {!empresa.archivada ? (
-                    <div style={s.actionsGrid}>
-                      <button
-                        type="button"
-                        style={s.adminButton}
-                        onClick={() => administrarEmpresa(empresa)}
+                    {!empresa.archivada ? (
+                      <div
+                        style={{
+                          ...s.actionsGrid,
+                          ...(esMovil ? s.actionsGridMobile : {}),
+                        }}
                       >
-                        Administrar
-                      </button>
-
-                      <button
-                        type="button"
-                        style={s.planButton}
-                        onClick={() => abrirPlan(empresa)}
-                      >
-                        Plan
-                      </button>
-
-                      <button
-                        type="button"
-                        style={s.paymentButton}
-                        onClick={() => abrirPago(empresa)}
-                      >
-                        Registrar pago
-                      </button>
-
-                      <button
-                        type="button"
-                        style={s.archiveButton}
-                        onClick={() => archivarEmpresa(empresa)}
-                      >
-                        Archivar
-                      </button>
-
-                      {esDemoVencido(empresa) && (
                         <button
                           type="button"
-                          style={s.deleteDemoButton}
-                          onClick={() => eliminarDemoVencido(empresa)}
-                          disabled={
-                            eliminandoDemoId === String(empresa.id)
-                          }
+                          style={s.adminButton}
+                          onClick={() => administrarEmpresa(empresa)}
                         >
-                          {eliminandoDemoId === String(empresa.id)
-                            ? "Eliminando..."
-                            : "Eliminar demo vencido"}
+                          Administrar
                         </button>
-                      )}
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      style={s.restoreButton}
-                      onClick={() => reactivarArchivada(empresa)}
-                    >
-                      Volver a cartera activa
-                    </button>
-                  )}
-                </article>
-              ))}
+
+                        <button
+                          type="button"
+                          style={s.planButton}
+                          onClick={() => abrirPlan(empresa)}
+                        >
+                          Plan
+                        </button>
+
+                        <button
+                          type="button"
+                          style={s.paymentButton}
+                          onClick={() => abrirPago(empresa)}
+                        >
+                          Registrar pago
+                        </button>
+
+                        <button
+                          type="button"
+                          style={s.archiveButton}
+                          onClick={() => archivarEmpresa(empresa)}
+                        >
+                          Archivar
+                        </button>
+
+                        {demoVencido && (
+                          <button
+                            type="button"
+                            style={s.deleteDemoButton}
+                            onClick={() => eliminarDemoVencido(empresa)}
+                            disabled={
+                              eliminandoDemoId === String(empresa.id)
+                            }
+                          >
+                            {eliminandoDemoId === String(empresa.id)
+                              ? "Eliminando..."
+                              : "Eliminar demo vencido"}
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        style={s.restoreButton}
+                        onClick={() => reactivarArchivada(empresa)}
+                      >
+                        Volver a cartera activa
+                      </button>
+                    )}
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
@@ -1963,12 +2013,17 @@ function KPI({
 
 function Detail({ label, value, accent = false }) {
   return (
-    <div style={s.detailBox}>
+    <div
+      style={{
+        ...s.detailBox,
+        ...(accent ? s.detailBoxAccent : {}),
+      }}
+    >
       <span style={s.detailLabel}>{label}</span>
       <strong
         style={{
           ...s.detailValue,
-          ...(accent ? { color: "#16834f" } : {}),
+          ...(accent ? { color: "#9a6700" } : {}),
         }}
       >
         {value}
@@ -2366,189 +2421,336 @@ const s = {
   },
   companyGrid: {
     display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit,minmax(320px,560px))",
-    justifyContent: "start",
+    gridTemplateColumns: "repeat(2,minmax(0,1fr))",
     alignItems: "start",
-    gap: 14,
+    gap: 18,
+  },
+  companyGridMobile: {
+    gridTemplateColumns: "1fr",
   },
   companyCard: {
     width: "100%",
-    maxWidth: 560,
-    padding: 17,
+    minWidth: 0,
+    padding: 20,
+    position: "relative",
+    overflow: "hidden",
     boxSizing: "border-box",
-    border: "1px solid #dfe7e2",
-    borderRadius: 18,
+    border: "1px solid #dce7e0",
+    borderRadius: 24,
     background:
-      "linear-gradient(155deg,#ffffff 0%,#f7faf8 100%)",
+      "linear-gradient(180deg,#ffffff 0%,#fbfdfc 55%,#f6faf8 100%)",
     boxShadow:
-      "0 12px 28px rgba(15,23,42,.055)",
+      "0 18px 44px rgba(15,23,42,.075), 0 2px 8px rgba(15,23,42,.035)",
+  },
+  companyAccent: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+    background:
+      "linear-gradient(90deg,#16834f 0%,#45b97c 55%,#d9efe2 100%)",
   },
   companyTop: {
     display: "grid",
     gridTemplateColumns: "minmax(0,1fr) auto",
-    gap: 10,
+    gap: 14,
+    alignItems: "start",
+    paddingTop: 3,
   },
   companyIdentity: {
     minWidth: 0,
     display: "grid",
-    gridTemplateColumns: "43px minmax(0,1fr)",
-    gap: 10,
+    gridTemplateColumns: "58px minmax(0,1fr)",
+    gap: 13,
     alignItems: "center",
   },
   companyInitial: {
-    width: 43,
-    height: 43,
+    width: 58,
+    height: 58,
     display: "grid",
     placeItems: "center",
-    borderRadius: 13,
-    background: "#e8f7ee",
-    color: "#16834f",
+    borderRadius: 18,
+    background:
+      "linear-gradient(145deg,#edf9f2 0%,#dff2e7 100%)",
+    border: "1px solid #d2e9dc",
+    color: "#137347",
+    fontSize: 21,
     fontWeight: 950,
+    boxShadow: "0 8px 18px rgba(22,131,79,.08)",
   },
   companyName: {
     display: "block",
-    fontSize: 14,
+    color: "#17221c",
+    fontSize: 17,
+    fontWeight: 900,
+    lineHeight: 1.2,
+    overflowWrap: "anywhere",
+  },
+  companyContactRow: {
+    marginTop: 7,
+    display: "flex",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
   },
   companyContact: {
-    display: "block",
-    marginTop: 2,
-    color: "#88948d",
-    fontSize: 9,
-  },
-  detailsGrid: {
-    marginTop: 13,
-    display: "grid",
-    gridTemplateColumns: "repeat(2,minmax(0,1fr))",
-    gap: 8,
-  },
-  detailBox: {
-    padding: "9px 10px",
-    border: "1px solid #e7ece9",
-    borderRadius: 11,
-    background: "#fff",
-  },
-  detailLabel: {
-    display: "block",
-    color: "#7d8981",
-    fontSize: 7.5,
-    fontWeight: 850,
-    textTransform: "uppercase",
-  },
-  detailValue: {
-    display: "block",
-    marginTop: 4,
-    color: "#27342d",
+    color: "#748178",
     fontSize: 10.5,
+    lineHeight: 1.35,
+    overflowWrap: "anywhere",
+  },
+  companyContactDot: {
+    color: "#a9b4ad",
+    fontSize: 10,
   },
   badgeStack: {
     display: "flex",
     alignItems: "flex-end",
     flexDirection: "column",
-    gap: 5,
+    gap: 7,
   },
   subscriptionBadge: {
     display: "inline-flex",
-    padding: "5px 8px",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 29,
+    padding: "5px 10px",
+    boxSizing: "border-box",
     borderRadius: 999,
-    fontSize: 7.5,
-    fontWeight: 950,
+    fontSize: 9,
+    fontWeight: 900,
     whiteSpace: "nowrap",
+    border: "1px solid transparent",
   },
   subscriptionBadgePaid: {
-    background: "#e8f7ee",
+    background: "#eaf8ef",
     color: "#14683e",
+    borderColor: "#cfe8d8",
   },
   subscriptionBadgeDemo: {
-    background: "#edf4ff",
-    color: "#1d4ed8",
+    background: "#eef4ff",
+    color: "#2352b8",
+    borderColor: "#d8e4ff",
   },
   subscriptionBadgeExpired: {
     background: "#fff0f0",
-    color: "#b91c1c",
+    color: "#b42318",
+    borderColor: "#f1cece",
   },
   subscriptionBadgeNeutral: {
-    background: "#f1f5f2",
+    background: "#f2f5f3",
     color: "#526057",
+    borderColor: "#e2e8e4",
   },
   serviceBadge: {
     display: "inline-flex",
-    padding: "6px 9px",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 29,
+    padding: "5px 10px",
+    boxSizing: "border-box",
     borderRadius: 999,
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: 900,
+    whiteSpace: "nowrap",
+    border: "1px solid transparent",
   },
   serviceBadgeActive: {
     background: "#dcfce7",
     color: "#166534",
+    borderColor: "#c9ebd5",
   },
   serviceBadgeSuspended: {
     background: "#fee2e2",
     color: "#991b1b",
+    borderColor: "#f3caca",
   },
-  actionsGrid: {
+  planSummary: {
+    marginTop: 17,
+    padding: 15,
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) auto",
+    alignItems: "center",
+    gap: 15,
+    border: "1px solid #e1e9e4",
+    borderRadius: 17,
+    background:
+      "linear-gradient(135deg,#f7fbf8 0%,#ffffff 65%)",
+  },
+  planSummaryMobile: {
+    gridTemplateColumns: "1fr",
+  },
+  planSummaryMain: {
+    minWidth: 0,
+  },
+  planSummaryLabel: {
+    display: "block",
+    color: "#16834f",
+    fontSize: 7.5,
+    fontWeight: 950,
+    letterSpacing: 1,
+  },
+  planSummaryName: {
+    display: "block",
+    marginTop: 5,
+    color: "#1c2922",
+    fontSize: 13.5,
+    fontWeight: 900,
+    lineHeight: 1.3,
+  },
+  planSummaryType: {
+    display: "block",
+    marginTop: 4,
+    color: "#7c8981",
+    fontSize: 9,
+  },
+  planPriceBox: {
+    minWidth: 108,
+    padding: "10px 12px",
+    textAlign: "right",
+    borderRadius: 13,
+    background: "#edf8f2",
+    border: "1px solid #d5eadc",
+  },
+  planPriceLabel: {
+    display: "block",
+    color: "#6c7b72",
+    fontSize: 7,
+    fontWeight: 900,
+    letterSpacing: 0.8,
+  },
+  planPriceValue: {
+    display: "block",
+    marginTop: 3,
+    color: "#117447",
+    fontSize: 20,
+    lineHeight: 1.1,
+    fontWeight: 950,
+  },
+  planPricePeriod: {
+    display: "block",
+    marginTop: 2,
+    color: "#87938c",
+    fontSize: 7.5,
+  },
+  detailsGrid: {
     marginTop: 12,
-    paddingTop: 12,
     display: "grid",
     gridTemplateColumns: "repeat(2,minmax(0,1fr))",
-    gap: 7,
-    borderTop: "1px solid #e7ece9",
+    gap: 9,
+  },
+  detailsGridMobile: {
+    gridTemplateColumns: "1fr",
+  },
+  detailBox: {
+    minWidth: 0,
+    padding: "11px 12px",
+    border: "1px solid #e5ebe7",
+    borderRadius: 13,
+    background: "rgba(255,255,255,.92)",
+  },
+  detailBoxAccent: {
+    border: "1px solid #f1ddb0",
+    background: "#fffaf0",
+  },
+  detailLabel: {
+    display: "block",
+    color: "#7c8981",
+    fontSize: 7.5,
+    fontWeight: 900,
+    letterSpacing: 0.55,
+    textTransform: "uppercase",
+  },
+  detailValue: {
+    display: "block",
+    marginTop: 5,
+    color: "#26342c",
+    fontSize: 11.5,
+    fontWeight: 800,
+    lineHeight: 1.3,
+    overflowWrap: "anywhere",
+  },
+  actionsGrid: {
+    marginTop: 15,
+    paddingTop: 15,
+    display: "grid",
+    gridTemplateColumns: "repeat(2,minmax(0,1fr))",
+    gap: 9,
+    borderTop: "1px solid #e5ece8",
+  },
+  actionsGridMobile: {
+    gridTemplateColumns: "1fr",
   },
   adminButton: {
-    minHeight: 40,
+    minHeight: 46,
+    padding: "10px 12px",
     border: "none",
-    borderRadius: 10,
-    background: "#16834f",
+    borderRadius: 13,
+    background: "linear-gradient(135deg,#178451,#11683e)",
     color: "#fff",
-    fontWeight: 850,
+    fontSize: 11.5,
+    fontWeight: 900,
     cursor: "pointer",
+    boxShadow: "0 9px 20px rgba(22,131,79,.16)",
   },
   planButton: {
-    minHeight: 40,
+    minHeight: 46,
+    padding: "10px 12px",
     border: "none",
-    borderRadius: 10,
-    background: "#2563eb",
+    borderRadius: 13,
+    background: "linear-gradient(135deg,#3b82f6,#2563eb)",
     color: "#fff",
-    fontWeight: 850,
+    fontSize: 11.5,
+    fontWeight: 900,
     cursor: "pointer",
+    boxShadow: "0 9px 20px rgba(37,99,235,.14)",
   },
   paymentButton: {
-    minHeight: 40,
+    minHeight: 46,
+    padding: "10px 12px",
     border: "none",
-    borderRadius: 10,
-    background: "#b7791f",
+    borderRadius: 13,
+    background: "linear-gradient(135deg,#c58a2c,#a96b17)",
     color: "#fff",
-    fontWeight: 850,
+    fontSize: 11.5,
+    fontWeight: 900,
     cursor: "pointer",
+    boxShadow: "0 9px 20px rgba(183,121,31,.13)",
   },
   archiveButton: {
-    minHeight: 40,
-    border: "1px solid #d1d7d3",
-    borderRadius: 10,
-    background: "#fff",
+    minHeight: 46,
+    padding: "10px 12px",
+    border: "1px solid #d4ddd7",
+    borderRadius: 13,
+    background: "#ffffff",
     color: "#526057",
-    fontWeight: 850,
+    fontSize: 11.5,
+    fontWeight: 900,
     cursor: "pointer",
   },
   deleteDemoButton: {
     gridColumn: "1 / -1",
-    minHeight: 42,
-    border: "1px solid #fecaca",
-    borderRadius: 10,
+    minHeight: 45,
+    padding: "10px 12px",
+    border: "1px solid #f3c6c6",
+    borderRadius: 13,
     background: "#fff5f5",
-    color: "#b91c1c",
+    color: "#b42318",
+    fontSize: 10.5,
     fontWeight: 900,
     cursor: "pointer",
   },
   restoreButton: {
     width: "100%",
-    minHeight: 42,
-    marginTop: 12,
+    minHeight: 46,
+    marginTop: 15,
     border: "1px solid #bddfca",
-    borderRadius: 10,
+    borderRadius: 13,
     background: "#edf8f1",
     color: "#14683e",
-    fontWeight: 850,
+    fontSize: 11.5,
+    fontWeight: 900,
     cursor: "pointer",
   },
   reportGrid: {
