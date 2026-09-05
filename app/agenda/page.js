@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.09.04-AGENDA-CALENDARIO-PROFESIONALES-KONAX-FIX20";
+const VERSION = "2026.09.05-AGENDA-CALENDARIO-PROFESIONALES-KONAX-FIX20";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -1415,155 +1415,136 @@ export default function AgendaPage() {
     };
   }, [disponibilidad, disponibilidadVisible, esSalonBelleza]);
 
+  const horariosFechaSalon = useMemo(() => {
+    if (!esSalonBelleza) return [];
 
-  const agendaVisualSalon = useMemo(() => {
-    if (!esSalonBelleza) {
-      return {
-        profesionales: [],
-        inicioMin: 8 * 60,
-        finMin: 20 * 60,
-        marcasHora: [],
-      };
-    }
+    return horarios.filter((horario) =>
+      rangoCoincideConFecha(horario, fechaAgenda)
+    );
+  }, [horarios, fechaAgenda, esSalonBelleza]);
 
-    const profesionalesMap = new Map();
+  const profesionalesAgendaSalon = useMemo(() => {
+    if (!esSalonBelleza) return [];
+
+    const porNombre = new Map();
 
     profesionalesSalon.forEach((profesional) => {
-      const nombre = String(profesional?.nombre || "").trim();
-      if (!nombre) return;
+      const clave = normalizar(profesional?.nombre || "");
+      if (!clave) return;
 
-      profesionalesMap.set(normalizar(nombre), {
-        id: profesional.id,
-        nombre,
-        especialidad: profesional.especialidad || "Profesional",
+      porNombre.set(clave, {
+        id: profesional.id || clave,
+        nombre: profesional.nombre || "Profesional",
+        especialidad:
+          profesional.especialidad ||
+          `Profesional de ${perfilBellezaTexto.conArticulo}`,
         foto_url: profesional.foto_url || "",
-        reservas: [],
       });
     });
 
-    reservasFechaOperativas.forEach((reserva) => {
-      const horario = mapaHorarios.get(String(reserva.horario_id || ""));
-      const nombreProfesional = String(
-        horario?.instructor || "Sin asignar"
-      ).trim() || "Sin asignar";
+    horariosFechaSalon.forEach((horario) => {
+      const nombre = String(horario?.instructor || "").trim();
+      const clave = normalizar(nombre);
+      if (!clave || porNombre.has(clave)) return;
 
-      const clave = normalizar(nombreProfesional);
-
-      if (!profesionalesMap.has(clave)) {
-        profesionalesMap.set(clave, {
-          id: `virtual-${clave || "sin-asignar"}`,
-          nombre: nombreProfesional,
-          especialidad:
-            nombreProfesional === "Sin asignar"
-              ? "Profesional por asignar"
-              : "Profesional",
-          foto_url: "",
-          reservas: [],
-        });
-      }
-
-      profesionalesMap.get(clave).reservas.push(reserva);
+      porNombre.set(clave, {
+        id: `horario-${clave}`,
+        nombre,
+        especialidad: "Profesional",
+        foto_url: "",
+      });
     });
 
-    const profesionales = Array.from(profesionalesMap.values())
-      .filter(
-        (profesional) =>
-          profesional.reservas.length > 0 ||
-          profesionalesSalon.some(
-            (item) =>
-              normalizar(item.nombre) ===
-              normalizar(profesional.nombre)
-          )
-      )
-      .sort((a, b) =>
-        a.nombre.localeCompare(b.nombre, "es", {
-          sensitivity: "base",
-        })
-      );
-
-    const minutosReferencia = [];
-
-    disponibilidadVisible.forEach((item) => {
-      if (item?.hora_inicio) {
-        minutosReferencia.push(horaAMinutos(item.hora_inicio));
-      }
-      if (item?.hora_fin) {
-        minutosReferencia.push(horaAMinutos(item.hora_fin));
-      }
-    });
-
-    reservasFechaOperativas.forEach((reserva) => {
-      if (reserva?.hora_inicio) {
-        minutosReferencia.push(horaAMinutos(reserva.hora_inicio));
-      }
-
-      if (reserva?.hora_fin) {
-        minutosReferencia.push(horaAMinutos(reserva.hora_fin));
-      } else {
-        const servicio = mapaServicios.get(
-          String(reserva.servicio_id || "")
-        );
-        minutosReferencia.push(
-          horaAMinutos(reserva.hora_inicio) +
-            Number(servicio?.duracion_minutos || 60)
-        );
-      }
-    });
-
-    let inicioMin = 8 * 60;
-    let finMin = 20 * 60;
-
-    if (minutosReferencia.length > 0) {
-      const minimo = Math.min(...minutosReferencia);
-      const maximo = Math.max(...minutosReferencia);
-
-      inicioMin = Math.max(
-        6 * 60,
-        Math.floor(minimo / 60) * 60
-      );
-
-      finMin = Math.min(
-        23 * 60,
-        Math.ceil(maximo / 60) * 60
-      );
-
-      if (finMin - inicioMin < 6 * 60) {
-        finMin = Math.min(23 * 60, inicioMin + 6 * 60);
-      }
-    }
-
-    const marcasHora = [];
-
-    for (let minuto = inicioMin; minuto <= finMin; minuto += 60) {
-      const hh = Math.floor(minuto / 60);
-      marcasHora.push({
-        minuto,
-        texto: formatoHora(
-          `${String(hh).padStart(2, "0")}:00`
-        ),
+    if (porNombre.size === 0) {
+      porNombre.set("sin-asignar", {
+        id: "sin-asignar",
+        nombre: "Sin asignar",
+        especialidad: "Profesional",
+        foto_url: "",
       });
     }
 
-    return {
-      profesionales,
-      inicioMin,
-      finMin,
-      marcasHora,
-    };
+    return Array.from(porNombre.values());
   }, [
     esSalonBelleza,
     profesionalesSalon,
-    reservasFechaOperativas,
-    disponibilidadVisible,
-    mapaHorarios,
-    mapaServicios,
+    horariosFechaSalon,
+    perfilBellezaTexto,
   ]);
 
-  function abrirReservaDesdeCalendario(reserva) {
-    setBusquedaReservas(
-      nombreDeReserva(reserva) || ""
+  const franjasAgendaSalon = useMemo(() => {
+    if (!esSalonBelleza) return [];
+
+    const inicios = horariosFechaSalon
+      .map((h) => horaAMinutos(h.hora_inicio))
+      .filter((n) => Number.isFinite(n) && n >= 0);
+
+    const finales = horariosFechaSalon
+      .map((h) => horaAMinutos(h.hora_fin))
+      .filter((n) => Number.isFinite(n) && n > 0);
+
+    let inicio = inicios.length ? Math.min(...inicios) : 8 * 60;
+    let fin = finales.length ? Math.max(...finales) : 20 * 60;
+
+    // Redondeo visual para que siempre se vea el día completo.
+    inicio = Math.max(0, Math.floor(inicio / 60) * 60);
+    fin = Math.min(24 * 60, Math.ceil(fin / 60) * 60);
+
+    // Si por alguna configuración extraña el rango queda corto,
+    // garantizamos al menos una jornada visible de 8 horas.
+    if (fin - inicio < 8 * 60) {
+      fin = Math.min(24 * 60, inicio + 8 * 60);
+    }
+
+    const resultado = [];
+    for (let minuto = inicio; minuto < fin; minuto += 30) {
+      const hh = String(Math.floor(minuto / 60)).padStart(2, "0");
+      const mm = String(minuto % 60).padStart(2, "0");
+
+      resultado.push({
+        minuto,
+        hora: `${hh}:${mm}`,
+        mostrarEtiqueta: minuto % 60 === 0,
+      });
+    }
+
+    return resultado;
+  }, [esSalonBelleza, horariosFechaSalon]);
+
+  function profesionalDeReserva(reserva) {
+    const horario = mapaHorarios.get(
+      String(reserva?.horario_id || "")
     );
-    setVista("reservas");
+
+    return String(
+      horario?.instructor ||
+      reserva?.profesional ||
+      ""
+    ).trim();
+  }
+
+  function reservasDeCelda(profesional, franja) {
+    const nombreProfesional = normalizar(
+      profesional?.nombre || ""
+    );
+
+    return reservasFechaOperativas.filter((reserva) => {
+      const inicioReserva = horaAMinutos(reserva?.hora_inicio);
+      const profesionalReservaNombre = normalizar(
+        profesionalDeReserva(reserva)
+      );
+
+      const coincideHora =
+        inicioReserva >= franja.minuto &&
+        inicioReserva < franja.minuto + 30;
+
+      const coincideProfesional =
+        nombreProfesional === "sin_asignar"
+          ? !profesionalReservaNombre
+          : profesionalReservaNombre === nombreProfesional;
+
+      return coincideHora && coincideProfesional;
+    });
   }
 
   async function refrescarTodo() {
@@ -2810,35 +2791,26 @@ export default function AgendaPage() {
           </section>
 
           {esSalonBelleza ? (
-            <section
-              className="agenda-konax-workspace"
-            >
-              <article className="agenda-konax-calendar-card">
-                <div className="agenda-konax-calendar-top">
+            <section className="konax-agenda-layout">
+              <article className="konax-calendar-card">
+                <div className="konax-calendar-top">
                   <div>
-                    <span style={neo.sectionEyebrow}>
+                    <span className="konax-calendar-eyebrow">
                       AGENDA DEL DÍA
                     </span>
-                    <h2 style={neo.panelHeading}>
-                      Agenda por profesional
+                    <h2 className="konax-calendar-title">
+                      Agenda por profesionales
                     </h2>
-                    <p className="agenda-konax-calendar-subtitle">
-                      Visualiza rápidamente qué profesional tiene cada cita y qué espacios siguen libres.
+                    <p className="konax-calendar-subtitle">
+                      {formatoFecha(fechaAgenda)} · {profesionalesAgendaSalon.length} profesional
+                      {profesionalesAgendaSalon.length === 1 ? "" : "es"}
                     </p>
                   </div>
 
-                  <div className="agenda-konax-calendar-actions">
+                  <div className="konax-calendar-actions">
                     <button
                       type="button"
-                      className="agenda-konax-today-button"
-                      onClick={irAgendaHoy}
-                    >
-                      Hoy
-                    </button>
-
-                    <button
-                      type="button"
-                      className="agenda-konax-date-arrow"
+                      className="konax-date-arrow"
                       onClick={() => moverFechaAgenda(-1)}
                       aria-label="Día anterior"
                     >
@@ -2852,12 +2824,12 @@ export default function AgendaPage() {
                         setFechaAgenda(e.target.value);
                         setHorarioSeleccionado("");
                       }}
-                      className="agenda-konax-date-input"
+                      className="konax-date-input"
                     />
 
                     <button
                       type="button"
-                      className="agenda-konax-date-arrow"
+                      className="konax-date-arrow"
                       onClick={() => moverFechaAgenda(1)}
                       aria-label="Día siguiente"
                     >
@@ -2866,328 +2838,229 @@ export default function AgendaPage() {
 
                     <button
                       type="button"
-                      className="agenda-konax-new-button"
+                      className="konax-new-reservation"
                       onClick={() => setVista("nueva")}
                     >
-                      + Nueva reserva
+                      <span>＋</span>
+                      Nueva reserva
                     </button>
                   </div>
                 </div>
 
-                {agendaVisualSalon.profesionales.length === 0 ? (
-                  <div style={neo.emptyLarge}>
-                    <div style={neo.emptyIcon}>◷</div>
-                    <strong style={neo.emptyTitle}>
-                      No hay profesionales configurados
-                    </strong>
-                    <span style={neo.emptyText}>
-                      Agrega profesionales y sus horarios para visualizar la agenda en columnas.
-                    </span>
+                <div className="konax-calendar-hint">
+                  <span className="konax-live-dot" />
+                  Horarios del negocio · desliza horizontalmente para ver más profesionales
+                </div>
 
-                    {esAdmin && (
-                      <button
-                        type="button"
-                        style={neo.emptyButton}
-                        onClick={() => setVista("configuracion")}
-                      >
-                        Configurar servicios y horarios
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="agenda-konax-calendar-scroll">
-                    <div
-                      className="agenda-konax-calendar-grid"
-                      style={{
-                        "--prof-count": agendaVisualSalon.profesionales.length,
-                        "--calendar-height": `${
-                          Math.max(
-                            420,
-                            ((agendaVisualSalon.finMin -
-                              agendaVisualSalon.inicioMin) /
-                              60) *
-                              58
-                          )
-                        }px`,
-                      }}
-                    >
-                      <div className="agenda-konax-time-head">
-                        Hora
-                      </div>
+                <div className="konax-calendar-scroll">
+                  <div
+                    className="konax-calendar-grid"
+                    style={{
+                      gridTemplateColumns: `92px repeat(${Math.max(
+                        profesionalesAgendaSalon.length,
+                        1
+                      )}, minmax(190px,1fr))`,
+                    }}
+                  >
+                    <div className="konax-time-head">
+                      HORA
+                    </div>
 
-                      {agendaVisualSalon.profesionales.map(
-                        (profesional, indice) => (
-                          <div
-                            key={`head-${profesional.id}`}
-                            className="agenda-konax-prof-head"
-                          >
-                            <div
-                              className={`agenda-konax-prof-avatar agenda-konax-prof-${indice % 6}`}
-                            >
-                              {profesional.foto_url ? (
-                                <img
-                                  src={profesional.foto_url}
-                                  alt={profesional.nombre}
-                                />
-                              ) : (
-                                String(
-                                  profesional.nombre || "P"
-                                )
-                                  .charAt(0)
-                                  .toUpperCase()
-                              )}
-                            </div>
-
-                            <div>
-                              <strong>
-                                {profesional.nombre}
-                              </strong>
-                              <span>
-                                {profesional.especialidad}
-                              </span>
-                            </div>
-                          </div>
-                        )
-                      )}
-
+                    {profesionalesAgendaSalon.map((profesional, indice) => (
                       <div
-                        className="agenda-konax-time-axis"
-                        style={{
-                          height: "var(--calendar-height)",
-                        }}
+                        key={profesional.id || `${profesional.nombre}-${indice}`}
+                        className="konax-pro-head"
                       >
-                        {agendaVisualSalon.marcasHora.map(
-                          (marca) => {
-                            const top =
-                              ((marca.minuto -
-                                agendaVisualSalon.inicioMin) /
-                                (agendaVisualSalon.finMin -
-                                  agendaVisualSalon.inicioMin)) *
-                              100;
+                        <div className="konax-pro-avatar">
+                          {profesional.foto_url ? (
+                            <img
+                              src={profesional.foto_url}
+                              alt={profesional.nombre}
+                            />
+                          ) : (
+                            <span>
+                              {String(profesional.nombre || "P")
+                                .charAt(0)
+                                .toUpperCase()}
+                            </span>
+                          )}
+                        </div>
 
-                            return (
-                              <span
-                                key={marca.minuto}
-                                className="agenda-konax-time-label"
-                                style={{
-                                  top: `${top}%`,
-                                }}
-                              >
-                                {marca.texto}
-                              </span>
-                            );
-                          }
-                        )}
+                        <div className="konax-pro-info">
+                          <strong>{profesional.nombre}</strong>
+                          <span>{profesional.especialidad || "Profesional"}</span>
+                        </div>
                       </div>
+                    ))}
 
-                      {agendaVisualSalon.profesionales.map(
-                        (profesional, indiceProfesional) => (
-                          <div
-                            key={`col-${profesional.id}`}
-                            className="agenda-konax-prof-column"
-                            style={{
-                              height: "var(--calendar-height)",
-                            }}
-                          >
-                            {agendaVisualSalon.marcasHora.map(
-                              (marca) => {
-                                const top =
-                                  ((marca.minuto -
-                                    agendaVisualSalon.inicioMin) /
-                                    (agendaVisualSalon.finMin -
-                                      agendaVisualSalon.inicioMin)) *
-                                  100;
+                    {franjasAgendaSalon.map((franja, fila) => (
+                      <Fragment key={franja.hora}>
+                        <div
+                          className={`konax-time-cell ${
+                            franja.mostrarEtiqueta ? "is-hour" : "is-half"
+                          }`}
+                        >
+                          {franja.mostrarEtiqueta ? formatoHora(franja.hora) : ""}
+                        </div>
 
-                                return (
-                                  <span
-                                    key={`${profesional.id}-${marca.minuto}`}
-                                    className="agenda-konax-hour-line"
-                                    style={{
-                                      top: `${top}%`,
-                                    }}
-                                  />
-                                );
-                              }
-                            )}
+                        {profesionalesAgendaSalon.map((profesional, indice) => {
+                          const citas = reservasDeCelda(
+                            profesional,
+                            franja
+                          );
 
-                            {profesional.reservas.map(
-                              (reserva) => {
-                                const servicio =
-                                  mapaServicios.get(
-                                    String(
-                                      reserva.servicio_id || ""
-                                    )
-                                  );
-
-                                const inicio =
-                                  horaAMinutos(
-                                    reserva.hora_inicio
-                                  );
-
-                                const fin = reserva.hora_fin
-                                  ? horaAMinutos(
-                                      reserva.hora_fin
-                                    )
-                                  : inicio +
-                                    Number(
-                                      servicio?.duracion_minutos ||
-                                        60
-                                    );
-
-                                const totalMin =
-                                  agendaVisualSalon.finMin -
-                                  agendaVisualSalon.inicioMin;
-
-                                const top =
-                                  ((inicio -
-                                    agendaVisualSalon.inicioMin) /
-                                    totalMin) *
-                                  100;
-
-                                const alto =
-                                  ((Math.max(
-                                    30,
-                                    fin - inicio
-                                  ) /
-                                    totalMin) *
-                                    100);
-
-                                const estado =
-                                  normalizar(reserva.estado);
+                          return (
+                            <div
+                              key={`${franja.hora}-${profesional.id || indice}`}
+                              className={`konax-calendar-cell ${
+                                franja.mostrarEtiqueta ? "is-hour" : "is-half"
+                              }`}
+                            >
+                              {citas.map((reserva) => {
+                                const estado = normalizar(reserva.estado);
+                                const claseEstado =
+                                  estado === "asistio"
+                                    ? "is-attended"
+                                    : estado === "no_asistio"
+                                    ? "is-no-show"
+                                    : estado === "pendiente_pago"
+                                    ? "is-pending"
+                                    : "is-confirmed";
 
                                 return (
                                   <button
                                     key={reserva.id}
                                     type="button"
-                                    className={`agenda-konax-event agenda-konax-event-${indiceProfesional % 6} ${
-                                      estado === "pendiente_pago"
-                                        ? "agenda-konax-event-pending"
-                                        : estado === "asistio"
-                                        ? "agenda-konax-event-done"
-                                        : estado === "no_asistio"
-                                        ? "agenda-konax-event-missed"
-                                        : ""
-                                    }`}
-                                    style={{
-                                      top: `${Math.max(0, top)}%`,
-                                      height: `${Math.max(
-                                        5.5,
-                                        alto
-                                      )}%`,
+                                    className={`konax-event-card ${claseEstado}`}
+                                    onClick={() => {
+                                      setBusquedaReservas(
+                                        nombreDeReserva(reserva) || ""
+                                      );
+                                      setVista("reservas");
                                     }}
-                                    onClick={() =>
-                                      abrirReservaDesdeCalendario(
-                                        reserva
-                                      )
-                                    }
-                                    title={`${nombreDeReserva(
-                                      reserva
-                                    )} · ${nombreServicio(
-                                      reserva.servicio_id
-                                    )}`}
                                   >
-                                    <span className="agenda-konax-event-time">
-                                      {formatoHora(
-                                        reserva.hora_inicio
-                                      )}
+                                    <span className="konax-event-time">
+                                      {formatoHora(reserva.hora_inicio)}
+                                      {reserva.hora_fin
+                                        ? ` – ${formatoHora(reserva.hora_fin)}`
+                                        : ""}
                                     </span>
-                                    <strong>
+
+                                    <strong className="konax-event-client">
                                       {nombreDeReserva(reserva)}
                                     </strong>
-                                    <small>
-                                      {nombreServicio(
-                                        reserva.servicio_id
-                                      )}
-                                    </small>
+
+                                    <span className="konax-event-service">
+                                      {nombreServicio(reserva.servicio_id)}
+                                    </span>
+
+                                    <span className="konax-event-status">
+                                      {estado === "asistio"
+                                        ? "Atendido"
+                                        : estado === "no_asistio"
+                                        ? "No asistió"
+                                        : estado === "pendiente_pago"
+                                        ? "Pendiente"
+                                        : "Confirmada"}
+                                    </span>
                                   </button>
                                 );
-                              }
-                            )}
-                          </div>
-                        )
-                      )}
-                    </div>
+                              })}
+                            </div>
+                          );
+                        })}
+                      </Fragment>
+                    ))}
                   </div>
-                )}
-              </article>
+                </div>
 
-              <aside className="agenda-konax-summary-card">
-                <span className="agenda-konax-summary-eyebrow">
-                  RESUMEN DE LA JORNADA
-                </span>
-
-                <h3>
-                  Estado del día
-                </h3>
-
-                <div className="agenda-konax-summary-list">
+                <div className="konax-calendar-footer">
                   <div>
-                    <span>Citas</span>
                     <strong>
                       {reservasFechaOperativas.length}
                     </strong>
+                    <span>Citas del día</span>
                   </div>
 
+                  <div>
+                    <strong>{resumenReservas.confirmadas}</strong>
+                    <span>Confirmadas</span>
+                  </div>
+
+                  <div>
+                    <strong>{resumenReservas.pendientes}</strong>
+                    <span>Pendientes</span>
+                  </div>
+
+                  <div>
+                    <strong>{resumenAgenda.cuposDisponibles}</strong>
+                    <span>Horarios libres</span>
+                  </div>
+                </div>
+              </article>
+
+              <aside className="konax-day-summary">
+                <span className="konax-summary-eyebrow">
+                  RESUMEN DE LA JORNADA
+                </span>
+                <h3>Estado del día</h3>
+
+                <div className="konax-summary-occupancy">
+                  <div
+                    className="konax-summary-ring"
+                    style={{
+                      background: `conic-gradient(#19a463 ${resumenAgenda.ocupacion}%, #e7efe9 0)`,
+                    }}
+                  >
+                    <div>
+                      <strong>{resumenAgenda.ocupacion}%</strong>
+                      <span>ocupación</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="konax-summary-list">
+                  <div>
+                    <span>Citas</span>
+                    <strong>{reservasFechaOperativas.length}</strong>
+                  </div>
                   <div>
                     <span>Confirmadas</span>
-                    <strong>
-                      {resumenReservas.confirmadas}
-                    </strong>
+                    <strong>{resumenReservas.confirmadas}</strong>
                   </div>
-
                   <div>
                     <span>Asistieron</span>
-                    <strong>
-                      {resumenReservas.asistieron}
-                    </strong>
+                    <strong>{resumenReservas.asistieron}</strong>
                   </div>
-
                   <div>
                     <span>Pendientes</span>
-                    <strong>
-                      {resumenReservas.pendientes}
-                    </strong>
+                    <strong>{resumenReservas.pendientes}</strong>
                   </div>
-
                   <div>
                     <span>No asistieron</span>
-                    <strong>
-                      {resumenReservas.noAsistieron}
-                    </strong>
+                    <strong>{resumenReservas.noAsistieron}</strong>
                   </div>
-
                   <div>
                     <span>Horarios libres</span>
-                    <strong>
-                      {resumenAgenda.cuposDisponibles}
-                    </strong>
+                    <strong>{resumenAgenda.cuposDisponibles}</strong>
                   </div>
                 </div>
 
                 <button
                   type="button"
-                  className="agenda-konax-summary-primary"
-                  onClick={() => setVista("reservas")}
+                  className="konax-summary-primary"
+                  onClick={() => setVista("nueva")}
                 >
-                  Ver citas del día
+                  ＋ Nueva reserva
                 </button>
 
                 <button
                   type="button"
-                  className="agenda-konax-summary-secondary"
+                  className="konax-summary-secondary"
                   onClick={() => setVista("reservas")}
                 >
                   Administrar citas
                 </button>
-
-                <div className="agenda-konax-tip">
-                  <strong>
-                    Tu agenda más organizada con KONAX
-                  </strong>
-                  <span>
-                    Cada columna corresponde a un profesional y cada bloque representa una cita.
-                  </span>
-                </div>
               </aside>
             </section>
           ) : (
@@ -4458,7 +4331,7 @@ export default function AgendaPage() {
                 {esSalonBelleza ? (
                   <select value="pago_local" disabled style={s.input}>
                     <option value="pago_local">
-                      {`Servicio de ${perfilBellezaTexto.corto} · Cobro en Caja`}
+                      Servicio del salón · Cobro en Caja
                     </option>
                   </select>
                 ) : (
@@ -7696,484 +7569,648 @@ const AGENDA_CSS = `
 
 
   /* =========================================================
-     KONAX · CALENDARIO POR PROFESIONALES FIX20
-     Solo aplica al perfil Belleza / Barbería / Spa en vista Agenda.
+     KONAX AGENDA · CALENDARIO POR PROFESIONALES FIX20
      ========================================================= */
-  .agenda-konax-workspace {
+
+  .agenda-salon.agenda-view-hoy {
+    background:
+      radial-gradient(circle at 0% 0%, rgba(21,146,83,.12), transparent 26%),
+      radial-gradient(circle at 100% 20%, rgba(55,184,126,.10), transparent 25%),
+      linear-gradient(180deg,#f5faf7 0%,#eef6f1 100%) !important;
+  }
+
+  .agenda-salon.agenda-view-hoy .agenda-d-hero {
+    background:
+      radial-gradient(circle at 88% 18%, rgba(103,232,167,.18), transparent 30%),
+      linear-gradient(125deg,#052c1d 0%,#075c38 54%,#11945a 100%) !important;
+    box-shadow: 0 20px 48px rgba(5,72,43,.20) !important;
+  }
+
+  .agenda-salon.agenda-view-hoy .agenda-nav-hoy button:nth-child(1) {
+    background: linear-gradient(135deg,#087446,#16a064) !important;
+    color: #fff !important;
+    box-shadow: 0 8px 18px rgba(8,116,70,.24) !important;
+  }
+
+  .agenda-salon.agenda-view-hoy .agenda-d-week-shell {
+    background:
+      linear-gradient(145deg,rgba(255,255,255,.98),rgba(239,249,243,.95)) !important;
+    border-color: rgba(14,128,77,.14) !important;
+    box-shadow: 0 12px 30px rgba(13,86,52,.07) !important;
+  }
+
+  .agenda-salon.agenda-view-hoy .agenda-d-week-strip button {
+    border-color: rgba(14,128,77,.14) !important;
+    background: rgba(255,255,255,.94) !important;
+  }
+
+  .agenda-salon.agenda-view-hoy .agenda-d-week-strip button[style*="linear-gradient"] {
+    background: linear-gradient(145deg,#087446,#16a064) !important;
+  }
+
+  .konax-agenda-layout {
     max-width: 1480px;
     margin: 0 auto 18px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 280px;
+    grid-template-columns: minmax(0,1fr) 286px;
     gap: 14px;
     align-items: start;
+    font-family:
+      Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+      "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   }
 
-  .agenda-konax-calendar-card,
-  .agenda-konax-summary-card {
-    border: 1px solid #dce8e1;
-    border-radius: 18px;
-    background: #ffffff;
-    box-shadow: 0 12px 28px rgba(16, 58, 37, .07);
+  .konax-calendar-card,
+  .konax-day-summary {
+    border: 1px solid rgba(12,91,54,.12);
+    border-radius: 22px;
+    background: rgba(255,255,255,.97);
+    box-shadow: 0 16px 38px rgba(16,71,45,.08);
   }
 
-  .agenda-konax-calendar-card {
+  .konax-calendar-card {
     min-width: 0;
-    padding: 15px;
+    overflow: hidden;
   }
 
-  .agenda-konax-calendar-top {
-    margin-bottom: 12px;
+  .konax-calendar-top {
+    padding: 18px 18px 14px;
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     gap: 14px;
     flex-wrap: wrap;
+    border-bottom: 1px solid #e7eee9;
+    background:
+      linear-gradient(180deg,#ffffff 0%,#fbfdfb 100%);
   }
 
-  .agenda-konax-calendar-subtitle {
-    margin: 5px 0 0;
-    color: #77837c;
+  .konax-calendar-eyebrow,
+  .konax-summary-eyebrow {
+    display: block;
+    margin-bottom: 5px;
+    color: #13835b;
+    font-size: 9px;
+    font-weight: 950;
+    letter-spacing: 1.45px;
+  }
+
+  .konax-calendar-title {
+    margin: 0;
+    color: #10261b;
+    font-size: clamp(21px,2vw,29px);
+    line-height: 1.05;
+    font-weight: 850;
+    letter-spacing: -.7px;
+  }
+
+  .konax-calendar-subtitle {
+    margin: 6px 0 0;
+    color: #6a7d72;
     font-size: 11px;
-    line-height: 1.45;
+    font-weight: 650;
   }
 
-  .agenda-konax-calendar-actions {
+  .konax-calendar-actions {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 6px;
+    gap: 7px;
     flex-wrap: wrap;
   }
 
-  .agenda-konax-today-button,
-  .agenda-konax-date-arrow,
-  .agenda-konax-date-input,
-  .agenda-konax-new-button {
-    min-height: 38px;
-    border-radius: 10px;
-    font-family: inherit;
-    font-weight: 850;
-  }
-
-  .agenda-konax-today-button {
-    padding: 0 13px;
-    border: 1px solid #9ed5b7;
-    background: #f2fbf6;
-    color: #0b7044;
-    cursor: pointer;
-  }
-
-  .agenda-konax-date-arrow {
-    width: 38px;
-    border: 1px solid #dce6e0;
+  .konax-date-arrow {
+    width: 42px;
+    height: 42px;
+    border: 1px solid #d8e3dc;
+    border-radius: 12px;
     background: #fff;
-    color: #214032;
-    font-size: 20px;
-    cursor: pointer;
-  }
-
-  .agenda-konax-date-input {
-    padding: 0 10px;
-    border: 1px solid #dce6e0;
-    background: #fff;
-    color: #1c2c24;
-  }
-
-  .agenda-konax-new-button {
-    padding: 0 14px;
-    border: 0;
-    background: linear-gradient(135deg,#0a7845,#119256);
-    color: #fff;
-    cursor: pointer;
-    box-shadow: 0 7px 16px rgba(11, 122, 67, .18);
-  }
-
-  .agenda-konax-calendar-scroll {
-    width: 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
-    border: 1px solid #e2e9e5;
-    border-radius: 14px;
-    background: #fff;
-  }
-
-  .agenda-konax-calendar-grid {
-    min-width: max(760px, calc(92px + (var(--prof-count) * 180px)));
-    display: grid;
-    grid-template-columns: 92px repeat(var(--prof-count), minmax(180px, 1fr));
-    grid-template-rows: 64px auto;
-  }
-
-  .agenda-konax-time-head,
-  .agenda-konax-prof-head {
-    position: sticky;
-    top: 0;
-    z-index: 3;
-    min-height: 64px;
-    border-bottom: 1px solid #dfe7e2;
-    background: #f8fbf9;
-  }
-
-  .agenda-konax-time-head {
-    display: grid;
-    place-items: center;
-    border-right: 1px solid #dfe7e2;
-    color: #708078;
-    font-size: 9px;
+    color: #0d6644;
+    font-size: 24px;
     font-weight: 900;
-    letter-spacing: .8px;
-    text-transform: uppercase;
+    cursor: pointer;
   }
 
-  .agenda-konax-prof-head {
-    padding: 10px 12px;
+  .konax-date-input {
+    min-height: 42px;
+    padding: 0 12px;
+    border: 1px solid #d8e3dc !important;
+    border-radius: 12px !important;
+    background: #fff !important;
+    color: #15281e !important;
+    font-size: 12px !important;
+    font-weight: 800;
+  }
+
+  .konax-new-reservation {
+    min-height: 42px;
+    padding: 0 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 0;
+    border-radius: 12px;
+    background: linear-gradient(135deg,#087547,#14a05f);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 900;
+    cursor: pointer;
+    box-shadow: 0 8px 18px rgba(8,117,71,.19);
+  }
+
+  .konax-calendar-hint {
+    padding: 9px 16px;
     display: flex;
     align-items: center;
-    gap: 9px;
-    border-right: 1px solid #e5ebe7;
+    gap: 7px;
+    border-bottom: 1px solid #ebf0ed;
+    background: #f7fbf8;
+    color: #64766c;
+    font-size: 9.5px;
+    font-weight: 700;
   }
 
-  .agenda-konax-prof-head strong {
-    display: block;
-    color: #17251e;
-    font-size: 12px;
-    line-height: 1.1;
+  .konax-live-dot {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: #17a15f;
+    box-shadow: 0 0 0 4px rgba(23,161,95,.10);
   }
 
-  .agenda-konax-prof-head span {
-    display: block;
-    margin-top: 3px;
-    color: #7a867f;
-    font-size: 9px;
+  .konax-calendar-scroll {
+    max-height: 720px;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #b8cec0 #f5f8f6;
+    background: #fff;
   }
 
-  .agenda-konax-prof-avatar {
-    width: 34px;
-    height: 34px;
-    flex: 0 0 34px;
+  .konax-calendar-grid {
+    min-width: max-content;
+    display: grid;
+    position: relative;
+  }
+
+  .konax-time-head,
+  .konax-pro-head {
+    min-height: 76px;
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    border-right: 1px solid #e0e8e3;
+    border-bottom: 1px solid #dce6e0;
+    background:
+      linear-gradient(180deg,#fbfdfc 0%,#f5faf7 100%);
+  }
+
+  .konax-time-head {
+    left: 0;
+    z-index: 14;
     display: grid;
     place-items: center;
-    overflow: hidden;
-    border-radius: 50%;
-    font-size: 10px;
+    color: #6a7b72;
+    font-size: 9px;
     font-weight: 950;
-    color: #17412d;
-    background: #dff5e8;
+    letter-spacing: 1px;
   }
 
-  .agenda-konax-prof-avatar img {
+  .konax-pro-head {
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .konax-pro-avatar {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background:
+      linear-gradient(135deg,#dff7e9,#c8efda);
+    color: #076f43;
+    font-size: 14px;
+    font-weight: 950;
+    box-shadow: inset 0 0 0 1px rgba(7,111,67,.08);
+  }
+
+  .konax-pro-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
 
-  .agenda-konax-prof-1 { background: #e8f0ff; color: #294d8c; }
-  .agenda-konax-prof-2 { background: #f1eaff; color: #6241a1; }
-  .agenda-konax-prof-3 { background: #e3f7f4; color: #176d65; }
-  .agenda-konax-prof-4 { background: #fff0f5; color: #9a4163; }
-  .agenda-konax-prof-5 { background: #fff4df; color: #8a601a; }
-
-  .agenda-konax-time-axis,
-  .agenda-konax-prof-column {
-    position: relative;
-  }
-
-  .agenda-konax-time-axis {
-    border-right: 1px solid #dfe7e2;
-    background:
-      repeating-linear-gradient(
-        to bottom,
-        #fbfdfc 0,
-        #fbfdfc 57px,
-        #e5ebe7 57px,
-        #e5ebe7 58px
-      );
-  }
-
-  .agenda-konax-prof-column {
+  .konax-pro-info {
     min-width: 0;
-    border-right: 1px solid #e7ece9;
-    background:
-      repeating-linear-gradient(
-        to bottom,
-        #ffffff 0,
-        #ffffff 57px,
-        #edf1ef 57px,
-        #edf1ef 58px
-      );
   }
 
-  .agenda-konax-time-label {
-    position: absolute;
-    left: 0;
-    right: 0;
-    padding-right: 9px;
-    transform: translateY(-50%);
-    color: #718078;
-    font-size: 9px;
-    font-weight: 800;
-    text-align: right;
-    white-space: nowrap;
-  }
-
-  .agenda-konax-hour-line {
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: #edf1ef;
-    pointer-events: none;
-  }
-
-  .agenda-konax-event {
-    position: absolute;
-    left: 6px;
-    right: 6px;
-    z-index: 2;
-    min-height: 38px;
+  .konax-pro-info strong {
+    display: block;
     overflow: hidden;
-    padding: 7px 8px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #13271d;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: -.15px;
+  }
+
+  .konax-pro-info span {
+    display: block;
+    margin-top: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #839088;
+    font-size: 8.5px;
+    font-weight: 750;
+    text-transform: uppercase;
+    letter-spacing: .35px;
+  }
+
+  .konax-time-cell,
+  .konax-calendar-cell {
+    min-height: 43px;
+    border-right: 1px solid #e7ede9;
+    border-bottom: 1px solid #edf1ef;
+    background: #fff;
+  }
+
+  .konax-time-cell {
+    position: sticky;
+    left: 0;
+    z-index: 8;
+    padding: 11px 9px 0 0;
+    background: #fbfdfc;
+    color: #64756b;
+    text-align: right;
+    font-size: 9px;
+    font-weight: 850;
+  }
+
+  .konax-time-cell.is-half {
+    border-bottom-color: #f3f5f4;
+  }
+
+  .konax-calendar-cell {
+    position: relative;
+    padding: 3px 4px;
+  }
+
+  .konax-calendar-cell.is-half {
+    border-bottom-color: #f3f5f4;
+    background:
+      linear-gradient(180deg,#ffffff,#fdfefd);
+  }
+
+  .konax-calendar-cell:hover {
+    background: #f7fbf8;
+  }
+
+  .konax-event-card {
+    width: 100%;
+    min-height: 54px;
+    padding: 7px 8px 8px;
+    display: grid;
     gap: 2px;
     border: 0;
-    border-left: 4px solid #0d8b4f;
-    border-radius: 8px;
-    background: linear-gradient(135deg,#e6f8ed,#d7f1e1);
-    color: #183326;
+    border-left: 4px solid #0d8c50;
+    border-radius: 9px;
+    background:
+      linear-gradient(135deg,#e8f8ef,#d8f2e4);
+    color: #163326;
     text-align: left;
     cursor: pointer;
-    box-shadow: 0 4px 10px rgba(21, 83, 50, .08);
+    box-shadow:
+      0 4px 11px rgba(18,84,52,.08),
+      inset 0 1px 0 rgba(255,255,255,.8);
   }
 
-  .agenda-konax-event-1 {
-    border-left-color: #4d74c9;
-    background: linear-gradient(135deg,#edf3ff,#e2eaff);
+  .konax-event-card.is-pending {
+    border-left-color: #d69213;
+    background:
+      linear-gradient(135deg,#fff8df,#fff0c1);
   }
 
-  .agenda-konax-event-2 {
-    border-left-color: #7354b7;
-    background: linear-gradient(135deg,#f4efff,#ebe4ff);
+  .konax-event-card.is-attended {
+    border-left-color: #1585a6;
+    background:
+      linear-gradient(135deg,#e4f7fb,#d5eff7);
   }
 
-  .agenda-konax-event-3 {
-    border-left-color: #26877d;
-    background: linear-gradient(135deg,#e6f8f5,#dff3f0);
+  .konax-event-card.is-no-show {
+    border-left-color: #b74444;
+    background:
+      linear-gradient(135deg,#fff0f0,#fde1e1);
   }
 
-  .agenda-konax-event-4 {
-    border-left-color: #b85d7d;
-    background: linear-gradient(135deg,#fff0f5,#fbe4ed);
+  .konax-event-time {
+    color: #587067;
+    font-size: 7.8px;
+    font-weight: 850;
   }
 
-  .agenda-konax-event-5 {
-    border-left-color: #c48a2b;
-    background: linear-gradient(135deg,#fff7e8,#ffefd0);
-  }
-
-  .agenda-konax-event-pending {
-    border-left-color: #d49a25 !important;
-    background: linear-gradient(135deg,#fff8e9,#ffedc4) !important;
-  }
-
-  .agenda-konax-event-done {
-    opacity: .72;
-  }
-
-  .agenda-konax-event-missed {
-    border-left-color: #9aa5a0 !important;
-    background: #f1f3f2 !important;
-    color: #68736d !important;
-  }
-
-  .agenda-konax-event-time {
-    color: #0b7044;
-    font-size: 8.5px;
+  .konax-event-client {
+    color: #13271d;
+    font-size: 10px;
+    line-height: 1.08;
     font-weight: 950;
   }
 
-  .agenda-konax-event strong {
-    max-width: 100%;
+  .konax-event-service {
     overflow: hidden;
-    color: inherit;
-    font-size: 10.5px;
-    line-height: 1.1;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: #53685d;
+    font-size: 8px;
+    font-weight: 700;
   }
 
-  .agenda-konax-event small {
-    max-width: 100%;
-    overflow: hidden;
-    color: #52665c;
-    font-size: 8.5px;
-    line-height: 1.1;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .konax-event-status {
+    margin-top: 2px;
+    color: #0c7547;
+    font-size: 7px;
+    font-weight: 950;
+    text-transform: uppercase;
+    letter-spacing: .45px;
   }
 
-  .agenda-konax-summary-card {
+  .konax-calendar-footer {
+    padding: 12px 14px 14px;
+    display: grid;
+    grid-template-columns: repeat(4,minmax(0,1fr));
+    gap: 7px;
+    border-top: 1px solid #e7eee9;
+    background: #fbfdfc;
+  }
+
+  .konax-calendar-footer > div {
+    min-height: 54px;
+    padding: 9px 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border: 1px solid #e2eae5;
+    border-radius: 11px;
+    background: #fff;
+  }
+
+  .konax-calendar-footer strong {
+    color: #0b7045;
+    font-size: 17px;
+    line-height: 1;
+  }
+
+  .konax-calendar-footer span {
+    margin-top: 4px;
+    color: #75847b;
+    font-size: 8px;
+    font-weight: 750;
+  }
+
+  .konax-day-summary {
     position: sticky;
     top: 12px;
-    padding: 16px;
+    padding: 18px;
   }
 
-  .agenda-konax-summary-eyebrow {
-    color: #13825d;
-    font-size: 8px;
-    font-weight: 950;
-    letter-spacing: 1.1px;
+  .konax-day-summary h3 {
+    margin: 0;
+    color: #12291d;
+    font-size: 20px;
+    letter-spacing: -.45px;
   }
 
-  .agenda-konax-summary-card h3 {
-    margin: 5px 0 13px;
-    color: #17231c;
-    font-size: 18px;
-  }
-
-  .agenda-konax-summary-list {
+  .konax-summary-occupancy {
+    padding: 17px 0 13px;
     display: grid;
+    place-items: center;
   }
 
-  .agenda-konax-summary-list > div {
-    min-height: 38px;
+  .konax-summary-ring {
+    width: 118px;
+    height: 118px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+  }
+
+  .konax-summary-ring > div {
+    width: 88px;
+    height: 88px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: inset 0 0 0 1px #e5ede8;
+  }
+
+  .konax-summary-ring strong {
+    color: #0b7045;
+    font-size: 24px;
+    line-height: 1;
+  }
+
+  .konax-summary-ring span {
+    margin-top: 4px;
+    color: #7a8980;
+    font-size: 8px;
+    font-weight: 800;
+  }
+
+  .konax-summary-list {
+    display: grid;
+    border-top: 1px solid #e7ede9;
+  }
+
+  .konax-summary-list > div {
+    min-height: 42px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
     border-bottom: 1px solid #edf1ef;
-  }
-
-  .agenda-konax-summary-list span {
-    color: #66736c;
+    color: #64766c;
     font-size: 10px;
+    font-weight: 700;
   }
 
-  .agenda-konax-summary-list strong {
-    color: #17231c;
-    font-size: 13px;
+  .konax-summary-list strong {
+    color: #16291f;
+    font-size: 12px;
   }
 
-  .agenda-konax-summary-primary,
-  .agenda-konax-summary-secondary {
+  .konax-summary-primary,
+  .konax-summary-secondary {
     width: 100%;
-    min-height: 40px;
+    min-height: 42px;
     margin-top: 10px;
-    border-radius: 10px;
-    font-family: inherit;
+    border-radius: 11px;
+    font-size: 10px;
     font-weight: 900;
     cursor: pointer;
   }
 
-  .agenda-konax-summary-primary {
+  .konax-summary-primary {
     border: 0;
-    background: linear-gradient(135deg,#0a7443,#0f8d51);
+    background: linear-gradient(135deg,#087547,#14a05f);
     color: #fff;
+    box-shadow: 0 8px 16px rgba(8,117,71,.17);
   }
 
-  .agenda-konax-summary-secondary {
-    border: 1px solid #a7d8bc;
-    background: #f8fcfa;
-    color: #0c7043;
+  .konax-summary-secondary {
+    border: 1px solid #bcd8c7;
+    background: #f7fcf9;
+    color: #0d754a;
   }
 
-  .agenda-konax-tip {
-    margin-top: 13px;
-    padding: 13px;
-    display: grid;
-    gap: 5px;
-    border: 1px solid #d6ece0;
-    border-radius: 12px;
-    background: linear-gradient(135deg,#effaf4,#e8f7ef);
-  }
-
-  .agenda-konax-tip strong {
-    color: #0d6840;
-    font-size: 10px;
-  }
-
-  .agenda-konax-tip span {
-    color: #5f7267;
-    font-size: 9px;
-    line-height: 1.4;
-  }
-
-  @media (max-width: 980px) {
-    .agenda-konax-workspace {
+  @media (max-width: 1080px) {
+    .konax-agenda-layout {
       grid-template-columns: 1fr;
     }
 
-    .agenda-konax-summary-card {
+    .konax-day-summary {
       position: static;
     }
   }
 
   @media (max-width: 760px) {
-    .agenda-konax-calendar-card {
-      padding: 11px;
-      border-radius: 15px;
+    .konax-agenda-layout {
+      margin-bottom: 12px;
+      gap: 10px;
     }
 
-    .agenda-konax-calendar-top {
-      display: grid;
-      grid-template-columns: 1fr;
+    .konax-calendar-card,
+    .konax-day-summary {
+      border-radius: 18px;
     }
 
-    .agenda-konax-calendar-actions {
+    .konax-calendar-top {
+      padding: 14px 12px 12px;
+      align-items: stretch;
+    }
+
+    .konax-calendar-title {
+      font-size: 22px;
+    }
+
+    .konax-calendar-actions {
       width: 100%;
       display: grid;
-      grid-template-columns: 46px minmax(0,1fr) 46px;
-      gap: 6px;
+      grid-template-columns: 44px minmax(0,1fr) 44px;
+      gap: 7px;
     }
 
-    .agenda-konax-today-button,
-    .agenda-konax-new-button {
-      grid-column: 1 / -1;
-      width: 100%;
-    }
-
-    .agenda-konax-date-input {
+    .konax-date-arrow,
+    .konax-date-input {
       width: 100%;
       min-width: 0;
     }
 
-    .agenda-konax-calendar-grid {
-      min-width: max(620px, calc(76px + (var(--prof-count) * 150px)));
-      grid-template-columns: 76px repeat(var(--prof-count), minmax(150px,1fr));
-      grid-template-rows: 58px auto;
+    .konax-new-reservation {
+      grid-column: 1 / -1;
+      width: 100%;
+      min-height: 46px;
+      font-size: 12px;
     }
 
-    .agenda-konax-prof-head {
-      padding: 8px;
+    .konax-calendar-hint {
+      padding: 9px 12px;
+      line-height: 1.35;
     }
 
-    .agenda-konax-prof-avatar {
-      width: 30px;
-      height: 30px;
-      flex-basis: 30px;
+    /*
+      CLAVE MÓVIL:
+      no recortamos el calendario verticalmente.
+      La página puede bajar hasta la última hora configurada.
+    */
+    .konax-calendar-scroll {
+      max-height: none !important;
+      overflow-x: auto !important;
+      overflow-y: visible !important;
+      overscroll-behavior-x: contain;
+      padding-bottom: 10px;
     }
 
-    .agenda-konax-prof-head strong {
+    .konax-calendar-grid {
+      min-width: max-content;
+    }
+
+    .konax-time-head,
+    .konax-pro-head {
+      min-height: 70px;
+    }
+
+    .konax-time-head {
+      width: 78px;
+    }
+
+    .konax-pro-head {
+      min-width: 178px;
+      padding: 10px 11px;
+    }
+
+    .konax-pro-avatar {
+      width: 40px;
+      height: 40px;
+      flex-basis: 40px;
+    }
+
+    .konax-pro-info strong {
+      font-size: 11px;
+    }
+
+    .konax-time-cell,
+    .konax-calendar-cell {
+      min-height: 46px;
+    }
+
+    .konax-time-cell {
+      padding-top: 12px;
+      font-size: 9px;
+    }
+
+    .konax-event-card {
+      min-height: 58px;
+      padding: 7px;
+      border-radius: 8px;
+    }
+
+    .konax-event-client {
       font-size: 10px;
     }
 
-    .agenda-konax-prof-head span {
-      font-size: 8px;
+    .konax-calendar-footer {
+      grid-template-columns: repeat(2,minmax(0,1fr));
+      padding: 10px 11px 12px;
     }
 
-    .agenda-konax-event {
-      left: 4px;
-      right: 4px;
-      padding: 6px;
+    .konax-day-summary {
+      padding: 15px;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .konax-calendar-title {
+      font-size: 20px;
     }
 
-    .agenda-konax-event strong {
-      font-size: 9.5px;
+    .konax-calendar-subtitle {
+      font-size: 10px;
     }
 
-    .agenda-konax-event small {
-      font-size: 8px;
+    .konax-pro-head {
+      min-width: 170px;
+    }
+
+    .konax-event-time {
+      font-size: 7px;
     }
   }
 
