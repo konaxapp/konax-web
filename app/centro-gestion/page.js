@@ -5,11 +5,11 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 
 const OPCIONES_ADMIN = [
-  { nombre: "Panel Maestro", ruta: "/admin" },
-  { nombre: "Crear Nueva Empresa", ruta: "/empresas" },
-  { nombre: "Planes Comerciales", ruta: "/planes" },
-  { nombre: "Gestión de Módulos", ruta: "/modulos" },
-  { nombre: "Centro de Gestión", ruta: "/centro-gestion" },
+  { nombre: "Resumen", ruta: "/admin" },
+  { nombre: "Empresas y demos", ruta: "/centro-gestion" },
+  { nombre: "Crear empresa", ruta: "/empresas" },
+  { nombre: "Planes", ruta: "/planes" },
+  { nombre: "Módulos", ruta: "/modulos" },
 ];
 
 const ACCIONES_HISTORIAL_VISIBLES = [
@@ -39,6 +39,8 @@ export default function GestionKonax() {
   const [pagos, setPagos] = useState([]);
   const [bitacora, setBitacora] = useState([]);
   const [filtro, setFiltro] = useState("");
+  const [filtroRapido, setFiltroRapido] = useState("");
+  const [eliminandoDemoId, setEliminandoDemoId] = useState("");
   const [cargando, setCargando] = useState(true);
 
   const [mostrarPago, setMostrarPago] = useState(false);
@@ -128,6 +130,92 @@ export default function GestionKonax() {
     );
   }
 
+  function fechaLocal(fecha) {
+    if (!fecha) return null;
+
+    const [year, month, day] = String(fecha)
+      .slice(0, 10)
+      .split("-")
+      .map(Number);
+
+    if (!year || !month || !day) return null;
+
+    return new Date(year, month - 1, day, 0, 0, 0, 0);
+  }
+
+  function esDemoEmpresa(empresa) {
+    const suscripcion = normalizar(empresa.estado_suscripcion);
+
+    // Si ya fue convertida a suscripción activa, nunca se trata como demo.
+    if (["activo", "activa"].includes(suscripcion)) {
+      return false;
+    }
+
+    return (
+      [
+        "prueba",
+        "prueba_vencida",
+        "pendiente_inicio_prueba",
+      ].includes(suscripcion) ||
+      empresa.es_prueba === true
+    );
+  }
+
+  function esDemoVencido(empresa) {
+    if (!esDemoEmpresa(empresa)) return false;
+
+    if (normalizar(empresa.estado_suscripcion) === "prueba_vencida") {
+      return true;
+    }
+
+    const fin = fechaLocal(empresa.fecha_fin_prueba);
+
+    if (!fin) return false;
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    return fin.getTime() < hoy.getTime();
+  }
+
+  function esClientePagoActivo(empresa) {
+    if (!estadoServicioActivo(empresa) || esDemoEmpresa(empresa)) {
+      return false;
+    }
+
+    const suscripcion = normalizar(empresa.estado_suscripcion);
+
+    if (
+      [
+        "prueba_vencida",
+        "pendiente_activacion",
+        "cancelado",
+      ].includes(suscripcion)
+    ) {
+      return false;
+    }
+
+    if (["activo", "activa"].includes(suscripcion)) {
+      return true;
+    }
+
+    // Compatibilidad con clientes antiguos que todavía no tengan
+    // estado_suscripcion pero sí un pago real registrado.
+    return Boolean(empresa.fecha_ultimo_pago);
+  }
+
+  function etiquetaSuscripcion(empresa) {
+    const suscripcion = normalizar(empresa.estado_suscripcion);
+
+    if (esDemoVencido(empresa)) return "Demo vencido";
+    if (suscripcion === "prueba") return "Demo activo";
+    if (suscripcion === "pendiente_inicio_prueba") return "Demo pendiente";
+    if (esClientePagoActivo(empresa)) return "Cliente pago";
+    if (suscripcion === "cancelado") return "Cancelado";
+
+    return empresa.estado_suscripcion || "Sin definir";
+  }
+
   function obtenerDiasParaVencer(fecha) {
     if (!fecha) return null;
 
@@ -153,6 +241,10 @@ export default function GestionKonax() {
 
     for (const empresa of empresasData || []) {
       if (empresa.archivada) continue;
+
+      // Los demos se controlan con fecha_fin_prueba / estado_suscripcion.
+      // No deben suspenderse por la lógica normal de facturación.
+      if (esDemoEmpresa(empresa)) continue;
 
       const vencida =
         empresa.fecha_proxima_facturacion &&
@@ -241,6 +333,32 @@ export default function GestionKonax() {
     setPagos(respuestaPagos.data || []);
     setBitacora(respuestaBitacora.data || []);
     setCargando(false);
+  }
+
+  function aplicarFiltroRapido(tipo) {
+    setFiltro("");
+    setFiltroRapido(tipo);
+
+    if (tipo === "archivadas") {
+      setMostrarArchivadas(true);
+    } else {
+      setMostrarArchivadas(false);
+    }
+
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("empresas-listado")
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    });
+  }
+
+  function limpiarFiltros() {
+    setFiltro("");
+    setFiltroRapido("");
+    setMostrarArchivadas(false);
   }
 
   function seleccionarEmpresa(empresa) {
@@ -536,6 +654,63 @@ export default function GestionKonax() {
     await cargarDatos();
   }
 
+  async function eliminarDemoVencido(empresa) {
+    if (!empresa?.id || eliminandoDemoId) return;
+
+    if (!esDemoVencido(empresa)) {
+      alert(
+        "Solo se puede eliminar desde aquí un demo cuyo período de prueba ya terminó."
+      );
+      return;
+    }
+
+    const confirmacion = window.prompt(
+      `Vas a eliminar definitivamente el demo "${empresa.nombre}" y todos sus datos asociados.\n\nEscribe ELIMINAR para confirmar.`
+    );
+
+    if (confirmacion !== "ELIMINAR") {
+      return;
+    }
+
+    setEliminandoDemoId(empresa.id);
+
+    try {
+      const { data, error } = await supabase.rpc(
+        "eliminar_empresa_demo_seguro",
+        {
+          p_empresa_id: empresa.id,
+          p_confirmacion: empresa.nombre || "",
+        }
+      );
+
+      if (error) {
+        alert(
+          "No se pudo eliminar el demo: " +
+            error.message +
+            "\n\nLa empresa no fue eliminada."
+        );
+        return;
+      }
+
+      alert(
+        data?.message ||
+          `Demo "${empresa.nombre}" eliminado correctamente.`
+      );
+
+      if (
+        localStorage.getItem("empresaAdminCreadaId") ===
+        String(empresa.id)
+      ) {
+        localStorage.removeItem("empresaAdminCreadaId");
+        localStorage.removeItem("empresaAdminCreadaNombre");
+      }
+
+      await cargarDatos();
+    } finally {
+      setEliminandoDemoId("");
+    }
+  }
+
   async function reactivarArchivada(empresa) {
     const usuario =
       localStorage.getItem("adminKonaxNombre") || "KONAX";
@@ -623,6 +798,7 @@ export default function GestionKonax() {
         estado: "Activo",
         estado_plan: "Activo",
         estado_pago: "Al día",
+        estado_suscripcion: "activo",
         fecha_ultimo_pago: hoy,
         fecha_proxima_facturacion: proximaFacturacion,
       })
@@ -667,72 +843,68 @@ export default function GestionKonax() {
     [empresas]
   );
 
-  const empresasBase = mostrarArchivadas
-    ? empresasArchivadas
-    : empresasActivasVisibles;
+  const clientesPagoActivos =
+    empresasActivasVisibles.filter(esClientePagoActivo);
 
-  const empresasFiltradas = useMemo(() => {
-    const texto = normalizar(filtro);
+  const demosVisibles =
+    empresasActivasVisibles.filter(esDemoEmpresa);
 
-    return empresasBase.filter((empresa) => {
-      if (!texto) return true;
+  const demosVencidos =
+    demosVisibles.filter(esDemoVencido);
 
-      const contenido = normalizar(
-        [
-          empresa.nombre,
-          empresa.correo,
-          empresa.telefono,
-          empresa.plan_nombre,
-          empresa.estado,
-          empresa.tipo_negocio,
-        ]
-          .filter(Boolean)
-          .join(" ")
+  const empresasSuspendidasLista =
+    empresasActivasVisibles.filter(
+      (empresa) =>
+        normalizar(empresa.estado) === "suspendido" ||
+        normalizar(empresa.estado_plan) === "suspendido"
+    );
+
+  const proximosVencerEmpresas =
+    empresasActivasVisibles.filter((empresa) => {
+      const dias = obtenerDiasParaVencer(
+        empresa.fecha_proxima_facturacion
       );
 
-      return contenido.includes(texto);
+      return (
+        dias !== null &&
+        dias >= 0 &&
+        dias <= 7 &&
+        estadoServicioActivo(empresa)
+      );
     });
-  }, [empresasBase, filtro]);
+
+  const empresasActivas = clientesPagoActivos.length;
+  const empresasSuspendidas = empresasSuspendidasLista.length;
+  const proximosVencer = proximosVencerEmpresas.length;
+
+  // Ingreso mensual = precio de los clientes realmente convertidos a plan.
+  // Los demos no entran en este cálculo aunque tengan un precio cargado.
+  const ingresosEstimados = clientesPagoActivos.reduce(
+    (sum, empresa) =>
+      sum + Number(empresa.plan_precio || 0),
+    0
+  );
 
   const hoyFecha = new Date();
   const mesActual = hoyFecha.getMonth();
   const anioActual = hoyFecha.getFullYear();
 
-  const empresasActivas = empresasActivasVisibles.filter(
-    estadoServicioActivo
-  ).length;
-
-  const empresasSuspendidas = empresasActivasVisibles.filter(
-    (empresa) =>
-      normalizar(empresa.estado) === "suspendido" ||
-      normalizar(empresa.estado_plan) === "suspendido"
-  ).length;
-
-  const ingresosEstimados = empresasActivasVisibles
-    .filter(estadoServicioActivo)
-    .reduce(
-      (sum, empresa) => sum + Number(empresa.plan_precio || 0),
-      0
-    );
-
-  const idsEmpresasActivas = new Set(
+  const idsEmpresasExistentes = new Set(
     empresasActivasVisibles.map((empresa) =>
       String(empresa.id)
     )
   );
 
   const pagosDelMes = pagos.filter((pago) => {
-    const fecha =
-      pago.fecha_pago || pago.created_at;
+    const fecha = pago.fecha_pago || pago.created_at;
 
     if (!fecha) return false;
 
-    const perteneceEmpresaActiva =
-      idsEmpresasActivas.has(
+    if (
+      !idsEmpresasExistentes.has(
         String(pago.empresa_id)
-      );
-
-    if (!perteneceEmpresaActiva) {
+      )
+    ) {
       return false;
     }
 
@@ -749,18 +921,76 @@ export default function GestionKonax() {
     0
   );
 
-  const proximosVencer = empresasActivasVisibles.filter((empresa) => {
-    const dias = obtenerDiasParaVencer(
-      empresa.fecha_proxima_facturacion
+  const idsPagaronEsteMes = new Set(
+    pagosDelMes.map((pago) => String(pago.empresa_id))
+  );
+
+  const empresasBase = mostrarArchivadas
+    ? empresasArchivadas
+    : empresasActivasVisibles;
+
+  const empresasFiltradas = empresasBase.filter((empresa) => {
+    const texto = normalizar(filtro);
+    let coincideRapido = true;
+
+    if (filtroRapido === "clientes") {
+      coincideRapido = esClientePagoActivo(empresa);
+    }
+
+    if (filtroRapido === "demos") {
+      coincideRapido = esDemoEmpresa(empresa);
+    }
+
+    if (filtroRapido === "suspendidos") {
+      coincideRapido =
+        normalizar(empresa.estado) === "suspendido" ||
+        normalizar(empresa.estado_plan) === "suspendido";
+    }
+
+    if (filtroRapido === "vencen7") {
+      const dias = obtenerDiasParaVencer(
+        empresa.fecha_proxima_facturacion
+      );
+
+      coincideRapido =
+        dias !== null &&
+        dias >= 0 &&
+        dias <= 7 &&
+        estadoServicioActivo(empresa);
+    }
+
+    if (filtroRapido === "pagados_mes") {
+      coincideRapido = idsPagaronEsteMes.has(
+        String(empresa.id)
+      );
+    }
+
+    if (filtroRapido === "archivadas") {
+      coincideRapido = Boolean(empresa.archivada);
+    }
+
+    if (!coincideRapido) {
+      return false;
+    }
+
+    if (!texto) return true;
+
+    const contenido = normalizar(
+      [
+        empresa.nombre,
+        empresa.correo,
+        empresa.telefono,
+        empresa.plan_nombre,
+        empresa.estado,
+        empresa.estado_suscripcion,
+        empresa.tipo_negocio,
+      ]
+        .filter(Boolean)
+        .join(" ")
     );
 
-    return (
-      dias !== null &&
-      dias >= 0 &&
-      dias <= 7 &&
-      estadoServicioActivo(empresa)
-    );
-  }).length;
+    return contenido.includes(texto);
+  });
 
   const historialVisible = useMemo(() => {
     const idsActivos = new Set(
@@ -851,40 +1081,52 @@ export default function GestionKonax() {
 
         <section
           style={{
-            ...s.topActions,
-            ...(esMovil ? s.topActionsMobile : {}),
+            ...s.adminNav,
+            ...(esMovil ? s.adminNavMobile : {}),
           }}
         >
+          <button
+            type="button"
+            onClick={limpiarFiltros}
+            style={s.navButton}
+          >
+            Resumen
+          </button>
+
+          <button
+            type="button"
+            onClick={() => aplicarFiltroRapido("clientes")}
+            style={s.navButton}
+          >
+            Clientes
+          </button>
+
+          <button
+            type="button"
+            onClick={() => aplicarFiltroRapido("demos")}
+            style={s.navButton}
+          >
+            Demos
+          </button>
+
           <button
             type="button"
             onClick={() =>
               setMostrarReporte((actual) => !actual)
             }
-            style={s.primaryAction}
+            style={s.navButtonPrimary}
           >
             {mostrarReporte
-              ? "Ocultar actividad"
-              : "Ver pagos y actividad"}
+              ? "Ocultar pagos"
+              : "Pagos y actividad"}
           </button>
 
-          <button
-            type="button"
-            onClick={() =>
-              setMostrarArchivadas((actual) => !actual)
-            }
-            style={s.lightButton}
-          >
-            {mostrarArchivadas
-              ? "Ver cartera activa"
-              : `Ver archivadas (${empresasArchivadas.length})`}
-          </button>
-
-          <Link href="/empresas" style={s.lightAction}>
-            Empresas
+          <Link href="/empresas" style={s.navLink}>
+            + Nueva empresa
           </Link>
 
-          <Link href="/admin" style={s.darkAction}>
-            Volver al Admin
+          <Link href="/admin" style={s.navLinkDark}>
+            Panel maestro
           </Link>
         </section>
 
@@ -894,15 +1136,82 @@ export default function GestionKonax() {
             ...(esMovil ? s.kpiGridMobile : {}),
           }}
         >
-          <KPI titulo="Clientes activos" valor={empresasActivas} tono="verde" />
-          <KPI titulo="Suspendidos" valor={empresasSuspendidas} tono="rojo" />
-          <KPI titulo="Vencen en 7 días" valor={proximosVencer} tono="amarillo" />
-          <KPI titulo="Ingreso mensual" valor={formato(ingresosEstimados)} tono="verde" />
-          <KPI titulo="Pagado este mes" valor={formato(pagadoEsteMes)} tono="dorado" />
-          <KPI titulo="Archivadas" valor={empresasArchivadas.length} tono="gris" />
+          <KPI
+            titulo="Clientes activos"
+            valor={empresasActivas}
+            detalle="Planes que sí generan ingreso"
+            tono="verde"
+            icono="✓"
+            activo={filtroRapido === "clientes"}
+            onClick={() => aplicarFiltroRapido("clientes")}
+          />
+
+          <KPI
+            titulo="Demos"
+            valor={demosVisibles.length}
+            detalle={`${demosVencidos.length} vencido${
+              demosVencidos.length === 1 ? "" : "s"
+            }`}
+            tono="azul"
+            icono="◷"
+            activo={filtroRapido === "demos"}
+            onClick={() => aplicarFiltroRapido("demos")}
+          />
+
+          <KPI
+            titulo="Suspendidos"
+            valor={empresasSuspendidas}
+            detalle="Servicio detenido"
+            tono="rojo"
+            icono="!"
+            activo={filtroRapido === "suspendidos"}
+            onClick={() => aplicarFiltroRapido("suspendidos")}
+          />
+
+          <KPI
+            titulo="Vencen en 7 días"
+            valor={proximosVencer}
+            detalle="Abrir empresas próximas"
+            tono="amarillo"
+            icono="7"
+            activo={filtroRapido === "vencen7"}
+            onClick={() => aplicarFiltroRapido("vencen7")}
+          />
+
+          <KPI
+            titulo="Ingreso mensual"
+            valor={formato(ingresosEstimados)}
+            detalle="Suma del precio de clientes pagos"
+            tono="verde"
+            icono="$"
+            activo={filtroRapido === "clientes"}
+            onClick={() => aplicarFiltroRapido("clientes")}
+          />
+
+          <KPI
+            titulo="Pagado este mes"
+            valor={formato(pagadoEsteMes)}
+            detalle={`${idsPagaronEsteMes.size} empresa${
+              idsPagaronEsteMes.size === 1 ? "" : "s"
+            }`}
+            tono="dorado"
+            icono="↓"
+            activo={filtroRapido === "pagados_mes"}
+            onClick={() => aplicarFiltroRapido("pagados_mes")}
+          />
+
+          <KPI
+            titulo="Archivadas"
+            valor={empresasArchivadas.length}
+            detalle="Fuera de la cartera"
+            tono="gris"
+            icono="□"
+            activo={filtroRapido === "archivadas"}
+            onClick={() => aplicarFiltroRapido("archivadas")}
+          />
         </section>
 
-        <section style={s.card}>
+        <section id="empresas-listado" style={s.card}>
           <div style={s.cardHeader}>
             <div>
               <span style={s.sectionEyebrow}>
@@ -931,6 +1240,35 @@ export default function GestionKonax() {
               style={s.searchInput}
             />
           </div>
+
+          {filtroRapido && (
+            <div style={s.activeFilterBar}>
+              <div>
+                <span style={s.activeFilterLabel}>FILTRO ACTIVO</span>
+                <strong style={s.activeFilterValue}>
+                  {filtroRapido === "clientes"
+                    ? "Clientes activos"
+                    : filtroRapido === "demos"
+                    ? "Demos"
+                    : filtroRapido === "suspendidos"
+                    ? "Suspendidos"
+                    : filtroRapido === "vencen7"
+                    ? "Vencen en 7 días"
+                    : filtroRapido === "pagados_mes"
+                    ? "Pagaron este mes"
+                    : "Archivadas"}
+                </strong>
+              </div>
+
+              <button
+                type="button"
+                onClick={limpiarFiltros}
+                style={s.clearFilterButton}
+              >
+                Ver todas
+              </button>
+            </div>
+          )}
 
           {empresasFiltradas.length === 0 ? (
             <EmptyState
@@ -965,29 +1303,70 @@ export default function GestionKonax() {
                       </div>
                     </div>
 
-                    <ServiceBadge
-                      active={estadoServicioActivo(empresa)}
-                      value={
-                        empresa.archivada
-                          ? "Archivada"
-                          : empresa.estado || "Activo"
-                      }
-                    />
+                    <div style={s.badgeStack}>
+                      <SubscriptionBadge value={etiquetaSuscripcion(empresa)} />
+
+                      <ServiceBadge
+                        active={estadoServicioActivo(empresa)}
+                        value={
+                          empresa.archivada
+                            ? "Archivada"
+                            : empresa.estado || "Activo"
+                        }
+                      />
+                    </div>
                   </div>
 
                   <div style={s.detailsGrid}>
-                    <Detail label="Plan" value={empresa.plan_nombre || "Sin plan"} />
-                    <Detail label="Precio" value={formato(empresa.plan_precio)} accent />
-                    <Detail label="Pago" value={empresa.estado_pago || "Pendiente"} />
                     <Detail
-                      label="Próxima facturación"
-                      value={formatoFecha(empresa.fecha_proxima_facturacion)}
+                      label="Plan"
+                      value={empresa.plan_nombre || "Sin plan"}
+                    />
+                    <Detail
+                      label="Precio"
+                      value={formato(empresa.plan_precio)}
+                      accent
+                    />
+                    <Detail
+                      label="Suscripción"
+                      value={etiquetaSuscripcion(empresa)}
+                    />
+                    <Detail
+                      label="Pago"
+                      value={empresa.estado_pago || "Pendiente"}
+                    />
+                    <Detail
+                      label={
+                        esDemoEmpresa(empresa)
+                          ? "Fin del demo"
+                          : "Próxima facturación"
+                      }
+                      value={formatoFecha(
+                        esDemoEmpresa(empresa)
+                          ? empresa.fecha_fin_prueba
+                          : empresa.fecha_proxima_facturacion
+                      )}
                     />
                     <Detail
                       label="Vencimiento"
-                      value={textoVencimiento(empresa.fecha_proxima_facturacion)}
+                      value={
+                        esDemoEmpresa(empresa)
+                          ? esDemoVencido(empresa)
+                            ? "Demo vencido"
+                            : textoVencimiento(empresa.fecha_fin_prueba)
+                          : textoVencimiento(
+                              empresa.fecha_proxima_facturacion
+                            )
+                      }
                     />
-                    <Detail label="Negocio" value={empresa.tipo_negocio || "-"} />
+                    <Detail
+                      label="Negocio"
+                      value={empresa.tipo_negocio || "-"}
+                    />
+                    <Detail
+                      label="Estado"
+                      value={empresa.estado || "-"}
+                    />
                   </div>
 
                   {!empresa.archivada ? (
@@ -1023,6 +1402,21 @@ export default function GestionKonax() {
                       >
                         Archivar
                       </button>
+
+                      {esDemoVencido(empresa) && (
+                        <button
+                          type="button"
+                          style={s.deleteDemoButton}
+                          onClick={() => eliminarDemoVencido(empresa)}
+                          disabled={
+                            eliminandoDemoId === String(empresa.id)
+                          }
+                        >
+                          {eliminandoDemoId === String(empresa.id)
+                            ? "Eliminando..."
+                            : "Eliminar demo vencido"}
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <button
@@ -1496,24 +1890,74 @@ function MobileAdminBar({ abierto, setAbierto }) {
   );
 }
 
-function KPI({ titulo, valor, tono }) {
+function KPI({
+  titulo,
+  valor,
+  tono,
+  icono,
+  detalle,
+  onClick,
+  activo = false,
+}) {
   const tonos = {
     verde: ["#16834f", "#e9f8ef"],
     rojo: ["#c62828", "#fff0f0"],
     amarillo: ["#a56a00", "#fff7df"],
     dorado: ["#9a6700", "#fff6dc"],
     gris: ["#526057", "#f1f5f2"],
+    azul: ["#2563eb", "#edf4ff"],
   };
 
   const [color, fondo] = tonos[tono] || tonos.verde;
 
   return (
-    <article style={s.kpiCard}>
-      <span style={{ ...s.kpiDot, background: color }} />
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        ...s.kpiCard,
+        ...(activo
+          ? {
+              borderColor: color,
+              boxShadow: `0 16px 38px ${color}20`,
+            }
+          : {}),
+      }}
+    >
+      <div style={s.kpiTopLine}>
+        <span
+          style={{
+            ...s.kpiIcon,
+            color,
+            background: fondo,
+          }}
+        >
+          {icono || "•"}
+        </span>
+
+        <span
+          style={{
+            ...s.kpiStatusDot,
+            background: color,
+          }}
+        />
+      </div>
+
       <span style={s.kpiTitle}>{titulo}</span>
+
       <strong style={s.kpiValue}>{valor}</strong>
-      <div style={{ ...s.kpiTint, background: fondo }} />
-    </article>
+
+      {detalle && (
+        <span style={s.kpiDetail}>{detalle}</span>
+      )}
+
+      <div
+        style={{
+          ...s.kpiTint,
+          background: fondo,
+        }}
+      />
+    </button>
   );
 }
 
@@ -1542,6 +1986,34 @@ function ServiceBadge({ active, value }) {
       }}
     >
       {value}
+    </span>
+  );
+}
+
+function SubscriptionBadge({ value }) {
+  const valor = normalizar(value);
+
+  let estilo = s.subscriptionBadgeNeutral;
+
+  if (valor === "cliente pago") {
+    estilo = s.subscriptionBadgePaid;
+  } else if (valor === "demo vencido") {
+    estilo = s.subscriptionBadgeExpired;
+  } else if (
+    valor === "demo activo" ||
+    valor === "demo pendiente"
+  ) {
+    estilo = s.subscriptionBadgeDemo;
+  }
+
+  return (
+    <span
+      style={{
+        ...s.subscriptionBadge,
+        ...estilo,
+      }}
+    >
+      {value || "Sin suscripción"}
     </span>
   );
 }
@@ -1674,52 +2146,144 @@ const s = {
     fontWeight: 850,
     textDecoration: "none",
   },
+  adminNav: {
+    marginBottom: 14,
+    padding: 8,
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 7,
+    flexWrap: "wrap",
+    border: "1px solid #dfe7e2",
+    borderRadius: 16,
+    background: "rgba(255,255,255,.88)",
+    boxShadow: "0 10px 28px rgba(15,23,42,.045)",
+  },
+  adminNavMobile: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+  },
+  navButton: {
+    minHeight: 42,
+    padding: "9px 14px",
+    border: "1px solid #dce5df",
+    borderRadius: 11,
+    background: "#fff",
+    color: "#243129",
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+  navButtonPrimary: {
+    minHeight: 42,
+    padding: "9px 14px",
+    border: "none",
+    borderRadius: 11,
+    background: "linear-gradient(135deg,#16834f,#0f6a3d)",
+    color: "#fff",
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+  navLink: {
+    minHeight: 42,
+    padding: "9px 14px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: "1px solid #cbd9d0",
+    borderRadius: 11,
+    background: "#f8fbf9",
+    color: "#16834f",
+    fontWeight: 900,
+    textDecoration: "none",
+  },
+  navLinkDark: {
+    minHeight: 42,
+    padding: "9px 14px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 11,
+    background: "#17211c",
+    color: "#fff",
+    fontWeight: 850,
+    textDecoration: "none",
+  },
   kpiGrid: {
     marginBottom: 15,
     display: "grid",
-    gridTemplateColumns: "repeat(6,minmax(0,1fr))",
+    gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))",
     gap: 11,
   },
   kpiGridMobile: {
     gridTemplateColumns: "repeat(2,minmax(0,1fr))",
   },
   kpiCard: {
-    minHeight: 120,
+    minHeight: 148,
     padding: 16,
     position: "relative",
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",
+    textAlign: "left",
     border: "1px solid #dfe7e2",
-    borderRadius: 18,
+    borderRadius: 19,
     background:
-      "linear-gradient(155deg,#ffffff,#f9fbfa)",
+      "linear-gradient(155deg,#ffffff,#f8fbf9)",
     boxShadow:
-      "0 10px 24px rgba(15,23,42,.045)",
+      "0 11px 28px rgba(15,23,42,.055)",
+    cursor: "pointer",
   },
-  kpiDot: {
-    width: 9,
-    height: 9,
+  kpiTopLine: {
+    position: "relative",
+    zIndex: 2,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  kpiIcon: {
+    width: 34,
+    height: 34,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 11,
+    fontSize: 13,
+    fontWeight: 950,
+  },
+  kpiStatusDot: {
+    width: 8,
+    height: 8,
     borderRadius: "50%",
   },
   kpiTitle: {
-    marginTop: 10,
-    color: "#657169",
-    fontSize: 10,
-    fontWeight: 850,
-  },
-  kpiValue: {
-    marginTop: "auto",
+    marginTop: 14,
     position: "relative",
     zIndex: 2,
-    fontSize: 25,
+    color: "#657169",
+    fontSize: 10,
+    fontWeight: 900,
+  },
+  kpiValue: {
+    marginTop: 5,
+    position: "relative",
+    zIndex: 2,
+    color: "#17211c",
+    fontSize: 27,
+    lineHeight: 1.05,
+  },
+  kpiDetail: {
+    marginTop: "auto",
+    paddingTop: 10,
+    position: "relative",
+    zIndex: 2,
+    color: "#89948d",
+    fontSize: 8.5,
+    lineHeight: 1.3,
   },
   kpiTint: {
-    width: 70,
-    height: 70,
+    width: 92,
+    height: 92,
     position: "absolute",
-    right: -25,
-    bottom: -25,
+    right: -34,
+    bottom: -38,
     borderRadius: "50%",
   },
   card: {
@@ -1764,6 +2328,41 @@ const s = {
     border: "1px solid #ccd7d0",
     borderRadius: 11,
     outline: "none",
+  },
+  activeFilterBar: {
+    marginBottom: 14,
+    padding: "10px 12px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    border: "1px solid #cfe6d8",
+    borderRadius: 12,
+    background: "#f1faf5",
+  },
+  activeFilterLabel: {
+    display: "block",
+    color: "#6c7b72",
+    fontSize: 7.5,
+    fontWeight: 900,
+    letterSpacing: 0.8,
+  },
+  activeFilterValue: {
+    display: "block",
+    marginTop: 2,
+    color: "#14683e",
+    fontSize: 11,
+  },
+  clearFilterButton: {
+    minHeight: 34,
+    padding: "7px 10px",
+    border: "1px solid #bddfca",
+    borderRadius: 9,
+    background: "#fff",
+    color: "#14683e",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
   },
   companyGrid: {
     display: "grid",
@@ -1842,6 +2441,36 @@ const s = {
     color: "#27342d",
     fontSize: 10.5,
   },
+  badgeStack: {
+    display: "flex",
+    alignItems: "flex-end",
+    flexDirection: "column",
+    gap: 5,
+  },
+  subscriptionBadge: {
+    display: "inline-flex",
+    padding: "5px 8px",
+    borderRadius: 999,
+    fontSize: 7.5,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+  subscriptionBadgePaid: {
+    background: "#e8f7ee",
+    color: "#14683e",
+  },
+  subscriptionBadgeDemo: {
+    background: "#edf4ff",
+    color: "#1d4ed8",
+  },
+  subscriptionBadgeExpired: {
+    background: "#fff0f0",
+    color: "#b91c1c",
+  },
+  subscriptionBadgeNeutral: {
+    background: "#f1f5f2",
+    color: "#526057",
+  },
   serviceBadge: {
     display: "inline-flex",
     padding: "6px 9px",
@@ -1899,6 +2528,16 @@ const s = {
     background: "#fff",
     color: "#526057",
     fontWeight: 850,
+    cursor: "pointer",
+  },
+  deleteDemoButton: {
+    gridColumn: "1 / -1",
+    minHeight: 42,
+    border: "1px solid #fecaca",
+    borderRadius: 10,
+    background: "#fff5f5",
+    color: "#b91c1c",
+    fontWeight: 900,
     cursor: "pointer",
   },
   restoreButton: {
