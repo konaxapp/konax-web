@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V14-PERFIL-INTERESES-RESENAS";
+const VERSION = "2026.09.07-PORTAL-PUBLICO-V15-GYM-FECHAS-DISPONIBLES";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -1079,24 +1079,56 @@ export default function ReservaPublicaAutoservicioPage() {
     try {
       const candidatos = fechasHastaFinDeAnio2026();
       const resultados = [];
+      const TAMANO_LOTE = 12;
 
-      for (const dia of candidatos) {
-        const { data, error: rpcError } = await supabase.rpc(
-          "obtener_disponibilidad_agenda_publica",
-          {
-            p_slug: slug,
-            p_fecha: dia,
-          }
+      for (let i = 0; i < candidatos.length; i += TAMANO_LOTE) {
+        const lote = candidatos.slice(i, i + TAMANO_LOTE);
+
+        const respuestas = await Promise.all(
+          lote.map(async (dia) => {
+            const { data, error: rpcError } = await supabase.rpc(
+              "obtener_disponibilidad_agenda_publica",
+              {
+                p_slug: slug,
+                p_fecha: dia,
+              }
+            );
+
+            if (!rpcError && Array.isArray(data) && data.length > 0) {
+              return dia;
+            }
+
+            return null;
+          })
         );
 
-        if (!rpcError && Array.isArray(data) && data.length > 0) {
-          resultados.push(dia);
-        }
-
+        respuestas.forEach((dia) => {
+          if (dia) resultados.push(dia);
+        });
       }
 
-      setFechasConDisponibilidad(resultados);
+      const ordenadas = resultados.sort();
+      setFechasConDisponibilidad(ordenadas);
 
+      /*
+        GIMNASIO:
+        Si hoy no tiene clases, el portal salta automáticamente
+        a la próxima fecha que sí tenga disponibilidad.
+        BELLEZA no se toca.
+      */
+      if (perfilGimnasio && ordenadas.length > 0) {
+        const hoy = fechaISO();
+
+        if (!ordenadas.includes(hoy)) {
+          setFecha((actual) => {
+            if (actual === hoy || !ordenadas.includes(actual)) {
+              return ordenadas[0];
+            }
+
+            return actual;
+          });
+        }
+      }
     } finally {
       setBuscandoFechas(false);
     }
@@ -1941,15 +1973,83 @@ export default function ReservaPublicaAutoservicioPage() {
                       </section>
                     )}
 
+                    {perfilGimnasio && (
+                      <section className="kp-gym-dates-section">
+                        <div className="kp-gym-dates-heading">
+                          <div>
+                            <span className="kp-section-kicker kp-section-kicker-black">
+                              PRÓXIMAS CLASES
+                            </span>
+                            <h2>Elige una fecha</h2>
+                          </div>
+
+                          {buscandoFechas && (
+                            <span className="kp-gym-dates-loading">
+                              Buscando fechas...
+                            </span>
+                          )}
+                        </div>
+
+                        {fechasConDisponibilidad.length > 0 ? (
+                          <div className="kp-gym-dates-strip-wrap">
+                            <div className="kp-gym-dates-strip">
+                              {fechasConDisponibilidad.map((dia) => {
+                                const activo = dia === fecha;
+                                const d = new Date(`${dia}T12:00:00`);
+
+                                return (
+                                  <button
+                                    key={`gym-home-${dia}`}
+                                    type="button"
+                                    className={`kp-gym-date-pill ${
+                                      activo ? "active" : ""
+                                    }`}
+                                    onClick={() => elegirFecha(dia)}
+                                  >
+                                    <span>
+                                      {new Intl.DateTimeFormat("es-PA", {
+                                        weekday: "short",
+                                      }).format(d)}
+                                    </span>
+
+                                    <strong>{d.getDate()}</strong>
+
+                                    <small>
+                                      {new Intl.DateTimeFormat("es-PA", {
+                                        month: "short",
+                                      }).format(d)}
+                                    </small>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : !buscandoFechas ? (
+                          <div className="kp-gym-no-dates">
+                            No hay próximas clases configuradas.
+                          </div>
+                        ) : null}
+
+                        {fechasConDisponibilidad.length > 0 && (
+                          <div className="kp-gym-selected-date">
+                            Mostrando clases para{" "}
+                            <strong>{formatoFecha(fecha)}</strong>
+                          </div>
+                        )}
+                      </section>
+                    )}
+
                     {cargandoServicios || cargandoHorarios ? (
                       <div className="kp-empty">
-                        Consultando servicios...
+                        {perfilGimnasio
+                          ? "Consultando clases..."
+                          : "Consultando servicios..."}
                       </div>
                     ) : servicios.length === 0 ? (
                       <div className="kp-empty">
                         <strong>
                           {perfilGimnasio
-                            ? "No hay clases disponibles hoy."
+                            ? "No hay clases disponibles para esta fecha."
                             : "No hay servicios activos disponibles."}
                         </strong>
                       </div>
@@ -4766,6 +4866,129 @@ const CSS = `
 
 
 
+
+  /* =========================================================
+     GIMNASIO · FECHAS DISPONIBLES EN PORTADA
+     ========================================================= */
+
+  .kp-gym-dates-section {
+    margin: 0 0 28px;
+    padding: 16px;
+    border: 1px solid #e1e6e3;
+    border-radius: 20px;
+    background: #fafbfa;
+  }
+
+  .kp-gym-dates-heading {
+    margin-bottom: 13px;
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .kp-gym-dates-heading h2 {
+    margin: 4px 0 0;
+    color: #111111;
+    font-size: 24px;
+    line-height: 1.05;
+  }
+
+  .kp-gym-dates-loading {
+    color: #748078;
+    font-size: 10px;
+    font-weight: 800;
+  }
+
+  .kp-gym-dates-strip-wrap {
+    margin: 0 -16px;
+    padding: 0 16px 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .kp-gym-dates-strip-wrap::-webkit-scrollbar {
+    display: none;
+  }
+
+  .kp-gym-dates-strip {
+    width: max-content;
+    display: flex;
+    gap: 8px;
+  }
+
+  .kp-gym-date-pill {
+    min-width: 72px;
+    min-height: 88px;
+    padding: 8px 7px;
+    display: grid;
+    place-items: center;
+    gap: 1px;
+    border: 1px solid #dcdedc;
+    border-radius: 16px;
+    background: #ffffff;
+    color: #555f59;
+    cursor: pointer;
+  }
+
+  .kp-gym-date-pill span,
+  .kp-gym-date-pill small {
+    font-size: 10px;
+    text-transform: capitalize;
+  }
+
+  .kp-gym-date-pill strong {
+    color: inherit;
+    font-size: 24px;
+    line-height: 1;
+  }
+
+  .kp-gym-date-pill.active {
+    border-color: #111111;
+    background: #111111;
+    color: #ffffff;
+    box-shadow: 0 7px 18px rgba(0,0,0,.12);
+  }
+
+  .kp-gym-selected-date {
+    margin-top: 11px;
+    color: #717b75;
+    font-size: 10px;
+  }
+
+  .kp-gym-selected-date strong {
+    color: #111111;
+    text-transform: capitalize;
+  }
+
+  .kp-gym-no-dates {
+    padding: 14px;
+    border: 1px dashed #d9ddda;
+    border-radius: 14px;
+    background: #ffffff;
+    color: #748078;
+    text-align: center;
+    font-size: 11px;
+  }
+
+  .kp-dark .kp-gym-dates-section,
+  .kp-dark .kp-gym-date-pill,
+  .kp-dark .kp-gym-no-dates {
+    border-color: #333b36;
+    background: #111713;
+    color: #b2bbb5;
+  }
+
+  .kp-dark .kp-gym-dates-heading h2,
+  .kp-dark .kp-gym-selected-date strong {
+    color: #ffffff;
+  }
+
+  .kp-dark .kp-gym-date-pill.active {
+    border-color: #ffffff;
+    background: #ffffff;
+    color: #111111;
+  }
 
   /* =========================================================
      RANKING DE SERVICIOS + TIPOGRAFÍA PREMIUM
