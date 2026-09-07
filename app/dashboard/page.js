@@ -2,11 +2,10 @@
 
 // DASHBOARD KONAX - GIMNASIO + SALÓN DE BELLEZA - MOBILE HEADER CLEAN - 2026-08-20
 
-// KONAX Dashboard · Gimnasio + Belleza + KONAX Agenda · Versión 2026.09.02-AGENDA
+// KONAX Dashboard · Gimnasio + Belleza + KONAX Agenda · Versión 2026.09.07-GYM-LOGO-EMPRESA
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 import SidebarKonax from "../../components/SidebarKonax";
 
@@ -2326,14 +2325,25 @@ export default function Dashboard() {
 
           {esGimnasio && !esMovil && (
             <div style={s.topbarGymImagenWrap}>
-              <Image
-                src="/gym-hero-fitness.png"
-                alt="Persona fitness motivada"
-                width={140}
-                height={140}
-                priority
-                style={s.topbarGymImagen}
-              />
+              {empresaLogoUrl ? (
+                <img
+                  src={empresaLogoUrl}
+                  alt={`Logo de ${empresaNombre}`}
+                  style={s.topbarGymImagen}
+                />
+              ) : (
+                <span
+                  style={{
+                    color: "#16834f",
+                    fontSize: 36,
+                    fontWeight: 950,
+                  }}
+                >
+                  {String(empresaNombre || "G")
+                    .charAt(0)
+                    .toUpperCase()}
+                </span>
+              )}
             </div>
           )}
 
