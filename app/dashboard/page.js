@@ -2,7 +2,7 @@
 
 // DASHBOARD KONAX - GIMNASIO + SALÓN DE BELLEZA - MOBILE HEADER CLEAN - 2026-08-20
 
-// KONAX Dashboard · Gimnasio + Belleza + KONAX Agenda · Versión 2026.09.07-GYM-LOGO-EMPRESA
+// KONAX Dashboard · Gimnasio + Belleza + KONAX Agenda · Versión 2026.09.07-GYM-LOGO-EMPRESA-MOBILE
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -2323,19 +2323,27 @@ export default function Dashboard() {
             </div>
           )}
 
-          {esGimnasio && !esMovil && (
-            <div style={s.topbarGymImagenWrap}>
+          {esGimnasio && (
+            <div
+              style={{
+                ...s.topbarGymImagenWrap,
+                ...(esMovil ? s.topbarGymImagenWrapMobile : {}),
+              }}
+            >
               {empresaLogoUrl ? (
                 <img
                   src={empresaLogoUrl}
                   alt={`Logo de ${empresaNombre}`}
-                  style={s.topbarGymImagen}
+                  style={{
+                    ...s.topbarGymImagen,
+                    ...(esMovil ? s.topbarGymImagenMobile : {}),
+                  }}
                 />
               ) : (
                 <span
                   style={{
                     color: "#16834f",
-                    fontSize: 36,
+                    fontSize: esMovil ? 25 : 36,
                     fontWeight: 950,
                   }}
                 >
@@ -4560,6 +4568,19 @@ const s = {
     objectFit: "cover",
     objectPosition: "center center",
     borderRadius: "50%",
+  },
+
+  topbarGymImagenWrapMobile: {
+    width: 72,
+    height: 72,
+    justifySelf: "start",
+    marginTop: -2,
+    borderWidth: 3,
+  },
+
+  topbarGymImagenMobile: {
+    objectFit: "contain",
+    background: "#ffffff",
   },
 
   userBox: {
