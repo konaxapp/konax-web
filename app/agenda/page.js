@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.09.04-AGENDA-TEXTO-DINAMICO-BELLEZA-FIX19";
+const VERSION = "2026.09.06-AGENDA-BELLEZA-INTACTA-GYM-WOD-V1";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -216,6 +216,36 @@ function esRolAdministrador(rol) {
   ].includes(normalizar(rol).replace(/\s+/g, "_"));
 }
 
+function esTipoGimnasio(tipoNegocio = "", categoriaNegocio = "") {
+  const texto = normalizar(
+    `${tipoNegocio || ""} ${categoriaNegocio || ""}`
+  );
+
+  return [
+    "gimnasio",
+    "gym",
+    "fitness",
+    "crossfit",
+    "cross fit",
+    "box",
+  ].some((palabra) => texto.includes(palabra));
+}
+
+const WOD_INICIAL = {
+  servicio_id: "",
+  fecha: fechaHoy(),
+  titulo: "WOD del día",
+  warmup: "",
+  strength: "",
+  skill: "",
+  metcon: "",
+  cooldown: "",
+  notas_publicas: "",
+  notas_coach: "",
+  visible_desde: "",
+  activo: true,
+};
+
 
 function horaAMinutos(hora) {
   if (!hora) return 0;
@@ -332,6 +362,12 @@ export default function AgendaPage() {
   const [rol, setRol] = useState("");
   const [esAdmin, setEsAdmin] = useState(false);
   const [esSalonBelleza, setEsSalonBelleza] = useState(false);
+  const [esGimnasio, setEsGimnasio] = useState(false);
+
+  const [wods, setWods] = useState([]);
+  const [wodForm, setWodForm] = useState(WOD_INICIAL);
+  const [wodEditandoId, setWodEditandoId] = useState(null);
+  const [visibilidadWod, setVisibilidadWod] = useState("inmediato");
   const [perfilBellezaTexto, setPerfilBellezaTexto] = useState({
     corto: "salón",
     conArticulo: "el salón",
@@ -544,11 +580,19 @@ export default function AgendaPage() {
         categoriaNegocioLocal
       );
 
+      const gimnasioLocal =
+        !salonLocal &&
+        esTipoGimnasio(
+          tipoNegocioLocal,
+          categoriaNegocioLocal
+        );
+
       setEmpresaId(empresaLocal);
       setEmpresaNombre(empresaNombreLocal);
       setRol(rolLocal);
       setEsAdmin(adminLocal);
       setEsSalonBelleza(salonLocal);
+      setEsGimnasio(gimnasioLocal);
       setPerfilBellezaTexto(
         obtenerPerfilBellezaTexto(
           tipoNegocioLocal,
@@ -567,7 +611,11 @@ export default function AgendaPage() {
           window.location.search
         ).get("vista");
 
-        if (["hoy", "nueva", "reservas", "configuracion"].includes(vistaUrl)) {
+        const vistasPermitidas = gimnasioLocal
+          ? ["hoy", "nueva", "reservas", "configuracion", "wod"]
+          : ["hoy", "nueva", "reservas", "configuracion"];
+
+        if (vistasPermitidas.includes(vistaUrl)) {
           setVista(vistaUrl);
         }
       }
@@ -580,6 +628,9 @@ export default function AgendaPage() {
         cargarDisponibilidad(fechaAgenda, empresaLocal),
         salonLocal
           ? cargarProfesionalesSalon(empresaLocal, true)
+          : Promise.resolve(),
+        gimnasioLocal
+          ? cargarWods(empresaLocal)
           : Promise.resolve(),
         adminLocal
           ? cargarConfiguracionPortal(empresaLocal)
@@ -804,6 +855,239 @@ export default function AgendaPage() {
           ? actual.precio
           : 0,
     }));
+  }
+
+  async function cargarWods(idEmpresa = empresaId) {
+    if (!idEmpresa) return;
+
+    const { data, error } = await supabase.rpc(
+      "listar_wods_agenda",
+      {
+        p_empresa_id: idEmpresa,
+        p_desde: null,
+        p_hasta: null,
+      }
+    );
+
+    if (error) {
+      console.error("No se pudieron cargar los WOD:", error);
+      setWods([]);
+      return;
+    }
+
+    setWods(Array.isArray(data) ? data : []);
+  }
+
+  function aplicarVisibilidadWod(valor) {
+    setVisibilidadWod(valor);
+
+    if (valor === "inmediato") {
+      setWodForm((actual) => ({
+        ...actual,
+        visible_desde: "",
+      }));
+      return;
+    }
+
+    const fechaBase =
+      wodForm.fecha || fechaAgenda || fechaHoy();
+
+    const base = new Date(`${fechaBase}T12:00:00`);
+
+    if (valor === "dia_anterior") {
+      base.setDate(base.getDate() - 1);
+      base.setHours(18, 0, 0, 0);
+
+      const local = new Date(
+        base.getTime() - base.getTimezoneOffset() * 60000
+      )
+        .toISOString()
+        .slice(0, 16);
+
+      setWodForm((actual) => ({
+        ...actual,
+        visible_desde: local,
+      }));
+      return;
+    }
+
+    if (valor === "mismo_dia") {
+      base.setHours(5, 0, 0, 0);
+
+      const local = new Date(
+        base.getTime() - base.getTimezoneOffset() * 60000
+      )
+        .toISOString()
+        .slice(0, 16);
+
+      setWodForm((actual) => ({
+        ...actual,
+        visible_desde: local,
+      }));
+      return;
+    }
+
+    if (
+      valor === "personalizado" &&
+      !wodForm.visible_desde
+    ) {
+      const ahora = new Date();
+      const local = new Date(
+        ahora.getTime() - ahora.getTimezoneOffset() * 60000
+      )
+        .toISOString()
+        .slice(0, 16);
+
+      setWodForm((actual) => ({
+        ...actual,
+        visible_desde: local,
+      }));
+    }
+  }
+
+  async function guardarWod() {
+    if (!esAdmin || !esGimnasio) return;
+
+    if (!wodForm.servicio_id || !wodForm.fecha) {
+      alert("Selecciona la clase/programa y la fecha.");
+      return;
+    }
+
+    setGuardando(true);
+    setError("");
+
+    try {
+      const { data, error } = await supabase.rpc(
+        "guardar_wod_agenda",
+        {
+          p_empresa_id: empresaId,
+          p_id: wodEditandoId,
+          p_servicio_id: wodForm.servicio_id,
+          p_fecha: wodForm.fecha,
+          p_titulo:
+            wodForm.titulo.trim() || "WOD del día",
+          p_warmup: wodForm.warmup.trim() || null,
+          p_strength:
+            wodForm.strength.trim() || null,
+          p_skill: wodForm.skill.trim() || null,
+          p_metcon: wodForm.metcon.trim() || null,
+          p_cooldown:
+            wodForm.cooldown.trim() || null,
+          p_notas_publicas:
+            wodForm.notas_publicas.trim() || null,
+          p_notas_coach:
+            wodForm.notas_coach.trim() || null,
+          p_visible_desde: wodForm.visible_desde
+            ? new Date(
+                wodForm.visible_desde
+              ).toISOString()
+            : null,
+          p_activo: Boolean(wodForm.activo),
+        }
+      );
+
+      if (error) throw error;
+
+      if (!data?.ok) {
+        throw new Error(
+          data?.mensaje || "No se pudo guardar el WOD."
+        );
+      }
+
+      const fechaGuardada = wodForm.fecha || fechaAgenda;
+
+      setWodForm({
+        ...WOD_INICIAL,
+        fecha: fechaGuardada,
+      });
+      setWodEditandoId(null);
+      setVisibilidadWod("inmediato");
+
+      await cargarWods();
+      alert("WOD guardado.");
+    } catch (err) {
+      console.error("Error guardando WOD:", err);
+      setError(
+        err?.message || "No se pudo guardar el WOD."
+      );
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  function editarWod(wod) {
+    if (!wod) return;
+
+    setWodEditandoId(wod.id);
+    setFechaAgenda(
+      String(wod.fecha || fechaAgenda).slice(0, 10)
+    );
+
+    setVisibilidadWod(
+      wod.visible_desde ? "personalizado" : "inmediato"
+    );
+
+    setWodForm({
+      servicio_id: wod.servicio_id || "",
+      fecha: String(wod.fecha || fechaHoy()).slice(0, 10),
+      titulo: wod.titulo || "WOD del día",
+      warmup: wod.warmup || "",
+      strength: wod.strength || "",
+      skill: wod.skill || "",
+      metcon: wod.metcon || "",
+      cooldown: wod.cooldown || "",
+      notas_publicas: wod.notas_publicas || "",
+      notas_coach: wod.notas_coach || "",
+      visible_desde: wod.visible_desde
+        ? String(wod.visible_desde).slice(0, 16)
+        : "",
+      activo: Boolean(wod.activo),
+    });
+
+    setVista("wod");
+  }
+
+  async function eliminarWod(wod) {
+    if (!esAdmin || !esGimnasio || !wod?.id) return;
+
+    const confirmar = window.confirm(
+      "¿Deseas eliminar este WOD?"
+    );
+
+    if (!confirmar) return;
+
+    try {
+      const { data, error } = await supabase.rpc(
+        "eliminar_wod_agenda",
+        {
+          p_empresa_id: empresaId,
+          p_id: wod.id,
+        }
+      );
+
+      if (error) throw error;
+
+      if (!data?.ok) {
+        throw new Error(
+          data?.mensaje || "No se pudo eliminar el WOD."
+        );
+      }
+
+      if (String(wodEditandoId) === String(wod.id)) {
+        setWodEditandoId(null);
+        setVisibilidadWod("inmediato");
+        setWodForm({
+          ...WOD_INICIAL,
+          fecha: fechaAgenda,
+        });
+      }
+
+      await cargarWods();
+    } catch (err) {
+      alert(
+        err?.message || "No se pudo eliminar el WOD."
+      );
+    }
   }
 
   async function cargarProfesionalesSalon(
@@ -1111,6 +1395,14 @@ export default function AgendaPage() {
       };
     });
   }, [fechaAgenda]);
+
+  const wodsFecha = useMemo(() => {
+    return wods.filter(
+      (wod) =>
+        String(wod.fecha || "").slice(0, 10) ===
+        fechaAgenda
+    );
+  }, [wods, fechaAgenda]);
 
   const horariosSalonAgrupados = useMemo(() => {
     if (!esSalonBelleza) return [];
@@ -1426,6 +1718,9 @@ export default function AgendaPage() {
         cargarClientes(),
         cargarReservas(),
         cargarDisponibilidad(),
+        esGimnasio
+          ? cargarWods()
+          : Promise.resolve(),
       ]);
     } catch (err) {
       setError(err?.message || "No se pudo actualizar Agenda.");
@@ -2464,6 +2759,33 @@ export default function AgendaPage() {
           </span>
           {esSalonBelleza ? "Reservas" : "Reservas"}
         </button>
+
+        {esGimnasio && !esSalonBelleza && (
+          <button
+            type="button"
+            onClick={() => {
+              setVista("wod");
+
+              if (!wodEditandoId) {
+                setWodForm((actual) => ({
+                  ...actual,
+                  fecha: fechaAgenda,
+                }));
+              }
+            }}
+            style={{
+              ...neo.navItem,
+              ...(vista === "wod"
+                ? neo.navItemActive
+                : {}),
+            }}
+          >
+            <span style={neo.navIcon}>
+              W
+            </span>
+            WOD
+          </button>
+        )}
 
         {esAdmin && (
           <button
@@ -3771,6 +4093,484 @@ export default function AgendaPage() {
         </section>
       )}
 
+      {vista === "wod" && esGimnasio && !esSalonBelleza && (
+        <>
+          <section
+            style={{
+              ...pro.panel,
+              maxWidth: 1450,
+              margin: "0 auto 14px",
+            }}
+          >
+            <div style={pro.panelHeader}>
+              <div>
+                <span style={pro.panelEyebrow}>
+                  WORKOUT OF THE DAY
+                </span>
+                <h2 style={pro.panelTitle}>
+                  WOD · {formatoFecha(fechaAgenda)}
+                </h2>
+                <p
+                  style={{
+                    ...s.muted,
+                    margin: "6px 0 0",
+                  }}
+                >
+                  Publica el entrenamiento del día por clase.
+                  Las notas del coach permanecen privadas.
+                </p>
+              </div>
+
+              <input
+                type="date"
+                value={fechaAgenda}
+                onChange={(e) => {
+                  setFechaAgenda(e.target.value);
+
+                  if (!wodEditandoId) {
+                    setWodForm((actual) => ({
+                      ...actual,
+                      fecha: e.target.value,
+                    }));
+                  }
+                }}
+                style={{ ...s.input, width: 180 }}
+              />
+            </div>
+
+            {wodsFecha.length === 0 ? (
+              <div style={s.empty}>
+                <strong>
+                  No hay WOD publicado para esta fecha.
+                </strong>
+                <span style={s.muted}>
+                  Créalo abajo y asígnalo a una clase.
+                </span>
+              </div>
+            ) : (
+              <div style={s.wodGrid}>
+                {wodsFecha.map((wod) => (
+                  <article
+                    key={wod.id}
+                    style={s.wodCard}
+                  >
+                    <div style={s.wodCardHeader}>
+                      <div>
+                        <span style={s.eyebrowSmall}>
+                          {wod.servicio_nombre ||
+                            nombreServicio(wod.servicio_id)}
+                        </span>
+                        <h3 style={s.wodCardTitle}>
+                          {wod.titulo || "WOD del día"}
+                        </h3>
+                      </div>
+
+                      <span
+                        style={{
+                          ...s.wodStatus,
+                          ...(wod.activo
+                            ? s.wodStatusActive
+                            : s.wodStatusInactive),
+                        }}
+                      >
+                        {wod.activo ? "ACTIVO" : "INACTIVO"}
+                      </span>
+                    </div>
+
+                    {wod.warmup && (
+                      <WodBloque
+                        titulo="Warm-up"
+                        texto={wod.warmup}
+                      />
+                    )}
+
+                    {wod.strength && (
+                      <WodBloque
+                        titulo="Fuerza"
+                        texto={wod.strength}
+                      />
+                    )}
+
+                    {wod.skill && (
+                      <WodBloque
+                        titulo="Técnica / Skill"
+                        texto={wod.skill}
+                      />
+                    )}
+
+                    {wod.metcon && (
+                      <WodBloque
+                        titulo="Metcon"
+                        texto={wod.metcon}
+                        destacado
+                      />
+                    )}
+
+                    {wod.cooldown && (
+                      <WodBloque
+                        titulo="Vuelta a la calma"
+                        texto={wod.cooldown}
+                      />
+                    )}
+
+                    {wod.notas_publicas && (
+                      <WodBloque
+                        titulo="Notas para alumnos"
+                        texto={wod.notas_publicas}
+                      />
+                    )}
+
+                    {esAdmin && (
+                      <div
+                        style={{
+                          ...s.inlineActions,
+                          marginTop: 12,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          style={s.smallButton}
+                          onClick={() => editarWod(wod)}
+                        >
+                          Editar
+                        </button>
+
+                        <button
+                          type="button"
+                          style={s.smallDanger}
+                          onClick={() => eliminarWod(wod)}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {esAdmin && (
+            <section
+              style={{
+                ...pro.panel,
+                maxWidth: 1450,
+                margin: "0 auto 18px",
+              }}
+            >
+              <div style={pro.panelHeader}>
+                <div>
+                  <span style={pro.panelEyebrow}>
+                    CONFIGURAR WOD
+                  </span>
+                  <h2 style={pro.panelTitle}>
+                    {wodEditandoId
+                      ? "Editar WOD"
+                      : "Nuevo WOD"}
+                  </h2>
+                  <p
+                    style={{
+                      ...s.muted,
+                      margin: "6px 0 0",
+                    }}
+                  >
+                    Define el entrenamiento que verá el alumno
+                    para una clase y una fecha específica.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                style={s.wodTopGrid}
+                className="agenda-wod-top-grid"
+              >
+                <Campo label="Clase / programa">
+                  <select
+                    value={wodForm.servicio_id}
+                    onChange={(e) =>
+                      setWodForm({
+                        ...wodForm,
+                        servicio_id: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                  >
+                    <option value="">Seleccionar</option>
+
+                    {servicios
+                      .filter(
+                        (servicio) =>
+                          servicio.activo &&
+                          servicio.tipo !== "cita_individual"
+                      )
+                      .map((servicio) => (
+                        <option
+                          key={servicio.id}
+                          value={servicio.id}
+                        >
+                          {servicio.nombre}
+                        </option>
+                      ))}
+                  </select>
+                </Campo>
+
+                <Campo label="Fecha">
+                  <input
+                    type="date"
+                    value={wodForm.fecha}
+                    onChange={(e) =>
+                      setWodForm({
+                        ...wodForm,
+                        fecha: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                  />
+                </Campo>
+
+                <Campo label="Título">
+                  <input
+                    value={wodForm.titulo}
+                    onChange={(e) =>
+                      setWodForm({
+                        ...wodForm,
+                        titulo: e.target.value,
+                      })
+                    }
+                    style={s.input}
+                    placeholder="WOD del día"
+                  />
+                </Campo>
+
+                <Campo label="Visibilidad">
+                  <select
+                    value={visibilidadWod}
+                    onChange={(e) =>
+                      aplicarVisibilidadWod(e.target.value)
+                    }
+                    style={s.input}
+                  >
+                    <option value="inmediato">
+                      Inmediatamente
+                    </option>
+                    <option value="dia_anterior">
+                      Día anterior · 6:00 p. m.
+                    </option>
+                    <option value="mismo_dia">
+                      Mismo día · 5:00 a. m.
+                    </option>
+                    <option value="personalizado">
+                      Personalizado
+                    </option>
+                  </select>
+                </Campo>
+              </div>
+
+              {visibilidadWod === "personalizado" && (
+                <div style={s.wodCustomVisibility}>
+                  <Campo label="Fecha y hora de publicación">
+                    <input
+                      type="datetime-local"
+                      value={wodForm.visible_desde}
+                      onChange={(e) =>
+                        setWodForm({
+                          ...wodForm,
+                          visible_desde: e.target.value,
+                        })
+                      }
+                      style={s.input}
+                    />
+                  </Campo>
+                </div>
+              )}
+
+              <div
+                style={s.wodEditorGrid}
+                className="agenda-wod-editor-grid"
+              >
+                <div style={s.wodColumn}>
+                  <div style={s.wodColumnTitle}>
+                    <span style={s.wodColumnEyebrow}>
+                      PREPARACIÓN
+                    </span>
+                    <strong>Base técnica</strong>
+                  </div>
+
+                  <Campo label="Warm-up">
+                    <textarea
+                      value={wodForm.warmup}
+                      onChange={(e) =>
+                        setWodForm({
+                          ...wodForm,
+                          warmup: e.target.value,
+                        })
+                      }
+                      style={s.wodTextareaCompact}
+                      placeholder="Ej. 3 rondas: 200 m run, 10 air squats..."
+                    />
+                  </Campo>
+
+                  <Campo label="Fuerza">
+                    <textarea
+                      value={wodForm.strength}
+                      onChange={(e) =>
+                        setWodForm({
+                          ...wodForm,
+                          strength: e.target.value,
+                        })
+                      }
+                      style={s.wodTextareaCompact}
+                      placeholder="Ej. Back Squat 5 x 5"
+                    />
+                  </Campo>
+
+                  <Campo label="Técnica / Skill">
+                    <textarea
+                      value={wodForm.skill}
+                      onChange={(e) =>
+                        setWodForm({
+                          ...wodForm,
+                          skill: e.target.value,
+                        })
+                      }
+                      style={s.wodTextareaCompact}
+                      placeholder="Ej. Double unders · 5 min de práctica"
+                    />
+                  </Campo>
+                </div>
+
+                <div style={s.wodColumn}>
+                  <div style={s.wodColumnTitle}>
+                    <span style={s.wodColumnEyebrow}>
+                      ENTRENAMIENTO
+                    </span>
+                    <strong>Trabajo principal</strong>
+                  </div>
+
+                  <Campo label="Metcon">
+                    <textarea
+                      value={wodForm.metcon}
+                      onChange={(e) =>
+                        setWodForm({
+                          ...wodForm,
+                          metcon: e.target.value,
+                        })
+                      }
+                      style={s.wodTextareaMetcon}
+                      placeholder="Ej. 12 min AMRAP: 10 burpees, 15 wall balls, 200 m run"
+                    />
+                  </Campo>
+
+                  <Campo label="Vuelta a la calma">
+                    <textarea
+                      value={wodForm.cooldown}
+                      onChange={(e) =>
+                        setWodForm({
+                          ...wodForm,
+                          cooldown: e.target.value,
+                        })
+                      }
+                      style={s.wodTextareaCompact}
+                      placeholder="Movilidad / estiramiento"
+                    />
+                  </Campo>
+
+                  <Campo label="Notas para alumnos">
+                    <textarea
+                      value={wodForm.notas_publicas}
+                      onChange={(e) =>
+                        setWodForm({
+                          ...wodForm,
+                          notas_publicas: e.target.value,
+                        })
+                      }
+                      style={s.wodTextareaCompact}
+                      placeholder="Información visible para los alumnos"
+                    />
+                  </Campo>
+                </div>
+              </div>
+
+              <div style={s.wodCoachNote}>
+                <Campo label="Notas privadas del coach">
+                  <textarea
+                    value={wodForm.notas_coach}
+                    onChange={(e) =>
+                      setWodForm({
+                        ...wodForm,
+                        notas_coach: e.target.value,
+                      })
+                    }
+                    style={s.wodTextareaCoach}
+                    placeholder="Escalas, ajustes, indicaciones o recordatorios internos"
+                  />
+                </Campo>
+              </div>
+
+              <div
+                style={s.wodFooterBar}
+                className="agenda-wod-footer"
+              >
+                <label style={s.wodActiveToggle}>
+                  <input
+                    type="checkbox"
+                    checked={wodForm.activo}
+                    onChange={(e) =>
+                      setWodForm({
+                        ...wodForm,
+                        activo: e.target.checked,
+                      })
+                    }
+                  />
+
+                  <span>
+                    <strong style={{ display: "block" }}>
+                      WOD activo
+                    </strong>
+                    <small>
+                      Se mostrará al alumno según la
+                      visibilidad configurada.
+                    </small>
+                  </span>
+                </label>
+
+                <div style={s.wodFooterActions}>
+                  {wodEditandoId && (
+                    <button
+                      type="button"
+                      style={s.secondaryButton}
+                      onClick={() => {
+                        setWodEditandoId(null);
+                        setVisibilidadWod("inmediato");
+                        setWodForm({
+                          ...WOD_INICIAL,
+                          fecha: fechaAgenda,
+                        });
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    style={s.primaryButton}
+                    onClick={guardarWod}
+                    disabled={guardando}
+                  >
+                    {guardando
+                      ? "Guardando..."
+                      : wodEditandoId
+                      ? "Guardar cambios"
+                      : "Publicar WOD"}
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
       {vista === "configuracion" && esAdmin && (
         <>
           <section style={s.portalPanel} className="agenda-portal-responsive agenda-premium-portal">
@@ -5013,6 +5813,30 @@ function Empty({ titulo, texto }) {
     <div style={s.empty}>
       <strong>{titulo}</strong>
       <span style={s.muted}>{texto}</span>
+    </div>
+  );
+}
+
+function WodBloque({
+  titulo,
+  texto,
+  destacado = false,
+}) {
+  if (!texto) return null;
+
+  return (
+    <div
+      style={{
+        ...s.wodBlock,
+        ...(destacado ? s.wodBlockAccent : {}),
+      }}
+    >
+      <span style={s.wodBlockTitle}>
+        {titulo}
+      </span>
+      <strong style={s.wodBlockText}>
+        {texto}
+      </strong>
     </div>
   );
 }
@@ -7425,6 +8249,30 @@ const AGENDA_CSS = `
     }
   }
 
+
+  /* =========================================================
+     GIMNASIO · WOD
+     No se aplica a belleza porque la vista WOD no se renderiza allí.
+     ========================================================= */
+  @media (max-width: 900px) {
+    .agenda-wod-top-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .agenda-wod-editor-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .agenda-wod-top-grid {
+      grid-template-columns: 1fr !important;
+    }
+
+    .agenda-wod-footer {
+      align-items: stretch !important;
+    }
+  }
 `;
 
 const neo = {
@@ -9719,6 +10567,202 @@ const s = {
     fontSize: 9,
     fontWeight: 900,
     cursor: "pointer",
+  },
+
+
+  wodGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))",
+    gap: 12,
+  },
+
+  wodCard: {
+    padding: 16,
+    border: "1px solid #DCE6E0",
+    borderRadius: 16,
+    background: "#FBFDFC",
+    boxShadow: "0 8px 22px rgba(18,61,39,.05)",
+  },
+
+  wodCardHeader: {
+    marginBottom: 8,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+
+  wodCardTitle: {
+    margin: "4px 0 0",
+    color: "#17241D",
+    fontSize: 18,
+  },
+
+  wodStatus: {
+    padding: "5px 8px",
+    borderRadius: 999,
+    fontSize: 8,
+    fontWeight: 900,
+  },
+
+  wodStatusActive: {
+    background: "#E5F7EC",
+    color: "#137541",
+  },
+
+  wodStatusInactive: {
+    background: "#F1F3F2",
+    color: "#6C7871",
+  },
+
+  wodBlock: {
+    marginTop: 8,
+    padding: 11,
+    display: "grid",
+    gap: 5,
+    border: "1px solid #E1E8E4",
+    borderRadius: 11,
+    background: "#FFFFFF",
+  },
+
+  wodBlockAccent: {
+    borderColor: "#A9D9BC",
+    background: "#EEF9F2",
+  },
+
+  wodBlockTitle: {
+    color: "#16834F",
+    fontSize: 8,
+    fontWeight: 950,
+    letterSpacing: .8,
+    textTransform: "uppercase",
+  },
+
+  wodBlockText: {
+    color: "#26382F",
+    fontSize: 11,
+    lineHeight: 1.5,
+    whiteSpace: "pre-wrap",
+  },
+
+  wodTopGrid: {
+    marginTop: 14,
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(220px,1.15fr) minmax(150px,.7fr) minmax(220px,1fr) minmax(210px,.9fr)",
+    gap: 10,
+    alignItems: "end",
+  },
+
+  wodCustomVisibility: {
+    maxWidth: 430,
+    marginTop: 10,
+    padding: 10,
+    border: "1px solid #DCE6E0",
+    borderRadius: 12,
+    background: "#F8FBF9",
+  },
+
+  wodEditorGrid: {
+    marginTop: 12,
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 14,
+    alignItems: "start",
+  },
+
+  wodColumn: {
+    padding: 14,
+    border: "1px solid #DCE6E0",
+    borderRadius: 15,
+    background: "#FBFDFC",
+  },
+
+  wodColumnTitle: {
+    marginBottom: 11,
+    paddingBottom: 9,
+    display: "grid",
+    gap: 3,
+    borderBottom: "1px solid #E6ECE8",
+  },
+
+  wodColumnEyebrow: {
+    color: "#0B7A43",
+    fontSize: 8,
+    fontWeight: 900,
+    letterSpacing: 1,
+  },
+
+  wodCoachNote: {
+    marginTop: 12,
+    padding: 14,
+    border: "1px solid #E4EAE6",
+    borderRadius: 15,
+    background: "#F7F9F8",
+  },
+
+  wodTextareaCompact: {
+    width: "100%",
+    minHeight: 84,
+    padding: "10px 11px",
+    border: "1px solid #CCD7D0",
+    borderRadius: 10,
+    background: "#FFFFFF",
+    color: "#17211C",
+    fontFamily: "inherit",
+    resize: "vertical",
+  },
+
+  wodTextareaMetcon: {
+    width: "100%",
+    minHeight: 154,
+    padding: 12,
+    border: "1px solid #9FD3B3",
+    borderRadius: 12,
+    background: "#F0FAF4",
+    color: "#17211C",
+    fontFamily: "inherit",
+    fontWeight: 700,
+    resize: "vertical",
+  },
+
+  wodTextareaCoach: {
+    width: "100%",
+    minHeight: 76,
+    padding: "10px 11px",
+    border: "1px solid #CCD7D0",
+    borderRadius: 10,
+    background: "#FFFFFF",
+    color: "#17211C",
+    fontFamily: "inherit",
+    resize: "vertical",
+  },
+
+  wodFooterBar: {
+    marginTop: 12,
+    padding: 12,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+    border: "1px solid #DCE6E0",
+    borderRadius: 14,
+    background: "#F8FBF9",
+  },
+
+  wodActiveToggle: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 9,
+    color: "#244034",
+    fontSize: 10,
+  },
+
+  wodFooterActions: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
   },
 
 };
