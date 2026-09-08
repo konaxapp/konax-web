@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.07-PORTAL-ALUMNO-MENU-APP-V3";
+const VERSION = "2026.09.07-PORTAL-ALUMNO-MENU-LIMPIO-V4";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
@@ -550,6 +550,29 @@ export default function PortalAlumnoInicio() {
 
       <section style={S.shell} className="portal-shell">
         <header style={S.topbar}>
+          <div style={S.topUserBlock}>
+            <div style={S.topUserAvatar}>
+              {fotoFirmada ? (
+                <img
+                  src={fotoFirmada}
+                  alt={cuenta?.nombre || "Alumno"}
+                  style={S.avatarImage}
+                />
+              ) : (
+                <span>{iniciales}</span>
+              )}
+            </div>
+
+            <div style={S.topUserText}>
+              <strong style={S.topUserName}>
+                {cuenta?.nombre || "Alumno"}
+              </strong>
+              <span style={S.topUserState}>
+                {estadoVisual}
+              </span>
+            </div>
+          </div>
+
           <button
             type="button"
             aria-label="Abrir menú"
@@ -557,39 +580,6 @@ export default function PortalAlumnoInicio() {
             style={S.menuButton}
           >
             ☰
-          </button>
-
-          <div style={S.brandBlock}>
-            <div style={S.brandMark}>
-              {empresaLogoUrl ? (
-                <img
-                  src={empresaLogoUrl}
-                  alt={`Logo de ${empresaNombre}`}
-                  style={S.brandLogo}
-                />
-              ) : (
-                <span>
-                  {String(empresaNombre || "K")
-                    .charAt(0)
-                    .toUpperCase()}
-                </span>
-              )}
-            </div>
-
-            <div style={S.brandTextWrap}>
-              <strong style={S.brandName}>{empresaNombre}</strong>
-              <span style={S.powered}>Portal del Alumno · KONAX</span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => cargarTodo(true)}
-            disabled={actualizando}
-            style={S.refreshButton}
-            title="Actualizar"
-          >
-            {actualizando ? "…" : "↻"}
           </button>
         </header>
 
@@ -603,6 +593,28 @@ export default function PortalAlumnoInicio() {
             />
 
             <aside style={S.drawer}>
+              <div style={S.drawerBusiness}>
+                <div style={S.drawerBusinessLogo}>
+                  {empresaLogoUrl ? (
+                    <img
+                      src={empresaLogoUrl}
+                      alt={`Logo de ${empresaNombre}`}
+                      style={S.brandLogo}
+                    />
+                  ) : (
+                    <span>
+                      {String(empresaNombre || "G")
+                        .charAt(0)
+                        .toUpperCase()}
+                    </span>
+                  )}
+                </div>
+
+                <strong style={S.drawerBusinessName}>
+                  {empresaNombre}
+                </strong>
+              </div>
+
               <div style={S.drawerHeader}>
                 <div style={S.drawerAvatar}>
                   {fotoFirmada ? (
@@ -664,17 +676,7 @@ export default function PortalAlumnoInicio() {
           )}
 
           {seccion === "inicio" && (
-            <Inicio
-              cuenta={cuenta}
-              membresia={membresia}
-              fotoFirmada={fotoFirmada}
-              iniciales={iniciales}
-              estadoVisual={estadoVisual}
-              accesoPermitido={accesoPermitido}
-              empresaNombre={empresaNombre}
-              formatearFecha={formatearFecha}
-              cambiarSeccion={cambiarSeccion}
-            />
+            <Inicio />
           )}
 
           {seccion === "clases" && (
@@ -760,76 +762,10 @@ export default function PortalAlumnoInicio() {
   );
 }
 
-function Inicio({
-  cuenta,
-  membresia,
-  fotoFirmada,
-  iniciales,
-  estadoVisual,
-  accesoPermitido,
-  empresaNombre,
-  formatearFecha,
-  cambiarSeccion,
-}) {
+function Inicio() {
   return (
-    <section style={S.appHome}>
-      <div style={S.appHomeHero}>
-        <div style={S.appHomeAvatar}>
-          {fotoFirmada ? (
-            <img
-              src={fotoFirmada}
-              alt={cuenta?.nombre || "Alumno"}
-              style={S.avatarImage}
-            />
-          ) : (
-            <span>{iniciales}</span>
-          )}
-        </div>
-
-        <div style={S.appHomeCopy}>
-          <span style={S.appHomeEyebrow}>BIENVENIDO</span>
-          <h1 style={S.appHomeName}>{cuenta?.nombre || "Alumno"}</h1>
-          <span style={S.appHomeState}>
-            {estadoVisual}
-          </span>
-        </div>
-      </div>
-
-      <div style={S.appHomeSummary} className="app-home-summary">
-        <div style={S.appHomeStat}>
-          <span style={S.appHomeStatLabel}>PLAN</span>
-          <strong style={S.appHomeStatValue}>
-            {membresia?.plan || "Sin membresía"}
-          </strong>
-        </div>
-
-        <div style={S.appHomeStat}>
-          <span style={S.appHomeStatLabel}>VENCIMIENTO</span>
-          <strong style={S.appHomeStatValue}>
-            {membresia?.fecha_vencimiento
-              ? formatearFecha(membresia.fecha_vencimiento)
-              : "—"}
-          </strong>
-        </div>
-
-        <div style={S.appHomeStat}>
-          <span style={S.appHomeStatLabel}>ACCESO</span>
-          <strong style={S.appHomeStatValue}>
-            {accesoPermitido ? "Disponible" : "No disponible"}
-          </strong>
-        </div>
-      </div>
-
-      <div style={S.homeHint}>
-        <span style={S.homeHintIcon}>☰</span>
-        <div>
-          <strong style={S.homeHintTitle}>Abre el menú</strong>
-          <p style={S.homeHintText}>
-            Desde allí puedes entrar a Clases, Mis reservas, Whiteboard,
-            Resultados y Configuración.
-          </p>
-        </div>
-      </div>
+    <section style={S.cleanHome}>
+      <div style={S.cleanHomeMark} />
     </section>
   );
 }
@@ -1317,15 +1253,57 @@ const S = {
     boxShadow: "0 28px 80px rgba(15,50,31,.13)",
   },
 
-  topbar: {
-    minHeight: 76,
-    padding: "12px 14px",
-    display: "grid",
-    gridTemplateColumns: "42px minmax(0,1fr) 42px",
+  topUserBlock: {
+    minWidth: 0,
+    display: "flex",
     alignItems: "center",
     gap: 10,
+  },
+
+  topUserAvatar: {
+    width: 46,
+    height: 46,
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    flex: "0 0 auto",
+    borderRadius: 14,
+    background: "#E9EEF4",
+    color: "#0F172A",
+    fontSize: 16,
+    fontWeight: 950,
+  },
+
+  topUserText: {
+    minWidth: 0,
+  },
+
+  topUserName: {
+    display: "block",
+    maxWidth: 230,
+    overflow: "hidden",
+    color: "#111827",
+    fontSize: 14,
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  topUserState: {
+    display: "block",
+    marginTop: 2,
+    color: "#7A8797",
+    fontSize: 8.5,
+  },
+
+  topbar: {
+    minHeight: 74,
+    padding: "12px 14px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
     background: "#FFFFFF",
-    borderBottom: "1px solid #E7EEE9",
+    borderBottom: "1px solid #E6EBF1",
     position: "sticky",
     top: 0,
     zIndex: 20,
@@ -1427,9 +1405,40 @@ const S = {
     padding: "18px 14px",
     display: "grid",
     gridTemplateRows: "auto 1fr auto",
-    background: "#0B1324",
+    background: "linear-gradient(180deg,#0B1220 0%,#111827 100%)",
     color: "#FFFFFF",
     boxShadow: "18px 0 50px rgba(0,0,0,.22)",
+  },
+
+  drawerBusiness: {
+    padding: "4px 8px 14px",
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    borderBottom: "1px solid rgba(255,255,255,.09)",
+  },
+
+  drawerBusinessLogo: {
+    width: 42,
+    height: 42,
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    flex: "0 0 auto",
+    borderRadius: 12,
+    background: "#FFFFFF",
+    color: "#0F172A",
+    fontSize: 16,
+    fontWeight: 950,
+  },
+
+  drawerBusinessName: {
+    minWidth: 0,
+    overflow: "hidden",
+    color: "#FFFFFF",
+    fontSize: 12,
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
 
   drawerHeader: {
@@ -2278,6 +2287,27 @@ const S = {
     color: "#6F7C8C",
     fontSize: 9,
     lineHeight: 1.45,
+  },
+
+  cleanHome: {
+    minHeight: 620,
+    borderRadius: 22,
+    background:
+      "linear-gradient(180deg,#F8FAFC 0%,#F3F6FA 100%)",
+    border: "1px solid #E3E9F0",
+    position: "relative",
+    overflow: "hidden",
+  },
+
+  cleanHomeMark: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    right: -55,
+    bottom: -55,
+    borderRadius: "50%",
+    background:
+      "radial-gradient(circle,rgba(14,165,166,.10) 0%,rgba(14,165,166,0) 70%)",
   },
 
   profileSettingsShell: {
