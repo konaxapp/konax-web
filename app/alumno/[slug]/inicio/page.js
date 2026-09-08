@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.06-PORTAL-ALUMNO-PERFIL-SELFIE-V4";
+const VERSION = "2026.09.07-PORTAL-ALUMNO-PRO-GYM-LOGO-V1";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 export default function PortalAlumnoInicio() {
@@ -18,8 +18,8 @@ export default function PortalAlumnoInicio() {
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
   const [subiendoFoto, setSubiendoFoto] = useState(false);
 
-  const [cuenta, setCuenta] = useState(null);
-  const [perfil, setPerfil] = useState(null);
+  const [cuenta, setCuenta] = useState<any>(null);
+  const [perfil, setPerfil] = useState<any>(null);
   const [fotoFirmada, setFotoFirmada] = useState("");
   const [mostrarEditor, setMostrarEditor] = useState(false);
 
@@ -107,9 +107,8 @@ export default function PortalAlumnoInicio() {
       );
 
       await resolverFoto(dataPerfil?.foto_url || "");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error cargando portal del alumno:", err);
-
       setError(err?.message || "No se pudo cargar tu cuenta.");
     } finally {
       setCargando(false);
@@ -117,7 +116,7 @@ export default function PortalAlumnoInicio() {
     }
   }
 
-  async function resolverFoto(valor) {
+  async function resolverFoto(valor: string) {
     const foto = String(valor || "").trim();
 
     if (!foto) {
@@ -208,7 +207,7 @@ export default function PortalAlumnoInicio() {
         );
       }
 
-      setPerfil((prev) => ({
+      setPerfil((prev: any) => ({
         ...(prev || {}),
         peso: data?.peso ?? pesoNumero,
         estatura: data?.estatura ?? estaturaNumero,
@@ -216,18 +215,16 @@ export default function PortalAlumnoInicio() {
 
       setMensajePerfil("Perfil actualizado.");
       setMostrarEditor(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error guardando perfil:", err);
-
       setError(err?.message || "No se pudo guardar el perfil.");
     } finally {
       setGuardandoPerfil(false);
     }
   }
 
-  async function subirSelfie(event) {
+  async function subirSelfie(event: any) {
     const archivo = event?.target?.files?.[0];
-
     if (!archivo) return;
 
     setSubiendoFoto(true);
@@ -235,9 +232,7 @@ export default function PortalAlumnoInicio() {
     setError("");
 
     try {
-      if (
-        !["image/jpeg", "image/png", "image/webp"].includes(archivo.type)
-      ) {
+      if (!["image/jpeg", "image/png", "image/webp"].includes(archivo.type)) {
         throw new Error("Usa una imagen JPG, PNG o WebP.");
       }
 
@@ -255,9 +250,7 @@ export default function PortalAlumnoInicio() {
       const userId = session?.user?.id;
 
       if (!userId) {
-        throw new Error(
-          "Tu sesión expiró. Vuelve a iniciar sesión."
-        );
+        throw new Error("Tu sesión expiró. Vuelve a iniciar sesión.");
       }
 
       const extension =
@@ -297,12 +290,12 @@ export default function PortalAlumnoInicio() {
         );
       }
 
-      setPerfil((prev) => ({
+      setPerfil((prev: any) => ({
         ...(prev || {}),
         foto_url: ruta,
       }));
 
-      setCuenta((prev) => ({
+      setCuenta((prev: any) => ({
         ...(prev || {}),
         foto_url: ruta,
       }));
@@ -310,9 +303,8 @@ export default function PortalAlumnoInicio() {
       await resolverFoto(ruta);
 
       setMensajePerfil("Foto actualizada.");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error subiendo selfie:", err);
-
       setError(err?.message || "No se pudo subir la foto.");
     } finally {
       setSubiendoFoto(false);
@@ -323,7 +315,7 @@ export default function PortalAlumnoInicio() {
     }
   }
 
-  function formatearFecha(fecha) {
+  function formatearFecha(fecha: string) {
     if (!fecha) return "No definida";
 
     try {
@@ -337,12 +329,10 @@ export default function PortalAlumnoInicio() {
     }
   }
 
-  function formatearDinero(valor) {
+  function formatearDinero(valor: any) {
     const numero = Number(valor || 0);
 
-    if (!Number.isFinite(numero)) {
-      return "$0.00";
-    }
+    if (!Number.isFinite(numero)) return "$0.00";
 
     return new Intl.NumberFormat("es-PA", {
       style: "currency",
@@ -352,16 +342,10 @@ export default function PortalAlumnoInicio() {
   }
 
   const membresia = cuenta?.membresia || null;
-
   const qrToken = String(cuenta?.qr_token || "").trim();
 
-  const qrDisponible = Boolean(
-    cuenta?.qr_disponible && qrToken
-  );
-
-  const accesoPermitido = Boolean(
-    cuenta?.acceso_permitido
-  );
+  const qrDisponible = Boolean(cuenta?.qr_disponible && qrToken);
+  const accesoPermitido = Boolean(cuenta?.acceso_permitido);
 
   const qrUrl = useMemo(() => {
     if (!qrToken) return "";
@@ -374,7 +358,6 @@ export default function PortalAlumnoInicio() {
 
   const iniciales = useMemo(() => {
     const nombre = String(cuenta?.nombre || "Alumno").trim();
-
     const partes = nombre.split(/\s+/).filter(Boolean);
 
     return (
@@ -384,6 +367,12 @@ export default function PortalAlumnoInicio() {
         .join("") || "A"
     );
   }, [cuenta?.nombre]);
+
+  const inicialEmpresa = useMemo(() => {
+    return String(cuenta?.empresa_nombre || "G")
+      .charAt(0)
+      .toUpperCase();
+  }, [cuenta?.empresa_nombre]);
 
   const estadoVisual =
     cuenta?.membresia_estado_visual ||
@@ -409,11 +398,8 @@ export default function PortalAlumnoInicio() {
             alt="KONAX"
             style={S.loadingLogo}
           />
-
           <div style={S.loader} />
-
           <strong>Preparando tu portal...</strong>
-
           <span style={S.loadingText}>
             Estamos validando tu acceso.
           </span>
@@ -471,25 +457,44 @@ export default function PortalAlumnoInicio() {
 
         body {
           margin: 0;
+          background: #07141a;
         }
 
         input {
           font: inherit;
         }
 
-        @media (max-width: 620px) {
+        @media (max-width: 720px) {
           .portal-shell {
             min-height: 100vh !important;
             border-radius: 0 !important;
+            width: 100% !important;
           }
 
           .portal-content {
-            padding-left: 15px !important;
-            padding-right: 15px !important;
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+          }
+
+          .portal-topbar {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+
+          .topbar-actions {
+            width: 100% !important;
+          }
+
+          .topbar-actions button {
+            width: 100% !important;
+          }
+
+          .hero-grid {
+            grid-template-columns: 1fr !important;
           }
 
           .member-grid {
-            grid-template-columns: 58px minmax(0, 1fr) !important;
+            grid-template-columns: 72px minmax(0, 1fr) !important;
           }
 
           .member-status {
@@ -508,208 +513,219 @@ export default function PortalAlumnoInicio() {
           .qr-layout {
             grid-template-columns: 1fr !important;
           }
+
+          .qr-frame {
+            max-width: 320px !important;
+            margin: 0 auto !important;
+          }
         }
 
-        @media (max-width: 390px) {
+        @media (max-width: 430px) {
           .profile-metrics,
           .membership-grid,
           .photo-actions {
             grid-template-columns: 1fr !important;
           }
+
+          .member-name-mobile {
+            font-size: 24px !important;
+          }
+
+          .hero-title-mobile {
+            font-size: 18px !important;
+          }
         }
       `}</style>
 
-      <section
-        style={S.shell}
-        className="portal-shell"
-      >
-        <header style={S.topbar}>
-          <div style={S.brandBlock}>
-            <div style={S.brandMark}>
+      <section style={S.shell} className="portal-shell">
+        <header style={S.topbar} className="portal-topbar">
+          <div style={S.topbarLeft}>
+            <div style={S.brandLogoWrap}>
               {cuenta?.empresa_logo_url ? (
                 <img
                   src={cuenta.empresa_logo_url}
-                  alt={cuenta?.empresa_nombre || "Negocio"}
+                  alt={cuenta?.empresa_nombre || "Gimnasio"}
                   style={S.brandLogo}
                 />
               ) : (
-                <span>
-                  {String(
-                    cuenta?.empresa_nombre || "K"
-                  )
-                    .charAt(0)
-                    .toUpperCase()}
-                </span>
+                <span style={S.brandFallback}>{inicialEmpresa}</span>
               )}
             </div>
 
-            <div>
+            <div style={S.brandTexts}>
+              <span style={S.brandEyebrow}>PORTAL DEL ALUMNO</span>
               <strong style={S.brandName}>
                 {cuenta?.empresa_nombre || "Gimnasio"}
               </strong>
-
-              <span style={S.powered}>
-                Portal del Alumno · KONAX
-              </span>
+              <span style={S.powered}>Experiencia digital impulsada por KONAX</span>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => cargarTodo(true)}
-            disabled={actualizando}
-            style={S.refreshButton}
-          >
-            {actualizando
-              ? "Actualizando..."
-              : "↻ Actualizar"}
-          </button>
+          <div className="topbar-actions" style={S.topbarActions}>
+            <button
+              type="button"
+              onClick={() => cargarTodo(true)}
+              disabled={actualizando}
+              style={S.refreshButton}
+            >
+              {actualizando ? "Actualizando..." : "↻ Actualizar"}
+            </button>
+          </div>
         </header>
 
-        <div
-          style={S.content}
-          className="portal-content"
-        >
+        <div style={S.content} className="portal-content">
           {error && (
             <div style={S.inlineError}>
-              <strong>Atención:</strong>{" "}
-              {error}
+              <strong>Atención:</strong> {error}
             </div>
           )}
 
           {mensajePerfil && (
-            <div style={S.successMessage}>
-              {mensajePerfil}
-            </div>
+            <div style={S.successMessage}>{mensajePerfil}</div>
           )}
 
-          <section
-            style={S.memberHeader}
-            className="member-grid"
-          >
-            <div style={S.avatar}>
-              {fotoFirmada ? (
-                <img
-                  src={fotoFirmada}
-                  alt={cuenta?.nombre || "Alumno"}
-                  style={S.avatarImage}
-                />
-              ) : (
-                <span>{iniciales}</span>
-              )}
+          <section style={S.heroPanel} className="hero-grid">
+            <div style={S.heroGymCard}>
+              <div style={S.heroGymTop}>
+                <div style={S.heroGymLogoBox}>
+                  {cuenta?.empresa_logo_url ? (
+                    <img
+                      src={cuenta.empresa_logo_url}
+                      alt={cuenta?.empresa_nombre || "Gimnasio"}
+                      style={S.heroGymLogo}
+                    />
+                  ) : (
+                    <span style={S.heroGymLogoFallback}>
+                      {inicialEmpresa}
+                    </span>
+                  )}
+                </div>
+
+                <div style={S.heroGymTexts}>
+                  <span style={S.heroGymEyebrow}>TU GIMNASIO</span>
+                  <h2 style={S.heroGymName} className="hero-title-mobile">
+                    {cuenta?.empresa_nombre || "Gimnasio"}
+                  </h2>
+                  <p style={S.heroGymSub}>
+                    Administra tu perfil, tu membresía y tu acceso desde un solo lugar.
+                  </p>
+                </div>
+              </div>
+
+              <div style={S.heroGymStats}>
+                <div style={S.heroMiniStat}>
+                  <span style={S.heroMiniLabel}>Estado</span>
+                  <strong style={S.heroMiniValue}>
+                    {accesoPermitido ? "Habilitado" : "Pendiente"}
+                  </strong>
+                </div>
+
+                <div style={S.heroMiniStat}>
+                  <span style={S.heroMiniLabel}>Plan</span>
+                  <strong style={S.heroMiniValue}>
+                    {membresia?.plan || "Sin plan"}
+                  </strong>
+                </div>
+
+                <div style={S.heroMiniStat}>
+                  <span style={S.heroMiniLabel}>Vigencia</span>
+                  <strong style={S.heroMiniValue}>
+                    {cuenta?.dias_restantes === null || cuenta?.dias_restantes === undefined
+                      ? "-"
+                      : cuenta.dias_restantes < 0
+                      ? "Vencida"
+                      : `${cuenta.dias_restantes} días`}
+                  </strong>
+                </div>
+              </div>
             </div>
 
-            <div style={S.memberIdentity}>
-              <span style={S.welcome}>
-                Hola,
-              </span>
+            <section style={S.memberHeader} className="member-grid">
+              <div style={S.avatar}>
+                {fotoFirmada ? (
+                  <img
+                    src={fotoFirmada}
+                    alt={cuenta?.nombre || "Alumno"}
+                    style={S.avatarImage}
+                  />
+                ) : (
+                  <span>{iniciales}</span>
+                )}
+              </div>
 
-              <h1 style={S.memberName}>
-                {cuenta?.nombre}
-              </h1>
+              <div style={S.memberIdentity}>
+                <span style={S.welcome}>Hola,</span>
 
-              <span style={S.memberId}>
-                {cuenta?.cedula
-                  ? `ID ${cuenta.cedula}`
-                  : "Miembro KONAX"}
-              </span>
-            </div>
+                <h1 style={S.memberName} className="member-name-mobile">
+                  {cuenta?.nombre}
+                </h1>
 
-            <div
-              style={{
-                ...S.estadoBadge,
-                ...(accesoPermitido
-                  ? S.estadoBadgeOk
-                  : S.estadoBadgeWarning),
-              }}
-              className="member-status"
-            >
-              <span
+                <span style={S.memberId}>
+                  {cuenta?.cedula ? `ID ${cuenta.cedula}` : "Miembro KONAX"}
+                </span>
+              </div>
+
+              <div
                 style={{
-                  ...S.statusDot,
-                  background: accesoPermitido
-                    ? "#1FB36A"
-                    : "#E2A72F",
+                  ...S.estadoBadge,
+                  ...(accesoPermitido ? S.estadoBadgeOk : S.estadoBadgeWarning),
                 }}
-              />
-
-              {estadoVisual}
-            </div>
+                className="member-status"
+              >
+                <span
+                  style={{
+                    ...S.statusDot,
+                    background: accesoPermitido ? "#22C55E" : "#F59E0B",
+                  }}
+                />
+                {estadoVisual}
+              </div>
+            </section>
           </section>
 
           <section style={S.profileCard}>
             <div style={S.sectionHeading}>
               <div>
-                <span style={S.sectionEyebrow}>
-                  MI PERFIL
-                </span>
-
-                <h2 style={S.sectionTitle}>
-                  Datos personales
-                </h2>
+                <span style={S.sectionEyebrow}>MI PERFIL</span>
+                <h2 style={S.sectionTitle}>Datos personales</h2>
               </div>
 
               <button
                 type="button"
-                onClick={() =>
-                  setMostrarEditor((valor) => !valor)
-                }
+                onClick={() => setMostrarEditor((valor) => !valor)}
                 style={S.outlineSmallButton}
               >
-                {mostrarEditor
-                  ? "Cerrar"
-                  : "Editar perfil"}
+                {mostrarEditor ? "Cerrar" : "Editar perfil"}
               </button>
             </div>
 
             <div style={S.profileBodySimple}>
-              <div
-                style={S.profileMetrics}
-                className="profile-metrics"
-              >
-                <Metric
-                  label="Peso"
-                  value={pesoVisual}
-                />
-
-                <Metric
-                  label="Estatura"
-                  value={estaturaVisual}
-                />
+              <div style={S.profileMetrics} className="profile-metrics">
+                <Metric label="Peso" value={pesoVisual} />
+                <Metric label="Estatura" value={estaturaVisual} />
               </div>
 
-              <div
-                style={S.photoActions}
-                className="photo-actions"
-              >
+              <div style={S.photoActions} className="photo-actions">
                 <label style={S.selfieButton}>
-                  {subiendoFoto
-                    ? "Subiendo..."
-                    : "📷 Tomar selfie"}
-
+                  {subiendoFoto ? "Subiendo..." : "📷 Tomar selfie"}
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
                     capture="user"
                     onChange={subirSelfie}
                     disabled={subiendoFoto}
-                    style={{
-                      display: "none",
-                    }}
+                    style={{ display: "none" }}
                   />
                 </label>
 
                 <label style={S.galleryButton}>
                   Elegir foto
-
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
                     onChange={subirSelfie}
                     disabled={subiendoFoto}
-                    style={{
-                      display: "none",
-                    }}
+                    style={{ display: "none" }}
                   />
                 </label>
               </div>
@@ -717,15 +733,10 @@ export default function PortalAlumnoInicio() {
               {mostrarEditor && (
                 <div style={S.profileEditor}>
                   <div style={S.fieldGroup}>
-                    <label style={S.fieldLabel}>
-                      Peso (kg)
-                    </label>
-
+                    <label style={S.fieldLabel}>Peso (kg)</label>
                     <input
                       value={peso}
-                      onChange={(e) =>
-                        setPeso(e.target.value)
-                      }
+                      onChange={(e) => setPeso(e.target.value)}
                       inputMode="decimal"
                       placeholder="Ej. 82.5"
                       style={S.input}
@@ -733,15 +744,10 @@ export default function PortalAlumnoInicio() {
                   </div>
 
                   <div style={S.fieldGroup}>
-                    <label style={S.fieldLabel}>
-                      Estatura (m)
-                    </label>
-
+                    <label style={S.fieldLabel}>Estatura (m)</label>
                     <input
                       value={estatura}
-                      onChange={(e) =>
-                        setEstatura(e.target.value)
-                      }
+                      onChange={(e) => setEstatura(e.target.value)}
                       inputMode="decimal"
                       placeholder="Ej. 1.76"
                       style={S.input}
@@ -754,9 +760,7 @@ export default function PortalAlumnoInicio() {
                     disabled={guardandoPerfil}
                     style={S.saveProfileButton}
                   >
-                    {guardandoPerfil
-                      ? "Guardando..."
-                      : "Guardar cambios"}
+                    {guardandoPerfil ? "Guardando..." : "Guardar cambios"}
                   </button>
                 </div>
               )}
@@ -766,31 +770,22 @@ export default function PortalAlumnoInicio() {
           <section
             style={{
               ...S.accessBanner,
-              ...(accesoPermitido
-                ? S.accessBannerOk
-                : S.accessBannerBlocked),
+              ...(accesoPermitido ? S.accessBannerOk : S.accessBannerBlocked),
             }}
           >
             <div
               style={{
                 ...S.accessIcon,
-                ...(accesoPermitido
-                  ? S.accessIconOk
-                  : S.accessIconBlocked),
+                ...(accesoPermitido ? S.accessIconOk : S.accessIconBlocked),
               }}
             >
               {accesoPermitido ? "✓" : "!"}
             </div>
 
             <div>
-              <span style={S.accessLabel}>
-                ESTADO DE ACCESO
-              </span>
-
+              <span style={S.accessLabel}>ESTADO DE ACCESO</span>
               <strong style={S.accessTitle}>
-                {accesoPermitido
-                  ? "Acceso disponible"
-                  : "Acceso no disponible"}
+                {accesoPermitido ? "Acceso disponible" : "Acceso no disponible"}
               </strong>
 
               <p style={S.accessText}>
@@ -804,19 +799,13 @@ export default function PortalAlumnoInicio() {
           <section style={S.section}>
             <div style={S.sectionHeading}>
               <div>
-                <span style={S.sectionEyebrow}>
-                  TU PLAN
-                </span>
-
-                <h2 style={S.sectionTitle}>
-                  Membresía
-                </h2>
+                <span style={S.sectionEyebrow}>TU PLAN</span>
+                <h2 style={S.sectionTitle}>Membresía</h2>
               </div>
 
               {membresia && (
                 <span style={S.planChip}>
-                  {membresia.periodicidad ||
-                    "Membresía"}
+                  {membresia.periodicidad || "Membresía"}
                 </span>
               )}
             </div>
@@ -825,13 +814,9 @@ export default function PortalAlumnoInicio() {
               <>
                 <div style={S.planHero}>
                   <div>
-                    <span style={S.planLabel}>
-                      PLAN ACTUAL
-                    </span>
-
+                    <span style={S.planLabel}>PLAN ACTUAL</span>
                     <strong style={S.planName}>
-                      {membresia.plan ||
-                        "Membresía"}
+                      {membresia.plan || "Membresía"}
                     </strong>
 
                     {membresia.descripcion && (
@@ -842,35 +827,23 @@ export default function PortalAlumnoInicio() {
                   </div>
 
                   <strong style={S.planPrice}>
-                    {formatearDinero(
-                      membresia.precio
-                    )}
+                    {formatearDinero(membresia.precio)}
                   </strong>
                 </div>
 
-                <div
-                  style={S.membershipGrid}
-                  className="membership-grid"
-                >
+                <div style={S.membershipGrid} className="membership-grid">
                   <Dato
                     label="Inicio"
-                    value={formatearFecha(
-                      membresia.fecha_inicio
-                    )}
+                    value={formatearFecha(membresia.fecha_inicio)}
                   />
 
                   <Dato
                     label="Vencimiento"
-                    value={formatearFecha(
-                      membresia.fecha_vencimiento
-                    )}
+                    value={formatearFecha(membresia.fecha_vencimiento)}
                     destacado
                   />
 
-                  <Dato
-                    label="Estado"
-                    value={estadoVisual}
-                  />
+                  <Dato label="Estado" value={estadoVisual} />
 
                   <Dato
                     label="Tiempo restante"
@@ -883,9 +856,7 @@ export default function PortalAlumnoInicio() {
                         : cuenta.dias_restantes === 0
                         ? "Vence hoy"
                         : `${cuenta.dias_restantes} día${
-                            cuenta.dias_restantes === 1
-                              ? ""
-                              : "s"
+                            cuenta.dias_restantes === 1 ? "" : "s"
                           }`
                     }
                   />
@@ -893,18 +864,9 @@ export default function PortalAlumnoInicio() {
               </>
             ) : (
               <div style={S.emptyMembership}>
-                <div style={S.emptyIcon}>
-                  ◇
-                </div>
-
-                <strong>
-                  Sin membresía registrada
-                </strong>
-
-                <span>
-                  Comunícate con recepción
-                  para activar un plan.
-                </span>
+                <div style={S.emptyIcon}>◇</div>
+                <strong>Sin membresía registrada</strong>
+                <span>Comunícate con recepción para activar un plan.</span>
               </div>
             )}
           </section>
@@ -912,41 +874,28 @@ export default function PortalAlumnoInicio() {
           <section style={S.qrSection}>
             <div style={S.sectionHeading}>
               <div>
-                <span style={S.qrEyebrow}>
-                  ACCESO DIGITAL
-                </span>
-
-                <h2 style={S.sectionTitle}>
-                  Mi código QR
-                </h2>
+                <span style={S.qrEyebrow}>ACCESO DIGITAL</span>
+                <h2 style={S.sectionTitle}>Mi código QR</h2>
               </div>
 
               <span
                 style={{
                   ...S.qrStatus,
-                  ...(accesoPermitido
-                    ? S.qrStatusActive
-                    : S.qrStatusInactive),
+                  ...(accesoPermitido ? S.qrStatusActive : S.qrStatusInactive),
                 }}
               >
-                {accesoPermitido
-                  ? "ACTIVO"
-                  : "NO DISPONIBLE"}
+                {accesoPermitido ? "ACTIVO" : "NO DISPONIBLE"}
               </span>
             </div>
 
-            <div
-              style={S.qrLayout}
-              className="qr-layout"
-            >
+            <div style={S.qrLayout} className="qr-layout">
               {qrDisponible ? (
                 <div
                   style={{
                     ...S.qrFrame,
-                    opacity: accesoPermitido
-                      ? 1
-                      : 0.38,
+                    opacity: accesoPermitido ? 1 : 0.45,
                   }}
+                  className="qr-frame"
                 >
                   <img
                     src={qrUrl}
@@ -956,67 +905,33 @@ export default function PortalAlumnoInicio() {
 
                   {!accesoPermitido && (
                     <div style={S.qrBlocked}>
-                      <span
-                        style={S.qrBlockedIcon}
-                      >
-                        🔒
-                      </span>
-
-                      <strong>
-                        Acceso temporalmente
-                        bloqueado
-                      </strong>
+                      <span style={S.qrBlockedIcon}>🔒</span>
+                      <strong>Acceso temporalmente bloqueado</strong>
                     </div>
                   )}
                 </div>
               ) : (
                 <div style={S.noQr}>
-                  <span style={S.noQrIcon}>
-                    QR
-                  </span>
-
-                  <strong>
-                    QR no disponible
-                  </strong>
-
-                  <span>
-                    Solicita a recepción que
-                    actualice tu ficha.
-                  </span>
+                  <span style={S.noQrIcon}>QR</span>
+                  <strong>QR no disponible</strong>
+                  <span>Solicita a recepción que actualice tu ficha.</span>
                 </div>
               )}
 
               <div style={S.qrInstructions}>
-                <span
-                  style={S.qrInstructionEyebrow}
-                >
-                  CÓMO INGRESAR
-                </span>
+                <span style={S.qrInstructionEyebrow}>CÓMO INGRESAR</span>
 
-                <h3
-                  style={S.qrInstructionTitle}
-                >
-                  Muestra este código en
-                  recepción
+                <h3 style={S.qrInstructionTitle}>
+                  Muestra este código en recepción
                 </h3>
 
                 <p style={S.qrInstructionText}>
-                  El personal escaneará tu QR
-                  desde el módulo Check-in de
-                  KONAX.
+                  El personal escaneará tu QR desde el módulo Check-in de KONAX.
                 </p>
 
                 <div style={S.steps}>
-                  <Paso
-                    numero="1"
-                    texto="Abre tu Portal del Alumno."
-                  />
-
-                  <Paso
-                    numero="2"
-                    texto="Muestra este QR en recepción."
-                  />
-
+                  <Paso numero="1" texto="Abre tu Portal del Alumno." />
+                  <Paso numero="2" texto="Muestra este QR en recepción." />
                   <Paso
                     numero="3"
                     texto="KONAX valida tu membresía y registra tu entrada."
@@ -1027,20 +942,11 @@ export default function PortalAlumnoInicio() {
           </section>
 
           <section style={S.contactCard}>
-            <span style={S.contactEyebrow}>
-              CONTACTO
-            </span>
+            <span style={S.contactEyebrow}>CONTACTO</span>
 
             <div style={S.contactRows}>
-              <Fila
-                label="Teléfono"
-                value={cuenta?.telefono || "-"}
-              />
-
-              <Fila
-                label="Correo"
-                value={cuenta?.correo || "-"}
-              />
+              <Fila label="Teléfono" value={cuenta?.telefono || "-"} />
+              <Fila label="Correo" value={cuenta?.correo || "-"} />
             </div>
           </section>
 
@@ -1054,16 +960,11 @@ export default function PortalAlumnoInicio() {
             </button>
 
             <div style={S.secureText}>
-              <span>
-                🔒 Acceso seguro
-              </span>
-
+              <span>🔒 Acceso seguro</span>
               <span>KONAX</span>
             </div>
 
-            <span style={S.version}>
-              {VERSION}
-            </span>
+            <span style={S.version}>{VERSION}</span>
           </footer>
         </div>
       </section>
@@ -1071,19 +972,11 @@ export default function PortalAlumnoInicio() {
   );
 }
 
-function Metric({
-  label,
-  value,
-}) {
+function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div style={S.metricCard}>
-      <span style={S.metricLabel}>
-        {label}
-      </span>
-
-      <strong style={S.metricValue}>
-        {value}
-      </strong>
+      <span style={S.metricLabel}>{label}</span>
+      <strong style={S.metricValue}>{value}</strong>
     </div>
   );
 }
@@ -1092,23 +985,20 @@ function Dato({
   label,
   value,
   destacado = false,
+}: {
+  label: string;
+  value: string;
+  destacado?: boolean;
 }) {
   return (
     <div
       style={{
         ...S.dataCard,
-        ...(destacado
-          ? S.dataCardHighlight
-          : {}),
+        ...(destacado ? S.dataCardHighlight : {}),
       }}
     >
-      <span style={S.dataLabel}>
-        {label}
-      </span>
-
-      <strong style={S.dataValue}>
-        {value}
-      </strong>
+      <span style={S.dataLabel}>{label}</span>
+      <strong style={S.dataValue}>{value}</strong>
     </div>
   );
 }
@@ -1116,16 +1006,14 @@ function Dato({
 function Paso({
   numero,
   texto,
+}: {
+  numero: string;
+  texto: string;
 }) {
   return (
     <div style={S.step}>
-      <span style={S.stepNumber}>
-        {numero}
-      </span>
-
-      <span style={S.stepText}>
-        {texto}
-      </span>
+      <span style={S.stepNumber}>{numero}</span>
+      <span style={S.stepText}>{texto}</span>
     </div>
   );
 }
@@ -1133,108 +1021,130 @@ function Paso({
 function Fila({
   label,
   value,
+}: {
+  label: string;
+  value: string;
 }) {
   return (
     <div style={S.row}>
-      <span style={S.rowLabel}>
-        {label}
-      </span>
-
-      <strong style={S.rowValue}>
-        {value}
-      </strong>
+      <span style={S.rowLabel}>{label}</span>
+      <strong style={S.rowValue}>{value}</strong>
     </div>
   );
 }
 
-const S = {
+const S: Record<string, any> = {
   page: {
     minHeight: "100vh",
     padding: 18,
     display: "grid",
     placeItems: "center",
     background:
-      "radial-gradient(circle at top right,rgba(22,131,79,.13),transparent 35%),radial-gradient(circle at bottom left,rgba(15,85,52,.08),transparent 32%),#EEF4F0",
-    color: "#17211C",
+      "radial-gradient(circle at top left, rgba(20,184,166,.14), transparent 26%), radial-gradient(circle at bottom right, rgba(59,130,246,.10), transparent 24%), linear-gradient(180deg,#07141A 0%,#0B1F27 100%)",
+    color: "#E8F2F0",
     fontFamily:
       'Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
   },
 
   shell: {
-    width: "min(620px,100%)",
+    width: "min(760px,100%)",
     overflow: "hidden",
-    border: "1px solid #D9E6DE",
-    borderRadius: 28,
-    background: "#F8FAF9",
-    boxShadow:
-      "0 28px 80px rgba(15,50,31,.13)",
+    border: "1px solid rgba(255,255,255,.08)",
+    borderRadius: 30,
+    background: "rgba(9,24,30,.92)",
+    boxShadow: "0 30px 90px rgba(0,0,0,.35)",
+    backdropFilter: "blur(8px)",
   },
 
   topbar: {
-    minHeight: 78,
-    padding: "14px 18px",
+    minHeight: 92,
+    padding: "18px 20px",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
-    background: "#FFFFFF",
-    borderBottom: "1px solid #E7EEE9",
+    gap: 14,
+    background:
+      "linear-gradient(135deg, rgba(8,22,28,.96) 0%, rgba(10,35,43,.95) 100%)",
+    borderBottom: "1px solid rgba(255,255,255,.07)",
   },
 
-  brandBlock: {
+  topbarLeft: {
     minWidth: 0,
     display: "flex",
     alignItems: "center",
-    gap: 10,
+    gap: 14,
   },
 
-  brandMark: {
-    width: 42,
-    height: 42,
+  brandLogoWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
     overflow: "hidden",
-    flex: "0 0 auto",
     display: "grid",
     placeItems: "center",
-    borderRadius: 12,
-    background: "#163D29",
-    color: "#FFFFFF",
-    fontSize: 17,
-    fontWeight: 950,
+    background: "linear-gradient(135deg,#0F766E,#155E75)",
+    boxShadow: "0 10px 24px rgba(0,0,0,.24)",
+    border: "1px solid rgba(255,255,255,.08)",
+    flex: "0 0 auto",
   },
 
   brandLogo: {
     width: "100%",
     height: "100%",
-    objectFit: "cover",
+    objectFit: "contain",
+    background: "#FFFFFF",
+  },
+
+  brandFallback: {
+    color: "#FFFFFF",
+    fontSize: 24,
+    fontWeight: 900,
+  },
+
+  brandTexts: {
+    minWidth: 0,
+    display: "grid",
+    gap: 3,
+  },
+
+  brandEyebrow: {
+    color: "#7DD3C7",
+    fontSize: 11,
+    fontWeight: 800,
+    letterSpacing: 1.1,
   },
 
   brandName: {
     display: "block",
-    maxWidth: 250,
-    overflow: "hidden",
-    color: "#1D3828",
-    fontSize: 13,
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
+    color: "#F7FAFC",
+    fontSize: 21,
+    fontWeight: 900,
+    lineHeight: 1.1,
   },
 
   powered: {
     display: "block",
-    marginTop: 2,
-    color: "#829088",
-    fontSize: 8,
+    color: "#9DB2B8",
+    fontSize: 12,
+  },
+
+  topbarActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
   },
 
   refreshButton: {
-    minHeight: 36,
-    padding: "0 11px",
-    border: "1px solid #DCE6E0",
-    borderRadius: 10,
-    background: "#F8FAF9",
-    color: "#426050",
-    fontSize: 9,
-    fontWeight: 850,
+    minHeight: 44,
+    padding: "0 16px",
+    border: "1px solid rgba(125,211,199,.28)",
+    borderRadius: 14,
+    background: "rgba(18,46,56,.95)",
+    color: "#D9F5F0",
+    fontSize: 13,
+    fontWeight: 800,
     cursor: "pointer",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,.04)",
   },
 
   content: {
@@ -1242,55 +1152,152 @@ const S = {
   },
 
   inlineError: {
-    marginBottom: 12,
-    padding: 11,
-    border: "1px solid #F0C9C4",
-    borderRadius: 12,
-    background: "#FFF2F0",
-    color: "#8B3C34",
-    fontSize: 9,
+    marginBottom: 14,
+    padding: 13,
+    border: "1px solid rgba(248,113,113,.28)",
+    borderRadius: 14,
+    background: "rgba(127,29,29,.18)",
+    color: "#FECACA",
+    fontSize: 13,
   },
 
   successMessage: {
-    marginBottom: 12,
-    padding: 11,
-    border: "1px solid #BFE3CE",
-    borderRadius: 12,
-    background: "#ECF9F1",
-    color: "#196D42",
-    fontSize: 9,
+    marginBottom: 14,
+    padding: 13,
+    border: "1px solid rgba(52,211,153,.22)",
+    borderRadius: 14,
+    background: "rgba(6,95,70,.22)",
+    color: "#CFFAE8",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+
+  heroPanel: {
+    display: "grid",
+    gridTemplateColumns: "1.1fr .9fr",
+    gap: 16,
+    marginBottom: 16,
+  },
+
+  heroGymCard: {
+    padding: 18,
+    borderRadius: 24,
+    background:
+      "linear-gradient(145deg, rgba(10,30,37,1) 0%, rgba(12,49,57,1) 58%, rgba(11,89,95,1) 100%)",
+    border: "1px solid rgba(255,255,255,.06)",
+    boxShadow: "0 18px 40px rgba(0,0,0,.22)",
+  },
+
+  heroGymTop: {
+    display: "grid",
+    gridTemplateColumns: "82px minmax(0,1fr)",
+    gap: 14,
+    alignItems: "center",
+  },
+
+  heroGymLogoBox: {
+    width: 82,
+    height: 82,
+    borderRadius: 22,
+    overflow: "hidden",
+    background: "#FFFFFF",
+    display: "grid",
+    placeItems: "center",
+    border: "1px solid rgba(255,255,255,.08)",
+    boxShadow: "0 10px 30px rgba(0,0,0,.24)",
+  },
+
+  heroGymLogo: {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+  },
+
+  heroGymLogoFallback: {
+    color: "#0F172A",
+    fontSize: 30,
+    fontWeight: 900,
+  },
+
+  heroGymTexts: {
+    minWidth: 0,
+  },
+
+  heroGymEyebrow: {
+    display: "block",
+    color: "#7DD3C7",
+    fontSize: 11,
     fontWeight: 800,
+    letterSpacing: 1.1,
+    marginBottom: 4,
+  },
+
+  heroGymName: {
+    margin: 0,
+    color: "#F8FBFC",
+    fontSize: 26,
+    lineHeight: 1.1,
+  },
+
+  heroGymSub: {
+    margin: "8px 0 0",
+    color: "#B7CBD1",
+    fontSize: 13,
+    lineHeight: 1.5,
+  },
+
+  heroGymStats: {
+    marginTop: 18,
+    display: "grid",
+    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+    gap: 10,
+  },
+
+  heroMiniStat: {
+    padding: 12,
+    borderRadius: 16,
+    background: "rgba(255,255,255,.06)",
+    border: "1px solid rgba(255,255,255,.05)",
+  },
+
+  heroMiniLabel: {
+    display: "block",
+    color: "#9FC2C9",
+    fontSize: 11,
+    marginBottom: 6,
+  },
+
+  heroMiniValue: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    lineHeight: 1.25,
   },
 
   memberHeader: {
     display: "grid",
-    gridTemplateColumns:
-      "68px minmax(0,1fr) auto",
-    gap: 13,
+    gridTemplateColumns: "76px minmax(0,1fr) auto",
+    gap: 14,
     alignItems: "center",
-    marginBottom: 15,
     padding: 18,
-    borderRadius: 20,
+    borderRadius: 24,
     background:
-      "linear-gradient(135deg,#173C2A 0%,#11633C 100%)",
+      "linear-gradient(145deg, rgba(17,24,39,.98) 0%, rgba(30,41,59,.96) 100%)",
     color: "#FFFFFF",
-    boxShadow:
-      "0 14px 30px rgba(23,60,42,.17)",
+    border: "1px solid rgba(255,255,255,.06)",
+    boxShadow: "0 18px 40px rgba(0,0,0,.22)",
   },
 
   avatar: {
-    width: 68,
-    height: 68,
+    width: 76,
+    height: 76,
     overflow: "hidden",
     display: "grid",
     placeItems: "center",
-    borderRadius: 20,
-    background:
-      "rgba(255,255,255,.13)",
-    border:
-      "1px solid rgba(255,255,255,.18)",
+    borderRadius: 22,
+    background: "rgba(255,255,255,.08)",
+    border: "1px solid rgba(255,255,255,.14)",
     color: "#FFFFFF",
-    fontSize: 21,
+    fontSize: 24,
     fontWeight: 950,
   },
 
@@ -1306,265 +1313,269 @@ const S = {
 
   welcome: {
     display: "block",
-    marginBottom: 2,
-    color: "#B9DDC8",
-    fontSize: 10,
+    marginBottom: 4,
+    color: "#94E7DB",
+    fontSize: 12,
   },
 
   memberName: {
     margin: 0,
     overflow: "hidden",
     color: "#FFFFFF",
-    fontSize: 23,
-    lineHeight: 1.08,
+    fontSize: 30,
+    lineHeight: 1.06,
     textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
 
   memberId: {
     display: "block",
-    marginTop: 5,
-    color: "#B9D2C3",
-    fontSize: 9,
+    marginTop: 8,
+    color: "#A5B8C7",
+    fontSize: 12,
   },
 
   estadoBadge: {
-    minHeight: 30,
-    padding: "0 10px",
+    minHeight: 36,
+    padding: "0 14px",
     display: "inline-flex",
     alignItems: "center",
-    gap: 7,
+    gap: 8,
     borderRadius: 999,
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: 900,
     whiteSpace: "nowrap",
   },
 
   estadoBadgeOk: {
-    color: "#D9FFE8",
-    background:
-      "rgba(77,210,132,.16)",
-    border:
-      "1px solid rgba(137,236,176,.21)",
+    color: "#D1FAE5",
+    background: "rgba(34,197,94,.14)",
+    border: "1px solid rgba(34,197,94,.24)",
   },
 
   estadoBadgeWarning: {
-    color: "#FFF0C4",
-    background:
-      "rgba(242,181,61,.15)",
-    border:
-      "1px solid rgba(255,217,137,.20)",
+    color: "#FEF3C7",
+    background: "rgba(245,158,11,.14)",
+    border: "1px solid rgba(245,158,11,.24)",
   },
 
   statusDot: {
-    width: 7,
-    height: 7,
+    width: 8,
+    height: 8,
     borderRadius: "50%",
   },
 
   profileCard: {
-    marginBottom: 15,
+    marginBottom: 16,
     padding: 18,
-    border: "1px solid #DCE8E0",
-    borderRadius: 19,
-    background: "#FFFFFF",
+    border: "1px solid rgba(255,255,255,.06)",
+    borderRadius: 22,
+    background: "rgba(255,255,255,.03)",
+    boxShadow: "0 16px 32px rgba(0,0,0,.14)",
   },
 
   profileBodySimple: {
     display: "grid",
-    gap: 12,
+    gap: 14,
   },
 
   profileMetrics: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
-    gap: 8,
+    gap: 10,
   },
 
   photoActions: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
-    gap: 8,
+    gap: 10,
   },
 
   metricCard: {
-    minHeight: 68,
-    padding: 12,
+    minHeight: 84,
+    padding: 15,
     display: "grid",
     alignContent: "center",
-    gap: 3,
-    border: "1px solid #E3ECE6",
-    borderRadius: 12,
-    background: "#F8FBF9",
+    gap: 4,
+    border: "1px solid rgba(255,255,255,.07)",
+    borderRadius: 16,
+    background: "linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025))",
   },
 
   metricLabel: {
-    color: "#839088",
-    fontSize: 7,
-    fontWeight: 900,
+    color: "#8DA6AD",
+    fontSize: 11,
+    fontWeight: 800,
     textTransform: "uppercase",
+    letterSpacing: 0.8,
   },
 
   metricValue: {
-    color: "#274433",
-    fontSize: 14,
+    color: "#F1F7F8",
+    fontSize: 21,
+    lineHeight: 1.2,
   },
 
   selfieButton: {
-    minHeight: 42,
-    padding: "0 10px",
+    minHeight: 48,
+    padding: "0 14px",
     display: "grid",
     placeItems: "center",
-    borderRadius: 11,
-    background: "#16834F",
+    borderRadius: 14,
+    background: "linear-gradient(135deg,#14B8A6,#0F766E)",
     color: "#FFFFFF",
-    fontSize: 9,
+    fontSize: 14,
     fontWeight: 900,
     cursor: "pointer",
     textAlign: "center",
+    boxShadow: "0 10px 24px rgba(20,184,166,.24)",
   },
 
   galleryButton: {
-    minHeight: 42,
-    padding: "0 10px",
+    minHeight: 48,
+    padding: "0 14px",
     display: "grid",
     placeItems: "center",
-    border: "1px solid #D7E3DB",
-    borderRadius: 11,
-    background: "#FFFFFF",
-    color: "#4E6658",
-    fontSize: 9,
-    fontWeight: 850,
+    border: "1px solid rgba(255,255,255,.10)",
+    borderRadius: 14,
+    background: "rgba(255,255,255,.04)",
+    color: "#D5E5E9",
+    fontSize: 14,
+    fontWeight: 800,
     cursor: "pointer",
     textAlign: "center",
   },
 
   profileEditor: {
-    padding: 12,
+    padding: 14,
     display: "grid",
-    gap: 10,
-    borderRadius: 13,
-    background: "#F4F8F5",
+    gap: 12,
+    borderRadius: 16,
+    background: "rgba(255,255,255,.04)",
+    border: "1px solid rgba(255,255,255,.06)",
   },
 
   fieldGroup: {
     display: "grid",
-    gap: 5,
+    gap: 7,
   },
 
   fieldLabel: {
-    color: "#617269",
-    fontSize: 8,
-    fontWeight: 850,
+    color: "#B4C3C8",
+    fontSize: 12,
+    fontWeight: 700,
   },
 
   input: {
     width: "100%",
-    minHeight: 40,
-    padding: "0 11px",
-    border: "1px solid #D6E1DA",
-    borderRadius: 10,
+    minHeight: 44,
+    padding: "0 12px",
+    border: "1px solid rgba(255,255,255,.08)",
+    borderRadius: 12,
     outline: "none",
-    background: "#FFFFFF",
-    color: "#21372A",
-    fontSize: 12,
+    background: "rgba(5,15,20,.45)",
+    color: "#F8FBFC",
+    fontSize: 14,
   },
 
   saveProfileButton: {
-    minHeight: 41,
+    minHeight: 46,
     border: 0,
-    borderRadius: 10,
-    background: "#163D29",
+    borderRadius: 14,
+    background: "linear-gradient(135deg,#2563EB,#0EA5E9)",
     color: "#FFFFFF",
-    fontSize: 9,
+    fontSize: 14,
     fontWeight: 900,
     cursor: "pointer",
+    boxShadow: "0 10px 24px rgba(37,99,235,.22)",
   },
 
   outlineSmallButton: {
-    minHeight: 32,
-    padding: "0 10px",
-    border: "1px solid #D7E3DB",
-    borderRadius: 9,
-    background: "#FFFFFF",
-    color: "#456353",
-    fontSize: 8,
-    fontWeight: 850,
+    minHeight: 38,
+    padding: "0 12px",
+    border: "1px solid rgba(255,255,255,.10)",
+    borderRadius: 12,
+    background: "rgba(255,255,255,.04)",
+    color: "#D8E5E8",
+    fontSize: 13,
+    fontWeight: 800,
     cursor: "pointer",
   },
 
   accessBanner: {
-    marginBottom: 15,
-    padding: 15,
+    marginBottom: 16,
+    padding: 16,
     display: "grid",
-    gridTemplateColumns:
-      "42px minmax(0,1fr)",
+    gridTemplateColumns: "54px minmax(0,1fr)",
     alignItems: "center",
-    gap: 11,
-    borderRadius: 16,
+    gap: 13,
+    borderRadius: 20,
   },
 
   accessBannerOk: {
-    background: "#EAF8F0",
-    border: "1px solid #C5E9D3",
+    background: "rgba(16,185,129,.10)",
+    border: "1px solid rgba(16,185,129,.18)",
   },
 
   accessBannerBlocked: {
-    background: "#FFF5E6",
-    border: "1px solid #F0D9AB",
+    background: "rgba(245,158,11,.10)",
+    border: "1px solid rgba(245,158,11,.18)",
   },
 
   accessIcon: {
-    width: 42,
-    height: 42,
+    width: 54,
+    height: 54,
     display: "grid",
     placeItems: "center",
-    borderRadius: 13,
-    fontSize: 18,
+    borderRadius: 16,
+    fontSize: 22,
     fontWeight: 950,
   },
 
   accessIconOk: {
-    background: "#D6F2E0",
-    color: "#16834F",
+    background: "rgba(34,197,94,.16)",
+    color: "#6EE7B7",
   },
 
   accessIconBlocked: {
-    background: "#FFEAC5",
-    color: "#A66A00",
+    background: "rgba(245,158,11,.16)",
+    color: "#FCD34D",
   },
 
   accessLabel: {
     display: "block",
-    color: "#718077",
-    fontSize: 7,
-    fontWeight: 950,
+    color: "#9CB3B8",
+    fontSize: 11,
+    fontWeight: 900,
     letterSpacing: 1,
   },
 
   accessTitle: {
     display: "block",
-    marginTop: 2,
-    color: "#22372B",
-    fontSize: 14,
+    marginTop: 3,
+    color: "#F4FAFB",
+    fontSize: 22,
+    lineHeight: 1.2,
   },
 
   accessText: {
-    margin: "4px 0 0",
-    color: "#69786F",
-    fontSize: 9.5,
-    lineHeight: 1.45,
+    margin: "5px 0 0",
+    color: "#B7C8CD",
+    fontSize: 14,
+    lineHeight: 1.5,
   },
 
   section: {
-    marginBottom: 15,
+    marginBottom: 16,
     padding: 18,
-    border: "1px solid #DFE8E2",
-    borderRadius: 19,
-    background: "#FFFFFF",
+    border: "1px solid rgba(255,255,255,.06)",
+    borderRadius: 22,
+    background: "rgba(255,255,255,.03)",
+    boxShadow: "0 16px 32px rgba(0,0,0,.12)",
   },
 
   sectionHeading: {
-    marginBottom: 14,
+    marginBottom: 16,
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
@@ -1573,164 +1584,166 @@ const S = {
 
   sectionEyebrow: {
     display: "block",
-    color: "#16834F",
-    fontSize: 7,
-    fontWeight: 950,
+    color: "#67E8F9",
+    fontSize: 11,
+    fontWeight: 900,
     letterSpacing: 1.1,
   },
 
   sectionTitle: {
-    margin: "3px 0 0",
-    color: "#17251D",
-    fontSize: 20,
+    margin: "5px 0 0",
+    color: "#F5FBFC",
+    fontSize: 28,
+    lineHeight: 1.1,
   },
 
   planChip: {
-    padding: "6px 9px",
+    padding: "8px 12px",
     borderRadius: 999,
-    background: "#EEF7F1",
-    color: "#226442",
-    fontSize: 8,
-    fontWeight: 850,
+    background: "rgba(20,184,166,.14)",
+    color: "#A7F3D0",
+    fontSize: 12,
+    fontWeight: 900,
   },
 
   planHero: {
-    marginBottom: 12,
-    padding: 14,
+    marginBottom: 14,
+    padding: 16,
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: 12,
-    borderRadius: 14,
+    borderRadius: 18,
     background:
-      "linear-gradient(135deg,#F3F9F5,#EDF6F0)",
+      "linear-gradient(135deg, rgba(20,184,166,.08), rgba(59,130,246,.08))",
+    border: "1px solid rgba(255,255,255,.05)",
   },
 
   planLabel: {
     display: "block",
-    color: "#748078",
-    fontSize: 7,
+    color: "#A1B3B8",
+    fontSize: 11,
     fontWeight: 900,
     letterSpacing: 0.9,
   },
 
   planName: {
     display: "block",
-    marginTop: 3,
-    color: "#183625",
-    fontSize: 18,
+    marginTop: 5,
+    color: "#F4FBFC",
+    fontSize: 24,
+    lineHeight: 1.2,
   },
 
   planDescription: {
-    margin: "4px 0 0",
-    color: "#708078",
-    fontSize: 9,
-    lineHeight: 1.4,
+    margin: "5px 0 0",
+    color: "#B1C2C8",
+    fontSize: 13,
+    lineHeight: 1.45,
   },
 
   planPrice: {
-    color: "#16834F",
-    fontSize: 17,
+    color: "#67E8F9",
+    fontSize: 24,
     whiteSpace: "nowrap",
   },
 
   membershipGrid: {
     display: "grid",
-    gridTemplateColumns:
-      "repeat(4,minmax(0,1fr))",
-    gap: 7,
+    gridTemplateColumns: "repeat(4,minmax(0,1fr))",
+    gap: 10,
   },
 
   dataCard: {
-    minHeight: 68,
-    padding: 10,
+    minHeight: 86,
+    padding: 13,
     display: "grid",
     alignContent: "center",
-    gap: 4,
-    border: "1px solid #E5ECE8",
-    borderRadius: 12,
-    background: "#FAFCFB",
+    gap: 5,
+    border: "1px solid rgba(255,255,255,.06)",
+    borderRadius: 15,
+    background: "rgba(255,255,255,.025)",
   },
 
   dataCardHighlight: {
-    background: "#F2FAF5",
-    border: "1px solid #D2EBDD",
+    background: "rgba(20,184,166,.08)",
+    border: "1px solid rgba(20,184,166,.16)",
   },
 
   dataLabel: {
-    color: "#839088",
-    fontSize: 7,
-    fontWeight: 850,
+    color: "#95AAB0",
+    fontSize: 11,
+    fontWeight: 800,
     textTransform: "uppercase",
+    letterSpacing: 0.8,
   },
 
   dataValue: {
-    color: "#31483A",
-    fontSize: 9.5,
-    lineHeight: 1.3,
+    color: "#F4FBFC",
+    fontSize: 15,
+    lineHeight: 1.35,
   },
 
   emptyMembership: {
-    minHeight: 130,
+    minHeight: 150,
     display: "grid",
     placeItems: "center",
     alignContent: "center",
-    gap: 7,
+    gap: 8,
     textAlign: "center",
-    color: "#67776E",
+    color: "#C4D1D5",
   },
 
   emptyIcon: {
-    width: 44,
-    height: 44,
+    width: 52,
+    height: 52,
     display: "grid",
     placeItems: "center",
-    borderRadius: 14,
-    background: "#EDF4EF",
-    color: "#16834F",
-    fontSize: 22,
+    borderRadius: 16,
+    background: "rgba(255,255,255,.06)",
+    color: "#67E8F9",
+    fontSize: 24,
   },
 
   qrSection: {
-    marginBottom: 15,
+    marginBottom: 16,
     padding: 18,
-    borderRadius: 20,
-    background:
-      "linear-gradient(145deg,#FFFFFF 0%,#F4FAF6 100%)",
-    border: "1px solid #D9E7DE",
+    borderRadius: 22,
+    background: "rgba(255,255,255,.03)",
+    border: "1px solid rgba(255,255,255,.06)",
+    boxShadow: "0 16px 32px rgba(0,0,0,.12)",
   },
 
   qrEyebrow: {
     display: "block",
-    color: "#16834F",
-    fontSize: 7,
-    fontWeight: 950,
+    color: "#67E8F9",
+    fontSize: 11,
+    fontWeight: 900,
     letterSpacing: 1,
   },
 
   qrStatus: {
-    padding: "6px 9px",
+    padding: "8px 12px",
     borderRadius: 999,
-    fontSize: 7.5,
-    fontWeight: 950,
+    fontSize: 11,
+    fontWeight: 900,
     letterSpacing: 0.8,
   },
 
   qrStatusActive: {
-    background: "#DEF5E7",
-    color: "#147443",
+    background: "rgba(34,197,94,.14)",
+    color: "#BBF7D0",
   },
 
   qrStatusInactive: {
-    background: "#FFF0D3",
-    color: "#92600A",
+    background: "rgba(245,158,11,.14)",
+    color: "#FDE68A",
   },
 
   qrLayout: {
     display: "grid",
-    gridTemplateColumns:
-      "230px minmax(0,1fr)",
-    gap: 20,
+    gridTemplateColumns: "260px minmax(0,1fr)",
+    gap: 22,
     alignItems: "center",
   },
 
@@ -1738,20 +1751,19 @@ const S = {
     position: "relative",
     width: "100%",
     aspectRatio: "1 / 1",
-    padding: 13,
+    padding: 14,
     overflow: "hidden",
-    borderRadius: 22,
+    borderRadius: 24,
     background: "#FFFFFF",
-    border: "1px solid #DDE7E1",
-    boxShadow:
-      "0 16px 36px rgba(17,62,39,.10)",
+    border: "1px solid rgba(255,255,255,.06)",
+    boxShadow: "0 18px 36px rgba(0,0,0,.16)",
   },
 
   qrImage: {
     width: "100%",
     height: "100%",
     display: "block",
-    borderRadius: 12,
+    borderRadius: 14,
     objectFit: "contain",
   },
 
@@ -1761,17 +1773,16 @@ const S = {
     display: "grid",
     placeItems: "center",
     alignContent: "center",
-    gap: 7,
+    gap: 8,
     padding: 18,
     textAlign: "center",
-    background:
-      "rgba(255,255,255,.78)",
+    background: "rgba(255,255,255,.80)",
     color: "#6B4D16",
     backdropFilter: "blur(3px)",
   },
 
   qrBlockedIcon: {
-    fontSize: 24,
+    fontSize: 26,
   },
 
   noQr: {
@@ -1780,22 +1791,22 @@ const S = {
     display: "grid",
     placeItems: "center",
     alignContent: "center",
-    gap: 7,
-    padding: 16,
+    gap: 8,
+    padding: 18,
     textAlign: "center",
-    borderRadius: 22,
-    background: "#F1F5F2",
-    border: "1px dashed #BED0C4",
-    color: "#64746A",
+    borderRadius: 24,
+    background: "rgba(255,255,255,.04)",
+    border: "1px dashed rgba(255,255,255,.18)",
+    color: "#C3D0D5",
   },
 
   noQrIcon: {
-    width: 54,
-    height: 54,
+    width: 58,
+    height: 58,
     display: "grid",
     placeItems: "center",
-    borderRadius: 15,
-    background: "#183C2A",
+    borderRadius: 16,
+    background: "linear-gradient(135deg,#0F766E,#2563EB)",
     color: "#FFFFFF",
     fontWeight: 950,
   },
@@ -1805,72 +1816,71 @@ const S = {
   },
 
   qrInstructionEyebrow: {
-    color: "#16834F",
-    fontSize: 7,
-    fontWeight: 950,
+    color: "#67E8F9",
+    fontSize: 11,
+    fontWeight: 900,
     letterSpacing: 1,
   },
 
   qrInstructionTitle: {
-    margin: "5px 0 7px",
-    color: "#1F3428",
-    fontSize: 18,
-    lineHeight: 1.15,
+    margin: "6px 0 8px",
+    color: "#F5FBFC",
+    fontSize: 24,
+    lineHeight: 1.18,
   },
 
   qrInstructionText: {
     margin: 0,
-    color: "#697970",
-    fontSize: 9.5,
-    lineHeight: 1.5,
+    color: "#B6C8CD",
+    fontSize: 14,
+    lineHeight: 1.55,
   },
 
   steps: {
-    marginTop: 13,
+    marginTop: 14,
     display: "grid",
-    gap: 7,
+    gap: 10,
   },
 
   step: {
     display: "grid",
-    gridTemplateColumns:
-      "25px minmax(0,1fr)",
+    gridTemplateColumns: "30px minmax(0,1fr)",
     alignItems: "center",
-    gap: 7,
+    gap: 10,
   },
 
   stepNumber: {
-    width: 25,
-    height: 25,
+    width: 30,
+    height: 30,
     display: "grid",
     placeItems: "center",
-    borderRadius: 8,
-    background: "#E5F4EA",
-    color: "#16834F",
-    fontSize: 8,
+    borderRadius: 10,
+    background: "rgba(20,184,166,.14)",
+    color: "#8EF2E2",
+    fontSize: 12,
     fontWeight: 950,
   },
 
   stepText: {
-    color: "#51645A",
-    fontSize: 9,
-    lineHeight: 1.35,
+    color: "#D3E2E6",
+    fontSize: 14,
+    lineHeight: 1.4,
   },
 
   contactCard: {
-    marginBottom: 15,
-    padding: 16,
-    border: "1px solid #E1E9E4",
-    borderRadius: 17,
-    background: "#FFFFFF",
+    marginBottom: 16,
+    padding: 18,
+    border: "1px solid rgba(255,255,255,.06)",
+    borderRadius: 22,
+    background: "rgba(255,255,255,.03)",
   },
 
   contactEyebrow: {
     display: "block",
-    marginBottom: 7,
-    color: "#16834F",
-    fontSize: 7,
-    fontWeight: 950,
+    marginBottom: 8,
+    color: "#67E8F9",
+    fontSize: 11,
+    fontWeight: 900,
     letterSpacing: 1,
   },
 
@@ -1879,44 +1889,43 @@ const S = {
   },
 
   row: {
-    minHeight: 38,
+    minHeight: 46,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 15,
-    borderBottom:
-      "1px solid #EEF2EF",
+    borderBottom: "1px solid rgba(255,255,255,.06)",
   },
 
   rowLabel: {
-    color: "#819087",
-    fontSize: 9,
+    color: "#9BB0B6",
+    fontSize: 14,
   },
 
   rowValue: {
     maxWidth: "65%",
     overflowWrap: "anywhere",
-    color: "#334A3C",
-    fontSize: 9.5,
+    color: "#F1FAFB",
+    fontSize: 14,
     textAlign: "right",
   },
 
   footer: {
     display: "grid",
     justifyItems: "center",
-    gap: 10,
-    paddingTop: 3,
+    gap: 12,
+    paddingTop: 2,
   },
 
   logoutButton: {
     width: "100%",
-    minHeight: 43,
-    border: "1px solid #D9E3DD",
-    borderRadius: 12,
-    background: "#FFFFFF",
-    color: "#536259",
-    fontSize: 10,
-    fontWeight: 850,
+    minHeight: 48,
+    border: "1px solid rgba(255,255,255,.10)",
+    borderRadius: 14,
+    background: "rgba(255,255,255,.04)",
+    color: "#D5E5E9",
+    fontSize: 14,
+    fontWeight: 800,
     cursor: "pointer",
   },
 
@@ -1924,13 +1933,13 @@ const S = {
     width: "100%",
     display: "flex",
     justifyContent: "space-between",
-    color: "#95A098",
-    fontSize: 7.5,
+    color: "#91A7AE",
+    fontSize: 11,
   },
 
   version: {
-    color: "#BAC2BD",
-    fontSize: 6,
+    color: "#738890",
+    fontSize: 10,
   },
 
   loadingPage: {
@@ -1938,23 +1947,22 @@ const S = {
     padding: 18,
     display: "grid",
     placeItems: "center",
-    background: "#F1F5F2",
-    color: "#284434",
+    background: "linear-gradient(180deg,#07141A,#0B1F27)",
+    color: "#EAF5F6",
     fontFamily:
       'Inter,ui-sans-serif,system-ui,sans-serif',
   },
 
   loadingCard: {
     width: "min(390px,100%)",
-    padding: 28,
+    padding: 30,
     display: "grid",
     justifyItems: "center",
-    gap: 10,
-    border: "1px solid #DFE7E2",
-    borderRadius: 22,
-    background: "#FFFFFF",
-    boxShadow:
-      "0 18px 50px rgba(22,50,34,.08)",
+    gap: 12,
+    border: "1px solid rgba(255,255,255,.08)",
+    borderRadius: 24,
+    background: "rgba(255,255,255,.05)",
+    boxShadow: "0 20px 60px rgba(0,0,0,.24)",
   },
 
   loadingLogo: {
@@ -1963,30 +1971,29 @@ const S = {
   },
 
   loader: {
-    width: 34,
-    height: 34,
+    width: 36,
+    height: 36,
     borderRadius: "50%",
-    border: "4px solid #E1EBE5",
-    borderTopColor: "#16834F",
+    border: "4px solid rgba(255,255,255,.16)",
+    borderTopColor: "#67E8F9",
   },
 
   loadingText: {
-    color: "#7B887F",
-    fontSize: 9,
+    color: "#A8BDC2",
+    fontSize: 13,
   },
 
   errorCard: {
     width: "min(420px,100%)",
-    padding: 27,
+    padding: 28,
     display: "grid",
     justifyItems: "center",
-    gap: 11,
+    gap: 12,
     textAlign: "center",
-    border: "1px solid #E4E9E6",
-    borderRadius: 22,
-    background: "#FFFFFF",
-    boxShadow:
-      "0 20px 60px rgba(22,44,31,.10)",
+    border: "1px solid rgba(255,255,255,.08)",
+    borderRadius: 24,
+    background: "rgba(255,255,255,.05)",
+    boxShadow: "0 20px 60px rgba(0,0,0,.24)",
   },
 
   errorLogo: {
@@ -1995,37 +2002,37 @@ const S = {
   },
 
   errorIcon: {
-    width: 48,
-    height: 48,
+    width: 50,
+    height: 50,
     display: "grid",
     placeItems: "center",
-    borderRadius: 15,
-    background: "#FFF0E8",
-    color: "#B85A2A",
-    fontSize: 21,
+    borderRadius: 16,
+    background: "rgba(239,68,68,.14)",
+    color: "#FCA5A5",
+    fontSize: 22,
     fontWeight: 950,
   },
 
   errorTitle: {
     margin: 0,
-    color: "#25382D",
-    fontSize: 21,
+    color: "#F4FAFB",
+    fontSize: 24,
   },
 
   errorText: {
     margin: 0,
-    color: "#748078",
-    fontSize: 10,
+    color: "#B3C4C8",
+    fontSize: 14,
     lineHeight: 1.5,
   },
 
   primaryButton: {
     width: "100%",
-    minHeight: 45,
+    minHeight: 46,
     marginTop: 4,
     border: 0,
-    borderRadius: 11,
-    background: "#16834F",
+    borderRadius: 12,
+    background: "linear-gradient(135deg,#14B8A6,#0F766E)",
     color: "#FFFFFF",
     fontWeight: 900,
     cursor: "pointer",
@@ -2033,12 +2040,12 @@ const S = {
 
   secondaryButton: {
     width: "100%",
-    minHeight: 43,
-    border: "1px solid #DAE4DE",
-    borderRadius: 11,
-    background: "#FFFFFF",
-    color: "#4D5F55",
-    fontWeight: 850,
+    minHeight: 44,
+    border: "1px solid rgba(255,255,255,.10)",
+    borderRadius: 12,
+    background: "rgba(255,255,255,.04)",
+    color: "#E4EEF0",
+    fontWeight: 800,
     cursor: "pointer",
   },
 };
