@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.07-PORTAL-ALUMNO-CONFIG-PRO-V2";
+const VERSION = "2026.09.07-PORTAL-ALUMNO-MENU-APP-V3";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
@@ -501,15 +501,11 @@ export default function PortalAlumnoInicio() {
           .portal-content {
             padding-left: 15px !important;
             padding-right: 15px !important;
-            padding-bottom: 95px !important;
+            padding-bottom: 28px !important;
           }
 
           .desktop-nav {
             display: none !important;
-          }
-
-          .mobile-bottom {
-            display: grid !important;
           }
 
           .member-grid {
@@ -535,6 +531,10 @@ export default function PortalAlumnoInicio() {
           }
 
           .profile-fields-grid {
+            grid-template-columns: 1fr !important;
+          }
+
+          .app-home-summary {
             grid-template-columns: 1fr !important;
           }
         }
@@ -671,8 +671,6 @@ export default function PortalAlumnoInicio() {
               iniciales={iniciales}
               estadoVisual={estadoVisual}
               accesoPermitido={accesoPermitido}
-              qrDisponible={qrDisponible}
-              qrUrl={qrUrl}
               empresaNombre={empresaNombre}
               formatearFecha={formatearFecha}
               cambiarSeccion={cambiarSeccion}
@@ -757,29 +755,6 @@ export default function PortalAlumnoInicio() {
             <span style={S.version}>{VERSION}</span>
           </footer>
         </div>
-
-        <nav style={S.mobileBottom} className="mobile-bottom">
-          {[
-            { id: "inicio", label: "Inicio", icon: "⌂" },
-            { id: "clases", label: "Clases", icon: "▦" },
-            { id: "reservas", label: "Reservas", icon: "◷" },
-            { id: "resultados", label: "Resultados", icon: "★" },
-            { id: "configuracion", label: "Ajustes", icon: "⚙" },
-          ].map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => cambiarSeccion(item.id)}
-              style={{
-                ...S.bottomItem,
-                ...(seccion === item.id ? S.bottomItemActive : {}),
-              }}
-            >
-              <span style={S.bottomIcon}>{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
       </section>
     </main>
   );
@@ -792,194 +767,70 @@ function Inicio({
   iniciales,
   estadoVisual,
   accesoPermitido,
-  qrDisponible,
-  qrUrl,
   empresaNombre,
   formatearFecha,
   cambiarSeccion,
 }) {
   return (
-    <>
-      <section style={S.hero}>
-        <div style={S.heroTop}>
-          <div style={S.heroIdentity}>
-            <div style={S.avatar}>
-              {fotoFirmada ? (
-                <img
-                  src={fotoFirmada}
-                  alt={cuenta?.nombre || "Alumno"}
-                  style={S.avatarImage}
-                />
-              ) : (
-                <span>{iniciales}</span>
-              )}
-            </div>
-
-            <div style={{ minWidth: 0 }}>
-              <span style={S.welcome}>Hola,</span>
-              <h1 style={S.memberName}>{cuenta?.nombre}</h1>
-              <span style={S.memberId}>
-                {cuenta?.cedula ? `ID ${cuenta.cedula}` : empresaNombre}
-              </span>
-            </div>
-          </div>
-
-          <span
-            style={{
-              ...S.estadoBadge,
-              ...(accesoPermitido
-                ? S.estadoBadgeOk
-                : S.estadoBadgeWarning),
-            }}
-          >
-            <span
-              style={{
-                ...S.statusDot,
-                background: accesoPermitido ? "#48D889" : "#F1B43A",
-              }}
+    <section style={S.appHome}>
+      <div style={S.appHomeHero}>
+        <div style={S.appHomeAvatar}>
+          {fotoFirmada ? (
+            <img
+              src={fotoFirmada}
+              alt={cuenta?.nombre || "Alumno"}
+              style={S.avatarImage}
             />
+          ) : (
+            <span>{iniciales}</span>
+          )}
+        </div>
+
+        <div style={S.appHomeCopy}>
+          <span style={S.appHomeEyebrow}>BIENVENIDO</span>
+          <h1 style={S.appHomeName}>{cuenta?.nombre || "Alumno"}</h1>
+          <span style={S.appHomeState}>
             {estadoVisual}
           </span>
         </div>
+      </div>
 
-        <div style={S.heroStats}>
-          <div style={S.heroStat}>
-            <span style={S.heroStatLabel}>PLAN</span>
-            <strong style={S.heroStatValue}>
-              {membresia?.plan || "Sin plan"}
-            </strong>
-          </div>
-
-          <div style={S.heroStat}>
-            <span style={S.heroStatLabel}>VENCE</span>
-            <strong style={S.heroStatValue}>
-              {membresia?.fecha_vencimiento
-                ? formatearFecha(membresia.fecha_vencimiento)
-                : "—"}
-            </strong>
-          </div>
-        </div>
-      </section>
-
-      <section style={S.quickSection}>
-        <div style={S.sectionHeading}>
-          <div>
-            <span style={S.sectionEyebrow}>ACCESOS</span>
-            <h2 style={S.sectionTitle}>Mi portal</h2>
-          </div>
-        </div>
-
-        <div style={S.quickGrid}>
-          <QuickCard
-            icon="▦"
-            title="Clases"
-            subtitle="Horarios y reservas"
-            onClick={() => cambiarSeccion("clases")}
-          />
-          <QuickCard
-            icon="◷"
-            title="Mis reservas"
-            subtitle="Próximas clases"
-            onClick={() => cambiarSeccion("reservas")}
-          />
-          <QuickCard
-            icon="▤"
-            title="Whiteboard"
-            subtitle="Resultados del box"
-            onClick={() => cambiarSeccion("whiteboard")}
-          />
-          <QuickCard
-            icon="★"
-            title="Resultados"
-            subtitle="Marcas y progreso"
-            onClick={() => cambiarSeccion("resultados")}
-          />
-        </div>
-      </section>
-
-      <section
-        style={{
-          ...S.accessBanner,
-          ...(accesoPermitido
-            ? S.accessBannerOk
-            : S.accessBannerBlocked),
-        }}
-      >
-        <div
-          style={{
-            ...S.accessIcon,
-            ...(accesoPermitido ? S.accessIconOk : S.accessIconBlocked),
-          }}
-        >
-          {accesoPermitido ? "✓" : "!"}
-        </div>
-
-        <div>
-          <span style={S.accessLabel}>ACCESO AL GIMNASIO</span>
-          <strong style={S.accessTitle}>
-            {accesoPermitido ? "Acceso disponible" : "Acceso no disponible"}
+      <div style={S.appHomeSummary} className="app-home-summary">
+        <div style={S.appHomeStat}>
+          <span style={S.appHomeStatLabel}>PLAN</span>
+          <strong style={S.appHomeStatValue}>
+            {membresia?.plan || "Sin membresía"}
           </strong>
-          <p style={S.accessText}>
-            {accesoPermitido
-              ? "Tu membresía está habilitada. Muestra tu QR en recepción."
-              : "Revisa el estado de tu membresía antes de ingresar."}
+        </div>
+
+        <div style={S.appHomeStat}>
+          <span style={S.appHomeStatLabel}>VENCIMIENTO</span>
+          <strong style={S.appHomeStatValue}>
+            {membresia?.fecha_vencimiento
+              ? formatearFecha(membresia.fecha_vencimiento)
+              : "—"}
+          </strong>
+        </div>
+
+        <div style={S.appHomeStat}>
+          <span style={S.appHomeStatLabel}>ACCESO</span>
+          <strong style={S.appHomeStatValue}>
+            {accesoPermitido ? "Disponible" : "No disponible"}
+          </strong>
+        </div>
+      </div>
+
+      <div style={S.homeHint}>
+        <span style={S.homeHintIcon}>☰</span>
+        <div>
+          <strong style={S.homeHintTitle}>Abre el menú</strong>
+          <p style={S.homeHintText}>
+            Desde allí puedes entrar a Clases, Mis reservas, Whiteboard,
+            Resultados y Configuración.
           </p>
         </div>
-      </section>
-
-      <section style={S.qrSection}>
-        <div style={S.sectionHeading}>
-          <div>
-            <span style={S.qrEyebrow}>ACCESO DIGITAL</span>
-            <h2 style={S.sectionTitle}>Mi código QR</h2>
-          </div>
-
-          <span
-            style={{
-              ...S.qrStatus,
-              ...(accesoPermitido
-                ? S.qrStatusActive
-                : S.qrStatusInactive),
-            }}
-          >
-            {accesoPermitido ? "ACTIVO" : "NO DISPONIBLE"}
-          </span>
-        </div>
-
-        <div style={S.qrLayout} className="qr-layout">
-          {qrDisponible ? (
-            <div
-              style={{
-                ...S.qrFrame,
-                opacity: accesoPermitido ? 1 : 0.38,
-              }}
-            >
-              <img
-                src={qrUrl}
-                alt="Mi código QR de acceso"
-                style={S.qrImage}
-              />
-            </div>
-          ) : (
-            <div style={S.noQr}>
-              <span style={S.noQrIcon}>QR</span>
-              <strong>QR no disponible</strong>
-              <span>Solicita a recepción que actualice tu ficha.</span>
-            </div>
-          )}
-
-          <div style={S.qrInstructions}>
-            <span style={S.qrInstructionEyebrow}>CÓMO INGRESAR</span>
-            <h3 style={S.qrInstructionTitle}>
-              Muestra este código en recepción
-            </h3>
-            <p style={S.qrInstructionText}>
-              El personal lo escaneará desde Check-in de KONAX.
-            </p>
-          </div>
-        </div>
-      </section>
-    </>
+      </div>
+    </section>
   );
 }
 
@@ -1462,7 +1313,7 @@ const S = {
     overflow: "hidden",
     border: "1px solid #D9E6DE",
     borderRadius: 28,
-    background: "#F7F9F8",
+    background: "#F6F8FB",
     boxShadow: "0 28px 80px rgba(15,50,31,.13)",
   },
 
@@ -1485,7 +1336,7 @@ const S = {
     height: 40,
     border: 0,
     borderRadius: 12,
-    background: "#163D29",
+    background: "#0F172A",
     color: "#FFFFFF",
     fontSize: 19,
     cursor: "pointer",
@@ -1512,7 +1363,7 @@ const S = {
     borderRadius: 14,
     background: "#FFFFFF",
     border: "1px solid #DDE8E1",
-    color: "#163D29",
+    color: "#0F172A",
     fontSize: 17,
     fontWeight: 950,
   },
@@ -1528,7 +1379,7 @@ const S = {
     display: "block",
     maxWidth: 260,
     overflow: "hidden",
-    color: "#1D3828",
+    color: "#0F172A",
     fontSize: 13,
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
@@ -1576,7 +1427,7 @@ const S = {
     padding: "18px 14px",
     display: "grid",
     gridTemplateRows: "auto 1fr auto",
-    background: "#13251B",
+    background: "#0B1324",
     color: "#FFFFFF",
     boxShadow: "18px 0 50px rgba(0,0,0,.22)",
   },
@@ -1614,7 +1465,7 @@ const S = {
   drawerState: {
     display: "block",
     marginTop: 3,
-    color: "#9DC4AF",
+    color: "#8FB9D1",
     fontSize: 9,
   },
 
@@ -1636,7 +1487,7 @@ const S = {
     border: 0,
     borderRadius: 12,
     background: "transparent",
-    color: "#C9D8CF",
+    color: "#D5DEE8",
     textAlign: "left",
     fontSize: 12,
     fontWeight: 750,
@@ -1644,7 +1495,7 @@ const S = {
   },
 
   drawerItemActive: {
-    background: "#1C4630",
+    background: "#172A45",
     color: "#FFFFFF",
   },
 
@@ -1858,7 +1709,7 @@ const S = {
     placeItems: "center",
     borderRadius: 12,
     background: "#E6F4EB",
-    color: "#16834F",
+    color: "#0EA5A6",
     fontSize: 16,
     fontWeight: 900,
   },
@@ -1916,7 +1767,7 @@ const S = {
 
   accessIconOk: {
     background: "#D6F2E0",
-    color: "#16834F",
+    color: "#0EA5A6",
   },
 
   accessIconBlocked: {
@@ -1964,7 +1815,7 @@ const S = {
 
   sectionEyebrow: {
     display: "block",
-    color: "#16834F",
+    color: "#0EA5A6",
     fontSize: 7,
     fontWeight: 950,
     letterSpacing: 1.1,
@@ -1987,7 +1838,7 @@ const S = {
 
   qrEyebrow: {
     display: "block",
-    color: "#16834F",
+    color: "#0EA5A6",
     fontSize: 7,
     fontWeight: 950,
     letterSpacing: 1,
@@ -2068,7 +1919,7 @@ const S = {
   },
 
   qrInstructionEyebrow: {
-    color: "#16834F",
+    color: "#0EA5A6",
     fontSize: 7,
     fontWeight: 950,
     letterSpacing: 1,
@@ -2165,7 +2016,7 @@ const S = {
     display: "grid",
     placeItems: "center",
     borderRadius: 11,
-    background: "#16834F",
+    background: "#0EA5A6",
     color: "#FFFFFF",
     fontSize: 9,
     fontWeight: 900,
@@ -2224,7 +2075,7 @@ const S = {
     minHeight: 41,
     border: 0,
     borderRadius: 10,
-    background: "#163D29",
+    background: "#0F172A",
     color: "#FFFFFF",
     fontSize: 9,
     fontWeight: 900,
@@ -2254,7 +2105,7 @@ const S = {
   contactEyebrow: {
     display: "block",
     marginBottom: 7,
-    color: "#16834F",
+    color: "#0EA5A6",
     fontSize: 7,
     fontWeight: 950,
     letterSpacing: 1,
@@ -2296,6 +2147,137 @@ const S = {
     fontSize: 10,
     fontWeight: 850,
     cursor: "pointer",
+  },
+
+  appHome: {
+    minHeight: 560,
+    display: "grid",
+    alignContent: "start",
+    gap: 16,
+  },
+
+  appHomeHero: {
+    padding: 22,
+    display: "grid",
+    gridTemplateColumns: "82px minmax(0,1fr)",
+    gap: 16,
+    alignItems: "center",
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg,#0F172A 0%,#17324B 62%,#0E7490 100%)",
+    boxShadow: "0 20px 42px rgba(15,23,42,.22)",
+    color: "#FFFFFF",
+  },
+
+  appHomeAvatar: {
+    width: 82,
+    height: 82,
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 22,
+    background: "rgba(255,255,255,.10)",
+    border: "1px solid rgba(255,255,255,.15)",
+    fontSize: 26,
+    fontWeight: 950,
+  },
+
+  appHomeCopy: {
+    minWidth: 0,
+  },
+
+  appHomeEyebrow: {
+    display: "block",
+    marginBottom: 4,
+    color: "#8ED8E2",
+    fontSize: 8,
+    fontWeight: 950,
+    letterSpacing: 1.2,
+  },
+
+  appHomeName: {
+    margin: 0,
+    color: "#FFFFFF",
+    fontSize: 28,
+    lineHeight: 1.05,
+  },
+
+  appHomeState: {
+    display: "inline-block",
+    marginTop: 8,
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,.10)",
+    color: "#D7F5F8",
+    fontSize: 9,
+    fontWeight: 850,
+  },
+
+  appHomeSummary: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+    gap: 10,
+  },
+
+  appHomeStat: {
+    minHeight: 92,
+    padding: 14,
+    display: "grid",
+    alignContent: "center",
+    gap: 5,
+    border: "1px solid #DEE6EF",
+    borderRadius: 17,
+    background: "#FFFFFF",
+    boxShadow: "0 10px 24px rgba(15,23,42,.05)",
+  },
+
+  appHomeStatLabel: {
+    color: "#7A8797",
+    fontSize: 7.5,
+    fontWeight: 900,
+    letterSpacing: .8,
+  },
+
+  appHomeStatValue: {
+    color: "#172033",
+    fontSize: 12,
+    lineHeight: 1.3,
+  },
+
+  homeHint: {
+    padding: 18,
+    display: "grid",
+    gridTemplateColumns: "48px minmax(0,1fr)",
+    gap: 12,
+    alignItems: "center",
+    border: "1px solid #DCE6EF",
+    borderRadius: 18,
+    background: "#FFFFFF",
+  },
+
+  homeHintIcon: {
+    width: 48,
+    height: 48,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 14,
+    background: "#E8F6F8",
+    color: "#0E7490",
+    fontSize: 22,
+    fontWeight: 900,
+  },
+
+  homeHintTitle: {
+    display: "block",
+    color: "#172033",
+    fontSize: 13,
+  },
+
+  homeHintText: {
+    margin: "4px 0 0",
+    color: "#6F7C8C",
+    fontSize: 9,
+    lineHeight: 1.45,
   },
 
   profileSettingsShell: {
@@ -2439,8 +2421,8 @@ const S = {
   },
 
   profileTabButtonActive: {
-    color: "#16834F",
-    borderBottomColor: "#16834F",
+    color: "#0EA5A6",
+    borderBottomColor: "#0EA5A6",
     background: "#FFFFFF",
   },
 
@@ -2540,7 +2522,7 @@ const S = {
     placeItems: "center",
     borderRadius: 16,
     background: "#EAF4EE",
-    color: "#16834F",
+    color: "#0EA5A6",
     fontSize: 24,
   },
 
@@ -2577,7 +2559,7 @@ const S = {
     marginBottom: 2,
     borderRadius: 22,
     background: "#E7F4EC",
-    color: "#16834F",
+    color: "#0EA5A6",
     fontSize: 30,
     fontWeight: 900,
   },
@@ -2603,7 +2585,7 @@ const S = {
     padding: "0 16px",
     border: 0,
     borderRadius: 11,
-    background: "#16834F",
+    background: "#0EA5A6",
     color: "#FFFFFF",
     fontWeight: 900,
     cursor: "pointer",
@@ -2670,7 +2652,7 @@ const S = {
   },
 
   bottomItemActive: {
-    color: "#16834F",
+    color: "#0EA5A6",
   },
 
   bottomIcon: {
@@ -2711,7 +2693,7 @@ const S = {
     height: 34,
     borderRadius: "50%",
     border: "4px solid #E1EBE5",
-    borderTopColor: "#16834F",
+    borderTopColor: "#0EA5A6",
   },
 
   loadingText: {
