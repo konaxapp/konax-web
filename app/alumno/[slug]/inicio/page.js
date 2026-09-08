@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.07-PORTAL-ALUMNO-MENU-LATERAL-V6";
+const VERSION = "2026.09.08-PORTAL-ALUMNO-MENU-RETORNO-V7";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
@@ -340,7 +340,13 @@ export default function PortalAlumnoInicio() {
 
   function cambiarSeccion(id) {
     setSeccion(id);
-    setMenuAbierto(false);
+
+    if (id === "inicio") {
+      setMenuAbierto(true);
+    } else {
+      setMenuAbierto(false);
+    }
+
     window?.scrollTo?.({ top: 0, behavior: "smooth" });
   }
 
