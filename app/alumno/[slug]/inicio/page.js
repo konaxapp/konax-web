@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.08-PORTAL-ALUMNO-WHITEBOARD-WOD-V8";
+const VERSION = "2026.09.08-PORTAL-ALUMNO-AGENDA-RESERVAS-WOD-V9";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
@@ -50,6 +50,18 @@ export default function PortalAlumnoInicio() {
   const [cargandoWod, setCargandoWod] = useState(false);
   const [errorWod, setErrorWod] = useState("");
 
+  const [fechaClases, setFechaClases] = useState("");
+  const [clasesDisponibles, setClasesDisponibles] = useState([]);
+  const [cargandoClases, setCargandoClases] = useState(false);
+  const [errorClases, setErrorClases] = useState("");
+  const [mensajeReserva, setMensajeReserva] = useState("");
+  const [reservandoHorarioId, setReservandoHorarioId] = useState("");
+
+  const [misReservas, setMisReservas] = useState([]);
+  const [serviciosAgenda, setServiciosAgenda] = useState([]);
+  const [cargandoReservas, setCargandoReservas] = useState(false);
+  const [errorReservas, setErrorReservas] = useState("");
+
   useEffect(() => {
     cargarTodo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,6 +72,24 @@ export default function PortalAlumnoInicio() {
     prepararWhiteboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seccion, slug]);
+
+  useEffect(() => {
+    if (seccion !== "clases" || !slug) return;
+
+    if (!fechaClases) {
+      prepararClases();
+      return;
+    }
+
+    cargarClases(fechaClases);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seccion, slug, fechaClases]);
+
+  useEffect(() => {
+    if (seccion !== "reservas" || !slug || !cuenta?.ok) return;
+    cargarMisReservas();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seccion, slug, cuenta?.ok]);
 
   async function cargarTodo(modoActualizar = false) {
     if (!slug) {
@@ -363,6 +393,326 @@ export default function PortalAlumnoInicio() {
     const fecha = new Date(y, (m || 1) - 1, d || 1, 12, 0, 0);
     fecha.setDate(fecha.getDate() + dias);
     return fechaLocalIso(fecha);
+  }
+
+  function obtenerClienteIdAlumno() {
+    return (
+      cuenta?.cliente_id ||
+      cuenta?.id_cliente ||
+      cuenta?.alumno_id ||
+      perfil?.cliente_id ||
+      perfil?.id_cliente ||
+      perfil?.alumno_id ||
+      cuenta?.id ||
+      perfil?.id ||
+      ""
+    );
+  }
+
+  function obtenerEmpresaIdAlumno() {
+    return (
+      cuenta?.empresa_id ||
+      cuenta?.id_empresa ||
+      perfil?.empresa_id ||
+      perfil?.id_empresa ||
+      portalPublico?.empresa_id ||
+      portalPublico?.id_empresa ||
+      ""
+    );
+  }
+
+  async function resolverIdentidadAlumnoAgenda() {
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
+    if (sessionError) throw sessionError;
+
+    const authUserId = session?.user?.id;
+
+    if (authUserId) {
+      const { data: cliente, error: clienteError } = await supabase
+        .from("clientes")
+        .select("id,empresa_id,nombre,telefono,correo,auth_user_id")
+        .eq("auth_user_id", authUserId)
+        .maybeSingle();
+
+      if (!clienteError && cliente?.id && cliente?.empresa_id) {
+        return {
+          clienteId: cliente.id,
+          empresaId: cliente.empresa_id,
+          cliente,
+        };
+      }
+
+      if (clienteError) {
+        console.warn(
+          "No se pudo resolver el alumno por auth_user_id:",
+          clienteError
+        );
+      }
+    }
+
+    const clienteId = obtenerClienteIdAlumno();
+    const empresaId = obtenerEmpresaIdAlumno();
+
+    if (!clienteId || !empresaId) {
+      throw new Error(
+        "No se pudo identificar tu ficha de alumno para consultar las reservas."
+      );
+    }
+
+    return {
+      clienteId,
+      empresaId,
+      cliente: null,
+    };
+  }
+
+  async function cargarServiciosAgenda() {
+    const { data, error: rpcError } = await supabase.rpc(
+      "obtener_servicios_agenda_publica",
+      {
+        p_slug: slug,
+      }
+    );
+
+    if (rpcError) {
+      console.warn("No se pudieron cargar servicios de Agenda:", rpcError);
+      return [];
+    }
+
+    const lista = Array.isArray(data) ? data : [];
+    setServiciosAgenda(lista);
+    return lista;
+  }
+
+  async function consultarDisponibilidadAgenda(fechaSeleccionada) {
+    const { data, error: rpcError } = await supabase.rpc(
+      "obtener_disponibilidad_agenda_publica",
+      {
+        p_slug: slug,
+        p_fecha: String(fechaSeleccionada).slice(0, 10),
+      }
+    );
+
+    if (rpcError) throw rpcError;
+    return Array.isArray(data) ? data : [];
+  }
+
+  async function cargarClases(fechaSeleccionada = fechaClases) {
+    if (!fechaSeleccionada || !slug) return [];
+
+    setCargandoClases(true);
+    setErrorClases("");
+    setMensajeReserva("");
+
+    try {
+      const [lista] = await Promise.all([
+        consultarDisponibilidadAgenda(fechaSeleccionada),
+        serviciosAgenda.length ? Promise.resolve(serviciosAgenda) : cargarServiciosAgenda(),
+      ]);
+
+      setClasesDisponibles(lista);
+      return lista;
+    } catch (err) {
+      console.error("Error cargando clases del alumno:", err);
+      setClasesDisponibles([]);
+      setErrorClases(
+        err?.message ||
+          "No se pudieron cargar los horarios creados en Agenda."
+      );
+      return [];
+    } finally {
+      setCargandoClases(false);
+    }
+  }
+
+  async function prepararClases() {
+    if (!slug) return;
+
+    setCargandoClases(true);
+    setErrorClases("");
+    setMensajeReserva("");
+
+    try {
+      if (!serviciosAgenda.length) {
+        await cargarServiciosAgenda();
+      }
+
+      const hoy = fechaLocalIso();
+
+      for (let offset = 0; offset <= 14; offset += 1) {
+        const fechaBuscar = sumarDiasIso(hoy, offset);
+        const lista = await consultarDisponibilidadAgenda(fechaBuscar);
+
+        if (lista.length) {
+          setFechaClases(fechaBuscar);
+          setClasesDisponibles(lista);
+          return;
+        }
+      }
+
+      setFechaClases(hoy);
+      setClasesDisponibles([]);
+      setErrorClases(
+        "No hay clases programadas para hoy ni para los próximos 14 días."
+      );
+    } catch (err) {
+      console.error("Error preparando clases:", err);
+      setFechaClases(fechaLocalIso());
+      setClasesDisponibles([]);
+      setErrorClases(
+        err?.message ||
+          "No se pudieron consultar los horarios creados en Agenda."
+      );
+    } finally {
+      setCargandoClases(false);
+    }
+  }
+
+  async function reservarClase(item) {
+    const horarioId = String(
+      item?.horario_id || item?.id_horario || item?.id || ""
+    ).trim();
+
+    if (!horarioId || !fechaClases) {
+      setErrorClases("No se pudo identificar el horario de esta clase.");
+      return;
+    }
+
+    const nombreAlumno = String(
+      cuenta?.nombre || perfil?.nombre || ""
+    ).trim();
+
+    const telefonoAlumno = String(
+      cuenta?.telefono ||
+        cuenta?.celular ||
+        perfil?.telefono ||
+        perfil?.celular ||
+        ""
+    ).trim();
+
+    if (!nombreAlumno || !telefonoAlumno) {
+      setErrorClases(
+        "Tu perfil debe tener nombre y teléfono para poder reservar. Actualiza esos datos con el gimnasio."
+      );
+      return;
+    }
+
+    setReservandoHorarioId(horarioId);
+    setErrorClases("");
+    setMensajeReserva("");
+
+    try {
+      const { data, error: rpcError } = await supabase.rpc(
+        "crear_reserva_agenda_publica",
+        {
+          p_slug: slug,
+          p_horario_id: horarioId,
+          p_fecha_reserva: fechaClases,
+          p_hora_inicio: item?.hora_inicio,
+          p_nombre: nombreAlumno,
+          p_telefono: telefonoAlumno,
+          p_observaciones: "Reserva creada desde Portal del Alumno",
+        }
+      );
+
+      if (rpcError) throw rpcError;
+
+      if (!data?.ok) {
+        throw new Error(data?.mensaje || "No se pudo realizar la reserva.");
+      }
+
+      const mensajeConfirmacion = `Reserva confirmada: ${
+        data?.servicio ||
+        item?.servicio_nombre ||
+        item?.servicio ||
+        "clase"
+      }.`;
+
+      await Promise.all([
+        cargarClases(fechaClases),
+        cargarMisReservas({ silencioso: true }),
+      ]);
+
+      setMensajeReserva(mensajeConfirmacion);
+    } catch (err) {
+      console.error("Error reservando clase:", err);
+      setErrorClases(
+        err?.message || "No se pudo reservar esta clase."
+      );
+    } finally {
+      setReservandoHorarioId("");
+    }
+  }
+
+  async function cargarMisReservas(opciones = {}) {
+    const { silencioso = false } = opciones;
+
+    if (!slug || !cuenta?.ok) return [];
+
+    if (!silencioso) {
+      setCargandoReservas(true);
+    }
+
+    setErrorReservas("");
+
+    try {
+      const identidad = await resolverIdentidadAlumnoAgenda();
+      const clienteId = String(identidad?.clienteId || "").trim();
+      const empresaId = String(identidad?.empresaId || "").trim();
+
+      const servicios =
+        serviciosAgenda.length > 0
+          ? serviciosAgenda
+          : await cargarServiciosAgenda();
+
+      const { data, error: reservasError } = await supabase
+        .from("agenda_reservas")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .eq("cliente_id", clienteId)
+        .order("fecha_reserva", { ascending: false })
+        .order("hora_inicio", { ascending: true })
+        .limit(200);
+
+      if (reservasError) throw reservasError;
+
+      const lista = Array.isArray(data) ? data : [];
+
+      setMisReservas(
+        lista.map((reserva) => {
+          const servicio = servicios.find(
+            (item) => String(item?.id) === String(reserva?.servicio_id)
+          );
+
+          return {
+            ...reserva,
+            servicio_nombre:
+              reserva?.servicio_nombre ||
+              reserva?.nombre_servicio ||
+              servicio?.nombre ||
+              "Clase",
+          };
+        })
+      );
+
+      return lista;
+    } catch (err) {
+      console.error("Error cargando reservas del alumno:", err);
+      setMisReservas([]);
+      setErrorReservas(
+        err?.message ||
+          "No se pudieron cargar tus reservas creadas en Agenda."
+      );
+      return [];
+    } finally {
+      if (!silencioso) {
+        setCargandoReservas(false);
+      }
+    }
   }
 
   async function obtenerWod(fechaSeleccionada, servicioId) {
@@ -679,6 +1029,10 @@ export default function PortalAlumnoInicio() {
           .whiteboard-filters {
             grid-template-columns: 1fr !important;
           }
+
+          .agenda-toolbar {
+            grid-template-columns: 1fr !important;
+          }
         }
 
         @media (max-width: 390px) {
@@ -829,24 +1183,28 @@ export default function PortalAlumnoInicio() {
           )}
 
           {seccion === "clases" && (
-            <SeccionVacia
-              eyebrow="ENTRENAMIENTO"
-              titulo="Clases"
-              texto="Aquí aparecerán las clases disponibles del gimnasio para reservar desde tu cuenta."
-              icono="▦"
-              accion="Volver al inicio"
-              onAccion={() => cambiarSeccion("inicio")}
+            <ClasesAgenda
+              fecha={fechaClases}
+              setFecha={setFechaClases}
+              clases={clasesDisponibles}
+              cargando={cargandoClases}
+              error={errorClases}
+              mensaje={mensajeReserva}
+              reservandoHorarioId={reservandoHorarioId}
+              onReservar={reservarClase}
+              onActualizar={() => cargarClases(fechaClases)}
+              onVolver={() => cambiarSeccion("inicio")}
             />
           )}
 
           {seccion === "reservas" && (
-            <SeccionVacia
-              eyebrow="AGENDA"
-              titulo="Mis reservas"
-              texto="Aquí verás tus próximas clases reservadas y el historial de reservas."
-              icono="◷"
-              accion="Volver al inicio"
-              onAccion={() => cambiarSeccion("inicio")}
+            <MisReservasAgenda
+              reservas={misReservas}
+              cargando={cargandoReservas}
+              error={errorReservas}
+              onActualizar={() => cargarMisReservas()}
+              onIrClases={() => cambiarSeccion("clases")}
+              onVolver={() => cambiarSeccion("inicio")}
             />
           )}
 
@@ -922,6 +1280,410 @@ function Inicio() {
     <section style={S.homeCompact}>
       <div style={S.homeCompactLine} />
     </section>
+  );
+}
+
+function formatearHoraAgenda(hora) {
+  if (!hora) return "-";
+
+  const [h = "0", m = "0"] = String(hora).split(":");
+  const fecha = new Date();
+  fecha.setHours(Number(h), Number(m), 0, 0);
+
+  return new Intl.DateTimeFormat("es-PA", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(fecha);
+}
+
+function formatearFechaAgenda(fecha) {
+  if (!fecha) return "-";
+
+  try {
+    return new Intl.DateTimeFormat("es-PA", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(new Date(`${String(fecha).slice(0, 10)}T12:00:00`));
+  } catch {
+    return String(fecha);
+  }
+}
+
+function etiquetaEstadoReserva(estado) {
+  const valor = String(estado || "").toLowerCase().trim();
+
+  if (valor === "confirmada") return "Confirmada";
+  if (valor === "pendiente_pago") return "Pendiente de pago";
+  if (valor === "asistio") return "Asistió";
+  if (valor === "no_asistio") return "No asistió";
+  if (valor === "cancelada") return "Cancelada";
+  return estado || "Registrada";
+}
+
+function estiloEstadoReserva(estado) {
+  const valor = String(estado || "").toLowerCase().trim();
+
+  if (valor === "cancelada" || valor === "no_asistio") {
+    return S.reservaStatusMuted;
+  }
+
+  if (valor === "pendiente_pago") {
+    return S.reservaStatusWarning;
+  }
+
+  return S.reservaStatusOk;
+}
+
+function ClasesAgenda({
+  fecha,
+  setFecha,
+  clases,
+  cargando,
+  error,
+  mensaje,
+  reservandoHorarioId,
+  onReservar,
+  onActualizar,
+  onVolver,
+}) {
+  return (
+    <section style={S.agendaPortalShell}>
+      <div style={S.agendaHero}>
+        <button type="button" onClick={onVolver} style={S.agendaBack}>
+          ← Menú
+        </button>
+
+        <div>
+          <span style={S.agendaEyebrow}>AGENDA DEL GIMNASIO</span>
+          <h1 style={S.agendaTitle}>Clases disponibles</h1>
+          <p style={S.agendaSubtitle}>
+            Los horarios que el gimnasio crea en Agenda aparecen aquí.
+          </p>
+        </div>
+      </div>
+
+      <div style={S.agendaToolbar} className="agenda-toolbar">
+        <label style={S.agendaDateField}>
+          <span style={S.agendaFieldLabel}>Fecha</span>
+          <input
+            type="date"
+            value={fecha}
+            onChange={(e) => setFecha(e.target.value)}
+            style={S.agendaDateInput}
+          />
+        </label>
+
+        <button
+          type="button"
+          onClick={onActualizar}
+          disabled={cargando || !fecha}
+          style={S.agendaRefreshButton}
+        >
+          {cargando ? "Actualizando..." : "↻ Actualizar"}
+        </button>
+      </div>
+
+      {mensaje && <div style={S.agendaSuccess}>{mensaje}</div>}
+      {error && <div style={S.agendaError}>{error}</div>}
+
+      {cargando ? (
+        <div style={S.agendaLoading}>
+          <div style={S.loader} />
+          <strong>Cargando horarios...</strong>
+        </div>
+      ) : clases.length > 0 ? (
+        <div style={S.agendaList}>
+          <div style={S.agendaDateCaption}>
+            <span>CLASES PROGRAMADAS</span>
+            <strong>{formatearFechaAgenda(fecha)}</strong>
+          </div>
+
+          {clases.map((item, index) => {
+            const horarioId = String(
+              item?.horario_id || item?.id_horario || item?.id || index
+            );
+
+            const disponiblesRaw =
+              item?.disponibles ?? item?.cupos_disponibles ?? null;
+
+            const tieneCupos =
+              disponiblesRaw === null ||
+              disponiblesRaw === undefined ||
+              Number(disponiblesRaw) > 0;
+
+            const reservando =
+              String(reservandoHorarioId) === horarioId;
+
+            return (
+              <article
+                key={`${horarioId}-${item?.hora_inicio || index}`}
+                style={S.agendaClassCard}
+              >
+                <div style={S.agendaClassTop}>
+                  <div style={S.agendaClassIcon}>▣</div>
+
+                  <div style={S.agendaClassCopy}>
+                    <strong style={S.agendaClassName}>
+                      {item?.servicio_nombre ||
+                        item?.servicio ||
+                        item?.nombre_servicio ||
+                        "Clase"}
+                    </strong>
+
+                    <span style={S.agendaClassMeta}>
+                      {item?.instructor
+                        ? `Coach: ${item.instructor}`
+                        : "Clase programada"}
+                    </span>
+                  </div>
+
+                  <span
+                    style={{
+                      ...S.agendaCapacity,
+                      ...(tieneCupos ? {} : S.agendaCapacityFull),
+                    }}
+                  >
+                    {disponiblesRaw === null ||
+                    disponiblesRaw === undefined
+                      ? "Disponible"
+                      : tieneCupos
+                      ? `${Number(disponiblesRaw)} cupo${
+                          Number(disponiblesRaw) === 1 ? "" : "s"
+                        }`
+                      : "Lleno"}
+                  </span>
+                </div>
+
+                <div style={S.agendaClassBottom}>
+                  <div style={S.agendaTimeBlock}>
+                    <span style={S.agendaTimeLabel}>HORARIO</span>
+                    <strong style={S.agendaTimeValue}>
+                      {formatearHoraAgenda(item?.hora_inicio)}
+                      {item?.hora_fin
+                        ? ` – ${formatearHoraAgenda(item.hora_fin)}`
+                        : ""}
+                    </strong>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={!tieneCupos || reservando}
+                    onClick={() => onReservar(item)}
+                    style={{
+                      ...S.agendaReserveButton,
+                      ...(!tieneCupos || reservando
+                        ? S.agendaReserveButtonDisabled
+                        : {}),
+                    }}
+                  >
+                    {reservando
+                      ? "Reservando..."
+                      : tieneCupos
+                      ? "Reservar"
+                      : "Sin cupos"}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={S.agendaEmpty}>
+          <div style={S.agendaEmptyIcon}>▣</div>
+          <strong style={S.agendaEmptyTitle}>
+            No hay clases para esta fecha
+          </strong>
+          <span style={S.agendaEmptyText}>
+            Cambia la fecha para consultar otro día. Al crear un horario
+            activo en Agenda, aparecerá automáticamente aquí.
+          </span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MisReservasAgenda({
+  reservas,
+  cargando,
+  error,
+  onActualizar,
+  onIrClases,
+  onVolver,
+}) {
+  const hoy = new Date();
+  const hoyIso = `${hoy.getFullYear()}-${String(
+    hoy.getMonth() + 1
+  ).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+
+  const ordenadas = [...reservas].sort((a, b) => {
+    const fechaA = `${a?.fecha_reserva || ""} ${a?.hora_inicio || ""}`;
+    const fechaB = `${b?.fecha_reserva || ""} ${b?.hora_inicio || ""}`;
+    return fechaB.localeCompare(fechaA);
+  });
+
+  const proximas = ordenadas.filter(
+    (reserva) =>
+      String(reserva?.fecha_reserva || "").slice(0, 10) >= hoyIso &&
+      String(reserva?.estado || "").toLowerCase() !== "cancelada"
+  );
+
+  const anteriores = ordenadas.filter(
+    (reserva) => !proximas.includes(reserva)
+  );
+
+  return (
+    <section style={S.agendaPortalShell}>
+      <div style={S.agendaHero}>
+        <button type="button" onClick={onVolver} style={S.agendaBack}>
+          ← Menú
+        </button>
+
+        <div>
+          <span style={S.agendaEyebrow}>MI AGENDA</span>
+          <h1 style={S.agendaTitle}>Mis reservas</h1>
+          <p style={S.agendaSubtitle}>
+            Aquí aparecen las reservas vinculadas a tu ficha de alumno.
+          </p>
+        </div>
+      </div>
+
+      <div style={S.reservasToolbar}>
+        <button
+          type="button"
+          onClick={onIrClases}
+          style={S.agendaPrimaryButton}
+        >
+          + Reservar clase
+        </button>
+
+        <button
+          type="button"
+          onClick={onActualizar}
+          disabled={cargando}
+          style={S.agendaRefreshButton}
+        >
+          {cargando ? "Actualizando..." : "↻ Actualizar"}
+        </button>
+      </div>
+
+      {error && <div style={S.agendaError}>{error}</div>}
+
+      {cargando ? (
+        <div style={S.agendaLoading}>
+          <div style={S.loader} />
+          <strong>Cargando tus reservas...</strong>
+        </div>
+      ) : reservas.length > 0 ? (
+        <div style={S.reservasSections}>
+          {proximas.length > 0 && (
+            <div style={S.reservasGroup}>
+              <div style={S.reservasGroupTitle}>
+                <span>PRÓXIMAS</span>
+                <strong>{proximas.length}</strong>
+              </div>
+
+              {proximas.map((reserva) => (
+                <ReservaAlumnoCard
+                  key={reserva.id}
+                  reserva={reserva}
+                />
+              ))}
+            </div>
+          )}
+
+          {anteriores.length > 0 && (
+            <div style={S.reservasGroup}>
+              <div style={S.reservasGroupTitle}>
+                <span>HISTORIAL</span>
+                <strong>{anteriores.length}</strong>
+              </div>
+
+              {anteriores.map((reserva) => (
+                <ReservaAlumnoCard
+                  key={reserva.id}
+                  reserva={reserva}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={S.agendaEmpty}>
+          <div style={S.agendaEmptyIcon}>◷</div>
+          <strong style={S.agendaEmptyTitle}>
+            Aún no tienes reservas
+          </strong>
+          <span style={S.agendaEmptyText}>
+            Si el gimnasio te reserva una clase desde Agenda o tú la reservas
+            desde este portal, aparecerá aquí.
+          </span>
+
+          <button
+            type="button"
+            onClick={onIrClases}
+            style={S.agendaPrimaryButton}
+          >
+            Ver clases disponibles
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ReservaAlumnoCard({ reserva }) {
+  return (
+    <article style={S.reservaCard}>
+      <div style={S.reservaCardTop}>
+        <div>
+          <span style={S.reservaDate}>
+            {formatearFechaAgenda(reserva?.fecha_reserva)}
+          </span>
+          <strong style={S.reservaService}>
+            {reserva?.servicio_nombre || "Clase"}
+          </strong>
+        </div>
+
+        <span
+          style={{
+            ...S.reservaStatus,
+            ...estiloEstadoReserva(reserva?.estado),
+          }}
+        >
+          {etiquetaEstadoReserva(reserva?.estado)}
+        </span>
+      </div>
+
+      <div style={S.reservaDetails}>
+        <div style={S.reservaDetail}>
+          <span>HORARIO</span>
+          <strong>
+            {formatearHoraAgenda(reserva?.hora_inicio)}
+            {reserva?.hora_fin
+              ? ` – ${formatearHoraAgenda(reserva.hora_fin)}`
+              : ""}
+          </strong>
+        </div>
+
+        {reserva?.instructor && (
+          <div style={S.reservaDetail}>
+            <span>COACH</span>
+            <strong>{reserva.instructor}</strong>
+          </div>
+        )}
+
+        {reserva?.requiere_pago && (
+          <div style={S.reservaDetail}>
+            <span>MONTO</span>
+            <strong>${Number(reserva?.monto || 0).toFixed(2)}</strong>
+          </div>
+        )}
+      </div>
+    </article>
   );
 }
 
@@ -2658,6 +3420,412 @@ const S = {
     borderRadius: "50%",
     background:
       "radial-gradient(circle,rgba(14,165,166,.10) 0%,rgba(14,165,166,0) 70%)",
+  },
+
+  agendaPortalShell: {
+    marginBottom: 15,
+    display: "grid",
+    gap: 14,
+  },
+
+  agendaHero: {
+    padding: 18,
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 14,
+    borderRadius: 18,
+    background:
+      "linear-gradient(135deg,#07111F 0%,#0B253A 65%,#0D506B 100%)",
+    color: "#FFFFFF",
+    boxShadow: "0 16px 34px rgba(7,17,31,.18)",
+  },
+
+  agendaBack: {
+    minHeight: 38,
+    padding: "0 11px",
+    flex: "0 0 auto",
+    border: "1px solid rgba(255,255,255,.14)",
+    borderRadius: 10,
+    background: "rgba(255,255,255,.07)",
+    color: "#EAF4FA",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  agendaEyebrow: {
+    display: "block",
+    color: "#79D7E3",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: 1.2,
+  },
+
+  agendaTitle: {
+    margin: "3px 0 0",
+    color: "#FFFFFF",
+    fontSize: 24,
+    lineHeight: 1.1,
+  },
+
+  agendaSubtitle: {
+    margin: "6px 0 0",
+    color: "#B9D8E4",
+    fontSize: 9,
+    lineHeight: 1.45,
+  },
+
+  agendaToolbar: {
+    padding: 14,
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) auto",
+    gap: 10,
+    alignItems: "end",
+    border: "1px solid #DEE6EF",
+    borderRadius: 16,
+    background: "#FFFFFF",
+  },
+
+  reservasToolbar: {
+    padding: 14,
+    display: "flex",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    gap: 10,
+    border: "1px solid #DEE6EF",
+    borderRadius: 16,
+    background: "#FFFFFF",
+  },
+
+  agendaDateField: {
+    display: "grid",
+    gap: 5,
+  },
+
+  agendaFieldLabel: {
+    color: "#6E7B89",
+    fontSize: 7.5,
+    fontWeight: 900,
+    textTransform: "uppercase",
+  },
+
+  agendaDateInput: {
+    width: "100%",
+    minHeight: 42,
+    padding: "0 11px",
+    border: "1px solid #D7E1EB",
+    borderRadius: 10,
+    outline: "none",
+    background: "#F9FBFD",
+    color: "#172033",
+    fontSize: 11,
+  },
+
+  agendaRefreshButton: {
+    minHeight: 42,
+    padding: "0 14px",
+    border: "1px solid #D7E1EB",
+    borderRadius: 10,
+    background: "#FFFFFF",
+    color: "#324A5E",
+    fontSize: 9,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  agendaPrimaryButton: {
+    minHeight: 42,
+    padding: "0 14px",
+    border: 0,
+    borderRadius: 10,
+    background: "#0D506B",
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  agendaSuccess: {
+    padding: 12,
+    border: "1px solid #B9E4CC",
+    borderRadius: 12,
+    background: "#ECF9F1",
+    color: "#176A40",
+    fontSize: 9,
+    fontWeight: 850,
+  },
+
+  agendaError: {
+    padding: 12,
+    border: "1px solid #F0C9C4",
+    borderRadius: 12,
+    background: "#FFF2F0",
+    color: "#8B3C34",
+    fontSize: 9,
+    lineHeight: 1.45,
+  },
+
+  agendaLoading: {
+    minHeight: 260,
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 10,
+    border: "1px solid #DFE7EF",
+    borderRadius: 18,
+    background: "#FFFFFF",
+    color: "#304153",
+  },
+
+  agendaList: {
+    display: "grid",
+    gap: 10,
+  },
+
+  agendaDateCaption: {
+    padding: "0 2px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    color: "#6D7C8D",
+    fontSize: 8,
+  },
+
+  agendaClassCard: {
+    padding: 15,
+    display: "grid",
+    gap: 13,
+    border: "1px solid #DCE5EE",
+    borderRadius: 17,
+    background: "#FFFFFF",
+    boxShadow: "0 10px 24px rgba(15,23,42,.05)",
+  },
+
+  agendaClassTop: {
+    display: "grid",
+    gridTemplateColumns: "46px minmax(0,1fr) auto",
+    gap: 10,
+    alignItems: "center",
+  },
+
+  agendaClassIcon: {
+    width: 46,
+    height: 46,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 13,
+    background: "#E8F4F6",
+    color: "#0D667D",
+    fontSize: 18,
+    fontWeight: 950,
+  },
+
+  agendaClassCopy: {
+    minWidth: 0,
+  },
+
+  agendaClassName: {
+    display: "block",
+    color: "#182333",
+    fontSize: 14,
+    lineHeight: 1.25,
+  },
+
+  agendaClassMeta: {
+    display: "block",
+    marginTop: 3,
+    color: "#7B8997",
+    fontSize: 8.5,
+  },
+
+  agendaCapacity: {
+    padding: "6px 8px",
+    borderRadius: 999,
+    background: "#DCFCE7",
+    color: "#166534",
+    fontSize: 7.5,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  agendaCapacityFull: {
+    background: "#F1F3F5",
+    color: "#747F89",
+  },
+
+  agendaClassBottom: {
+    paddingTop: 11,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    borderTop: "1px solid #EEF2F6",
+  },
+
+  agendaTimeBlock: {
+    minWidth: 0,
+  },
+
+  agendaTimeLabel: {
+    display: "block",
+    color: "#8A96A4",
+    fontSize: 7,
+    fontWeight: 900,
+  },
+
+  agendaTimeValue: {
+    display: "block",
+    marginTop: 2,
+    color: "#1D2A3A",
+    fontSize: 11,
+  },
+
+  agendaReserveButton: {
+    minWidth: 100,
+    minHeight: 38,
+    padding: "0 13px",
+    border: 0,
+    borderRadius: 10,
+    background: "#0EA5A6",
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+
+  agendaReserveButtonDisabled: {
+    background: "#D8E0E5",
+    color: "#77838D",
+    cursor: "not-allowed",
+  },
+
+  agendaEmpty: {
+    minHeight: 300,
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 9,
+    padding: 22,
+    textAlign: "center",
+    border: "1px solid #DFE7EF",
+    borderRadius: 18,
+    background: "#FFFFFF",
+  },
+
+  agendaEmptyIcon: {
+    width: 58,
+    height: 58,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 17,
+    background: "#E8F4F6",
+    color: "#0D667D",
+    fontSize: 22,
+    fontWeight: 950,
+  },
+
+  agendaEmptyTitle: {
+    color: "#243244",
+    fontSize: 14,
+  },
+
+  agendaEmptyText: {
+    maxWidth: 390,
+    color: "#788697",
+    fontSize: 9,
+    lineHeight: 1.55,
+  },
+
+  reservasSections: {
+    display: "grid",
+    gap: 16,
+  },
+
+  reservasGroup: {
+    display: "grid",
+    gap: 9,
+  },
+
+  reservasGroupTitle: {
+    padding: "0 2px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    color: "#748393",
+    fontSize: 8,
+    fontWeight: 900,
+    letterSpacing: .7,
+  },
+
+  reservaCard: {
+    padding: 15,
+    display: "grid",
+    gap: 12,
+    border: "1px solid #DCE5EE",
+    borderRadius: 17,
+    background: "#FFFFFF",
+    boxShadow: "0 10px 24px rgba(15,23,42,.05)",
+  },
+
+  reservaCardTop: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  reservaDate: {
+    display: "block",
+    color: "#738192",
+    fontSize: 8,
+    textTransform: "capitalize",
+  },
+
+  reservaService: {
+    display: "block",
+    marginTop: 3,
+    color: "#172333",
+    fontSize: 15,
+  },
+
+  reservaStatus: {
+    padding: "6px 9px",
+    borderRadius: 999,
+    fontSize: 7,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  reservaStatusOk: {
+    background: "#DCFCE7",
+    color: "#166534",
+  },
+
+  reservaStatusWarning: {
+    background: "#FFF4D8",
+    color: "#8A5A00",
+  },
+
+  reservaStatusMuted: {
+    background: "#EFF2F4",
+    color: "#6A7782",
+  },
+
+  reservaDetails: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+
+  reservaDetail: {
+    minWidth: 110,
+    padding: "9px 10px",
+    display: "grid",
+    gap: 3,
+    borderRadius: 10,
+    background: "#F7F9FB",
+    border: "1px solid #E8EDF2",
   },
 
   whiteboardShell: {
