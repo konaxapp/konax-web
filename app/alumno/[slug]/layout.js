@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
+import { supabasePortalAlumno as supabase } from "../../../lib/supabasePortalAlumno";
 
 const VERSION = "2026.09.07-PORTAL-ALUMNO-PRO-V5";
 const BUCKET_PERFIL = "alumnos-perfil";
