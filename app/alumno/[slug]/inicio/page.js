@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.08-PORTAL-ALUMNO-AGENDA-RESERVAS-WOD-V9";
+const VERSION = "2026.09.08-PORTAL-ALUMNO-AGENDA-LINK-FIX-V10";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
@@ -30,6 +30,7 @@ export default function PortalAlumnoInicio() {
   const [cuenta, setCuenta] = useState(null);
   const [perfil, setPerfil] = useState(null);
   const [portalPublico, setPortalPublico] = useState(null);
+  const [agendaSlug, setAgendaSlug] = useState("");
 
   const [fotoFirmada, setFotoFirmada] = useState("");
   const [mostrarEditor, setMostrarEditor] = useState(false);
@@ -432,10 +433,18 @@ export default function PortalAlumnoInicio() {
     const authUserId = session?.user?.id;
 
     if (authUserId) {
-      const { data: cliente, error: clienteError } = await supabase
+      let consultaCliente = supabase
         .from("clientes")
         .select("id,empresa_id,nombre,telefono,correo,auth_user_id")
-        .eq("auth_user_id", authUserId)
+        .eq("auth_user_id", authUserId);
+
+      const empresaEsperada = obtenerEmpresaIdAlumno();
+      if (empresaEsperada) {
+        consultaCliente = consultaCliente.eq("empresa_id", empresaEsperada);
+      }
+
+      const { data: cliente, error: clienteError } = await consultaCliente
+        .limit(1)
         .maybeSingle();
 
       if (!clienteError && cliente?.id && cliente?.empresa_id) {
@@ -459,7 +468,7 @@ export default function PortalAlumnoInicio() {
 
     if (!clienteId || !empresaId) {
       throw new Error(
-        "No se pudo identificar tu ficha de alumno para consultar las reservas."
+        "No se pudo identificar tu ficha de alumno para consultar Agenda."
       );
     }
 
@@ -470,18 +479,97 @@ export default function PortalAlumnoInicio() {
     };
   }
 
-  async function cargarServiciosAgenda() {
-    const { data, error: rpcError } = await supabase.rpc(
-      "obtener_servicios_agenda_publica",
+  async function resolverSlugAgenda() {
+    if (agendaSlug) return agendaSlug;
+
+    const candidatoDirecto = String(
+      cuenta?.agenda_slug ||
+        cuenta?.slug_agenda ||
+        perfil?.agenda_slug ||
+        perfil?.slug_agenda ||
+        portalPublico?.agenda_slug ||
+        portalPublico?.slug_agenda ||
+        ""
+    ).trim();
+
+    if (candidatoDirecto) {
+      setAgendaSlug(candidatoDirecto);
+      return candidatoDirecto;
+    }
+
+    const identidad = await resolverIdentidadAlumnoAgenda();
+
+    const { data, error: configError } = await supabase.rpc(
+      "obtener_configuracion_portal_agenda",
       {
-        p_slug: slug,
+        p_empresa_id: identidad.empresaId,
       }
     );
 
-    if (rpcError) {
-      console.warn("No se pudieron cargar servicios de Agenda:", rpcError);
-      return [];
+    if (!configError) {
+      const configuracion = Array.isArray(data) ? data[0] : data;
+      const slugResuelto = String(
+        configuracion?.slug || configuracion?.agenda_slug || ""
+      ).trim();
+
+      if (slugResuelto) {
+        setAgendaSlug(slugResuelto);
+        return slugResuelto;
+      }
+    } else {
+      console.warn(
+        "No se pudo resolver el slug del portal de Agenda:",
+        configError
+      );
     }
+
+    throw new Error(
+      "El Portal del Alumno está conectado al gimnasio, pero no pudo localizar el enlace interno de Agenda. Revisa que Agenda tenga configurado su enlace /reservar/."
+    );
+  }
+
+  async function cargarServiciosAgenda() {
+    let identidad = null;
+
+    try {
+      identidad = await resolverIdentidadAlumnoAgenda();
+
+      const { data: dataDirecta, error: errorDirecto } = await supabase
+        .from("agenda_servicios")
+        .select(
+          "id,nombre,descripcion,imagen_url,tipo,duracion_minutos,capacidad_default,requiere_membresia,requiere_pago,precio,activo"
+        )
+        .eq("empresa_id", identidad.empresaId)
+        .eq("activo", true)
+        .order("nombre", { ascending: true });
+
+      const listaDirecta = Array.isArray(dataDirecta) ? dataDirecta : [];
+
+      if (!errorDirecto && listaDirecta.length > 0) {
+        setServiciosAgenda(listaDirecta);
+        return listaDirecta;
+      }
+
+      if (errorDirecto) {
+        console.warn(
+          "Agenda directa no permitió leer servicios; se intentará el portal de reservas:",
+          errorDirecto
+        );
+      }
+    } catch (err) {
+      console.warn("No se pudo resolver la empresa para servicios:", err);
+    }
+
+    const slugAgenda = await resolverSlugAgenda();
+
+    const { data, error: rpcError } = await supabase.rpc(
+      "obtener_servicios_agenda_publica",
+      {
+        p_slug: slugAgenda,
+      }
+    );
+
+    if (rpcError) throw rpcError;
 
     const lista = Array.isArray(data) ? data : [];
     setServiciosAgenda(lista);
@@ -489,11 +577,38 @@ export default function PortalAlumnoInicio() {
   }
 
   async function consultarDisponibilidadAgenda(fechaSeleccionada) {
+    const fechaConsulta = String(fechaSeleccionada).slice(0, 10);
+
+    try {
+      const identidad = await resolverIdentidadAlumnoAgenda();
+
+      const { data: dataInterna, error: errorInterno } = await supabase.rpc(
+        "obtener_disponibilidad_agenda",
+        {
+          p_empresa_id: identidad.empresaId,
+          p_fecha: fechaConsulta,
+        }
+      );
+
+      if (!errorInterno) {
+        return Array.isArray(dataInterna) ? dataInterna : [];
+      }
+
+      console.warn(
+        "Agenda interna no permitió leer disponibilidad; se intentará el portal de reservas:",
+        errorInterno
+      );
+    } catch (err) {
+      console.warn("No se pudo consultar Agenda interna:", err);
+    }
+
+    const slugAgenda = await resolverSlugAgenda();
+
     const { data, error: rpcError } = await supabase.rpc(
       "obtener_disponibilidad_agenda_publica",
       {
-        p_slug: slug,
-        p_fecha: String(fechaSeleccionada).slice(0, 10),
+        p_slug: slugAgenda,
+        p_fecha: fechaConsulta,
       }
     );
 
@@ -582,51 +697,81 @@ export default function PortalAlumnoInicio() {
       return;
     }
 
-    const nombreAlumno = String(
-      cuenta?.nombre || perfil?.nombre || ""
-    ).trim();
-
-    const telefonoAlumno = String(
-      cuenta?.telefono ||
-        cuenta?.celular ||
-        perfil?.telefono ||
-        perfil?.celular ||
-        ""
-    ).trim();
-
-    if (!nombreAlumno || !telefonoAlumno) {
-      setErrorClases(
-        "Tu perfil debe tener nombre y teléfono para poder reservar. Actualiza esos datos con el gimnasio."
-      );
-      return;
-    }
-
     setReservandoHorarioId(horarioId);
     setErrorClases("");
     setMensajeReserva("");
 
     try {
-      const { data, error: rpcError } = await supabase.rpc(
-        "crear_reserva_agenda_publica",
+      const identidad = await resolverIdentidadAlumnoAgenda();
+
+      const { data: dataInterna, error: errorInterno } = await supabase.rpc(
+        "crear_reserva_agenda",
         {
-          p_slug: slug,
+          p_empresa_id: identidad.empresaId,
           p_horario_id: horarioId,
+          p_cliente_id: identidad.clienteId,
           p_fecha_reserva: fechaClases,
-          p_hora_inicio: item?.hora_inicio,
-          p_nombre: nombreAlumno,
-          p_telefono: telefonoAlumno,
           p_observaciones: "Reserva creada desde Portal del Alumno",
         }
       );
 
-      if (rpcError) throw rpcError;
+      let resultado = dataInterna || null;
 
-      if (!data?.ok) {
-        throw new Error(data?.mensaje || "No se pudo realizar la reserva.");
+      if (errorInterno) {
+        const codigo = String(errorInterno?.code || "");
+        const permiteFallback = ["42501", "42883", "PGRST202"].includes(codigo);
+
+        if (!permiteFallback) throw errorInterno;
+
+        const nombreAlumno = String(
+          cuenta?.nombre || perfil?.nombre || ""
+        ).trim();
+
+        const telefonoAlumno = String(
+          cuenta?.telefono ||
+            cuenta?.celular ||
+            perfil?.telefono ||
+            perfil?.celular ||
+            ""
+        ).trim();
+
+        if (!nombreAlumno || !telefonoAlumno) {
+          throw new Error(
+            "Tu perfil debe tener nombre y teléfono para reservar."
+          );
+        }
+
+        const slugAgenda = await resolverSlugAgenda();
+
+        const { data: dataPublica, error: errorPublico } = await supabase.rpc(
+          "crear_reserva_agenda_publica",
+          {
+            p_slug: slugAgenda,
+            p_horario_id: horarioId,
+            p_fecha_reserva: fechaClases,
+            p_hora_inicio: item?.hora_inicio,
+            p_nombre: nombreAlumno,
+            p_telefono: telefonoAlumno,
+            p_observaciones: "Reserva creada desde Portal del Alumno",
+          }
+        );
+
+        if (errorPublico) throw errorPublico;
+        if (dataPublica?.ok === false) {
+          throw new Error(
+            dataPublica?.mensaje || "No se pudo realizar la reserva."
+          );
+        }
+
+        resultado = dataPublica || {};
+      } else if (dataInterna?.ok === false) {
+        throw new Error(
+          dataInterna?.mensaje || "No se pudo realizar la reserva."
+        );
       }
 
       const mensajeConfirmacion = `Reserva confirmada: ${
-        data?.servicio ||
+        resultado?.servicio ||
         item?.servicio_nombre ||
         item?.servicio ||
         "clase"
@@ -640,9 +785,7 @@ export default function PortalAlumnoInicio() {
       setMensajeReserva(mensajeConfirmacion);
     } catch (err) {
       console.error("Error reservando clase:", err);
-      setErrorClases(
-        err?.message || "No se pudo reservar esta clase."
-      );
+      setErrorClases(err?.message || "No se pudo reservar esta clase.");
     } finally {
       setReservandoHorarioId("");
     }
@@ -718,10 +861,12 @@ export default function PortalAlumnoInicio() {
   async function obtenerWod(fechaSeleccionada, servicioId) {
     if (!fechaSeleccionada || !servicioId) return null;
 
+    const slugAgenda = await resolverSlugAgenda();
+
     const { data, error: rpcError } = await supabase.rpc(
       "obtener_wod_publico",
       {
-        p_slug: slug,
+        p_slug: slugAgenda,
         p_fecha: String(fechaSeleccionada).slice(0, 10),
         p_servicio_id: servicioId,
       }
@@ -764,27 +909,76 @@ export default function PortalAlumnoInicio() {
     setErrorWod("");
 
     try {
-      const { data, error: errorServicios } = await supabase.rpc(
-        "obtener_servicios_agenda_publica",
-        {
-          p_slug: slug,
+      let lista = await cargarServiciosAgenda();
+
+      if (!lista.length) {
+        const mapaServicios = new Map();
+        const hoy = fechaLocalIso();
+
+        for (let offset = 0; offset <= 14; offset += 1) {
+          const fechaBuscar = sumarDiasIso(hoy, offset);
+          const slots = await consultarDisponibilidadAgenda(fechaBuscar);
+
+          slots.forEach((item) => {
+            const id = String(item?.servicio_id || "").trim();
+            if (!id || mapaServicios.has(id)) return;
+
+            mapaServicios.set(id, {
+              id,
+              nombre:
+                item?.servicio_nombre ||
+                item?.nombre_servicio ||
+                item?.servicio ||
+                "Clase",
+              descripcion: item?.descripcion || "",
+              duracion_minutos: Number(item?.duracion_minutos || 60),
+              precio: Number(item?.precio || 0),
+              requiere_pago: Boolean(item?.requiere_pago),
+            });
+          });
+
+          if (mapaServicios.size > 0) break;
         }
-      );
 
-      if (errorServicios) throw errorServicios;
+        lista = Array.from(mapaServicios.values());
+        if (lista.length) {
+          setServiciosAgenda(lista);
+        }
+      }
 
-      const lista = Array.isArray(data) ? data : [];
       setServiciosWod(lista);
 
       if (!lista.length) {
         setServicioWodId("");
         setFechaWod(fechaLocalIso());
         setWodPublico(null);
-        setErrorWod("No hay clases disponibles para consultar.");
+        setErrorWod(
+          "Agenda no devolvió ninguna clase activa. Revisa que el servicio y el horario estén activos."
+        );
         return;
       }
 
       const hoy = fechaLocalIso();
+      const primerServicioId = String(lista[0]?.id || "");
+      setServicioWodId(primerServicioId);
+      setFechaWod(hoy);
+      setWodPublico(null);
+
+      let enlaceAgendaDisponible = true;
+
+      try {
+        await resolverSlugAgenda();
+      } catch (err) {
+        enlaceAgendaDisponible = false;
+        console.warn("Whiteboard sin slug de Agenda:", err);
+      }
+
+      if (!enlaceAgendaDisponible) {
+        setErrorWod(
+          "Las clases ya están enlazadas, pero falta localizar el enlace /reservar/ de Agenda para consultar el WOD."
+        );
+        return;
+      }
 
       for (let offset = 0; offset <= 7; offset += 1) {
         const fechaBuscar = sumarDiasIso(hoy, offset);
@@ -799,37 +993,27 @@ export default function PortalAlumnoInicio() {
             setFechaWod(fechaBuscar);
             setServicioWodId(servicioId);
             setWodPublico(wod);
+            setErrorWod("");
             return;
           }
         }
       }
 
-      const primerServicioId = String(lista[0]?.id || "");
-      setFechaWod(hoy);
-      setServicioWodId(primerServicioId);
-      setWodPublico(null);
       setErrorWod(
-        "No hay WOD publicado para hoy ni para los próximos 7 días."
+        "Las clases ya están cargadas. No hay un WOD publicado para los próximos 7 días."
       );
     } catch (err) {
       console.error("Error preparando Whiteboard:", err);
+      setServiciosWod([]);
+      setServicioWodId("");
+      setFechaWod(fechaLocalIso());
       setWodPublico(null);
-      setErrorWod("No se pudo cargar el Whiteboard.");
+      setErrorWod(
+        err?.message || "No se pudo preparar el Whiteboard."
+      );
     } finally {
       setCargandoWod(false);
     }
-  }
-
-  function cambiarSeccion(id) {
-    setSeccion(id);
-
-    if (id === "inicio") {
-      setMenuAbierto(true);
-    } else {
-      setMenuAbierto(false);
-    }
-
-    window?.scrollTo?.({ top: 0, behavior: "smooth" });
   }
 
   function formatearFecha(fecha) {
