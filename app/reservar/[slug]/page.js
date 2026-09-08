@@ -1,7812 +1,3365 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
-import { supabase } from "../../../lib/supabase";
+import { useParams, useRouter } from "next/navigation";
+import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.07-PORTAL-PUBLICO-V15-GYM-FECHAS-DISPONIBLES";
+const VERSION = "2026.09.08-PORTAL-ALUMNO-WHITEBOARD-WOD-V8";
+const BUCKET_PERFIL = "alumnos-perfil";
 
-function normalizar(valor) {
-  return String(valor || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
+const MENU = [
+  { id: "inicio", label: "Inicio", icon: "⌂" },
+  { id: "clases", label: "Clases", icon: "▣" },
+  { id: "reservas", label: "Mis reservas", icon: "◷" },
+  { id: "whiteboard", label: "Whiteboard", icon: "▤" },
+  { id: "resultados", label: "Resultados", icon: "▥" },
+  { id: "configuracion", label: "Configuración", icon: "⚙" },
+];
 
-function esBelleza(portal) {
-  const texto = normalizar(
-    `${portal?.tipo_negocio || ""} ${portal?.categoria_negocio || ""}`
-  );
-
-  return [
-    "belleza",
-    "salon",
-    "peluqueria",
-    "estetica",
-    "barberia",
-    "spa",
-    "beauty",
-  ].some((item) => texto.includes(item));
-}
-
-
-function esGimnasio(portal) {
-  const texto = normalizar(
-    `${portal?.tipo_negocio || ""} ${portal?.categoria_negocio || ""}`
-  );
-
-  return [
-    "gimnasio",
-    "gym",
-    "fitness",
-    "crossfit",
-    "cross fit",
-    "box",
-    "academia",
-    "club deportivo",
-  ].some((item) => texto.includes(item));
-}
-
-function fechaISO(fecha = new Date()) {
-  const d = fecha instanceof Date ? fecha : new Date(fecha);
-  const offset = d.getTimezoneOffset();
-  return new Date(d.getTime() - offset * 60000)
-    .toISOString()
-    .slice(0, 10);
-}
-
-function formatoFecha(iso) {
-  if (!iso) return "-";
-  return new Intl.DateTimeFormat("es-PA", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(`${String(iso).slice(0, 10)}T12:00:00`));
-}
-
-function formatoHora(hora) {
-  if (!hora) return "-";
-  const [h = "0", m = "0"] = String(hora).split(":");
-  const d = new Date();
-  d.setHours(Number(h), Number(m), 0, 0);
-  return new Intl.DateTimeFormat("es-PA", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  }).format(d);
-}
-
-function dinero(valor) {
-  return new Intl.NumberFormat("es-PA", {
-    style: "currency",
-    currency: "USD",
-  }).format(Number(valor || 0));
-}
-
-function mensajeError(error) {
-  return String(
-    error?.message ||
-      error?.details ||
-      error?.hint ||
-      error ||
-      "Error inesperado"
-  )
-    .replace("P0001:", "")
-    .replace("Error:", "")
-    .trim();
-}
-
-function claveSlot(item) {
-  return `${item?.horario_id || ""}-${String(
-    item?.hora_inicio || ""
-  ).slice(0, 5)}`;
-}
-
-function franjaDeHora(hora) {
-  const [h = "0"] = String(hora || "").split(":");
-  const numero = Number(h);
-
-  if (numero < 12) return "manana";
-  if (numero < 18) return "tarde";
-  return "noche";
-}
-
-
-function fechasHastaFinDeAnio2026() {
-  const lista = [];
-  const hoy = new Date();
-  hoy.setHours(12, 0, 0, 0);
-
-  const fin = new Date("2026-12-31T12:00:00");
-  const cursor = new Date(hoy);
-
-  while (cursor <= fin) {
-    lista.push(fechaISO(cursor));
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return lista;
-}
-
-function fechaCorta(iso) {
-  if (!iso) return "";
-  return new Intl.DateTimeFormat("es-PA", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  }).format(new Date(`${iso}T12:00:00`));
-}
-
-function inicialNombre(nombre) {
-  return String(nombre || "?").trim().charAt(0).toUpperCase();
-}
-
-function obtenerCitasEjecutadas(servicio) {
-  return Number(
-    servicio?.citas_ejecutadas ??
-      servicio?.reservas_ejecutadas ??
-      servicio?.total_ejecutadas ??
-      servicio?.total_reservas_ejecutadas ??
-      0
-  );
-}
-
-function formatoEntero(valor) {
-  return new Intl.NumberFormat("es-PA").format(Number(valor || 0));
-}
-
-
-function formatoFechaResena(valor) {
-  if (!valor) return "";
-
-  const fecha = new Date(valor);
-
-  if (Number.isNaN(fecha.getTime())) return "";
-
-  return new Intl.DateTimeFormat("es-PA", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(fecha);
-}
-
-function inicialesResena(nombre) {
-  const partes = String(nombre || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-
-  if (!partes.length) return "C";
-
-  if (partes.length === 1) {
-    return partes[0].slice(0, 2).toUpperCase();
-  }
-
-  return `${partes[0]?.[0] || ""}${
-    partes[partes.length - 1]?.[0] || ""
-  }`.toUpperCase();
-}
-
-function haceCuantoResena(valor) {
-  if (!valor) return "";
-
-  const fecha = new Date(valor);
-
-  if (Number.isNaN(fecha.getTime())) return "";
-
-  const dias = Math.floor(
-    (Date.now() - fecha.getTime()) / 86400000
-  );
-
-  if (dias <= 0) return "Hoy";
-  if (dias === 1) return "Hace 1 día";
-  if (dias < 30) return `Hace ${dias} días`;
-
-  return formatoFechaResena(valor);
-}
-
-function formatearHoraLocalPublica(valor) {
-  if (!valor) return "";
-
-  const partes = String(valor).slice(0, 5).split(":");
-  const horas = Number(partes[0] || 0);
-  const minutos = Number(partes[1] || 0);
-
-  const fecha = new Date(2000, 0, 1, horas, minutos);
-
-  return new Intl.DateTimeFormat("es-PA", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  }).format(fecha);
-}
-
-export default function ReservaPublicaAutoservicioPage() {
+export default function PortalAlumnoInicio() {
   const params = useParams();
-  const searchParams = useSearchParams();
+  const router = useRouter();
 
-  const slug = Array.isArray(params?.slug)
-    ? params.slug[0]
-    : params?.slug || "";
+  const slug = String(params?.slug || "").trim();
 
-  const tokenUrl = searchParams?.get("cita") || "";
-
-  const [portal, setPortal] = useState(null);
-  const [identidadEmpresa, setIdentidadEmpresa] = useState(null);
-  const [perfilPublicoLocal, setPerfilPublicoLocal] = useState(null);
   const [cargando, setCargando] = useState(true);
-  const [cargandoHorarios, setCargandoHorarios] = useState(false);
-  const [guardando, setGuardando] = useState(false);
+  const [actualizando, setActualizando] = useState(false);
+  const [guardandoPerfil, setGuardandoPerfil] = useState(false);
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+
+  const [cuenta, setCuenta] = useState(null);
+  const [perfil, setPerfil] = useState(null);
+  const [portalPublico, setPortalPublico] = useState(null);
+
+  const [fotoFirmada, setFotoFirmada] = useState("");
+  const [mostrarEditor, setMostrarEditor] = useState(false);
+
+  const [peso, setPeso] = useState("");
+  const [estatura, setEstatura] = useState("");
+
+  const [mensajePerfil, setMensajePerfil] = useState("");
   const [error, setError] = useState("");
 
-  const [tema, setTema] = useState("claro");
-  const [menuAbierto, setMenuAbierto] = useState(false);
-  const [mostrarAvisoMiCita, setMostrarAvisoMiCita] = useState(false);
+  const [menuAbierto, setMenuAbierto] = useState(true);
+  const [seccion, setSeccion] = useState("inicio");
 
-  const [tabPortal, setTabPortal] = useState("servicios");
-  const [equipoPortal, setEquipoPortal] = useState([]);
-  const [cargandoEquipoPortal, setCargandoEquipoPortal] = useState(false);
-
-  const [perfilProfesionalAbierto, setPerfilProfesionalAbierto] = useState(null);
-  const [perfilProfesionalDetalle, setPerfilProfesionalDetalle] = useState(null);
-  const [tabPerfilProfesional, setTabPerfilProfesional] = useState("perfil");
-  const [cargandoPerfilProfesional, setCargandoPerfilProfesional] = useState(false);
-  const [resumenProfesionales, setResumenProfesionales] = useState({});
-
-  const [paso, setPaso] = useState(1);
-
-  const [fecha, setFecha] = useState(fechaISO());
-  const [horarios, setHorarios] = useState([]);
-  const [serviciosCatalogo, setServiciosCatalogo] = useState([]);
-  const [cargandoServicios, setCargandoServicios] = useState(false);
-  const [profesionalesServicio, setProfesionalesServicio] = useState([]);
-  const [cargandoProfesionales, setCargandoProfesionales] = useState(false);
-  const [servicioFiltro, setServicioFiltro] = useState("todos");
-  const [servicioSeleccionado, setServicioSeleccionado] = useState(null);
-  const [profesionalSeleccionado, setProfesionalSeleccionado] =
-    useState("sin-preferencia");
-  const [horarioSeleccionado, setHorarioSeleccionado] = useState(null);
-  const [franjaHorario, setFranjaHorario] = useState("manana");
-
-  const [nombre, setNombre] = useState("");
-  const [telefono, setTelefono] = useState("");
-  const [observaciones, setObservaciones] = useState("");
-  const [reservaConfirmada, setReservaConfirmada] = useState(null);
-  const [tokenGestion, setTokenGestion] = useState("");
-
-  const [miCita, setMiCita] = useState(null);
-
-  const [estadoResena, setEstadoResena] = useState(null);
-  const [resenasPublicas, setResenasPublicas] = useState({
-    ok: true,
-    total_resenas: 0,
-    promedio: 0,
-    estrellas_5: 0,
-    estrellas_4: 0,
-    estrellas_3: 0,
-    estrellas_2: 0,
-    estrellas_1: 0,
-    resenas: [],
-  });
-  const [cargandoResenas, setCargandoResenas] = useState(false);
-  const [calificacionNegocio, setCalificacionNegocio] = useState(0);
-  const [calificacionProfesional, setCalificacionProfesional] = useState(0);
-  const [comentarioResena, setComentarioResena] = useState("");
-  const [enviandoResena, setEnviandoResena] = useState(false);
-  const [resenaEnviada, setResenaEnviada] = useState(false);
-
-  const [telefonoGestion, setTelefonoGestion] = useState("");
-  const [motivoCancelacion, setMotivoCancelacion] = useState("");
-  const [cancelando, setCancelando] = useState(false);
-  const [mostrarNuevaCita, setMostrarNuevaCita] = useState(false);
+  const [serviciosWod, setServiciosWod] = useState([]);
+  const [servicioWodId, setServicioWodId] = useState("");
+  const [fechaWod, setFechaWod] = useState("");
   const [wodPublico, setWodPublico] = useState(null);
   const [cargandoWod, setCargandoWod] = useState(false);
-
-  const perfilBelleza = esBelleza(portal);
-  const perfilGimnasio = esGimnasio(portal);
-  const dias = useMemo(() => fechasHastaFinDeAnio2026(), []);
+  const [errorWod, setErrorWod] = useState("");
 
   useEffect(() => {
-    if (!slug) return;
-
-    cargarPortal();
-
-    try {
-      const tokenGuardado = localStorage.getItem(
-        `konax_reserva_token_${slug}`
-      );
-
-      if (tokenGuardado) {
-        setTokenGestion(tokenGuardado);
-      }
-    } catch (err) {
-      console.warn("No se pudo leer la cita guardada:", err);
-    }
+    cargarTodo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
   useEffect(() => {
-    if (!portal?.ok || !fecha) return;
-    cargarDisponibilidad(fecha);
-  }, [portal?.ok, fecha]);
+    if (seccion !== "whiteboard" || !slug) return;
+    prepararWhiteboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seccion, slug]);
 
-  useEffect(() => {
-    if (!portal?.ok || !tokenUrl) return;
-
-    cargarMiCita(tokenUrl);
-
-    try {
-      localStorage.setItem(
-        `konax_reserva_token_${slug}`,
-        tokenUrl
-      );
-      setTokenGestion(tokenUrl);
-    } catch (err) {
-      console.warn("No se pudo guardar la cita:", err);
-    }
-  }, [portal?.ok, tokenUrl, slug]);
-
-  async function cargarPortal() {
-    setCargando(true);
-    setError("");
-
-    const { data, error: rpcError } = await supabase.rpc(
-      "obtener_agenda_publica",
-      { p_slug: slug }
-    );
-
-    if (rpcError || !data?.ok) {
-      setError(
-        mensajeError(rpcError) ||
-          data?.mensaje ||
-          "Este portal de reservas no está disponible."
-      );
-      setPortal(null);
+  async function cargarTodo(modoActualizar = false) {
+    if (!slug) {
+      setError("El portal no es válido.");
       setCargando(false);
       return;
     }
 
-    setPortal(data);
-
-    const [
-      respuestaIdentidad,
-      respuestaPerfilPublico,
-      serviciosBase,
-    ] = await Promise.all([
-      supabase.rpc(
-        "obtener_identidad_empresa_publica",
-        {
-          p_slug: slug,
-        }
-      ),
-      supabase.rpc(
-        "obtener_perfil_publico_agenda",
-        {
-          p_slug: slug,
-        }
-      ),
-      cargarServiciosPublicos(),
-    ]);
-
-    const identidadData = respuestaIdentidad?.data;
-
-    const identidad = Array.isArray(identidadData)
-      ? identidadData[0]
-      : identidadData;
-
-    setIdentidadEmpresa(identidad || null);
-
-    if (respuestaPerfilPublico?.error) {
-      console.warn(
-        "No se pudo cargar el perfil público del local:",
-        respuestaPerfilPublico.error
-      );
-      setPerfilPublicoLocal(null);
+    if (modoActualizar) {
+      setActualizando(true);
     } else {
-      const perfilData = respuestaPerfilPublico?.data;
-      const perfil = Array.isArray(perfilData)
-        ? perfilData[0]
-        : perfilData;
-
-      setPerfilPublicoLocal(
-        perfil?.ok === false ? null : perfil || null
-      );
+      setCargando(true);
     }
 
-    if (esBelleza(data) && Array.isArray(serviciosBase) && serviciosBase.length > 0) {
-      cargarEquipoPortal(serviciosBase);
-    }
-
-    await cargarResenasPublicas();
-
-    setCargando(false);
-  }
-
-  async function cargarServiciosPublicos() {
-    setCargandoServicios(true);
-
-    const { data, error: rpcError } = await supabase.rpc(
-      "obtener_servicios_agenda_publica",
-      {
-        p_slug: slug,
-      }
-    );
-
-    if (rpcError) {
-      console.error(
-        "No se pudieron cargar los servicios públicos:",
-        rpcError
-      );
-      setServiciosCatalogo([]);
-      setCargandoServicios(false);
-      return [];
-    }
-
-    const lista = Array.isArray(data) ? data : [];
-    setServiciosCatalogo(lista);
-    setCargandoServicios(false);
-    return lista;
-  }
-
-  async function cargarEquipoPortal(serviciosBase = serviciosCatalogo) {
-    if (!Array.isArray(serviciosBase) || serviciosBase.length === 0) {
-      setEquipoPortal([]);
-      return;
-    }
-
-    setCargandoEquipoPortal(true);
-
-    try {
-      const respuestas = await Promise.all(
-        serviciosBase.map((servicio) =>
-          supabase.rpc(
-            "obtener_profesionales_servicio_publico",
-            {
-              p_slug: slug,
-              p_servicio_id: String(servicio.id),
-            }
-          )
-        )
-      );
-
-      const mapa = new Map();
-
-      respuestas.forEach((respuesta) => {
-        const lista = Array.isArray(respuesta?.data)
-          ? respuesta.data
-          : [];
-
-        lista.forEach((prof) => {
-          const clave = String(
-            prof?.id || normalizar(prof?.nombre || "")
-          );
-
-          if (!clave || mapa.has(clave)) return;
-
-          mapa.set(clave, {
-            id: prof.id || clave,
-            nombre: String(prof.nombre || "").trim(),
-            especialidad: prof.especialidad || "Profesional",
-            fotoUrl: prof.foto_url || "",
-          });
-        });
-      });
-
-      setEquipoPortal(Array.from(mapa.values()));
-    } catch (err) {
-      console.warn("No se pudo cargar el equipo público:", err);
-      setEquipoPortal([]);
-    } finally {
-      setCargandoEquipoPortal(false);
-    }
-  }
-
-  async function cargarDisponibilidad(fechaSeleccionada) {
-    setCargandoHorarios(true);
     setError("");
-    setHorarioSeleccionado(null);
-
-    const { data, error: rpcError } = await supabase.rpc(
-      "obtener_disponibilidad_agenda_publica",
-      {
-        p_slug: slug,
-        p_fecha: fechaSeleccionada,
-      }
-    );
-
-    if (rpcError) {
-      setHorarios([]);
-      setError(mensajeError(rpcError));
-      setCargandoHorarios(false);
-      return;
-    }
-
-    setHorarios(Array.isArray(data) ? data : []);
-    setCargandoHorarios(false);
-  }
-
-  async function cargarProfesionalesServicio(servicioId) {
-    if (!perfilBelleza || !servicioId) {
-      setProfesionalesServicio([]);
-      return [];
-    }
-
-    setCargandoProfesionales(true);
-
-    const { data, error: rpcError } = await supabase.rpc(
-      "obtener_profesionales_servicio_publico",
-      {
-        p_slug: slug,
-        p_servicio_id: String(servicioId),
-      }
-    );
-
-    if (rpcError) {
-      console.error(
-        "No se pudieron cargar profesionales del servicio:",
-        rpcError
-      );
-      setProfesionalesServicio([]);
-      setCargandoProfesionales(false);
-      return [];
-    }
-
-    const lista = Array.isArray(data) ? data : [];
-    setProfesionalesServicio(lista);
-    setCargandoProfesionales(false);
-
-    cargarResumenProfesionales(lista);
-
-    return lista;
-  }
-
-
-  async function cargarResumenProfesionales(lista = []) {
-    const profesionalesConId = (Array.isArray(lista) ? lista : []).filter(
-      (prof) => prof?.id
-    );
-
-    if (profesionalesConId.length === 0) return;
+    setMensajePerfil("");
 
     try {
-      const respuestas = await Promise.all(
-        profesionalesConId.map((prof) =>
-          supabase.rpc(
-            "obtener_perfil_profesional_publico",
-            {
-              p_slug: slug,
-              p_profesional_id: String(prof.id),
-            }
-          )
-        )
+      const {
+        data: { session },
+        error: errorSesion,
+      } = await supabase.auth.getSession();
+
+      if (errorSesion) throw errorSesion;
+
+      if (!session?.user?.id) {
+        router.replace(`/alumno/${encodeURIComponent(slug)}`);
+        return;
+      }
+
+      const [
+        { data: dataCuenta, error: errorCuenta },
+        { data: dataPerfil, error: errorPerfil },
+        { data: dataPortalPublico, error: errorPortalPublico },
+      ] = await Promise.all([
+        supabase.rpc("obtener_mi_cuenta_alumno", {
+          p_slug: slug,
+        }),
+        supabase.rpc("obtener_mi_perfil_alumno", {
+          p_slug: slug,
+        }),
+        supabase.rpc("obtener_portal_alumno_publico", {
+          p_slug: slug,
+        }),
+      ]);
+
+      if (errorCuenta) throw errorCuenta;
+
+      if (!dataCuenta?.ok) {
+        throw new Error(
+          dataCuenta?.mensaje || "No se pudo abrir tu portal."
+        );
+      }
+
+      if (errorPerfil) throw errorPerfil;
+
+      if (!dataPerfil?.ok) {
+        throw new Error(
+          dataPerfil?.mensaje || "No se pudo cargar tu configuración."
+        );
+      }
+
+      setCuenta(dataCuenta);
+      setPerfil(dataPerfil);
+
+      if (!errorPortalPublico && dataPortalPublico?.ok) {
+        setPortalPublico(dataPortalPublico);
+      } else {
+        setPortalPublico(null);
+      }
+
+      setPeso(
+        dataPerfil?.peso === null || dataPerfil?.peso === undefined
+          ? ""
+          : String(dataPerfil.peso)
       );
 
-      const nuevoMapa = {};
+      setEstatura(
+        dataPerfil?.estatura === null || dataPerfil?.estatura === undefined
+          ? ""
+          : String(dataPerfil.estatura)
+      );
 
-      respuestas.forEach((respuesta, index) => {
-        const prof = profesionalesConId[index];
-        const data = respuesta?.data;
-
-        if (!respuesta?.error && data?.ok) {
-          nuevoMapa[String(prof.id)] = data;
-        }
-      });
-
-      setResumenProfesionales((actual) => ({
-        ...actual,
-        ...nuevoMapa,
-      }));
+      await resolverFoto(dataPerfil?.foto_url || "");
     } catch (err) {
-      console.warn(
-        "No se pudieron cargar los resúmenes públicos de profesionales:",
-        err
-      );
+      console.error("Error cargando portal del alumno:", err);
+      setError(err?.message || "No se pudo cargar tu cuenta.");
+    } finally {
+      setCargando(false);
+      setActualizando(false);
     }
   }
 
-  async function abrirPerfilProfesional(profesional) {
-    if (!profesional?.profesionalId) return;
+  async function resolverFoto(valor) {
+    const foto = String(valor || "").trim();
 
-    const id = String(profesional.profesionalId);
-    const resumen = resumenProfesionales[id] || null;
+    if (!foto) {
+      setFotoFirmada("");
+      return;
+    }
 
-    setPerfilProfesionalAbierto(profesional);
-    setPerfilProfesionalDetalle(resumen);
-    setTabPerfilProfesional("perfil");
-    setCargandoPerfilProfesional(true);
+    if (
+      foto.startsWith("http://") ||
+      foto.startsWith("https://") ||
+      foto.startsWith("data:") ||
+      foto.startsWith("blob:")
+    ) {
+      setFotoFirmada(foto);
+      return;
+    }
 
-    const { data, error: rpcError } = await supabase.rpc(
-      "obtener_perfil_profesional_publico",
-      {
-        p_slug: slug,
-        p_profesional_id: id,
+    const { data, error: signedError } = await supabase.storage
+      .from(BUCKET_PERFIL)
+      .createSignedUrl(foto, 60 * 60);
+
+    if (signedError) {
+      console.warn("No se pudo crear URL firmada:", signedError);
+      setFotoFirmada("");
+      return;
+    }
+
+    setFotoFirmada(data?.signedUrl || "");
+  }
+
+  async function cerrarSesion() {
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      router.replace(`/alumno/${encodeURIComponent(slug)}`);
+    }
+  }
+
+  async function guardarDatosPerfil() {
+    setGuardandoPerfil(true);
+    setMensajePerfil("");
+    setError("");
+
+    try {
+      const pesoNumero =
+        String(peso).trim() === ""
+          ? null
+          : Number(String(peso).replace(",", "."));
+
+      const estaturaNumero =
+        String(estatura).trim() === ""
+          ? null
+          : Number(String(estatura).replace(",", "."));
+
+      if (
+        pesoNumero !== null &&
+        (!Number.isFinite(pesoNumero) || pesoNumero <= 0 || pesoNumero > 500)
+      ) {
+        throw new Error("Ingresa un peso válido en kilogramos.");
       }
-    );
 
-    setCargandoPerfilProfesional(false);
+      if (
+        estaturaNumero !== null &&
+        (!Number.isFinite(estaturaNumero) ||
+          estaturaNumero <= 0 ||
+          estaturaNumero > 3)
+      ) {
+        throw new Error(
+          "Ingresa una estatura válida en metros. Ejemplo: 1.76"
+        );
+      }
 
-    if (rpcError || !data?.ok) {
-      console.warn(
-        "No se pudo cargar el perfil público del profesional:",
-        rpcError || data
+      const { data, error: rpcError } = await supabase.rpc(
+        "actualizar_mi_perfil_alumno",
+        {
+          p_slug: slug,
+          p_foto_url: null,
+          p_peso: pesoNumero,
+          p_estatura: estaturaNumero,
+        }
       );
 
-      if (!resumen) {
-        setPerfilProfesionalDetalle({
-          ok: false,
-          mensaje:
-            data?.mensaje ||
-            "El perfil del profesional no está disponible.",
+      if (rpcError) throw rpcError;
+
+      if (!data?.ok) {
+        throw new Error(
+          data?.mensaje || "No se pudo guardar la configuración."
+        );
+      }
+
+      setPerfil((prev) => ({
+        ...(prev || {}),
+        peso: data?.peso ?? pesoNumero,
+        estatura: data?.estatura ?? estaturaNumero,
+      }));
+
+      setMensajePerfil("Configuración actualizada.");
+      setMostrarEditor(false);
+    } catch (err) {
+      console.error("Error guardando configuración:", err);
+      setError(err?.message || "No se pudo guardar la configuración.");
+    } finally {
+      setGuardandoPerfil(false);
+    }
+  }
+
+  async function subirSelfie(event) {
+    const archivo = event?.target?.files?.[0];
+    if (!archivo) return;
+
+    setSubiendoFoto(true);
+    setMensajePerfil("");
+    setError("");
+
+    try {
+      if (
+        !["image/jpeg", "image/png", "image/webp"].includes(archivo.type)
+      ) {
+        throw new Error("Usa una imagen JPG, PNG o WebP.");
+      }
+
+      if (archivo.size > 5 * 1024 * 1024) {
+        throw new Error("La foto no puede superar 5 MB.");
+      }
+
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) throw sessionError;
+
+      const userId = session?.user?.id;
+
+      if (!userId) {
+        throw new Error("Tu sesión expiró. Vuelve a iniciar sesión.");
+      }
+
+      const extension =
+        archivo.type === "image/png"
+          ? "png"
+          : archivo.type === "image/webp"
+          ? "webp"
+          : "jpg";
+
+      const ruta = `${userId}/perfil.${extension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET_PERFIL)
+        .upload(ruta, archivo, {
+          upsert: true,
+          cacheControl: "3600",
+          contentType: archivo.type,
         });
+
+      if (uploadError) throw uploadError;
+
+      const { data, error: rpcError } = await supabase.rpc(
+        "actualizar_mi_perfil_alumno",
+        {
+          p_slug: slug,
+          p_foto_url: ruta,
+          p_peso: null,
+          p_estatura: null,
+        }
+      );
+
+      if (rpcError) throw rpcError;
+
+      if (!data?.ok) {
+        throw new Error(data?.mensaje || "No se pudo guardar la foto.");
       }
 
-      return;
-    }
+      setPerfil((prev) => ({
+        ...(prev || {}),
+        foto_url: ruta,
+      }));
 
-    setPerfilProfesionalDetalle(data);
-    setResumenProfesionales((actual) => ({
-      ...actual,
-      [id]: data,
-    }));
+      setCuenta((prev) => ({
+        ...(prev || {}),
+        foto_url: ruta,
+      }));
+
+      await resolverFoto(ruta);
+      setMensajePerfil("Foto actualizada.");
+    } catch (err) {
+      console.error("Error subiendo selfie:", err);
+      setError(err?.message || "No se pudo subir la foto.");
+    } finally {
+      setSubiendoFoto(false);
+
+      if (event?.target) {
+        event.target.value = "";
+      }
+    }
   }
 
-  function cerrarPerfilProfesional() {
-    setPerfilProfesionalAbierto(null);
-    setPerfilProfesionalDetalle(null);
-    setTabPerfilProfesional("perfil");
-    setCargandoPerfilProfesional(false);
+  function fechaLocalIso(fecha = new Date()) {
+    const y = fecha.getFullYear();
+    const m = String(fecha.getMonth() + 1).padStart(2, "0");
+    const d = String(fecha.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
   }
 
-  async function cargarWodPublico(fechaWod, servicioId) {
-    if (!perfilGimnasio || !fechaWod || !servicioId) {
-      setWodPublico(null);
-      return;
-    }
+  function sumarDiasIso(fechaIso, dias) {
+    const [y, m, d] = String(fechaIso).split("-").map(Number);
+    const fecha = new Date(y, (m || 1) - 1, d || 1, 12, 0, 0);
+    fecha.setDate(fecha.getDate() + dias);
+    return fechaLocalIso(fecha);
+  }
 
-    setCargandoWod(true);
+  async function obtenerWod(fechaSeleccionada, servicioId) {
+    if (!fechaSeleccionada || !servicioId) return null;
 
     const { data, error: rpcError } = await supabase.rpc(
       "obtener_wod_publico",
       {
         p_slug: slug,
-        p_fecha: String(fechaWod).slice(0, 10),
+        p_fecha: String(fechaSeleccionada).slice(0, 10),
         p_servicio_id: servicioId,
       }
     );
 
-    if (rpcError || !data?.ok) {
+    if (rpcError || !data?.ok) return null;
+    return data;
+  }
+
+  async function cargarWodSeleccionado(
+    fechaSeleccionada = fechaWod,
+    servicioId = servicioWodId
+  ) {
+    if (!fechaSeleccionada || !servicioId) {
       setWodPublico(null);
-      setCargandoWod(false);
       return;
     }
 
-    setWodPublico(data);
-    setCargandoWod(false);
-  }
-
-  async function cargarResenasPublicas() {
-    if (!slug) return;
-
-    setCargandoResenas(true);
-
-    const { data, error: rpcError } = await supabase.rpc(
-      "obtener_resenas_agenda_publica",
-      {
-        p_slug: slug,
-      }
-    );
-
-    if (rpcError || !data?.ok) {
-      console.warn(
-        "No se pudieron cargar las reseñas públicas:",
-        rpcError || data
-      );
-
-      setResenasPublicas({
-        ok: true,
-        total_resenas: 0,
-        promedio: 0,
-        estrellas_5: 0,
-        estrellas_4: 0,
-        estrellas_3: 0,
-        estrellas_2: 0,
-        estrellas_1: 0,
-        resenas: [],
-      });
-
-      setCargandoResenas(false);
-      return;
-    }
-
-    setResenasPublicas({
-      ...data,
-      resenas: Array.isArray(data.resenas) ? data.resenas : [],
-    });
-
-    setCargandoResenas(false);
-  }
-
-  async function cargarEstadoResena(token = tokenUrl) {
-    if (!token) {
-      setEstadoResena(null);
-      return;
-    }
-
-    const { data, error: rpcError } = await supabase.rpc(
-      "obtener_estado_resena_agenda_publica",
-      {
-        p_slug: slug,
-        p_token: token,
-      }
-    );
-
-    if (rpcError || !data?.ok) {
-      console.warn(
-        "No se pudo consultar el estado de la reseña:",
-        rpcError || data
-      );
-      setEstadoResena(null);
-      return;
-    }
-
-    setEstadoResena(data);
-  }
-
-  async function enviarResena() {
-    if (!tokenUrl || enviandoResena) return;
-
-    if (calificacionNegocio < 1 || calificacionNegocio > 5) {
-      setError("Selecciona de 1 a 5 estrellas para el negocio.");
-      return;
-    }
-
-    if (
-      estadoResena?.profesional_id &&
-      (calificacionProfesional < 1 ||
-        calificacionProfesional > 5)
-    ) {
-      setError("Selecciona de 1 a 5 estrellas para el profesional.");
-      return;
-    }
-
-    setEnviandoResena(true);
-    setError("");
-
-    const { data, error: rpcError } = await supabase.rpc(
-      "enviar_resena_agenda_publica",
-      {
-        p_slug: slug,
-        p_token: tokenUrl,
-        p_calificacion_negocio: calificacionNegocio,
-        p_calificacion_profesional:
-          estadoResena?.profesional_id
-            ? calificacionProfesional
-            : null,
-        p_comentario: comentarioResena.trim() || null,
-      }
-    );
-
-    setEnviandoResena(false);
-
-    if (rpcError || !data?.ok) {
-      setError(
-        mensajeError(rpcError) ||
-          data?.mensaje ||
-          "No se pudo enviar la reseña."
-      );
-      return;
-    }
-
-    setResenaEnviada(true);
-    setComentarioResena("");
-
-    await Promise.all([
-      cargarEstadoResena(tokenUrl),
-      cargarResenasPublicas(),
-    ]);
-  }
-
-  async function cargarMiCita(token = tokenUrl) {
-    if (!token) return;
-
-    const { data, error: rpcError } = await supabase.rpc(
-      "obtener_reserva_agenda_publica",
-      {
-        p_slug: slug,
-        p_token: token,
-      }
-    );
-
-    if (rpcError || !data?.ok) {
-      setMiCita(null);
-      setError(
-        mensajeError(rpcError) ||
-          data?.mensaje ||
-          "No se pudo cargar la cita."
-      );
-      return;
-    }
-
-    setMiCita(data);
-    if (data.fecha) setFecha(String(data.fecha).slice(0, 10));
-
-    await cargarEstadoResena(token);
-
-    if (perfilGimnasio && data.servicio_id && data.fecha) {
-      await cargarWodPublico(data.fecha, data.servicio_id);
-    }
-  }
-
-  const servicios = useMemo(() => {
-    /*
-      SALÓN DE BELLEZA:
-      El PASO 1 usa el catálogo público de servicios y ya no depende
-      de que el servicio tenga un slot disponible en la fecha actual.
-
-      GIMNASIO / compatibilidad:
-      Se conserva la lógica anterior basada en la disponibilidad del día.
-    */
-    if (perfilBelleza && serviciosCatalogo.length > 0) {
-      return serviciosCatalogo.map((item) => ({
-        id: String(item.id),
-        nombre: item.nombre,
-        descripcion: item.descripcion || "",
-        imagenUrl: item.imagen_url || "",
-        precio: Number(item.precio || 0),
-        requierePago: Boolean(item.requiere_pago),
-        duracion: Number(item.duracion_minutos || 60),
-        citasEjecutadas: obtenerCitasEjecutadas(item),
-      }));
-    }
-
-    const mapa = new Map();
-
-    horarios.forEach((item) => {
-      if (!mapa.has(String(item.servicio_id))) {
-        mapa.set(String(item.servicio_id), {
-          id: String(item.servicio_id),
-          nombre: item.servicio_nombre,
-          descripcion: item.descripcion || "",
-          imagenUrl: item.imagen_url || "",
-          precio: Number(item.precio || 0),
-          requierePago: Boolean(item.requiere_pago),
-          duracion: Number(item.duracion_minutos || 60),
-          citasEjecutadas: obtenerCitasEjecutadas(item),
-        });
-      }
-    });
-
-    return Array.from(mapa.values());
-  }, [
-    horarios,
-    serviciosCatalogo,
-    perfilBelleza,
-  ]);
-
-  const serviciosOrdenadosPorDemanda = useMemo(() => {
-    return [...servicios].sort((a, b) => {
-      const porReservas =
-        Number(b.citasEjecutadas || 0) -
-        Number(a.citasEjecutadas || 0);
-
-      if (porReservas !== 0) return porReservas;
-
-      return String(a.nombre || "").localeCompare(
-        String(b.nombre || ""),
-        "es"
-      );
-    });
-  }, [servicios]);
-
-  const serviciosMasPedidos = useMemo(
-    () => serviciosOrdenadosPorDemanda.slice(0, 3),
-    [serviciosOrdenadosPorDemanda]
-  );
-
-  const profesionales = useMemo(() => {
-    if (!servicioSeleccionado) return [];
-
-    /*
-      SALÓN DE BELLEZA:
-      Los profesionales salen del perfil profesional y de los
-      servicios asignados, no solamente de agenda_horarios.
-      Así un profesional aparece en el paso 2 si está activo y
-      tiene este servicio asignado.
-
-      GIMNASIO / compatibilidad:
-      Se mantiene la lógica anterior basada en instructores de
-      los horarios disponibles.
-    */
-    if (perfilBelleza) {
-      return profesionalesServicio.map((prof) => {
-        const nombreProfesional = String(
-          prof.nombre || ""
-        ).trim();
-
-        const resumen =
-          resumenProfesionales[String(prof.id)] || {};
-
-        return {
-          id: normalizar(nombreProfesional),
-          profesionalId: prof.id,
-          nombre: nombreProfesional,
-          especialidad: prof.especialidad || "Profesional",
-          fotoUrl: prof.foto_url || "",
-          promedioCalificacion: Number(
-            resumen?.promedio_calificacion || 0
-          ),
-          totalResenas: Number(
-            resumen?.total_resenas || 0
-          ),
-          citasCompletadas: Number(
-            resumen?.citas_completadas || 0
-          ),
-        };
-      });
-    }
-
-    const mapa = new Map();
-
-    horarios
-      .filter(
-        (item) =>
-          String(item.servicio_id) ===
-          String(servicioSeleccionado.id)
-      )
-      .forEach((item) => {
-        const nombreProfesional = String(
-          item.instructor || ""
-        ).trim();
-
-        if (!nombreProfesional) return;
-
-        const clave = normalizar(nombreProfesional);
-
-        if (!mapa.has(clave)) {
-          mapa.set(clave, {
-            id: clave,
-            nombre: nombreProfesional,
-            especialidad: "Instructor",
-            fotoUrl: "",
-          });
-        }
-      });
-
-    return Array.from(mapa.values());
-  }, [
-    horarios,
-    servicioSeleccionado,
-    perfilBelleza,
-    profesionalesServicio,
-    resumenProfesionales,
-  ]);
-
-  const slotsDisponibles = useMemo(() => {
-    if (!servicioSeleccionado) return [];
-
-    return horarios.filter((item) => {
-      const mismoServicio =
-        String(item.servicio_id) ===
-        String(servicioSeleccionado.id);
-
-      const disponible = Number(item.disponibles || 0) > 0;
-
-      const coincideProfesional =
-        profesionalSeleccionado === "sin-preferencia" ||
-        normalizar(item.instructor || "") ===
-          normalizar(profesionalSeleccionado);
-
-      return mismoServicio && disponible && coincideProfesional;
-    });
-  }, [
-    horarios,
-    servicioSeleccionado,
-    profesionalSeleccionado,
-  ]);
-
-  const slotsPorFranja = useMemo(() => {
-    const grupos = {
-      manana: [],
-      tarde: [],
-      noche: [],
-    };
-
-    slotsDisponibles.forEach((slot) => {
-      grupos[franjaDeHora(slot.hora_inicio)].push(slot);
-    });
-
-    return grupos;
-  }, [slotsDisponibles]);
-
-  const slotsFranjaVisible = useMemo(
-    () => slotsPorFranja[franjaHorario] || [],
-    [slotsPorFranja, franjaHorario]
-  );
-
-  useEffect(() => {
-    if (slotsDisponibles.length === 0) return;
-
-    const actualTiene =
-      (slotsPorFranja[franjaHorario] || []).length > 0;
-
-    if (actualTiene) return;
-
-    if (slotsPorFranja.manana.length > 0) {
-      setFranjaHorario("manana");
-      return;
-    }
-
-    if (slotsPorFranja.tarde.length > 0) {
-      setFranjaHorario("tarde");
-      return;
-    }
-
-    if (slotsPorFranja.noche.length > 0) {
-      setFranjaHorario("noche");
-    }
-  }, [slotsDisponibles, slotsPorFranja, franjaHorario]);
-
-  const serviciosFechaActual = useMemo(() => {
-    const mapa = new Map();
-
-    horarios.forEach((item) => {
-      const id = String(item.servicio_id);
-
-      if (!mapa.has(id)) {
-        mapa.set(id, {
-          id,
-          nombre: item.servicio_nombre,
-          descripcion: item.descripcion || "",
-          precio: Number(item.precio || 0),
-          requierePago: Boolean(item.requiere_pago),
-          duracion: Number(item.duracion_minutos || 60),
-        });
-      }
-    });
-
-    return Array.from(mapa.values());
-  }, [horarios]);
-
-  const [fechasConDisponibilidad, setFechasConDisponibilidad] = useState([]);
-  const [buscandoFechas, setBuscandoFechas] = useState(false);
-
-  async function buscarFechasDisponibles() {
-    if (!portal?.ok) return;
-
-    setBuscandoFechas(true);
+    setCargandoWod(true);
+    setErrorWod("");
 
     try {
-      const candidatos = fechasHastaFinDeAnio2026();
-      const resultados = [];
-      const TAMANO_LOTE = 12;
+      const data = await obtenerWod(fechaSeleccionada, servicioId);
+      setWodPublico(data);
 
-      for (let i = 0; i < candidatos.length; i += TAMANO_LOTE) {
-        const lote = candidatos.slice(i, i + TAMANO_LOTE);
+      if (!data) {
+        setErrorWod("No hay un WOD publicado para esta clase y fecha.");
+      }
+    } catch (err) {
+      console.error("Error cargando WOD público:", err);
+      setWodPublico(null);
+      setErrorWod("No se pudo cargar el WOD.");
+    } finally {
+      setCargandoWod(false);
+    }
+  }
 
-        const respuestas = await Promise.all(
-          lote.map(async (dia) => {
-            const { data, error: rpcError } = await supabase.rpc(
-              "obtener_disponibilidad_agenda_publica",
-              {
-                p_slug: slug,
-                p_fecha: dia,
-              }
-            );
+  async function prepararWhiteboard() {
+    setCargandoWod(true);
+    setErrorWod("");
 
-            if (!rpcError && Array.isArray(data) && data.length > 0) {
-              return dia;
-            }
+    try {
+      const { data, error: errorServicios } = await supabase.rpc(
+        "obtener_servicios_agenda_publica",
+        {
+          p_slug: slug,
+        }
+      );
 
-            return null;
-          })
-        );
+      if (errorServicios) throw errorServicios;
 
-        respuestas.forEach((dia) => {
-          if (dia) resultados.push(dia);
-        });
+      const lista = Array.isArray(data) ? data : [];
+      setServiciosWod(lista);
+
+      if (!lista.length) {
+        setServicioWodId("");
+        setFechaWod(fechaLocalIso());
+        setWodPublico(null);
+        setErrorWod("No hay clases disponibles para consultar.");
+        return;
       }
 
-      const ordenadas = resultados.sort();
-      setFechasConDisponibilidad(ordenadas);
+      const hoy = fechaLocalIso();
 
-      /*
-        GIMNASIO:
-        Si hoy no tiene clases, el portal salta automáticamente
-        a la próxima fecha que sí tenga disponibilidad.
-        BELLEZA no se toca.
-      */
-      if (perfilGimnasio && ordenadas.length > 0) {
-        const hoy = fechaISO();
+      for (let offset = 0; offset <= 7; offset += 1) {
+        const fechaBuscar = sumarDiasIso(hoy, offset);
 
-        if (!ordenadas.includes(hoy)) {
-          setFecha((actual) => {
-            if (actual === hoy || !ordenadas.includes(actual)) {
-              return ordenadas[0];
-            }
+        for (const servicio of lista) {
+          const servicioId = String(servicio?.id || "").trim();
+          if (!servicioId) continue;
 
-            return actual;
-          });
+          const wod = await obtenerWod(fechaBuscar, servicioId);
+
+          if (wod?.ok) {
+            setFechaWod(fechaBuscar);
+            setServicioWodId(servicioId);
+            setWodPublico(wod);
+            return;
+          }
         }
       }
+
+      const primerServicioId = String(lista[0]?.id || "");
+      setFechaWod(hoy);
+      setServicioWodId(primerServicioId);
+      setWodPublico(null);
+      setErrorWod(
+        "No hay WOD publicado para hoy ni para los próximos 7 días."
+      );
+    } catch (err) {
+      console.error("Error preparando Whiteboard:", err);
+      setWodPublico(null);
+      setErrorWod("No se pudo cargar el Whiteboard.");
     } finally {
-      setBuscandoFechas(false);
+      setCargandoWod(false);
     }
   }
 
-  useEffect(() => {
-    if (!portal?.ok) return;
-    buscarFechasDisponibles();
-  }, [portal?.ok]);
+  function cambiarSeccion(id) {
+    setSeccion(id);
 
-  const profesionalResumen = useMemo(() => {
-    if (profesionalSeleccionado === "sin-preferencia") {
-      return "Sin preferencia";
+    if (id === "inicio") {
+      setMenuAbierto(true);
+    } else {
+      setMenuAbierto(false);
     }
+
+    window?.scrollTo?.({ top: 0, behavior: "smooth" });
+  }
+
+  function formatearFecha(fecha) {
+    if (!fecha) return "No definida";
+
+    try {
+      return new Intl.DateTimeFormat("es-PA", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }).format(new Date(`${fecha}T12:00:00`));
+    } catch {
+      return String(fecha);
+    }
+  }
+
+  function formatearDinero(valor) {
+    const numero = Number(valor || 0);
+
+    if (!Number.isFinite(numero)) {
+      return "$0.00";
+    }
+
+    return new Intl.NumberFormat("es-PA", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+    }).format(numero);
+  }
+
+  const empresaNombre =
+    cuenta?.empresa_nombre ||
+    portalPublico?.empresa_nombre ||
+    portalPublico?.titulo ||
+    portalPublico?.titulo_publico ||
+    "Gimnasio";
+
+  const empresaLogoUrl =
+    cuenta?.empresa_logo_url ||
+    cuenta?.logo_url ||
+    portalPublico?.empresa_logo_url ||
+    portalPublico?.logo_url ||
+    portalPublico?.logo ||
+    "";
+
+  const membresia = cuenta?.membresia || null;
+  const qrToken = String(cuenta?.qr_token || "").trim();
+  const qrDisponible = Boolean(cuenta?.qr_disponible && qrToken);
+  const accesoPermitido = Boolean(cuenta?.acceso_permitido);
+
+  const qrUrl = useMemo(() => {
+    if (!qrToken) return "";
 
     return (
-      profesionales.find(
-        (p) => p.id === profesionalSeleccionado
-      )?.nombre || "Sin preferencia"
+      "https://api.qrserver.com/v1/create-qr-code/" +
+      `?size=700x700&margin=24&data=${encodeURIComponent(qrToken)}`
     );
-  }, [profesionalSeleccionado, profesionales]);
+  }, [qrToken]);
 
-  const horariosVisibles = useMemo(() => {
-    if (servicioFiltro === "todos") return horarios;
+  const iniciales = useMemo(() => {
+    const nombre = String(cuenta?.nombre || "Alumno").trim();
+    const partes = nombre.split(/\s+/).filter(Boolean);
 
-    return horarios.filter(
-      (item) =>
-        String(item.servicio_id) === String(servicioFiltro)
+    return (
+      partes
+        .slice(0, 2)
+        .map((parte) => parte.charAt(0).toUpperCase())
+        .join("") || "A"
     );
-  }, [horarios, servicioFiltro]);
+  }, [cuenta?.nombre]);
 
-  const serviciosConSlots = useMemo(() => {
-    const grupos = new Map();
+  const estadoVisual =
+    cuenta?.membresia_estado_visual ||
+    membresia?.estado ||
+    "Sin membresía";
 
-    horariosVisibles.forEach((item) => {
-      const servicioId = String(item.servicio_id);
+  const pesoVisual =
+    perfil?.peso === null || perfil?.peso === undefined
+      ? "Sin registrar"
+      : `${Number(perfil.peso).toFixed(1)} kg`;
 
-      if (!grupos.has(servicioId)) {
-        grupos.set(servicioId, {
-          servicio_id: item.servicio_id,
-          servicio_nombre: item.servicio_nombre,
-          descripcion: item.descripcion || "",
-          instructor: item.instructor || "",
-          precio: Number(item.precio || 0),
-          requiere_pago: Boolean(item.requiere_pago),
-          duracion_minutos: Number(item.duracion_minutos || 60),
-          slots: [],
-        });
-      }
-
-      grupos.get(servicioId).slots.push(item);
-    });
-
-    return Array.from(grupos.values());
-  }, [horariosVisibles]);
-
-  async function elegirServicio(servicio) {
-    setServicioSeleccionado(servicio);
-    setServicioFiltro(servicio.id);
-    setProfesionalSeleccionado("sin-preferencia");
-    setHorarioSeleccionado(null);
-    setFranjaHorario("manana");
-    setError("");
-
-    if (perfilBelleza) {
-      await cargarProfesionalesServicio(servicio.id);
-    } else {
-      setProfesionalesServicio([]);
-    }
-
-    setPaso(2);
-  }
-
-  function elegirProfesional(valor) {
-    setProfesionalSeleccionado(valor);
-    setHorarioSeleccionado(null);
-    setFranjaHorario("manana");
-    setError("");
-    setPaso(3);
-  }
-
-  function elegirFecha(valor) {
-    setFecha(valor);
-    setHorarioSeleccionado(null);
-    setFranjaHorario("manana");
-    setError("");
-  }
-
-  function continuarFechaHora() {
-    if (!horarioSeleccionado) {
-      setError("Selecciona una hora disponible.");
-      return;
-    }
-
-    setError("");
-    setPaso(4);
-  }
-
-  function reiniciarFlujo() {
-    setPaso(1);
-    setTabPortal("servicios");
-    setServicioSeleccionado(null);
-    setServicioFiltro("todos");
-    setProfesionalesServicio([]);
-    setProfesionalSeleccionado("sin-preferencia");
-    setHorarioSeleccionado(null);
-    setFranjaHorario("manana");
-    setReservaConfirmada(null);
-    setTokenGestion("");
-    setFecha(fechaISO());
-    setNombre("");
-    setTelefono("");
-    setObservaciones("");
-    setError("");
-
-    setTimeout(() => {
-      document.getElementById("flujo-reserva")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 60);
-  }
-
-  async function confirmarReserva(e) {
-    e.preventDefault();
-
-    if (!horarioSeleccionado) {
-      setError("Selecciona un servicio y una hora disponible.");
-      return;
-    }
-
-    if (!nombre.trim() || !telefono.trim()) {
-      setError("Ingresa tu nombre y teléfono.");
-      return;
-    }
-
-    setGuardando(true);
-    setError("");
-
-    const { data, error: rpcError } = await supabase.rpc(
-      "crear_reserva_agenda_publica",
-      {
-        p_slug: slug,
-        p_horario_id: horarioSeleccionado.horario_id,
-        p_fecha_reserva: fecha,
-        p_hora_inicio: horarioSeleccionado.hora_inicio,
-        p_nombre: nombre.trim(),
-        p_telefono: telefono.trim(),
-        p_observaciones: observaciones.trim() || null,
-      }
-    );
-
-    if (rpcError || !data?.ok) {
-      setError(
-        mensajeError(rpcError) ||
-          data?.mensaje ||
-          "No se pudo reservar."
-      );
-      setGuardando(false);
-      return;
-    }
-
-    setReservaConfirmada(data);
-
-    const { data: gestion } = await supabase.rpc(
-      "obtener_token_gestion_reserva_publica",
-      {
-        p_slug: slug,
-        p_reserva_id: data.reserva_id,
-        p_telefono: telefono.trim(),
-      }
-    );
-
-    if (gestion?.ok && gestion?.token) {
-      const tokenNuevo = String(gestion.token);
-
-      setTokenGestion(tokenNuevo);
-
-      try {
-        localStorage.setItem(
-          `konax_reserva_token_${slug}`,
-          tokenNuevo
-        );
-      } catch (err) {
-        console.warn("No se pudo guardar la cita:", err);
-      }
-    }
-
-    await cargarDisponibilidad(fecha);
-
-    if (perfilGimnasio && servicioSeleccionado?.id) {
-      await cargarWodPublico(fecha, servicioSeleccionado.id);
-    }
-
-    setGuardando(false);
-    setPaso(5);
-
-    setTimeout(() => {
-      document.getElementById("confirmacion-cita")?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }, 80);
-  }
-
-  function abrirMiCita() {
-    let token = tokenGestion;
-
-    if (!token) {
-      try {
-        token = localStorage.getItem(
-          `konax_reserva_token_${slug}`
-        );
-      } catch (err) {
-        console.warn("No se pudo leer la cita guardada:", err);
-      }
-    }
-
-    if (token) {
-      window.location.href = `/reservar/${slug}?cita=${token}`;
-      return;
-    }
-
-    setMostrarAvisoMiCita(true);
-  }
-
-  async function cancelarMiCita() {
-    if (!miCita?.puede_cancelar) return;
-
-    if (!telefonoGestion.trim()) {
-      setError(
-        "Escribe el teléfono utilizado en la cita para confirmar la cancelación."
-      );
-      return;
-    }
-
-    const confirmar = window.confirm(
-      "¿Seguro que deseas cancelar esta cita? El horario quedará disponible inmediatamente."
-    );
-
-    if (!confirmar) return;
-
-    setCancelando(true);
-    setError("");
-
-    const { data, error: rpcError } = await supabase.rpc(
-      "cancelar_reserva_agenda_publica",
-      {
-        p_slug: slug,
-        p_token: tokenUrl,
-        p_telefono: telefonoGestion.trim(),
-        p_motivo: motivoCancelacion.trim() || null,
-      }
-    );
-
-    if (rpcError || !data?.ok) {
-      setError(
-        mensajeError(rpcError) ||
-          data?.mensaje ||
-          "No se pudo cancelar la cita."
-      );
-      setCancelando(false);
-      return;
-    }
-
-    await Promise.all([
-      cargarMiCita(tokenUrl),
-      cargarDisponibilidad(miCita.fecha || fecha),
-    ]);
-
-    setCancelando(false);
-  }
-
-  function reservarOtraCita() {
-    setMostrarNuevaCita(true);
-    setMiCita(null);
-    reiniciarFlujo();
-  }
-
-  function enlaceGestion() {
-    if (!tokenGestion || typeof window === "undefined") return "";
-    return `${window.location.origin}/reservar/${slug}?cita=${tokenGestion}`;
-  }
+  const estaturaVisual =
+    perfil?.estatura === null || perfil?.estatura === undefined
+      ? "Sin registrar"
+      : `${Number(perfil.estatura).toFixed(2)} m`;
 
   if (cargando) {
     return (
-      <main
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          background: "#f5f7f6",
-          fontFamily:
-            'Inter, system-ui, "Segoe UI", sans-serif',
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            justifyItems: "center",
-            gap: 12,
-            padding: 24,
-          }}
-        >
-          <span
-            aria-hidden="true"
-            style={{
-              width: 34,
-              height: 34,
-              display: "block",
-              border: "3px solid #dbe6df",
-              borderTopColor: "#0b7041",
-              borderRadius: "50%",
-              animation: "kpSpin .75s linear infinite",
-            }}
-          />
-
-          <strong
-            style={{
-              color: "#365347",
-              fontSize: 13,
-              fontWeight: 800,
-            }}
-          >
-            Preparando tu agenda...
-          </strong>
-
-          <style>{`
-            @keyframes kpSpin {
-              to { transform: rotate(360deg); }
-            }
-          `}</style>
-        </div>
+      <main style={S.loadingPage}>
+        <section style={S.loadingCard}>
+          <img src="/konax-logo.png" alt="KONAX" style={S.loadingLogo} />
+          <div style={S.loader} />
+          <strong>Preparando tu portal...</strong>
+          <span style={S.loadingText}>Estamos validando tu acceso.</span>
+        </section>
       </main>
     );
   }
 
-  if (!portal?.ok) {
+  if (error && !cuenta?.ok) {
     return (
-      <main
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          padding: 20,
-          background: "#f5f7f6",
-          fontFamily:
-            'Inter, system-ui, "Segoe UI", sans-serif',
-        }}
-      >
-        <div
-          style={{
-            width: "min(420px,100%)",
-            padding: 18,
-            display: "grid",
-            gap: 7,
-            border: "1px solid #f2b8b3",
-            borderRadius: 16,
-            background: "#fff1ef",
-            color: "#8a1c12",
-          }}
-        >
-          <strong>Reservas no disponibles</strong>
-          <span style={{ fontSize: 13, lineHeight: 1.45 }}>
-            {error}
-          </span>
-        </div>
-      </main>
-    );
-  }
+      <main style={S.loadingPage}>
+        <section style={S.errorCard}>
+          <img src="/konax-logo.png" alt="KONAX" style={S.errorLogo} />
+          <div style={S.errorIcon}>!</div>
+          <h1 style={S.errorTitle}>No pudimos abrir tu portal</h1>
+          <p style={S.errorText}>
+            {error || "Tu portal no está disponible."}
+          </p>
 
-  const nombreNegocio =
-    perfilPublicoLocal?.empresa_nombre ||
-    identidadEmpresa?.empresa_nombre ||
-    portal.titulo_publico ||
-    portal.empresa_nombre ||
-    "Negocio";
-
-  const logoNegocio =
-    identidadEmpresa?.logo_url || "";
-
-  const portadaNegocio =
-    identidadEmpresa?.portada_url ||
-    portal?.portada_url ||
-    portal?.imagen_portada_url ||
-    logoNegocio ||
-    "";
-
-  const descripcionNegocio =
-    identidadEmpresa?.descripcion_publica ||
-    portal?.descripcion_publica ||
-    portal?.descripcion ||
-    "";
-
-  const direccionNegocio =
-    perfilPublicoLocal?.direccion ||
-    identidadEmpresa?.direccion ||
-    portal?.direccion ||
-    "";
-
-
-  const googleMapsUrl = direccionNegocio
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-        direccionNegocio
-      )}`
-    : "";
-
-  const categoriaNegocio =
-    identidadEmpresa?.categoria_negocio ||
-    portal?.categoria_negocio ||
-    portal?.tipo_negocio ||
-    (perfilGimnasio ? "Gimnasio" : perfilBelleza ? "Belleza" : "Negocio");
-
-  const horarioPublico = (() => {
-    if (perfilPublicoLocal?.horario_configurado) {
-      if (perfilPublicoLocal?.cerrado_hoy) {
-        return "Cerrado hoy";
-      }
-
-      const apertura = formatearHoraLocalPublica(
-        perfilPublicoLocal?.hora_apertura
-      );
-      const cierre = formatearHoraLocalPublica(
-        perfilPublicoLocal?.hora_cierre
-      );
-
-      if (apertura && cierre) {
-        return `${
-          perfilPublicoLocal?.abierto_ahora
-            ? "Abierto ahora"
-            : "Horario de hoy"
-        } · ${apertura} – ${cierre}`;
-      }
-    }
-
-    return (
-      identidadEmpresa?.horario_hoy ||
-      portal?.horario_hoy ||
-      ""
-    );
-  })();
-
-  return (
-    <main className={`kp-page ${tema === "oscuro" ? "kp-dark" : ""}`}>
-      <style>{CSS}</style>
-
-      <div className="kp-shell">
-        <header className="kp-topbar">
           <button
             type="button"
-            className="kp-back"
-            onClick={() => {
-              if (tokenUrl) {
-                window.location.href = `/reservar/${slug}`;
-                return;
-              }
-
-              if (paso > 1 && paso < 5) {
-                setPaso((actual) => actual - 1);
-                setError("");
-                return;
-              }
-
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
+            onClick={() => cargarTodo()}
+            style={S.primaryButton}
           >
-            ‹
+            Intentar nuevamente
           </button>
 
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            className="kp-top-logo"
-          />
+          <button
+            type="button"
+            onClick={cerrarSesion}
+            style={S.secondaryButton}
+          >
+            Volver al acceso
+          </button>
+        </section>
+      </main>
+    );
+  }
 
-          <div className="kp-top-icons">
+  return (
+    <main style={S.page}>
+      <style jsx global>{`
+        * {
+          box-sizing: border-box;
+        }
+
+        body {
+          margin: 0;
+          background: #eef3ef;
+        }
+
+        button,
+        input {
+          font: inherit;
+        }
+
+        @media (max-width: 620px) {
+          .portal-shell {
+            width: 100% !important;
+            min-height: 100vh !important;
+            border-radius: 0 !important;
+            border-left: 0 !important;
+            border-right: 0 !important;
+          }
+
+          .portal-content {
+            padding-left: 15px !important;
+            padding-right: 15px !important;
+            padding-bottom: 28px !important;
+          }
+
+          .desktop-nav {
+            display: none !important;
+          }
+
+          .member-grid {
+            grid-template-columns: 58px minmax(0, 1fr) !important;
+          }
+
+          .member-status {
+            grid-column: 1 / -1 !important;
+            justify-self: start !important;
+          }
+
+          .membership-grid,
+          .config-grid {
+            grid-template-columns: 1fr 1fr !important;
+          }
+
+          .qr-layout {
+            grid-template-columns: 1fr !important;
+          }
+
+          .profile-settings-shell {
+            grid-template-columns: 1fr !important;
+          }
+
+          .profile-fields-grid {
+            grid-template-columns: 1fr !important;
+          }
+
+          .app-home-summary {
+            grid-template-columns: 1fr !important;
+          }
+
+          .whiteboard-filters {
+            grid-template-columns: 1fr !important;
+          }
+        }
+
+        @media (max-width: 390px) {
+          .membership-grid,
+          .config-grid,
+          .photo-actions {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
+
+      <section style={S.shell} className="portal-shell">
+        <header style={S.topbar}>
+          <div style={S.topUserRow}>
+            <div style={S.topUserBlock}>
+              <div style={S.topUserAvatar}>
+                {fotoFirmada ? (
+                  <img
+                    src={fotoFirmada}
+                    alt={cuenta?.nombre || "Alumno"}
+                    style={S.avatarImage}
+                  />
+                ) : (
+                  <span>{iniciales}</span>
+                )}
+              </div>
+
+              <div style={S.topUserText}>
+                <strong style={S.topUserName}>
+                  {cuenta?.nombre || "Alumno"}
+                </strong>
+                <span style={S.topUserState}>
+                  {estadoVisual}
+                </span>
+              </div>
+            </div>
+
             <button
               type="button"
-              className={tema === "oscuro" ? "active" : ""}
-              onClick={() => {
-                setTema("oscuro");
-                setMenuAbierto(false);
-              }}
-              aria-label="Modo oscuro"
-              title="Modo oscuro"
-            >
-              ☾
-            </button>
-
-            <button
-              type="button"
-              className={tema === "claro" ? "active" : ""}
-              onClick={() => {
-                setTema("claro");
-                setMenuAbierto(false);
-              }}
-              aria-label="Modo claro"
-              title="Modo claro"
-            >
-              ☀
-            </button>
-
-            <button
-              type="button"
-              className={menuAbierto ? "active" : ""}
-              onClick={() => setMenuAbierto((actual) => !actual)}
               aria-label="Abrir menú"
-              title="Menú"
+              onClick={() => setMenuAbierto(true)}
+              style={S.topMenuIconButton}
             >
               ☰
             </button>
           </div>
-
-          {menuAbierto && (
-            <div className="kp-menu">
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuAbierto(false);
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
-              >
-                ⌂ Inicio
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuAbierto(false);
-                  document
-                    .getElementById("flujo-reserva")
-                    ?.scrollIntoView({
-                      behavior: "smooth",
-                      block: "start",
-                    });
-                }}
-              >
-                {perfilGimnasio ? "▣ Reservar clase" : "▣ Reservar"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuAbierto(false);
-                  abrirMiCita();
-                }}
-              >
-                {perfilGimnasio ? "▤ Mi reserva" : "▤ Mi cita"}
-              </button>
-            </div>
-          )}
         </header>
 
-
-        {error && (
-          <div className="kp-error">
-            {error}
-          </div>
-        )}
-
-        {tokenUrl && miCita ? (
-          <section className="kp-manage">
-            <span className="kp-eyebrow-dark">
-              {perfilGimnasio ? "GESTIONAR MI RESERVA" : "GESTIONAR MI CITA"}
-            </span>
-
-            <h2>{miCita.servicio}</h2>
-
-            <div className="kp-data-grid">
-              <Dato label="Cliente" value={miCita.cliente} />
-              <Dato label="Fecha" value={formatoFecha(miCita.fecha)} />
-              <Dato
-                label="Horario"
-                value={`${formatoHora(
-                  miCita.hora_inicio
-                )} – ${formatoHora(miCita.hora_fin)}`}
-              />
-              <Dato
-                label={perfilBelleza ? "Profesional" : "Instructor"}
-                value={miCita.profesional || "Por confirmar"}
-              />
-              <Dato
-                label="Estado"
-                value={String(miCita.estado || "")
-                  .replaceAll("_", " ")
-                  .toUpperCase()}
-              />
-            </div>
-
-            {miCita.estado === "cancelada" ? (
-              <div className="kp-cancelled">
-                {perfilGimnasio
-                  ? "Esta reserva está cancelada. El cupo quedó disponible nuevamente."
-                  : "Esta cita está cancelada. El horario quedó disponible nuevamente."}
-              </div>
-            ) : miCita.puede_cancelar ? (
-              <div className="kp-cancel-box">
-                <label>
-                  <span>Teléfono de la cita</span>
-                  <input
-                    value={telefonoGestion}
-                    onChange={(e) =>
-                      setTelefonoGestion(e.target.value)
-                    }
-                    placeholder="Ej. 6000-0000"
-                  />
-                </label>
-
-                <label>
-                  <span>Motivo de cancelación (opcional)</span>
-                  <input
-                    value={motivoCancelacion}
-                    onChange={(e) =>
-                      setMotivoCancelacion(e.target.value)
-                    }
-                    placeholder="Ej. No podré llegar"
-                  />
-                </label>
-
-                <button
-                  type="button"
-                  className="kp-danger"
-                  onClick={cancelarMiCita}
-                  disabled={cancelando}
-                >
-                  {cancelando ? "Cancelando..." : "Cancelar mi cita"}
-                </button>
-              </div>
-            ) : (
-              <div className="kp-info">
-                {perfilGimnasio
-                  ? "Esta reserva ya no puede cancelarse desde autoservicio."
-                  : "Esta cita ya no puede cancelarse desde autoservicio."}
-              </div>
-            )}
-
-            {estadoResena?.ya_reseno ? (
-              <section className="kp-review-done">
-                <div className="kp-review-done-icon">★</div>
-                <div>
-                  <strong>Gracias por tu reseña</strong>
-                  <p>
-                    Esta cita ya fue calificada y tu opinión forma parte
-                    de las reseñas verificadas de KONAX.
-                  </p>
-                </div>
-              </section>
-            ) : estadoResena?.puede_resenar ? (
-              <section className="kp-review-form-box">
-                <span className="kp-section-kicker kp-section-kicker-black">
-                  CITA COMPLETADA
-                </span>
-
-                <h3>Califica tu experiencia</h3>
-
-                <p className="kp-review-help">
-                  Tu reseña está vinculada a una cita real marcada como
-                  ASISTIÓ.
-                </p>
-
-                <EstrellasSelector
-                  label={`¿Cómo estuvo tu experiencia con ${nombreNegocio}?`}
-                  valor={calificacionNegocio}
-                  onChange={setCalificacionNegocio}
-                />
-
-                {estadoResena?.profesional_id && (
-                  <EstrellasSelector
-                    label={`¿Cómo te atendió ${
-                      estadoResena?.profesional_nombre || "el profesional"
-                    }?`}
-                    valor={calificacionProfesional}
-                    onChange={setCalificacionProfesional}
-                  />
-                )}
-
-                <label className="kp-review-comment">
-                  <span>Cuéntanos tu experiencia (opcional)</span>
-                  <textarea
-                    value={comentarioResena}
-                    onChange={(e) =>
-                      setComentarioResena(e.target.value)
-                    }
-                    placeholder="Ej. Excelente atención, puntualidad y resultado."
-                    maxLength={700}
-                  />
-                </label>
-
-                <button
-                  type="button"
-                  className="kp-review-submit"
-                  onClick={enviarResena}
-                  disabled={enviandoResena}
-                >
-                  {enviandoResena
-                    ? "ENVIANDO..."
-                    : "ENVIAR RESEÑA"}
-                </button>
-              </section>
-            ) : resenaEnviada ? (
-              <section className="kp-review-done">
-                <div className="kp-review-done-icon">★</div>
-                <div>
-                  <strong>Reseña enviada</strong>
-                  <p>Gracias por compartir tu experiencia.</p>
-                </div>
-              </section>
-            ) : null}
-
+        {menuAbierto && (
+          <>
             <button
               type="button"
-              className="kp-secondary"
-              onClick={reservarOtraCita}
-            >
-              {perfilGimnasio ? "+ Reservar otra clase" : "+ Reservar otra cita"}
-            </button>
+              aria-label="Cerrar menú"
+              onClick={() => setMenuAbierto(false)}
+              style={S.menuOverlay}
+            />
 
-            <button
-              type="button"
-              className="kp-link"
-              onClick={() =>
-                (window.location.href = `/reservar/${slug}`)
-              }
-            >
-              Volver al portal
-            </button>
-          </section>
-        ) : (
-          <section
-            id="flujo-reserva"
-            className="kp-flow"
-          >
-            {paso === 1 ? (
-              <div className="kp-public-profile">
-                <section
-                  className={`kp-cover ${portadaNegocio ? "has-image" : ""}`}
-                >
-                  {portadaNegocio ? (
+            <aside style={S.drawer}>
+              <div style={S.drawerBusiness}>
+                <div style={S.drawerBusinessLogo}>
+                  {empresaLogoUrl ? (
                     <img
-                      src={portadaNegocio}
-                      alt={`Portada de ${nombreNegocio}`}
-                      className="kp-cover-image"
+                      src={empresaLogoUrl}
+                      alt={`Logo de ${empresaNombre}`}
+                      style={S.brandLogo}
                     />
                   ) : (
-                    <div className="kp-cover-fallback">
-                      <span>K</span>
-                    </div>
-                  )}
-
-                  <div className="kp-cover-overlay" />
-
-                  <div className="kp-cover-ui">
-                    <div className="kp-cover-top">
-                      <span className="kp-powered">Reservas con KONAX</span>
-
-                      <button
-                        type="button"
-                        className="kp-share"
-                        onClick={async () => {
-                          const url = window.location.href;
-
-                          if (navigator.share) {
-                            try {
-                              await navigator.share({
-                                title: nombreNegocio,
-                                text: `Reserva en ${nombreNegocio}`,
-                                url,
-                              });
-                            } catch {}
-                            return;
-                          }
-
-                          try {
-                            await navigator.clipboard.writeText(url);
-                            alert("Enlace copiado.");
-                          } catch {}
-                        }}
-                        aria-label="Compartir"
-                      >
-                        ↗
-                      </button>
-                    </div>
-
-                    <div className="kp-cover-content">
-                      <span className="kp-category-badge">
-                        {categoriaNegocio}
-                      </span>
-
-                      <h1>{nombreNegocio}</h1>
-
-                      {direccionNegocio && (
-                        <a
-                          className="kp-profile-meta kp-map-link"
-                          href={googleMapsUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          aria-label={`Cómo llegar a ${nombreNegocio} en Google Maps`}
-                        >
-                          <span className="kp-meta-icon">⌖</span>
-
-                          <span className="kp-map-copy">
-                            <span>{direccionNegocio}</span>
-                            <strong>Cómo llegar ↗</strong>
-                          </span>
-                        </a>
-                      )}
-
-                      {horarioPublico && (
-                        <div className="kp-profile-meta">
-                          <span className="kp-meta-icon">◷</span>
-                          <span>{horarioPublico}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </section>
-
-                <nav className="kp-profile-tabs">
-                  {[
-                    ["servicios", perfilGimnasio ? "Clases" : "Servicios"],
-                    ["equipo", perfilGimnasio ? "Instructores" : "Equipo"],
-                    ["resenas", "Reseñas"],
-                  ].map(([codigo, label]) => (
-                    <button
-                      key={codigo}
-                      type="button"
-                      className={tabPortal === codigo ? "active" : ""}
-                      onClick={() => setTabPortal(codigo)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </nav>
-
-                {tabPortal === "servicios" && (
-                  <div className="kp-profile-section">
-                    {descripcionNegocio && (
-                      <section className="kp-about">
-                        <span className="kp-section-kicker">SOBRE NOSOTROS</span>
-                        <h2>Conoce {nombreNegocio}</h2>
-                        <p>{descripcionNegocio}</p>
-                      </section>
-                    )}
-
-                    {perfilGimnasio && (
-                      <section className="kp-gym-dates-section">
-                        <div className="kp-gym-dates-heading">
-                          <div>
-                            <span className="kp-section-kicker kp-section-kicker-black">
-                              PRÓXIMAS CLASES
-                            </span>
-                            <h2>Elige una fecha</h2>
-                          </div>
-
-                          {buscandoFechas && (
-                            <span className="kp-gym-dates-loading">
-                              Buscando fechas...
-                            </span>
-                          )}
-                        </div>
-
-                        {fechasConDisponibilidad.length > 0 ? (
-                          <div className="kp-gym-dates-strip-wrap">
-                            <div className="kp-gym-dates-strip">
-                              {fechasConDisponibilidad.map((dia) => {
-                                const activo = dia === fecha;
-                                const d = new Date(`${dia}T12:00:00`);
-
-                                return (
-                                  <button
-                                    key={`gym-home-${dia}`}
-                                    type="button"
-                                    className={`kp-gym-date-pill ${
-                                      activo ? "active" : ""
-                                    }`}
-                                    onClick={() => elegirFecha(dia)}
-                                  >
-                                    <span>
-                                      {new Intl.DateTimeFormat("es-PA", {
-                                        weekday: "short",
-                                      }).format(d)}
-                                    </span>
-
-                                    <strong>{d.getDate()}</strong>
-
-                                    <small>
-                                      {new Intl.DateTimeFormat("es-PA", {
-                                        month: "short",
-                                      }).format(d)}
-                                    </small>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ) : !buscandoFechas ? (
-                          <div className="kp-gym-no-dates">
-                            No hay próximas clases configuradas.
-                          </div>
-                        ) : null}
-
-                        {fechasConDisponibilidad.length > 0 && (
-                          <div className="kp-gym-selected-date">
-                            Mostrando clases para{" "}
-                            <strong>{formatoFecha(fecha)}</strong>
-                          </div>
-                        )}
-                      </section>
-                    )}
-
-                    {cargandoServicios || cargandoHorarios ? (
-                      <div className="kp-empty">
-                        {perfilGimnasio
-                          ? "Consultando clases..."
-                          : "Consultando servicios..."}
-                      </div>
-                    ) : servicios.length === 0 ? (
-                      <div className="kp-empty">
-                        <strong>
-                          {perfilGimnasio
-                            ? "No hay clases disponibles para esta fecha."
-                            : "No hay servicios activos disponibles."}
-                        </strong>
-                      </div>
-                    ) : (
-                      <>
-                        <section className="kp-popular-section">
-                          <div className="kp-popular-heading">
-                            <div>
-                              <span className="kp-section-kicker kp-section-kicker-black">SERVICIOS DESTACADOS</span>
-                              <h2>Más reservados</h2>
-                            </div>
-
-                            <button
-                              type="button"
-                              className="kp-view-all"
-                              onClick={() =>
-                                document
-                                  .getElementById("todos-los-servicios")
-                                  ?.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "start",
-                                  })
-                              }
-                            >
-                              Ver todos <span>→</span>
-                            </button>
-                          </div>
-
-                          <div className="kp-popular-list">
-                            {serviciosMasPedidos.map((servicio, index) => (
-                              <article
-                                key={`popular-${servicio.id}`}
-                                className={`kp-popular-card ${
-                                  index === 0 ? "first" : ""
-                                }`}
-                              >
-                                <div className="kp-rank-badge">
-                                  N.º {index + 1} EN RESERVAS
-                                </div>
-
-                                <div className="kp-popular-media">
-                                  {servicio.imagenUrl ? (
-                                    <img
-                                      src={servicio.imagenUrl}
-                                      alt={servicio.nombre}
-                                    />
-                                  ) : (
-                                    <div className="kp-popular-placeholder">
-                                      {perfilGimnasio ? "◉" : "✦"}
-                                    </div>
-                                  )}
-
-                                  <div className="kp-executed-chip">
-                                    <span>✓</span>
-                                    <strong>
-                                      {formatoEntero(servicio.citasEjecutadas)}
-                                    </strong>
-                                    <small>citas ejecutadas</small>
-                                  </div>
-                                </div>
-
-                                <div className="kp-popular-info">
-                                  <strong className="kp-popular-name">
-                                    {servicio.nombre}
-                                  </strong>
-
-                                  <span className="kp-popular-meta">
-                                    {servicio.duracion} min
-                                  </span>
-
-                                  {servicio.requierePago && (
-                                    <div className="kp-popular-price">
-                                      <small>Precio desde</small>
-                                      <strong>
-                                        {dinero(servicio.precio)}
-                                      </strong>
-                                    </div>
-                                  )}
-
-                                  <button
-                                    type="button"
-                                    onClick={() => elegirServicio(servicio)}
-                                  >
-                                    RESERVAR
-                                  </button>
-                                </div>
-                              </article>
-                            ))}
-                          </div>
-                        </section>
-
-                        <section
-                          id="todos-los-servicios"
-                          className="kp-all-services"
-                        >
-                          <div className="kp-all-services-title">
-                            <div>
-                              <span className="kp-section-kicker">
-                                CATÁLOGO COMPLETO
-                              </span>
-                              <h2>
-                                {perfilGimnasio
-                                  ? "Todas las clases"
-                                  : "Todos los servicios"}
-                              </h2>
-                            </div>
-
-                            <span className="kp-service-total">
-                              {servicios.length}
-                            </span>
-                          </div>
-
-                          <div className="kp-service-list kp-public-services">
-                            {servicios.map((servicio) => (
-                              <article
-                                key={servicio.id}
-                                className="kp-service kp-public-service"
-                              >
-                                {servicio.imagenUrl ? (
-                                  <div className="kp-service-image">
-                                    <img
-                                      src={servicio.imagenUrl}
-                                      alt={servicio.nombre}
-                                    />
-                                  </div>
-                                ) : (
-                                  <div className="kp-service-icon">
-                                    {perfilGimnasio ? "●" : "✦"}
-                                  </div>
-                                )}
-
-                                <div className="kp-service-info">
-                                  <strong>{servicio.nombre}</strong>
-
-                                  <span>
-                                    {servicio.duracion} min
-                                    {servicio.citasEjecutadas > 0
-                                      ? ` · ${formatoEntero(
-                                          servicio.citasEjecutadas
-                                        )} citas ejecutadas`
-                                      : ""}
-                                  </span>
-
-                                  {servicio.descripcion && (
-                                    <small>{servicio.descripcion}</small>
-                                  )}
-
-                                  {servicio.requierePago && (
-                                    <b>{dinero(servicio.precio)}</b>
-                                  )}
-                                </div>
-
-                                <button
-                                  type="button"
-                                  onClick={() => elegirServicio(servicio)}
-                                >
-                                  RESERVAR
-                                </button>
-                              </article>
-                            ))}
-                          </div>
-                        </section>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {tabPortal === "equipo" && (
-                  <div className="kp-profile-section">
-                    <span className="kp-section-kicker">
-                      {perfilGimnasio ? "INSTRUCTORES" : "NUESTRO EQUIPO"}
-                    </span>
-                    <h2>
-                      {perfilGimnasio
-                        ? "Conoce a quienes te acompañan"
-                        : "Profesionales del negocio"}
-                    </h2>
-                    <p className="kp-muted">
-                      Elige un servicio al reservar y podrás seleccionar
-                      quién deseas que te atienda.
-                    </p>
-
-                    {cargandoEquipoPortal ? (
-                      <div className="kp-empty">Consultando equipo...</div>
-                    ) : equipoPortal.length === 0 ? (
-                      <div className="kp-empty">
-                        El negocio todavía no tiene perfiles públicos disponibles.
-                      </div>
-                    ) : (
-                      <div className="kp-team-grid">
-                        {equipoPortal.map((prof) => (
-                          <article key={prof.id} className="kp-team-card">
-                            <div className="kp-team-photo">
-                              {prof.fotoUrl ? (
-                                <img src={prof.fotoUrl} alt={prof.nombre} />
-                              ) : (
-                                <span>{inicialNombre(prof.nombre)}</span>
-                              )}
-                            </div>
-
-                            <div>
-                              <strong>{prof.nombre}</strong>
-                              <span>{prof.especialidad}</span>
-                            </div>
-                          </article>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {tabPortal === "resenas" && (
-                  <div className="kp-profile-section">
-                    <span className="kp-section-kicker kp-section-kicker-black">
-                      RESEÑAS VERIFICADAS
-                    </span>
-                    <h2>Opiniones de clientes</h2>
-
-                    {cargandoResenas ? (
-                      <div className="kp-empty">
-                        Consultando reseñas...
-                      </div>
-                    ) : Number(resenasPublicas?.total_resenas || 0) === 0 ? (
-                      <div className="kp-reviews-empty">
-                        <div className="kp-reviews-icon">★</div>
-                        <strong>Aún no hay reseñas verificadas</strong>
-                        <p>
-                          Las opiniones aparecerán cuando clientes con una
-                          cita completada califiquen su experiencia.
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        <section className="kp-review-summary">
-                          <div className="kp-review-score">
-                            <strong>
-                              {Number(
-                                resenasPublicas?.promedio || 0
-                              ).toFixed(1)}
-                            </strong>
-                            <div className="kp-review-score-stars">
-                              ★★★★★
-                            </div>
-                            <span>
-                              {formatoEntero(
-                                resenasPublicas?.total_resenas || 0
-                              )}{" "}
-                              {Number(
-                                resenasPublicas?.total_resenas || 0
-                              ) === 1
-                                ? "reseña verificada"
-                                : "reseñas verificadas"}
-                            </span>
-                          </div>
-
-                          <div className="kp-review-bars">
-                            {[5, 4, 3, 2, 1].map((estrella) => {
-                              const total = Number(
-                                resenasPublicas?.total_resenas || 0
-                              );
-
-                              const cantidad = Number(
-                                resenasPublicas?.[
-                                  `estrellas_${estrella}`
-                                ] || 0
-                              );
-
-                              const porcentaje =
-                                total > 0
-                                  ? Math.round(
-                                      (cantidad / total) * 100
-                                    )
-                                  : 0;
-
-                              return (
-                                <div
-                                  key={estrella}
-                                  className="kp-review-bar-row"
-                                >
-                                  <span>{estrella} ★</span>
-
-                                  <div className="kp-review-bar-track">
-                                    <i
-                                      style={{
-                                        width: `${porcentaje}%`,
-                                      }}
-                                    />
-                                  </div>
-
-                                  <b>{cantidad}</b>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </section>
-
-                        <div className="kp-review-list">
-                          {(resenasPublicas?.resenas || []).map(
-                            (resena) => (
-                              <article
-                                key={resena.id}
-                                className="kp-review-card"
-                              >
-                                <div className="kp-review-card-top">
-                                  <span className="kp-review-card-stars">
-                                    {"★".repeat(
-                                      Number(
-                                        resena.calificacion || 0
-                                      )
-                                    )}
-                                    <i>
-                                      {"★".repeat(
-                                        Math.max(
-                                          0,
-                                          5 -
-                                            Number(
-                                              resena.calificacion || 0
-                                            )
-                                        )
-                                      )}
-                                    </i>
-                                  </span>
-
-                                  <small>
-                                    {formatoFechaResena(
-                                      resena.fecha
-                                    )}
-                                  </small>
-                                </div>
-
-                                {resena.comentario && (
-                                  <p>{resena.comentario}</p>
-                                )}
-
-                                {resena.servicio && (
-                                  <span className="kp-review-service">
-                                    Servicio: {resena.servicio}
-                                  </span>
-                                )}
-
-                                <span className="kp-review-verified">
-                                  ✓ Cita verificada por KONAX
-                                </span>
-                              </article>
-                            )
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <>
-                <div className="kp-business-window kp-booking-mini-business">
-                  <div className="kp-business-logo-box">
-                    {logoNegocio ? (
-                      <img
-                        src={logoNegocio}
-                        alt={nombreNegocio}
-                        className="kp-business-logo"
-                      />
-                    ) : (
-                      <span className="kp-business-placeholder">
-                        {inicialNombre(nombreNegocio)}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="kp-business-window-info">
-                    <strong>{nombreNegocio}</strong>
                     <span>
-                      {servicioSeleccionado?.nombre ||
-                        (perfilGimnasio ? "Reserva de clase" : "Reserva de cita")}
-                    </span>
-                  </div>
-                </div>
-
-                <Stepper paso={paso} gimnasio={perfilGimnasio} />
-              </>
-            )}
-
-            {paso === 2 && servicioSeleccionado && (
-              <div>
-                <button
-                  type="button"
-                  className="kp-blue-link"
-                  onClick={() => setPaso(1)}
-                >
-                  {perfilGimnasio ? "‹ Cambiar clase" : "‹ Cambiar servicio"}
-                </button>
-
-                <span className="kp-eyebrow-dark">
-                  PASO 2 DE 4
-                </span>
-
-                <h2>{perfilGimnasio ? "Seleccionar instructor" : "Seleccionar profesional"}</h2>
-
-                <ServicioResumen servicio={servicioSeleccionado} />
-
-                <div className="kp-prof-list">
-                  <button
-                    type="button"
-                    className="kp-prof"
-                    onClick={() =>
-                      elegirProfesional("sin-preferencia")
-                    }
-                  >
-                    <span className="kp-avatar">↝</span>
-
-                    <span className="kp-prof-info">
-                      <strong>
-                        {perfilGimnasio
-                          ? "Cualquier instructor"
-                          : "Cualquier profesional"}
-                      </strong>
-                      <small>
-                        {perfilGimnasio
-                          ? "KONAX te muestra la mejor disponibilidad"
-                          : "KONAX asigna una opción disponible"}
-                      </small>
-                    </span>
-
-                    <span className="kp-select">
-                      Seleccionar
-                    </span>
-                  </button>
-
-                  {cargandoProfesionales ? (
-                    <div className="kp-prof-loading">
-                      Consultando profesionales...
-                    </div>
-                  ) : (
-                    profesionales.map((profesional) => (
-                      <article
-                        key={
-                          profesional.profesionalId ||
-                          profesional.id
-                        }
-                        className="kp-prof kp-prof-card"
-                      >
-                        <span className="kp-avatar">
-                          {profesional.fotoUrl ? (
-                            <img
-                              src={profesional.fotoUrl}
-                              alt={profesional.nombre}
-                              className="kp-avatar-img"
-                            />
-                          ) : (
-                            inicialNombre(
-                              profesional.nombre
-                            )
-                          )}
-                        </span>
-
-                        <span className="kp-prof-info">
-                          <strong>
-                            {profesional.nombre}
-                          </strong>
-
-                          <small>
-                            {profesional.especialidad ||
-                              (perfilBelleza
-                                ? "Profesional"
-                                : "Instructor")}
-                          </small>
-
-                          {profesional.totalResenas > 0 && (
-                            <span className="kp-prof-rating">
-                              ★{" "}
-                              {profesional.promedioCalificacion.toFixed(
-                                1
-                              )}
-                              <small>
-                                {" "}
-                                ({formatoEntero(
-                                  profesional.totalResenas
-                                )})
-                              </small>
-                            </span>
-                          )}
-
-                          {perfilBelleza &&
-                            profesional.profesionalId && (
-                              <button
-                                type="button"
-                                className="kp-prof-profile-link"
-                                onClick={() =>
-                                  abrirPerfilProfesional(
-                                    profesional
-                                  )
-                                }
-                              >
-                                Ver perfil
-                              </button>
-                            )}
-                        </span>
-
-                        <button
-                          type="button"
-                          className="kp-select"
-                          onClick={() =>
-                            elegirProfesional(
-                              profesional.id
-                            )
-                          }
-                        >
-                          Seleccionar
-                        </button>
-                      </article>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-
-            {paso === 3 && servicioSeleccionado && (
-              <div>
-                <button
-                  type="button"
-                  className="kp-blue-link"
-                  onClick={() => setPaso(2)}
-                >
-                  {perfilGimnasio ? "‹ Cambiar instructor" : "‹ Cambiar profesional"}
-                </button>
-
-                <span className="kp-eyebrow-dark">
-                  PASO 3 DE 4
-                </span>
-
-                <h2>Seleccionar fecha y hora</h2>
-
-                <div className="kp-booking-head">
-                  <div className="kp-booking-business">
-                    <div className="kp-mini-avatar">
-                      {profesionalSeleccionado === "sin-preferencia"
-                        ? "↝"
-                        : inicialNombre(profesionalResumen)}
-                    </div>
-
-                    <div>
-                      <strong>{profesionalResumen}</strong>
-                      <small>
-                        {servicioSeleccionado.nombre} ·{" "}
-                        {servicioSeleccionado.duracion} min
-                        {servicioSeleccionado.requierePago
-                          ? ` · ${dinero(servicioSeleccionado.precio)}`
-                          : ""}
-                      </small>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="kp-date-strip-wrap">
-                  <div className="kp-date-strip">
-                    {dias.map((dia) => {
-                      const activo = dia === fecha;
-                      const d = new Date(`${dia}T12:00:00`);
-
-                      return (
-                        <button
-                          key={dia}
-                          type="button"
-                          className={`kp-date-pill ${
-                            activo ? "active" : ""
-                          } ${
-                            fechasConDisponibilidad.includes(dia)
-                              ? "available"
-                              : ""
-                          }`}
-                          onClick={() => elegirFecha(dia)}
-                        >
-                          <span>
-                            {new Intl.DateTimeFormat("es-PA", {
-                              weekday: "short",
-                            }).format(d)}
-                          </span>
-
-                          <strong>{d.getDate()}</strong>
-
-                          <span>
-                            {new Intl.DateTimeFormat("es-PA", {
-                              month: "short",
-                            }).format(d)}
-                          </span>
-
-                          <i
-                            className="kp-date-dot"
-                            aria-hidden="true"
-                          />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="kp-time-heading">
-                  <div>
-                    <span className="kp-section-kicker">HORARIOS DISPONIBLES</span>
-                    <h3 className="kp-time-title">Elige la hora que prefieras</h3>
-                  </div>
-
-                  <span className="kp-date-caption">
-                    {fechaCorta(fecha)}
-                  </span>
-                </div>
-
-                {cargandoHorarios ? (
-                  <div className="kp-empty">
-                    Consultando horarios...
-                  </div>
-                ) : slotsDisponibles.length === 0 ? (
-                  <div className="kp-empty">
-                    {profesionalSeleccionado ===
-                    "sin-preferencia"
-                      ? "No hay horas disponibles para esta fecha."
-                      : "Este profesional no tiene horas disponibles para esta fecha. Puedes elegir otra fecha o volver y seleccionar otro profesional."}
-                  </div>
-                ) : (
-                  <>
-                    <div className="kp-period-tabs">
-                      {[
-                        ["manana", "Mañana"],
-                        ["tarde", "Tarde"],
-                        ["noche", "Noche"],
-                      ].map(([codigo, label]) => {
-                        const cantidad =
-                          slotsPorFranja[codigo]?.length || 0;
-
-                        return (
-                          <button
-                            key={codigo}
-                            type="button"
-                            className={
-                              franjaHorario === codigo
-                                ? "active"
-                                : ""
-                            }
-                            onClick={() => {
-                              setFranjaHorario(codigo);
-                              setHorarioSeleccionado(null);
-                            }}
-                          >
-                            <span>{label}</span>
-                            <b>{cantidad}</b>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {slotsFranjaVisible.length === 0 ? (
-                      <div className="kp-period-empty">
-                        No hay horarios disponibles en esta franja.
-                      </div>
-                    ) : (
-                      <>
-                        <div className="kp-slot-count">
-                          <strong>
-                            {slotsFranjaVisible.length}{" "}
-                            {slotsFranjaVisible.length === 1
-                              ? "horario disponible"
-                              : "horarios disponibles"}
-                          </strong>
-                          <span>
-                            Duración {servicioSeleccionado.duracion} min
-                          </span>
-                        </div>
-
-                        <div className="kp-time-cards">
-                          {slotsFranjaVisible.map((slot) => {
-                            const activo =
-                              claveSlot(horarioSeleccionado) ===
-                              claveSlot(slot);
-
-                            return (
-                              <button
-                                key={claveSlot(slot)}
-                                type="button"
-                                className={`kp-time-card ${
-                                  activo ? "active" : ""
-                                }`}
-                                onClick={() =>
-                                  setHorarioSeleccionado(slot)
-                                }
-                              >
-                                {formatoHora(slot.hora_inicio)}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </>
-                    )}
-                  </>
-                )}
-
-                {horarioSeleccionado && (
-                  <div className="kp-continue-fixed">
-                    <div className="kp-continue-summary">
-                      <span>RESUMEN</span>
-                      <strong>
-                        {servicioSeleccionado.requierePago
-                          ? dinero(servicioSeleccionado.precio)
-                          : `${servicioSeleccionado.duracion} min`}
-                      </strong>
-                      <small>
-                        {formatoHora(horarioSeleccionado.hora_inicio)}
-                        {" · "}
-                        {profesionalResumen}
-                      </small>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="kp-continue-action"
-                      onClick={continuarFechaHora}
-                    >
-                      Siguiente <b>›</b>
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {paso === 4 &&
-              servicioSeleccionado &&
-              horarioSeleccionado && (
-                <div>
-                  <button
-                    type="button"
-                    className="kp-blue-link"
-                    onClick={() => setPaso(3)}
-                  >
-                    ‹ Cambiar fecha u hora
-                  </button>
-
-                  <span className="kp-eyebrow-dark">
-                    PASO 4 DE 4
-                  </span>
-
-                  <h2>Completa tu reserva</h2>
-
-                  <div className="kp-summary">
-                    <ResumenFila
-                      label="Negocio"
-                      value={nombreNegocio}
-                    />
-                    <ResumenFila
-                      label={perfilGimnasio ? "Clase" : "Servicio"}
-                      value={servicioSeleccionado.nombre}
-                    />
-                    <ResumenFila
-                      label={perfilGimnasio ? "Instructor" : "Profesional"}
-                      value={profesionalResumen}
-                    />
-                    <ResumenFila
-                      label="Duración"
-                      value={`${servicioSeleccionado.duracion} min`}
-                    />
-                    <ResumenFila
-                      label="Fecha"
-                      value={formatoFecha(fecha)}
-                    />
-                    <ResumenFila
-                      label="Hora"
-                      value={formatoHora(
-                        horarioSeleccionado.hora_inicio
-                      )}
-                    />
-
-                    {servicioSeleccionado.requierePago && (
-                      <ResumenFila
-                        label="Precio"
-                        value={dinero(servicioSeleccionado.precio)}
-                        destacado
-                      />
-                    )}
-                  </div>
-
-                  <div className="kp-note">
-                    Revisa los detalles y completa tus datos para confirmar.
-                  </div>
-
-                  <form
-                    className="kp-form"
-                    onSubmit={confirmarReserva}
-                  >
-                    <label>
-                      <span>Nombre completo</span>
-                      <input
-                        value={nombre}
-                        onChange={(e) =>
-                          setNombre(e.target.value)
-                        }
-                        placeholder="Nombre del cliente"
-                      />
-                    </label>
-
-                    <label>
-                      <span>WhatsApp / teléfono</span>
-                      <input
-                        value={telefono}
-                        onChange={(e) =>
-                          setTelefono(e.target.value)
-                        }
-                        placeholder="+507 6000-0000"
-                      />
-                    </label>
-
-                    <label>
-                      <span>Observaciones (opcional)</span>
-                      <textarea
-                        value={observaciones}
-                        onChange={(e) =>
-                          setObservaciones(e.target.value)
-                        }
-                        placeholder="Alguna indicación para el negocio"
-                      />
-                    </label>
-
-                    <button
-                      className="kp-confirm"
-                      disabled={guardando}
-                    >
-                      {guardando
-                        ? "Reservando..."
-                        : "Confirmar reserva"}
-                    </button>
-                  </form>
-                </div>
-              )}
-
-            {paso === 5 && reservaConfirmada && (
-              <div
-                id="confirmacion-cita"
-                className="kp-success"
-              >
-                <div className="kp-check">✓</div>
-
-                <span className="kp-eyebrow-dark">
-                  RESERVA CONFIRMADA
-                </span>
-
-                <h2>{perfilGimnasio ? "Tu clase quedó reservada" : "Tu cita quedó registrada"}</h2>
-
-                <p>
-                  {reservaConfirmada.servicio}
-                  <br />
-                  {formatoFecha(reservaConfirmada.fecha)}
-                  <br />
-                  {formatoHora(
-                    reservaConfirmada.hora_inicio
-                  )}{" "}
-                  –{" "}
-                  {formatoHora(
-                    reservaConfirmada.hora_fin
-                  )}
-                </p>
-
-                {perfilGimnasio && (
-                  <div className="kp-wod-wrap">
-                    {cargandoWod ? (
-                      <div className="kp-info">Consultando WOD...</div>
-                    ) : wodPublico?.ok ? (
-                      <WodPublico wod={wodPublico} />
-                    ) : (
-                      <div className="kp-wod-locked">
-                        <strong>WOD</strong>
-                        <span>
-                          El entrenamiento todavía no está publicado.
-                          Aparecerá aquí cuando el coach lo habilite.
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {reservaConfirmada.requiere_pago && (
-                  <div className="kp-info">
-                    Pago en el local:{" "}
-                    {dinero(reservaConfirmada.monto)}
-                  </div>
-                )}
-
-                {tokenGestion && (
-                  <button
-                    type="button"
-                    className="kp-confirm"
-                    onClick={() =>
-                      (window.location.href =
-                        `/reservar/${slug}?cita=${tokenGestion}`)
-                    }
-                  >
-                    Ver mi cita
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  className="kp-secondary"
-                  onClick={reiniciarFlujo}
-                >
-                  + Reservar otra cita
-                </button>
-
-                <button
-                  type="button"
-                  className="kp-link"
-                  onClick={() =>
-                    (window.location.href = `/reservar/${slug}`)
-                  }
-                >
-                  Volver al portal
-                </button>
-              </div>
-            )}
-          </section>
-        )}
-
-        {!(paso === 3 && horarioSeleccionado) && (
-        <nav className="kp-bottom-nav">
-          <button
-            type="button"
-            onClick={() =>
-              window.scrollTo({ top: 0, behavior: "smooth" })
-            }
-          >
-            <span>⌂</span>
-            <small>Inicio</small>
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              document
-                .getElementById("flujo-reserva")
-                ?.scrollIntoView({
-                  behavior: "smooth",
-                  block: "start",
-                })
-            }
-          >
-            <span>▣</span>
-            <small>{perfilGimnasio ? "Clases" : "Reservar"}</small>
-          </button>
-
-          <button
-            type="button"
-            onClick={abrirMiCita}
-          >
-            <span>▤</span>
-            <small>{perfilGimnasio ? "Mi reserva" : "Mi cita"}</small>
-          </button>
-        </nav>
-        )}
-
-        {mostrarAvisoMiCita && (
-          <div
-            className="kp-modal-overlay"
-            onClick={() => setMostrarAvisoMiCita(false)}
-          >
-            <div
-              className="kp-modal"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="kp-modal-icon">▤</div>
-
-              <span className="kp-eyebrow-dark">
-                {perfilGimnasio ? "MI RESERVA" : "MI CITA"}
-              </span>
-
-              <h3>
-                {perfilGimnasio
-                  ? "Aún no tienes una reserva guardada"
-                  : "Aún no tienes una cita guardada"}
-              </h3>
-
-              <p>
-                Cuando completes una reserva en este teléfono,
-                KONAX guardará el acceso para que puedas volver
-                directamente desde{" "}
-                {perfilGimnasio ? "“Mi reserva”." : "“Mi cita”."}
-              </p>
-
-              <button
-                type="button"
-                className="kp-confirm"
-                onClick={() => {
-                  setMostrarAvisoMiCita(false);
-                  document
-                    .getElementById("flujo-reserva")
-                    ?.scrollIntoView({
-                      behavior: "smooth",
-                      block: "start",
-                    });
-                }}
-              >
-                Reservar ahora
-              </button>
-
-              <button
-                type="button"
-                className="kp-link"
-                onClick={() => setMostrarAvisoMiCita(false)}
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        )}
-
-        {perfilProfesionalAbierto && (
-          <div
-            className="kp-pro-profile-overlay"
-            onClick={cerrarPerfilProfesional}
-          >
-            <section
-              className="kp-pro-profile-modal"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="kp-pro-profile-topbar">
-                <span>Perfil profesional</span>
-
-                <button
-                  type="button"
-                  onClick={cerrarPerfilProfesional}
-                  aria-label="Cerrar perfil"
-                >
-                  ×
-                </button>
-              </div>
-
-              {cargandoPerfilProfesional &&
-              !perfilProfesionalDetalle ? (
-                <div className="kp-pro-profile-loading">
-                  Consultando perfil...
-                </div>
-              ) : perfilProfesionalDetalle?.ok ? (
-                <>
-                  <section className="kp-pro-profile-hero">
-                    <div className="kp-pro-profile-photo">
-                      {perfilProfesionalDetalle?.foto_url ? (
-                        <img
-                          src={perfilProfesionalDetalle.foto_url}
-                          alt={
-                            perfilProfesionalDetalle?.nombre ||
-                            perfilProfesionalAbierto?.nombre ||
-                            "Profesional"
-                          }
-                        />
-                      ) : (
-                        <span>
-                          {inicialNombre(
-                            perfilProfesionalDetalle?.nombre ||
-                              perfilProfesionalAbierto?.nombre
-                          )}
-                        </span>
-                      )}
-                    </div>
-
-                    <h2>
-                      {perfilProfesionalDetalle?.nombre ||
-                        perfilProfesionalAbierto?.nombre}
-                    </h2>
-
-                    <p>
-                      {perfilProfesionalDetalle?.especialidad ||
-                        perfilProfesionalAbierto?.especialidad ||
-                        "Profesional"}
-                    </p>
-
-                    {Number(
-                      perfilProfesionalDetalle?.total_resenas || 0
-                    ) > 0 ? (
-                      <div className="kp-pro-profile-rating">
-                        <strong>
-                          ★{" "}
-                          {Number(
-                            perfilProfesionalDetalle?.promedio_calificacion ||
-                              0
-                          ).toFixed(1)}
-                        </strong>
-                        <span>
-                          (
-                          {formatoEntero(
-                            perfilProfesionalDetalle?.total_resenas ||
-                              0
-                          )}
-                          )
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="kp-pro-profile-no-rating">
-                        Aún sin reseñas
-                      </div>
-                    )}
-
-                    {perfilProfesionalDetalle?.ubicacion && (
-                      <span className="kp-pro-profile-location">
-                        ⌖ {perfilProfesionalDetalle.ubicacion}
-                      </span>
-                    )}
-                  </section>
-
-                  <nav className="kp-pro-profile-tabs">
-                    {[
-                      ["perfil", "Perfil", null],
-                      [
-                        "portafolio",
-                        "Portafolio",
-                        Number(
-                          perfilProfesionalDetalle?.total_portafolio ||
-                            0
-                        ),
-                      ],
-                      [
-                        "resenas",
-                        "Reseñas",
-                        Number(
-                          perfilProfesionalDetalle?.total_resenas || 0
-                        ),
-                      ],
-                    ].map(([codigo, label, cantidad]) => (
-                      <button
-                        key={codigo}
-                        type="button"
-                        className={
-                          tabPerfilProfesional === codigo
-                            ? "active"
-                            : ""
-                        }
-                        onClick={() =>
-                          setTabPerfilProfesional(codigo)
-                        }
-                      >
-                        {label}
-                        {cantidad !== null && (
-                          <span>{formatoEntero(cantidad)}</span>
-                        )}
-                      </button>
-                    ))}
-                  </nav>
-
-                  <div className="kp-pro-profile-body">
-                    {tabPerfilProfesional === "perfil" && (
-                      <>
-                        <div className="kp-pro-stats">
-                          <div>
-                            <span>Citas completadas</span>
-                            <strong>
-                              {formatoEntero(
-                                perfilProfesionalDetalle?.citas_completadas ||
-                                  0
-                              )}
-                            </strong>
-                          </div>
-
-                          <div>
-                            <span>Clientes atendidos</span>
-                            <strong>
-                              {formatoEntero(
-                                perfilProfesionalDetalle?.clientes_atendidos ||
-                                  0
-                              )}
-                            </strong>
-                          </div>
-                        </div>
-
-                        <section className="kp-pro-about">
-                          <h3>Acerca de</h3>
-
-                          <p>
-                            {perfilProfesionalDetalle?.bio ||
-                              "Este profesional todavía no ha agregado una presentación pública."}
-                          </p>
-                        </section>
-
-                        {Array.isArray(
-                          perfilProfesionalDetalle?.idiomas
-                        ) &&
-                          perfilProfesionalDetalle.idiomas.length >
-                            0 && (
-                            <section className="kp-pro-languages">
-                              <h3>Idiomas</h3>
-
-                              <div>
-                                {perfilProfesionalDetalle.idiomas.map(
-                                  (idioma) => (
-                                    <span key={idioma}>
-                                      {idioma}
-                                    </span>
-                                  )
-                                )}
-                              </div>
-                            </section>
-                          )}
-
-                        {Array.isArray(
-                          perfilProfesionalDetalle?.intereses
-                        ) &&
-                          perfilProfesionalDetalle.intereses.length >
-                            0 && (
-                            <section className="kp-pro-interests">
-                              <h3>Intereses</h3>
-
-                              <div>
-                                {perfilProfesionalDetalle.intereses.map(
-                                  (interes) => (
-                                    <span key={interes}>
-                                      {interes}
-                                    </span>
-                                  )
-                                )}
-                              </div>
-                            </section>
-                          )}
-                      </>
-                    )}
-
-                    {tabPerfilProfesional === "portafolio" && (
-                      <section className="kp-pro-portfolio">
-                        <div className="kp-pro-tab-heading">
-                          <h3>Portafolio</h3>
-                          <span>
-                            {formatoEntero(
-                              perfilProfesionalDetalle?.total_portafolio ||
-                                0
-                            )}
-                          </span>
-                        </div>
-
-                        {Array.isArray(
-                          perfilProfesionalDetalle?.portafolio
-                        ) &&
-                        perfilProfesionalDetalle.portafolio.length >
-                          0 ? (
-                          <div className="kp-pro-portfolio-grid">
-                            {perfilProfesionalDetalle.portafolio.map(
-                              (item, index) => (
-                                <figure
-                                  key={
-                                    item?.id ||
-                                    `${item?.imagen_url}-${index}`
-                                  }
-                                >
-                                  <img
-                                    src={item.imagen_url}
-                                    alt={
-                                      item?.descripcion ||
-                                      `Trabajo ${index + 1}`
-                                    }
-                                  />
-
-                                  {item?.descripcion && (
-                                    <figcaption>
-                                      {item.descripcion}
-                                    </figcaption>
-                                  )}
-                                </figure>
-                              )
-                            )}
-                          </div>
-                        ) : (
-                          <div className="kp-pro-empty">
-                            Este profesional todavía no ha publicado trabajos
-                            en su portafolio.
-                          </div>
-                        )}
-                      </section>
-                    )}
-
-                    {tabPerfilProfesional === "resenas" && (
-                      <section className="kp-pro-reviews">
-                        {Number(
-                          perfilProfesionalDetalle?.total_resenas || 0
-                        ) > 0 ? (
-                          <>
-                            <div className="kp-pro-review-score">
-                              <strong>
-                                {Number(
-                                  perfilProfesionalDetalle?.promedio_calificacion ||
-                                    0
-                                ).toFixed(1)}
-                              </strong>
-                              <span>★</span>
-                              <small>
-                                {formatoEntero(
-                                  perfilProfesionalDetalle?.total_resenas ||
-                                    0
-                                )}{" "}
-                                {Number(
-                                  perfilProfesionalDetalle?.total_resenas ||
-                                    0
-                                ) === 1
-                                  ? "reseña verificada"
-                                  : "reseñas verificadas"}
-                              </small>
-                            </div>
-
-                            <div className="kp-pro-review-list">
-                              {(
-                                perfilProfesionalDetalle?.resenas || []
-                              ).map((resena) => (
-                                <article
-                                  key={resena.id}
-                                  className="kp-pro-review-card kp-pro-review-card-v14"
-                                >
-                                  <div className="kp-pro-review-client">
-                                    <span className="kp-pro-review-avatar">
-                                      {inicialesResena(
-                                        resena.cliente_nombre ||
-                                          "Cliente"
-                                      )}
-                                    </span>
-
-                                    <div>
-                                      <strong>
-                                        {resena.cliente_nombre ||
-                                          "Cliente"}
-                                      </strong>
-
-                                      <span className="kp-pro-review-stars">
-                                        {"★".repeat(
-                                          Math.max(
-                                            0,
-                                            Math.min(
-                                              5,
-                                              Number(
-                                                resena.calificacion ||
-                                                  0
-                                              )
-                                            )
-                                          )
-                                        )}
-                                        <i>
-                                          {"★".repeat(
-                                            Math.max(
-                                              0,
-                                              5 -
-                                                Math.min(
-                                                  5,
-                                                  Number(
-                                                    resena.calificacion ||
-                                                      0
-                                                  )
-                                                )
-                                            )
-                                          )}
-                                        </i>
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  {resena.comentario && (
-                                    <p>{resena.comentario}</p>
-                                  )}
-
-                                  <div className="kp-pro-review-meta-v14">
-                                    <span>
-                                      {haceCuantoResena(
-                                        resena.fecha
-                                      )}
-                                    </span>
-
-                                    {Number(
-                                      resena.total_servicios_cliente ||
-                                        0
-                                    ) > 0 && (
-                                      <span>
-                                        ·{" "}
-                                        {formatoEntero(
-                                          resena.total_servicios_cliente
-                                        )}{" "}
-                                        {Number(
-                                          resena.total_servicios_cliente
-                                        ) === 1
-                                          ? "servicio"
-                                          : "servicios"}
-                                      </span>
-                                    )}
-
-                                    {resena.servicio && (
-                                      <span>
-                                        · {resena.servicio}
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  <em>
-                                    ✓ Cita verificada por KONAX
-                                  </em>
-                                </article>
-                              ))}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="kp-pro-empty">
-                            Este profesional todavía no tiene reseñas
-                            verificadas.
-                          </div>
-                        )}
-                      </section>
-                    )}
-                  </div>
-
-                  <div className="kp-pro-profile-action">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const idSeleccion =
-                          perfilProfesionalAbierto?.id;
-
-                        cerrarPerfilProfesional();
-
-                        if (idSeleccion) {
-                          elegirProfesional(idSeleccion);
-                        }
-                      }}
-                    >
-                      SELECCIONAR A{" "}
-                      {String(
-                        perfilProfesionalDetalle?.nombre ||
-                          perfilProfesionalAbierto?.nombre ||
-                          "PROFESIONAL"
-                      )
-                        .split(" ")[0]
+                      {String(empresaNombre || "G")
+                        .charAt(0)
                         .toUpperCase()}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="kp-pro-profile-loading">
-                  {perfilProfesionalDetalle?.mensaje ||
-                    "El perfil del profesional no está disponible."}
+                    </span>
+                  )}
                 </div>
-              )}
-            </section>
-          </div>
+
+                <div style={S.drawerBusinessText}>
+                  <strong style={S.drawerBusinessName}>
+                    {empresaNombre}
+                  </strong>
+                  <span style={S.drawerBusinessSub}>
+                    Portal del Alumno · KONAX
+                  </span>
+                </div>
+              </div>
+
+              <div style={S.drawerHeader}>
+                <div style={S.drawerAvatar}>
+                  {fotoFirmada ? (
+                    <img
+                      src={fotoFirmada}
+                      alt={cuenta?.nombre || "Alumno"}
+                      style={S.avatarImage}
+                    />
+                  ) : (
+                    <span>{iniciales}</span>
+                  )}
+                </div>
+
+                <div style={{ minWidth: 0 }}>
+                  <strong style={S.drawerName}>{cuenta?.nombre}</strong>
+                  <span style={S.drawerState}>{estadoVisual}</span>
+                </div>
+              </div>
+
+              <nav style={S.drawerNav}>
+                {MENU.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => cambiarSeccion(item.id)}
+                    style={{
+                      ...S.drawerItem,
+                      ...(seccion === item.id ? S.drawerItemActive : {}),
+                    }}
+                  >
+                    <span style={S.drawerIcon}>{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </nav>
+
+              <div style={S.drawerFooter}>
+                <button
+                  type="button"
+                  onClick={cerrarSesion}
+                  style={S.drawerLogout}
+                >
+                  Cerrar sesión
+                </button>
+              </div>
+            </aside>
+          </>
         )}
 
-        <footer className="kp-footer">
-          <img src="/konax-logo.png" alt="KONAX" />
-          <span>Reservas por KONAX · {VERSION}</span>
-        </footer>
-      </div>
+        <div style={S.content} className="portal-content">
+          {error && (
+            <div style={S.inlineError}>
+              <strong>Atención:</strong> {error}
+            </div>
+          )}
+
+          {mensajePerfil && (
+            <div style={S.successMessage}>{mensajePerfil}</div>
+          )}
+
+          {seccion === "inicio" && (
+            <Inicio />
+          )}
+
+          {seccion === "clases" && (
+            <SeccionVacia
+              eyebrow="ENTRENAMIENTO"
+              titulo="Clases"
+              texto="Aquí aparecerán las clases disponibles del gimnasio para reservar desde tu cuenta."
+              icono="▦"
+              accion="Volver al inicio"
+              onAccion={() => cambiarSeccion("inicio")}
+            />
+          )}
+
+          {seccion === "reservas" && (
+            <SeccionVacia
+              eyebrow="AGENDA"
+              titulo="Mis reservas"
+              texto="Aquí verás tus próximas clases reservadas y el historial de reservas."
+              icono="◷"
+              accion="Volver al inicio"
+              onAccion={() => cambiarSeccion("inicio")}
+            />
+          )}
+
+          {seccion === "whiteboard" && (
+            <WhiteboardWod
+              servicios={serviciosWod}
+              servicioId={servicioWodId}
+              setServicioId={setServicioWodId}
+              fecha={fechaWod}
+              setFecha={setFechaWod}
+              wod={wodPublico}
+              cargando={cargandoWod}
+              error={errorWod}
+              onBuscar={() =>
+                cargarWodSeleccionado(fechaWod, servicioWodId)
+              }
+              onVolver={() => cambiarSeccion("inicio")}
+            />
+          )}
+
+          {seccion === "resultados" && (
+            <SeccionVacia
+              eyebrow="PROGRESO"
+              titulo="Resultados"
+              texto="Aquí podrás consultar tus marcas, tiempos, pesos, repeticiones y evolución."
+              icono="★"
+              accion="Volver al inicio"
+              onAccion={() => cambiarSeccion("inicio")}
+            />
+          )}
+
+          {seccion === "configuracion" && (
+            <Configuracion
+              cuenta={cuenta}
+              perfil={perfil}
+              membresia={membresia}
+              estadoVisual={estadoVisual}
+              accesoPermitido={accesoPermitido}
+              formatearFecha={formatearFecha}
+              fotoFirmada={fotoFirmada}
+              iniciales={iniciales}
+              peso={peso}
+              setPeso={setPeso}
+              estatura={estatura}
+              setEstatura={setEstatura}
+              pesoVisual={pesoVisual}
+              estaturaVisual={estaturaVisual}
+              mostrarEditor={mostrarEditor}
+              setMostrarEditor={setMostrarEditor}
+              guardandoPerfil={guardandoPerfil}
+              guardarDatosPerfil={guardarDatosPerfil}
+              subiendoFoto={subiendoFoto}
+              subirSelfie={subirSelfie}
+              cerrarSesion={cerrarSesion}
+            />
+          )}
+
+          <footer style={S.footer}>
+            <div style={S.secureText}>
+              <span>🔒 Acceso seguro</span>
+              <span>KONAX</span>
+            </div>
+            <span style={S.version}>{VERSION}</span>
+          </footer>
+        </div>
+      </section>
     </main>
   );
 }
 
-function Stepper({ paso, gimnasio = false }) {
-  const pasos = gimnasio
-    ? [
-        [1, "Clase"],
-        [2, "Instructor"],
-        [3, "Fecha y hora"],
-        [4, "Confirmación"],
-      ]
-    : [
-        [1, "Servicio"],
-        [2, "Profesional"],
-        [3, "Fecha y hora"],
-        [4, "Confirmación"],
-      ];
+function Inicio() {
+  return (
+    <section style={S.homeCompact}>
+      <div style={S.homeCompactLine} />
+    </section>
+  );
+}
+
+function WhiteboardWod({
+  servicios,
+  servicioId,
+  setServicioId,
+  fecha,
+  setFecha,
+  wod,
+  cargando,
+  error,
+  onBuscar,
+  onVolver,
+}) {
+  const bloques = [
+    ["Warm-up", wod?.warmup],
+    ["Fuerza", wod?.strength],
+    ["Técnica / Skill", wod?.skill],
+    ["Metcon", wod?.metcon],
+    ["Vuelta a la calma", wod?.cooldown],
+  ].filter(([, valor]) => Boolean(String(valor || "").trim()));
 
   return (
-    <div className="kp-stepper">
-      {pasos.map(([numero, label], index) => (
-        <div
-          key={numero}
-          className="kp-step-item"
+    <section style={S.whiteboardShell}>
+      <div style={S.whiteboardTop}>
+        <button
+          type="button"
+          onClick={onVolver}
+          style={S.whiteboardBack}
         >
-          <div className="kp-step-top">
-            <span
-              className={[
-                "kp-step-circle",
-                paso === numero ? "active" : "",
-                paso > numero ? "done" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              {paso > numero ? "✓" : numero}
-            </span>
+          ← Menú
+        </button>
 
-            {index < pasos.length - 1 && (
-              <span
-                className={[
-                  "kp-step-line",
-                  paso > numero ? "done" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
+        <div>
+          <span style={S.whiteboardEyebrow}>WORKOUT OF THE DAY</span>
+          <h1 style={S.whiteboardTitle}>Whiteboard</h1>
+        </div>
+      </div>
+
+      <div style={S.whiteboardFilters} className="whiteboard-filters">
+        <div style={S.whiteboardField}>
+          <label style={S.whiteboardLabel}>Clase</label>
+          <select
+            value={servicioId}
+            onChange={(e) => setServicioId(e.target.value)}
+            style={S.whiteboardInput}
+          >
+            {servicios.map((servicio) => (
+              <option key={servicio.id} value={String(servicio.id)}>
+                {servicio.nombre || "Clase"}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={S.whiteboardField}>
+          <label style={S.whiteboardLabel}>Fecha</label>
+          <input
+            type="date"
+            value={fecha}
+            onChange={(e) => setFecha(e.target.value)}
+            style={S.whiteboardInput}
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={onBuscar}
+          disabled={cargando || !fecha || !servicioId}
+          style={S.whiteboardSearch}
+        >
+          {cargando ? "Buscando..." : "Ver WOD"}
+        </button>
+      </div>
+
+      {cargando ? (
+        <div style={S.whiteboardLoading}>
+          <div style={S.loader} />
+          <strong>Cargando WOD...</strong>
+        </div>
+      ) : wod?.ok ? (
+        <article style={S.wodCard}>
+          <div style={S.wodHeader}>
+            <div>
+              <span style={S.wodProgram}>
+                {wod.servicio || "CLASE"}
+              </span>
+              <h2 style={S.wodTitle}>
+                {wod.titulo || "WOD del día"}
+              </h2>
+            </div>
+
+            <span style={S.wodActive}>PUBLICADO</span>
+          </div>
+
+          <div style={S.wodBlocks}>
+            {bloques.map(([titulo, valor]) => (
+              <div
+                key={titulo}
+                style={{
+                  ...S.wodBlock,
+                  ...(titulo === "Metcon" ? S.wodBlockAccent : {}),
+                }}
+              >
+                <span style={S.wodBlockLabel}>{titulo}</span>
+                <strong style={S.wodBlockValue}>{valor}</strong>
+              </div>
+            ))}
+          </div>
+
+          {wod.notas_publicas && (
+            <div style={S.wodNote}>
+              <span style={S.wodNoteLabel}>NOTA DEL COACH</span>
+              <strong style={S.wodNoteValue}>
+                {wod.notas_publicas}
+              </strong>
+            </div>
+          )}
+        </article>
+      ) : (
+        <div style={S.whiteboardEmpty}>
+          <div style={S.whiteboardEmptyIcon}>W</div>
+          <strong style={S.whiteboardEmptyTitle}>
+            WOD no disponible
+          </strong>
+          <span style={S.whiteboardEmptyText}>
+            {error || "Selecciona una clase y una fecha para consultar."}
+          </span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Configuracion({
+  cuenta,
+  membresia,
+  estadoVisual,
+  accesoPermitido,
+  formatearFecha,
+  fotoFirmada,
+  iniciales,
+  peso,
+  setPeso,
+  estatura,
+  setEstatura,
+  pesoVisual,
+  estaturaVisual,
+  mostrarEditor,
+  setMostrarEditor,
+  guardandoPerfil,
+  guardarDatosPerfil,
+  subiendoFoto,
+  subirSelfie,
+  cerrarSesion,
+}) {
+  const [tabConfig, setTabConfig] = useState("perfil");
+  const [nuevaClave, setNuevaClave] = useState("");
+  const [confirmarClave, setConfirmarClave] = useState("");
+  const [guardandoClave, setGuardandoClave] = useState(false);
+  const [mensajeClave, setMensajeClave] = useState("");
+
+  async function cambiarClave() {
+    setMensajeClave("");
+
+    if (String(nuevaClave).length < 8) {
+      setMensajeClave("La contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+
+    if (nuevaClave !== confirmarClave) {
+      setMensajeClave("Las contraseñas no coinciden.");
+      return;
+    }
+
+    setGuardandoClave(true);
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: nuevaClave,
+      });
+
+      if (error) throw error;
+
+      setNuevaClave("");
+      setConfirmarClave("");
+      setMensajeClave("Contraseña actualizada correctamente.");
+    } catch (err) {
+      setMensajeClave(err?.message || "No se pudo cambiar la contraseña.");
+    } finally {
+      setGuardandoClave(false);
+    }
+  }
+
+  const tabs = [
+    { id: "perfil", label: "Perfil" },
+    { id: "clave", label: "Cambiar contraseña" },
+    { id: "membresia", label: "Membresía" },
+    { id: "pagos", label: "Pagos" },
+    { id: "notificaciones", label: "Notificaciones" },
+    { id: "fisico", label: "Seguimiento físico" },
+  ];
+
+  return (
+    <section style={S.profileSettingsShell} className="profile-settings-shell">
+      <aside style={S.profileSummaryCard}>
+        <div style={S.profileSummaryAvatar}>
+          {fotoFirmada ? (
+            <img
+              src={fotoFirmada}
+              alt={cuenta?.nombre || "Alumno"}
+              style={S.avatarImage}
+            />
+          ) : (
+            <span>{iniciales}</span>
+          )}
+        </div>
+
+        <strong style={S.profileSummaryName}>
+          {cuenta?.nombre || "Alumno"}
+        </strong>
+
+        <span style={S.profileSummaryRole}>Cliente</span>
+
+        <label style={S.changePhotoButton}>
+          {subiendoFoto ? "Subiendo..." : "✎ Cambiar foto"}
+
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={subirSelfie}
+            disabled={subiendoFoto}
+            style={{ display: "none" }}
+          />
+        </label>
+
+        <div style={S.profileSummaryDivider} />
+
+        <ResumenFila
+          label="Estado"
+          value={accesoPermitido ? "Activo" : estadoVisual}
+        />
+
+        <ResumenFila
+          label="Membresía"
+          value={membresia?.plan || "Sin plan"}
+        />
+
+        <ResumenFila
+          label="Vencimiento"
+          value={
+            membresia?.fecha_vencimiento
+              ? formatearFecha(membresia.fecha_vencimiento)
+              : "-"
+          }
+        />
+
+        <ResumenFila
+          label="Check-ins"
+          value={cuenta?.checkins_total ?? cuenta?.checkins ?? "—"}
+        />
+
+        <button
+          type="button"
+          onClick={cerrarSesion}
+          style={S.profileLogoutButton}
+        >
+          Cerrar sesión
+        </button>
+      </aside>
+
+      <div style={S.profileSettingsMain}>
+        <div style={S.profileTabs}>
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setTabConfig(tab.id)}
+              style={{
+                ...S.profileTabButton,
+                ...(tabConfig === tab.id ? S.profileTabButtonActive : {}),
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {tabConfig === "perfil" && (
+          <div style={S.profilePanel}>
+            <div style={S.profilePanelHeading}>
+              <div>
+                <span style={S.sectionEyebrow}>PERFIL</span>
+                <h2 style={S.profilePanelTitle}>Datos personales</h2>
+              </div>
+            </div>
+
+            <div style={S.profileFieldsGrid} className="profile-fields-grid">
+              <ProfileField
+                label="Nombre y apellidos"
+                value={cuenta?.nombre || "-"}
+              />
+              <ProfileField
+                label="ID Cliente"
+                value={cuenta?.cedula || "-"}
+              />
+              <ProfileField
+                label="Email"
+                value={cuenta?.correo || "-"}
+              />
+              <ProfileField
+                label="Teléfono"
+                value={cuenta?.telefono || "-"}
+              />
+              <ProfileField
+                label="Estado"
+                value={accesoPermitido ? "Activo" : estadoVisual}
+              />
+              <ProfileField
+                label="Plan actual"
+                value={membresia?.plan || "Sin membresía"}
+              />
+            </div>
+          </div>
+        )}
+
+        {tabConfig === "clave" && (
+          <div style={S.profilePanel}>
+            <span style={S.sectionEyebrow}>SEGURIDAD</span>
+            <h2 style={S.profilePanelTitle}>Cambiar contraseña</h2>
+
+            <div style={S.passwordForm}>
+              <div style={S.fieldGroup}>
+                <label style={S.fieldLabel}>Nueva contraseña</label>
+                <input
+                  type="password"
+                  value={nuevaClave}
+                  onChange={(e) => setNuevaClave(e.target.value)}
+                  placeholder="Mínimo 8 caracteres"
+                  style={S.input}
+                />
+              </div>
+
+              <div style={S.fieldGroup}>
+                <label style={S.fieldLabel}>Confirmar contraseña</label>
+                <input
+                  type="password"
+                  value={confirmarClave}
+                  onChange={(e) => setConfirmarClave(e.target.value)}
+                  placeholder="Repite la contraseña"
+                  style={S.input}
+                />
+              </div>
+
+              {mensajeClave && (
+                <div style={S.passwordMessage}>{mensajeClave}</div>
+              )}
+
+              <button
+                type="button"
+                onClick={cambiarClave}
+                disabled={guardandoClave}
+                style={S.saveProfileButton}
+              >
+                {guardandoClave
+                  ? "Actualizando..."
+                  : "Actualizar contraseña"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {tabConfig === "membresia" && (
+          <div style={S.profilePanel}>
+            <span style={S.sectionEyebrow}>SUSCRIPCIÓN</span>
+            <h2 style={S.profilePanelTitle}>Mi membresía</h2>
+
+            {membresia ? (
+              <div style={S.membershipProfileCard}>
+                <strong style={S.membershipProfilePlan}>
+                  {membresia.plan || "Membresía"}
+                </strong>
+
+                <div style={S.profileFieldsGrid} className="profile-fields-grid">
+                  <ProfileField
+                    label="Estado"
+                    value={estadoVisual}
+                  />
+                  <ProfileField
+                    label="Periodicidad"
+                    value={membresia.periodicidad || "-"}
+                  />
+                  <ProfileField
+                    label="Fecha de inicio"
+                    value={
+                      membresia.fecha_inicio
+                        ? formatearFecha(membresia.fecha_inicio)
+                        : "-"
+                    }
+                  />
+                  <ProfileField
+                    label="Vencimiento"
+                    value={
+                      membresia.fecha_vencimiento
+                        ? formatearFecha(membresia.fecha_vencimiento)
+                        : "-"
+                    }
+                  />
+                </div>
+              </div>
+            ) : (
+              <ConfigEmpty
+                title="Sin membresía registrada"
+                text="Cuando el gimnasio te asigne una membresía aparecerá aquí."
               />
             )}
           </div>
+        )}
 
-          <small
-            className={
-              paso >= numero ? "active" : ""
-            }
-          >
-            {label}
-          </small>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-
-function EstrellasSelector({
-  label,
-  valor,
-  onChange,
-}) {
-  return (
-    <div className="kp-stars-field">
-      <span>{label}</span>
-
-      <div
-        className="kp-stars-selector"
-        role="radiogroup"
-        aria-label={label}
-      >
-        {[1, 2, 3, 4, 5].map((estrella) => (
-          <button
-            key={estrella}
-            type="button"
-            className={
-              estrella <= valor ? "active" : ""
-            }
-            onClick={() => onChange(estrella)}
-            role="radio"
-            aria-checked={estrella === valor}
-            aria-label={`${estrella} ${
-              estrella === 1 ? "estrella" : "estrellas"
-            }`}
-          >
-            ★
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function WodPublico({ wod }) {
-  if (!wod?.ok) return null;
-
-  const bloques = [
-    ["Warm-up", wod.warmup],
-    ["Strength", wod.strength],
-    ["Skill", wod.skill],
-    ["Metcon", wod.metcon],
-    ["Cooldown", wod.cooldown],
-  ].filter(([, valor]) => Boolean(valor));
-
-  return (
-    <div className="kp-wod">
-      <span className="kp-wod-eyebrow">WORKOUT OF THE DAY</span>
-      <h3>{wod.titulo || "WOD del día"}</h3>
-
-      {wod.servicio && (
-        <div className="kp-wod-program">{wod.servicio}</div>
-      )}
-
-      <div className="kp-wod-blocks">
-        {bloques.map(([titulo, valor]) => (
-          <div
-            key={titulo}
-            className={`kp-wod-block ${
-              titulo === "Metcon" ? "accent" : ""
-            }`}
-          >
-            <span>{titulo}</span>
-            <strong>{valor}</strong>
+        {tabConfig === "pagos" && (
+          <div style={S.profilePanel}>
+            <span style={S.sectionEyebrow}>PAGOS</span>
+            <h2 style={S.profilePanelTitle}>Facturación y pagos</h2>
+            <ConfigEmpty
+              title="Sin movimientos para mostrar"
+              text="Esta sección quedará preparada para mostrar tus pagos y comprobantes cuando conectemos el historial financiero del alumno."
+            />
           </div>
-        ))}
+        )}
+
+        {tabConfig === "notificaciones" && (
+          <div style={S.profilePanel}>
+            <span style={S.sectionEyebrow}>PREFERENCIAS</span>
+            <h2 style={S.profilePanelTitle}>Notificaciones</h2>
+            <ConfigEmpty
+              title="Preferencias de notificación"
+              text="Aquí podrás administrar avisos de reservas, cambios de horario y vencimiento de membresía."
+            />
+          </div>
+        )}
+
+        {tabConfig === "fisico" && (
+          <div style={S.profilePanel}>
+            <div style={S.profilePanelHeading}>
+              <div>
+                <span style={S.sectionEyebrow}>SEGUIMIENTO FÍSICO</span>
+                <h2 style={S.profilePanelTitle}>Peso y estatura</h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setMostrarEditor((valor) => !valor)}
+                style={S.outlineSmallButton}
+              >
+                {mostrarEditor ? "Cerrar" : "Editar"}
+              </button>
+            </div>
+
+            <div style={S.configGrid} className="config-grid">
+              <Metric label="Peso" value={pesoVisual} />
+              <Metric label="Estatura" value={estaturaVisual} />
+            </div>
+
+            {mostrarEditor && (
+              <div style={S.profileEditor}>
+                <div style={S.fieldGroup}>
+                  <label style={S.fieldLabel}>Peso (kg)</label>
+                  <input
+                    value={peso}
+                    onChange={(e) => setPeso(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="Ej. 82.5"
+                    style={S.input}
+                  />
+                </div>
+
+                <div style={S.fieldGroup}>
+                  <label style={S.fieldLabel}>Estatura (m)</label>
+                  <input
+                    value={estatura}
+                    onChange={(e) => setEstatura(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="Ej. 1.76"
+                    style={S.input}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={guardarDatosPerfil}
+                  disabled={guardandoPerfil}
+                  style={S.saveProfileButton}
+                >
+                  {guardandoPerfil ? "Guardando..." : "Guardar cambios"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
-
-      {wod.notas_publicas && (
-        <div className="kp-wod-note">
-          <span>Nota del coach</span>
-          <strong>{wod.notas_publicas}</strong>
-        </div>
-      )}
-    </div>
+    </section>
   );
 }
 
-function ServicioResumen({ servicio }) {
-  if (!servicio) return null;
-
+function ResumenFila({ label, value }) {
   return (
-    <div className="kp-selected-service">
-      <strong>{servicio.nombre}</strong>
-      <span>
-        {servicio.duracion} min
-        {servicio.requierePago
-          ? ` · ${dinero(servicio.precio)}`
-          : ""}
-      </span>
+    <div style={S.profileSummaryRow}>
+      <span style={S.profileSummaryLabel}>{label}</span>
+      <strong style={S.profileSummaryValue}>{value}</strong>
     </div>
   );
 }
 
-function ResumenFila({
-  label,
-  value,
-  destacado = false,
+function ProfileField({ label, value }) {
+  return (
+    <div style={S.profileField}>
+      <span style={S.profileFieldLabel}>{label}</span>
+      <strong style={S.profileFieldValue}>{value}</strong>
+    </div>
+  );
+}
+
+function ConfigEmpty({ title, text }) {
+  return (
+    <div style={S.configEmpty}>
+      <div style={S.configEmptyIcon}>◇</div>
+      <strong style={S.configEmptyTitle}>{title}</strong>
+      <span style={S.configEmptyText}>{text}</span>
+    </div>
+  );
+}
+
+function SeccionVacia({
+  eyebrow,
+  titulo,
+  texto,
+  icono,
+  accion,
+  onAccion,
 }) {
   return (
-    <div className="kp-summary-row">
-      <span>{label}</span>
-      <strong className={destacado ? "accent" : ""}>
-        {value || "-"}
-      </strong>
-    </div>
+    <section style={S.emptyPageCard}>
+      <div style={S.emptyPageIcon}>{icono}</div>
+      <span style={S.sectionEyebrow}>{eyebrow}</span>
+      <h1 style={S.emptyPageTitle}>{titulo}</h1>
+      <p style={S.emptyPageText}>{texto}</p>
+
+      <button
+        type="button"
+        onClick={onAccion}
+        style={S.primaryButton}
+      >
+        {accion}
+      </button>
+    </section>
   );
 }
 
-function Dato({ label, value }) {
+function QuickCard({ icon, title, subtitle, onClick }) {
   return (
-    <div className="kp-data">
-      <span>{label}</span>
-      <strong>{value || "-"}</strong>
+    <button
+      type="button"
+      onClick={onClick}
+      style={S.quickCard}
+    >
+      <span style={S.quickIcon}>{icon}</span>
+      <span style={S.quickCopy}>
+        <strong style={S.quickTitle}>{title}</strong>
+        <span style={S.quickSubtitle}>{subtitle}</span>
+      </span>
+      <span style={S.quickArrow}>›</span>
+    </button>
+  );
+}
+
+function Metric({ label, value }) {
+  return (
+    <div style={S.metricCard}>
+      <span style={S.metricLabel}>{label}</span>
+      <strong style={S.metricValue}>{value}</strong>
     </div>
   );
 }
 
-const CSS = `
-  * { box-sizing: border-box; }
+function Fila({ label, value }) {
+  return (
+    <div style={S.row}>
+      <span style={S.rowLabel}>{label}</span>
+      <strong style={S.rowValue}>{value}</strong>
+    </div>
+  );
+}
 
-  html, body {
-    max-width: 100%;
-    overflow-x: hidden;
-  }
-
-  body {
-    margin: 0;
-  }
-
-  button, input, textarea {
-    font: inherit;
-  }
-
-  button {
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .kp-page {
-    min-height: 100vh;
-    padding-bottom: 150px;
-    background: #f5f7f6;
-    color: #152019;
-    font-family: "Avenir Next", "Segoe UI Variable", "Segoe UI", Inter, system-ui, sans-serif;
-  }
-
-  .kp-shell {
-    width: min(760px, 100%);
-    margin: 0 auto;
-    padding: 0 14px 28px;
-  }
-
-  .kp-topbar {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    min-height: 66px;
-    margin: 0 -14px 14px;
-    padding: 10px 14px;
-    display: grid;
-    grid-template-columns: 42px 1fr auto;
-    align-items: center;
-    gap: 8px;
-    border-bottom: 1px solid #e1e7e3;
-    background: rgba(255,255,255,.97);
-    backdrop-filter: blur(12px);
-  }
-
-  .kp-back {
-    width: 40px;
-    height: 40px;
-    border: 0;
-    border-radius: 12px;
-    background: #fff;
-    font-size: 34px;
-    line-height: 1;
-    cursor: pointer;
-  }
-
-  .kp-top-logo {
-    width: 92px;
-    height: 34px;
-    object-fit: contain;
-    justify-self: center;
-  }
-
-  .kp-top-icons {
-    display: flex;
-    gap: 4px;
-  }
-
-  .kp-top-icons button {
-    width: 34px;
-    height: 34px;
-    display: grid;
-    place-items: center;
-    border: 1px solid transparent;
-    border-radius: 999px;
-    background: #f1f4f2;
-    color: #17211c;
-    font-size: 14px;
-    cursor: pointer;
-  }
-
-  .kp-top-icons button.active {
-    border-color: #0b7041;
-    background: #e8f5ed;
-    color: #0b7041;
-  }
-
-  .kp-menu {
-    position: absolute;
-    top: 58px;
-    right: 14px;
-    z-index: 90;
-    width: 190px;
-    padding: 8px;
-    display: grid;
-    gap: 5px;
-    border: 1px solid #dfe6e2;
-    border-radius: 15px;
-    background: #ffffff;
-    box-shadow: 0 14px 34px rgba(20,38,28,.16);
-  }
-
-  .kp-menu button {
-    min-height: 42px;
-    padding: 0 12px;
-    border: 0;
-    border-radius: 10px;
-    background: transparent;
-    color: #17211c;
-    text-align: left;
-    font-weight: 800;
-    cursor: pointer;
-  }
-
-  .kp-menu button:hover {
-    background: #f1f7f3;
-  }
-
-  .kp-hero {
-    margin-bottom: 14px;
-    padding: 20px;
-    display: grid;
-    grid-template-columns: minmax(0,1fr) auto;
-    align-items: center;
-    gap: 14px;
-    border-radius: 22px;
-    color: #fff;
-    background: linear-gradient(135deg,#073a29,#0e7042);
-  }
-
-  .kp-hero h1 {
-    margin: 7px 0;
-    font-size: clamp(27px,7vw,42px);
-    line-height: 1.03;
-  }
-
-  .kp-hero p {
-    margin: 0;
-    color: #d9ede2;
-    font-size: 14px;
-    line-height: 1.45;
-  }
-
-  .kp-hero img {
-    width: 106px;
-    min-height: 72px;
-    padding: 9px;
-    object-fit: contain;
-    border-radius: 18px;
-    background: #fff;
-  }
-
-  .kp-eyebrow,
-  .kp-eyebrow-dark {
-    display: block;
-    font-size: 9px;
-    font-weight: 900;
-    letter-spacing: 1.2px;
-  }
-
-  .kp-eyebrow { color: #74e1a5; }
-  .kp-eyebrow-dark { color: #0b7041; }
-
-  .kp-flow,
-  .kp-manage {
-    padding: 16px;
-    border: 1px solid #dfe6e2;
-    border-radius: 22px;
-    background: #fff;
-    box-shadow: 0 10px 24px rgba(20,38,28,.05);
-  }
-
-  .kp-flow h2,
-  .kp-manage h2 {
-    margin: 5px 0 8px;
-    font-size: clamp(24px,6vw,32px);
-    line-height: 1.08;
-  }
-
-  .kp-muted {
-    margin: 0 0 14px;
-    color: #6b7770;
-    font-size: 13px;
-  }
-
-  .kp-business-window {
-    margin: 4px 0 18px;
-    padding: 15px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    border: 1px solid #dfe6e2;
-    border-radius: 17px;
-    background: #ffffff;
-    box-shadow: 0 5px 14px rgba(20,38,28,.04);
-  }
-
-  .kp-business-logo-box {
-    width: 58px;
-    height: 58px;
-    flex: 0 0 auto;
-    display: grid;
-    place-items: center;
-    border: 1px solid #e5ebe7;
-    border-radius: 14px;
-    background: #ffffff;
-    overflow: hidden;
-  }
-
-  .kp-business-logo {
-    width: 50px;
-    height: 44px;
-    object-fit: contain;
-  }
-
-  .kp-business-placeholder {
-    font-size: 27px;
-    line-height: 1;
-  }
-
-  .kp-business-window-info {
-    min-width: 0;
-    display: grid;
-    gap: 3px;
-  }
-
-  .kp-business-window-info strong {
-    color: #17211c;
-    font-size: 19px;
-    line-height: 1.2;
-  }
-
-  .kp-business-window-info span {
-    color: #6f7c74;
-    font-size: 13px;
-  }
-
-  .kp-stepper {
-    margin-bottom: 22px;
-    padding: 18px 16px 14px;
-    display: grid;
-    grid-template-columns: repeat(4,minmax(0,1fr));
-    gap: 0;
-    border: 1px solid #e1e7e3;
-    border-radius: 18px;
-    background: #f8faf9;
-  }
-
-  .kp-step-item {
-    min-width: 0;
-    display: grid;
-    justify-items: center;
-    gap: 7px;
-  }
-
-  .kp-step-top {
-    width: 100%;
-    display: flex;
-    align-items: center;
-  }
-
-  .kp-step-circle {
-    width: 34px;
-    height: 34px;
-    flex: 0 0 auto;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: #e7ece9;
-    color: #5e6963;
-    font-size: 13px;
-    font-weight: 900;
-    position: relative;
-    z-index: 2;
-  }
-
-  .kp-step-line {
-    height: 3px;
-    flex: 1;
-    margin: 0 8px;
-    border-radius: 999px;
+const S = {
+  page: {
+    minHeight: "100vh",
+    padding: 18,
+    display: "grid",
+    placeItems: "center",
     background:
-      radial-gradient(circle, #9aa59f 1.4px, transparent 1.6px)
-      center / 9px 3px repeat-x;
-    opacity: .7;
-  }
-
-  .kp-step-line.done {
-    background: #0b7041;
-    opacity: 1;
-  }
-
-  .kp-step-circle.active {
-    background: linear-gradient(145deg,#0b7041,#14a35f);
-    color: #fff;
-    box-shadow: 0 6px 14px rgba(11,112,65,.24);
-  }
-
-  .kp-step-circle.done {
-    background: #dff3e7;
-    color: #0b7041;
-  }
-
-  .kp-stepper small {
-    color: #7d8882;
-    font-size: 9px;
-    font-weight: 850;
-    text-align: center;
-    line-height: 1.2;
-  }
-
-  .kp-stepper small.active {
-    color: #0b7041;
-  }
-
-  .kp-service-list,
-  .kp-prof-list,
-  .kp-times,
-  .kp-form,
-  .kp-cancel-box {
-    display: grid;
-    gap: 11px;
-  }
-
-  .kp-service {
-    padding: 12px;
-    display: grid;
-    grid-template-columns: 96px minmax(0,1fr) auto;
-    gap: 12px;
-    align-items: center;
-    border: 1px solid #dbe4df;
-    border-radius: 18px;
-    background: #ffffff;
-    box-shadow: 0 5px 14px rgba(20,38,28,.04);
-    overflow: hidden;
-  }
-
-  .kp-service-image {
-    width: 96px;
-    height: 82px;
-    overflow: hidden;
-    border-radius: 14px;
-    background: #eef2ef;
-    border: 1px solid #e2e8e4;
-  }
-
-  .kp-service-image img {
-    width: 100%;
-    height: 100%;
-    display: block;
-    object-fit: cover;
-  }
-
-  .kp-service-icon,
-  .kp-avatar,
-  .kp-mini-avatar {
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: #eaf5ef;
-    color: #0b7041;
-    font-weight: 900;
-  }
-
-  .kp-service-icon {
-    width: 54px;
-    height: 54px;
-    color: #fff;
-    background: linear-gradient(145deg,#07834b,#13a95f);
-    box-shadow: 0 7px 16px rgba(11,112,65,.22);
-    font-size: 24px;
-  }
-
-  .kp-service-info {
-    min-width: 0;
-    display: grid;
-    gap: 3px;
-  }
-
-  .kp-service-info strong {
-    color: #17211c;
-    font-size: 17px;
-    line-height: 1.15;
-  }
-
-  .kp-service-info span,
-  .kp-service-info small {
-    color: #6f7b74;
-    font-size: 12px;
-  }
-
-  .kp-service-info b {
-    color: #0b7041;
-    font-size: 14px;
-    font-weight: 900;
-  }
-
-  .kp-service > button,
-  .kp-select {
-    min-width: 86px;
-    min-height: 38px;
-    padding: 0 12px;
-    display: grid;
-    place-items: center;
-    border: 0;
-    border-radius: 999px;
-    background: #0b7041;
-    color: #fff;
-    font-size: 11px;
-    font-weight: 900;
-    cursor: pointer;
-  }
-
-  .kp-blue-link,
-  .kp-link {
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: #3564c4;
-    font-weight: 800;
-    cursor: pointer;
-  }
-
-  .kp-selected-service,
-  .kp-prof-summary {
-    margin: 12px 0 15px;
-    padding: 13px;
-    display: grid;
-    gap: 4px;
-    border-radius: 15px;
-    background: #f8faf9;
-  }
-
-  .kp-prof {
-    width: 100%;
-    padding: 13px;
-    display: grid;
-    grid-template-columns: 52px minmax(0,1fr) auto;
-    gap: 11px;
-    align-items: center;
-    border: 1px solid #dfe5e2;
-    border-radius: 18px;
-    background: #fff;
-    color: #17211c;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .kp-avatar {
-    width: 50px;
-    height: 50px;
-    font-size: 18px;
-    overflow: hidden;
-  }
-
-  .kp-avatar-img {
-    width: 100%;
-    height: 100%;
-    display: block;
-    object-fit: cover;
-  }
-
-  .kp-prof-loading {
-    padding: 16px;
-    border: 1px dashed #d5ddd8;
-    border-radius: 15px;
-    background: #fafcfb;
-    color: #748078;
-    text-align: center;
-    font-size: 12px;
-  }
-
-  .kp-prof-info {
-    min-width: 0;
-    display: grid;
-    gap: 3px;
-  }
-
-  .kp-prof-info small {
-    color: #6c7871;
-  }
-
-  .kp-select {
-    min-width: 88px;
-    min-height: 34px;
-    border: 1px solid #d7deda;
-    background: #fff;
-    color: #303b35;
-  }
-
-  .kp-prof-summary {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    border: 1px solid #e0e6e3;
-    background: #fff;
-  }
-
-  .kp-mini-avatar {
-    width: 30px;
-    height: 30px;
-  }
-
-  .kp-flow h3 {
-    margin: 18px 0 10px;
-    font-size: 17px;
-  }
-
-
-  .kp-booking-head {
-    margin: 12px 0 14px;
-  }
-
-  .kp-booking-business {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border: 1px solid #e0e6e3;
-    border-radius: 16px;
-    background: #ffffff;
-  }
-
-  .kp-booking-business > div:last-child {
-    min-width: 0;
-    display: grid;
-    gap: 2px;
-  }
-
-  .kp-booking-business strong {
-    color: #17211c;
-    font-size: 14px;
-  }
-
-  .kp-booking-business small {
-    color: #6e7a73;
-    font-size: 11px;
-    line-height: 1.35;
-  }
-
-  .kp-date-strip-wrap {
-    margin: 12px -16px 0;
-    padding: 0 16px 4px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .kp-date-strip {
-    display: flex;
-    gap: 8px;
-    width: max-content;
-  }
-
-  .kp-date-pill {
-    min-width: 78px;
-    height: 112px;
-    padding: 8px 6px;
-    display: grid;
-    place-items: center;
-    gap: 2px;
-    border: 1px solid #dfe5e1;
-    border-radius: 18px;
-    background: #ffffff;
-    color: #526058;
-    cursor: pointer;
-  }
-
-  .kp-date-pill strong {
-    font-size: 27px;
-    line-height: 1;
-    color: inherit;
-  }
-
-  .kp-date-pill span {
-    font-size: 12px;
-    text-transform: lowercase;
-  }
-
-  .kp-date-pill.active {
-    border-color: #0b7041;
-    background: #0b7041;
-    color: #ffffff;
-    box-shadow: 0 8px 18px rgba(11,112,65,.18);
-  }
-
-  .kp-date-dot {
-    width: 6px;
-    height: 6px;
-    display: block;
-    border-radius: 50%;
-    background: transparent;
-  }
-
-  .kp-date-pill.available .kp-date-dot {
-    background: #0b7041;
-  }
-
-  .kp-date-pill.active .kp-date-dot {
-    background: #ffffff;
-  }
-
-  .kp-time-title {
-    margin: 24px 0 12px !important;
-    font-size: 20px !important;
-    font-weight: 800;
-  }
-
-  .kp-time-cards {
-    display: grid;
-    gap: 12px;
-    padding-bottom: 92px;
-  }
-
-  .kp-time-card {
-    width: 100%;
-    min-height: 78px;
-    padding: 0 18px;
-    display: flex;
-    align-items: center;
-    border: 1px solid #dfe4e1;
-    border-radius: 18px;
-    background: #ffffff;
-    color: #17211c;
-    font-size: 19px;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .kp-time-card.active {
-    border: 2px solid #0b7041;
-    background: #eef8f2;
-    color: #0b7041;
-    font-weight: 900;
-  }
-
-  .kp-continue-fixed {
-    position: fixed;
-    left: 50%;
-    bottom: 18px;
-    transform: translateX(-50%);
-    z-index: 95;
-    width: min(620px, calc(100% - 34px));
-    min-height: 66px;
-    margin: 0;
-    padding: 0 20px;
-    border-radius: 18px;
-    background: #171817;
-    color: #ffffff;
-    box-shadow: 0 12px 30px rgba(0,0,0,.24);
-  }
-
-  .kp-continue-detail {
-    color: #d3d3d3;
-    font-size: 15px;
-    font-weight: 800;
-  }
-
-  .kp-continue-action {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    color: #ffffff;
-    font-size: 18px;
-    font-weight: 900;
-  }
-
-  .kp-continue-action b {
-    font-size: 29px;
-    line-height: 1;
-    font-weight: 400;
-  }
-
-  .kp-available-note {
-    margin: -2px 0 10px;
-    color: #6b7770;
-    font-size: 11px;
-  }
-
-  .kp-days {
-    padding-bottom: 6px;
-    display: flex;
-    gap: 9px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .kp-days button {
-    min-width: 72px;
-    min-height: 100px;
-    padding: 9px 7px;
-    display: grid;
-    place-items: center;
-    gap: 3px;
-    border: 1px solid #dce3df;
-    border-radius: 18px;
-    background: #fff;
-    color: #59645e;
-    cursor: pointer;
-  }
-
-  .kp-days button strong {
-    font-size: 24px;
-  }
-
-  .kp-days button.active {
-    border-color: #171817;
-    background: #171817;
-    color: #fff;
-  }
-
-  .kp-times button {
-    min-height: 68px;
-    padding: 0 18px;
-    display: flex;
-    align-items: center;
-    border: 1px solid #dfe4e1;
-    border-radius: 17px;
-    background: #fff;
-    color: #1b231f;
-    font-size: 18px;
-    cursor: pointer;
-  }
-
-  .kp-times button.active {
-    border: 2px solid #2f65c8;
-    background: #f3f6ff;
-    color: #2f65c8;
-    font-weight: 900;
-  }
-
-  .kp-continue {
-    width: 100%;
-    min-height: 58px;
-    margin-top: 15px;
-    padding: 0 18px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border: 0;
-    border-radius: 18px;
-    background: #171817;
-    color: #fff;
-    cursor: pointer;
-  }
-
-  .kp-summary {
-    margin: 13px 0;
-    padding: 15px;
-    display: grid;
-    gap: 10px;
-    border: 1px solid #edf0ee;
-    border-radius: 18px;
-    background: #fafbfa;
-  }
-
-  .kp-summary-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    color: #6c7771;
-    font-size: 13px;
-  }
-
-  .kp-summary-row strong {
-    color: #17211c;
-    text-align: right;
-  }
-
-  .kp-summary-row strong.accent {
-    color: #0b7041;
-  }
-
-  .kp-note,
-  .kp-info,
-  .kp-cancelled {
-    margin: 12px 0;
-    padding: 12px;
-    border-radius: 13px;
-    font-size: 12px;
-    line-height: 1.4;
-  }
-
-  .kp-note {
-    background: #fff8e7;
-    color: #8a6414;
-  }
-
-  .kp-info {
-    background: #eef5f1;
-    color: #405147;
-  }
-
-  .kp-cancelled {
-    background: #ffedec;
-    color: #8a1c12;
-  }
-
-  .kp-form label,
-  .kp-cancel-box label {
-    display: grid;
-    gap: 6px;
-    color: #263129;
-    font-size: 12px;
-    font-weight: 800;
-  }
-
-  .kp-form input,
-  .kp-form textarea,
-  .kp-cancel-box input {
-    width: 100%;
-    min-height: 48px;
-    padding: 10px 12px;
-    border: 1px solid #cfd9d3;
-    border-radius: 13px;
-    background: #fff;
-    color: #17211c;
-    font-size: 16px;
-  }
-
-  .kp-form textarea {
-    min-height: 82px;
-    resize: vertical;
-  }
-
-  .kp-confirm,
-  .kp-secondary,
-  .kp-danger {
-    width: 100%;
-    min-height: 50px;
-    border-radius: 14px;
-    font-weight: 900;
-    cursor: pointer;
-  }
-
-  .kp-confirm {
-    border: 0;
-    color: #fff;
-    background: linear-gradient(180deg,#168c54,#0b7041);
-  }
-
-  .kp-secondary {
-    margin-top: 10px;
-    border: 1px solid #0b7041;
-    background: #fff;
-    color: #0b7041;
-  }
-
-  .kp-danger {
-    border: 0;
-    background: #b42318;
-    color: #fff;
-  }
-
-  .kp-link {
-    width: 100%;
-    min-height: 42px;
-    margin-top: 6px;
-    color: #5d6962;
-  }
-
-  .kp-success {
-    text-align: center;
-  }
-
-  .kp-check {
-    width: 62px;
-    height: 62px;
-    margin: 6px auto 13px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: #0b7041;
-    color: #fff;
-    font-size: 30px;
-    font-weight: 900;
-  }
-
-  .kp-success p {
-    color: #536159;
-    line-height: 1.6;
-  }
-
-  .kp-manage {
-    border: 2px solid #a7d7ba;
-    background: #f0faf4;
-  }
-
-  .kp-data-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit,minmax(150px,1fr));
-    gap: 9px;
-  }
-
-  .kp-data {
-    padding: 11px;
-    display: grid;
-    gap: 4px;
-    border: 1px solid #dce6e0;
-    border-radius: 13px;
-    background: #fff;
-  }
-
-  .kp-error,
-  .kp-error-card {
-    margin-bottom: 12px;
-    padding: 12px;
-    border: 1px solid #f2b8b3;
-    border-radius: 13px;
-    background: #fff1ef;
-    color: #8a1c12;
-  }
-
-  .kp-empty-action {
-    margin-top: 12px;
-    min-height: 42px;
-    padding: 0 14px;
-    border: 0;
-    border-radius: 12px;
-    background: #0b7041;
-    color: #ffffff;
-    font-weight: 900;
-    cursor: pointer;
-  }
-
-  .kp-empty {
-    padding: 24px;
-    border: 1px dashed #d5ddd8;
-    border-radius: 15px;
-    background: #fafcfb;
-    color: #748078;
-    text-align: center;
-    font-size: 13px;
-  }
-
-  .kp-reserve-now {
-    position: fixed;
-    z-index: 80;
-    left: 50%;
-    bottom: 82px;
-    transform: translateX(-50%);
-    width: min(620px,calc(100% - 30px));
-    min-height: 58px;
-    padding: 0 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    border: 0;
-    border-radius: 18px;
-    color: #fff;
-    background: linear-gradient(180deg,#168c54,#0b7041);
-    box-shadow: 0 12px 30px rgba(11,112,65,.28);
-    font-size: 18px;
-    cursor: pointer;
-  }
-
-  .kp-bottom-nav {
-    position: fixed;
-    z-index: 70;
-    left: 50%;
-    bottom: 8px;
-    transform: translateX(-50%);
-    width: min(620px,calc(100% - 20px));
-    min-height: 68px;
-    padding: 8px 12px;
-    display: grid;
-    grid-template-columns: repeat(3,minmax(0,1fr));
-    gap: 6px;
-    border: 1px solid #e2e7e4;
-    border-radius: 22px;
-    background: rgba(255,255,255,.98);
-    box-shadow: 0 8px 28px rgba(20,38,28,.10);
-  }
-
-  .kp-bottom-nav button {
-    display: grid;
-    place-items: center;
-    gap: 2px;
-    border: 0;
-    background: transparent;
-    color: #56625b;
-    font-weight: 800;
-    cursor: pointer;
-  }
-
-  .kp-bottom-nav button span {
-    font-size: 20px;
-  }
-
-  .kp-modal-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 120;
-    display: grid;
-    place-items: center;
-    padding: 20px;
-    background: rgba(8,14,11,.58);
-    backdrop-filter: blur(3px);
-  }
-
-  .kp-modal {
-    width: min(420px,100%);
-    padding: 22px;
-    border-radius: 22px;
-    background: #ffffff;
-    color: #17211c;
-    box-shadow: 0 24px 60px rgba(0,0,0,.25);
-    text-align: center;
-  }
-
-  .kp-modal-icon {
-    width: 58px;
-    height: 58px;
-    margin: 0 auto 12px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: #eaf5ef;
-    color: #0b7041;
-    font-size: 25px;
-    font-weight: 900;
-  }
-
-  .kp-modal h3 {
-    margin: 7px 0 8px;
-    font-size: 21px;
-  }
-
-  .kp-modal p {
-    margin: 0 0 16px;
-    color: #66746c;
-    font-size: 13px;
-    line-height: 1.5;
-  }
-
-
-  .kp-wod-wrap {
-    margin: 16px 0;
-    text-align: left;
-  }
-
-  .kp-wod,
-  .kp-wod-locked {
-    padding: 16px;
-    border: 1px solid #b9ddc8;
-    border-radius: 18px;
-    background: #f0faf4;
-  }
-
-  .kp-wod-eyebrow {
-    display: block;
-    color: #0b7041;
-    font-size: 9px;
-    font-weight: 900;
-    letter-spacing: 1.1px;
-  }
-
-  .kp-wod h3 {
-    margin: 5px 0 4px;
-    color: #17211c;
-    font-size: 22px;
-  }
-
-  .kp-wod-program {
-    margin-bottom: 12px;
-    color: #607068;
-    font-size: 12px;
-    font-weight: 800;
-  }
-
-  .kp-wod-blocks {
-    display: grid;
-    gap: 8px;
-  }
-
-  .kp-wod-block {
-    padding: 11px 12px;
-    display: grid;
-    gap: 5px;
-    border: 1px solid #dce7e1;
-    border-radius: 12px;
-    background: #ffffff;
-  }
-
-  .kp-wod-block.accent {
-    border-color: #8fcaa8;
-    background: #e8f7ee;
-  }
-
-  .kp-wod-block span,
-  .kp-wod-note span {
-    color: #0b7041;
-    font-size: 9px;
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: .8px;
-  }
-
-  .kp-wod-block strong,
-  .kp-wod-note strong {
-    white-space: pre-wrap;
-    color: #17211c;
-    font-size: 13px;
-    line-height: 1.45;
-  }
-
-  .kp-wod-note {
-    margin-top: 9px;
-    padding: 11px 12px;
-    display: grid;
-    gap: 5px;
-    border-radius: 12px;
-    background: #fff8e7;
-  }
-
-  .kp-wod-locked {
-    display: grid;
-    gap: 5px;
-    color: #536159;
-  }
-
-  .kp-wod-locked strong {
-    color: #0b7041;
-  }
-
-  .kp-dark .kp-wod,
-  .kp-dark .kp-wod-locked {
-    background: #102018;
-    border-color: #28523a;
-  }
-
-  .kp-dark .kp-wod h3,
-  .kp-dark .kp-wod-block strong,
-  .kp-dark .kp-wod-note strong {
-    color: #ffffff;
-  }
-
-  .kp-dark .kp-wod-block {
-    background: #111b16;
-    border-color: #2b3a32;
-  }
-
-  .kp-dark .kp-wod-block.accent {
-    background: #153c29;
-    border-color: #42d47f;
-  }
-
-  .kp-dark .kp-wod-program,
-  .kp-dark .kp-wod-locked {
-    color: #aeb9b2;
-  }
-
-  .kp-footer {
-    padding: 18px 2px 4px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    color: #829088;
-    font-size: 9px;
-  }
-
-  .kp-footer img {
-    width: 74px;
-    height: 28px;
-    object-fit: contain;
-  }
-
-  .kp-loading {
-    min-height: 100vh;
-    display: grid;
-    place-items: center;
-    align-content: center;
-    gap: 12px;
-    background: #f5f7f6;
-    color: #0b7041;
-    font-family: Inter, system-ui, "Segoe UI", sans-serif;
-  }
-
-
-
-
-
-  /* =========================================================
-     GIMNASIO · FECHAS DISPONIBLES EN PORTADA
-     ========================================================= */
-
-  .kp-gym-dates-section {
-    margin: 0 0 28px;
-    padding: 16px;
-    border: 1px solid #e1e6e3;
-    border-radius: 20px;
-    background: #fafbfa;
-  }
-
-  .kp-gym-dates-heading {
-    margin-bottom: 13px;
-    display: flex;
-    align-items: end;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .kp-gym-dates-heading h2 {
-    margin: 4px 0 0;
-    color: #111111;
-    font-size: 24px;
-    line-height: 1.05;
-  }
-
-  .kp-gym-dates-loading {
-    color: #748078;
-    font-size: 10px;
-    font-weight: 800;
-  }
-
-  .kp-gym-dates-strip-wrap {
-    margin: 0 -16px;
-    padding: 0 16px 4px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .kp-gym-dates-strip-wrap::-webkit-scrollbar {
-    display: none;
-  }
-
-  .kp-gym-dates-strip {
-    width: max-content;
-    display: flex;
-    gap: 8px;
-  }
-
-  .kp-gym-date-pill {
-    min-width: 72px;
-    min-height: 88px;
-    padding: 8px 7px;
-    display: grid;
-    place-items: center;
-    gap: 1px;
-    border: 1px solid #dcdedc;
-    border-radius: 16px;
-    background: #ffffff;
-    color: #555f59;
-    cursor: pointer;
-  }
-
-  .kp-gym-date-pill span,
-  .kp-gym-date-pill small {
-    font-size: 10px;
-    text-transform: capitalize;
-  }
-
-  .kp-gym-date-pill strong {
-    color: inherit;
-    font-size: 24px;
-    line-height: 1;
-  }
-
-  .kp-gym-date-pill.active {
-    border-color: #111111;
-    background: #111111;
-    color: #ffffff;
-    box-shadow: 0 7px 18px rgba(0,0,0,.12);
-  }
-
-  .kp-gym-selected-date {
-    margin-top: 11px;
-    color: #717b75;
-    font-size: 10px;
-  }
-
-  .kp-gym-selected-date strong {
-    color: #111111;
-    text-transform: capitalize;
-  }
-
-  .kp-gym-no-dates {
-    padding: 14px;
-    border: 1px dashed #d9ddda;
-    border-radius: 14px;
-    background: #ffffff;
-    color: #748078;
-    text-align: center;
-    font-size: 11px;
-  }
-
-  .kp-dark .kp-gym-dates-section,
-  .kp-dark .kp-gym-date-pill,
-  .kp-dark .kp-gym-no-dates {
-    border-color: #333b36;
-    background: #111713;
-    color: #b2bbb5;
-  }
-
-  .kp-dark .kp-gym-dates-heading h2,
-  .kp-dark .kp-gym-selected-date strong {
-    color: #ffffff;
-  }
-
-  .kp-dark .kp-gym-date-pill.active {
-    border-color: #ffffff;
-    background: #ffffff;
-    color: #111111;
-  }
-
-  /* =========================================================
-     RANKING DE SERVICIOS + TIPOGRAFÍA PREMIUM
-     ========================================================= */
-
-  .kp-page {
-    font-family:
-      "Avenir Next",
-      "Segoe UI Variable",
-      "Segoe UI",
-      Inter,
-      system-ui,
-      sans-serif;
-    letter-spacing: -.012em;
-  }
-
-  .kp-cover h1,
-  .kp-profile-section h2,
-  .kp-popular-heading h2,
-  .kp-all-services-title h2,
-  .kp-flow h2 {
-    font-weight: 800;
-    letter-spacing: -.045em;
-  }
-
-  .kp-popular-section {
-    margin-top: 6px;
-  }
-
-  .kp-popular-heading,
-  .kp-all-services-title {
-    margin-bottom: 15px;
-    display: flex;
-    align-items: end;
-    justify-content: space-between;
-    gap: 14px;
-  }
-
-  .kp-popular-heading h2,
-  .kp-all-services-title h2 {
-    margin: 4px 0 0;
-    color: #10261d;
-    font-size: 29px;
-    line-height: 1.02;
-  }
-
-  .kp-view-all {
-    flex: 0 0 auto;
-    padding: 7px 0;
-    border: 0;
-    background: transparent;
-    color: #087a55;
-    font-size: 12px;
-    font-weight: 850;
-    cursor: pointer;
-  }
-
-  .kp-view-all span {
-    margin-left: 3px;
-    font-size: 17px;
-  }
-
-  .kp-popular-list {
-    display: grid;
-    gap: 14px;
-  }
-
-  .kp-popular-card {
-    position: relative;
-    min-height: 220px;
-    padding: 12px;
-    display: grid;
-    grid-template-columns: 43% minmax(0,1fr);
-    gap: 14px;
-    overflow: hidden;
-    border: 1px solid #dfe7e2;
-    border-radius: 22px;
-    background: #ffffff;
-    box-shadow: 0 8px 24px rgba(16,38,29,.045);
-  }
-
-  .kp-popular-card.first {
-    border-color: #b9d9ca;
-    box-shadow:
-      0 10px 30px rgba(16,38,29,.055),
-      inset 4px 0 0 #087a55;
-  }
-
-  .kp-rank-badge {
-    position: absolute;
-    z-index: 4;
-    top: 12px;
-    left: 12px;
-    min-height: 31px;
-    padding: 0 12px;
-    display: inline-flex;
-    align-items: center;
-    border-radius: 10px 10px 10px 3px;
-    background: #087a55;
-    color: #ffffff;
-    font-size: 9px;
-    font-weight: 950;
-    letter-spacing: .75px;
-  }
-
-  .kp-popular-card:not(.first) .kp-rank-badge {
-    background: #66756d;
-  }
-
-  .kp-popular-media {
-    position: relative;
-    min-height: 196px;
-    overflow: hidden;
-    border-radius: 17px;
-    background: #edf3ef;
-  }
-
-  .kp-popular-media > img {
-    width: 100%;
-    height: 100%;
-    display: block;
-    object-fit: cover;
-  }
-
-  .kp-popular-placeholder {
-    width: 100%;
-    height: 100%;
-    min-height: 196px;
-    display: grid;
-    place-items: center;
-    background: #eaf5ef;
-    color: #087a55;
-    font-size: 42px;
-  }
-
-  .kp-executed-chip {
-    position: absolute;
-    left: 8px;
-    bottom: 8px;
-    max-width: calc(100% - 16px);
-    padding: 7px 9px;
-    display: grid;
-    grid-template-columns: auto auto;
-    align-items: center;
-    column-gap: 5px;
-    border: 1px solid rgba(255,255,255,.20);
-    border-radius: 10px;
-    background: rgba(12,25,19,.74);
-    color: #ffffff;
-    backdrop-filter: blur(8px);
-  }
-
-  .kp-executed-chip > span {
-    grid-row: 1 / 3;
-    width: 20px;
-    height: 20px;
-    display: grid;
-    place-items: center;
-    border: 1px solid rgba(255,255,255,.75);
-    border-radius: 50%;
-    font-size: 10px;
-  }
-
-  .kp-executed-chip strong {
-    font-size: 14px;
-    line-height: 1;
-  }
-
-  .kp-executed-chip small {
-    color: rgba(255,255,255,.88);
-    font-size: 8.5px;
-    line-height: 1.1;
-  }
-
-  .kp-popular-info {
-    min-width: 0;
-    padding: 35px 2px 2px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .kp-popular-name {
-    color: #10261d;
-    font-size: 18px;
-    font-weight: 900;
-    line-height: 1.08;
-  }
-
-  .kp-popular-meta {
-    margin-top: 7px;
-    color: #68776f;
-    font-size: 11px;
-    font-weight: 700;
-  }
-
-  .kp-popular-price {
-    margin-top: auto;
-    padding-top: 18px;
-    display: grid;
-    gap: 2px;
-  }
-
-  .kp-popular-price small {
-    color: #748078;
-    font-size: 9px;
-    font-weight: 750;
-  }
-
-  .kp-popular-price strong {
-    color: #087a55;
-    font-size: 20px;
-    line-height: 1;
-  }
-
-  .kp-popular-info > button {
-    width: 100%;
-    min-height: 43px;
-    margin-top: 12px;
-    border: 0;
-    border-radius: 14px;
-    background: #087a55;
-    color: #ffffff;
-    font-size: 12px;
-    font-weight: 900;
-    cursor: pointer;
-  }
-
-  .kp-all-services {
-    margin-top: 36px;
-    scroll-margin-top: 150px;
-  }
-
-  .kp-service-total {
-    min-width: 34px;
-    height: 34px;
-    padding: 0 9px;
-    display: grid;
-    place-items: center;
-    border-radius: 999px;
-    background: #eaf7f1;
-    color: #087a55;
-    font-size: 11px;
-    font-weight: 950;
-  }
-
-  .kp-dark .kp-popular-heading h2,
-  .kp-dark .kp-all-services-title h2,
-  .kp-dark .kp-popular-name {
-    color: #ffffff;
-  }
-
-  .kp-dark .kp-popular-card {
-    border-color: #2b3a32;
-    background: #111b16;
-  }
-
-  .kp-dark .kp-service-total {
-    background: #173c29;
-    color: #75e2a4;
-  }
-
-  /* =========================================================
-     PERFIL PÚBLICO DEL NEGOCIO · PORTADA + TABS
-     ========================================================= */
-
-  .kp-public-profile {
-    margin: -18px;
-    overflow: visible;
-    border-radius: 24px;
-    background: #ffffff;
-  }
-
-  /*
-     PORTADA EN FLUJO NORMAL:
-     La FOTO es un elemento normal del documento.
-     Al deslizar la página, foto + texto suben juntos.
-     La portada NO usa sticky, fixed, parallax ni background fijo.
-  */
-  .kp-cover {
-    position: relative;
-    width: 100%;
-    padding: 0;
-    overflow: hidden;
-    border-radius: 24px 24px 0 0;
-    background: #0d3b2a;
-    touch-action: pan-y;
-  }
-
-  .kp-cover-image {
-    position: relative;
-    z-index: 0;
-    display: block;
-    width: 100%;
-    height: 430px;
-    object-fit: cover;
-    object-position: center center;
-    transform: none;
-    pointer-events: none;
-    user-select: none;
-    -webkit-user-drag: none;
-  }
-
-  .kp-cover-fallback {
-    position: relative;
-    z-index: 0;
-    width: 100%;
-    height: 430px;
-    display: grid;
-    place-items: center;
-    overflow: hidden;
+      "radial-gradient(circle at top right,rgba(22,131,79,.13),transparent 35%),radial-gradient(circle at bottom left,rgba(15,85,52,.08),transparent 32%),#EEF4F0",
+    color: "#17211C",
+    fontFamily:
+      'Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+  },
+
+  shell: {
+    position: "relative",
+    width: "min(680px,100%)",
+    minHeight: 760,
+    overflow: "hidden",
+    border: "1px solid #D9E6DE",
+    borderRadius: 28,
+    background: "#F6F8FB",
+    boxShadow: "0 28px 80px rgba(15,50,31,.13)",
+  },
+
+  topUserRow: {
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  topMenuIconButton: {
+    width: 44,
+    height: 44,
+    flex: "0 0 auto",
+    display: "grid",
+    placeItems: "center",
+    border: 0,
+    borderRadius: 13,
+    background: "#0B1628",
+    color: "#FFFFFF",
+    fontSize: 21,
+    cursor: "pointer",
+    boxShadow: "0 8px 18px rgba(15,23,42,.12)",
+  },
+
+  topUserButton: {
+    minWidth: 0,
+    padding: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    border: 0,
+    background: "transparent",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  topUserBlock: {
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  topUserAvatar: {
+    width: 46,
+    height: 46,
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    flex: "0 0 auto",
+    borderRadius: 14,
+    background: "#E9EEF4",
+    color: "#0F172A",
+    fontSize: 16,
+    fontWeight: 950,
+  },
+
+  topUserText: {
+    minWidth: 0,
+  },
+
+  topUserName: {
+    display: "block",
+    maxWidth: 230,
+    overflow: "hidden",
+    color: "#111827",
+    fontSize: 14,
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  topUserState: {
+    display: "block",
+    marginTop: 2,
+    color: "#7A8797",
+    fontSize: 8.5,
+  },
+
+  topbar: {
+    minHeight: 74,
+    padding: "12px 14px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    background: "#FFFFFF",
+    borderBottom: "1px solid #E6EBF1",
+    position: "sticky",
+    top: 0,
+    zIndex: 20,
+  },
+
+  menuButton: {
+    width: 40,
+    height: 40,
+    border: 0,
+    borderRadius: 12,
+    background: "#0F172A",
+    color: "#FFFFFF",
+    fontSize: 19,
+    cursor: "pointer",
+  },
+
+  brandBlock: {
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  brandTextWrap: {
+    minWidth: 0,
+  },
+
+  brandMark: {
+    width: 48,
+    height: 48,
+    overflow: "hidden",
+    flex: "0 0 auto",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 14,
+    background: "#FFFFFF",
+    border: "1px solid #DDE8E1",
+    color: "#0F172A",
+    fontSize: 17,
+    fontWeight: 950,
+  },
+
+  brandLogo: {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    background: "#FFFFFF",
+  },
+
+  brandName: {
+    display: "block",
+    maxWidth: 260,
+    overflow: "hidden",
+    color: "#0F172A",
+    fontSize: 13,
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  powered: {
+    display: "block",
+    marginTop: 2,
+    color: "#829088",
+    fontSize: 8,
+  },
+
+  refreshButton: {
+    width: 40,
+    height: 40,
+    border: "1px solid #DCE6E0",
+    borderRadius: 12,
+    background: "#F8FAF9",
+    color: "#426050",
+    fontSize: 18,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  content: {
+    padding: "18px 18px 26px",
+  },
+
+  menuOverlay: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 90,
+    border: 0,
+    background: "rgba(8,18,12,.55)",
+    backdropFilter: "blur(2px)",
+  },
+
+  drawer: {
+    position: "fixed",
+    zIndex: 100,
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: "min(360px,88vw)",
+    padding: "18px 16px",
+    display: "grid",
+    gridTemplateRows: "auto 1fr auto",
+    background: "linear-gradient(180deg,#07111F 0%,#0B1628 55%,#0A1422 100%)",
+    color: "#FFFFFF",
+    boxShadow: "18px 0 50px rgba(0,0,0,.22)",
+  },
+
+  drawerBusiness: {
+    padding: "4px 8px 14px",
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    borderBottom: "1px solid rgba(255,255,255,.09)",
+  },
+
+  drawerBusinessLogo: {
+    width: 52,
+    height: 52,
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    flex: "0 0 auto",
+    borderRadius: 12,
+    background: "#FFFFFF",
+    color: "#0F172A",
+    fontSize: 16,
+    fontWeight: 950,
+  },
+
+  drawerBusinessText: {
+    minWidth: 0,
+  },
+
+  drawerBusinessName: {
+    display: "block",
+    minWidth: 0,
+    overflow: "hidden",
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: 900,
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  drawerBusinessSub: {
+    display: "block",
+    marginTop: 2,
+    color: "#72839A",
+    fontSize: 8,
+  },
+
+  drawerHeader: {
+    padding: "8px 8px 18px",
+    display: "grid",
+    gridTemplateColumns: "56px minmax(0,1fr)",
+    gap: 11,
+    alignItems: "center",
+    borderBottom: "1px solid rgba(255,255,255,.09)",
+  },
+
+  drawerAvatar: {
+    width: 56,
+    height: 56,
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 17,
+    background: "rgba(255,255,255,.10)",
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: 950,
+  },
+
+  drawerName: {
+    display: "block",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    fontSize: 14,
+  },
+
+  drawerState: {
+    display: "block",
+    marginTop: 3,
+    color: "#8FB9D1",
+    fontSize: 9,
+  },
+
+  drawerNav: {
+    padding: "16px 0",
+    display: "grid",
+    alignContent: "start",
+    gap: 5,
+  },
+
+  drawerItem: {
+    width: "100%",
+    minHeight: 48,
+    padding: "0 13px",
+    display: "grid",
+    gridTemplateColumns: "31px minmax(0,1fr)",
+    alignItems: "center",
+    gap: 8,
+    border: 0,
+    borderRadius: 12,
+    background: "transparent",
+    color: "#D5DEE8",
+    textAlign: "left",
+    fontSize: 12,
+    fontWeight: 750,
+    cursor: "pointer",
+  },
+
+  drawerItemActive: {
+    background: "linear-gradient(90deg,#0B3C5D 0%,#0D506B 100%)",
+    color: "#FFFFFF",
+    boxShadow: "0 10px 24px rgba(0,0,0,.16)",
+  },
+
+  drawerIcon: {
+    width: 34,
+    height: 34,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 9,
+    background: "rgba(255,255,255,.07)",
+    fontSize: 14,
+  },
+
+  drawerFooter: {
+    paddingTop: 12,
+    borderTop: "1px solid rgba(255,255,255,.09)",
+  },
+
+  drawerLogout: {
+    width: "100%",
+    minHeight: 44,
+    border: "1px solid rgba(255,255,255,.13)",
+    borderRadius: 11,
+    background: "transparent",
+    color: "#D8E2DC",
+    fontSize: 10,
+    fontWeight: 800,
+  },
+
+  inlineError: {
+    marginBottom: 12,
+    padding: 11,
+    border: "1px solid #F0C9C4",
+    borderRadius: 12,
+    background: "#FFF2F0",
+    color: "#8B3C34",
+    fontSize: 9,
+  },
+
+  successMessage: {
+    marginBottom: 12,
+    padding: 11,
+    border: "1px solid #BFE3CE",
+    borderRadius: 12,
+    background: "#ECF9F1",
+    color: "#196D42",
+    fontSize: 9,
+    fontWeight: 800,
+  },
+
+  hero: {
+    marginBottom: 15,
+    padding: 18,
+    borderRadius: 21,
     background:
-      radial-gradient(circle at 80% 20%, rgba(48,182,127,.28), transparent 30%),
-      linear-gradient(145deg,#0d3b2a,#081d15);
-  }
+      "linear-gradient(135deg,#173C2A 0%,#0F6B40 100%)",
+    color: "#FFFFFF",
+    boxShadow: "0 16px 34px rgba(23,60,42,.18)",
+  },
 
-  .kp-cover-fallback span {
-    transform: rotate(-10deg);
-    color: rgba(255,255,255,.055);
-    font-size: 300px;
-    font-weight: 950;
-    line-height: 1;
-  }
+  heroTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+  },
 
-  .kp-cover-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    pointer-events: none;
+  heroIdentity: {
+    minWidth: 0,
+    display: "grid",
+    gridTemplateColumns: "62px minmax(0,1fr)",
+    alignItems: "center",
+    gap: 12,
+  },
+
+  avatar: {
+    width: 62,
+    height: 62,
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 18,
+    background: "rgba(255,255,255,.13)",
+    border: "1px solid rgba(255,255,255,.18)",
+    color: "#FFFFFF",
+    fontSize: 19,
+    fontWeight: 950,
+  },
+
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+  },
+
+  welcome: {
+    display: "block",
+    marginBottom: 2,
+    color: "#B9DDC8",
+    fontSize: 9,
+  },
+
+  memberName: {
+    margin: 0,
+    overflow: "hidden",
+    color: "#FFFFFF",
+    fontSize: 22,
+    lineHeight: 1.08,
+    textOverflow: "ellipsis",
+  },
+
+  memberId: {
+    display: "block",
+    marginTop: 5,
+    color: "#B9D2C3",
+    fontSize: 8.5,
+  },
+
+  estadoBadge: {
+    minHeight: 28,
+    padding: "0 9px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    fontSize: 8.5,
+    fontWeight: 900,
+    whiteSpace: "nowrap",
+  },
+
+  estadoBadgeOk: {
+    color: "#D9FFE8",
+    background: "rgba(77,210,132,.16)",
+    border: "1px solid rgba(137,236,176,.21)",
+  },
+
+  estadoBadgeWarning: {
+    color: "#FFF0C4",
+    background: "rgba(242,181,61,.15)",
+    border: "1px solid rgba(255,217,137,.20)",
+  },
+
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: "50%",
+  },
+
+  heroStats: {
+    marginTop: 16,
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 8,
+  },
+
+  heroStat: {
+    padding: 11,
+    borderRadius: 13,
+    background: "rgba(255,255,255,.09)",
+    border: "1px solid rgba(255,255,255,.09)",
+  },
+
+  heroStatLabel: {
+    display: "block",
+    color: "#A9CDB8",
+    fontSize: 7,
+    fontWeight: 900,
+    letterSpacing: 1,
+  },
+
+  heroStatValue: {
+    display: "block",
+    marginTop: 4,
+    color: "#FFFFFF",
+    fontSize: 11,
+    lineHeight: 1.3,
+  },
+
+  quickSection: {
+    marginBottom: 15,
+    padding: 17,
+    border: "1px solid #DFE8E2",
+    borderRadius: 19,
+    background: "#FFFFFF",
+  },
+
+  quickGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 9,
+  },
+
+  quickCard: {
+    minHeight: 82,
+    padding: 12,
+    display: "grid",
+    gridTemplateColumns: "38px minmax(0,1fr) 14px",
+    alignItems: "center",
+    gap: 8,
+    border: "1px solid #E2EAE5",
+    borderRadius: 14,
+    background: "#F9FBFA",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  quickIcon: {
+    width: 38,
+    height: 38,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 12,
+    background: "#E6F4EB",
+    color: "#0EA5A6",
+    fontSize: 16,
+    fontWeight: 900,
+  },
+
+  quickCopy: {
+    minWidth: 0,
+    display: "grid",
+    gap: 2,
+  },
+
+  quickTitle: {
+    color: "#243A2D",
+    fontSize: 11,
+  },
+
+  quickSubtitle: {
+    color: "#829088",
+    fontSize: 7.5,
+  },
+
+  quickArrow: {
+    color: "#AAB6AF",
+    fontSize: 20,
+  },
+
+  accessBanner: {
+    marginBottom: 15,
+    padding: 15,
+    display: "grid",
+    gridTemplateColumns: "42px minmax(0,1fr)",
+    alignItems: "center",
+    gap: 11,
+    borderRadius: 16,
+  },
+
+  accessBannerOk: {
+    background: "#EAF8F0",
+    border: "1px solid #C5E9D3",
+  },
+
+  accessBannerBlocked: {
+    background: "#FFF5E6",
+    border: "1px solid #F0D9AB",
+  },
+
+  accessIcon: {
+    width: 42,
+    height: 42,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 13,
+    fontSize: 18,
+    fontWeight: 950,
+  },
+
+  accessIconOk: {
+    background: "#D6F2E0",
+    color: "#0EA5A6",
+  },
+
+  accessIconBlocked: {
+    background: "#FFEAC5",
+    color: "#A66A00",
+  },
+
+  accessLabel: {
+    display: "block",
+    color: "#718077",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: 1,
+  },
+
+  accessTitle: {
+    display: "block",
+    marginTop: 2,
+    color: "#22372B",
+    fontSize: 14,
+  },
+
+  accessText: {
+    margin: "4px 0 0",
+    color: "#69786F",
+    fontSize: 9.5,
+    lineHeight: 1.45,
+  },
+
+  section: {
+    marginBottom: 15,
+    padding: 18,
+    border: "1px solid #DFE8E2",
+    borderRadius: 19,
+    background: "#FFFFFF",
+  },
+
+  sectionHeading: {
+    marginBottom: 14,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+
+  sectionEyebrow: {
+    display: "block",
+    color: "#0EA5A6",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: 1.1,
+  },
+
+  sectionTitle: {
+    margin: "3px 0 0",
+    color: "#17251D",
+    fontSize: 20,
+  },
+
+  qrSection: {
+    marginBottom: 15,
+    padding: 18,
+    borderRadius: 20,
     background:
-      linear-gradient(
-        180deg,
-        rgba(7,25,18,.07) 8%,
-        rgba(7,25,18,.16) 42%,
-        rgba(7,25,18,.88) 100%
-      );
-  }
+      "linear-gradient(145deg,#FFFFFF 0%,#F4FAF6 100%)",
+    border: "1px solid #D9E7DE",
+  },
 
-  .kp-cover-ui {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    pointer-events: none;
-  }
+  qrEyebrow: {
+    display: "block",
+    color: "#0EA5A6",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: 1,
+  },
 
-  .kp-cover-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    pointer-events: auto;
-  }
+  qrStatus: {
+    padding: "6px 9px",
+    borderRadius: 999,
+    fontSize: 7.5,
+    fontWeight: 950,
+    letterSpacing: 0.8,
+  },
 
-  .kp-powered {
-    padding: 7px 10px;
-    border: 1px solid rgba(255,255,255,.22);
-    border-radius: 999px;
-    background: rgba(7,24,17,.32);
-    color: rgba(255,255,255,.92);
-    backdrop-filter: blur(9px);
-    font-size: 10px;
-    font-weight: 850;
-    letter-spacing: .2px;
-  }
+  qrStatusActive: {
+    background: "#DEF5E7",
+    color: "#147443",
+  },
 
-  .kp-share {
-    width: 42px;
-    height: 42px;
-    display: grid;
-    place-items: center;
-    border: 1px solid rgba(255,255,255,.35);
-    border-radius: 50%;
-    background: rgba(255,255,255,.92);
-    color: #10261d;
-    font-size: 21px;
-    font-weight: 900;
-    cursor: pointer;
-    box-shadow: 0 8px 24px rgba(0,0,0,.16);
-    pointer-events: auto;
-  }
+  qrStatusInactive: {
+    background: "#FFF0D3",
+    color: "#92600A",
+  },
 
-  .kp-cover-content {
-    max-width: 560px;
-    pointer-events: auto;
-  }
+  qrLayout: {
+    display: "grid",
+    gridTemplateColumns: "210px minmax(0,1fr)",
+    gap: 18,
+    alignItems: "center",
+  },
 
-  .kp-category-badge {
-    display: inline-flex;
-    align-items: center;
-    min-height: 34px;
-    margin-bottom: 12px;
-    padding: 0 14px;
-    border: 1px solid rgba(255,255,255,.16);
-    border-radius: 999px;
-    background: rgba(9,25,18,.52);
-    color: #ffffff;
-    backdrop-filter: blur(9px);
-    font-size: 12px;
-    font-weight: 800;
-  }
+  qrFrame: {
+    width: "100%",
+    aspectRatio: "1 / 1",
+    padding: 13,
+    overflow: "hidden",
+    borderRadius: 22,
+    background: "#FFFFFF",
+    border: "1px solid #DDE7E1",
+    boxShadow: "0 16px 36px rgba(17,62,39,.10)",
+  },
 
-  .kp-cover h1 {
-    max-width: 560px;
-    margin: 0 0 14px;
-    color: #ffffff;
-    font-size: clamp(34px,8vw,52px);
-    line-height: .98;
-    letter-spacing: -1.3px;
-    text-shadow: 0 3px 18px rgba(0,0,0,.28);
-  }
+  qrImage: {
+    width: "100%",
+    height: "100%",
+    display: "block",
+    borderRadius: 12,
+    objectFit: "contain",
+  },
 
-  .kp-profile-meta {
-    max-width: 500px;
-    margin-top: 9px;
-    display: flex;
-    align-items: flex-start;
-    gap: 9px;
-    color: rgba(255,255,255,.96);
-    font-size: 14px;
-    font-weight: 650;
-    line-height: 1.45;
-    text-shadow: 0 2px 12px rgba(0,0,0,.24);
-  }
+  noQr: {
+    width: "100%",
+    aspectRatio: "1 / 1",
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 7,
+    padding: 16,
+    textAlign: "center",
+    borderRadius: 22,
+    background: "#F1F5F2",
+    border: "1px dashed #BED0C4",
+    color: "#64746A",
+  },
 
-  .kp-meta-icon {
-    flex: 0 0 auto;
-    font-size: 18px;
-    line-height: 1.2;
-  }
+  noQrIcon: {
+    width: 54,
+    height: 54,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 15,
+    background: "#183C2A",
+    color: "#FFFFFF",
+    fontWeight: 950,
+  },
 
-  .kp-map-link {
-    width: fit-content;
-    max-width: 100%;
-    text-decoration: none;
-    cursor: pointer;
-  }
+  qrInstructions: {
+    minWidth: 0,
+  },
 
-  .kp-map-copy {
-    display: grid;
-    gap: 2px;
-    min-width: 0;
-  }
+  qrInstructionEyebrow: {
+    color: "#0EA5A6",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: 1,
+  },
 
-  .kp-map-copy strong {
-    color: #d7ffdf;
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: .1px;
-  }
+  qrInstructionTitle: {
+    margin: "5px 0 7px",
+    color: "#1F3428",
+    fontSize: 18,
+    lineHeight: 1.15,
+  },
 
-  .kp-profile-tabs {
-    position: sticky;
-    top: 66px;
-    z-index: 15;
-    min-height: 68px;
-    padding: 0 18px;
-    display: grid;
-    grid-template-columns: repeat(3,minmax(0,1fr));
-    align-items: stretch;
-    border-bottom: 1px solid #e4e9e6;
-    background: rgba(255,255,255,.97);
-    backdrop-filter: blur(12px);
-  }
+  qrInstructionText: {
+    margin: 0,
+    color: "#697970",
+    fontSize: 9.5,
+    lineHeight: 1.5,
+  },
 
+  configHero: {
+    marginBottom: 15,
+    padding: 18,
+    display: "grid",
+    gridTemplateColumns: "76px minmax(0,1fr)",
+    gap: 14,
+    alignItems: "center",
+    borderRadius: 20,
+    background: "#173C2A",
+    color: "#FFFFFF",
+  },
 
-  .kp-profile-tabs button {
-    position: relative;
-    border: 0;
-    background: transparent;
-    color: #7a8780;
-    font-size: 14px;
-    font-weight: 800;
-    cursor: pointer;
-  }
+  configAvatar: {
+    width: 76,
+    height: 76,
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 22,
+    background: "rgba(255,255,255,.12)",
+    fontSize: 22,
+    fontWeight: 950,
+  },
 
-  .kp-profile-tabs button.active {
-    color: #17352a;
-  }
+  configTitle: {
+    margin: "3px 0 2px",
+    fontSize: 21,
+    lineHeight: 1.1,
+  },
 
-  .kp-profile-tabs button.active::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    bottom: 7px;
-    width: 7px;
-    height: 7px;
-    transform: translateX(-50%);
-    border-radius: 50%;
-    background: #16845f;
-  }
+  configSubtitle: {
+    color: "#B9D2C3",
+    fontSize: 8.5,
+  },
 
-  .kp-profile-section {
-    padding: 28px 18px 24px;
-  }
+  configGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 8,
+    marginBottom: 10,
+  },
 
-  .kp-profile-section > h2,
-  .kp-about h2 {
-    margin: 5px 0 12px;
-    color: #10261d;
-    font-size: clamp(26px,6.8vw,36px);
-    line-height: 1.05;
-    letter-spacing: -.7px;
-  }
+  metricCard: {
+    minHeight: 68,
+    padding: 12,
+    display: "grid",
+    alignContent: "center",
+    gap: 3,
+    border: "1px solid #E3ECE6",
+    borderRadius: 12,
+    background: "#F8FBF9",
+  },
 
-  .kp-about {
-    margin-bottom: 34px;
-  }
+  metricLabel: {
+    color: "#839088",
+    fontSize: 7,
+    fontWeight: 900,
+    textTransform: "uppercase",
+  },
 
-  .kp-about p {
-    margin: 0;
-    color: #55675e;
-    font-size: 15px;
-    line-height: 1.65;
-  }
+  metricValue: {
+    color: "#274433",
+    fontSize: 14,
+  },
 
-  .kp-section-title-row {
-    margin-bottom: 14px;
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-  }
+  photoActions: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 8,
+  },
 
-  .kp-section-title-row h2 {
-    margin: 4px 0 0;
-    color: #10261d;
-    font-size: 26px;
-    line-height: 1.1;
-  }
+  selfieButton: {
+    minHeight: 42,
+    padding: "0 10px",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 11,
+    background: "#0EA5A6",
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: 900,
+    cursor: "pointer",
+    textAlign: "center",
+  },
 
-  .kp-public-services {
-    gap: 12px;
-  }
+  galleryButton: {
+    minHeight: 42,
+    padding: "0 10px",
+    display: "grid",
+    placeItems: "center",
+    border: "1px solid #D7E3DB",
+    borderRadius: 11,
+    background: "#FFFFFF",
+    color: "#4E6658",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
+    textAlign: "center",
+  },
 
-  .kp-public-service {
-    grid-template-columns: 106px minmax(0,1fr) auto;
-    min-height: 130px;
-    padding: 11px;
-    border-radius: 20px;
-    box-shadow: none;
-  }
+  profileEditor: {
+    marginTop: 10,
+    padding: 12,
+    display: "grid",
+    gap: 10,
+    borderRadius: 13,
+    background: "#F4F8F5",
+  },
 
-  .kp-public-service .kp-service-image {
-    width: 106px;
-    height: 106px;
-    border-radius: 16px;
-  }
+  fieldGroup: {
+    display: "grid",
+    gap: 5,
+  },
 
-  .kp-public-service .kp-service-info strong {
-    font-size: 17px;
-  }
+  fieldLabel: {
+    color: "#617269",
+    fontSize: 8,
+    fontWeight: 850,
+  },
 
-  .kp-public-service .kp-service-info b {
-    margin-top: 4px;
-    color: #087a55;
-    font-size: 15px;
-  }
+  input: {
+    width: "100%",
+    minHeight: 40,
+    padding: "0 11px",
+    border: "1px solid #D6E1DA",
+    borderRadius: 10,
+    outline: "none",
+    background: "#FFFFFF",
+    color: "#21372A",
+    fontSize: 12,
+  },
 
-  .kp-public-service > button {
-    min-width: 84px;
-    min-height: 42px;
-    border-radius: 14px;
-  }
+  saveProfileButton: {
+    minHeight: 41,
+    border: 0,
+    borderRadius: 10,
+    background: "#0F172A",
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
 
-  .kp-team-grid {
-    display: grid;
-    grid-template-columns: repeat(2,minmax(0,1fr));
-    gap: 12px;
-  }
+  outlineSmallButton: {
+    minHeight: 32,
+    padding: "0 10px",
+    border: "1px solid #D7E3DB",
+    borderRadius: 9,
+    background: "#FFFFFF",
+    color: "#456353",
+    fontSize: 8,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
 
-  .kp-team-card {
-    min-width: 0;
-    padding: 14px;
-    display: grid;
-    gap: 11px;
-    border: 1px solid #dfe7e2;
-    border-radius: 20px;
-    background: #ffffff;
-  }
+  contactCard: {
+    marginBottom: 15,
+    padding: 16,
+    border: "1px solid #E1E9E4",
+    borderRadius: 17,
+    background: "#FFFFFF",
+  },
 
-  .kp-team-photo {
-    width: 82px;
-    height: 82px;
-    overflow: hidden;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: #eaf7f1;
-    color: #087a55;
-    font-size: 27px;
-    font-weight: 950;
-  }
+  contactEyebrow: {
+    display: "block",
+    marginBottom: 7,
+    color: "#0EA5A6",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: 1,
+  },
 
-  .kp-team-photo img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
+  contactRows: {
+    display: "grid",
+  },
 
-  .kp-team-card > div:last-child {
-    min-width: 0;
-    display: grid;
-    gap: 4px;
-  }
+  row: {
+    minHeight: 38,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 15,
+    borderBottom: "1px solid #EEF2EF",
+  },
 
-  .kp-team-card strong {
-    overflow: hidden;
-    color: #10261d;
-    font-size: 15px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
+  rowLabel: {
+    color: "#819087",
+    fontSize: 9,
+  },
 
-  .kp-team-card span {
-    color: #728078;
-    font-size: 12px;
-  }
+  rowValue: {
+    maxWidth: "65%",
+    overflowWrap: "anywhere",
+    color: "#334A3C",
+    fontSize: 9.5,
+    textAlign: "right",
+  },
 
-  .kp-reviews-empty {
-    margin-top: 18px;
-    padding: 26px 20px;
-    display: grid;
-    justify-items: center;
-    gap: 8px;
-    border: 1px solid #e0e8e3;
-    border-radius: 22px;
-    background: #f8faf9;
-    text-align: center;
-  }
+  logoutButton: {
+    width: "100%",
+    minHeight: 43,
+    border: "1px solid #D9E3DD",
+    borderRadius: 12,
+    background: "#FFFFFF",
+    color: "#536259",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
 
-  .kp-reviews-icon {
-    width: 58px;
-    height: 58px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: #fff8dd;
-    color: #d8a400;
-    font-size: 28px;
-  }
+  appHome: {
+    minHeight: 560,
+    display: "grid",
+    alignContent: "start",
+    gap: 16,
+  },
 
-  .kp-reviews-empty strong {
-    color: #10261d;
-    font-size: 16px;
-  }
-
-  .kp-reviews-empty p {
-    max-width: 400px;
-    margin: 0;
-    color: #708078;
-    font-size: 12px;
-    line-height: 1.5;
-  }
-
-  .kp-booking-mini-business {
-    margin-top: 0;
-  }
-
-  /* =========================================================
-     KONAX PORTAL PREMIUM · 2026.09.02
-     Diseño claro, sobrio y enfocado en conversión móvil.
-     ========================================================= */
-
-  .kp-page {
+  appHomeHero: {
+    padding: 22,
+    display: "grid",
+    gridTemplateColumns: "82px minmax(0,1fr)",
+    gap: 16,
+    alignItems: "center",
+    borderRadius: 24,
     background:
-      radial-gradient(circle at 50% -120px, rgba(22,132,95,.08), transparent 340px),
-      #f7f9f8;
-    color: #10261d;
-  }
-
-  .kp-shell {
-    width: min(720px, 100%);
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  .kp-topbar {
-    min-height: 70px;
-    margin-left: -16px;
-    margin-right: -16px;
-    padding-left: 16px;
-    padding-right: 16px;
-    border-bottom-color: rgba(16,38,29,.08);
-    box-shadow: 0 6px 22px rgba(16,38,29,.04);
-  }
-
-  .kp-back {
-    border: 1px solid #e3e9e5;
-    color: #16372a;
-    box-shadow: 0 3px 10px rgba(16,38,29,.04);
-  }
-
-  .kp-top-icons button {
-    background: #f5f8f6;
-    color: #335246;
-  }
-
-  .kp-top-icons button.active {
-    border-color: #bcdccc;
-    background: #eaf7f1;
-    color: #087a55;
-  }
-
-  .kp-flow,
-  .kp-manage {
-    padding: 18px;
-    border-color: #e1e8e4;
-    border-radius: 24px;
-    box-shadow: 0 16px 44px rgba(16,38,29,.055);
-  }
-
-  .kp-business-window {
-    padding: 14px;
-    border-color: #e4eae6;
-    border-radius: 20px;
-    box-shadow: none;
-  }
-
-  .kp-business-window-info strong {
-    color: #10261d;
-    font-size: 18px;
-    font-weight: 850;
-  }
-
-  .kp-business-window-info span {
-    color: #708078;
-  }
-
-  .kp-stepper {
-    padding: 16px 12px 13px;
-    border-color: #e5ebe7;
-    border-radius: 20px;
-    background: #fbfcfb;
-  }
-
-  .kp-step-circle.active {
-    background: #087a55;
-    box-shadow: 0 7px 18px rgba(8,122,85,.22);
-  }
-
-  .kp-step-circle.done {
-    background: #e6f5ee;
-    color: #087a55;
-  }
-
-  .kp-step-line.done {
-    background: #16845f;
-  }
-
-  .kp-eyebrow-dark,
-  .kp-section-kicker {
-    color: #16845f;
-  }
-
-  .kp-flow h2,
-  .kp-manage h2 {
-    color: #10261d;
-    font-weight: 900;
-    letter-spacing: -.45px;
-  }
-
-  .kp-muted {
-    color: #68786f;
-    line-height: 1.5;
-  }
-
-  .kp-service {
-    border-color: #e0e7e3;
-    border-radius: 20px;
-    box-shadow: 0 7px 22px rgba(16,38,29,.045);
-  }
-
-  .kp-service-info strong {
-    color: #10261d;
-    font-weight: 850;
-  }
-
-  .kp-service-info b {
-    color: #087a55;
-  }
-
-  .kp-service > button {
-    background: #087a55;
-    box-shadow: 0 6px 14px rgba(8,122,85,.16);
-  }
-
-  .kp-blue-link,
-  .kp-link {
-    color: #16845f;
-  }
-
-  .kp-selected-service {
-    border: 1px solid #dce9e2;
-    background: #f5faf7;
-  }
-
-  .kp-prof {
-    min-height: 84px;
-    padding: 14px;
-    border-color: #dfe7e2;
-    border-radius: 20px;
-    box-shadow: 0 5px 18px rgba(16,38,29,.035);
-    transition:
-      transform .16s ease,
-      border-color .16s ease,
-      box-shadow .16s ease,
-      background .16s ease;
-  }
-
-  .kp-prof:hover,
-  .kp-prof:focus-visible {
-    transform: translateY(-1px);
-    border-color: #9fd0b9;
-    background: #fbfefc;
-    box-shadow: 0 9px 24px rgba(16,38,29,.07);
-    outline: none;
-  }
-
-  .kp-avatar {
-    width: 54px;
-    height: 54px;
-    border: 2px solid #d8eee3;
-    background: #ecf8f2;
-    color: #087a55;
-  }
-
-  .kp-prof-info strong {
-    color: #10261d;
-    font-size: 15px;
-    font-weight: 900;
-  }
-
-  .kp-prof-info small {
-    color: #738078;
-    line-height: 1.35;
-  }
-
-  .kp-select {
-    min-width: 92px;
-    border-color: #cfe4da;
-    background: #f3faf6;
-    color: #087a55;
-  }
-
-  .kp-booking-business {
-    border-color: #e1e8e4;
-    background: #fbfcfb;
-  }
-
-  .kp-date-strip-wrap {
-    margin-top: 14px;
-  }
-
-  .kp-date-pill {
-    min-width: 76px;
-    height: 106px;
-    border-color: #dfe7e2;
-    color: #44584d;
-    box-shadow: 0 4px 12px rgba(16,38,29,.025);
-  }
-
-  .kp-date-pill.active {
-    border-color: #087a55;
-    background: #087a55;
-    box-shadow: 0 9px 22px rgba(8,122,85,.20);
-  }
-
-  .kp-date-pill.available:not(.active) .kp-date-dot {
-    background: #27a574;
-  }
-
-  .kp-time-heading {
-    margin: 24px 0 12px;
-    display: flex;
-    align-items: end;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .kp-section-kicker {
-    display: block;
-    margin-bottom: 3px;
-    font-size: 9px;
-    font-weight: 950;
-    letter-spacing: 1.2px;
-  }
-
-  .kp-time-title {
-    margin: 0 !important;
-    color: #10261d;
-    font-size: 20px !important;
-    line-height: 1.2;
-  }
-
-  .kp-date-caption {
-    flex: 0 0 auto;
-    padding: 6px 9px;
-    border-radius: 999px;
-    background: #f0f6f3;
-    color: #567066;
-    font-size: 10px;
-    font-weight: 850;
-    text-transform: capitalize;
-  }
-
-  .kp-period-tabs {
-    margin: 0 0 16px;
-    padding: 5px;
-    display: grid;
-    grid-template-columns: repeat(3,minmax(0,1fr));
-    gap: 5px;
-    border: 1px solid #dde6e1;
-    border-radius: 17px;
-    background: #f7faf8;
-  }
-
-  .kp-period-tabs button {
-    min-width: 0;
-    min-height: 52px;
-    padding: 6px 7px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    border: 0;
-    border-radius: 13px;
-    background: transparent;
-    color: #617168;
-    cursor: pointer;
-  }
-
-  .kp-period-tabs button span {
-    font-size: 12px;
-    font-weight: 900;
-  }
-
-  .kp-period-tabs button b {
-    min-width: 23px;
-    height: 23px;
-    padding: 0 6px;
-    display: grid;
-    place-items: center;
-    border-radius: 999px;
-    background: #e8eeea;
-    color: #63736a;
-    font-size: 10px;
-  }
-
-  .kp-period-tabs button.active {
-    background: #087a55;
-    color: #ffffff;
-    box-shadow: 0 7px 16px rgba(8,122,85,.18);
-  }
-
-  .kp-period-tabs button.active b {
-    background: rgba(255,255,255,.18);
-    color: #ffffff;
-  }
-
-  .kp-period-empty {
-    padding: 18px;
-    border: 1px dashed #d8e1dc;
-    border-radius: 16px;
-    background: #fbfcfb;
-    color: #75827b;
-    text-align: center;
-    font-size: 12px;
-  }
-
-  .kp-slot-count {
-    margin: 2px 0 11px;
-    display: flex;
-    align-items: end;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .kp-slot-count strong {
-    color: #10261d;
-    font-size: 14px;
-  }
-
-  .kp-slot-count span {
-    color: #738078;
-    font-size: 11px;
-  }
-
-  .kp-time-cards {
-    grid-template-columns: repeat(2,minmax(0,1fr));
-    gap: 10px;
-    padding-bottom: 116px;
-  }
-
-  .kp-time-card {
-    min-height: 62px;
-    padding: 0 10px;
-    justify-content: center;
-    border-color: #dce5e0;
-    border-radius: 15px;
-    color: #173127;
-    font-size: 16px;
-    font-weight: 850;
-    text-align: center;
-    box-shadow: 0 4px 12px rgba(16,38,29,.025);
-  }
-
-  .kp-time-card.active {
-    border: 1px solid #087a55;
-    background: #eaf7f1;
-    color: #087a55;
-    box-shadow: inset 0 0 0 1px #087a55;
-  }
-
-  .kp-continue-fixed {
-    position: fixed;
-    left: 50%;
-    bottom: 14px;
-    transform: translateX(-50%);
-    z-index: 95;
-    width: min(620px, calc(100% - 28px));
-    min-height: 86px;
-    margin: 0;
-    padding: 12px 12px 12px 16px;
-    display: grid;
-    grid-template-columns: minmax(0,1fr) auto;
-    align-items: center;
-    gap: 12px;
-    border: 1px solid #e0e7e3;
-    border-radius: 22px;
-    background: rgba(255,255,255,.98);
-    color: #10261d;
-    box-shadow: 0 14px 40px rgba(16,38,29,.16);
-    backdrop-filter: blur(14px);
-  }
-
-  .kp-continue-summary {
-    min-width: 0;
-    display: grid;
-    gap: 1px;
-  }
-
-  .kp-continue-summary > span {
-    color: #728078;
-    font-size: 8.5px;
-    font-weight: 950;
-    letter-spacing: 1px;
-  }
-
-  .kp-continue-summary > strong {
-    color: #10261d;
-    font-size: 21px;
-    line-height: 1.1;
-  }
-
-  .kp-continue-summary > small {
-    max-width: 220px;
-    overflow: hidden;
-    color: #66766d;
-    font-size: 10px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .kp-continue-action {
-    min-width: 132px;
-    min-height: 58px;
-    padding: 0 17px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
-    border: 0;
-    border-radius: 16px;
-    background: #087a55;
-    color: #ffffff;
-    font-size: 15px;
-    font-weight: 950;
-    box-shadow: 0 8px 20px rgba(8,122,85,.22);
-    cursor: pointer;
-  }
-
-  .kp-continue-action b {
-    font-size: 23px;
-    line-height: 1;
-    font-weight: 500;
-  }
-
-  .kp-summary {
-    padding: 16px;
-    border-color: #e0e8e3;
-    background: #f8faf9;
-  }
-
-  .kp-summary-row {
-    padding: 2px 0;
-  }
-
-  .kp-summary-row strong.accent {
-    color: #087a55;
-  }
-
-  .kp-note {
-    background: #f0f7f3;
-    color: #4f675b;
-  }
-
-  .kp-form {
-    gap: 14px;
-  }
-
-  .kp-form label > span {
-    color: #2d4439;
-    font-size: 12px;
-  }
-
-  .kp-form input,
-  .kp-form textarea,
-  .kp-cancel-box input {
-    min-height: 54px;
-    padding-left: 14px;
-    padding-right: 14px;
-    border-color: #cfdad4;
-    border-radius: 15px;
-    color: #10261d;
-    outline: none;
-    transition:
-      border-color .16s ease,
-      box-shadow .16s ease;
-  }
-
-  .kp-form input:focus,
-  .kp-form textarea:focus,
-  .kp-cancel-box input:focus {
-    border-color: #6cb696;
-    box-shadow: 0 0 0 4px rgba(22,132,95,.10);
-  }
-
-  .kp-confirm {
-    min-height: 56px;
-    border-radius: 16px;
-    background: #087a55;
-    box-shadow: 0 8px 20px rgba(8,122,85,.18);
-  }
-
-  .kp-secondary {
-    border-color: #9ccbb6;
-    color: #087a55;
-  }
-
-  .kp-bottom-nav {
-    border-color: #e1e8e4;
-    background: rgba(255,255,255,.985);
-    box-shadow: 0 10px 30px rgba(16,38,29,.10);
-  }
-
-  .kp-bottom-nav button {
-    color: #607168;
-  }
-
-  .kp-bottom-nav button:focus-visible {
-    color: #087a55;
-    outline: none;
-  }
-
-  .kp-footer {
-    color: #8b9891;
-  }
-
-  .kp-dark {
+      "linear-gradient(135deg,#0F172A 0%,#17324B 62%,#0E7490 100%)",
+    boxShadow: "0 20px 42px rgba(15,23,42,.22)",
+    color: "#FFFFFF",
+  },
+
+  appHomeAvatar: {
+    width: 82,
+    height: 82,
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 22,
+    background: "rgba(255,255,255,.10)",
+    border: "1px solid rgba(255,255,255,.15)",
+    fontSize: 26,
+    fontWeight: 950,
+  },
+
+  appHomeCopy: {
+    minWidth: 0,
+  },
+
+  appHomeEyebrow: {
+    display: "block",
+    marginBottom: 4,
+    color: "#8ED8E2",
+    fontSize: 8,
+    fontWeight: 950,
+    letterSpacing: 1.2,
+  },
+
+  appHomeName: {
+    margin: 0,
+    color: "#FFFFFF",
+    fontSize: 28,
+    lineHeight: 1.05,
+  },
+
+  appHomeState: {
+    display: "inline-block",
+    marginTop: 8,
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,.10)",
+    color: "#D7F5F8",
+    fontSize: 9,
+    fontWeight: 850,
+  },
+
+  appHomeSummary: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+    gap: 10,
+  },
+
+  appHomeStat: {
+    minHeight: 92,
+    padding: 14,
+    display: "grid",
+    alignContent: "center",
+    gap: 5,
+    border: "1px solid #DEE6EF",
+    borderRadius: 17,
+    background: "#FFFFFF",
+    boxShadow: "0 10px 24px rgba(15,23,42,.05)",
+  },
+
+  appHomeStatLabel: {
+    color: "#7A8797",
+    fontSize: 7.5,
+    fontWeight: 900,
+    letterSpacing: .8,
+  },
+
+  appHomeStatValue: {
+    color: "#172033",
+    fontSize: 12,
+    lineHeight: 1.3,
+  },
+
+  homeHint: {
+    padding: 18,
+    display: "grid",
+    gridTemplateColumns: "48px minmax(0,1fr)",
+    gap: 12,
+    alignItems: "center",
+    border: "1px solid #DCE6EF",
+    borderRadius: 18,
+    background: "#FFFFFF",
+  },
+
+  homeHintIcon: {
+    width: 48,
+    height: 48,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 14,
+    background: "#E8F6F8",
+    color: "#0E7490",
+    fontSize: 22,
+    fontWeight: 900,
+  },
+
+  homeHintTitle: {
+    display: "block",
+    color: "#172033",
+    fontSize: 13,
+  },
+
+  homeHintText: {
+    margin: "4px 0 0",
+    color: "#6F7C8C",
+    fontSize: 9,
+    lineHeight: 1.45,
+  },
+
+  homeCompact: {
+    minHeight: 120,
+    padding: "18px 0 8px",
+    background: "transparent",
+  },
+
+  homeCompactLine: {
+    width: 44,
+    height: 4,
+    margin: "0 auto",
+    borderRadius: 999,
+    background: "#D8E0E8",
+  },
+
+  cleanHome: {
+    minHeight: 620,
+    borderRadius: 22,
     background:
-      radial-gradient(circle at top right, rgba(20,163,95,.08), transparent 30%),
-      #08100c;
-    color: #f5f7f6;
-  }
+      "linear-gradient(180deg,#F8FAFC 0%,#F3F6FA 100%)",
+    border: "1px solid #E3E9F0",
+    position: "relative",
+    overflow: "hidden",
+  },
 
-  .kp-dark .kp-topbar {
-    background: rgba(8,16,12,.97);
-    border-color: #26332c;
-  }
-
-  .kp-dark .kp-flow,
-  .kp-dark .kp-manage {
-    background: #0f1713;
-    color: #f5f7f6;
-    border-color: #2a3931;
-    box-shadow: 0 12px 30px rgba(0,0,0,.22);
-  }
-
-  .kp-dark .kp-business-window,
-  .kp-dark .kp-business-logo-box,
-  .kp-dark .kp-booking-business,
-  .kp-dark .kp-date-pill,
-  .kp-dark .kp-time-card,
-  .kp-dark .kp-prof,
-  .kp-dark .kp-service,
-  .kp-dark .kp-data,
-  .kp-dark .kp-summary,
-  .kp-dark .kp-menu,
-  .kp-dark .kp-bottom-nav {
-    background: #111b16;
-    color: #f5f7f6;
-    border-color: #2b3a32;
-  }
-
-  .kp-dark .kp-stepper {
-    background: #121a16;
-    border-color: #2d3b34;
-  }
-
-  .kp-dark .kp-step-circle {
-    background: #313a35;
-    color: #d7ded9;
-  }
-
-  .kp-dark .kp-step-circle.active {
-    background: linear-gradient(145deg,#0b7041,#15b466);
-    color: #ffffff;
-  }
-
-  .kp-dark .kp-step-circle.done {
-    background: #173c29;
-    color: #78e7aa;
-  }
-
-  .kp-dark .kp-step-line {
+  cleanHomeMark: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    right: -55,
+    bottom: -55,
+    borderRadius: "50%",
     background:
-      radial-gradient(circle, #647169 1.4px, transparent 1.6px)
-      center / 9px 3px repeat-x;
-    opacity: 1;
-  }
-
-  .kp-dark .kp-step-line.done {
-    background: #17a25e;
-  }
-
-  .kp-dark .kp-stepper small {
-    color: #aab4ae;
-  }
-
-  .kp-dark .kp-stepper small.active {
-    color: #48d889;
-  }
-
-  .kp-dark .kp-top-icons button,
-  .kp-dark .kp-back {
-    background: #17221c;
-    color: #eef4f0;
-    border-color: #26342d;
-  }
-
-  .kp-dark .kp-top-icons button.active {
-    background: #143c29;
-    border-color: #43d483;
-    color: #77e9aa;
-  }
-
-  .kp-dark .kp-business-window-info strong,
-  .kp-dark .kp-booking-business strong,
-  .kp-dark .kp-service-info strong,
-  .kp-dark .kp-prof-info strong,
-  .kp-dark .kp-summary-row strong,
-  .kp-dark .kp-menu button,
-  .kp-dark .kp-flow h2,
-  .kp-dark .kp-flow h3,
-  .kp-dark .kp-time-title {
-    color: #ffffff;
-  }
-
-  .kp-dark .kp-business-window-info span,
-  .kp-dark .kp-booking-business small,
-  .kp-dark .kp-muted,
-  .kp-dark .kp-service-info span,
-  .kp-dark .kp-service-info small,
-  .kp-dark .kp-prof-info small,
-  .kp-dark .kp-summary-row,
-  .kp-dark .kp-footer,
-  .kp-dark .kp-available-note {
-    color: #aeb9b2;
-  }
-
-  .kp-dark .kp-service-info b,
-  .kp-dark .kp-eyebrow-dark {
-    color: #45d987;
-  }
-
-  .kp-dark .kp-service > button,
-  .kp-dark .kp-select,
-  .kp-dark .kp-confirm,
-  .kp-dark .kp-empty-action {
-    background: linear-gradient(145deg,#0b7041,#14a55f);
-    color: #ffffff;
-    border-color: transparent;
-  }
-
-  .kp-dark .kp-date-pill.active,
-  .kp-dark .kp-time-card.active {
-    background: #153c29;
-    color: #7be7aa;
-    border-color: #42d47f;
-  }
-
-  .kp-dark .kp-form input,
-  .kp-dark .kp-form textarea,
-  .kp-dark .kp-cancel-box input {
-    background: #0b120e;
-    color: #ffffff;
-    border-color: #33433a;
-  }
-
-  .kp-dark .kp-form input::placeholder,
-  .kp-dark .kp-form textarea::placeholder,
-  .kp-dark .kp-cancel-box input::placeholder {
-    color: #7f8b84;
-  }
-
-  .kp-dark .kp-empty,
-  .kp-dark .kp-prof-loading {
-    background: #101813;
-    color: #aeb9b2;
-    border-color: #34443a;
-  }
-
-  .kp-dark .kp-menu button:hover {
-    background: #1b2922;
-  }
-
-  .kp-dark .kp-modal {
-    background: #111b16;
-    color: #f5f7f6;
-  }
-
-  .kp-dark .kp-modal p {
-    color: #aeb9b2;
-  }
-
-  .kp-dark .kp-bottom-nav button {
-    color: #b5c0ba;
-  }
-
-  .kp-dark .kp-bottom-nav button:hover,
-  .kp-dark .kp-bottom-nav button:focus {
-    color: #49d98a;
-  }
-
-
-  .kp-dark .kp-public-profile,
-  .kp-dark .kp-profile-tabs,
-  .kp-dark .kp-profile-section,
-  .kp-dark .kp-team-card,
-  .kp-dark .kp-reviews-empty {
-    background: #0f1713;
-    border-color: #2b3a32;
-  }
-
-
-  .kp-dark .kp-profile-tabs {
-    border-color: #2b3a32;
-  }
-
-  .kp-dark .kp-profile-tabs button {
-    color: #92a098;
-  }
-
-  .kp-dark .kp-profile-tabs button.active,
-  .kp-dark .kp-profile-section > h2,
-  .kp-dark .kp-about h2,
-  .kp-dark .kp-section-title-row h2,
-  .kp-dark .kp-team-card strong,
-  .kp-dark .kp-reviews-empty strong {
-    color: #ffffff;
-  }
-
-  .kp-dark .kp-about p,
-  .kp-dark .kp-team-card span,
-  .kp-dark .kp-reviews-empty p {
-    color: #aeb9b2;
-  }
-
-  .kp-dark .kp-time-heading .kp-time-title,
-  .kp-dark .kp-slot-count strong,
-  .kp-dark .kp-continue-summary > strong {
-    color: #ffffff;
-  }
-
-  .kp-dark .kp-date-caption,
-  .kp-dark .kp-period-tabs,
-  .kp-dark .kp-period-empty {
-    background: #101813;
-    border-color: #304138;
-    color: #aeb9b2;
-  }
-
-  .kp-dark .kp-period-tabs button {
-    color: #aeb9b2;
-  }
-
-  .kp-dark .kp-period-tabs button b {
-    background: #25332c;
-    color: #b9c5be;
-  }
-
-  .kp-dark .kp-period-tabs button.active {
-    background: #16845f;
-    color: #ffffff;
-  }
-
-  .kp-dark .kp-period-tabs button.active b {
-    background: rgba(255,255,255,.16);
-    color: #ffffff;
-  }
-
-  .kp-dark .kp-slot-count span,
-  .kp-dark .kp-continue-summary > span,
-  .kp-dark .kp-continue-summary > small {
-    color: #aeb9b2;
-  }
-
-  .kp-dark .kp-continue-fixed {
-    background: rgba(15,23,19,.98);
-    border-color: #2b3a32;
-    color: #ffffff;
-  }
-
-  .kp-dark .kp-continue-action {
-    background: #16845f;
-    color: #ffffff;
-  }
-
-  @media (max-width: 520px) {
-    .kp-popular-heading h2,
-    .kp-all-services-title h2 {
-      font-size: 25px;
-    }
-
-    .kp-popular-card {
-      min-height: 200px;
-      grid-template-columns: 44% minmax(0,1fr);
-      gap: 11px;
-      padding: 10px;
-      border-radius: 20px;
-    }
-
-    .kp-rank-badge {
-      top: 10px;
-      left: 10px;
-      min-height: 29px;
-      padding: 0 10px;
-      font-size: 8px;
-    }
-
-    .kp-popular-media,
-    .kp-popular-placeholder {
-      min-height: 180px;
-    }
-
-    .kp-popular-info {
-      padding-top: 34px;
-    }
-
-    .kp-popular-name {
-      font-size: 16px;
-    }
-
-    .kp-popular-price strong {
-      font-size: 18px;
-    }
-
-    .kp-executed-chip {
-      left: 6px;
-      right: 6px;
-      bottom: 6px;
-      max-width: none;
-    }
-
-    .kp-public-profile {
-      margin: -15px;
-      overflow: visible;
-      border-radius: 21px;
-    }
-
-    .kp-cover {
-      border-radius: 21px 21px 0 0;
-      touch-action: pan-y;
-    }
-
-    .kp-cover-image,
-    .kp-cover-fallback {
-      height: 390px;
-    }
-
-    .kp-cover-ui {
-      padding: 18px;
-    }
-
-
-    .kp-cover-content {
-      padding-top: 110px;
-    }
-
-    .kp-cover h1 {
-      font-size: 38px;
-    }
-
-    .kp-profile-tabs {
-      top: 70px;
-      min-height: 64px;
-      padding: 0 8px;
-    }
-
-    .kp-profile-tabs button {
-      font-size: 13px;
-    }
-
-    .kp-profile-section {
-      padding: 24px 15px 22px;
-    }
-
-    .kp-public-service {
-      grid-template-columns: 90px minmax(0,1fr);
-      min-height: auto;
-      padding: 10px;
-    }
-
-    .kp-public-service .kp-service-image {
-      width: 90px;
-      height: 90px;
-    }
-
-    .kp-public-service > button {
-      grid-column: 1 / -1;
-      width: 100%;
-      min-height: 46px;
-      border-radius: 15px;
-    }
-
-    .kp-team-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .kp-team-card {
-      grid-template-columns: 72px minmax(0,1fr);
-      align-items: center;
-    }
-
-    .kp-team-photo {
-      width: 72px;
-      height: 72px;
-    }
-
-    .kp-flow,
-    .kp-manage {
-      padding: 15px;
-      border-radius: 21px;
-    }
-
-    .kp-stepper {
-      margin-left: -2px;
-      margin-right: -2px;
-      padding-left: 8px;
-      padding-right: 8px;
-    }
-
-    .kp-step-circle {
-      width: 31px;
-      height: 31px;
-    }
-
-    .kp-date-strip-wrap {
-      margin-left: -15px;
-      margin-right: -15px;
-      padding-left: 15px;
-      padding-right: 15px;
-    }
-
-    .kp-date-pill {
-      min-width: 72px;
-      height: 102px;
-    }
-
-    .kp-time-heading {
-      align-items: flex-start;
-    }
-
-    .kp-date-caption {
-      margin-top: 1px;
-    }
-
-    .kp-period-tabs button {
-      min-height: 50px;
-      gap: 4px;
-    }
-
-    .kp-period-tabs button span {
-      font-size: 11px;
-    }
-
-    .kp-time-card {
-      min-height: 58px;
-      font-size: 15px;
-    }
-
-    .kp-continue-fixed {
-      width: calc(100% - 24px);
-      min-height: 82px;
-      bottom: 10px;
-      padding: 10px 10px 10px 14px;
-    }
-
-    .kp-continue-action {
-      min-width: 122px;
-      min-height: 56px;
-      padding: 0 14px;
-    }
-    .kp-continue-fixed {
-      width: calc(100% - 28px);
-      bottom: 12px;
-      min-height: 64px;
-      padding: 0 18px;
-    }
-
-    .kp-continue-detail {
-      font-size: 14px;
-    }
-
-    .kp-continue-action {
-      font-size: 17px;
-    }
-
-    .kp-hero {
-      grid-template-columns: 1fr;
-    }
-
-    .kp-hero img {
-      width: 104px;
-    }
-
-    .kp-service {
-      grid-template-columns: 88px minmax(0,1fr);
-      align-items: start;
-    }
-
-    .kp-service-image {
-      width: 88px;
-      height: 82px;
-    }
-
-    .kp-service-icon {
-      width: 54px;
-      height: 54px;
-      align-self: center;
-    }
-
-    .kp-service > button {
-      grid-column: 1 / -1;
-      width: 100%;
-    }
-
-    .kp-prof {
-      grid-template-columns: 50px minmax(0,1fr);
-    }
-
-    .kp-select {
-      grid-column: 1 / -1;
-      width: 100%;
-    }
-  }
-
-  /* =========================================================
-     PORTAL SERVICIOS · BLANCO + NEGRO
-     ========================================================= */
-
-  .kp-profile-tabs button.active {
-    color: #111111;
-  }
-
-  .kp-profile-tabs button.active::after {
-    background: #111111;
-  }
-
-  .kp-section-kicker-black {
-    color: #111111 !important;
-  }
-
-  .kp-popular-heading h2,
-  .kp-all-services-title h2 {
-    color: #111111;
-  }
-
-  .kp-view-all {
-    color: #111111;
-  }
-
-  .kp-popular-card,
-  .kp-popular-card.first {
-    border-color: #d8d8d8;
-    background: #ffffff;
-    box-shadow: 0 7px 20px rgba(0,0,0,.045);
-  }
-
-  .kp-popular-card.first {
-    box-shadow: 0 8px 24px rgba(0,0,0,.055);
-  }
-
-  .kp-rank-badge,
-  .kp-popular-card:not(.first) .kp-rank-badge {
-    background: #111111;
-    color: #ffffff;
-  }
-
-  .kp-popular-placeholder {
-    background: #f3f3f3;
-    color: #111111;
-  }
-
-  .kp-popular-name {
-    color: #111111;
-  }
-
-  .kp-popular-meta,
-  .kp-popular-price small {
-    color: #6b6b6b;
-  }
-
-  .kp-popular-price strong {
-    color: #111111;
-  }
-
-  .kp-popular-info > button {
-    background: #111111;
-    color: #ffffff;
-    border-radius: 12px;
-    box-shadow: none;
-    text-transform: uppercase;
-    letter-spacing: .35px;
-  }
-
-  .kp-service-total {
-    background: #f1f1f1;
-    color: #111111;
-  }
-
-  .kp-public-service {
-    border-color: #dddddd;
-    background: #ffffff;
-  }
-
-  .kp-public-service .kp-service-info strong,
-  .kp-public-service .kp-service-info b {
-    color: #111111;
-  }
-
-  .kp-public-service > button {
-    background: #111111;
-    color: #ffffff;
-    border-radius: 12px;
-    box-shadow: none;
-    text-transform: uppercase;
-    letter-spacing: .35px;
-  }
-
-  .kp-public-service .kp-service-icon {
-    background: #111111;
-    color: #ffffff;
-    box-shadow: none;
-  }
-
-  .kp-executed-chip {
-    background: rgba(15,15,15,.82);
-    border-color: rgba(255,255,255,.22);
-  }
-
-
-  /* =========================================================
-     RESEÑAS VERIFICADAS · KONAX
-     ========================================================= */
-
-  .kp-review-form-box {
-    margin: 18px 0;
-    padding: 18px;
-    border: 1px solid #d8d8d8;
-    border-radius: 20px;
-    background: #ffffff;
-  }
-
-  .kp-review-form-box h3 {
-    margin: 5px 0 5px;
-    color: #111111;
-    font-size: 24px;
-    line-height: 1.05;
-  }
-
-  .kp-review-help {
-    margin: 0 0 18px;
-    color: #6c6c6c;
-    font-size: 12px;
-    line-height: 1.5;
-  }
-
-  .kp-stars-field {
-    margin-top: 16px;
-    display: grid;
-    gap: 8px;
-  }
-
-  .kp-stars-field > span {
-    color: #222222;
-    font-size: 13px;
-    font-weight: 850;
-  }
-
-  .kp-stars-selector {
-    display: flex;
-    gap: 6px;
-  }
-
-  .kp-stars-selector button {
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    display: grid;
-    place-items: center;
-    border: 1px solid #dedede;
-    border-radius: 12px;
-    background: #ffffff;
-    color: #c8c8c8;
-    font-size: 25px;
-    cursor: pointer;
-  }
-
-  .kp-stars-selector button.active {
-    border-color: #111111;
-    background: #111111;
-    color: #ffffff;
-  }
-
-  .kp-review-comment {
-    margin-top: 18px;
-    display: grid;
-    gap: 7px;
-  }
-
-  .kp-review-comment > span {
-    color: #222222;
-    font-size: 12px;
-    font-weight: 850;
-  }
-
-  .kp-review-comment textarea {
-    width: 100%;
-    min-height: 100px;
-    padding: 12px 13px;
-    resize: vertical;
-    border: 1px solid #d6d6d6;
-    border-radius: 14px;
-    background: #ffffff;
-    color: #111111;
-    font-size: 16px;
-    outline: none;
-  }
-
-  .kp-review-comment textarea:focus {
-    border-color: #111111;
-    box-shadow: 0 0 0 3px rgba(0,0,0,.06);
-  }
-
-  .kp-review-submit {
-    width: 100%;
-    min-height: 50px;
-    margin-top: 15px;
-    border: 0;
-    border-radius: 14px;
-    background: #111111;
-    color: #ffffff;
-    font-size: 12px;
-    font-weight: 950;
-    letter-spacing: .4px;
-    cursor: pointer;
-  }
-
-  .kp-review-submit:disabled {
-    opacity: .55;
-    cursor: wait;
-  }
-
-  .kp-review-done {
-    margin: 18px 0;
-    padding: 16px;
-    display: grid;
-    grid-template-columns: 48px minmax(0,1fr);
-    gap: 12px;
-    align-items: center;
-    border: 1px solid #d8d8d8;
-    border-radius: 18px;
-    background: #f8f8f8;
-  }
-
-  .kp-review-done-icon {
-    width: 48px;
-    height: 48px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: #111111;
-    color: #ffffff;
-    font-size: 22px;
-  }
-
-  .kp-review-done strong {
-    color: #111111;
-  }
-
-  .kp-review-done p {
-    margin: 4px 0 0;
-    color: #686868;
-    font-size: 12px;
-    line-height: 1.45;
-  }
-
-  .kp-review-summary {
-    margin-top: 18px;
-    padding: 18px;
-    display: grid;
-    grid-template-columns: 150px minmax(0,1fr);
-    gap: 22px;
-    align-items: center;
-    border: 1px solid #dedede;
-    border-radius: 20px;
-    background: #ffffff;
-  }
-
-  .kp-review-score {
-    display: grid;
-    justify-items: center;
-    text-align: center;
-  }
-
-  .kp-review-score > strong {
-    color: #111111;
-    font-size: 46px;
-    line-height: 1;
-  }
-
-  .kp-review-score-stars {
-    margin-top: 6px;
-    color: #111111;
-    font-size: 16px;
-    letter-spacing: 2px;
-  }
-
-  .kp-review-score > span {
-    margin-top: 6px;
-    color: #737373;
-    font-size: 10px;
-    font-weight: 750;
-  }
-
-  .kp-review-bars {
-    display: grid;
-    gap: 7px;
-  }
-
-  .kp-review-bar-row {
-    display: grid;
-    grid-template-columns: 34px minmax(0,1fr) 26px;
-    gap: 8px;
-    align-items: center;
-    color: #5f5f5f;
-    font-size: 10px;
-  }
-
-  .kp-review-bar-track {
-    height: 7px;
-    overflow: hidden;
-    border-radius: 999px;
-    background: #eeeeee;
-  }
-
-  .kp-review-bar-track i {
-    height: 100%;
-    display: block;
-    border-radius: inherit;
-    background: #111111;
-  }
-
-  .kp-review-bar-row b {
-    color: #111111;
-    text-align: right;
-  }
-
-  .kp-review-list {
-    margin-top: 15px;
-    display: grid;
-    gap: 11px;
-  }
-
-  .kp-review-card {
-    padding: 15px;
-    border: 1px solid #e0e0e0;
-    border-radius: 17px;
-    background: #ffffff;
-  }
-
-  .kp-review-card-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-  }
-
-  .kp-review-card-stars {
-    color: #111111;
-    letter-spacing: 1px;
-    font-size: 13px;
-  }
-
-  .kp-review-card-stars i {
-    color: #d8d8d8;
-    font-style: normal;
-  }
-
-  .kp-review-card-top small {
-    color: #858585;
-    font-size: 9px;
-  }
-
-  .kp-review-card p {
-    margin: 10px 0;
-    color: #353535;
-    font-size: 13px;
-    line-height: 1.55;
-  }
-
-  .kp-review-service,
-  .kp-review-verified {
-    display: block;
-    margin-top: 6px;
-    color: #777777;
-    font-size: 9.5px;
-    font-weight: 750;
-  }
-
-  .kp-review-verified {
-    color: #111111;
-  }
-
-  .kp-dark .kp-review-form-box,
-  .kp-dark .kp-review-summary,
-  .kp-dark .kp-review-card,
-  .kp-dark .kp-review-comment textarea {
-    border-color: #353535;
-    background: #121212;
-    color: #ffffff;
-  }
-
-  .kp-dark .kp-review-form-box h3,
-  .kp-dark .kp-stars-field > span,
-  .kp-dark .kp-review-comment > span,
-  .kp-dark .kp-review-score > strong,
-  .kp-dark .kp-review-bar-row b,
-  .kp-dark .kp-review-card p,
-  .kp-dark .kp-review-verified {
-    color: #ffffff;
-  }
-
-  @media (max-width: 520px) {
-    .kp-review-summary {
-      grid-template-columns: 1fr;
-      gap: 16px;
-    }
-
-    .kp-review-score > strong {
-      font-size: 42px;
-    }
-
-    .kp-stars-selector button {
-      width: 42px;
-      height: 42px;
-    }
-  }
-
-
-  /* =========================================================
-     PERFIL PROFESIONAL · BLANCO + NEGRO · V13
-     ========================================================= */
-
-  .kp-prof-card {
-    cursor: default;
-  }
-
-  .kp-prof-card:hover,
-  .kp-prof-card:focus-within {
-    transform: none;
-    border-color: #cfcfcf;
-    background: #ffffff;
-    box-shadow: 0 7px 20px rgba(0,0,0,.045);
-  }
-
-  .kp-prof-card .kp-avatar {
-    border-color: #e1e1e1;
-    background: #f3f3f3;
-    color: #111111;
-  }
-
-  .kp-prof-card .kp-prof-info {
-    align-self: center;
-  }
-
-  .kp-prof-card .kp-prof-info strong {
-    color: #111111;
-  }
-
-  .kp-prof-card .kp-prof-info small {
-    color: #747474;
-  }
-
-  .kp-prof-rating {
-    margin-top: 3px;
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    color: #111111;
-    font-size: 12px;
-    font-weight: 900;
-  }
-
-  .kp-prof-rating small {
-    color: #777777 !important;
-    font-size: 10px !important;
-    font-weight: 700;
-  }
-
-  .kp-prof-profile-link {
-    width: fit-content;
-    margin-top: 4px;
-    padding: 0 0 2px;
-    border: 0;
-    border-bottom: 1px solid #111111;
-    background: transparent;
-    color: #111111;
-    font-size: 11px;
-    font-weight: 850;
-    cursor: pointer;
-  }
-
-  .kp-prof-card .kp-select {
-    min-width: 104px;
-    min-height: 38px;
-    border: 0;
-    border-radius: 12px;
-    background: #111111;
-    color: #ffffff;
-    box-shadow: none;
-    cursor: pointer;
-  }
-
-  .kp-pro-profile-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 180;
-    padding: 18px;
-    display: grid;
-    place-items: center;
-    background: rgba(0,0,0,.56);
-    backdrop-filter: blur(5px);
-  }
-
-  .kp-pro-profile-modal {
-    width: min(680px,100%);
-    max-height: calc(100vh - 36px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    border: 1px solid #dedede;
-    border-radius: 26px;
-    background: #ffffff;
-    color: #111111;
-    box-shadow: 0 30px 80px rgba(0,0,0,.28);
-  }
-
-  .kp-pro-profile-topbar {
-    position: sticky;
-    top: 0;
-    z-index: 8;
-    min-height: 58px;
-    padding: 10px 14px 10px 18px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    border-bottom: 1px solid #eeeeee;
-    background: rgba(255,255,255,.97);
-    backdrop-filter: blur(12px);
-  }
-
-  .kp-pro-profile-topbar > span {
-    color: #111111;
-    font-size: 12px;
-    font-weight: 900;
-    letter-spacing: .25px;
-    text-transform: uppercase;
-  }
-
-  .kp-pro-profile-topbar button {
-    width: 38px;
-    height: 38px;
-    display: grid;
-    place-items: center;
-    border: 1px solid #dddddd;
-    border-radius: 50%;
-    background: #ffffff;
-    color: #111111;
-    font-size: 25px;
-    line-height: 1;
-    cursor: pointer;
-  }
-
-  .kp-pro-profile-loading {
-    min-height: 260px;
-    padding: 32px 20px;
-    display: grid;
-    place-items: center;
-    color: #777777;
-    text-align: center;
-    font-size: 13px;
-  }
-
-  .kp-pro-profile-hero {
-    padding: 28px 22px 22px;
-    display: grid;
-    justify-items: center;
-    text-align: center;
-  }
-
-  .kp-pro-profile-photo {
-    width: 150px;
-    height: 150px;
-    overflow: hidden;
-    display: grid;
-    place-items: center;
-    border: 1px solid #dedede;
-    border-radius: 50%;
-    background: #f3f3f3;
-    color: #111111;
-    font-size: 48px;
-    font-weight: 950;
-  }
-
-  .kp-pro-profile-photo img {
-    width: 100%;
-    height: 100%;
-    display: block;
-    object-fit: cover;
-  }
-
-  .kp-pro-profile-hero h2 {
-    margin: 15px 0 3px;
-    color: #111111;
-    font-size: 30px;
-    line-height: 1;
-    letter-spacing: -.7px;
-  }
-
-  .kp-pro-profile-hero > p {
-    margin: 0;
-    color: #555555;
-    font-size: 14px;
-  }
-
-  .kp-pro-profile-rating {
-    margin-top: 9px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    color: #111111;
-  }
-
-  .kp-pro-profile-rating strong {
-    font-size: 15px;
-    font-weight: 900;
-  }
-
-  .kp-pro-profile-rating span {
-    color: #7b7b7b;
-    font-size: 11px;
-  }
-
-  .kp-pro-profile-no-rating {
-    margin-top: 9px;
-    color: #7a7a7a;
-    font-size: 11px;
-    font-weight: 750;
-  }
-
-  .kp-pro-profile-location {
-    margin-top: 8px;
-    color: #777777;
-    font-size: 11px;
-  }
-
-  .kp-pro-profile-tabs {
-    padding: 0 18px 16px;
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    border-bottom: 1px solid #eeeeee;
-  }
-
-  .kp-pro-profile-tabs button {
-    min-height: 40px;
-    padding: 0 15px;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    border: 1px solid #dadada;
-    border-radius: 999px;
-    background: #ffffff;
-    color: #222222;
-    font-size: 11px;
-    font-weight: 850;
-    cursor: pointer;
-  }
-
-  .kp-pro-profile-tabs button span {
-    min-width: 21px;
-    height: 21px;
-    padding: 0 6px;
-    display: grid;
-    place-items: center;
-    border-radius: 999px;
-    background: #f0f0f0;
-    color: #444444;
-    font-size: 9px;
-  }
-
-  .kp-pro-profile-tabs button.active {
-    border-color: #111111;
-    background: #111111;
-    color: #ffffff;
-  }
-
-  .kp-pro-profile-tabs button.active span {
-    background: #ffffff;
-    color: #111111;
-  }
-
-  .kp-pro-profile-body {
-    padding: 22px;
-  }
-
-  .kp-pro-stats {
-    display: grid;
-    grid-template-columns: repeat(2,minmax(0,1fr));
-    gap: 10px;
-  }
-
-  .kp-pro-stats > div {
-    padding: 15px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    border: 1px solid #e3e3e3;
-    border-radius: 15px;
-    background: #fafafa;
-  }
-
-  .kp-pro-stats span {
-    color: #555555;
-    font-size: 11px;
-    font-weight: 750;
-  }
-
-  .kp-pro-stats strong {
-    color: #111111;
-    font-size: 19px;
-  }
-
-  .kp-pro-about,
-  .kp-pro-languages {
-    margin-top: 24px;
-  }
-
-  .kp-pro-about h3,
-  .kp-pro-languages h3,
-  .kp-pro-portfolio h3 {
-    margin: 0 0 9px;
-    color: #111111;
-    font-size: 18px;
-  }
-
-  .kp-pro-about p {
-    margin: 0;
-    color: #444444;
-    font-size: 13px;
-    line-height: 1.65;
-  }
-
-  .kp-pro-languages > div {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .kp-pro-languages span {
-    padding: 8px 11px;
-    border: 1px solid #dddddd;
-    border-radius: 999px;
-    background: #ffffff;
-    color: #333333;
-    font-size: 10px;
-    font-weight: 750;
-  }
-
-  .kp-pro-tab-heading {
-    margin-bottom: 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .kp-pro-tab-heading h3 {
-    margin: 0;
-  }
-
-  .kp-pro-tab-heading > span {
-    min-width: 24px;
-    height: 24px;
-    padding: 0 7px;
-    display: grid;
-    place-items: center;
-    border-radius: 999px;
-    background: #f0f0f0;
-    color: #333333;
-    font-size: 9px;
-    font-weight: 900;
-  }
-
-  .kp-pro-portfolio-grid {
-    display: grid;
-    grid-template-columns: repeat(3,minmax(0,1fr));
-    gap: 8px;
-  }
-
-  .kp-pro-portfolio-grid figure {
-    position: relative;
-    min-width: 0;
-    margin: 0;
-    aspect-ratio: 1 / 1;
-    overflow: hidden;
-    border: 1px solid #e0e0e0;
-    border-radius: 14px;
-    background: #f3f3f3;
-  }
-
-  .kp-pro-portfolio-grid figure:first-child {
-    grid-column: span 2;
-    grid-row: span 2;
-  }
-
-  .kp-pro-portfolio-grid img {
-    width: 100%;
-    height: 100%;
-    display: block;
-    object-fit: cover;
-  }
-
-  .kp-pro-portfolio-grid figcaption {
-    position: absolute;
-    left: 7px;
-    right: 7px;
-    bottom: 7px;
-    padding: 6px 8px;
-    overflow: hidden;
-    border-radius: 8px;
-    background: rgba(0,0,0,.68);
-    color: #ffffff;
-    font-size: 8px;
-    line-height: 1.2;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .kp-pro-empty {
-    padding: 30px 20px;
-    border: 1px dashed #d8d8d8;
-    border-radius: 17px;
-    background: #fafafa;
-    color: #777777;
-    text-align: center;
-    font-size: 12px;
-    line-height: 1.5;
-  }
-
-  .kp-pro-review-score {
-    padding: 4px 0 18px;
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-    border-bottom: 1px solid #eeeeee;
-  }
-
-  .kp-pro-review-score > strong {
-    color: #111111;
-    font-size: 42px;
-    line-height: 1;
-  }
-
-  .kp-pro-review-score > span {
-    color: #111111;
-    font-size: 24px;
-  }
-
-  .kp-pro-review-score > small {
-    margin-left: 3px;
-    color: #747474;
-    font-size: 10px;
-  }
-
-  .kp-pro-review-list {
-    margin-top: 14px;
-    display: grid;
-    gap: 10px;
-  }
-
-  .kp-pro-review-card {
-    padding: 14px;
-    border: 1px solid #e1e1e1;
-    border-radius: 16px;
-    background: #ffffff;
-  }
-
-  .kp-pro-review-card > div:first-child {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-  }
-
-  .kp-pro-review-card > div:first-child strong {
-    color: #111111;
-    font-size: 12px;
-    letter-spacing: 1px;
-  }
-
-  .kp-pro-review-card > div:first-child small {
-    color: #888888;
-    font-size: 9px;
-  }
-
-  .kp-pro-review-card p {
-    margin: 9px 0;
-    color: #333333;
-    font-size: 12px;
-    line-height: 1.55;
-  }
-
-  .kp-pro-review-card > span,
-  .kp-pro-review-card > em {
-    display: block;
-    margin-top: 5px;
-    color: #777777;
-    font-size: 9px;
-    font-style: normal;
-  }
-
-  .kp-pro-review-card > em {
-    color: #111111;
-    font-weight: 750;
-  }
-
-  .kp-pro-profile-action {
-    position: sticky;
-    bottom: 0;
-    z-index: 8;
-    padding: 12px 18px 16px;
-    border-top: 1px solid #eeeeee;
-    background: rgba(255,255,255,.97);
-    backdrop-filter: blur(12px);
-  }
-
-  .kp-pro-profile-action button {
-    width: 100%;
-    min-height: 52px;
-    border: 0;
-    border-radius: 14px;
-    background: #111111;
-    color: #ffffff;
-    font-size: 11px;
-    font-weight: 950;
-    letter-spacing: .35px;
-    cursor: pointer;
-  }
-
-  @media (max-width: 520px) {
-    .kp-prof-card {
-      grid-template-columns: 54px minmax(0,1fr) auto;
-      align-items: center;
-    }
-
-    .kp-prof-card .kp-select {
-      grid-column: auto;
-      width: auto;
-      min-width: 92px;
-    }
-
-    .kp-pro-profile-overlay {
-      padding: 0;
-      align-items: end;
-    }
-
-    .kp-pro-profile-modal {
-      width: 100%;
-      max-height: 94vh;
-      border-radius: 24px 24px 0 0;
-      border-bottom: 0;
-    }
-
-    .kp-pro-profile-photo {
-      width: 126px;
-      height: 126px;
-    }
-
-    .kp-pro-profile-hero h2 {
-      font-size: 27px;
-    }
-
-    .kp-pro-profile-tabs {
-      padding-left: 12px;
-      padding-right: 12px;
-      overflow-x: auto;
-      justify-content: flex-start;
-      scrollbar-width: none;
-    }
-
-    .kp-pro-profile-tabs button {
-      flex: 0 0 auto;
-    }
-
-    .kp-pro-profile-body {
-      padding: 18px 15px 22px;
-    }
-
-    .kp-pro-stats {
-      grid-template-columns: 1fr;
-    }
-
-    .kp-pro-portfolio-grid {
-      gap: 6px;
-    }
-  }
-
-  .kp-dark .kp-pro-profile-modal,
-  .kp-dark .kp-pro-profile-topbar,
-  .kp-dark .kp-pro-profile-action,
-  .kp-dark .kp-pro-profile-tabs button,
-  .kp-dark .kp-pro-review-card,
-  .kp-dark .kp-pro-languages span {
-    background: #111111;
-    color: #ffffff;
-    border-color: #333333;
-  }
-
-  .kp-dark .kp-pro-profile-hero h2,
-  .kp-dark .kp-pro-profile-topbar > span,
-  .kp-dark .kp-pro-stats strong,
-  .kp-dark .kp-pro-about h3,
-  .kp-dark .kp-pro-languages h3,
-  .kp-dark .kp-pro-portfolio h3,
-  .kp-dark .kp-pro-review-score > strong,
-  .kp-dark .kp-pro-review-score > span,
-  .kp-dark .kp-pro-review-card p,
-  .kp-dark .kp-pro-review-card > em {
-    color: #ffffff;
-  }
-
-  .kp-dark .kp-pro-stats > div,
-  .kp-dark .kp-pro-empty {
-    border-color: #333333;
-    background: #171717;
-  }
-
-  .kp-dark .kp-pro-profile-tabs button.active,
-  .kp-dark .kp-pro-profile-action button,
-  .kp-dark .kp-prof-card .kp-select {
-    background: #ffffff;
-    color: #111111;
-  }
-
-
-
-  /* =========================================================
-     PERFIL PROFESIONAL V14 · INTERESES + RESEÑAS CON CLIENTE
-     ========================================================= */
-
-  .kp-pro-interests {
-    margin-top: 22px;
-  }
-
-  .kp-pro-interests h3 {
-    margin: 0 0 10px;
-    color: #111111;
-    font-size: 18px;
-  }
-
-  .kp-pro-interests > div {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .kp-pro-interests span {
-    padding: 7px 11px;
-    border: 1px solid #dddddd;
-    border-radius: 999px;
-    background: #f7f7f7;
-    color: #333333;
-    font-size: 11px;
-    font-weight: 750;
-  }
-
-  .kp-pro-review-card-v14 {
-    padding: 18px 0;
-    border: 0;
-    border-top: 1px solid #ececec;
-    border-radius: 0;
-    background: transparent;
-  }
-
-  .kp-pro-review-card-v14:first-child {
-    border-top: 0;
-    padding-top: 0;
-  }
-
-  .kp-pro-review-client {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
-    gap: 11px !important;
-  }
-
-  .kp-pro-review-avatar {
-    width: 48px;
-    height: 48px;
-    flex: 0 0 auto;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: #f0f0f0;
-    color: #4b5563;
-    font-size: 12px;
-    font-weight: 900;
-  }
-
-  .kp-pro-review-client > div {
-    min-width: 0;
-    display: grid;
-    gap: 3px;
-  }
-
-  .kp-pro-review-client > div > strong {
-    color: #111111 !important;
-    font-size: 14px !important;
-    letter-spacing: 0 !important;
-  }
-
-  .kp-pro-review-stars {
-    color: #111111;
-    font-size: 13px;
-    letter-spacing: 1px;
-  }
-
-  .kp-pro-review-stars i {
-    color: #d7d7d7;
-    font-style: normal;
-  }
-
-  .kp-pro-review-card-v14 > p {
-    margin: 12px 0 7px;
-    color: #333333;
-    font-size: 13px;
-    line-height: 1.55;
-  }
-
-  .kp-pro-review-meta-v14 {
-    display: flex !important;
-    justify-content: flex-start !important;
-    flex-wrap: wrap;
-    gap: 5px;
-    color: #8a8a8a;
-    font-size: 9.5px;
-  }
-
-  .kp-pro-review-card-v14 > em {
-    display: block;
-    margin-top: 8px;
-    color: #555555;
-    font-size: 9px;
-    font-style: normal;
-    font-weight: 800;
-  }
-
-  .kp-dark .kp-pro-interests h3,
-  .kp-dark .kp-pro-review-client > div > strong,
-  .kp-dark .kp-pro-review-card-v14 > p {
-    color: #ffffff !important;
-  }
-
-  .kp-dark .kp-pro-interests span,
-  .kp-dark .kp-pro-review-avatar {
-    border-color: #353535;
-    background: #1c1c1c;
-    color: #eeeeee;
-  }
-
-  .kp-dark .kp-pro-review-card-v14 {
-    border-top-color: #333333;
-  }
-
-`;
+      "radial-gradient(circle,rgba(14,165,166,.10) 0%,rgba(14,165,166,0) 70%)",
+  },
+
+  whiteboardShell: {
+    marginBottom: 15,
+    display: "grid",
+    gap: 14,
+  },
+
+  whiteboardTop: {
+    padding: 18,
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+    borderRadius: 18,
+    background:
+      "linear-gradient(135deg,#07111F 0%,#0B253A 65%,#0D506B 100%)",
+    color: "#FFFFFF",
+    boxShadow: "0 16px 34px rgba(7,17,31,.18)",
+  },
+
+  whiteboardBack: {
+    minHeight: 38,
+    padding: "0 11px",
+    border: "1px solid rgba(255,255,255,.14)",
+    borderRadius: 10,
+    background: "rgba(255,255,255,.07)",
+    color: "#EAF4FA",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  whiteboardEyebrow: {
+    display: "block",
+    color: "#79D7E3",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: 1.2,
+  },
+
+  whiteboardTitle: {
+    margin: "3px 0 0",
+    color: "#FFFFFF",
+    fontSize: 24,
+  },
+
+  whiteboardFilters: {
+    padding: 14,
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr auto",
+    gap: 9,
+    alignItems: "end",
+    border: "1px solid #DEE6EF",
+    borderRadius: 16,
+    background: "#FFFFFF",
+  },
+
+  whiteboardField: {
+    display: "grid",
+    gap: 5,
+  },
+
+  whiteboardLabel: {
+    color: "#6E7B89",
+    fontSize: 7.5,
+    fontWeight: 900,
+    textTransform: "uppercase",
+  },
+
+  whiteboardInput: {
+    width: "100%",
+    minHeight: 40,
+    padding: "0 10px",
+    border: "1px solid #D7E1EB",
+    borderRadius: 10,
+    outline: "none",
+    background: "#F9FBFD",
+    color: "#172033",
+    fontSize: 10,
+  },
+
+  whiteboardSearch: {
+    minHeight: 40,
+    padding: "0 13px",
+    border: 0,
+    borderRadius: 10,
+    background: "#0D506B",
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  whiteboardLoading: {
+    minHeight: 280,
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 10,
+    border: "1px solid #DFE7EF",
+    borderRadius: 18,
+    background: "#FFFFFF",
+    color: "#304153",
+  },
+
+  wodCard: {
+    padding: 18,
+    border: "1px solid #DCE5EE",
+    borderRadius: 20,
+    background: "#FFFFFF",
+    boxShadow: "0 14px 30px rgba(15,23,42,.06)",
+  },
+
+  wodHeader: {
+    marginBottom: 14,
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  wodProgram: {
+    display: "block",
+    color: "#0D7C92",
+    fontSize: 8,
+    fontWeight: 950,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+
+  wodTitle: {
+    margin: "4px 0 0",
+    color: "#101827",
+    fontSize: 25,
+    lineHeight: 1.05,
+  },
+
+  wodActive: {
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#DCFCE7",
+    color: "#166534",
+    fontSize: 7,
+    fontWeight: 950,
+  },
+
+  wodBlocks: {
+    display: "grid",
+    gap: 9,
+  },
+
+  wodBlock: {
+    padding: 14,
+    display: "grid",
+    gap: 5,
+    border: "1px solid #E1E8EF",
+    borderRadius: 13,
+    background: "#F9FBFD",
+  },
+
+  wodBlockAccent: {
+    background:
+      "linear-gradient(135deg,#E8F7FA 0%,#F4FBFC 100%)",
+    border: "1px solid #BDE6EC",
+  },
+
+  wodBlockLabel: {
+    color: "#708090",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: .8,
+    textTransform: "uppercase",
+  },
+
+  wodBlockValue: {
+    color: "#182333",
+    fontSize: 14,
+    lineHeight: 1.4,
+    whiteSpace: "pre-wrap",
+  },
+
+  wodNote: {
+    marginTop: 10,
+    padding: 13,
+    display: "grid",
+    gap: 4,
+    borderRadius: 12,
+    background: "#FFF8E8",
+    border: "1px solid #F0E0B7",
+  },
+
+  wodNoteLabel: {
+    color: "#96722A",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: .8,
+  },
+
+  wodNoteValue: {
+    color: "#5E4A21",
+    fontSize: 10,
+    lineHeight: 1.45,
+  },
+
+  whiteboardEmpty: {
+    minHeight: 300,
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 8,
+    padding: 20,
+    textAlign: "center",
+    border: "1px solid #DFE7EF",
+    borderRadius: 18,
+    background: "#FFFFFF",
+  },
+
+  whiteboardEmptyIcon: {
+    width: 56,
+    height: 56,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 16,
+    background: "#E8F4F6",
+    color: "#0D667D",
+    fontSize: 21,
+    fontWeight: 950,
+  },
+
+  whiteboardEmptyTitle: {
+    color: "#243244",
+    fontSize: 14,
+  },
+
+  whiteboardEmptyText: {
+    maxWidth: 360,
+    color: "#788697",
+    fontSize: 9,
+    lineHeight: 1.5,
+  },
+
+  profileSettingsShell: {
+    marginBottom: 15,
+    display: "grid",
+    gridTemplateColumns: "220px minmax(0,1fr)",
+    gap: 14,
+    alignItems: "start",
+  },
+
+  profileSummaryCard: {
+    padding: 18,
+    display: "grid",
+    justifyItems: "center",
+    gap: 8,
+    border: "1px solid #DDE8E1",
+    borderRadius: 18,
+    background: "#FFFFFF",
+    boxShadow: "0 10px 24px rgba(15,50,31,.05)",
+  },
+
+  profileSummaryAvatar: {
+    width: 96,
+    height: 96,
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background: "#EAF2ED",
+    border: "4px solid #F3F7F4",
+    color: "#173C2A",
+    fontSize: 30,
+    fontWeight: 950,
+  },
+
+  profileSummaryName: {
+    marginTop: 4,
+    maxWidth: "100%",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    color: "#1B3023",
+    fontSize: 17,
+    textAlign: "center",
+  },
+
+  profileSummaryRole: {
+    color: "#829088",
+    fontSize: 9,
+  },
+
+  changePhotoButton: {
+    width: "100%",
+    minHeight: 36,
+    marginTop: 4,
+    display: "grid",
+    placeItems: "center",
+    border: "1px solid #D9E4DD",
+    borderRadius: 10,
+    background: "#F8FAF9",
+    color: "#385345",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  profileSummaryDivider: {
+    width: "100%",
+    height: 1,
+    margin: "6px 0 1px",
+    background: "#E8EEEA",
+  },
+
+  profileSummaryRow: {
+    width: "100%",
+    minHeight: 38,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    borderBottom: "1px solid #EFF3F0",
+  },
+
+  profileSummaryLabel: {
+    color: "#7B8981",
+    fontSize: 8.5,
+  },
+
+  profileSummaryValue: {
+    maxWidth: "58%",
+    overflow: "hidden",
+    color: "#2B4435",
+    fontSize: 8.5,
+    textAlign: "right",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  profileLogoutButton: {
+    width: "100%",
+    minHeight: 38,
+    marginTop: 7,
+    border: "1px solid #E1E8E3",
+    borderRadius: 10,
+    background: "#FFFFFF",
+    color: "#6A766F",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  profileSettingsMain: {
+    minWidth: 0,
+    overflow: "hidden",
+    border: "1px solid #DDE8E1",
+    borderRadius: 18,
+    background: "#FFFFFF",
+    boxShadow: "0 10px 24px rgba(15,50,31,.05)",
+  },
+
+  profileTabs: {
+    display: "flex",
+    gap: 0,
+    overflowX: "auto",
+    borderBottom: "1px solid #E4EBE6",
+    background: "#FBFCFB",
+  },
+
+  profileTabButton: {
+    minHeight: 48,
+    padding: "0 14px",
+    flex: "0 0 auto",
+    border: 0,
+    borderBottom: "3px solid transparent",
+    background: "transparent",
+    color: "#6F7F76",
+    fontSize: 9,
+    fontWeight: 800,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+
+  profileTabButtonActive: {
+    color: "#0EA5A6",
+    borderBottomColor: "#0EA5A6",
+    background: "#FFFFFF",
+  },
+
+  profilePanel: {
+    minHeight: 430,
+    padding: 20,
+  },
+
+  profilePanelHeading: {
+    marginBottom: 16,
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  profilePanelTitle: {
+    margin: "4px 0 0",
+    color: "#17251D",
+    fontSize: 22,
+  },
+
+  profileFieldsGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 12,
+  },
+
+  profileField: {
+    minHeight: 70,
+    padding: "11px 12px",
+    display: "grid",
+    alignContent: "center",
+    gap: 4,
+    border: "1px solid #E4EBE6",
+    borderRadius: 11,
+    background: "#FAFCFB",
+  },
+
+  profileFieldLabel: {
+    color: "#7E8C84",
+    fontSize: 7.5,
+    fontWeight: 850,
+    textTransform: "uppercase",
+  },
+
+  profileFieldValue: {
+    overflowWrap: "anywhere",
+    color: "#263F31",
+    fontSize: 11,
+    lineHeight: 1.35,
+  },
+
+  passwordForm: {
+    maxWidth: 430,
+    marginTop: 18,
+    display: "grid",
+    gap: 12,
+  },
+
+  passwordMessage: {
+    padding: 10,
+    borderRadius: 10,
+    background: "#F2F7F4",
+    color: "#476052",
+    fontSize: 9,
+  },
+
+  membershipProfileCard: {
+    marginTop: 16,
+    padding: 15,
+    border: "1px solid #DDE8E1",
+    borderRadius: 14,
+    background: "#F8FBF9",
+  },
+
+  membershipProfilePlan: {
+    display: "block",
+    marginBottom: 12,
+    color: "#173C2A",
+    fontSize: 18,
+  },
+
+  configEmpty: {
+    minHeight: 280,
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 8,
+    textAlign: "center",
+  },
+
+  configEmptyIcon: {
+    width: 54,
+    height: 54,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 16,
+    background: "#EAF4EE",
+    color: "#0EA5A6",
+    fontSize: 24,
+  },
+
+  configEmptyTitle: {
+    color: "#2A4033",
+    fontSize: 14,
+  },
+
+  configEmptyText: {
+    maxWidth: 360,
+    color: "#7A8780",
+    fontSize: 9,
+    lineHeight: 1.5,
+  },
+
+  emptyPageCard: {
+    minHeight: 430,
+    padding: 30,
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 10,
+    border: "1px solid #DFE8E2",
+    borderRadius: 22,
+    background: "#FFFFFF",
+    textAlign: "center",
+  },
+
+  emptyPageIcon: {
+    width: 72,
+    height: 72,
+    display: "grid",
+    placeItems: "center",
+    marginBottom: 2,
+    borderRadius: 22,
+    background: "#E7F4EC",
+    color: "#0EA5A6",
+    fontSize: 30,
+    fontWeight: 900,
+  },
+
+  emptyPageTitle: {
+    margin: 0,
+    color: "#1C3426",
+    fontSize: 28,
+  },
+
+  emptyPageText: {
+    maxWidth: 390,
+    margin: 0,
+    color: "#748179",
+    fontSize: 10,
+    lineHeight: 1.6,
+  },
+
+  primaryButton: {
+    minWidth: 160,
+    minHeight: 44,
+    marginTop: 4,
+    padding: "0 16px",
+    border: 0,
+    borderRadius: 11,
+    background: "#0EA5A6",
+    color: "#FFFFFF",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  secondaryButton: {
+    width: "100%",
+    minHeight: 43,
+    border: "1px solid #DAE4DE",
+    borderRadius: 11,
+    background: "#FFFFFF",
+    color: "#4D5F55",
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  footer: {
+    display: "grid",
+    justifyItems: "center",
+    gap: 8,
+    paddingTop: 5,
+  },
+
+  secureText: {
+    width: "100%",
+    display: "flex",
+    justifyContent: "space-between",
+    color: "#95A098",
+    fontSize: 7.5,
+  },
+
+  version: {
+    color: "#BAC2BD",
+    fontSize: 6,
+  },
+
+  mobileBottom: {
+    display: "none",
+    position: "fixed",
+    zIndex: 40,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    gridTemplateColumns: "repeat(5,1fr)",
+    minHeight: 72,
+    padding: "7px 5px max(7px,env(safe-area-inset-bottom))",
+    background: "rgba(255,255,255,.97)",
+    borderTop: "1px solid #E0E8E3",
+    boxShadow: "0 -8px 26px rgba(17,45,29,.08)",
+    backdropFilter: "blur(12px)",
+  },
+
+  bottomItem: {
+    minWidth: 0,
+    border: 0,
+    background: "transparent",
+    color: "#839088",
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 3,
+    fontSize: 7.5,
+    fontWeight: 850,
+  },
+
+  bottomItemActive: {
+    color: "#0EA5A6",
+  },
+
+  bottomIcon: {
+    fontSize: 19,
+    lineHeight: 1,
+  },
+
+  loadingPage: {
+    minHeight: "100vh",
+    padding: 18,
+    display: "grid",
+    placeItems: "center",
+    background: "#F1F5F2",
+    color: "#284434",
+    fontFamily:
+      'Inter,ui-sans-serif,system-ui,sans-serif',
+  },
+
+  loadingCard: {
+    width: "min(390px,100%)",
+    padding: 28,
+    display: "grid",
+    justifyItems: "center",
+    gap: 10,
+    border: "1px solid #DFE7E2",
+    borderRadius: 22,
+    background: "#FFFFFF",
+    boxShadow: "0 18px 50px rgba(22,50,34,.08)",
+  },
+
+  loadingLogo: {
+    width: 140,
+    marginBottom: 6,
+  },
+
+  loader: {
+    width: 34,
+    height: 34,
+    borderRadius: "50%",
+    border: "4px solid #E1EBE5",
+    borderTopColor: "#0EA5A6",
+  },
+
+  loadingText: {
+    color: "#7B887F",
+    fontSize: 9,
+  },
+
+  errorCard: {
+    width: "min(420px,100%)",
+    padding: 27,
+    display: "grid",
+    justifyItems: "center",
+    gap: 11,
+    textAlign: "center",
+    border: "1px solid #E4E9E6",
+    borderRadius: 22,
+    background: "#FFFFFF",
+    boxShadow: "0 20px 60px rgba(22,44,31,.10)",
+  },
+
+  errorLogo: {
+    width: 135,
+    marginBottom: 6,
+  },
+
+  errorIcon: {
+    width: 48,
+    height: 48,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 15,
+    background: "#FFF0E8",
+    color: "#B85A2A",
+    fontSize: 21,
+    fontWeight: 950,
+  },
+
+  errorTitle: {
+    margin: 0,
+    color: "#25382D",
+    fontSize: 21,
+  },
+
+  errorText: {
+    margin: 0,
+    color: "#748078",
+    fontSize: 10,
+    lineHeight: 1.5,
+  },
+};
