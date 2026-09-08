@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.08-PORTAL-ALUMNO-MENU-RETORNO-V7";
+const VERSION = "2026.09.08-PORTAL-ALUMNO-WHITEBOARD-WOD-V8";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
@@ -43,10 +43,23 @@ export default function PortalAlumnoInicio() {
   const [menuAbierto, setMenuAbierto] = useState(true);
   const [seccion, setSeccion] = useState("inicio");
 
+  const [serviciosWod, setServiciosWod] = useState([]);
+  const [servicioWodId, setServicioWodId] = useState("");
+  const [fechaWod, setFechaWod] = useState("");
+  const [wodPublico, setWodPublico] = useState(null);
+  const [cargandoWod, setCargandoWod] = useState(false);
+  const [errorWod, setErrorWod] = useState("");
+
   useEffect(() => {
     cargarTodo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  useEffect(() => {
+    if (seccion !== "whiteboard" || !slug) return;
+    prepararWhiteboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seccion, slug]);
 
   async function cargarTodo(modoActualizar = false) {
     if (!slug) {
@@ -338,6 +351,125 @@ export default function PortalAlumnoInicio() {
     }
   }
 
+  function fechaLocalIso(fecha = new Date()) {
+    const y = fecha.getFullYear();
+    const m = String(fecha.getMonth() + 1).padStart(2, "0");
+    const d = String(fecha.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  function sumarDiasIso(fechaIso, dias) {
+    const [y, m, d] = String(fechaIso).split("-").map(Number);
+    const fecha = new Date(y, (m || 1) - 1, d || 1, 12, 0, 0);
+    fecha.setDate(fecha.getDate() + dias);
+    return fechaLocalIso(fecha);
+  }
+
+  async function obtenerWod(fechaSeleccionada, servicioId) {
+    if (!fechaSeleccionada || !servicioId) return null;
+
+    const { data, error: rpcError } = await supabase.rpc(
+      "obtener_wod_publico",
+      {
+        p_slug: slug,
+        p_fecha: String(fechaSeleccionada).slice(0, 10),
+        p_servicio_id: servicioId,
+      }
+    );
+
+    if (rpcError || !data?.ok) return null;
+    return data;
+  }
+
+  async function cargarWodSeleccionado(
+    fechaSeleccionada = fechaWod,
+    servicioId = servicioWodId
+  ) {
+    if (!fechaSeleccionada || !servicioId) {
+      setWodPublico(null);
+      return;
+    }
+
+    setCargandoWod(true);
+    setErrorWod("");
+
+    try {
+      const data = await obtenerWod(fechaSeleccionada, servicioId);
+      setWodPublico(data);
+
+      if (!data) {
+        setErrorWod("No hay un WOD publicado para esta clase y fecha.");
+      }
+    } catch (err) {
+      console.error("Error cargando WOD público:", err);
+      setWodPublico(null);
+      setErrorWod("No se pudo cargar el WOD.");
+    } finally {
+      setCargandoWod(false);
+    }
+  }
+
+  async function prepararWhiteboard() {
+    setCargandoWod(true);
+    setErrorWod("");
+
+    try {
+      const { data, error: errorServicios } = await supabase.rpc(
+        "obtener_servicios_agenda_publica",
+        {
+          p_slug: slug,
+        }
+      );
+
+      if (errorServicios) throw errorServicios;
+
+      const lista = Array.isArray(data) ? data : [];
+      setServiciosWod(lista);
+
+      if (!lista.length) {
+        setServicioWodId("");
+        setFechaWod(fechaLocalIso());
+        setWodPublico(null);
+        setErrorWod("No hay clases disponibles para consultar.");
+        return;
+      }
+
+      const hoy = fechaLocalIso();
+
+      for (let offset = 0; offset <= 7; offset += 1) {
+        const fechaBuscar = sumarDiasIso(hoy, offset);
+
+        for (const servicio of lista) {
+          const servicioId = String(servicio?.id || "").trim();
+          if (!servicioId) continue;
+
+          const wod = await obtenerWod(fechaBuscar, servicioId);
+
+          if (wod?.ok) {
+            setFechaWod(fechaBuscar);
+            setServicioWodId(servicioId);
+            setWodPublico(wod);
+            return;
+          }
+        }
+      }
+
+      const primerServicioId = String(lista[0]?.id || "");
+      setFechaWod(hoy);
+      setServicioWodId(primerServicioId);
+      setWodPublico(null);
+      setErrorWod(
+        "No hay WOD publicado para hoy ni para los próximos 7 días."
+      );
+    } catch (err) {
+      console.error("Error preparando Whiteboard:", err);
+      setWodPublico(null);
+      setErrorWod("No se pudo cargar el Whiteboard.");
+    } finally {
+      setCargandoWod(false);
+    }
+  }
+
   function cambiarSeccion(id) {
     setSeccion(id);
 
@@ -543,6 +675,10 @@ export default function PortalAlumnoInicio() {
           .app-home-summary {
             grid-template-columns: 1fr !important;
           }
+
+          .whiteboard-filters {
+            grid-template-columns: 1fr !important;
+          }
         }
 
         @media (max-width: 390px) {
@@ -715,13 +851,19 @@ export default function PortalAlumnoInicio() {
           )}
 
           {seccion === "whiteboard" && (
-            <SeccionVacia
-              eyebrow="COMUNIDAD"
-              titulo="Whiteboard"
-              texto="Aquí se mostrarán los resultados publicados por el gimnasio y los atletas del día."
-              icono="▤"
-              accion="Volver al inicio"
-              onAccion={() => cambiarSeccion("inicio")}
+            <WhiteboardWod
+              servicios={serviciosWod}
+              servicioId={servicioWodId}
+              setServicioId={setServicioWodId}
+              fecha={fechaWod}
+              setFecha={setFechaWod}
+              wod={wodPublico}
+              cargando={cargandoWod}
+              error={errorWod}
+              onBuscar={() =>
+                cargarWodSeleccionado(fechaWod, servicioWodId)
+              }
+              onVolver={() => cambiarSeccion("inicio")}
             />
           )}
 
@@ -779,6 +921,138 @@ function Inicio() {
   return (
     <section style={S.homeCompact}>
       <div style={S.homeCompactLine} />
+    </section>
+  );
+}
+
+function WhiteboardWod({
+  servicios,
+  servicioId,
+  setServicioId,
+  fecha,
+  setFecha,
+  wod,
+  cargando,
+  error,
+  onBuscar,
+  onVolver,
+}) {
+  const bloques = [
+    ["Warm-up", wod?.warmup],
+    ["Fuerza", wod?.strength],
+    ["Técnica / Skill", wod?.skill],
+    ["Metcon", wod?.metcon],
+    ["Vuelta a la calma", wod?.cooldown],
+  ].filter(([, valor]) => Boolean(String(valor || "").trim()));
+
+  return (
+    <section style={S.whiteboardShell}>
+      <div style={S.whiteboardTop}>
+        <button
+          type="button"
+          onClick={onVolver}
+          style={S.whiteboardBack}
+        >
+          ← Menú
+        </button>
+
+        <div>
+          <span style={S.whiteboardEyebrow}>WORKOUT OF THE DAY</span>
+          <h1 style={S.whiteboardTitle}>Whiteboard</h1>
+        </div>
+      </div>
+
+      <div style={S.whiteboardFilters} className="whiteboard-filters">
+        <div style={S.whiteboardField}>
+          <label style={S.whiteboardLabel}>Clase</label>
+          <select
+            value={servicioId}
+            onChange={(e) => setServicioId(e.target.value)}
+            style={S.whiteboardInput}
+          >
+            {servicios.map((servicio) => (
+              <option key={servicio.id} value={String(servicio.id)}>
+                {servicio.nombre || "Clase"}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={S.whiteboardField}>
+          <label style={S.whiteboardLabel}>Fecha</label>
+          <input
+            type="date"
+            value={fecha}
+            onChange={(e) => setFecha(e.target.value)}
+            style={S.whiteboardInput}
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={onBuscar}
+          disabled={cargando || !fecha || !servicioId}
+          style={S.whiteboardSearch}
+        >
+          {cargando ? "Buscando..." : "Ver WOD"}
+        </button>
+      </div>
+
+      {cargando ? (
+        <div style={S.whiteboardLoading}>
+          <div style={S.loader} />
+          <strong>Cargando WOD...</strong>
+        </div>
+      ) : wod?.ok ? (
+        <article style={S.wodCard}>
+          <div style={S.wodHeader}>
+            <div>
+              <span style={S.wodProgram}>
+                {wod.servicio || "CLASE"}
+              </span>
+              <h2 style={S.wodTitle}>
+                {wod.titulo || "WOD del día"}
+              </h2>
+            </div>
+
+            <span style={S.wodActive}>PUBLICADO</span>
+          </div>
+
+          <div style={S.wodBlocks}>
+            {bloques.map(([titulo, valor]) => (
+              <div
+                key={titulo}
+                style={{
+                  ...S.wodBlock,
+                  ...(titulo === "Metcon" ? S.wodBlockAccent : {}),
+                }}
+              >
+                <span style={S.wodBlockLabel}>{titulo}</span>
+                <strong style={S.wodBlockValue}>{valor}</strong>
+              </div>
+            ))}
+          </div>
+
+          {wod.notas_publicas && (
+            <div style={S.wodNote}>
+              <span style={S.wodNoteLabel}>NOTA DEL COACH</span>
+              <strong style={S.wodNoteValue}>
+                {wod.notas_publicas}
+              </strong>
+            </div>
+          )}
+        </article>
+      ) : (
+        <div style={S.whiteboardEmpty}>
+          <div style={S.whiteboardEmptyIcon}>W</div>
+          <strong style={S.whiteboardEmptyTitle}>
+            WOD no disponible
+          </strong>
+          <span style={S.whiteboardEmptyText}>
+            {error || "Selecciona una clase y una fecha para consultar."}
+          </span>
+        </div>
+      )}
     </section>
   );
 }
@@ -2384,6 +2658,245 @@ const S = {
     borderRadius: "50%",
     background:
       "radial-gradient(circle,rgba(14,165,166,.10) 0%,rgba(14,165,166,0) 70%)",
+  },
+
+  whiteboardShell: {
+    marginBottom: 15,
+    display: "grid",
+    gap: 14,
+  },
+
+  whiteboardTop: {
+    padding: 18,
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+    borderRadius: 18,
+    background:
+      "linear-gradient(135deg,#07111F 0%,#0B253A 65%,#0D506B 100%)",
+    color: "#FFFFFF",
+    boxShadow: "0 16px 34px rgba(7,17,31,.18)",
+  },
+
+  whiteboardBack: {
+    minHeight: 38,
+    padding: "0 11px",
+    border: "1px solid rgba(255,255,255,.14)",
+    borderRadius: 10,
+    background: "rgba(255,255,255,.07)",
+    color: "#EAF4FA",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  whiteboardEyebrow: {
+    display: "block",
+    color: "#79D7E3",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: 1.2,
+  },
+
+  whiteboardTitle: {
+    margin: "3px 0 0",
+    color: "#FFFFFF",
+    fontSize: 24,
+  },
+
+  whiteboardFilters: {
+    padding: 14,
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr auto",
+    gap: 9,
+    alignItems: "end",
+    border: "1px solid #DEE6EF",
+    borderRadius: 16,
+    background: "#FFFFFF",
+  },
+
+  whiteboardField: {
+    display: "grid",
+    gap: 5,
+  },
+
+  whiteboardLabel: {
+    color: "#6E7B89",
+    fontSize: 7.5,
+    fontWeight: 900,
+    textTransform: "uppercase",
+  },
+
+  whiteboardInput: {
+    width: "100%",
+    minHeight: 40,
+    padding: "0 10px",
+    border: "1px solid #D7E1EB",
+    borderRadius: 10,
+    outline: "none",
+    background: "#F9FBFD",
+    color: "#172033",
+    fontSize: 10,
+  },
+
+  whiteboardSearch: {
+    minHeight: 40,
+    padding: "0 13px",
+    border: 0,
+    borderRadius: 10,
+    background: "#0D506B",
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  whiteboardLoading: {
+    minHeight: 280,
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 10,
+    border: "1px solid #DFE7EF",
+    borderRadius: 18,
+    background: "#FFFFFF",
+    color: "#304153",
+  },
+
+  wodCard: {
+    padding: 18,
+    border: "1px solid #DCE5EE",
+    borderRadius: 20,
+    background: "#FFFFFF",
+    boxShadow: "0 14px 30px rgba(15,23,42,.06)",
+  },
+
+  wodHeader: {
+    marginBottom: 14,
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  wodProgram: {
+    display: "block",
+    color: "#0D7C92",
+    fontSize: 8,
+    fontWeight: 950,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+
+  wodTitle: {
+    margin: "4px 0 0",
+    color: "#101827",
+    fontSize: 25,
+    lineHeight: 1.05,
+  },
+
+  wodActive: {
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#DCFCE7",
+    color: "#166534",
+    fontSize: 7,
+    fontWeight: 950,
+  },
+
+  wodBlocks: {
+    display: "grid",
+    gap: 9,
+  },
+
+  wodBlock: {
+    padding: 14,
+    display: "grid",
+    gap: 5,
+    border: "1px solid #E1E8EF",
+    borderRadius: 13,
+    background: "#F9FBFD",
+  },
+
+  wodBlockAccent: {
+    background:
+      "linear-gradient(135deg,#E8F7FA 0%,#F4FBFC 100%)",
+    border: "1px solid #BDE6EC",
+  },
+
+  wodBlockLabel: {
+    color: "#708090",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: .8,
+    textTransform: "uppercase",
+  },
+
+  wodBlockValue: {
+    color: "#182333",
+    fontSize: 14,
+    lineHeight: 1.4,
+    whiteSpace: "pre-wrap",
+  },
+
+  wodNote: {
+    marginTop: 10,
+    padding: 13,
+    display: "grid",
+    gap: 4,
+    borderRadius: 12,
+    background: "#FFF8E8",
+    border: "1px solid #F0E0B7",
+  },
+
+  wodNoteLabel: {
+    color: "#96722A",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: .8,
+  },
+
+  wodNoteValue: {
+    color: "#5E4A21",
+    fontSize: 10,
+    lineHeight: 1.45,
+  },
+
+  whiteboardEmpty: {
+    minHeight: 300,
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 8,
+    padding: 20,
+    textAlign: "center",
+    border: "1px solid #DFE7EF",
+    borderRadius: 18,
+    background: "#FFFFFF",
+  },
+
+  whiteboardEmptyIcon: {
+    width: 56,
+    height: 56,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 16,
+    background: "#E8F4F6",
+    color: "#0D667D",
+    fontSize: 21,
+    fontWeight: 950,
+  },
+
+  whiteboardEmptyTitle: {
+    color: "#243244",
+    fontSize: 14,
+  },
+
+  whiteboardEmptyText: {
+    maxWidth: 360,
+    color: "#788697",
+    fontSize: 9,
+    lineHeight: 1.5,
   },
 
   profileSettingsShell: {
