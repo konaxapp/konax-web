@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.07-PORTAL-ALUMNO-PREMIUM-MENU-V1";
+const VERSION = "2026.09.07-PORTAL-ALUMNO-CONFIG-PRO-V2";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
@@ -529,6 +529,14 @@ export default function PortalAlumnoInicio() {
           .qr-layout {
             grid-template-columns: 1fr !important;
           }
+
+          .profile-settings-shell {
+            grid-template-columns: 1fr !important;
+          }
+
+          .profile-fields-grid {
+            grid-template-columns: 1fr !important;
+          }
         }
 
         @media (max-width: 390px) {
@@ -719,6 +727,10 @@ export default function PortalAlumnoInicio() {
             <Configuracion
               cuenta={cuenta}
               perfil={perfil}
+              membresia={membresia}
+              estadoVisual={estadoVisual}
+              accesoPermitido={accesoPermitido}
+              formatearFecha={formatearFecha}
               fotoFirmada={fotoFirmada}
               iniciales={iniciales}
               peso={peso}
@@ -973,6 +985,10 @@ function Inicio({
 
 function Configuracion({
   cuenta,
+  membresia,
+  estadoVisual,
+  accesoPermitido,
+  formatearFecha,
   fotoFirmada,
   iniciales,
   peso,
@@ -989,10 +1005,57 @@ function Configuracion({
   subirSelfie,
   cerrarSesion,
 }) {
+  const [tabConfig, setTabConfig] = useState("perfil");
+  const [nuevaClave, setNuevaClave] = useState("");
+  const [confirmarClave, setConfirmarClave] = useState("");
+  const [guardandoClave, setGuardandoClave] = useState(false);
+  const [mensajeClave, setMensajeClave] = useState("");
+
+  async function cambiarClave() {
+    setMensajeClave("");
+
+    if (String(nuevaClave).length < 8) {
+      setMensajeClave("La contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+
+    if (nuevaClave !== confirmarClave) {
+      setMensajeClave("Las contraseñas no coinciden.");
+      return;
+    }
+
+    setGuardandoClave(true);
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: nuevaClave,
+      });
+
+      if (error) throw error;
+
+      setNuevaClave("");
+      setConfirmarClave("");
+      setMensajeClave("Contraseña actualizada correctamente.");
+    } catch (err) {
+      setMensajeClave(err?.message || "No se pudo cambiar la contraseña.");
+    } finally {
+      setGuardandoClave(false);
+    }
+  }
+
+  const tabs = [
+    { id: "perfil", label: "Perfil" },
+    { id: "clave", label: "Cambiar contraseña" },
+    { id: "membresia", label: "Membresía" },
+    { id: "pagos", label: "Pagos" },
+    { id: "notificaciones", label: "Notificaciones" },
+    { id: "fisico", label: "Seguimiento físico" },
+  ];
+
   return (
-    <>
-      <section style={S.configHero}>
-        <div style={S.configAvatar}>
+    <section style={S.profileSettingsShell} className="profile-settings-shell">
+      <aside style={S.profileSummaryCard}>
+        <div style={S.profileSummaryAvatar}>
           {fotoFirmada ? (
             <img
               src={fotoFirmada}
@@ -1004,116 +1067,317 @@ function Configuracion({
           )}
         </div>
 
-        <div>
-          <span style={S.sectionEyebrow}>CONFIGURACIÓN</span>
-          <h1 style={S.configTitle}>{cuenta?.nombre}</h1>
-          <span style={S.configSubtitle}>
-            Administra tus datos y foto de acceso
-          </span>
-        </div>
-      </section>
+        <strong style={S.profileSummaryName}>
+          {cuenta?.nombre || "Alumno"}
+        </strong>
 
-      <section style={S.section}>
-        <div style={S.sectionHeading}>
-          <div>
-            <span style={S.sectionEyebrow}>DATOS PERSONALES</span>
-            <h2 style={S.sectionTitle}>Configuración de cuenta</h2>
-          </div>
+        <span style={S.profileSummaryRole}>Cliente</span>
 
-          <button
-            type="button"
-            onClick={() => setMostrarEditor((valor) => !valor)}
-            style={S.outlineSmallButton}
-          >
-            {mostrarEditor ? "Cerrar" : "Editar"}
-          </button>
-        </div>
+        <label style={S.changePhotoButton}>
+          {subiendoFoto ? "Subiendo..." : "✎ Cambiar foto"}
 
-        <div style={S.configGrid} className="config-grid">
-          <Metric label="Peso" value={pesoVisual} />
-          <Metric label="Estatura" value={estaturaVisual} />
-        </div>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={subirSelfie}
+            disabled={subiendoFoto}
+            style={{ display: "none" }}
+          />
+        </label>
 
-        <div style={S.photoActions} className="photo-actions">
-          <label style={S.selfieButton}>
-            {subiendoFoto ? "Subiendo..." : "📷 Tomar selfie"}
+        <div style={S.profileSummaryDivider} />
 
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              capture="user"
-              onChange={subirSelfie}
-              disabled={subiendoFoto}
-              style={{ display: "none" }}
-            />
-          </label>
+        <ResumenFila
+          label="Estado"
+          value={accesoPermitido ? "Activo" : estadoVisual}
+        />
 
-          <label style={S.galleryButton}>
-            Elegir foto
+        <ResumenFila
+          label="Membresía"
+          value={membresia?.plan || "Sin plan"}
+        />
 
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={subirSelfie}
-              disabled={subiendoFoto}
-              style={{ display: "none" }}
-            />
-          </label>
-        </div>
+        <ResumenFila
+          label="Vencimiento"
+          value={
+            membresia?.fecha_vencimiento
+              ? formatearFecha(membresia.fecha_vencimiento)
+              : "-"
+          }
+        />
 
-        {mostrarEditor && (
-          <div style={S.profileEditor}>
-            <div style={S.fieldGroup}>
-              <label style={S.fieldLabel}>Peso (kg)</label>
-              <input
-                value={peso}
-                onChange={(e) => setPeso(e.target.value)}
-                inputMode="decimal"
-                placeholder="Ej. 82.5"
-                style={S.input}
-              />
-            </div>
+        <ResumenFila
+          label="Check-ins"
+          value={cuenta?.checkins_total ?? cuenta?.checkins ?? "—"}
+        />
 
-            <div style={S.fieldGroup}>
-              <label style={S.fieldLabel}>Estatura (m)</label>
-              <input
-                value={estatura}
-                onChange={(e) => setEstatura(e.target.value)}
-                inputMode="decimal"
-                placeholder="Ej. 1.76"
-                style={S.input}
-              />
-            </div>
+        <button
+          type="button"
+          onClick={cerrarSesion}
+          style={S.profileLogoutButton}
+        >
+          Cerrar sesión
+        </button>
+      </aside>
 
+      <div style={S.profileSettingsMain}>
+        <div style={S.profileTabs}>
+          {tabs.map((tab) => (
             <button
+              key={tab.id}
               type="button"
-              onClick={guardarDatosPerfil}
-              disabled={guardandoPerfil}
-              style={S.saveProfileButton}
+              onClick={() => setTabConfig(tab.id)}
+              style={{
+                ...S.profileTabButton,
+                ...(tabConfig === tab.id ? S.profileTabButtonActive : {}),
+              }}
             >
-              {guardandoPerfil ? "Guardando..." : "Guardar cambios"}
+              {tab.label}
             </button>
+          ))}
+        </div>
+
+        {tabConfig === "perfil" && (
+          <div style={S.profilePanel}>
+            <div style={S.profilePanelHeading}>
+              <div>
+                <span style={S.sectionEyebrow}>PERFIL</span>
+                <h2 style={S.profilePanelTitle}>Datos personales</h2>
+              </div>
+            </div>
+
+            <div style={S.profileFieldsGrid} className="profile-fields-grid">
+              <ProfileField
+                label="Nombre y apellidos"
+                value={cuenta?.nombre || "-"}
+              />
+              <ProfileField
+                label="ID Cliente"
+                value={cuenta?.cedula || "-"}
+              />
+              <ProfileField
+                label="Email"
+                value={cuenta?.correo || "-"}
+              />
+              <ProfileField
+                label="Teléfono"
+                value={cuenta?.telefono || "-"}
+              />
+              <ProfileField
+                label="Estado"
+                value={accesoPermitido ? "Activo" : estadoVisual}
+              />
+              <ProfileField
+                label="Plan actual"
+                value={membresia?.plan || "Sin membresía"}
+              />
+            </div>
           </div>
         )}
-      </section>
 
-      <section style={S.contactCard}>
-        <span style={S.contactEyebrow}>CONTACTO</span>
+        {tabConfig === "clave" && (
+          <div style={S.profilePanel}>
+            <span style={S.sectionEyebrow}>SEGURIDAD</span>
+            <h2 style={S.profilePanelTitle}>Cambiar contraseña</h2>
 
-        <div style={S.contactRows}>
-          <Fila label="Teléfono" value={cuenta?.telefono || "-"} />
-          <Fila label="Correo" value={cuenta?.correo || "-"} />
-        </div>
-      </section>
+            <div style={S.passwordForm}>
+              <div style={S.fieldGroup}>
+                <label style={S.fieldLabel}>Nueva contraseña</label>
+                <input
+                  type="password"
+                  value={nuevaClave}
+                  onChange={(e) => setNuevaClave(e.target.value)}
+                  placeholder="Mínimo 8 caracteres"
+                  style={S.input}
+                />
+              </div>
 
-      <button
-        type="button"
-        onClick={cerrarSesion}
-        style={S.logoutButton}
-      >
-        Cerrar sesión
-      </button>
-    </>
+              <div style={S.fieldGroup}>
+                <label style={S.fieldLabel}>Confirmar contraseña</label>
+                <input
+                  type="password"
+                  value={confirmarClave}
+                  onChange={(e) => setConfirmarClave(e.target.value)}
+                  placeholder="Repite la contraseña"
+                  style={S.input}
+                />
+              </div>
+
+              {mensajeClave && (
+                <div style={S.passwordMessage}>{mensajeClave}</div>
+              )}
+
+              <button
+                type="button"
+                onClick={cambiarClave}
+                disabled={guardandoClave}
+                style={S.saveProfileButton}
+              >
+                {guardandoClave
+                  ? "Actualizando..."
+                  : "Actualizar contraseña"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {tabConfig === "membresia" && (
+          <div style={S.profilePanel}>
+            <span style={S.sectionEyebrow}>SUSCRIPCIÓN</span>
+            <h2 style={S.profilePanelTitle}>Mi membresía</h2>
+
+            {membresia ? (
+              <div style={S.membershipProfileCard}>
+                <strong style={S.membershipProfilePlan}>
+                  {membresia.plan || "Membresía"}
+                </strong>
+
+                <div style={S.profileFieldsGrid} className="profile-fields-grid">
+                  <ProfileField
+                    label="Estado"
+                    value={estadoVisual}
+                  />
+                  <ProfileField
+                    label="Periodicidad"
+                    value={membresia.periodicidad || "-"}
+                  />
+                  <ProfileField
+                    label="Fecha de inicio"
+                    value={
+                      membresia.fecha_inicio
+                        ? formatearFecha(membresia.fecha_inicio)
+                        : "-"
+                    }
+                  />
+                  <ProfileField
+                    label="Vencimiento"
+                    value={
+                      membresia.fecha_vencimiento
+                        ? formatearFecha(membresia.fecha_vencimiento)
+                        : "-"
+                    }
+                  />
+                </div>
+              </div>
+            ) : (
+              <ConfigEmpty
+                title="Sin membresía registrada"
+                text="Cuando el gimnasio te asigne una membresía aparecerá aquí."
+              />
+            )}
+          </div>
+        )}
+
+        {tabConfig === "pagos" && (
+          <div style={S.profilePanel}>
+            <span style={S.sectionEyebrow}>PAGOS</span>
+            <h2 style={S.profilePanelTitle}>Facturación y pagos</h2>
+            <ConfigEmpty
+              title="Sin movimientos para mostrar"
+              text="Esta sección quedará preparada para mostrar tus pagos y comprobantes cuando conectemos el historial financiero del alumno."
+            />
+          </div>
+        )}
+
+        {tabConfig === "notificaciones" && (
+          <div style={S.profilePanel}>
+            <span style={S.sectionEyebrow}>PREFERENCIAS</span>
+            <h2 style={S.profilePanelTitle}>Notificaciones</h2>
+            <ConfigEmpty
+              title="Preferencias de notificación"
+              text="Aquí podrás administrar avisos de reservas, cambios de horario y vencimiento de membresía."
+            />
+          </div>
+        )}
+
+        {tabConfig === "fisico" && (
+          <div style={S.profilePanel}>
+            <div style={S.profilePanelHeading}>
+              <div>
+                <span style={S.sectionEyebrow}>SEGUIMIENTO FÍSICO</span>
+                <h2 style={S.profilePanelTitle}>Peso y estatura</h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setMostrarEditor((valor) => !valor)}
+                style={S.outlineSmallButton}
+              >
+                {mostrarEditor ? "Cerrar" : "Editar"}
+              </button>
+            </div>
+
+            <div style={S.configGrid} className="config-grid">
+              <Metric label="Peso" value={pesoVisual} />
+              <Metric label="Estatura" value={estaturaVisual} />
+            </div>
+
+            {mostrarEditor && (
+              <div style={S.profileEditor}>
+                <div style={S.fieldGroup}>
+                  <label style={S.fieldLabel}>Peso (kg)</label>
+                  <input
+                    value={peso}
+                    onChange={(e) => setPeso(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="Ej. 82.5"
+                    style={S.input}
+                  />
+                </div>
+
+                <div style={S.fieldGroup}>
+                  <label style={S.fieldLabel}>Estatura (m)</label>
+                  <input
+                    value={estatura}
+                    onChange={(e) => setEstatura(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="Ej. 1.76"
+                    style={S.input}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={guardarDatosPerfil}
+                  disabled={guardandoPerfil}
+                  style={S.saveProfileButton}
+                >
+                  {guardandoPerfil ? "Guardando..." : "Guardar cambios"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ResumenFila({ label, value }) {
+  return (
+    <div style={S.profileSummaryRow}>
+      <span style={S.profileSummaryLabel}>{label}</span>
+      <strong style={S.profileSummaryValue}>{value}</strong>
+    </div>
+  );
+}
+
+function ProfileField({ label, value }) {
+  return (
+    <div style={S.profileField}>
+      <span style={S.profileFieldLabel}>{label}</span>
+      <strong style={S.profileFieldValue}>{value}</strong>
+    </div>
+  );
+}
+
+function ConfigEmpty({ title, text }) {
+  return (
+    <div style={S.configEmpty}>
+      <div style={S.configEmptyIcon}>◇</div>
+      <strong style={S.configEmptyTitle}>{title}</strong>
+      <span style={S.configEmptyText}>{text}</span>
+    </div>
   );
 }
 
@@ -2032,6 +2296,264 @@ const S = {
     fontSize: 10,
     fontWeight: 850,
     cursor: "pointer",
+  },
+
+  profileSettingsShell: {
+    marginBottom: 15,
+    display: "grid",
+    gridTemplateColumns: "220px minmax(0,1fr)",
+    gap: 14,
+    alignItems: "start",
+  },
+
+  profileSummaryCard: {
+    padding: 18,
+    display: "grid",
+    justifyItems: "center",
+    gap: 8,
+    border: "1px solid #DDE8E1",
+    borderRadius: 18,
+    background: "#FFFFFF",
+    boxShadow: "0 10px 24px rgba(15,50,31,.05)",
+  },
+
+  profileSummaryAvatar: {
+    width: 96,
+    height: 96,
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background: "#EAF2ED",
+    border: "4px solid #F3F7F4",
+    color: "#173C2A",
+    fontSize: 30,
+    fontWeight: 950,
+  },
+
+  profileSummaryName: {
+    marginTop: 4,
+    maxWidth: "100%",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    color: "#1B3023",
+    fontSize: 17,
+    textAlign: "center",
+  },
+
+  profileSummaryRole: {
+    color: "#829088",
+    fontSize: 9,
+  },
+
+  changePhotoButton: {
+    width: "100%",
+    minHeight: 36,
+    marginTop: 4,
+    display: "grid",
+    placeItems: "center",
+    border: "1px solid #D9E4DD",
+    borderRadius: 10,
+    background: "#F8FAF9",
+    color: "#385345",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  profileSummaryDivider: {
+    width: "100%",
+    height: 1,
+    margin: "6px 0 1px",
+    background: "#E8EEEA",
+  },
+
+  profileSummaryRow: {
+    width: "100%",
+    minHeight: 38,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    borderBottom: "1px solid #EFF3F0",
+  },
+
+  profileSummaryLabel: {
+    color: "#7B8981",
+    fontSize: 8.5,
+  },
+
+  profileSummaryValue: {
+    maxWidth: "58%",
+    overflow: "hidden",
+    color: "#2B4435",
+    fontSize: 8.5,
+    textAlign: "right",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  profileLogoutButton: {
+    width: "100%",
+    minHeight: 38,
+    marginTop: 7,
+    border: "1px solid #E1E8E3",
+    borderRadius: 10,
+    background: "#FFFFFF",
+    color: "#6A766F",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  profileSettingsMain: {
+    minWidth: 0,
+    overflow: "hidden",
+    border: "1px solid #DDE8E1",
+    borderRadius: 18,
+    background: "#FFFFFF",
+    boxShadow: "0 10px 24px rgba(15,50,31,.05)",
+  },
+
+  profileTabs: {
+    display: "flex",
+    gap: 0,
+    overflowX: "auto",
+    borderBottom: "1px solid #E4EBE6",
+    background: "#FBFCFB",
+  },
+
+  profileTabButton: {
+    minHeight: 48,
+    padding: "0 14px",
+    flex: "0 0 auto",
+    border: 0,
+    borderBottom: "3px solid transparent",
+    background: "transparent",
+    color: "#6F7F76",
+    fontSize: 9,
+    fontWeight: 800,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+
+  profileTabButtonActive: {
+    color: "#16834F",
+    borderBottomColor: "#16834F",
+    background: "#FFFFFF",
+  },
+
+  profilePanel: {
+    minHeight: 430,
+    padding: 20,
+  },
+
+  profilePanelHeading: {
+    marginBottom: 16,
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  profilePanelTitle: {
+    margin: "4px 0 0",
+    color: "#17251D",
+    fontSize: 22,
+  },
+
+  profileFieldsGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 12,
+  },
+
+  profileField: {
+    minHeight: 70,
+    padding: "11px 12px",
+    display: "grid",
+    alignContent: "center",
+    gap: 4,
+    border: "1px solid #E4EBE6",
+    borderRadius: 11,
+    background: "#FAFCFB",
+  },
+
+  profileFieldLabel: {
+    color: "#7E8C84",
+    fontSize: 7.5,
+    fontWeight: 850,
+    textTransform: "uppercase",
+  },
+
+  profileFieldValue: {
+    overflowWrap: "anywhere",
+    color: "#263F31",
+    fontSize: 11,
+    lineHeight: 1.35,
+  },
+
+  passwordForm: {
+    maxWidth: 430,
+    marginTop: 18,
+    display: "grid",
+    gap: 12,
+  },
+
+  passwordMessage: {
+    padding: 10,
+    borderRadius: 10,
+    background: "#F2F7F4",
+    color: "#476052",
+    fontSize: 9,
+  },
+
+  membershipProfileCard: {
+    marginTop: 16,
+    padding: 15,
+    border: "1px solid #DDE8E1",
+    borderRadius: 14,
+    background: "#F8FBF9",
+  },
+
+  membershipProfilePlan: {
+    display: "block",
+    marginBottom: 12,
+    color: "#173C2A",
+    fontSize: 18,
+  },
+
+  configEmpty: {
+    minHeight: 280,
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 8,
+    textAlign: "center",
+  },
+
+  configEmptyIcon: {
+    width: 54,
+    height: 54,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 16,
+    background: "#EAF4EE",
+    color: "#16834F",
+    fontSize: 24,
+  },
+
+  configEmptyTitle: {
+    color: "#2A4033",
+    fontSize: 14,
+  },
+
+  configEmptyText: {
+    maxWidth: 360,
+    color: "#7A8780",
+    fontSize: 9,
+    lineHeight: 1.5,
   },
 
   emptyPageCard: {
