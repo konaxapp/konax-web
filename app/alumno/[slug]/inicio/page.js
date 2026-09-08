@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.08-PORTAL-ALUMNO-NAV-FIX-V11";
+const VERSION = "2026.09.08-PORTAL-ALUMNO-AGENDA-RPC-V12";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
@@ -423,62 +423,54 @@ export default function PortalAlumnoInicio() {
   }
 
   async function resolverIdentidadAlumnoAgenda() {
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
-
-    if (sessionError) throw sessionError;
-
-    const authUserId = session?.user?.id;
-
-    if (authUserId) {
-      let consultaCliente = supabase
-        .from("clientes")
-        .select("id,empresa_id,nombre,telefono,correo,auth_user_id")
-        .eq("auth_user_id", authUserId);
-
-      const empresaEsperada = obtenerEmpresaIdAlumno();
-      if (empresaEsperada) {
-        consultaCliente = consultaCliente.eq("empresa_id", empresaEsperada);
+    const { data, error: conexionError } = await supabase.rpc(
+      "obtener_conexion_agenda_alumno",
+      {
+        p_slug: slug,
       }
+    );
 
-      const { data: cliente, error: clienteError } = await consultaCliente
-        .limit(1)
-        .maybeSingle();
+    if (conexionError) {
+      const codigo = String(conexionError?.code || "");
 
-      if (!clienteError && cliente?.id && cliente?.empresa_id) {
-        return {
-          clienteId: cliente.id,
-          empresaId: cliente.empresa_id,
-          cliente,
-        };
-      }
-
-      if (clienteError) {
-        console.warn(
-          "No se pudo resolver el alumno por auth_user_id:",
-          clienteError
+      if (["PGRST202", "42883"].includes(codigo)) {
+        throw new Error(
+          "Falta instalar la conexión segura entre Portal del Alumno y Agenda. Ejecuta primero el SQL V12 en Supabase."
         );
       }
+
+      throw conexionError;
     }
 
-    const clienteId = obtenerClienteIdAlumno();
-    const empresaId = obtenerEmpresaIdAlumno();
+    if (!data?.ok) {
+      throw new Error(
+        data?.mensaje ||
+          "No se pudo identificar tu ficha de alumno para consultar Agenda."
+      );
+    }
+
+    const clienteId = String(data?.cliente_id || "").trim();
+    const empresaId = String(data?.empresa_id || "").trim();
 
     if (!clienteId || !empresaId) {
       throw new Error(
-        "No se pudo identificar tu ficha de alumno para consultar Agenda."
+        "La conexión con Agenda respondió, pero faltan los identificadores del alumno."
       );
+    }
+
+    const slugResuelto = String(data?.agenda_slug || "").trim();
+    if (slugResuelto && slugResuelto !== agendaSlug) {
+      setAgendaSlug(slugResuelto);
     }
 
     return {
       clienteId,
       empresaId,
       cliente: null,
+      agendaSlug: slugResuelto,
+      agendaActiva: Boolean(data?.agenda_activa),
     };
   }
-
   async function resolverSlugAgenda() {
     if (agendaSlug) return agendaSlug;
 
@@ -498,124 +490,74 @@ export default function PortalAlumnoInicio() {
     }
 
     const identidad = await resolverIdentidadAlumnoAgenda();
+    const slugResuelto = String(identidad?.agendaSlug || "").trim();
 
-    const { data, error: configError } = await supabase.rpc(
-      "obtener_configuracion_portal_agenda",
-      {
-        p_empresa_id: identidad.empresaId,
-      }
-    );
-
-    if (!configError) {
-      const configuracion = Array.isArray(data) ? data[0] : data;
-      const slugResuelto = String(
-        configuracion?.slug || configuracion?.agenda_slug || ""
-      ).trim();
-
-      if (slugResuelto) {
-        setAgendaSlug(slugResuelto);
-        return slugResuelto;
-      }
-    } else {
-      console.warn(
-        "No se pudo resolver el slug del portal de Agenda:",
-        configError
-      );
+    if (slugResuelto) {
+      setAgendaSlug(slugResuelto);
+      return slugResuelto;
     }
 
     throw new Error(
-      "El Portal del Alumno está conectado al gimnasio, pero no pudo localizar el enlace interno de Agenda. Revisa que Agenda tenga configurado su enlace /reservar/."
+      "Las clases y reservas están conectadas. Para consultar el Whiteboard, Agenda necesita tener guardado su enlace /reservar/."
     );
   }
-
   async function cargarServiciosAgenda() {
-    let identidad = null;
-
-    try {
-      identidad = await resolverIdentidadAlumnoAgenda();
-
-      const { data: dataDirecta, error: errorDirecto } = await supabase
-        .from("agenda_servicios")
-        .select(
-          "id,nombre,descripcion,imagen_url,tipo,duracion_minutos,capacidad_default,requiere_membresia,requiere_pago,precio,activo"
-        )
-        .eq("empresa_id", identidad.empresaId)
-        .eq("activo", true)
-        .order("nombre", { ascending: true });
-
-      const listaDirecta = Array.isArray(dataDirecta) ? dataDirecta : [];
-
-      if (!errorDirecto && listaDirecta.length > 0) {
-        setServiciosAgenda(listaDirecta);
-        return listaDirecta;
-      }
-
-      if (errorDirecto) {
-        console.warn(
-          "Agenda directa no permitió leer servicios; se intentará el portal de reservas:",
-          errorDirecto
-        );
-      }
-    } catch (err) {
-      console.warn("No se pudo resolver la empresa para servicios:", err);
-    }
-
-    const slugAgenda = await resolverSlugAgenda();
-
     const { data, error: rpcError } = await supabase.rpc(
-      "obtener_servicios_agenda_publica",
+      "obtener_servicios_agenda_alumno",
       {
-        p_slug: slugAgenda,
+        p_slug: slug,
       }
     );
 
-    if (rpcError) throw rpcError;
+    if (rpcError) {
+      const codigo = String(rpcError?.code || "");
+      if (["PGRST202", "42883"].includes(codigo)) {
+        throw new Error(
+          "Falta ejecutar el SQL V12 del Portal del Alumno en Supabase."
+        );
+      }
+      throw rpcError;
+    }
 
-    const lista = Array.isArray(data) ? data : [];
+    if (!data?.ok) {
+      throw new Error(
+        data?.mensaje || "No se pudieron cargar las clases de Agenda."
+      );
+    }
+
+    const lista = Array.isArray(data?.servicios) ? data.servicios : [];
     setServiciosAgenda(lista);
     return lista;
   }
-
   async function consultarDisponibilidadAgenda(fechaSeleccionada) {
     const fechaConsulta = String(fechaSeleccionada).slice(0, 10);
 
-    try {
-      const identidad = await resolverIdentidadAlumnoAgenda();
-
-      const { data: dataInterna, error: errorInterno } = await supabase.rpc(
-        "obtener_disponibilidad_agenda",
-        {
-          p_empresa_id: identidad.empresaId,
-          p_fecha: fechaConsulta,
-        }
-      );
-
-      if (!errorInterno) {
-        return Array.isArray(dataInterna) ? dataInterna : [];
-      }
-
-      console.warn(
-        "Agenda interna no permitió leer disponibilidad; se intentará el portal de reservas:",
-        errorInterno
-      );
-    } catch (err) {
-      console.warn("No se pudo consultar Agenda interna:", err);
-    }
-
-    const slugAgenda = await resolverSlugAgenda();
-
     const { data, error: rpcError } = await supabase.rpc(
-      "obtener_disponibilidad_agenda_publica",
+      "obtener_disponibilidad_agenda_alumno",
       {
-        p_slug: slugAgenda,
+        p_slug: slug,
         p_fecha: fechaConsulta,
       }
     );
 
-    if (rpcError) throw rpcError;
-    return Array.isArray(data) ? data : [];
-  }
+    if (rpcError) {
+      const codigo = String(rpcError?.code || "");
+      if (["PGRST202", "42883"].includes(codigo)) {
+        throw new Error(
+          "Falta ejecutar el SQL V12 del Portal del Alumno en Supabase."
+        );
+      }
+      throw rpcError;
+    }
 
+    if (!data?.ok) {
+      throw new Error(
+        data?.mensaje || "No se pudo consultar la disponibilidad de Agenda."
+      );
+    }
+
+    return Array.isArray(data?.clases) ? data.clases : [];
+  }
   async function cargarClases(fechaSeleccionada = fechaClases) {
     if (!fechaSeleccionada || !slug) return [];
 
@@ -702,76 +644,26 @@ export default function PortalAlumnoInicio() {
     setMensajeReserva("");
 
     try {
-      const identidad = await resolverIdentidadAlumnoAgenda();
-
-      const { data: dataInterna, error: errorInterno } = await supabase.rpc(
-        "crear_reserva_agenda",
+      const { data, error: rpcError } = await supabase.rpc(
+        "crear_reserva_agenda_alumno",
         {
-          p_empresa_id: identidad.empresaId,
+          p_slug: slug,
           p_horario_id: horarioId,
-          p_cliente_id: identidad.clienteId,
           p_fecha_reserva: fechaClases,
           p_observaciones: "Reserva creada desde Portal del Alumno",
         }
       );
 
-      let resultado = dataInterna || null;
+      if (rpcError) throw rpcError;
 
-      if (errorInterno) {
-        const codigo = String(errorInterno?.code || "");
-        const permiteFallback = ["42501", "42883", "PGRST202"].includes(codigo);
-
-        if (!permiteFallback) throw errorInterno;
-
-        const nombreAlumno = String(
-          cuenta?.nombre || perfil?.nombre || ""
-        ).trim();
-
-        const telefonoAlumno = String(
-          cuenta?.telefono ||
-            cuenta?.celular ||
-            perfil?.telefono ||
-            perfil?.celular ||
-            ""
-        ).trim();
-
-        if (!nombreAlumno || !telefonoAlumno) {
-          throw new Error(
-            "Tu perfil debe tener nombre y teléfono para reservar."
-          );
-        }
-
-        const slugAgenda = await resolverSlugAgenda();
-
-        const { data: dataPublica, error: errorPublico } = await supabase.rpc(
-          "crear_reserva_agenda_publica",
-          {
-            p_slug: slugAgenda,
-            p_horario_id: horarioId,
-            p_fecha_reserva: fechaClases,
-            p_hora_inicio: item?.hora_inicio,
-            p_nombre: nombreAlumno,
-            p_telefono: telefonoAlumno,
-            p_observaciones: "Reserva creada desde Portal del Alumno",
-          }
-        );
-
-        if (errorPublico) throw errorPublico;
-        if (dataPublica?.ok === false) {
-          throw new Error(
-            dataPublica?.mensaje || "No se pudo realizar la reserva."
-          );
-        }
-
-        resultado = dataPublica || {};
-      } else if (dataInterna?.ok === false) {
+      if (!data?.ok) {
         throw new Error(
-          dataInterna?.mensaje || "No se pudo realizar la reserva."
+          data?.mensaje || "No se pudo realizar la reserva."
         );
       }
 
       const mensajeConfirmacion = `Reserva confirmada: ${
-        resultado?.servicio ||
+        data?.servicio ||
         item?.servicio_nombre ||
         item?.servicio ||
         "clase"
@@ -790,7 +682,6 @@ export default function PortalAlumnoInicio() {
       setReservandoHorarioId("");
     }
   }
-
   async function cargarMisReservas(opciones = {}) {
     const { silencioso = false } = opciones;
 
@@ -803,52 +694,37 @@ export default function PortalAlumnoInicio() {
     setErrorReservas("");
 
     try {
-      const identidad = await resolverIdentidadAlumnoAgenda();
-      const clienteId = String(identidad?.clienteId || "").trim();
-      const empresaId = String(identidad?.empresaId || "").trim();
-
-      const servicios =
-        serviciosAgenda.length > 0
-          ? serviciosAgenda
-          : await cargarServiciosAgenda();
-
-      const { data, error: reservasError } = await supabase
-        .from("agenda_reservas")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .eq("cliente_id", clienteId)
-        .order("fecha_reserva", { ascending: false })
-        .order("hora_inicio", { ascending: true })
-        .limit(200);
-
-      if (reservasError) throw reservasError;
-
-      const lista = Array.isArray(data) ? data : [];
-
-      setMisReservas(
-        lista.map((reserva) => {
-          const servicio = servicios.find(
-            (item) => String(item?.id) === String(reserva?.servicio_id)
-          );
-
-          return {
-            ...reserva,
-            servicio_nombre:
-              reserva?.servicio_nombre ||
-              reserva?.nombre_servicio ||
-              servicio?.nombre ||
-              "Clase",
-          };
-        })
+      const { data, error: rpcError } = await supabase.rpc(
+        "obtener_mis_reservas_alumno",
+        {
+          p_slug: slug,
+        }
       );
 
+      if (rpcError) {
+        const codigo = String(rpcError?.code || "");
+        if (["PGRST202", "42883"].includes(codigo)) {
+          throw new Error(
+            "Falta ejecutar el SQL V12 del Portal del Alumno en Supabase."
+          );
+        }
+        throw rpcError;
+      }
+
+      if (!data?.ok) {
+        throw new Error(
+          data?.mensaje || "No se pudieron cargar tus reservas."
+        );
+      }
+
+      const lista = Array.isArray(data?.reservas) ? data.reservas : [];
+      setMisReservas(lista);
       return lista;
     } catch (err) {
       console.error("Error cargando reservas del alumno:", err);
       setMisReservas([]);
       setErrorReservas(
-        err?.message ||
-          "No se pudieron cargar tus reservas creadas en Agenda."
+        err?.message || "No se pudieron cargar tus reservas creadas en Agenda."
       );
       return [];
     } finally {
@@ -857,7 +733,6 @@ export default function PortalAlumnoInicio() {
       }
     }
   }
-
   async function obtenerWod(fechaSeleccionada, servicioId) {
     if (!fechaSeleccionada || !servicioId) return null;
 
