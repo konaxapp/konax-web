@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.08-PORTAL-ALUMNO-AGENDA-LINK-FIX-V10";
+const VERSION = "2026.09.08-PORTAL-ALUMNO-NAV-FIX-V11";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
@@ -1013,6 +1013,17 @@ export default function PortalAlumnoInicio() {
       );
     } finally {
       setCargandoWod(false);
+    }
+  }
+
+  function cambiarSeccion(id) {
+    const destino = String(id || "inicio").trim();
+
+    setSeccion(destino);
+    setMenuAbierto(false);
+
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }
 
