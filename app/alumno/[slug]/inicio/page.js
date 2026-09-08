@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.07-PORTAL-ALUMNO-MENU-LATERAL-V5";
+const VERSION = "2026.09.07-PORTAL-ALUMNO-MENU-LATERAL-V6";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
@@ -550,33 +550,39 @@ export default function PortalAlumnoInicio() {
 
       <section style={S.shell} className="portal-shell">
         <header style={S.topbar}>
-          <button
-            type="button"
-            onClick={() => setMenuAbierto(true)}
-            style={S.topUserButton}
-            aria-label="Abrir menú"
-          >
-            <div style={S.topUserAvatar}>
-              {fotoFirmada ? (
-                <img
-                  src={fotoFirmada}
-                  alt={cuenta?.nombre || "Alumno"}
-                  style={S.avatarImage}
-                />
-              ) : (
-                <span>{iniciales}</span>
-              )}
+          <div style={S.topUserRow}>
+            <div style={S.topUserBlock}>
+              <div style={S.topUserAvatar}>
+                {fotoFirmada ? (
+                  <img
+                    src={fotoFirmada}
+                    alt={cuenta?.nombre || "Alumno"}
+                    style={S.avatarImage}
+                  />
+                ) : (
+                  <span>{iniciales}</span>
+                )}
+              </div>
+
+              <div style={S.topUserText}>
+                <strong style={S.topUserName}>
+                  {cuenta?.nombre || "Alumno"}
+                </strong>
+                <span style={S.topUserState}>
+                  {estadoVisual}
+                </span>
+              </div>
             </div>
 
-            <div style={S.topUserText}>
-              <strong style={S.topUserName}>
-                {cuenta?.nombre || "Alumno"}
-              </strong>
-              <span style={S.topUserState}>
-                {estadoVisual}
-              </span>
-            </div>
-          </button>
+            <button
+              type="button"
+              aria-label="Abrir menú"
+              onClick={() => setMenuAbierto(true)}
+              style={S.topMenuIconButton}
+            >
+              ☰
+            </button>
+          </div>
         </header>
 
         {menuAbierto && (
@@ -765,8 +771,8 @@ export default function PortalAlumnoInicio() {
 
 function Inicio() {
   return (
-    <section style={S.cleanHome}>
-      <div style={S.cleanHomeMark} />
+    <section style={S.homeCompact}>
+      <div style={S.homeCompactLine} />
     </section>
   );
 }
@@ -1254,6 +1260,29 @@ const S = {
     boxShadow: "0 28px 80px rgba(15,50,31,.13)",
   },
 
+  topUserRow: {
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  topMenuIconButton: {
+    width: 44,
+    height: 44,
+    flex: "0 0 auto",
+    display: "grid",
+    placeItems: "center",
+    border: 0,
+    borderRadius: 13,
+    background: "#0B1628",
+    color: "#FFFFFF",
+    fontSize: 21,
+    cursor: "pointer",
+    boxShadow: "0 8px 18px rgba(15,23,42,.12)",
+  },
+
   topUserButton: {
     minWidth: 0,
     padding: 0,
@@ -1313,7 +1342,7 @@ const S = {
     padding: "12px 14px",
     display: "flex",
     alignItems: "center",
-    justifyContent: "flex-start",
+    justifyContent: "space-between",
     gap: 12,
     background: "#FFFFFF",
     borderBottom: "1px solid #E6EBF1",
@@ -2314,6 +2343,20 @@ const S = {
     color: "#6F7C8C",
     fontSize: 9,
     lineHeight: 1.45,
+  },
+
+  homeCompact: {
+    minHeight: 120,
+    padding: "18px 0 8px",
+    background: "transparent",
+  },
+
+  homeCompactLine: {
+    width: 44,
+    height: 4,
+    margin: "0 auto",
+    borderRadius: 999,
+    background: "#D8E0E8",
   },
 
   cleanHome: {
