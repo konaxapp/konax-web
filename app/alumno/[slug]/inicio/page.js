@@ -4,8 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.07-PORTAL-ALUMNO-PRO-GYM-LOGO-V1";
+const VERSION = "2026.09.07-PORTAL-ALUMNO-PREMIUM-MENU-V1";
 const BUCKET_PERFIL = "alumnos-perfil";
+
+const MENU = [
+  { id: "inicio", label: "Inicio", icon: "⌂" },
+  { id: "clases", label: "Clases", icon: "▦" },
+  { id: "reservas", label: "Mis reservas", icon: "◷" },
+  { id: "whiteboard", label: "Whiteboard", icon: "▤" },
+  { id: "resultados", label: "Resultados", icon: "★" },
+  { id: "configuracion", label: "Configuración", icon: "⚙" },
+];
 
 export default function PortalAlumnoInicio() {
   const params = useParams();
@@ -18,8 +27,10 @@ export default function PortalAlumnoInicio() {
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
   const [subiendoFoto, setSubiendoFoto] = useState(false);
 
-  const [cuenta, setCuenta] = useState<any>(null);
-  const [perfil, setPerfil] = useState<any>(null);
+  const [cuenta, setCuenta] = useState(null);
+  const [perfil, setPerfil] = useState(null);
+  const [portalPublico, setPortalPublico] = useState(null);
+
   const [fotoFirmada, setFotoFirmada] = useState("");
   const [mostrarEditor, setMostrarEditor] = useState(false);
 
@@ -28,6 +39,9 @@ export default function PortalAlumnoInicio() {
 
   const [mensajePerfil, setMensajePerfil] = useState("");
   const [error, setError] = useState("");
+
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [seccion, setSeccion] = useState("inicio");
 
   useEffect(() => {
     cargarTodo();
@@ -66,11 +80,15 @@ export default function PortalAlumnoInicio() {
       const [
         { data: dataCuenta, error: errorCuenta },
         { data: dataPerfil, error: errorPerfil },
+        { data: dataPortalPublico, error: errorPortalPublico },
       ] = await Promise.all([
         supabase.rpc("obtener_mi_cuenta_alumno", {
           p_slug: slug,
         }),
         supabase.rpc("obtener_mi_perfil_alumno", {
+          p_slug: slug,
+        }),
+        supabase.rpc("obtener_portal_alumno_publico", {
           p_slug: slug,
         }),
       ]);
@@ -87,12 +105,18 @@ export default function PortalAlumnoInicio() {
 
       if (!dataPerfil?.ok) {
         throw new Error(
-          dataPerfil?.mensaje || "No se pudo cargar tu perfil."
+          dataPerfil?.mensaje || "No se pudo cargar tu configuración."
         );
       }
 
       setCuenta(dataCuenta);
       setPerfil(dataPerfil);
+
+      if (!errorPortalPublico && dataPortalPublico?.ok) {
+        setPortalPublico(dataPortalPublico);
+      } else {
+        setPortalPublico(null);
+      }
 
       setPeso(
         dataPerfil?.peso === null || dataPerfil?.peso === undefined
@@ -107,7 +131,7 @@ export default function PortalAlumnoInicio() {
       );
 
       await resolverFoto(dataPerfil?.foto_url || "");
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error cargando portal del alumno:", err);
       setError(err?.message || "No se pudo cargar tu cuenta.");
     } finally {
@@ -116,7 +140,7 @@ export default function PortalAlumnoInicio() {
     }
   }
 
-  async function resolverFoto(valor: string) {
+  async function resolverFoto(valor) {
     const foto = String(valor || "").trim();
 
     if (!foto) {
@@ -203,27 +227,27 @@ export default function PortalAlumnoInicio() {
 
       if (!data?.ok) {
         throw new Error(
-          data?.mensaje || "No se pudo guardar el perfil."
+          data?.mensaje || "No se pudo guardar la configuración."
         );
       }
 
-      setPerfil((prev: any) => ({
+      setPerfil((prev) => ({
         ...(prev || {}),
         peso: data?.peso ?? pesoNumero,
         estatura: data?.estatura ?? estaturaNumero,
       }));
 
-      setMensajePerfil("Perfil actualizado.");
+      setMensajePerfil("Configuración actualizada.");
       setMostrarEditor(false);
-    } catch (err: any) {
-      console.error("Error guardando perfil:", err);
-      setError(err?.message || "No se pudo guardar el perfil.");
+    } catch (err) {
+      console.error("Error guardando configuración:", err);
+      setError(err?.message || "No se pudo guardar la configuración.");
     } finally {
       setGuardandoPerfil(false);
     }
   }
 
-  async function subirSelfie(event: any) {
+  async function subirSelfie(event) {
     const archivo = event?.target?.files?.[0];
     if (!archivo) return;
 
@@ -232,7 +256,9 @@ export default function PortalAlumnoInicio() {
     setError("");
 
     try {
-      if (!["image/jpeg", "image/png", "image/webp"].includes(archivo.type)) {
+      if (
+        !["image/jpeg", "image/png", "image/webp"].includes(archivo.type)
+      ) {
         throw new Error("Usa una imagen JPG, PNG o WebP.");
       }
 
@@ -285,25 +311,22 @@ export default function PortalAlumnoInicio() {
       if (rpcError) throw rpcError;
 
       if (!data?.ok) {
-        throw new Error(
-          data?.mensaje || "No se pudo guardar la foto."
-        );
+        throw new Error(data?.mensaje || "No se pudo guardar la foto.");
       }
 
-      setPerfil((prev: any) => ({
+      setPerfil((prev) => ({
         ...(prev || {}),
         foto_url: ruta,
       }));
 
-      setCuenta((prev: any) => ({
+      setCuenta((prev) => ({
         ...(prev || {}),
         foto_url: ruta,
       }));
 
       await resolverFoto(ruta);
-
       setMensajePerfil("Foto actualizada.");
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error subiendo selfie:", err);
       setError(err?.message || "No se pudo subir la foto.");
     } finally {
@@ -315,7 +338,13 @@ export default function PortalAlumnoInicio() {
     }
   }
 
-  function formatearFecha(fecha: string) {
+  function cambiarSeccion(id) {
+    setSeccion(id);
+    setMenuAbierto(false);
+    window?.scrollTo?.({ top: 0, behavior: "smooth" });
+  }
+
+  function formatearFecha(fecha) {
     if (!fecha) return "No definida";
 
     try {
@@ -329,10 +358,12 @@ export default function PortalAlumnoInicio() {
     }
   }
 
-  function formatearDinero(valor: any) {
+  function formatearDinero(valor) {
     const numero = Number(valor || 0);
 
-    if (!Number.isFinite(numero)) return "$0.00";
+    if (!Number.isFinite(numero)) {
+      return "$0.00";
+    }
 
     return new Intl.NumberFormat("es-PA", {
       style: "currency",
@@ -341,9 +372,23 @@ export default function PortalAlumnoInicio() {
     }).format(numero);
   }
 
+  const empresaNombre =
+    cuenta?.empresa_nombre ||
+    portalPublico?.empresa_nombre ||
+    portalPublico?.titulo ||
+    portalPublico?.titulo_publico ||
+    "Gimnasio";
+
+  const empresaLogoUrl =
+    cuenta?.empresa_logo_url ||
+    cuenta?.logo_url ||
+    portalPublico?.empresa_logo_url ||
+    portalPublico?.logo_url ||
+    portalPublico?.logo ||
+    "";
+
   const membresia = cuenta?.membresia || null;
   const qrToken = String(cuenta?.qr_token || "").trim();
-
   const qrDisponible = Boolean(cuenta?.qr_disponible && qrToken);
   const accesoPermitido = Boolean(cuenta?.acceso_permitido);
 
@@ -368,12 +413,6 @@ export default function PortalAlumnoInicio() {
     );
   }, [cuenta?.nombre]);
 
-  const inicialEmpresa = useMemo(() => {
-    return String(cuenta?.empresa_nombre || "G")
-      .charAt(0)
-      .toUpperCase();
-  }, [cuenta?.empresa_nombre]);
-
   const estadoVisual =
     cuenta?.membresia_estado_visual ||
     membresia?.estado ||
@@ -393,16 +432,10 @@ export default function PortalAlumnoInicio() {
     return (
       <main style={S.loadingPage}>
         <section style={S.loadingCard}>
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            style={S.loadingLogo}
-          />
+          <img src="/konax-logo.png" alt="KONAX" style={S.loadingLogo} />
           <div style={S.loader} />
           <strong>Preparando tu portal...</strong>
-          <span style={S.loadingText}>
-            Estamos validando tu acceso.
-          </span>
+          <span style={S.loadingText}>Estamos validando tu acceso.</span>
         </section>
       </main>
     );
@@ -412,18 +445,9 @@ export default function PortalAlumnoInicio() {
     return (
       <main style={S.loadingPage}>
         <section style={S.errorCard}>
-          <img
-            src="/konax-logo.png"
-            alt="KONAX"
-            style={S.errorLogo}
-          />
-
+          <img src="/konax-logo.png" alt="KONAX" style={S.errorLogo} />
           <div style={S.errorIcon}>!</div>
-
-          <h1 style={S.errorTitle}>
-            No pudimos abrir tu portal
-          </h1>
-
+          <h1 style={S.errorTitle}>No pudimos abrir tu portal</h1>
           <p style={S.errorText}>
             {error || "Tu portal no está disponible."}
           </p>
@@ -457,44 +481,39 @@ export default function PortalAlumnoInicio() {
 
         body {
           margin: 0;
-          background: #07141a;
+          background: #eef3ef;
         }
 
+        button,
         input {
           font: inherit;
         }
 
-        @media (max-width: 720px) {
+        @media (max-width: 620px) {
           .portal-shell {
+            width: 100% !important;
             min-height: 100vh !important;
             border-radius: 0 !important;
-            width: 100% !important;
+            border-left: 0 !important;
+            border-right: 0 !important;
           }
 
           .portal-content {
-            padding-left: 16px !important;
-            padding-right: 16px !important;
+            padding-left: 15px !important;
+            padding-right: 15px !important;
+            padding-bottom: 95px !important;
           }
 
-          .portal-topbar {
-            flex-direction: column !important;
-            align-items: stretch !important;
+          .desktop-nav {
+            display: none !important;
           }
 
-          .topbar-actions {
-            width: 100% !important;
-          }
-
-          .topbar-actions button {
-            width: 100% !important;
-          }
-
-          .hero-grid {
-            grid-template-columns: 1fr !important;
+          .mobile-bottom {
+            display: grid !important;
           }
 
           .member-grid {
-            grid-template-columns: 72px minmax(0, 1fr) !important;
+            grid-template-columns: 58px minmax(0, 1fr) !important;
           }
 
           .member-status {
@@ -502,76 +521,128 @@ export default function PortalAlumnoInicio() {
             justify-self: start !important;
           }
 
-          .profile-metrics {
-            grid-template-columns: 1fr 1fr !important;
-          }
-
-          .membership-grid {
+          .membership-grid,
+          .config-grid {
             grid-template-columns: 1fr 1fr !important;
           }
 
           .qr-layout {
             grid-template-columns: 1fr !important;
           }
-
-          .qr-frame {
-            max-width: 320px !important;
-            margin: 0 auto !important;
-          }
         }
 
-        @media (max-width: 430px) {
-          .profile-metrics,
+        @media (max-width: 390px) {
           .membership-grid,
+          .config-grid,
           .photo-actions {
             grid-template-columns: 1fr !important;
-          }
-
-          .member-name-mobile {
-            font-size: 24px !important;
-          }
-
-          .hero-title-mobile {
-            font-size: 18px !important;
           }
         }
       `}</style>
 
       <section style={S.shell} className="portal-shell">
-        <header style={S.topbar} className="portal-topbar">
-          <div style={S.topbarLeft}>
-            <div style={S.brandLogoWrap}>
-              {cuenta?.empresa_logo_url ? (
+        <header style={S.topbar}>
+          <button
+            type="button"
+            aria-label="Abrir menú"
+            onClick={() => setMenuAbierto(true)}
+            style={S.menuButton}
+          >
+            ☰
+          </button>
+
+          <div style={S.brandBlock}>
+            <div style={S.brandMark}>
+              {empresaLogoUrl ? (
                 <img
-                  src={cuenta.empresa_logo_url}
-                  alt={cuenta?.empresa_nombre || "Gimnasio"}
+                  src={empresaLogoUrl}
+                  alt={`Logo de ${empresaNombre}`}
                   style={S.brandLogo}
                 />
               ) : (
-                <span style={S.brandFallback}>{inicialEmpresa}</span>
+                <span>
+                  {String(empresaNombre || "K")
+                    .charAt(0)
+                    .toUpperCase()}
+                </span>
               )}
             </div>
 
-            <div style={S.brandTexts}>
-              <span style={S.brandEyebrow}>PORTAL DEL ALUMNO</span>
-              <strong style={S.brandName}>
-                {cuenta?.empresa_nombre || "Gimnasio"}
-              </strong>
-              <span style={S.powered}>Experiencia digital impulsada por KONAX</span>
+            <div style={S.brandTextWrap}>
+              <strong style={S.brandName}>{empresaNombre}</strong>
+              <span style={S.powered}>Portal del Alumno · KONAX</span>
             </div>
           </div>
 
-          <div className="topbar-actions" style={S.topbarActions}>
+          <button
+            type="button"
+            onClick={() => cargarTodo(true)}
+            disabled={actualizando}
+            style={S.refreshButton}
+            title="Actualizar"
+          >
+            {actualizando ? "…" : "↻"}
+          </button>
+        </header>
+
+        {menuAbierto && (
+          <>
             <button
               type="button"
-              onClick={() => cargarTodo(true)}
-              disabled={actualizando}
-              style={S.refreshButton}
-            >
-              {actualizando ? "Actualizando..." : "↻ Actualizar"}
-            </button>
-          </div>
-        </header>
+              aria-label="Cerrar menú"
+              onClick={() => setMenuAbierto(false)}
+              style={S.menuOverlay}
+            />
+
+            <aside style={S.drawer}>
+              <div style={S.drawerHeader}>
+                <div style={S.drawerAvatar}>
+                  {fotoFirmada ? (
+                    <img
+                      src={fotoFirmada}
+                      alt={cuenta?.nombre || "Alumno"}
+                      style={S.avatarImage}
+                    />
+                  ) : (
+                    <span>{iniciales}</span>
+                  )}
+                </div>
+
+                <div style={{ minWidth: 0 }}>
+                  <strong style={S.drawerName}>{cuenta?.nombre}</strong>
+                  <span style={S.drawerState}>{estadoVisual}</span>
+                </div>
+              </div>
+
+              <nav style={S.drawerNav}>
+                {MENU.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => cambiarSeccion(item.id)}
+                    style={{
+                      ...S.drawerItem,
+                      ...(seccion === item.id ? S.drawerItemActive : {}),
+                    }}
+                  >
+                    <span style={S.drawerIcon}>{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </nav>
+
+              <div style={S.drawerFooter}>
+                <button
+                  type="button"
+                  onClick={cerrarSesion}
+                  style={S.drawerLogout}
+                >
+                  Cerrar sesión
+                </button>
+              </div>
+            </aside>
+          </>
+        )}
 
         <div style={S.content} className="portal-content">
           {error && (
@@ -584,395 +655,512 @@ export default function PortalAlumnoInicio() {
             <div style={S.successMessage}>{mensajePerfil}</div>
           )}
 
-          <section style={S.heroPanel} className="hero-grid">
-            <div style={S.heroGymCard}>
-              <div style={S.heroGymTop}>
-                <div style={S.heroGymLogoBox}>
-                  {cuenta?.empresa_logo_url ? (
-                    <img
-                      src={cuenta.empresa_logo_url}
-                      alt={cuenta?.empresa_nombre || "Gimnasio"}
-                      style={S.heroGymLogo}
-                    />
-                  ) : (
-                    <span style={S.heroGymLogoFallback}>
-                      {inicialEmpresa}
-                    </span>
-                  )}
-                </div>
+          {seccion === "inicio" && (
+            <Inicio
+              cuenta={cuenta}
+              membresia={membresia}
+              fotoFirmada={fotoFirmada}
+              iniciales={iniciales}
+              estadoVisual={estadoVisual}
+              accesoPermitido={accesoPermitido}
+              qrDisponible={qrDisponible}
+              qrUrl={qrUrl}
+              empresaNombre={empresaNombre}
+              formatearFecha={formatearFecha}
+              cambiarSeccion={cambiarSeccion}
+            />
+          )}
 
-                <div style={S.heroGymTexts}>
-                  <span style={S.heroGymEyebrow}>TU GIMNASIO</span>
-                  <h2 style={S.heroGymName} className="hero-title-mobile">
-                    {cuenta?.empresa_nombre || "Gimnasio"}
-                  </h2>
-                  <p style={S.heroGymSub}>
-                    Administra tu perfil, tu membresía y tu acceso desde un solo lugar.
-                  </p>
-                </div>
-              </div>
+          {seccion === "clases" && (
+            <SeccionVacia
+              eyebrow="ENTRENAMIENTO"
+              titulo="Clases"
+              texto="Aquí aparecerán las clases disponibles del gimnasio para reservar desde tu cuenta."
+              icono="▦"
+              accion="Volver al inicio"
+              onAccion={() => cambiarSeccion("inicio")}
+            />
+          )}
 
-              <div style={S.heroGymStats}>
-                <div style={S.heroMiniStat}>
-                  <span style={S.heroMiniLabel}>Estado</span>
-                  <strong style={S.heroMiniValue}>
-                    {accesoPermitido ? "Habilitado" : "Pendiente"}
-                  </strong>
-                </div>
+          {seccion === "reservas" && (
+            <SeccionVacia
+              eyebrow="AGENDA"
+              titulo="Mis reservas"
+              texto="Aquí verás tus próximas clases reservadas y el historial de reservas."
+              icono="◷"
+              accion="Volver al inicio"
+              onAccion={() => cambiarSeccion("inicio")}
+            />
+          )}
 
-                <div style={S.heroMiniStat}>
-                  <span style={S.heroMiniLabel}>Plan</span>
-                  <strong style={S.heroMiniValue}>
-                    {membresia?.plan || "Sin plan"}
-                  </strong>
-                </div>
+          {seccion === "whiteboard" && (
+            <SeccionVacia
+              eyebrow="COMUNIDAD"
+              titulo="Whiteboard"
+              texto="Aquí se mostrarán los resultados publicados por el gimnasio y los atletas del día."
+              icono="▤"
+              accion="Volver al inicio"
+              onAccion={() => cambiarSeccion("inicio")}
+            />
+          )}
 
-                <div style={S.heroMiniStat}>
-                  <span style={S.heroMiniLabel}>Vigencia</span>
-                  <strong style={S.heroMiniValue}>
-                    {cuenta?.dias_restantes === null || cuenta?.dias_restantes === undefined
-                      ? "-"
-                      : cuenta.dias_restantes < 0
-                      ? "Vencida"
-                      : `${cuenta.dias_restantes} días`}
-                  </strong>
-                </div>
-              </div>
-            </div>
+          {seccion === "resultados" && (
+            <SeccionVacia
+              eyebrow="PROGRESO"
+              titulo="Resultados"
+              texto="Aquí podrás consultar tus marcas, tiempos, pesos, repeticiones y evolución."
+              icono="★"
+              accion="Volver al inicio"
+              onAccion={() => cambiarSeccion("inicio")}
+            />
+          )}
 
-            <section style={S.memberHeader} className="member-grid">
-              <div style={S.avatar}>
-                {fotoFirmada ? (
-                  <img
-                    src={fotoFirmada}
-                    alt={cuenta?.nombre || "Alumno"}
-                    style={S.avatarImage}
-                  />
-                ) : (
-                  <span>{iniciales}</span>
-                )}
-              </div>
-
-              <div style={S.memberIdentity}>
-                <span style={S.welcome}>Hola,</span>
-
-                <h1 style={S.memberName} className="member-name-mobile">
-                  {cuenta?.nombre}
-                </h1>
-
-                <span style={S.memberId}>
-                  {cuenta?.cedula ? `ID ${cuenta.cedula}` : "Miembro KONAX"}
-                </span>
-              </div>
-
-              <div
-                style={{
-                  ...S.estadoBadge,
-                  ...(accesoPermitido ? S.estadoBadgeOk : S.estadoBadgeWarning),
-                }}
-                className="member-status"
-              >
-                <span
-                  style={{
-                    ...S.statusDot,
-                    background: accesoPermitido ? "#22C55E" : "#F59E0B",
-                  }}
-                />
-                {estadoVisual}
-              </div>
-            </section>
-          </section>
-
-          <section style={S.profileCard}>
-            <div style={S.sectionHeading}>
-              <div>
-                <span style={S.sectionEyebrow}>MI PERFIL</span>
-                <h2 style={S.sectionTitle}>Datos personales</h2>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setMostrarEditor((valor) => !valor)}
-                style={S.outlineSmallButton}
-              >
-                {mostrarEditor ? "Cerrar" : "Editar perfil"}
-              </button>
-            </div>
-
-            <div style={S.profileBodySimple}>
-              <div style={S.profileMetrics} className="profile-metrics">
-                <Metric label="Peso" value={pesoVisual} />
-                <Metric label="Estatura" value={estaturaVisual} />
-              </div>
-
-              <div style={S.photoActions} className="photo-actions">
-                <label style={S.selfieButton}>
-                  {subiendoFoto ? "Subiendo..." : "📷 Tomar selfie"}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    capture="user"
-                    onChange={subirSelfie}
-                    disabled={subiendoFoto}
-                    style={{ display: "none" }}
-                  />
-                </label>
-
-                <label style={S.galleryButton}>
-                  Elegir foto
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={subirSelfie}
-                    disabled={subiendoFoto}
-                    style={{ display: "none" }}
-                  />
-                </label>
-              </div>
-
-              {mostrarEditor && (
-                <div style={S.profileEditor}>
-                  <div style={S.fieldGroup}>
-                    <label style={S.fieldLabel}>Peso (kg)</label>
-                    <input
-                      value={peso}
-                      onChange={(e) => setPeso(e.target.value)}
-                      inputMode="decimal"
-                      placeholder="Ej. 82.5"
-                      style={S.input}
-                    />
-                  </div>
-
-                  <div style={S.fieldGroup}>
-                    <label style={S.fieldLabel}>Estatura (m)</label>
-                    <input
-                      value={estatura}
-                      onChange={(e) => setEstatura(e.target.value)}
-                      inputMode="decimal"
-                      placeholder="Ej. 1.76"
-                      style={S.input}
-                    />
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={guardarDatosPerfil}
-                    disabled={guardandoPerfil}
-                    style={S.saveProfileButton}
-                  >
-                    {guardandoPerfil ? "Guardando..." : "Guardar cambios"}
-                  </button>
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section
-            style={{
-              ...S.accessBanner,
-              ...(accesoPermitido ? S.accessBannerOk : S.accessBannerBlocked),
-            }}
-          >
-            <div
-              style={{
-                ...S.accessIcon,
-                ...(accesoPermitido ? S.accessIconOk : S.accessIconBlocked),
-              }}
-            >
-              {accesoPermitido ? "✓" : "!"}
-            </div>
-
-            <div>
-              <span style={S.accessLabel}>ESTADO DE ACCESO</span>
-              <strong style={S.accessTitle}>
-                {accesoPermitido ? "Acceso disponible" : "Acceso no disponible"}
-              </strong>
-
-              <p style={S.accessText}>
-                {accesoPermitido
-                  ? "Tu membresía está habilitada. Muestra tu QR en recepción para ingresar."
-                  : "Tu QR no puede autorizar una entrada en este momento. Revisa el estado de tu membresía."}
-              </p>
-            </div>
-          </section>
-
-          <section style={S.section}>
-            <div style={S.sectionHeading}>
-              <div>
-                <span style={S.sectionEyebrow}>TU PLAN</span>
-                <h2 style={S.sectionTitle}>Membresía</h2>
-              </div>
-
-              {membresia && (
-                <span style={S.planChip}>
-                  {membresia.periodicidad || "Membresía"}
-                </span>
-              )}
-            </div>
-
-            {membresia ? (
-              <>
-                <div style={S.planHero}>
-                  <div>
-                    <span style={S.planLabel}>PLAN ACTUAL</span>
-                    <strong style={S.planName}>
-                      {membresia.plan || "Membresía"}
-                    </strong>
-
-                    {membresia.descripcion && (
-                      <p style={S.planDescription}>
-                        {membresia.descripcion}
-                      </p>
-                    )}
-                  </div>
-
-                  <strong style={S.planPrice}>
-                    {formatearDinero(membresia.precio)}
-                  </strong>
-                </div>
-
-                <div style={S.membershipGrid} className="membership-grid">
-                  <Dato
-                    label="Inicio"
-                    value={formatearFecha(membresia.fecha_inicio)}
-                  />
-
-                  <Dato
-                    label="Vencimiento"
-                    value={formatearFecha(membresia.fecha_vencimiento)}
-                    destacado
-                  />
-
-                  <Dato label="Estado" value={estadoVisual} />
-
-                  <Dato
-                    label="Tiempo restante"
-                    value={
-                      cuenta?.dias_restantes === null ||
-                      cuenta?.dias_restantes === undefined
-                        ? "-"
-                        : cuenta.dias_restantes < 0
-                        ? "Vencida"
-                        : cuenta.dias_restantes === 0
-                        ? "Vence hoy"
-                        : `${cuenta.dias_restantes} día${
-                            cuenta.dias_restantes === 1 ? "" : "s"
-                          }`
-                    }
-                  />
-                </div>
-              </>
-            ) : (
-              <div style={S.emptyMembership}>
-                <div style={S.emptyIcon}>◇</div>
-                <strong>Sin membresía registrada</strong>
-                <span>Comunícate con recepción para activar un plan.</span>
-              </div>
-            )}
-          </section>
-
-          <section style={S.qrSection}>
-            <div style={S.sectionHeading}>
-              <div>
-                <span style={S.qrEyebrow}>ACCESO DIGITAL</span>
-                <h2 style={S.sectionTitle}>Mi código QR</h2>
-              </div>
-
-              <span
-                style={{
-                  ...S.qrStatus,
-                  ...(accesoPermitido ? S.qrStatusActive : S.qrStatusInactive),
-                }}
-              >
-                {accesoPermitido ? "ACTIVO" : "NO DISPONIBLE"}
-              </span>
-            </div>
-
-            <div style={S.qrLayout} className="qr-layout">
-              {qrDisponible ? (
-                <div
-                  style={{
-                    ...S.qrFrame,
-                    opacity: accesoPermitido ? 1 : 0.45,
-                  }}
-                  className="qr-frame"
-                >
-                  <img
-                    src={qrUrl}
-                    alt="Mi código QR de acceso"
-                    style={S.qrImage}
-                  />
-
-                  {!accesoPermitido && (
-                    <div style={S.qrBlocked}>
-                      <span style={S.qrBlockedIcon}>🔒</span>
-                      <strong>Acceso temporalmente bloqueado</strong>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div style={S.noQr}>
-                  <span style={S.noQrIcon}>QR</span>
-                  <strong>QR no disponible</strong>
-                  <span>Solicita a recepción que actualice tu ficha.</span>
-                </div>
-              )}
-
-              <div style={S.qrInstructions}>
-                <span style={S.qrInstructionEyebrow}>CÓMO INGRESAR</span>
-
-                <h3 style={S.qrInstructionTitle}>
-                  Muestra este código en recepción
-                </h3>
-
-                <p style={S.qrInstructionText}>
-                  El personal escaneará tu QR desde el módulo Check-in de KONAX.
-                </p>
-
-                <div style={S.steps}>
-                  <Paso numero="1" texto="Abre tu Portal del Alumno." />
-                  <Paso numero="2" texto="Muestra este QR en recepción." />
-                  <Paso
-                    numero="3"
-                    texto="KONAX valida tu membresía y registra tu entrada."
-                  />
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section style={S.contactCard}>
-            <span style={S.contactEyebrow}>CONTACTO</span>
-
-            <div style={S.contactRows}>
-              <Fila label="Teléfono" value={cuenta?.telefono || "-"} />
-              <Fila label="Correo" value={cuenta?.correo || "-"} />
-            </div>
-          </section>
+          {seccion === "configuracion" && (
+            <Configuracion
+              cuenta={cuenta}
+              perfil={perfil}
+              fotoFirmada={fotoFirmada}
+              iniciales={iniciales}
+              peso={peso}
+              setPeso={setPeso}
+              estatura={estatura}
+              setEstatura={setEstatura}
+              pesoVisual={pesoVisual}
+              estaturaVisual={estaturaVisual}
+              mostrarEditor={mostrarEditor}
+              setMostrarEditor={setMostrarEditor}
+              guardandoPerfil={guardandoPerfil}
+              guardarDatosPerfil={guardarDatosPerfil}
+              subiendoFoto={subiendoFoto}
+              subirSelfie={subirSelfie}
+              cerrarSesion={cerrarSesion}
+            />
+          )}
 
           <footer style={S.footer}>
-            <button
-              type="button"
-              onClick={cerrarSesion}
-              style={S.logoutButton}
-            >
-              Cerrar sesión
-            </button>
-
             <div style={S.secureText}>
               <span>🔒 Acceso seguro</span>
               <span>KONAX</span>
             </div>
-
             <span style={S.version}>{VERSION}</span>
           </footer>
         </div>
+
+        <nav style={S.mobileBottom} className="mobile-bottom">
+          {[
+            { id: "inicio", label: "Inicio", icon: "⌂" },
+            { id: "clases", label: "Clases", icon: "▦" },
+            { id: "reservas", label: "Reservas", icon: "◷" },
+            { id: "resultados", label: "Resultados", icon: "★" },
+            { id: "configuracion", label: "Ajustes", icon: "⚙" },
+          ].map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => cambiarSeccion(item.id)}
+              style={{
+                ...S.bottomItem,
+                ...(seccion === item.id ? S.bottomItemActive : {}),
+              }}
+            >
+              <span style={S.bottomIcon}>{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
       </section>
     </main>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Inicio({
+  cuenta,
+  membresia,
+  fotoFirmada,
+  iniciales,
+  estadoVisual,
+  accesoPermitido,
+  qrDisponible,
+  qrUrl,
+  empresaNombre,
+  formatearFecha,
+  cambiarSeccion,
+}) {
+  return (
+    <>
+      <section style={S.hero}>
+        <div style={S.heroTop}>
+          <div style={S.heroIdentity}>
+            <div style={S.avatar}>
+              {fotoFirmada ? (
+                <img
+                  src={fotoFirmada}
+                  alt={cuenta?.nombre || "Alumno"}
+                  style={S.avatarImage}
+                />
+              ) : (
+                <span>{iniciales}</span>
+              )}
+            </div>
+
+            <div style={{ minWidth: 0 }}>
+              <span style={S.welcome}>Hola,</span>
+              <h1 style={S.memberName}>{cuenta?.nombre}</h1>
+              <span style={S.memberId}>
+                {cuenta?.cedula ? `ID ${cuenta.cedula}` : empresaNombre}
+              </span>
+            </div>
+          </div>
+
+          <span
+            style={{
+              ...S.estadoBadge,
+              ...(accesoPermitido
+                ? S.estadoBadgeOk
+                : S.estadoBadgeWarning),
+            }}
+          >
+            <span
+              style={{
+                ...S.statusDot,
+                background: accesoPermitido ? "#48D889" : "#F1B43A",
+              }}
+            />
+            {estadoVisual}
+          </span>
+        </div>
+
+        <div style={S.heroStats}>
+          <div style={S.heroStat}>
+            <span style={S.heroStatLabel}>PLAN</span>
+            <strong style={S.heroStatValue}>
+              {membresia?.plan || "Sin plan"}
+            </strong>
+          </div>
+
+          <div style={S.heroStat}>
+            <span style={S.heroStatLabel}>VENCE</span>
+            <strong style={S.heroStatValue}>
+              {membresia?.fecha_vencimiento
+                ? formatearFecha(membresia.fecha_vencimiento)
+                : "—"}
+            </strong>
+          </div>
+        </div>
+      </section>
+
+      <section style={S.quickSection}>
+        <div style={S.sectionHeading}>
+          <div>
+            <span style={S.sectionEyebrow}>ACCESOS</span>
+            <h2 style={S.sectionTitle}>Mi portal</h2>
+          </div>
+        </div>
+
+        <div style={S.quickGrid}>
+          <QuickCard
+            icon="▦"
+            title="Clases"
+            subtitle="Horarios y reservas"
+            onClick={() => cambiarSeccion("clases")}
+          />
+          <QuickCard
+            icon="◷"
+            title="Mis reservas"
+            subtitle="Próximas clases"
+            onClick={() => cambiarSeccion("reservas")}
+          />
+          <QuickCard
+            icon="▤"
+            title="Whiteboard"
+            subtitle="Resultados del box"
+            onClick={() => cambiarSeccion("whiteboard")}
+          />
+          <QuickCard
+            icon="★"
+            title="Resultados"
+            subtitle="Marcas y progreso"
+            onClick={() => cambiarSeccion("resultados")}
+          />
+        </div>
+      </section>
+
+      <section
+        style={{
+          ...S.accessBanner,
+          ...(accesoPermitido
+            ? S.accessBannerOk
+            : S.accessBannerBlocked),
+        }}
+      >
+        <div
+          style={{
+            ...S.accessIcon,
+            ...(accesoPermitido ? S.accessIconOk : S.accessIconBlocked),
+          }}
+        >
+          {accesoPermitido ? "✓" : "!"}
+        </div>
+
+        <div>
+          <span style={S.accessLabel}>ACCESO AL GIMNASIO</span>
+          <strong style={S.accessTitle}>
+            {accesoPermitido ? "Acceso disponible" : "Acceso no disponible"}
+          </strong>
+          <p style={S.accessText}>
+            {accesoPermitido
+              ? "Tu membresía está habilitada. Muestra tu QR en recepción."
+              : "Revisa el estado de tu membresía antes de ingresar."}
+          </p>
+        </div>
+      </section>
+
+      <section style={S.qrSection}>
+        <div style={S.sectionHeading}>
+          <div>
+            <span style={S.qrEyebrow}>ACCESO DIGITAL</span>
+            <h2 style={S.sectionTitle}>Mi código QR</h2>
+          </div>
+
+          <span
+            style={{
+              ...S.qrStatus,
+              ...(accesoPermitido
+                ? S.qrStatusActive
+                : S.qrStatusInactive),
+            }}
+          >
+            {accesoPermitido ? "ACTIVO" : "NO DISPONIBLE"}
+          </span>
+        </div>
+
+        <div style={S.qrLayout} className="qr-layout">
+          {qrDisponible ? (
+            <div
+              style={{
+                ...S.qrFrame,
+                opacity: accesoPermitido ? 1 : 0.38,
+              }}
+            >
+              <img
+                src={qrUrl}
+                alt="Mi código QR de acceso"
+                style={S.qrImage}
+              />
+            </div>
+          ) : (
+            <div style={S.noQr}>
+              <span style={S.noQrIcon}>QR</span>
+              <strong>QR no disponible</strong>
+              <span>Solicita a recepción que actualice tu ficha.</span>
+            </div>
+          )}
+
+          <div style={S.qrInstructions}>
+            <span style={S.qrInstructionEyebrow}>CÓMO INGRESAR</span>
+            <h3 style={S.qrInstructionTitle}>
+              Muestra este código en recepción
+            </h3>
+            <p style={S.qrInstructionText}>
+              El personal lo escaneará desde Check-in de KONAX.
+            </p>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function Configuracion({
+  cuenta,
+  fotoFirmada,
+  iniciales,
+  peso,
+  setPeso,
+  estatura,
+  setEstatura,
+  pesoVisual,
+  estaturaVisual,
+  mostrarEditor,
+  setMostrarEditor,
+  guardandoPerfil,
+  guardarDatosPerfil,
+  subiendoFoto,
+  subirSelfie,
+  cerrarSesion,
+}) {
+  return (
+    <>
+      <section style={S.configHero}>
+        <div style={S.configAvatar}>
+          {fotoFirmada ? (
+            <img
+              src={fotoFirmada}
+              alt={cuenta?.nombre || "Alumno"}
+              style={S.avatarImage}
+            />
+          ) : (
+            <span>{iniciales}</span>
+          )}
+        </div>
+
+        <div>
+          <span style={S.sectionEyebrow}>CONFIGURACIÓN</span>
+          <h1 style={S.configTitle}>{cuenta?.nombre}</h1>
+          <span style={S.configSubtitle}>
+            Administra tus datos y foto de acceso
+          </span>
+        </div>
+      </section>
+
+      <section style={S.section}>
+        <div style={S.sectionHeading}>
+          <div>
+            <span style={S.sectionEyebrow}>DATOS PERSONALES</span>
+            <h2 style={S.sectionTitle}>Configuración de cuenta</h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setMostrarEditor((valor) => !valor)}
+            style={S.outlineSmallButton}
+          >
+            {mostrarEditor ? "Cerrar" : "Editar"}
+          </button>
+        </div>
+
+        <div style={S.configGrid} className="config-grid">
+          <Metric label="Peso" value={pesoVisual} />
+          <Metric label="Estatura" value={estaturaVisual} />
+        </div>
+
+        <div style={S.photoActions} className="photo-actions">
+          <label style={S.selfieButton}>
+            {subiendoFoto ? "Subiendo..." : "📷 Tomar selfie"}
+
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              capture="user"
+              onChange={subirSelfie}
+              disabled={subiendoFoto}
+              style={{ display: "none" }}
+            />
+          </label>
+
+          <label style={S.galleryButton}>
+            Elegir foto
+
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={subirSelfie}
+              disabled={subiendoFoto}
+              style={{ display: "none" }}
+            />
+          </label>
+        </div>
+
+        {mostrarEditor && (
+          <div style={S.profileEditor}>
+            <div style={S.fieldGroup}>
+              <label style={S.fieldLabel}>Peso (kg)</label>
+              <input
+                value={peso}
+                onChange={(e) => setPeso(e.target.value)}
+                inputMode="decimal"
+                placeholder="Ej. 82.5"
+                style={S.input}
+              />
+            </div>
+
+            <div style={S.fieldGroup}>
+              <label style={S.fieldLabel}>Estatura (m)</label>
+              <input
+                value={estatura}
+                onChange={(e) => setEstatura(e.target.value)}
+                inputMode="decimal"
+                placeholder="Ej. 1.76"
+                style={S.input}
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={guardarDatosPerfil}
+              disabled={guardandoPerfil}
+              style={S.saveProfileButton}
+            >
+              {guardandoPerfil ? "Guardando..." : "Guardar cambios"}
+            </button>
+          </div>
+        )}
+      </section>
+
+      <section style={S.contactCard}>
+        <span style={S.contactEyebrow}>CONTACTO</span>
+
+        <div style={S.contactRows}>
+          <Fila label="Teléfono" value={cuenta?.telefono || "-"} />
+          <Fila label="Correo" value={cuenta?.correo || "-"} />
+        </div>
+      </section>
+
+      <button
+        type="button"
+        onClick={cerrarSesion}
+        style={S.logoutButton}
+      >
+        Cerrar sesión
+      </button>
+    </>
+  );
+}
+
+function SeccionVacia({
+  eyebrow,
+  titulo,
+  texto,
+  icono,
+  accion,
+  onAccion,
+}) {
+  return (
+    <section style={S.emptyPageCard}>
+      <div style={S.emptyPageIcon}>{icono}</div>
+      <span style={S.sectionEyebrow}>{eyebrow}</span>
+      <h1 style={S.emptyPageTitle}>{titulo}</h1>
+      <p style={S.emptyPageText}>{texto}</p>
+
+      <button
+        type="button"
+        onClick={onAccion}
+        style={S.primaryButton}
+      >
+        {accion}
+      </button>
+    </section>
+  );
+}
+
+function QuickCard({ icon, title, subtitle, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={S.quickCard}
+    >
+      <span style={S.quickIcon}>{icon}</span>
+      <span style={S.quickCopy}>
+        <strong style={S.quickTitle}>{title}</strong>
+        <span style={S.quickSubtitle}>{subtitle}</span>
+      </span>
+      <span style={S.quickArrow}>›</span>
+    </button>
+  );
+}
+
+function Metric({ label, value }) {
   return (
     <div style={S.metricCard}>
       <span style={S.metricLabel}>{label}</span>
@@ -981,50 +1169,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Dato({
-  label,
-  value,
-  destacado = false,
-}: {
-  label: string;
-  value: string;
-  destacado?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        ...S.dataCard,
-        ...(destacado ? S.dataCardHighlight : {}),
-      }}
-    >
-      <span style={S.dataLabel}>{label}</span>
-      <strong style={S.dataValue}>{value}</strong>
-    </div>
-  );
-}
-
-function Paso({
-  numero,
-  texto,
-}: {
-  numero: string;
-  texto: string;
-}) {
-  return (
-    <div style={S.step}>
-      <span style={S.stepNumber}>{numero}</span>
-      <span style={S.stepText}>{texto}</span>
-    </div>
-  );
-}
-
-function Fila({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function Fila({ label, value }) {
   return (
     <div style={S.row}>
       <span style={S.rowLabel}>{label}</span>
@@ -1033,59 +1178,79 @@ function Fila({
   );
 }
 
-const S: Record<string, any> = {
+const S = {
   page: {
     minHeight: "100vh",
     padding: 18,
     display: "grid",
     placeItems: "center",
     background:
-      "radial-gradient(circle at top left, rgba(20,184,166,.14), transparent 26%), radial-gradient(circle at bottom right, rgba(59,130,246,.10), transparent 24%), linear-gradient(180deg,#07141A 0%,#0B1F27 100%)",
-    color: "#E8F2F0",
+      "radial-gradient(circle at top right,rgba(22,131,79,.13),transparent 35%),radial-gradient(circle at bottom left,rgba(15,85,52,.08),transparent 32%),#EEF4F0",
+    color: "#17211C",
     fontFamily:
       'Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
   },
 
   shell: {
-    width: "min(760px,100%)",
+    position: "relative",
+    width: "min(680px,100%)",
+    minHeight: 760,
     overflow: "hidden",
-    border: "1px solid rgba(255,255,255,.08)",
-    borderRadius: 30,
-    background: "rgba(9,24,30,.92)",
-    boxShadow: "0 30px 90px rgba(0,0,0,.35)",
-    backdropFilter: "blur(8px)",
+    border: "1px solid #D9E6DE",
+    borderRadius: 28,
+    background: "#F7F9F8",
+    boxShadow: "0 28px 80px rgba(15,50,31,.13)",
   },
 
   topbar: {
-    minHeight: 92,
-    padding: "18px 20px",
-    display: "flex",
+    minHeight: 76,
+    padding: "12px 14px",
+    display: "grid",
+    gridTemplateColumns: "42px minmax(0,1fr) 42px",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 14,
-    background:
-      "linear-gradient(135deg, rgba(8,22,28,.96) 0%, rgba(10,35,43,.95) 100%)",
-    borderBottom: "1px solid rgba(255,255,255,.07)",
+    gap: 10,
+    background: "#FFFFFF",
+    borderBottom: "1px solid #E7EEE9",
+    position: "sticky",
+    top: 0,
+    zIndex: 20,
   },
 
-  topbarLeft: {
+  menuButton: {
+    width: 40,
+    height: 40,
+    border: 0,
+    borderRadius: 12,
+    background: "#163D29",
+    color: "#FFFFFF",
+    fontSize: 19,
+    cursor: "pointer",
+  },
+
+  brandBlock: {
     minWidth: 0,
     display: "flex",
     alignItems: "center",
-    gap: 14,
+    gap: 10,
   },
 
-  brandLogoWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
+  brandTextWrap: {
+    minWidth: 0,
+  },
+
+  brandMark: {
+    width: 48,
+    height: 48,
     overflow: "hidden",
+    flex: "0 0 auto",
     display: "grid",
     placeItems: "center",
-    background: "linear-gradient(135deg,#0F766E,#155E75)",
-    boxShadow: "0 10px 24px rgba(0,0,0,.24)",
-    border: "1px solid rgba(255,255,255,.08)",
-    flex: "0 0 auto",
+    borderRadius: 14,
+    background: "#FFFFFF",
+    border: "1px solid #DDE8E1",
+    color: "#163D29",
+    fontSize: 17,
+    fontWeight: 950,
   },
 
   brandLogo: {
@@ -1095,209 +1260,213 @@ const S: Record<string, any> = {
     background: "#FFFFFF",
   },
 
-  brandFallback: {
-    color: "#FFFFFF",
-    fontSize: 24,
-    fontWeight: 900,
-  },
-
-  brandTexts: {
-    minWidth: 0,
-    display: "grid",
-    gap: 3,
-  },
-
-  brandEyebrow: {
-    color: "#7DD3C7",
-    fontSize: 11,
-    fontWeight: 800,
-    letterSpacing: 1.1,
-  },
-
   brandName: {
     display: "block",
-    color: "#F7FAFC",
-    fontSize: 21,
-    fontWeight: 900,
-    lineHeight: 1.1,
+    maxWidth: 260,
+    overflow: "hidden",
+    color: "#1D3828",
+    fontSize: 13,
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
 
   powered: {
     display: "block",
-    color: "#9DB2B8",
-    fontSize: 12,
-  },
-
-  topbarActions: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
+    marginTop: 2,
+    color: "#829088",
+    fontSize: 8,
   },
 
   refreshButton: {
-    minHeight: 44,
-    padding: "0 16px",
-    border: "1px solid rgba(125,211,199,.28)",
-    borderRadius: 14,
-    background: "rgba(18,46,56,.95)",
-    color: "#D9F5F0",
-    fontSize: 13,
-    fontWeight: 800,
+    width: 40,
+    height: 40,
+    border: "1px solid #DCE6E0",
+    borderRadius: 12,
+    background: "#F8FAF9",
+    color: "#426050",
+    fontSize: 18,
+    fontWeight: 850,
     cursor: "pointer",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,.04)",
   },
 
   content: {
-    padding: "20px 20px 18px",
+    padding: "18px 18px 26px",
+  },
+
+  menuOverlay: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 90,
+    border: 0,
+    background: "rgba(8,18,12,.55)",
+    backdropFilter: "blur(2px)",
+  },
+
+  drawer: {
+    position: "fixed",
+    zIndex: 100,
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: "min(320px,86vw)",
+    padding: "18px 14px",
+    display: "grid",
+    gridTemplateRows: "auto 1fr auto",
+    background: "#13251B",
+    color: "#FFFFFF",
+    boxShadow: "18px 0 50px rgba(0,0,0,.22)",
+  },
+
+  drawerHeader: {
+    padding: "8px 8px 18px",
+    display: "grid",
+    gridTemplateColumns: "56px minmax(0,1fr)",
+    gap: 11,
+    alignItems: "center",
+    borderBottom: "1px solid rgba(255,255,255,.09)",
+  },
+
+  drawerAvatar: {
+    width: 56,
+    height: 56,
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 17,
+    background: "rgba(255,255,255,.10)",
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: 950,
+  },
+
+  drawerName: {
+    display: "block",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    fontSize: 14,
+  },
+
+  drawerState: {
+    display: "block",
+    marginTop: 3,
+    color: "#9DC4AF",
+    fontSize: 9,
+  },
+
+  drawerNav: {
+    padding: "16px 0",
+    display: "grid",
+    alignContent: "start",
+    gap: 5,
+  },
+
+  drawerItem: {
+    width: "100%",
+    minHeight: 48,
+    padding: "0 13px",
+    display: "grid",
+    gridTemplateColumns: "31px minmax(0,1fr)",
+    alignItems: "center",
+    gap: 8,
+    border: 0,
+    borderRadius: 12,
+    background: "transparent",
+    color: "#C9D8CF",
+    textAlign: "left",
+    fontSize: 12,
+    fontWeight: 750,
+    cursor: "pointer",
+  },
+
+  drawerItemActive: {
+    background: "#1C4630",
+    color: "#FFFFFF",
+  },
+
+  drawerIcon: {
+    width: 28,
+    height: 28,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 9,
+    background: "rgba(255,255,255,.07)",
+    fontSize: 14,
+  },
+
+  drawerFooter: {
+    paddingTop: 12,
+    borderTop: "1px solid rgba(255,255,255,.09)",
+  },
+
+  drawerLogout: {
+    width: "100%",
+    minHeight: 44,
+    border: "1px solid rgba(255,255,255,.13)",
+    borderRadius: 11,
+    background: "transparent",
+    color: "#D8E2DC",
+    fontSize: 10,
+    fontWeight: 800,
   },
 
   inlineError: {
-    marginBottom: 14,
-    padding: 13,
-    border: "1px solid rgba(248,113,113,.28)",
-    borderRadius: 14,
-    background: "rgba(127,29,29,.18)",
-    color: "#FECACA",
-    fontSize: 13,
+    marginBottom: 12,
+    padding: 11,
+    border: "1px solid #F0C9C4",
+    borderRadius: 12,
+    background: "#FFF2F0",
+    color: "#8B3C34",
+    fontSize: 9,
   },
 
   successMessage: {
-    marginBottom: 14,
-    padding: 13,
-    border: "1px solid rgba(52,211,153,.22)",
-    borderRadius: 14,
-    background: "rgba(6,95,70,.22)",
-    color: "#CFFAE8",
-    fontSize: 13,
-    fontWeight: 700,
-  },
-
-  heroPanel: {
-    display: "grid",
-    gridTemplateColumns: "1.1fr .9fr",
-    gap: 16,
-    marginBottom: 16,
-  },
-
-  heroGymCard: {
-    padding: 18,
-    borderRadius: 24,
-    background:
-      "linear-gradient(145deg, rgba(10,30,37,1) 0%, rgba(12,49,57,1) 58%, rgba(11,89,95,1) 100%)",
-    border: "1px solid rgba(255,255,255,.06)",
-    boxShadow: "0 18px 40px rgba(0,0,0,.22)",
-  },
-
-  heroGymTop: {
-    display: "grid",
-    gridTemplateColumns: "82px minmax(0,1fr)",
-    gap: 14,
-    alignItems: "center",
-  },
-
-  heroGymLogoBox: {
-    width: 82,
-    height: 82,
-    borderRadius: 22,
-    overflow: "hidden",
-    background: "#FFFFFF",
-    display: "grid",
-    placeItems: "center",
-    border: "1px solid rgba(255,255,255,.08)",
-    boxShadow: "0 10px 30px rgba(0,0,0,.24)",
-  },
-
-  heroGymLogo: {
-    width: "100%",
-    height: "100%",
-    objectFit: "contain",
-  },
-
-  heroGymLogoFallback: {
-    color: "#0F172A",
-    fontSize: 30,
-    fontWeight: 900,
-  },
-
-  heroGymTexts: {
-    minWidth: 0,
-  },
-
-  heroGymEyebrow: {
-    display: "block",
-    color: "#7DD3C7",
-    fontSize: 11,
+    marginBottom: 12,
+    padding: 11,
+    border: "1px solid #BFE3CE",
+    borderRadius: 12,
+    background: "#ECF9F1",
+    color: "#196D42",
+    fontSize: 9,
     fontWeight: 800,
-    letterSpacing: 1.1,
-    marginBottom: 4,
   },
 
-  heroGymName: {
-    margin: 0,
-    color: "#F8FBFC",
-    fontSize: 26,
-    lineHeight: 1.1,
-  },
-
-  heroGymSub: {
-    margin: "8px 0 0",
-    color: "#B7CBD1",
-    fontSize: 13,
-    lineHeight: 1.5,
-  },
-
-  heroGymStats: {
-    marginTop: 18,
-    display: "grid",
-    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
-    gap: 10,
-  },
-
-  heroMiniStat: {
-    padding: 12,
-    borderRadius: 16,
-    background: "rgba(255,255,255,.06)",
-    border: "1px solid rgba(255,255,255,.05)",
-  },
-
-  heroMiniLabel: {
-    display: "block",
-    color: "#9FC2C9",
-    fontSize: 11,
-    marginBottom: 6,
-  },
-
-  heroMiniValue: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    lineHeight: 1.25,
-  },
-
-  memberHeader: {
-    display: "grid",
-    gridTemplateColumns: "76px minmax(0,1fr) auto",
-    gap: 14,
-    alignItems: "center",
+  hero: {
+    marginBottom: 15,
     padding: 18,
-    borderRadius: 24,
+    borderRadius: 21,
     background:
-      "linear-gradient(145deg, rgba(17,24,39,.98) 0%, rgba(30,41,59,.96) 100%)",
+      "linear-gradient(135deg,#173C2A 0%,#0F6B40 100%)",
     color: "#FFFFFF",
-    border: "1px solid rgba(255,255,255,.06)",
-    boxShadow: "0 18px 40px rgba(0,0,0,.22)",
+    boxShadow: "0 16px 34px rgba(23,60,42,.18)",
+  },
+
+  heroTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+
+  heroIdentity: {
+    minWidth: 0,
+    display: "grid",
+    gridTemplateColumns: "62px minmax(0,1fr)",
+    alignItems: "center",
+    gap: 12,
   },
 
   avatar: {
-    width: 76,
-    height: 76,
+    width: 62,
+    height: 62,
     overflow: "hidden",
     display: "grid",
     placeItems: "center",
-    borderRadius: 22,
-    background: "rgba(255,255,255,.08)",
-    border: "1px solid rgba(255,255,255,.14)",
+    borderRadius: 18,
+    background: "rgba(255,255,255,.13)",
+    border: "1px solid rgba(255,255,255,.18)",
     color: "#FFFFFF",
-    fontSize: 24,
+    fontSize: 19,
     fontWeight: 950,
   },
 
@@ -1307,275 +1476,222 @@ const S: Record<string, any> = {
     objectFit: "cover",
   },
 
-  memberIdentity: {
-    minWidth: 0,
-  },
-
   welcome: {
     display: "block",
-    marginBottom: 4,
-    color: "#94E7DB",
-    fontSize: 12,
+    marginBottom: 2,
+    color: "#B9DDC8",
+    fontSize: 9,
   },
 
   memberName: {
     margin: 0,
     overflow: "hidden",
     color: "#FFFFFF",
-    fontSize: 30,
-    lineHeight: 1.06,
+    fontSize: 22,
+    lineHeight: 1.08,
     textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
   },
 
   memberId: {
     display: "block",
-    marginTop: 8,
-    color: "#A5B8C7",
-    fontSize: 12,
+    marginTop: 5,
+    color: "#B9D2C3",
+    fontSize: 8.5,
   },
 
   estadoBadge: {
-    minHeight: 36,
-    padding: "0 14px",
+    minHeight: 28,
+    padding: "0 9px",
     display: "inline-flex",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
     borderRadius: 999,
-    fontSize: 12,
+    fontSize: 8.5,
     fontWeight: 900,
     whiteSpace: "nowrap",
   },
 
   estadoBadgeOk: {
-    color: "#D1FAE5",
-    background: "rgba(34,197,94,.14)",
-    border: "1px solid rgba(34,197,94,.24)",
+    color: "#D9FFE8",
+    background: "rgba(77,210,132,.16)",
+    border: "1px solid rgba(137,236,176,.21)",
   },
 
   estadoBadgeWarning: {
-    color: "#FEF3C7",
-    background: "rgba(245,158,11,.14)",
-    border: "1px solid rgba(245,158,11,.24)",
+    color: "#FFF0C4",
+    background: "rgba(242,181,61,.15)",
+    border: "1px solid rgba(255,217,137,.20)",
   },
 
   statusDot: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: "50%",
   },
 
-  profileCard: {
-    marginBottom: 16,
-    padding: 18,
-    border: "1px solid rgba(255,255,255,.06)",
-    borderRadius: 22,
-    background: "rgba(255,255,255,.03)",
-    boxShadow: "0 16px 32px rgba(0,0,0,.14)",
-  },
-
-  profileBodySimple: {
-    display: "grid",
-    gap: 14,
-  },
-
-  profileMetrics: {
+  heroStats: {
+    marginTop: 16,
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
-    gap: 10,
+    gap: 8,
   },
 
-  photoActions: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 10,
+  heroStat: {
+    padding: 11,
+    borderRadius: 13,
+    background: "rgba(255,255,255,.09)",
+    border: "1px solid rgba(255,255,255,.09)",
   },
 
-  metricCard: {
-    minHeight: 84,
-    padding: 15,
-    display: "grid",
-    alignContent: "center",
-    gap: 4,
-    border: "1px solid rgba(255,255,255,.07)",
-    borderRadius: 16,
-    background: "linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025))",
+  heroStatLabel: {
+    display: "block",
+    color: "#A9CDB8",
+    fontSize: 7,
+    fontWeight: 900,
+    letterSpacing: 1,
   },
 
-  metricLabel: {
-    color: "#8DA6AD",
+  heroStatValue: {
+    display: "block",
+    marginTop: 4,
+    color: "#FFFFFF",
     fontSize: 11,
-    fontWeight: 800,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
+    lineHeight: 1.3,
   },
 
-  metricValue: {
-    color: "#F1F7F8",
-    fontSize: 21,
-    lineHeight: 1.2,
+  quickSection: {
+    marginBottom: 15,
+    padding: 17,
+    border: "1px solid #DFE8E2",
+    borderRadius: 19,
+    background: "#FFFFFF",
   },
 
-  selfieButton: {
-    minHeight: 48,
-    padding: "0 14px",
+  quickGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 9,
+  },
+
+  quickCard: {
+    minHeight: 82,
+    padding: 12,
+    display: "grid",
+    gridTemplateColumns: "38px minmax(0,1fr) 14px",
+    alignItems: "center",
+    gap: 8,
+    border: "1px solid #E2EAE5",
+    borderRadius: 14,
+    background: "#F9FBFA",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  quickIcon: {
+    width: 38,
+    height: 38,
     display: "grid",
     placeItems: "center",
-    borderRadius: 14,
-    background: "linear-gradient(135deg,#14B8A6,#0F766E)",
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: 900,
-    cursor: "pointer",
-    textAlign: "center",
-    boxShadow: "0 10px 24px rgba(20,184,166,.24)",
-  },
-
-  galleryButton: {
-    minHeight: 48,
-    padding: "0 14px",
-    display: "grid",
-    placeItems: "center",
-    border: "1px solid rgba(255,255,255,.10)",
-    borderRadius: 14,
-    background: "rgba(255,255,255,.04)",
-    color: "#D5E5E9",
-    fontSize: 14,
-    fontWeight: 800,
-    cursor: "pointer",
-    textAlign: "center",
-  },
-
-  profileEditor: {
-    padding: 14,
-    display: "grid",
-    gap: 12,
-    borderRadius: 16,
-    background: "rgba(255,255,255,.04)",
-    border: "1px solid rgba(255,255,255,.06)",
-  },
-
-  fieldGroup: {
-    display: "grid",
-    gap: 7,
-  },
-
-  fieldLabel: {
-    color: "#B4C3C8",
-    fontSize: 12,
-    fontWeight: 700,
-  },
-
-  input: {
-    width: "100%",
-    minHeight: 44,
-    padding: "0 12px",
-    border: "1px solid rgba(255,255,255,.08)",
     borderRadius: 12,
-    outline: "none",
-    background: "rgba(5,15,20,.45)",
-    color: "#F8FBFC",
-    fontSize: 14,
-  },
-
-  saveProfileButton: {
-    minHeight: 46,
-    border: 0,
-    borderRadius: 14,
-    background: "linear-gradient(135deg,#2563EB,#0EA5E9)",
-    color: "#FFFFFF",
-    fontSize: 14,
+    background: "#E6F4EB",
+    color: "#16834F",
+    fontSize: 16,
     fontWeight: 900,
-    cursor: "pointer",
-    boxShadow: "0 10px 24px rgba(37,99,235,.22)",
   },
 
-  outlineSmallButton: {
-    minHeight: 38,
-    padding: "0 12px",
-    border: "1px solid rgba(255,255,255,.10)",
-    borderRadius: 12,
-    background: "rgba(255,255,255,.04)",
-    color: "#D8E5E8",
-    fontSize: 13,
-    fontWeight: 800,
-    cursor: "pointer",
+  quickCopy: {
+    minWidth: 0,
+    display: "grid",
+    gap: 2,
+  },
+
+  quickTitle: {
+    color: "#243A2D",
+    fontSize: 11,
+  },
+
+  quickSubtitle: {
+    color: "#829088",
+    fontSize: 7.5,
+  },
+
+  quickArrow: {
+    color: "#AAB6AF",
+    fontSize: 20,
   },
 
   accessBanner: {
-    marginBottom: 16,
-    padding: 16,
+    marginBottom: 15,
+    padding: 15,
     display: "grid",
-    gridTemplateColumns: "54px minmax(0,1fr)",
+    gridTemplateColumns: "42px minmax(0,1fr)",
     alignItems: "center",
-    gap: 13,
-    borderRadius: 20,
+    gap: 11,
+    borderRadius: 16,
   },
 
   accessBannerOk: {
-    background: "rgba(16,185,129,.10)",
-    border: "1px solid rgba(16,185,129,.18)",
+    background: "#EAF8F0",
+    border: "1px solid #C5E9D3",
   },
 
   accessBannerBlocked: {
-    background: "rgba(245,158,11,.10)",
-    border: "1px solid rgba(245,158,11,.18)",
+    background: "#FFF5E6",
+    border: "1px solid #F0D9AB",
   },
 
   accessIcon: {
-    width: 54,
-    height: 54,
+    width: 42,
+    height: 42,
     display: "grid",
     placeItems: "center",
-    borderRadius: 16,
-    fontSize: 22,
+    borderRadius: 13,
+    fontSize: 18,
     fontWeight: 950,
   },
 
   accessIconOk: {
-    background: "rgba(34,197,94,.16)",
-    color: "#6EE7B7",
+    background: "#D6F2E0",
+    color: "#16834F",
   },
 
   accessIconBlocked: {
-    background: "rgba(245,158,11,.16)",
-    color: "#FCD34D",
+    background: "#FFEAC5",
+    color: "#A66A00",
   },
 
   accessLabel: {
     display: "block",
-    color: "#9CB3B8",
-    fontSize: 11,
-    fontWeight: 900,
+    color: "#718077",
+    fontSize: 7,
+    fontWeight: 950,
     letterSpacing: 1,
   },
 
   accessTitle: {
     display: "block",
-    marginTop: 3,
-    color: "#F4FAFB",
-    fontSize: 22,
-    lineHeight: 1.2,
+    marginTop: 2,
+    color: "#22372B",
+    fontSize: 14,
   },
 
   accessText: {
-    margin: "5px 0 0",
-    color: "#B7C8CD",
-    fontSize: 14,
-    lineHeight: 1.5,
+    margin: "4px 0 0",
+    color: "#69786F",
+    fontSize: 9.5,
+    lineHeight: 1.45,
   },
 
   section: {
-    marginBottom: 16,
+    marginBottom: 15,
     padding: 18,
-    border: "1px solid rgba(255,255,255,.06)",
-    borderRadius: 22,
-    background: "rgba(255,255,255,.03)",
-    boxShadow: "0 16px 32px rgba(0,0,0,.12)",
+    border: "1px solid #DFE8E2",
+    borderRadius: 19,
+    background: "#FFFFFF",
   },
 
   sectionHeading: {
-    marginBottom: 16,
+    marginBottom: 14,
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
@@ -1584,205 +1700,77 @@ const S: Record<string, any> = {
 
   sectionEyebrow: {
     display: "block",
-    color: "#67E8F9",
-    fontSize: 11,
-    fontWeight: 900,
+    color: "#16834F",
+    fontSize: 7,
+    fontWeight: 950,
     letterSpacing: 1.1,
   },
 
   sectionTitle: {
-    margin: "5px 0 0",
-    color: "#F5FBFC",
-    fontSize: 28,
-    lineHeight: 1.1,
-  },
-
-  planChip: {
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "rgba(20,184,166,.14)",
-    color: "#A7F3D0",
-    fontSize: 12,
-    fontWeight: 900,
-  },
-
-  planHero: {
-    marginBottom: 14,
-    padding: 16,
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 12,
-    borderRadius: 18,
-    background:
-      "linear-gradient(135deg, rgba(20,184,166,.08), rgba(59,130,246,.08))",
-    border: "1px solid rgba(255,255,255,.05)",
-  },
-
-  planLabel: {
-    display: "block",
-    color: "#A1B3B8",
-    fontSize: 11,
-    fontWeight: 900,
-    letterSpacing: 0.9,
-  },
-
-  planName: {
-    display: "block",
-    marginTop: 5,
-    color: "#F4FBFC",
-    fontSize: 24,
-    lineHeight: 1.2,
-  },
-
-  planDescription: {
-    margin: "5px 0 0",
-    color: "#B1C2C8",
-    fontSize: 13,
-    lineHeight: 1.45,
-  },
-
-  planPrice: {
-    color: "#67E8F9",
-    fontSize: 24,
-    whiteSpace: "nowrap",
-  },
-
-  membershipGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4,minmax(0,1fr))",
-    gap: 10,
-  },
-
-  dataCard: {
-    minHeight: 86,
-    padding: 13,
-    display: "grid",
-    alignContent: "center",
-    gap: 5,
-    border: "1px solid rgba(255,255,255,.06)",
-    borderRadius: 15,
-    background: "rgba(255,255,255,.025)",
-  },
-
-  dataCardHighlight: {
-    background: "rgba(20,184,166,.08)",
-    border: "1px solid rgba(20,184,166,.16)",
-  },
-
-  dataLabel: {
-    color: "#95AAB0",
-    fontSize: 11,
-    fontWeight: 800,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-
-  dataValue: {
-    color: "#F4FBFC",
-    fontSize: 15,
-    lineHeight: 1.35,
-  },
-
-  emptyMembership: {
-    minHeight: 150,
-    display: "grid",
-    placeItems: "center",
-    alignContent: "center",
-    gap: 8,
-    textAlign: "center",
-    color: "#C4D1D5",
-  },
-
-  emptyIcon: {
-    width: 52,
-    height: 52,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: 16,
-    background: "rgba(255,255,255,.06)",
-    color: "#67E8F9",
-    fontSize: 24,
+    margin: "3px 0 0",
+    color: "#17251D",
+    fontSize: 20,
   },
 
   qrSection: {
-    marginBottom: 16,
+    marginBottom: 15,
     padding: 18,
-    borderRadius: 22,
-    background: "rgba(255,255,255,.03)",
-    border: "1px solid rgba(255,255,255,.06)",
-    boxShadow: "0 16px 32px rgba(0,0,0,.12)",
+    borderRadius: 20,
+    background:
+      "linear-gradient(145deg,#FFFFFF 0%,#F4FAF6 100%)",
+    border: "1px solid #D9E7DE",
   },
 
   qrEyebrow: {
     display: "block",
-    color: "#67E8F9",
-    fontSize: 11,
-    fontWeight: 900,
+    color: "#16834F",
+    fontSize: 7,
+    fontWeight: 950,
     letterSpacing: 1,
   },
 
   qrStatus: {
-    padding: "8px 12px",
+    padding: "6px 9px",
     borderRadius: 999,
-    fontSize: 11,
-    fontWeight: 900,
+    fontSize: 7.5,
+    fontWeight: 950,
     letterSpacing: 0.8,
   },
 
   qrStatusActive: {
-    background: "rgba(34,197,94,.14)",
-    color: "#BBF7D0",
+    background: "#DEF5E7",
+    color: "#147443",
   },
 
   qrStatusInactive: {
-    background: "rgba(245,158,11,.14)",
-    color: "#FDE68A",
+    background: "#FFF0D3",
+    color: "#92600A",
   },
 
   qrLayout: {
     display: "grid",
-    gridTemplateColumns: "260px minmax(0,1fr)",
-    gap: 22,
+    gridTemplateColumns: "210px minmax(0,1fr)",
+    gap: 18,
     alignItems: "center",
   },
 
   qrFrame: {
-    position: "relative",
     width: "100%",
     aspectRatio: "1 / 1",
-    padding: 14,
+    padding: 13,
     overflow: "hidden",
-    borderRadius: 24,
+    borderRadius: 22,
     background: "#FFFFFF",
-    border: "1px solid rgba(255,255,255,.06)",
-    boxShadow: "0 18px 36px rgba(0,0,0,.16)",
+    border: "1px solid #DDE7E1",
+    boxShadow: "0 16px 36px rgba(17,62,39,.10)",
   },
 
   qrImage: {
     width: "100%",
     height: "100%",
     display: "block",
-    borderRadius: 14,
+    borderRadius: 12,
     objectFit: "contain",
-  },
-
-  qrBlocked: {
-    position: "absolute",
-    inset: 0,
-    display: "grid",
-    placeItems: "center",
-    alignContent: "center",
-    gap: 8,
-    padding: 18,
-    textAlign: "center",
-    background: "rgba(255,255,255,.80)",
-    color: "#6B4D16",
-    backdropFilter: "blur(3px)",
-  },
-
-  qrBlockedIcon: {
-    fontSize: 26,
   },
 
   noQr: {
@@ -1791,22 +1779,22 @@ const S: Record<string, any> = {
     display: "grid",
     placeItems: "center",
     alignContent: "center",
-    gap: 8,
-    padding: 18,
+    gap: 7,
+    padding: 16,
     textAlign: "center",
-    borderRadius: 24,
-    background: "rgba(255,255,255,.04)",
-    border: "1px dashed rgba(255,255,255,.18)",
-    color: "#C3D0D5",
+    borderRadius: 22,
+    background: "#F1F5F2",
+    border: "1px dashed #BED0C4",
+    color: "#64746A",
   },
 
   noQrIcon: {
-    width: 58,
-    height: 58,
+    width: 54,
+    height: 54,
     display: "grid",
     placeItems: "center",
-    borderRadius: 16,
-    background: "linear-gradient(135deg,#0F766E,#2563EB)",
+    borderRadius: 15,
+    background: "#183C2A",
     color: "#FFFFFF",
     fontWeight: 950,
   },
@@ -1816,71 +1804,195 @@ const S: Record<string, any> = {
   },
 
   qrInstructionEyebrow: {
-    color: "#67E8F9",
-    fontSize: 11,
-    fontWeight: 900,
+    color: "#16834F",
+    fontSize: 7,
+    fontWeight: 950,
     letterSpacing: 1,
   },
 
   qrInstructionTitle: {
-    margin: "6px 0 8px",
-    color: "#F5FBFC",
-    fontSize: 24,
-    lineHeight: 1.18,
+    margin: "5px 0 7px",
+    color: "#1F3428",
+    fontSize: 18,
+    lineHeight: 1.15,
   },
 
   qrInstructionText: {
     margin: 0,
-    color: "#B6C8CD",
-    fontSize: 14,
-    lineHeight: 1.55,
+    color: "#697970",
+    fontSize: 9.5,
+    lineHeight: 1.5,
   },
 
-  steps: {
-    marginTop: 14,
+  configHero: {
+    marginBottom: 15,
+    padding: 18,
     display: "grid",
-    gap: 10,
-  },
-
-  step: {
-    display: "grid",
-    gridTemplateColumns: "30px minmax(0,1fr)",
+    gridTemplateColumns: "76px minmax(0,1fr)",
+    gap: 14,
     alignItems: "center",
-    gap: 10,
+    borderRadius: 20,
+    background: "#173C2A",
+    color: "#FFFFFF",
   },
 
-  stepNumber: {
-    width: 30,
-    height: 30,
+  configAvatar: {
+    width: 76,
+    height: 76,
+    overflow: "hidden",
     display: "grid",
     placeItems: "center",
-    borderRadius: 10,
-    background: "rgba(20,184,166,.14)",
-    color: "#8EF2E2",
-    fontSize: 12,
+    borderRadius: 22,
+    background: "rgba(255,255,255,.12)",
+    fontSize: 22,
     fontWeight: 950,
   },
 
-  stepText: {
-    color: "#D3E2E6",
+  configTitle: {
+    margin: "3px 0 2px",
+    fontSize: 21,
+    lineHeight: 1.1,
+  },
+
+  configSubtitle: {
+    color: "#B9D2C3",
+    fontSize: 8.5,
+  },
+
+  configGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 8,
+    marginBottom: 10,
+  },
+
+  metricCard: {
+    minHeight: 68,
+    padding: 12,
+    display: "grid",
+    alignContent: "center",
+    gap: 3,
+    border: "1px solid #E3ECE6",
+    borderRadius: 12,
+    background: "#F8FBF9",
+  },
+
+  metricLabel: {
+    color: "#839088",
+    fontSize: 7,
+    fontWeight: 900,
+    textTransform: "uppercase",
+  },
+
+  metricValue: {
+    color: "#274433",
     fontSize: 14,
-    lineHeight: 1.4,
+  },
+
+  photoActions: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 8,
+  },
+
+  selfieButton: {
+    minHeight: 42,
+    padding: "0 10px",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 11,
+    background: "#16834F",
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: 900,
+    cursor: "pointer",
+    textAlign: "center",
+  },
+
+  galleryButton: {
+    minHeight: 42,
+    padding: "0 10px",
+    display: "grid",
+    placeItems: "center",
+    border: "1px solid #D7E3DB",
+    borderRadius: 11,
+    background: "#FFFFFF",
+    color: "#4E6658",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
+    textAlign: "center",
+  },
+
+  profileEditor: {
+    marginTop: 10,
+    padding: 12,
+    display: "grid",
+    gap: 10,
+    borderRadius: 13,
+    background: "#F4F8F5",
+  },
+
+  fieldGroup: {
+    display: "grid",
+    gap: 5,
+  },
+
+  fieldLabel: {
+    color: "#617269",
+    fontSize: 8,
+    fontWeight: 850,
+  },
+
+  input: {
+    width: "100%",
+    minHeight: 40,
+    padding: "0 11px",
+    border: "1px solid #D6E1DA",
+    borderRadius: 10,
+    outline: "none",
+    background: "#FFFFFF",
+    color: "#21372A",
+    fontSize: 12,
+  },
+
+  saveProfileButton: {
+    minHeight: 41,
+    border: 0,
+    borderRadius: 10,
+    background: "#163D29",
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  outlineSmallButton: {
+    minHeight: 32,
+    padding: "0 10px",
+    border: "1px solid #D7E3DB",
+    borderRadius: 9,
+    background: "#FFFFFF",
+    color: "#456353",
+    fontSize: 8,
+    fontWeight: 850,
+    cursor: "pointer",
   },
 
   contactCard: {
-    marginBottom: 16,
-    padding: 18,
-    border: "1px solid rgba(255,255,255,.06)",
-    borderRadius: 22,
-    background: "rgba(255,255,255,.03)",
+    marginBottom: 15,
+    padding: 16,
+    border: "1px solid #E1E9E4",
+    borderRadius: 17,
+    background: "#FFFFFF",
   },
 
   contactEyebrow: {
     display: "block",
-    marginBottom: 8,
-    color: "#67E8F9",
-    fontSize: 11,
-    fontWeight: 900,
+    marginBottom: 7,
+    color: "#16834F",
+    fontSize: 7,
+    fontWeight: 950,
     letterSpacing: 1,
   },
 
@@ -1889,57 +2001,159 @@ const S: Record<string, any> = {
   },
 
   row: {
-    minHeight: 46,
+    minHeight: 38,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 15,
-    borderBottom: "1px solid rgba(255,255,255,.06)",
+    borderBottom: "1px solid #EEF2EF",
   },
 
   rowLabel: {
-    color: "#9BB0B6",
-    fontSize: 14,
+    color: "#819087",
+    fontSize: 9,
   },
 
   rowValue: {
     maxWidth: "65%",
     overflowWrap: "anywhere",
-    color: "#F1FAFB",
-    fontSize: 14,
+    color: "#334A3C",
+    fontSize: 9.5,
     textAlign: "right",
+  },
+
+  logoutButton: {
+    width: "100%",
+    minHeight: 43,
+    border: "1px solid #D9E3DD",
+    borderRadius: 12,
+    background: "#FFFFFF",
+    color: "#536259",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  emptyPageCard: {
+    minHeight: 430,
+    padding: 30,
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 10,
+    border: "1px solid #DFE8E2",
+    borderRadius: 22,
+    background: "#FFFFFF",
+    textAlign: "center",
+  },
+
+  emptyPageIcon: {
+    width: 72,
+    height: 72,
+    display: "grid",
+    placeItems: "center",
+    marginBottom: 2,
+    borderRadius: 22,
+    background: "#E7F4EC",
+    color: "#16834F",
+    fontSize: 30,
+    fontWeight: 900,
+  },
+
+  emptyPageTitle: {
+    margin: 0,
+    color: "#1C3426",
+    fontSize: 28,
+  },
+
+  emptyPageText: {
+    maxWidth: 390,
+    margin: 0,
+    color: "#748179",
+    fontSize: 10,
+    lineHeight: 1.6,
+  },
+
+  primaryButton: {
+    minWidth: 160,
+    minHeight: 44,
+    marginTop: 4,
+    padding: "0 16px",
+    border: 0,
+    borderRadius: 11,
+    background: "#16834F",
+    color: "#FFFFFF",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  secondaryButton: {
+    width: "100%",
+    minHeight: 43,
+    border: "1px solid #DAE4DE",
+    borderRadius: 11,
+    background: "#FFFFFF",
+    color: "#4D5F55",
+    fontWeight: 850,
+    cursor: "pointer",
   },
 
   footer: {
     display: "grid",
     justifyItems: "center",
-    gap: 12,
-    paddingTop: 2,
-  },
-
-  logoutButton: {
-    width: "100%",
-    minHeight: 48,
-    border: "1px solid rgba(255,255,255,.10)",
-    borderRadius: 14,
-    background: "rgba(255,255,255,.04)",
-    color: "#D5E5E9",
-    fontSize: 14,
-    fontWeight: 800,
-    cursor: "pointer",
+    gap: 8,
+    paddingTop: 5,
   },
 
   secureText: {
     width: "100%",
     display: "flex",
     justifyContent: "space-between",
-    color: "#91A7AE",
-    fontSize: 11,
+    color: "#95A098",
+    fontSize: 7.5,
   },
 
   version: {
-    color: "#738890",
-    fontSize: 10,
+    color: "#BAC2BD",
+    fontSize: 6,
+  },
+
+  mobileBottom: {
+    display: "none",
+    position: "fixed",
+    zIndex: 40,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    gridTemplateColumns: "repeat(5,1fr)",
+    minHeight: 72,
+    padding: "7px 5px max(7px,env(safe-area-inset-bottom))",
+    background: "rgba(255,255,255,.97)",
+    borderTop: "1px solid #E0E8E3",
+    boxShadow: "0 -8px 26px rgba(17,45,29,.08)",
+    backdropFilter: "blur(12px)",
+  },
+
+  bottomItem: {
+    minWidth: 0,
+    border: 0,
+    background: "transparent",
+    color: "#839088",
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 3,
+    fontSize: 7.5,
+    fontWeight: 850,
+  },
+
+  bottomItemActive: {
+    color: "#16834F",
+  },
+
+  bottomIcon: {
+    fontSize: 19,
+    lineHeight: 1,
   },
 
   loadingPage: {
@@ -1947,22 +2161,22 @@ const S: Record<string, any> = {
     padding: 18,
     display: "grid",
     placeItems: "center",
-    background: "linear-gradient(180deg,#07141A,#0B1F27)",
-    color: "#EAF5F6",
+    background: "#F1F5F2",
+    color: "#284434",
     fontFamily:
       'Inter,ui-sans-serif,system-ui,sans-serif',
   },
 
   loadingCard: {
     width: "min(390px,100%)",
-    padding: 30,
+    padding: 28,
     display: "grid",
     justifyItems: "center",
-    gap: 12,
-    border: "1px solid rgba(255,255,255,.08)",
-    borderRadius: 24,
-    background: "rgba(255,255,255,.05)",
-    boxShadow: "0 20px 60px rgba(0,0,0,.24)",
+    gap: 10,
+    border: "1px solid #DFE7E2",
+    borderRadius: 22,
+    background: "#FFFFFF",
+    boxShadow: "0 18px 50px rgba(22,50,34,.08)",
   },
 
   loadingLogo: {
@@ -1971,29 +2185,29 @@ const S: Record<string, any> = {
   },
 
   loader: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 34,
     borderRadius: "50%",
-    border: "4px solid rgba(255,255,255,.16)",
-    borderTopColor: "#67E8F9",
+    border: "4px solid #E1EBE5",
+    borderTopColor: "#16834F",
   },
 
   loadingText: {
-    color: "#A8BDC2",
-    fontSize: 13,
+    color: "#7B887F",
+    fontSize: 9,
   },
 
   errorCard: {
     width: "min(420px,100%)",
-    padding: 28,
+    padding: 27,
     display: "grid",
     justifyItems: "center",
-    gap: 12,
+    gap: 11,
     textAlign: "center",
-    border: "1px solid rgba(255,255,255,.08)",
-    borderRadius: 24,
-    background: "rgba(255,255,255,.05)",
-    boxShadow: "0 20px 60px rgba(0,0,0,.24)",
+    border: "1px solid #E4E9E6",
+    borderRadius: 22,
+    background: "#FFFFFF",
+    boxShadow: "0 20px 60px rgba(22,44,31,.10)",
   },
 
   errorLogo: {
@@ -2002,50 +2216,27 @@ const S: Record<string, any> = {
   },
 
   errorIcon: {
-    width: 50,
-    height: 50,
+    width: 48,
+    height: 48,
     display: "grid",
     placeItems: "center",
-    borderRadius: 16,
-    background: "rgba(239,68,68,.14)",
-    color: "#FCA5A5",
-    fontSize: 22,
+    borderRadius: 15,
+    background: "#FFF0E8",
+    color: "#B85A2A",
+    fontSize: 21,
     fontWeight: 950,
   },
 
   errorTitle: {
     margin: 0,
-    color: "#F4FAFB",
-    fontSize: 24,
+    color: "#25382D",
+    fontSize: 21,
   },
 
   errorText: {
     margin: 0,
-    color: "#B3C4C8",
-    fontSize: 14,
+    color: "#748078",
+    fontSize: 10,
     lineHeight: 1.5,
-  },
-
-  primaryButton: {
-    width: "100%",
-    minHeight: 46,
-    marginTop: 4,
-    border: 0,
-    borderRadius: 12,
-    background: "linear-gradient(135deg,#14B8A6,#0F766E)",
-    color: "#FFFFFF",
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-
-  secondaryButton: {
-    width: "100%",
-    minHeight: 44,
-    border: "1px solid rgba(255,255,255,.10)",
-    borderRadius: 12,
-    background: "rgba(255,255,255,.04)",
-    color: "#E4EEF0",
-    fontWeight: 800,
-    cursor: "pointer",
   },
 };
