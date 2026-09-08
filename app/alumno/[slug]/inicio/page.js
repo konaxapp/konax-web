@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.08-PORTAL-ALUMNO-AGENDA-RPC-V13-QR";
+const VERSION = "2026.09.08-PORTAL-ALUMNO-AGENDA-RPC-V14-MENU-QR";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
-  { id: "inicio", label: "Inicio", icon: "⌂" },
+  { id: "inicio", label: "Mi QR", icon: "QR" },
   { id: "clases", label: "Clases", icon: "▣" },
   { id: "reservas", label: "Mis reservas", icon: "◷" },
   { id: "whiteboard", label: "Whiteboard", icon: "▤" },
@@ -1308,7 +1308,7 @@ export default function PortalAlumnoInicio() {
               titulo="Resultados"
               texto="Aquí podrás consultar tus marcas, tiempos, pesos, repeticiones y evolución."
               icono="★"
-              accion="Volver al inicio"
+              accion="Ver mi QR"
               onAccion={() => cambiarSeccion("inicio")}
             />
           )}
