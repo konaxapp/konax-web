@@ -4,15 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.07-PORTAL-ALUMNO-MENU-LIMPIO-V4";
+const VERSION = "2026.09.07-PORTAL-ALUMNO-MENU-LATERAL-V5";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
   { id: "inicio", label: "Inicio", icon: "⌂" },
-  { id: "clases", label: "Clases", icon: "▦" },
+  { id: "clases", label: "Clases", icon: "▣" },
   { id: "reservas", label: "Mis reservas", icon: "◷" },
   { id: "whiteboard", label: "Whiteboard", icon: "▤" },
-  { id: "resultados", label: "Resultados", icon: "★" },
+  { id: "resultados", label: "Resultados", icon: "▥" },
   { id: "configuracion", label: "Configuración", icon: "⚙" },
 ];
 
@@ -40,7 +40,7 @@ export default function PortalAlumnoInicio() {
   const [mensajePerfil, setMensajePerfil] = useState("");
   const [error, setError] = useState("");
 
-  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [menuAbierto, setMenuAbierto] = useState(true);
   const [seccion, setSeccion] = useState("inicio");
 
   useEffect(() => {
@@ -550,7 +550,12 @@ export default function PortalAlumnoInicio() {
 
       <section style={S.shell} className="portal-shell">
         <header style={S.topbar}>
-          <div style={S.topUserBlock}>
+          <button
+            type="button"
+            onClick={() => setMenuAbierto(true)}
+            style={S.topUserButton}
+            aria-label="Abrir menú"
+          >
             <div style={S.topUserAvatar}>
               {fotoFirmada ? (
                 <img
@@ -571,15 +576,6 @@ export default function PortalAlumnoInicio() {
                 {estadoVisual}
               </span>
             </div>
-          </div>
-
-          <button
-            type="button"
-            aria-label="Abrir menú"
-            onClick={() => setMenuAbierto(true)}
-            style={S.menuButton}
-          >
-            ☰
           </button>
         </header>
 
@@ -610,9 +606,14 @@ export default function PortalAlumnoInicio() {
                   )}
                 </div>
 
-                <strong style={S.drawerBusinessName}>
-                  {empresaNombre}
-                </strong>
+                <div style={S.drawerBusinessText}>
+                  <strong style={S.drawerBusinessName}>
+                    {empresaNombre}
+                  </strong>
+                  <span style={S.drawerBusinessSub}>
+                    Portal del Alumno · KONAX
+                  </span>
+                </div>
               </div>
 
               <div style={S.drawerHeader}>
@@ -1253,6 +1254,18 @@ const S = {
     boxShadow: "0 28px 80px rgba(15,50,31,.13)",
   },
 
+  topUserButton: {
+    minWidth: 0,
+    padding: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    border: 0,
+    background: "transparent",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
   topUserBlock: {
     minWidth: 0,
     display: "flex",
@@ -1300,7 +1313,7 @@ const S = {
     padding: "12px 14px",
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     gap: 12,
     background: "#FFFFFF",
     borderBottom: "1px solid #E6EBF1",
@@ -1401,11 +1414,11 @@ const S = {
     top: 0,
     left: 0,
     bottom: 0,
-    width: "min(320px,86vw)",
-    padding: "18px 14px",
+    width: "min(360px,88vw)",
+    padding: "18px 16px",
     display: "grid",
     gridTemplateRows: "auto 1fr auto",
-    background: "linear-gradient(180deg,#0B1220 0%,#111827 100%)",
+    background: "linear-gradient(180deg,#07111F 0%,#0B1628 55%,#0A1422 100%)",
     color: "#FFFFFF",
     boxShadow: "18px 0 50px rgba(0,0,0,.22)",
   },
@@ -1419,8 +1432,8 @@ const S = {
   },
 
   drawerBusinessLogo: {
-    width: 42,
-    height: 42,
+    width: 52,
+    height: 52,
     overflow: "hidden",
     display: "grid",
     placeItems: "center",
@@ -1432,13 +1445,26 @@ const S = {
     fontWeight: 950,
   },
 
+  drawerBusinessText: {
+    minWidth: 0,
+  },
+
   drawerBusinessName: {
+    display: "block",
     minWidth: 0,
     overflow: "hidden",
     color: "#FFFFFF",
-    fontSize: 12,
+    fontSize: 14,
+    fontWeight: 900,
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
+  },
+
+  drawerBusinessSub: {
+    display: "block",
+    marginTop: 2,
+    color: "#72839A",
+    fontSize: 8,
   },
 
   drawerHeader: {
@@ -1504,13 +1530,14 @@ const S = {
   },
 
   drawerItemActive: {
-    background: "#172A45",
+    background: "linear-gradient(90deg,#0B3C5D 0%,#0D506B 100%)",
     color: "#FFFFFF",
+    boxShadow: "0 10px 24px rgba(0,0,0,.16)",
   },
 
   drawerIcon: {
-    width: 28,
-    height: 28,
+    width: 34,
+    height: 34,
     display: "grid",
     placeItems: "center",
     borderRadius: 9,
