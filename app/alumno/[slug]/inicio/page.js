@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.08-PORTAL-ALUMNO-AGENDA-RPC-V14-MENU-QR";
+const VERSION = "2026.09.08-PORTAL-ALUMNO-AGENDA-RPC-V15-RESERVADO";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
@@ -568,7 +568,10 @@ export default function PortalAlumnoInicio() {
     try {
       const [lista] = await Promise.all([
         consultarDisponibilidadAgenda(fechaSeleccionada),
-        serviciosAgenda.length ? Promise.resolve(serviciosAgenda) : cargarServiciosAgenda(),
+        serviciosAgenda.length
+          ? Promise.resolve(serviciosAgenda)
+          : cargarServiciosAgenda(),
+        cargarMisReservas({ silencioso: true }),
       ]);
 
       setClasesDisponibles(lista);
@@ -594,9 +597,12 @@ export default function PortalAlumnoInicio() {
     setMensajeReserva("");
 
     try {
-      if (!serviciosAgenda.length) {
-        await cargarServiciosAgenda();
-      }
+      await Promise.all([
+        serviciosAgenda.length
+          ? Promise.resolve(serviciosAgenda)
+          : cargarServiciosAgenda(),
+        cargarMisReservas({ silencioso: true }),
+      ]);
 
       const hoy = fechaLocalIso();
 
@@ -1267,6 +1273,7 @@ export default function PortalAlumnoInicio() {
               cargando={cargandoClases}
               error={errorClases}
               mensaje={mensajeReserva}
+              reservas={misReservas}
               reservandoHorarioId={reservandoHorarioId}
               onReservar={reservarClase}
               onActualizar={() => cargarClases(fechaClases)}
@@ -1487,6 +1494,7 @@ function ClasesAgenda({
   cargando,
   error,
   mensaje,
+  reservas,
   reservandoHorarioId,
   onReservar,
   onActualizar,
@@ -1560,6 +1568,26 @@ function ClasesAgenda({
             const reservando =
               String(reservandoHorarioId) === horarioId;
 
+            const yaReservado = (Array.isArray(reservas) ? reservas : []).some(
+              (reserva) => {
+                const reservaHorarioId = String(
+                  reserva?.horario_id || reserva?.id_horario || ""
+                ).trim();
+                const reservaFecha = String(
+                  reserva?.fecha_reserva || ""
+                ).slice(0, 10);
+                const estadoReserva = String(
+                  reserva?.estado || ""
+                ).toLowerCase().trim();
+
+                return (
+                  reservaHorarioId === horarioId &&
+                  reservaFecha === String(fecha || "").slice(0, 10) &&
+                  estadoReserva !== "cancelada"
+                );
+              }
+            );
+
             return (
               <article
                 key={`${horarioId}-${item?.hora_inicio || index}`}
@@ -1613,16 +1641,20 @@ function ClasesAgenda({
 
                   <button
                     type="button"
-                    disabled={!tieneCupos || reservando}
+                    disabled={yaReservado || !tieneCupos || reservando}
                     onClick={() => onReservar(item)}
                     style={{
                       ...S.agendaReserveButton,
-                      ...(!tieneCupos || reservando
+                      ...(yaReservado
+                        ? S.agendaReserveButtonReserved
+                        : !tieneCupos || reservando
                         ? S.agendaReserveButtonDisabled
                         : {}),
                     }}
                   >
-                    {reservando
+                    {yaReservado
+                      ? "✓ Reservado"
+                      : reservando
                       ? "Reservando..."
                       : tieneCupos
                       ? "Reservar"
@@ -3841,6 +3873,14 @@ const S = {
     background: "#D8E0E5",
     color: "#77838D",
     cursor: "not-allowed",
+  },
+
+  agendaReserveButtonReserved: {
+    background: "#DCFCE7",
+    color: "#166534",
+    border: "1px solid #BBF7D0",
+    cursor: "default",
+    boxShadow: "none",
   },
 
   agendaEmpty: {
