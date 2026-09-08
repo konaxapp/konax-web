@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.08-PORTAL-ALUMNO-AGENDA-RPC-V12";
+const VERSION = "2026.09.08-PORTAL-ALUMNO-AGENDA-RPC-V13-QR";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
@@ -947,7 +947,7 @@ export default function PortalAlumnoInicio() {
 
   const membresia = cuenta?.membresia || null;
   const qrToken = String(cuenta?.qr_token || "").trim();
-  const qrDisponible = Boolean(cuenta?.qr_disponible && qrToken);
+  const qrDisponible = Boolean(qrToken);
   const accesoPermitido = Boolean(cuenta?.acceso_permitido);
 
   const qrUrl = useMemo(() => {
@@ -1249,7 +1249,14 @@ export default function PortalAlumnoInicio() {
           )}
 
           {seccion === "inicio" && (
-            <Inicio />
+            <Inicio
+              qrDisponible={qrDisponible}
+              qrUrl={qrUrl}
+              nombre={cuenta?.nombre || "Alumno"}
+              estadoVisual={estadoVisual}
+              onActualizar={() => cargarTodo(true)}
+              actualizando={actualizando}
+            />
           )}
 
           {seccion === "clases" && (
@@ -1345,10 +1352,76 @@ export default function PortalAlumnoInicio() {
   );
 }
 
-function Inicio() {
+function Inicio({
+  qrDisponible,
+  qrUrl,
+  nombre,
+  estadoVisual,
+  onActualizar,
+  actualizando,
+}) {
   return (
-    <section style={S.homeCompact}>
-      <div style={S.homeCompactLine} />
+    <section style={S.qrSection}>
+      <div style={S.sectionHeading}>
+        <div>
+          <span style={S.qrEyebrow}>ACCESO AL GIMNASIO</span>
+          <h1 style={S.sectionTitle}>Mi código QR</h1>
+        </div>
+
+        <span
+          style={{
+            ...S.qrStatus,
+            ...(qrDisponible ? S.qrStatusActive : S.qrStatusInactive),
+          }}
+        >
+          {qrDisponible ? "QR ACTIVO" : "SIN QR"}
+        </span>
+      </div>
+
+      <div style={S.qrLayout} className="qr-layout">
+        <div>
+          {qrDisponible && qrUrl ? (
+            <div style={S.qrFrame}>
+              <img
+                src={qrUrl}
+                alt={`Código QR de ${nombre}`}
+                style={S.qrImage}
+              />
+            </div>
+          ) : (
+            <div style={S.noQr}>
+              <div style={S.noQrIcon}>QR</div>
+              <strong>QR no disponible</strong>
+              <span>El gimnasio debe generar un QR para tu ficha de alumno.</span>
+            </div>
+          )}
+        </div>
+
+        <div style={S.qrInstructions}>
+          <span style={S.qrInstructionEyebrow}>IDENTIFICACIÓN PERSONAL</span>
+          <h2 style={S.qrInstructionTitle}>Muéstralo al ingresar</h2>
+          <p style={S.qrInstructionText}>
+            Este código identifica tu cuenta de alumno. Preséntalo en el
+            gimnasio para registrar tu ingreso y validar tu membresía.
+          </p>
+
+          <div style={{ marginTop: 14 }}>
+            <span style={S.qrInstructionEyebrow}>ESTADO</span>
+            <strong style={{ display: "block", marginTop: 4, color: "#1F3428", fontSize: 12 }}>
+              {estadoVisual || "Sin membresía"}
+            </strong>
+          </div>
+
+          <button
+            type="button"
+            onClick={onActualizar}
+            disabled={actualizando}
+            style={{ ...S.outlineSmallButton, marginTop: 16, minHeight: 38 }}
+          >
+            {actualizando ? "Actualizando..." : "Actualizar QR"}
+          </button>
+        </div>
+      </div>
     </section>
   );
 }
