@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.08-PORTAL-ALUMNO-AGENDA-RPC-V16-PAGOS";
+const VERSION = "2026.09.09-PORTAL-ALUMNO-V17-RESULTADOS-NOTIFICACIONES";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
@@ -1098,7 +1098,9 @@ export default function PortalAlumnoInicio() {
             grid-template-columns: 1fr !important;
           }
 
-          .payment-summary-grid {
+          .payment-summary-grid,
+          .results-summary-grid,
+          .results-form-grid {
             grid-template-columns: 1fr !important;
           }
 
@@ -1314,13 +1316,9 @@ export default function PortalAlumnoInicio() {
           )}
 
           {seccion === "resultados" && (
-            <SeccionVacia
-              eyebrow="PROGRESO"
-              titulo="Resultados"
-              texto="Aquí podrás consultar tus marcas, tiempos, pesos, repeticiones y evolución."
-              icono="★"
-              accion="Ver mi QR"
-              onAccion={() => cambiarSeccion("inicio")}
+            <ResultadosAlumno
+              slug={slug}
+              onVolver={() => cambiarSeccion("inicio")}
             />
           )}
 
@@ -1999,6 +1997,509 @@ function WhiteboardWod({
   );
 }
 
+
+const TIPOS_RESULTADO = [
+  { id: "tiempo", label: "Tiempo", unidad: "min" },
+  { id: "peso", label: "Peso", unidad: "kg" },
+  { id: "repeticiones", label: "Repeticiones", unidad: "reps" },
+  { id: "rondas", label: "Rondas", unidad: "rondas" },
+  { id: "distancia", label: "Distancia", unidad: "m" },
+  { id: "calorias", label: "Calorías", unidad: "cal" },
+  { id: "otro", label: "Otro", unidad: "" },
+];
+
+function fechaHoyResultado() {
+  const fecha = new Date();
+  const y = fecha.getFullYear();
+  const m = String(fecha.getMonth() + 1).padStart(2, "0");
+  const d = String(fecha.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function etiquetaTipoResultado(tipo) {
+  const encontrado = TIPOS_RESULTADO.find(
+    (item) => item.id === String(tipo || "").toLowerCase()
+  );
+
+  return encontrado?.label || tipo || "Resultado";
+}
+
+function formatearFechaResultado(fecha) {
+  if (!fecha) return "-";
+
+  try {
+    return new Intl.DateTimeFormat("es-PA", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(`${String(fecha).slice(0, 10)}T12:00:00`));
+  } catch {
+    return String(fecha);
+  }
+}
+
+function ResultadosAlumno({ slug, onVolver }) {
+  const [resultados, setResultados] = useState([]);
+  const [servicios, setServicios] = useState([]);
+
+  const [fecha, setFecha] = useState(fechaHoyResultado());
+  const [servicioId, setServicioId] = useState("");
+  const [tipo, setTipo] = useState("tiempo");
+  const [valor, setValor] = useState("");
+  const [unidad, setUnidad] = useState("min");
+  const [notas, setNotas] = useState("");
+
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [eliminandoId, setEliminandoId] = useState("");
+  const [errorResultados, setErrorResultados] = useState("");
+  const [mensajeResultados, setMensajeResultados] = useState("");
+
+  useEffect(() => {
+    if (!slug) return;
+
+    Promise.all([
+      cargarResultados(),
+      cargarServiciosResultados(),
+    ]).finally(() => setCargando(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
+
+  async function cargarServiciosResultados() {
+    try {
+      const { data, error } = await supabase.rpc(
+        "obtener_servicios_agenda_alumno",
+        {
+          p_slug: slug,
+        }
+      );
+
+      if (error) throw error;
+
+      const lista =
+        data?.ok && Array.isArray(data?.servicios)
+          ? data.servicios
+          : [];
+
+      setServicios(lista);
+
+      if (!servicioId && lista.length) {
+        setServicioId(String(lista[0]?.id || ""));
+      }
+
+      return lista;
+    } catch (err) {
+      console.warn("No se pudieron cargar clases para Resultados:", err);
+      setServicios([]);
+      return [];
+    }
+  }
+
+  async function cargarResultados() {
+    setErrorResultados("");
+
+    try {
+      const { data, error } = await supabase.rpc(
+        "obtener_resultados_alumno",
+        {
+          p_slug: slug,
+        }
+      );
+
+      if (error) {
+        const codigo = String(error?.code || "");
+
+        if (["PGRST202", "42883"].includes(codigo)) {
+          throw new Error(
+            "Falta ejecutar el SQL V17 de Resultados y Notificaciones en Supabase."
+          );
+        }
+
+        throw error;
+      }
+
+      if (!data?.ok) {
+        throw new Error(
+          data?.mensaje || "No se pudo cargar tu historial de resultados."
+        );
+      }
+
+      const lista = Array.isArray(data?.resultados)
+        ? data.resultados
+        : [];
+
+      setResultados(lista);
+      return lista;
+    } catch (err) {
+      console.error("Error cargando resultados:", err);
+      setResultados([]);
+      setErrorResultados(
+        err?.message || "No se pudo cargar tu historial de resultados."
+      );
+      return [];
+    }
+  }
+
+  function cambiarTipoResultado(nuevoTipo) {
+    setTipo(nuevoTipo);
+
+    const encontrado = TIPOS_RESULTADO.find(
+      (item) => item.id === nuevoTipo
+    );
+
+    setUnidad(encontrado?.unidad || "");
+  }
+
+  async function guardarResultado() {
+    setMensajeResultados("");
+    setErrorResultados("");
+
+    const valorLimpio = String(valor || "").trim();
+
+    if (!fecha) {
+      setErrorResultados("Selecciona la fecha del resultado.");
+      return;
+    }
+
+    if (!valorLimpio) {
+      setErrorResultados("Escribe el resultado obtenido.");
+      return;
+    }
+
+    setGuardando(true);
+
+    try {
+      const servicioSeleccionado = servicios.find(
+        (item) => String(item?.id || "") === String(servicioId || "")
+      );
+
+      const { data, error } = await supabase.rpc(
+        "guardar_resultado_alumno",
+        {
+          p_slug: slug,
+          p_fecha: fecha,
+          p_servicio_id: servicioId || null,
+          p_servicio_nombre:
+            servicioSeleccionado?.nombre ||
+            servicioSeleccionado?.servicio_nombre ||
+            null,
+          p_tipo: tipo,
+          p_valor: valorLimpio,
+          p_unidad: String(unidad || "").trim() || null,
+          p_notas: String(notas || "").trim() || null,
+        }
+      );
+
+      if (error) throw error;
+
+      if (!data?.ok) {
+        throw new Error(
+          data?.mensaje || "No se pudo guardar el resultado."
+        );
+      }
+
+      setValor("");
+      setNotas("");
+      setMensajeResultados("Resultado guardado correctamente.");
+      await cargarResultados();
+    } catch (err) {
+      console.error("Error guardando resultado:", err);
+      setErrorResultados(
+        err?.message || "No se pudo guardar el resultado."
+      );
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function eliminarResultado(resultadoId) {
+    if (!resultadoId) return;
+
+    setEliminandoId(String(resultadoId));
+    setMensajeResultados("");
+    setErrorResultados("");
+
+    try {
+      const { data, error } = await supabase.rpc(
+        "eliminar_resultado_alumno",
+        {
+          p_slug: slug,
+          p_resultado_id: resultadoId,
+        }
+      );
+
+      if (error) throw error;
+
+      if (!data?.ok) {
+        throw new Error(
+          data?.mensaje || "No se pudo eliminar el resultado."
+        );
+      }
+
+      setMensajeResultados("Resultado eliminado.");
+      await cargarResultados();
+    } catch (err) {
+      console.error("Error eliminando resultado:", err);
+      setErrorResultados(
+        err?.message || "No se pudo eliminar el resultado."
+      );
+    } finally {
+      setEliminandoId("");
+    }
+  }
+
+  const ultimoResultado = resultados[0] || null;
+
+  const tiposUsados = new Set(
+    resultados.map((item) => String(item?.tipo || "").trim()).filter(Boolean)
+  ).size;
+
+  return (
+    <section style={S.resultsShell}>
+      <div style={S.resultsHero}>
+        <button type="button" onClick={onVolver} style={S.resultsBack}>
+          ← Menú
+        </button>
+
+        <div>
+          <span style={S.resultsEyebrow}>PROGRESO DEL ALUMNO</span>
+          <h1 style={S.resultsTitle}>Resultados</h1>
+          <p style={S.resultsSubtitle}>
+            Registra tus marcas y consulta tu evolución por clase.
+          </p>
+        </div>
+      </div>
+
+      <div style={S.resultsSummaryGrid} className="results-summary-grid">
+        <div style={S.resultsSummaryCard}>
+          <span style={S.resultsSummaryLabel}>REGISTROS</span>
+          <strong style={S.resultsSummaryValue}>{resultados.length}</strong>
+        </div>
+
+        <div style={S.resultsSummaryCard}>
+          <span style={S.resultsSummaryLabel}>TIPOS DE MARCA</span>
+          <strong style={S.resultsSummaryValue}>{tiposUsados}</strong>
+        </div>
+
+        <div style={S.resultsSummaryCard}>
+          <span style={S.resultsSummaryLabel}>ÚLTIMO RESULTADO</span>
+          <strong style={S.resultsSummaryValueSmall}>
+            {ultimoResultado
+              ? `${ultimoResultado.valor}${
+                  ultimoResultado.unidad
+                    ? ` ${ultimoResultado.unidad}`
+                    : ""
+                }`
+              : "Sin registros"}
+          </strong>
+        </div>
+      </div>
+
+      <div style={S.resultsFormCard}>
+        <div style={S.resultsPanelHeading}>
+          <div>
+            <span style={S.sectionEyebrow}>NUEVA MARCA</span>
+            <h2 style={S.resultsPanelTitle}>Registrar resultado</h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setCargando(true);
+              Promise.all([
+                cargarResultados(),
+                cargarServiciosResultados(),
+              ]).finally(() => setCargando(false));
+            }}
+            disabled={cargando}
+            style={S.outlineSmallButton}
+          >
+            {cargando ? "Actualizando..." : "Actualizar"}
+          </button>
+        </div>
+
+        <div style={S.resultsFormGrid} className="results-form-grid">
+          <label style={S.resultsField}>
+            <span style={S.resultsFieldLabel}>Fecha</span>
+            <input
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              style={S.resultsInput}
+            />
+          </label>
+
+          <label style={S.resultsField}>
+            <span style={S.resultsFieldLabel}>Clase</span>
+            <select
+              value={servicioId}
+              onChange={(e) => setServicioId(e.target.value)}
+              style={S.resultsInput}
+            >
+              <option value="">Sin clase específica</option>
+              {servicios.map((servicio) => (
+                <option
+                  key={servicio.id}
+                  value={String(servicio.id)}
+                >
+                  {servicio.nombre ||
+                    servicio.servicio_nombre ||
+                    "Clase"}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label style={S.resultsField}>
+            <span style={S.resultsFieldLabel}>Tipo de resultado</span>
+            <select
+              value={tipo}
+              onChange={(e) => cambiarTipoResultado(e.target.value)}
+              style={S.resultsInput}
+            >
+              {TIPOS_RESULTADO.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label style={S.resultsField}>
+            <span style={S.resultsFieldLabel}>Resultado</span>
+            <input
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              placeholder={
+                tipo === "tiempo"
+                  ? "Ej. 12:35"
+                  : tipo === "peso"
+                  ? "Ej. 85"
+                  : tipo === "repeticiones"
+                  ? "Ej. 50"
+                  : "Escribe tu marca"
+              }
+              style={S.resultsInput}
+            />
+          </label>
+
+          <label style={S.resultsField}>
+            <span style={S.resultsFieldLabel}>Unidad</span>
+            <input
+              value={unidad}
+              onChange={(e) => setUnidad(e.target.value)}
+              placeholder="kg, reps, min..."
+              style={S.resultsInput}
+            />
+          </label>
+
+          <label style={{ ...S.resultsField, gridColumn: "1 / -1" }}>
+            <span style={S.resultsFieldLabel}>Notas</span>
+            <textarea
+              value={notas}
+              onChange={(e) => setNotas(e.target.value)}
+              placeholder="Opcional: sensaciones, carga, nivel, observaciones..."
+              style={S.resultsTextarea}
+            />
+          </label>
+        </div>
+
+        <button
+          type="button"
+          onClick={guardarResultado}
+          disabled={guardando}
+          style={S.resultsSaveButton}
+        >
+          {guardando ? "Guardando..." : "+ Guardar resultado"}
+        </button>
+
+        {mensajeResultados && (
+          <div style={S.resultsSuccess}>{mensajeResultados}</div>
+        )}
+
+        {errorResultados && (
+          <div style={S.resultsError}>{errorResultados}</div>
+        )}
+      </div>
+
+      <div style={S.resultsHistoryCard}>
+        <div style={S.resultsPanelHeading}>
+          <div>
+            <span style={S.sectionEyebrow}>HISTORIAL</span>
+            <h2 style={S.resultsPanelTitle}>Mis marcas</h2>
+          </div>
+        </div>
+
+        {cargando ? (
+          <div style={S.resultsLoading}>
+            <div style={S.loader} />
+            <strong>Cargando resultados...</strong>
+          </div>
+        ) : resultados.length > 0 ? (
+          <div style={S.resultsList}>
+            {resultados.map((resultado) => (
+              <article key={resultado.id} style={S.resultCard}>
+                <div style={S.resultCardTop}>
+                  <div style={{ minWidth: 0 }}>
+                    <span style={S.resultDate}>
+                      {formatearFechaResultado(resultado.fecha)}
+                    </span>
+                    <strong style={S.resultService}>
+                      {resultado.servicio_nombre ||
+                        "Entrenamiento general"}
+                    </strong>
+                  </div>
+
+                  <span style={S.resultTypeBadge}>
+                    {etiquetaTipoResultado(resultado.tipo)}
+                  </span>
+                </div>
+
+                <div style={S.resultValueRow}>
+                  <strong style={S.resultValue}>
+                    {resultado.valor}
+                    {resultado.unidad
+                      ? ` ${resultado.unidad}`
+                      : ""}
+                  </strong>
+
+                  <button
+                    type="button"
+                    onClick={() => eliminarResultado(resultado.id)}
+                    disabled={
+                      String(eliminandoId) === String(resultado.id)
+                    }
+                    style={S.resultDeleteButton}
+                  >
+                    {String(eliminandoId) === String(resultado.id)
+                      ? "Eliminando..."
+                      : "Eliminar"}
+                  </button>
+                </div>
+
+                {resultado.notas && (
+                  <p style={S.resultNotes}>{resultado.notas}</p>
+                )}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div style={S.resultsEmpty}>
+            <div style={S.resultsEmptyIcon}>★</div>
+            <strong style={S.resultsEmptyTitle}>
+              Aún no tienes resultados
+            </strong>
+            <span style={S.resultsEmptyText}>
+              Registra tu primera marca arriba. Aquí se irá formando tu
+              historial de tiempos, pesos, repeticiones y demás resultados.
+            </span>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function Configuracion({
   slug,
   cuenta,
@@ -2032,6 +2533,18 @@ function Configuracion({
   const [cargandoPagos, setCargandoPagos] = useState(false);
   const [errorPagos, setErrorPagos] = useState("");
   const [pagoAbiertoId, setPagoAbiertoId] = useState("");
+
+  const [preferenciasNotif, setPreferenciasNotif] = useState({
+    reserva_confirmada: true,
+    recordatorio_clase: true,
+    cambio_cancelacion: true,
+    vencimiento_membresia: true,
+    pago_comprobante: true,
+  });
+  const [cargandoNotif, setCargandoNotif] = useState(false);
+  const [guardandoNotif, setGuardandoNotif] = useState(false);
+  const [mensajeNotif, setMensajeNotif] = useState("");
+  const [errorNotif, setErrorNotif] = useState("");
 
   useEffect(() => {
     if (tabConfig !== "pagos") return;
@@ -2114,6 +2627,117 @@ function Configuracion({
   );
 
   const ultimoPagoAlumno = pagosAlumno[0] || null;
+
+  useEffect(() => {
+    if (tabConfig !== "notificaciones" || !slug) return;
+    cargarPreferenciasNotificaciones();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabConfig, slug]);
+
+  async function cargarPreferenciasNotificaciones() {
+    setCargandoNotif(true);
+    setMensajeNotif("");
+    setErrorNotif("");
+
+    try {
+      const { data, error } = await supabase.rpc(
+        "obtener_preferencias_notificaciones_alumno",
+        {
+          p_slug: slug,
+        }
+      );
+
+      if (error) {
+        const codigo = String(error?.code || "");
+
+        if (["PGRST202", "42883"].includes(codigo)) {
+          throw new Error(
+            "Falta ejecutar el SQL V17 de Resultados y Notificaciones en Supabase."
+          );
+        }
+
+        throw error;
+      }
+
+      if (!data?.ok) {
+        throw new Error(
+          data?.mensaje || "No se pudieron cargar tus preferencias."
+        );
+      }
+
+      const preferencias = data?.preferencias || {};
+
+      setPreferenciasNotif({
+        reserva_confirmada:
+          preferencias?.reserva_confirmada !== false,
+        recordatorio_clase:
+          preferencias?.recordatorio_clase !== false,
+        cambio_cancelacion:
+          preferencias?.cambio_cancelacion !== false,
+        vencimiento_membresia:
+          preferencias?.vencimiento_membresia !== false,
+        pago_comprobante:
+          preferencias?.pago_comprobante !== false,
+      });
+    } catch (err) {
+      console.error("Error cargando preferencias:", err);
+      setErrorNotif(
+        err?.message || "No se pudieron cargar tus preferencias."
+      );
+    } finally {
+      setCargandoNotif(false);
+    }
+  }
+
+  function cambiarPreferenciaNotificacion(campo) {
+    setPreferenciasNotif((prev) => ({
+      ...prev,
+      [campo]: !prev[campo],
+    }));
+    setMensajeNotif("");
+  }
+
+  async function guardarPreferenciasNotificaciones() {
+    setGuardandoNotif(true);
+    setMensajeNotif("");
+    setErrorNotif("");
+
+    try {
+      const { data, error } = await supabase.rpc(
+        "guardar_preferencias_notificaciones_alumno",
+        {
+          p_slug: slug,
+          p_reserva_confirmada:
+            Boolean(preferenciasNotif.reserva_confirmada),
+          p_recordatorio_clase:
+            Boolean(preferenciasNotif.recordatorio_clase),
+          p_cambio_cancelacion:
+            Boolean(preferenciasNotif.cambio_cancelacion),
+          p_vencimiento_membresia:
+            Boolean(preferenciasNotif.vencimiento_membresia),
+          p_pago_comprobante:
+            Boolean(preferenciasNotif.pago_comprobante),
+        }
+      );
+
+      if (error) throw error;
+
+      if (!data?.ok) {
+        throw new Error(
+          data?.mensaje || "No se pudieron guardar tus preferencias."
+        );
+      }
+
+      setMensajeNotif("Preferencias guardadas correctamente.");
+    } catch (err) {
+      console.error("Error guardando preferencias:", err);
+      setErrorNotif(
+        err?.message || "No se pudieron guardar tus preferencias."
+      );
+    } finally {
+      setGuardandoNotif(false);
+    }
+  }
 
   async function cambiarClave() {
     setMensajeClave("");
@@ -2564,12 +3188,100 @@ function Configuracion({
 
         {tabConfig === "notificaciones" && (
           <div style={S.profilePanel}>
-            <span style={S.sectionEyebrow}>PREFERENCIAS</span>
-            <h2 style={S.profilePanelTitle}>Notificaciones</h2>
-            <ConfigEmpty
-              title="Preferencias de notificación"
-              text="Aquí podrás administrar avisos de reservas, cambios de horario y vencimiento de membresía."
-            />
+            <div style={S.profilePanelHeading}>
+              <div>
+                <span style={S.sectionEyebrow}>PREFERENCIAS</span>
+                <h2 style={S.profilePanelTitle}>Notificaciones</h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={cargarPreferenciasNotificaciones}
+                disabled={cargandoNotif}
+                style={S.outlineSmallButton}
+              >
+                {cargandoNotif ? "Actualizando..." : "Actualizar"}
+              </button>
+            </div>
+
+            <p style={S.notificationIntro}>
+              Decide qué avisos quieres recibir. Estas preferencias quedan
+              guardadas en tu ficha de alumno y serán respetadas por los
+              canales automáticos habilitados por el gimnasio.
+            </p>
+
+            {cargandoNotif ? (
+              <div style={S.notificationLoading}>
+                <div style={S.loader} />
+                <strong>Cargando preferencias...</strong>
+              </div>
+            ) : (
+              <div style={S.notificationList}>
+                <NotificacionToggle
+                  titulo="Reserva confirmada"
+                  texto="Aviso cuando una clase quede reservada a tu nombre."
+                  activo={preferenciasNotif.reserva_confirmada}
+                  onCambiar={() =>
+                    cambiarPreferenciaNotificacion("reserva_confirmada")
+                  }
+                />
+
+                <NotificacionToggle
+                  titulo="Recordatorio de clase"
+                  texto="Recordatorio antes de una clase que tengas reservada."
+                  activo={preferenciasNotif.recordatorio_clase}
+                  onCambiar={() =>
+                    cambiarPreferenciaNotificacion("recordatorio_clase")
+                  }
+                />
+
+                <NotificacionToggle
+                  titulo="Cambios o cancelaciones"
+                  texto="Aviso si el gimnasio modifica o cancela un horario reservado."
+                  activo={preferenciasNotif.cambio_cancelacion}
+                  onCambiar={() =>
+                    cambiarPreferenciaNotificacion("cambio_cancelacion")
+                  }
+                />
+
+                <NotificacionToggle
+                  titulo="Membresía por vencer"
+                  texto="Aviso antes de que llegue la fecha de vencimiento de tu plan."
+                  activo={preferenciasNotif.vencimiento_membresia}
+                  onCambiar={() =>
+                    cambiarPreferenciaNotificacion("vencimiento_membresia")
+                  }
+                />
+
+                <NotificacionToggle
+                  titulo="Pago y comprobante"
+                  texto="Confirmación cuando el gimnasio registre un pago a tu nombre."
+                  activo={preferenciasNotif.pago_comprobante}
+                  onCambiar={() =>
+                    cambiarPreferenciaNotificacion("pago_comprobante")
+                  }
+                />
+              </div>
+            )}
+
+            {mensajeNotif && (
+              <div style={S.notificationSuccess}>{mensajeNotif}</div>
+            )}
+
+            {errorNotif && (
+              <div style={S.notificationError}>{errorNotif}</div>
+            )}
+
+            <button
+              type="button"
+              onClick={guardarPreferenciasNotificaciones}
+              disabled={guardandoNotif || cargandoNotif}
+              style={S.notificationSaveButton}
+            >
+              {guardandoNotif
+                ? "Guardando..."
+                : "Guardar preferencias"}
+            </button>
           </div>
         )}
 
@@ -2633,6 +3345,42 @@ function Configuracion({
         )}
       </div>
     </section>
+  );
+}
+
+
+function NotificacionToggle({
+  titulo,
+  texto,
+  activo,
+  onCambiar,
+}) {
+  return (
+    <div style={S.notificationRow}>
+      <div style={S.notificationCopy}>
+        <strong style={S.notificationTitle}>{titulo}</strong>
+        <span style={S.notificationText}>{texto}</span>
+      </div>
+
+      <button
+        type="button"
+        role="switch"
+        aria-checked={Boolean(activo)}
+        aria-label={`${titulo}: ${activo ? "activado" : "desactivado"}`}
+        onClick={onCambiar}
+        style={{
+          ...S.notificationSwitch,
+          ...(activo ? S.notificationSwitchActive : {}),
+        }}
+      >
+        <span
+          style={{
+            ...S.notificationSwitchKnob,
+            ...(activo ? S.notificationSwitchKnobActive : {}),
+          }}
+        />
+      </button>
+    </div>
   );
 }
 
@@ -4932,6 +5680,442 @@ const S = {
 
   paymentLoading: {
     minHeight: 260,
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 10,
+    color: "#52675B",
+    fontSize: 9,
+  },
+
+  resultsShell: {
+    marginBottom: 15,
+    display: "grid",
+    gap: 14,
+  },
+
+  resultsHero: {
+    padding: 18,
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 14,
+    borderRadius: 18,
+    background:
+      "linear-gradient(135deg,#07111F 0%,#0B253A 65%,#0D506B 100%)",
+    color: "#FFFFFF",
+    boxShadow: "0 16px 34px rgba(7,17,31,.18)",
+  },
+
+  resultsBack: {
+    minHeight: 38,
+    padding: "0 11px",
+    flex: "0 0 auto",
+    border: "1px solid rgba(255,255,255,.14)",
+    borderRadius: 10,
+    background: "rgba(255,255,255,.07)",
+    color: "#EAF4FA",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  resultsEyebrow: {
+    display: "block",
+    color: "#79D7E3",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: 1.2,
+  },
+
+  resultsTitle: {
+    margin: "3px 0 0",
+    color: "#FFFFFF",
+    fontSize: 24,
+    lineHeight: 1.1,
+  },
+
+  resultsSubtitle: {
+    margin: "6px 0 0",
+    color: "#B9D8E4",
+    fontSize: 9,
+    lineHeight: 1.45,
+  },
+
+  resultsSummaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+    gap: 9,
+  },
+
+  resultsSummaryCard: {
+    minHeight: 82,
+    padding: 13,
+    display: "grid",
+    alignContent: "center",
+    gap: 5,
+    border: "1px solid #DDE6EE",
+    borderRadius: 14,
+    background: "#FFFFFF",
+    boxShadow: "0 8px 20px rgba(15,23,42,.04)",
+  },
+
+  resultsSummaryLabel: {
+    color: "#7A8795",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: .7,
+  },
+
+  resultsSummaryValue: {
+    color: "#0D506B",
+    fontSize: 19,
+  },
+
+  resultsSummaryValueSmall: {
+    color: "#213244",
+    fontSize: 11,
+    lineHeight: 1.35,
+  },
+
+  resultsFormCard: {
+    padding: 16,
+    border: "1px solid #DDE6EE",
+    borderRadius: 17,
+    background: "#FFFFFF",
+    boxShadow: "0 10px 24px rgba(15,23,42,.05)",
+  },
+
+  resultsHistoryCard: {
+    padding: 16,
+    border: "1px solid #DDE6EE",
+    borderRadius: 17,
+    background: "#FFFFFF",
+    boxShadow: "0 10px 24px rgba(15,23,42,.05)",
+  },
+
+  resultsPanelHeading: {
+    marginBottom: 14,
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  resultsPanelTitle: {
+    margin: "4px 0 0",
+    color: "#17251D",
+    fontSize: 19,
+  },
+
+  resultsFormGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 10,
+  },
+
+  resultsField: {
+    display: "grid",
+    gap: 5,
+  },
+
+  resultsFieldLabel: {
+    color: "#6F7F76",
+    fontSize: 7.5,
+    fontWeight: 900,
+    textTransform: "uppercase",
+  },
+
+  resultsInput: {
+    width: "100%",
+    minHeight: 41,
+    padding: "0 10px",
+    border: "1px solid #D8E2DC",
+    borderRadius: 10,
+    outline: "none",
+    background: "#FAFCFB",
+    color: "#17251D",
+    fontSize: 10,
+  },
+
+  resultsTextarea: {
+    width: "100%",
+    minHeight: 82,
+    padding: 10,
+    resize: "vertical",
+    border: "1px solid #D8E2DC",
+    borderRadius: 10,
+    outline: "none",
+    background: "#FAFCFB",
+    color: "#17251D",
+    fontFamily: "inherit",
+    fontSize: 10,
+    lineHeight: 1.45,
+  },
+
+  resultsSaveButton: {
+    width: "100%",
+    minHeight: 43,
+    marginTop: 12,
+    border: 0,
+    borderRadius: 10,
+    background: "#0EA5A6",
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+
+  resultsSuccess: {
+    marginTop: 10,
+    padding: 10,
+    border: "1px solid #BCE2CB",
+    borderRadius: 10,
+    background: "#ECF9F1",
+    color: "#176A40",
+    fontSize: 8.5,
+    fontWeight: 850,
+  },
+
+  resultsError: {
+    marginTop: 10,
+    padding: 10,
+    border: "1px solid #F0C9C4",
+    borderRadius: 10,
+    background: "#FFF2F0",
+    color: "#8B3C34",
+    fontSize: 8.5,
+    lineHeight: 1.45,
+  },
+
+  resultsLoading: {
+    minHeight: 230,
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 10,
+    color: "#52675B",
+    fontSize: 9,
+  },
+
+  resultsList: {
+    display: "grid",
+    gap: 10,
+  },
+
+  resultCard: {
+    padding: 14,
+    border: "1px solid #E0E7ED",
+    borderRadius: 13,
+    background: "#FAFCFD",
+  },
+
+  resultCardTop: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  resultDate: {
+    display: "block",
+    color: "#7A8795",
+    fontSize: 7.5,
+  },
+
+  resultService: {
+    display: "block",
+    marginTop: 3,
+    color: "#172333",
+    fontSize: 12,
+  },
+
+  resultTypeBadge: {
+    padding: "5px 8px",
+    borderRadius: 999,
+    background: "#E7F6F7",
+    color: "#0D6F7C",
+    fontSize: 7,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  resultValueRow: {
+    marginTop: 11,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  resultValue: {
+    color: "#0D506B",
+    fontSize: 20,
+    lineHeight: 1.1,
+  },
+
+  resultDeleteButton: {
+    minHeight: 31,
+    padding: "0 9px",
+    border: "1px solid #E3E8EC",
+    borderRadius: 8,
+    background: "#FFFFFF",
+    color: "#7A4D4D",
+    fontSize: 7.5,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  resultNotes: {
+    margin: "9px 0 0",
+    color: "#6C7A88",
+    fontSize: 8.5,
+    lineHeight: 1.45,
+  },
+
+  resultsEmpty: {
+    minHeight: 240,
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 8,
+    padding: 20,
+    textAlign: "center",
+  },
+
+  resultsEmptyIcon: {
+    width: 58,
+    height: 58,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 17,
+    background: "#E8F4F6",
+    color: "#0D667D",
+    fontSize: 23,
+  },
+
+  resultsEmptyTitle: {
+    color: "#243244",
+    fontSize: 14,
+  },
+
+  resultsEmptyText: {
+    maxWidth: 360,
+    color: "#788697",
+    fontSize: 9,
+    lineHeight: 1.55,
+  },
+
+  notificationIntro: {
+    margin: "0 0 14px",
+    color: "#718077",
+    fontSize: 9,
+    lineHeight: 1.5,
+  },
+
+  notificationList: {
+    display: "grid",
+    gap: 9,
+  },
+
+  notificationRow: {
+    minHeight: 72,
+    padding: "12px 13px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 14,
+    border: "1px solid #E1E8E3",
+    borderRadius: 12,
+    background: "#FAFCFB",
+  },
+
+  notificationCopy: {
+    minWidth: 0,
+    display: "grid",
+    gap: 3,
+  },
+
+  notificationTitle: {
+    color: "#263F31",
+    fontSize: 11,
+  },
+
+  notificationText: {
+    color: "#7A8780",
+    fontSize: 8.2,
+    lineHeight: 1.4,
+  },
+
+  notificationSwitch: {
+    position: "relative",
+    width: 42,
+    height: 24,
+    flex: "0 0 auto",
+    padding: 0,
+    border: 0,
+    borderRadius: 999,
+    background: "#D5DDD8",
+    cursor: "pointer",
+    transition: "background .18s ease",
+  },
+
+  notificationSwitchActive: {
+    background: "#0EA5A6",
+  },
+
+  notificationSwitchKnob: {
+    position: "absolute",
+    top: 3,
+    left: 3,
+    width: 18,
+    height: 18,
+    borderRadius: "50%",
+    background: "#FFFFFF",
+    boxShadow: "0 2px 6px rgba(0,0,0,.16)",
+    transition: "transform .18s ease",
+  },
+
+  notificationSwitchKnobActive: {
+    transform: "translateX(18px)",
+  },
+
+  notificationSaveButton: {
+    width: "100%",
+    minHeight: 42,
+    marginTop: 14,
+    border: 0,
+    borderRadius: 10,
+    background: "#0F172A",
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  notificationSuccess: {
+    marginTop: 10,
+    padding: 10,
+    border: "1px solid #BCE2CB",
+    borderRadius: 10,
+    background: "#ECF9F1",
+    color: "#176A40",
+    fontSize: 8.5,
+    fontWeight: 850,
+  },
+
+  notificationError: {
+    marginTop: 10,
+    padding: 10,
+    border: "1px solid #F0C9C4",
+    borderRadius: 10,
+    background: "#FFF2F0",
+    color: "#8B3C34",
+    fontSize: 8.5,
+    lineHeight: 1.45,
+  },
+
+  notificationLoading: {
+    minHeight: 220,
     display: "grid",
     justifyItems: "center",
     alignContent: "center",
