@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.08-PORTAL-ALUMNO-AGENDA-RPC-V15-RESERVADO";
+const VERSION = "2026.09.08-PORTAL-ALUMNO-AGENDA-RPC-V16-PAGOS";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
@@ -1098,6 +1098,10 @@ export default function PortalAlumnoInicio() {
             grid-template-columns: 1fr !important;
           }
 
+          .payment-summary-grid {
+            grid-template-columns: 1fr !important;
+          }
+
           .app-home-summary {
             grid-template-columns: 1fr !important;
           }
@@ -1322,6 +1326,7 @@ export default function PortalAlumnoInicio() {
 
           {seccion === "configuracion" && (
             <Configuracion
+              slug={slug}
               cuenta={cuenta}
               perfil={perfil}
               membresia={membresia}
@@ -1995,6 +2000,7 @@ function WhiteboardWod({
 }
 
 function Configuracion({
+  slug,
   cuenta,
   membresia,
   estadoVisual,
@@ -2021,6 +2027,93 @@ function Configuracion({
   const [confirmarClave, setConfirmarClave] = useState("");
   const [guardandoClave, setGuardandoClave] = useState(false);
   const [mensajeClave, setMensajeClave] = useState("");
+
+  const [pagosAlumno, setPagosAlumno] = useState([]);
+  const [cargandoPagos, setCargandoPagos] = useState(false);
+  const [errorPagos, setErrorPagos] = useState("");
+  const [pagoAbiertoId, setPagoAbiertoId] = useState("");
+
+  useEffect(() => {
+    if (tabConfig !== "pagos") return;
+    cargarPagosAlumno();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabConfig, slug]);
+
+  async function cargarPagosAlumno() {
+    if (!slug) return;
+
+    setCargandoPagos(true);
+    setErrorPagos("");
+
+    try {
+      const { data, error } = await supabase.rpc(
+        "obtener_mis_pagos_alumno",
+        {
+          p_slug: slug,
+        }
+      );
+
+      if (error) throw error;
+
+      if (!data?.ok) {
+        throw new Error(
+          data?.mensaje || "No se pudo cargar tu historial de pagos."
+        );
+      }
+
+      setPagosAlumno(
+        Array.isArray(data?.pagos) ? data.pagos : []
+      );
+    } catch (err) {
+      console.error("Error cargando pagos del alumno:", err);
+      setPagosAlumno([]);
+      setErrorPagos(
+        err?.message || "No se pudo cargar tu historial de pagos."
+      );
+    } finally {
+      setCargandoPagos(false);
+    }
+  }
+
+  function formatearFechaPago(valor) {
+    if (!valor) return "-";
+
+    try {
+      const texto = String(valor);
+      const fecha = texto.includes("T")
+        ? new Date(texto)
+        : new Date(`${texto.slice(0, 10)}T12:00:00`);
+
+      if (Number.isNaN(fecha.getTime())) {
+        return texto;
+      }
+
+      return new Intl.DateTimeFormat("es-PA", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }).format(fecha);
+    } catch {
+      return String(valor);
+    }
+  }
+
+  function formatearMontoPago(valor) {
+    const numero = Number(valor || 0);
+
+    return new Intl.NumberFormat("es-PA", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+    }).format(Number.isFinite(numero) ? numero : 0);
+  }
+
+  const totalPagadoAlumno = pagosAlumno.reduce(
+    (total, pago) => total + Math.max(0, Number(pago?.monto || 0)),
+    0
+  );
+
+  const ultimoPagoAlumno = pagosAlumno[0] || null;
 
   async function cambiarClave() {
     setMensajeClave("");
@@ -2281,12 +2374,191 @@ function Configuracion({
 
         {tabConfig === "pagos" && (
           <div style={S.profilePanel}>
-            <span style={S.sectionEyebrow}>PAGOS</span>
-            <h2 style={S.profilePanelTitle}>Facturación y pagos</h2>
-            <ConfigEmpty
-              title="Sin movimientos para mostrar"
-              text="Esta sección quedará preparada para mostrar tus pagos y comprobantes cuando conectemos el historial financiero del alumno."
-            />
+            <div style={S.profilePanelHeading}>
+              <div>
+                <span style={S.sectionEyebrow}>PAGOS</span>
+                <h2 style={S.profilePanelTitle}>Facturación y pagos</h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={cargarPagosAlumno}
+                disabled={cargandoPagos}
+                style={S.outlineSmallButton}
+              >
+                {cargandoPagos ? "Actualizando..." : "Actualizar"}
+              </button>
+            </div>
+
+            {errorPagos && (
+              <div style={S.paymentError}>{errorPagos}</div>
+            )}
+
+            {!cargandoPagos && !errorPagos && pagosAlumno.length > 0 && (
+              <>
+                <div style={S.paymentSummaryGrid} className="payment-summary-grid">
+                  <div style={S.paymentSummaryCard}>
+                    <span style={S.paymentSummaryLabel}>TOTAL REGISTRADO</span>
+                    <strong style={S.paymentSummaryValue}>
+                      {formatearMontoPago(totalPagadoAlumno)}
+                    </strong>
+                  </div>
+
+                  <div style={S.paymentSummaryCard}>
+                    <span style={S.paymentSummaryLabel}>ÚLTIMO PAGO</span>
+                    <strong style={S.paymentSummaryValueSmall}>
+                      {ultimoPagoAlumno
+                        ? formatearFechaPago(ultimoPagoAlumno.fecha_pago)
+                        : "-"}
+                    </strong>
+                  </div>
+
+                  <div style={S.paymentSummaryCard}>
+                    <span style={S.paymentSummaryLabel}>MOVIMIENTOS</span>
+                    <strong style={S.paymentSummaryValue}>
+                      {pagosAlumno.length}
+                    </strong>
+                  </div>
+                </div>
+
+                <div style={S.paymentList}>
+                  {pagosAlumno.map((pago) => {
+                    const abierto =
+                      String(pagoAbiertoId) === String(pago.id);
+
+                    return (
+                      <article key={pago.id} style={S.paymentCard}>
+                        <div style={S.paymentCardTop}>
+                          <div style={{ minWidth: 0 }}>
+                            <span style={S.paymentDate}>
+                              {formatearFechaPago(pago.fecha_pago)}
+                            </span>
+                            <strong style={S.paymentConcept}>
+                              {pago.tipo ||
+                                pago.tipo_movimiento ||
+                                "Pago"}
+                            </strong>
+                          </div>
+
+                          <div style={S.paymentAmountWrap}>
+                            <strong style={S.paymentAmount}>
+                              {formatearMontoPago(pago.monto)}
+                            </strong>
+                            <span style={S.paymentPaidBadge}>
+                              {pago.estado || "Procesado"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={S.paymentMeta}>
+                          <span>
+                            Método: <strong>{pago.metodo_pago || "-"}</strong>
+                          </span>
+                          {pago.numero_transaccion && (
+                            <span>
+                              Transacción:{" "}
+                              <strong>{pago.numero_transaccion}</strong>
+                            </span>
+                          )}
+                        </div>
+
+                        {pago.descripcion && (
+                          <p style={S.paymentDescription}>
+                            {pago.descripcion}
+                          </p>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPagoAbiertoId(
+                              abierto ? "" : String(pago.id)
+                            )
+                          }
+                          style={S.paymentReceiptButton}
+                        >
+                          {abierto ? "Ocultar comprobante" : "Ver comprobante"}
+                        </button>
+
+                        {abierto && (
+                          <div style={S.receiptBox}>
+                            <div style={S.receiptHeader}>
+                              <div>
+                                <span style={S.receiptEyebrow}>COMPROBANTE KONAX</span>
+                                <strong style={S.receiptTitle}>
+                                  Pago registrado
+                                </strong>
+                              </div>
+                              <strong style={S.receiptAmount}>
+                                {formatearMontoPago(pago.monto)}
+                              </strong>
+                            </div>
+
+                            <div style={S.receiptRows}>
+                              <ResumenFila
+                                label="Alumno"
+                                value={cuenta?.nombre || "-"}
+                              />
+                              <ResumenFila
+                                label="Fecha"
+                                value={formatearFechaPago(pago.fecha_pago)}
+                              />
+                              <ResumenFila
+                                label="Concepto"
+                                value={
+                                  pago.tipo ||
+                                  pago.tipo_movimiento ||
+                                  "Pago"
+                                }
+                              />
+                              <ResumenFila
+                                label="Método"
+                                value={pago.metodo_pago || "-"}
+                              />
+                              <ResumenFila
+                                label="Estado"
+                                value={pago.estado || "Procesado"}
+                              />
+                              {pago.numero_transaccion && (
+                                <ResumenFila
+                                  label="Transacción"
+                                  value={pago.numero_transaccion}
+                                />
+                              )}
+                              {pago.numero_cuenta && (
+                                <ResumenFila
+                                  label="Cuenta"
+                                  value={pago.numero_cuenta}
+                                />
+                              )}
+                            </div>
+
+                            <span style={S.receiptNote}>
+                              Este comprobante corresponde al movimiento
+                              registrado por el gimnasio en KONAX.
+                            </span>
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {!cargandoPagos && !errorPagos && pagosAlumno.length === 0 && (
+              <ConfigEmpty
+                title="Sin pagos registrados"
+                text="Cuando el gimnasio registre un pago a tu nombre en Caja, aparecerá automáticamente en este historial."
+              />
+            )}
+
+            {cargandoPagos && (
+              <div style={S.paymentLoading}>
+                <div style={S.loader} />
+                <strong>Cargando historial de pagos...</strong>
+              </div>
+            )}
           </div>
         )}
 
@@ -4474,6 +4746,198 @@ const S = {
     marginBottom: 12,
     color: "#173C2A",
     fontSize: 18,
+  },
+
+  paymentError: {
+    marginTop: 14,
+    padding: 12,
+    border: "1px solid #F1C9C4",
+    borderRadius: 11,
+    background: "#FFF3F1",
+    color: "#8C4038",
+    fontSize: 9,
+    lineHeight: 1.45,
+  },
+
+  paymentSummaryGrid: {
+    marginTop: 16,
+    marginBottom: 14,
+    display: "grid",
+    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+    gap: 8,
+  },
+
+  paymentSummaryCard: {
+    minHeight: 76,
+    padding: 12,
+    display: "grid",
+    alignContent: "center",
+    gap: 5,
+    border: "1px solid #E1E8E3",
+    borderRadius: 12,
+    background: "#F8FBF9",
+  },
+
+  paymentSummaryLabel: {
+    color: "#7B8981",
+    fontSize: 7,
+    fontWeight: 900,
+    letterSpacing: .7,
+  },
+
+  paymentSummaryValue: {
+    color: "#173C2A",
+    fontSize: 16,
+  },
+
+  paymentSummaryValueSmall: {
+    color: "#173C2A",
+    fontSize: 11,
+    lineHeight: 1.3,
+  },
+
+  paymentList: {
+    display: "grid",
+    gap: 10,
+  },
+
+  paymentCard: {
+    padding: 14,
+    border: "1px solid #DFE7E2",
+    borderRadius: 14,
+    background: "#FFFFFF",
+    boxShadow: "0 7px 18px rgba(15,50,31,.04)",
+  },
+
+  paymentCardTop: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  paymentDate: {
+    display: "block",
+    marginBottom: 4,
+    color: "#839088",
+    fontSize: 8,
+  },
+
+  paymentConcept: {
+    display: "block",
+    color: "#21372A",
+    fontSize: 13,
+    lineHeight: 1.3,
+  },
+
+  paymentAmountWrap: {
+    display: "grid",
+    justifyItems: "end",
+    gap: 5,
+    flex: "0 0 auto",
+  },
+
+  paymentAmount: {
+    color: "#0F6B40",
+    fontSize: 17,
+  },
+
+  paymentPaidBadge: {
+    padding: "4px 7px",
+    borderRadius: 999,
+    background: "#E6F7ED",
+    color: "#147443",
+    fontSize: 7,
+    fontWeight: 900,
+  },
+
+  paymentMeta: {
+    marginTop: 10,
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "6px 14px",
+    color: "#718077",
+    fontSize: 8.5,
+  },
+
+  paymentDescription: {
+    margin: "10px 0 0",
+    color: "#627168",
+    fontSize: 8.5,
+    lineHeight: 1.5,
+  },
+
+  paymentReceiptButton: {
+    width: "100%",
+    minHeight: 37,
+    marginTop: 11,
+    border: "1px solid #D7E3DB",
+    borderRadius: 10,
+    background: "#F8FAF9",
+    color: "#345343",
+    fontSize: 8.5,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  receiptBox: {
+    marginTop: 10,
+    padding: 13,
+    borderRadius: 12,
+    background: "#F4F8F5",
+    border: "1px solid #DCE8E0",
+  },
+
+  receiptHeader: {
+    paddingBottom: 10,
+    marginBottom: 6,
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    borderBottom: "1px dashed #CBD8CF",
+  },
+
+  receiptEyebrow: {
+    display: "block",
+    color: "#0EA5A6",
+    fontSize: 6.5,
+    fontWeight: 950,
+    letterSpacing: .9,
+  },
+
+  receiptTitle: {
+    display: "block",
+    marginTop: 3,
+    color: "#21372A",
+    fontSize: 12,
+  },
+
+  receiptAmount: {
+    color: "#0F6B40",
+    fontSize: 17,
+  },
+
+  receiptRows: {
+    display: "grid",
+  },
+
+  receiptNote: {
+    display: "block",
+    marginTop: 10,
+    color: "#87928C",
+    fontSize: 7.5,
+    lineHeight: 1.45,
+  },
+
+  paymentLoading: {
+    minHeight: 260,
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 10,
+    color: "#52675B",
+    fontSize: 9,
   },
 
   configEmpty: {
