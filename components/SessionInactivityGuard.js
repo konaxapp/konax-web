@@ -1,20 +1,20 @@
 "use client";
 
 // KONAX · Control de sesión por inactividad
-// VERSION PRUEBA 2026.09.10
-// Aviso: 20 segundos sin actividad
-// Cierre automático: 10 segundos después del aviso
+// VERSION 2026.09.10
+// Aviso: 15 minutos sin actividad
+// Cierre automático: 2 minutos después del aviso
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabase } from "../lib/supabase";
 
 /* ============================================
-   TIEMPOS DE PRUEBA
+   CONFIGURACIÓN
    ============================================ */
 
-const TIEMPO_HASTA_AVISO = 20 * 1000; // 20 segundos
-const TIEMPO_GRACIA = 10 * 1000; // 10 segundos
+const TIEMPO_HASTA_AVISO = 15 * 60 * 1000; // 15 minutos
+const TIEMPO_GRACIA = 2 * 60 * 1000; // 2 minutos
 
 const TIEMPO_TOTAL_INACTIVIDAD =
   TIEMPO_HASTA_AVISO + TIEMPO_GRACIA;
@@ -22,7 +22,7 @@ const TIEMPO_TOTAL_INACTIVIDAD =
 const CLAVE_ULTIMA_ACTIVIDAD = "konaxUltimaActividad";
 
 /* ============================================
-   RUTAS DONDE NO SE APLICA EL BLOQUEO
+   RUTAS PÚBLICAS
    ============================================ */
 
 const RUTAS_PUBLICAS = [
@@ -50,7 +50,7 @@ export default function SessionInactivityGuard() {
   const ultimaActualizacionRef = useRef(0);
 
   /* ============================================
-     MANTENER SINCRONIZADO EL ESTADO DEL AVISO
+     SINCRONIZAR AVISO
      ============================================ */
 
   useEffect(() => {
@@ -87,11 +87,6 @@ export default function SessionInactivityGuard() {
       return;
     }
 
-    /*
-      Si todavía no existe una última actividad,
-      registrar el momento actual.
-    */
-
     if (
       !localStorage.getItem(CLAVE_ULTIMA_ACTIVIDAD)
     ) {
@@ -104,7 +99,7 @@ export default function SessionInactivityGuard() {
     verificarInactividad();
 
     /* ========================================
-       EVENTOS QUE CUENTAN COMO ACTIVIDAD
+       ACTIVIDAD DEL USUARIO
        ======================================== */
 
     const eventos = [
@@ -123,35 +118,32 @@ export default function SessionInactivityGuard() {
       );
     });
 
-    /*
-      Si KONAX está abierto en otra pestaña,
-      mantener la actividad sincronizada.
-    */
+    /* ========================================
+       SINCRONIZACIÓN ENTRE PESTAÑAS
+       ======================================== */
 
     window.addEventListener(
       "storage",
       manejarActividadOtraPestana
     );
 
-    /*
-      Si el usuario vuelve a la aplicación
-      después de dejarla en segundo plano.
-    */
+    /* ========================================
+       CUANDO REGRESA A LA APP
+       ======================================== */
 
     document.addEventListener(
       "visibilitychange",
       manejarVisibilidad
     );
 
-    /*
-      Verificación adicional cada 5 segundos
-      durante esta prueba.
-    */
+    /* ========================================
+       VERIFICACIÓN DE RESPALDO
+       ======================================== */
 
     const intervaloVerificacion =
       window.setInterval(() => {
         verificarInactividad();
-      }, 5000);
+      }, 15000);
 
     return () => {
       eventos.forEach((evento) => {
@@ -180,7 +172,7 @@ export default function SessionInactivityGuard() {
   }, [pathname]);
 
   /* ============================================
-     LIMPIEZA DE TEMPORIZADORES
+     LIMPIAR TEMPORIZADORES
      ============================================ */
 
   function limpiarTimeoutAviso() {
@@ -234,7 +226,7 @@ export default function SessionInactivityGuard() {
   }
 
   /* ============================================
-     OBTENER ÚLTIMA ACTIVIDAD
+     ÚLTIMA ACTIVIDAD
      ============================================ */
 
   function obtenerUltimaActividad() {
@@ -246,7 +238,7 @@ export default function SessionInactivityGuard() {
   }
 
   /* ============================================
-     PROGRAMAR PRÓXIMO AVISO
+     PROGRAMAR AVISO
      ============================================ */
 
   function programarControl() {
@@ -277,10 +269,9 @@ export default function SessionInactivityGuard() {
     const transcurrido =
       Date.now() - ultimaActividad;
 
-    /*
-      Si ya pasó todo el tiempo permitido,
-      cerrar.
-    */
+    /* ========================================
+       YA PASARON LOS 17 MINUTOS
+       ======================================== */
 
     if (
       transcurrido >=
@@ -290,10 +281,9 @@ export default function SessionInactivityGuard() {
       return;
     }
 
-    /*
-      Si ya pasaron los 20 segundos,
-      mostrar aviso.
-    */
+    /* ========================================
+       YA PASARON LOS 15 MINUTOS
+       ======================================== */
 
     if (
       transcurrido >=
@@ -314,7 +304,7 @@ export default function SessionInactivityGuard() {
   }
 
   /* ============================================
-     MOSTRAR AVISO
+     ABRIR AVISO
      ============================================ */
 
   function abrirAvisoInactividad() {
@@ -330,11 +320,6 @@ export default function SessionInactivityGuard() {
 
     const transcurrido =
       Date.now() - ultimaActividad;
-
-    /*
-      Si hubo actividad recientemente,
-      no mostrar aviso.
-    */
 
     if (
       transcurrido <
@@ -361,10 +346,6 @@ export default function SessionInactivityGuard() {
 
     limpiarTimeoutCierre();
 
-    /*
-      Programar cierre definitivo.
-    */
-
     timeoutCierreRef.current =
       window.setTimeout(
         () =>
@@ -373,10 +354,6 @@ export default function SessionInactivityGuard() {
       );
 
     limpiarCuentaRegresiva();
-
-    /*
-      Actualizar reloj cada segundo.
-    */
 
     intervaloCuentaRef.current =
       window.setInterval(() => {
@@ -414,20 +391,20 @@ export default function SessionInactivityGuard() {
   }
 
   /* ============================================
-     REGISTRAR ACTIVIDAD NORMAL
+     ACTIVIDAD NORMAL
      ============================================ */
 
   function registrarActividad() {
     if (cerrandoRef.current) return;
 
     /*
-      MUY IMPORTANTE:
+      IMPORTANTE:
 
-      Una vez aparezca el aviso, hacer scroll,
-      tocar fuera del modal o mover la pantalla
-      NO extiende automáticamente la sesión.
+      Cuando el aviso ya está visible,
+      tocar fuera, hacer scroll o mover
+      la pantalla NO renueva la sesión.
 
-      El usuario tiene que tocar:
+      Debe tocar:
       "Sí, continuar sesión".
     */
 
@@ -436,11 +413,6 @@ export default function SessionInactivityGuard() {
     }
 
     const ahora = Date.now();
-
-    /*
-      Evitar escribir en localStorage demasiadas
-      veces cuando hay muchos eventos seguidos.
-    */
 
     if (
       ahora -
@@ -488,7 +460,7 @@ export default function SessionInactivityGuard() {
   }
 
   /* ============================================
-     OTRA PESTAÑA
+     ACTIVIDAD EN OTRA PESTAÑA
      ============================================ */
 
   function manejarActividadOtraPestana(
@@ -510,11 +482,6 @@ export default function SessionInactivityGuard() {
     const transcurrido =
       Date.now() - ultimaActividad;
 
-    /*
-      Si hubo actividad en otra pestaña,
-      quitar el aviso.
-    */
-
     if (
       transcurrido <
       TIEMPO_HASTA_AVISO
@@ -526,7 +493,7 @@ export default function SessionInactivityGuard() {
   }
 
   /* ============================================
-     APP VUELVE A PRIMER PLANO
+     REGRESAR A PRIMER PLANO
      ============================================ */
 
   function manejarVisibilidad() {
@@ -627,9 +594,9 @@ export default function SessionInactivityGuard() {
       motivo
     );
 
-    /*
-      Limpiar información local de KONAX.
-    */
+    /* ========================================
+       LIMPIAR DATOS LOCALES
+       ======================================== */
 
     const clavesKonax = [
       "empresaId",
@@ -670,9 +637,9 @@ export default function SessionInactivityGuard() {
       localStorage.removeItem(clave);
     });
 
-    /*
-      Redirección según tipo de usuario.
-    */
+    /* ========================================
+       REDIRECCIÓN
+       ======================================== */
 
     if (eraAdminMaster) {
       window.location.replace(
@@ -692,7 +659,7 @@ export default function SessionInactivityGuard() {
   }
 
   /* ============================================
-     FORMATO DEL RELOJ
+     RELOJ
      ============================================ */
 
   function formatearTiempo(segundos) {
@@ -712,7 +679,7 @@ export default function SessionInactivityGuard() {
   }
 
   /* ============================================
-     SIN AVISO = NO MOSTRAR NADA
+     SIN AVISO
      ============================================ */
 
   if (!mostrarAviso) {
@@ -720,7 +687,7 @@ export default function SessionInactivityGuard() {
   }
 
   /* ============================================
-     MODAL DE AVISO
+     MODAL
      ============================================ */
 
   return (
@@ -747,10 +714,11 @@ export default function SessionInactivityGuard() {
         </h2>
 
         <p style={s.text}>
-          Detectamos un periodo sin actividad.
-          Para proteger tu información, la
-          sesión se cerrará automáticamente si
-          no confirmas que deseas continuar.
+          Detectamos varios minutos sin
+          actividad. Para proteger tu
+          información, la sesión se cerrará
+          automáticamente si no confirmas que
+          deseas continuar.
         </p>
 
         <div style={s.timerBox}>
@@ -785,9 +753,9 @@ export default function SessionInactivityGuard() {
         </button>
 
         <span style={s.note}>
-          Al continuar podrás seguir trabajando
-          sin volver a ingresar tu correo y
-          contraseña.
+          Al continuar podrás seguir
+          trabajando sin volver a ingresar tu
+          correo ni contraseña.
         </span>
       </div>
     </div>
@@ -795,7 +763,7 @@ export default function SessionInactivityGuard() {
 }
 
 /* ==============================================
-   DISEÑO DEL MODAL
+   DISEÑO
    ============================================== */
 
 const s = {
@@ -803,197 +771,129 @@ const s = {
     position: "fixed",
     inset: 0,
     zIndex: 99999,
-
     padding: 18,
-
     display: "grid",
     placeItems: "center",
-
     boxSizing: "border-box",
-
     background:
       "rgba(3, 17, 10, .72)",
-
     backdropFilter: "blur(6px)",
   },
 
   modal: {
     width: 420,
     maxWidth: "100%",
-
     padding: "28px 24px 22px",
-
     boxSizing: "border-box",
-
     border:
       "1px solid rgba(255,255,255,.8)",
-
     borderRadius: 24,
-
     background:
       "linear-gradient(180deg,#ffffff 0%,#f7faf8 100%)",
-
     boxShadow:
       "0 30px 90px rgba(0,0,0,.32)",
-
     textAlign: "center",
-
     color: "#17211c",
   },
 
   iconBox: {
     width: 58,
     height: 58,
-
     margin: "0 auto 14px",
-
     display: "grid",
     placeItems: "center",
-
     borderRadius: 18,
-
     background: "#e9f7ef",
-
     color: "#16834f",
-
     fontSize: 27,
   },
 
   eyebrow: {
     display: "block",
-
     marginBottom: 7,
-
     color: "#16834f",
-
     fontSize: 9,
-
     fontWeight: 900,
-
     letterSpacing: 1.3,
   },
 
   title: {
     margin: 0,
-
     fontSize: 27,
-
     lineHeight: 1.1,
-
     fontWeight: 900,
   },
 
   text: {
     margin: "12px auto 0",
-
     maxWidth: 345,
-
     color: "#68756d",
-
     fontSize: 13,
-
     lineHeight: 1.55,
   },
 
   timerBox: {
     margin: "19px 0 16px",
-
     padding: "13px 14px",
-
     border:
       "1px solid #dce8e0",
-
     borderRadius: 15,
-
     background: "#f4f9f6",
   },
 
   timerLabel: {
     display: "block",
-
     color: "#7a877f",
-
     fontSize: 9,
-
     fontWeight: 800,
-
     textTransform: "uppercase",
-
     letterSpacing: 0.7,
   },
 
   timerValue: {
     display: "block",
-
     marginTop: 5,
-
     color: "#137347",
-
     fontSize: 25,
-
     lineHeight: 1,
-
     fontWeight: 950,
-
     letterSpacing: 1,
   },
 
   continueButton: {
     width: "100%",
-
     minHeight: 50,
-
     border: "none",
-
     borderRadius: 14,
-
     background:
       "linear-gradient(135deg,#16834f,#0f693d)",
-
     color: "#fff",
-
     fontSize: 14,
-
     fontWeight: 900,
-
     cursor: "pointer",
-
     boxShadow:
       "0 12px 24px rgba(22,131,79,.20)",
   },
 
   logoutButton: {
     width: "100%",
-
     minHeight: 45,
-
     marginTop: 9,
-
     border:
       "1px solid #d7e0da",
-
     borderRadius: 14,
-
     background: "#fff",
-
     color: "#58655e",
-
     fontSize: 12,
-
     fontWeight: 800,
-
     cursor: "pointer",
   },
 
   note: {
     display: "block",
-
     marginTop: 13,
-
     color: "#89958e",
-
     fontSize: 9.5,
-
     lineHeight: 1.4,
   },
 };
