@@ -4,13 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.11-PORTAL-ALUMNO-V19-HORARIOS-DIA";
+const VERSION = "2026.09.11-PORTAL-ALUMNO-V20-HORARIOS-DIA-SEMANA";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
-  { id: "inicio", label: "Inicio", icon: "⌂" },
+  { id: "inicio", label: "Dashboard", icon: "▥" },
   { id: "clases", label: "Clases", icon: "▣" },
-  { id: "reservas", label: "Mis reservas", icon: "◷" },
+  { id: "reservas", label: "Mis Reservas", icon: "◷" },
   { id: "horarios", label: "Horarios", icon: "◴" },
   { id: "whiteboard", label: "Whiteboard", icon: "W" },
   { id: "resultados", label: "Resultados", icon: "★" },
@@ -65,7 +65,9 @@ export default function PortalAlumnoInicio() {
   const [errorReservas, setErrorReservas] = useState("");
 
   const [fechaHorarios, setFechaHorarios] = useState("");
+  const [vistaHorarios, setVistaHorarios] = useState("dia");
   const [horariosDia, setHorariosDia] = useState([]);
+  const [horariosSemana, setHorariosSemana] = useState([]);
   const [cargandoHorarios, setCargandoHorarios] = useState(false);
   const [errorHorarios, setErrorHorarios] = useState("");
   const [filtroServicioHorarios, setFiltroServicioHorarios] = useState("");
@@ -107,9 +109,13 @@ export default function PortalAlumnoInicio() {
       return;
     }
 
-    cargarHorarios(fechaHorarios);
+    if (vistaHorarios === "semana") {
+      cargarHorariosSemana(fechaHorarios);
+    } else {
+      cargarHorarios(fechaHorarios);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seccion, slug, cuenta?.ok, fechaHorarios]);
+  }, [seccion, slug, cuenta?.ok, fechaHorarios, vistaHorarios]);
 
   async function cargarTodo(modoActualizar = false) {
     if (!slug) {
@@ -415,6 +421,15 @@ export default function PortalAlumnoInicio() {
     return fechaLocalIso(fecha);
   }
 
+  function inicioSemanaIso(fechaIso) {
+    const [y, m, d] = String(fechaIso).split("-").map(Number);
+    const fecha = new Date(y, (m || 1) - 1, d || 1, 12, 0, 0);
+    const dia = fecha.getDay();
+    const ajuste = dia === 0 ? -6 : 1 - dia;
+    fecha.setDate(fecha.getDate() + ajuste);
+    return fechaLocalIso(fecha);
+  }
+
   function obtenerClienteIdAlumno() {
     return (
       cuenta?.cliente_id ||
@@ -684,9 +699,55 @@ export default function PortalAlumnoInicio() {
     }
   }
 
+  async function cargarHorariosSemana(fechaSeleccionada = fechaHorarios) {
+    if (!fechaSeleccionada || !slug) return [];
+
+    setCargandoHorarios(true);
+    setErrorHorarios("");
+
+    try {
+      await Promise.all([
+        serviciosAgenda.length
+          ? Promise.resolve(serviciosAgenda)
+          : cargarServiciosAgenda(),
+        cargarMisReservas({ silencioso: true }),
+      ]);
+
+      const lunes = inicioSemanaIso(fechaSeleccionada);
+      const fechas = Array.from({ length: 7 }, (_, index) =>
+        sumarDiasIso(lunes, index)
+      );
+
+      const resultados = await Promise.all(
+        fechas.map(async (fechaDia) => {
+          const lista = await consultarDisponibilidadAgenda(fechaDia);
+          return (Array.isArray(lista) ? lista : []).map((item) => ({
+            ...item,
+            __fechaAgenda: fechaDia,
+          }));
+        })
+      );
+
+      const listaSemana = resultados.flat();
+      setHorariosSemana(listaSemana);
+      return listaSemana;
+    } catch (err) {
+      console.error("Error cargando semana del alumno:", err);
+      setHorariosSemana([]);
+      setErrorHorarios(
+        err?.message ||
+          "No se pudieron cargar los horarios de esta semana."
+      );
+      return [];
+    } finally {
+      setCargandoHorarios(false);
+    }
+  }
+
   function moverDiaHorarios(dias) {
     const base = fechaHorarios || fechaLocalIso();
-    setFechaHorarios(sumarDiasIso(base, dias));
+    const salto = vistaHorarios === "semana" ? dias * 7 : dias;
+    setFechaHorarios(sumarDiasIso(base, salto));
   }
 
   function irHoyHorarios() {
@@ -1398,7 +1459,10 @@ export default function PortalAlumnoInicio() {
             <HorariosDia
               fecha={fechaHorarios}
               setFecha={setFechaHorarios}
+              vista={vistaHorarios}
+              setVista={setVistaHorarios}
               horarios={horariosDia}
+              horariosSemana={horariosSemana}
               servicios={serviciosAgenda}
               filtroServicio={filtroServicioHorarios}
               setFiltroServicio={setFiltroServicioHorarios}
@@ -1410,12 +1474,20 @@ export default function PortalAlumnoInicio() {
               onAnterior={() => moverDiaHorarios(-1)}
               onHoy={irHoyHorarios}
               onSiguiente={() => moverDiaHorarios(1)}
-              onActualizar={() => cargarHorarios(fechaHorarios)}
-              onReservar={(item) =>
-                reservarClase(item, fechaHorarios, "horarios")
+              onActualizar={() =>
+                vistaHorarios === "semana"
+                  ? cargarHorariosSemana(fechaHorarios)
+                  : cargarHorarios(fechaHorarios)
               }
-              onVerClase={() => {
-                setFechaClases(fechaHorarios);
+              onReservar={(item, fechaReserva) =>
+                reservarClase(
+                  item,
+                  fechaReserva || fechaHorarios,
+                  "horarios"
+                )
+              }
+              onVerClase={(fechaClase) => {
+                setFechaClases(fechaClase || fechaHorarios);
                 cambiarSeccion("clases");
               }}
             />
@@ -1487,9 +1559,9 @@ export default function PortalAlumnoInicio() {
           aria-label="Navegación principal"
         >
           {[
-            { id: "inicio", label: "Inicio", icon: "⌂" },
+            { id: "inicio", label: "Dashboard", icon: "▥" },
             { id: "clases", label: "Clases", icon: "▣" },
-            { id: "reservas", label: "Reservas", icon: "◷" },
+            { id: "reservas", label: "Mis Reservas", icon: "▦" },
             { id: "horarios", label: "Horarios", icon: "◴" },
             { id: "configuracion", label: "Perfil", icon: "●" },
           ].map((item) => (
@@ -1808,7 +1880,10 @@ function capacidadHorarioAgenda(item) {
 function HorariosDia({
   fecha,
   setFecha,
+  vista,
+  setVista,
   horarios,
+  horariosSemana,
   servicios,
   filtroServicio,
   setFiltroServicio,
@@ -1824,20 +1899,148 @@ function HorariosDia({
   onReservar,
   onVerClase,
 }) {
-  const listaFiltrada = (Array.isArray(horarios) ? horarios : []).filter(
-    (item) => {
-      if (!filtroServicio) return true;
+  const fuente =
+    vista === "semana"
+      ? Array.isArray(horariosSemana)
+        ? horariosSemana
+        : []
+      : Array.isArray(horarios)
+      ? horarios
+      : [];
 
-      const servicioItem = String(
-        item?.servicio_id ||
-          item?.id_servicio ||
-          item?.servicio?.id ||
-          ""
-      ).trim();
+  const listaFiltrada = fuente.filter((item) => {
+    if (!filtroServicio) return true;
 
-      return servicioItem === String(filtroServicio);
-    }
+    const servicioItem = String(
+      item?.servicio_id ||
+        item?.id_servicio ||
+        item?.servicio?.id ||
+        ""
+    ).trim();
+
+    return servicioItem === String(filtroServicio);
+  });
+
+  const lunesSemana = inicioSemanaVista(fecha);
+  const fechasSemana = Array.from({ length: 7 }, (_, index) =>
+    sumarDiasVista(lunesSemana, index)
   );
+
+  function estaReservado(horarioId, fechaItem) {
+    return (Array.isArray(reservas) ? reservas : []).some((reserva) => {
+      const reservaHorarioId = String(
+        reserva?.horario_id || reserva?.id_horario || ""
+      ).trim();
+      const reservaFecha = String(reserva?.fecha_reserva || "").slice(0, 10);
+      const estadoReserva = String(reserva?.estado || "")
+        .toLowerCase()
+        .trim();
+
+      return (
+        reservaHorarioId === horarioId &&
+        reservaFecha === String(fechaItem || "").slice(0, 10) &&
+        estadoReserva !== "cancelada"
+      );
+    });
+  }
+
+  function renderHorario(item, index, fechaItem) {
+    const horarioId = String(
+      item?.horario_id || item?.id_horario || item?.id || index
+    ).trim();
+
+    const capacidad = capacidadHorarioAgenda(item);
+    const tieneCupos = capacidad.libres === null || capacidad.libres > 0;
+    const yaReservado = estaReservado(horarioId, fechaItem);
+    const reservando = String(reservandoHorarioId) === horarioId;
+
+    const instructor =
+      item?.instructor ||
+      item?.profesional_nombre ||
+      item?.coach ||
+      "Sin instructor";
+
+    const sala =
+      item?.sala_nombre ||
+      item?.sala ||
+      item?.ubicacion ||
+      item?.ubicacion_nombre ||
+      "";
+
+    return (
+      <article
+        key={`${fechaItem}-${horarioId}-${item?.hora_inicio || index}`}
+        style={S.scheduleClassCard}
+      >
+        <div style={S.scheduleTimeColumn}>
+          <div style={S.scheduleClock}>◷</div>
+          <strong style={S.scheduleTime}>
+            {formatearHoraAgenda(item?.hora_inicio)}
+          </strong>
+        </div>
+
+        <div style={S.scheduleClassMain}>
+          <strong style={S.scheduleClassName}>
+            {String(
+              item?.servicio_nombre ||
+                item?.servicio ||
+                item?.nombre_servicio ||
+                "Clase"
+            ).toUpperCase()}
+          </strong>
+
+          <span style={S.scheduleDuration}>
+            {duracionHorarioAgenda(item)} min
+          </span>
+
+          <div style={S.scheduleMetaRow}>
+            <span>
+              👥{" "}
+              {capacidad.total !== null && capacidad.ocupados !== null
+                ? `${capacidad.ocupados} de ${capacidad.total}`
+                : capacidad.libres !== null
+                ? `${capacidad.libres} libres`
+                : "Cupos disponibles"}
+            </span>
+            <span>● {instructor}</span>
+            {sala && <span>➤ {sala}</span>}
+          </div>
+        </div>
+
+        <div style={S.scheduleActions}>
+          <button
+            type="button"
+            disabled={yaReservado || !tieneCupos || reservando}
+            onClick={() => onReservar(item, fechaItem)}
+            style={{
+              ...S.scheduleReserveButton,
+              ...(yaReservado
+                ? S.scheduleReserveButtonReserved
+                : !tieneCupos || reservando
+                ? S.scheduleReserveButtonDisabled
+                : {}),
+            }}
+          >
+            {yaReservado
+              ? "✓ Reservado"
+              : reservando
+              ? "Reservando..."
+              : tieneCupos
+              ? "Reservar"
+              : "Sin cupos"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onVerClase(fechaItem)}
+            style={S.scheduleViewButton}
+          >
+            Ver clase
+          </button>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <section style={S.scheduleShell}>
@@ -1845,8 +2048,19 @@ function HorariosDia({
 
       <div style={S.scheduleControls}>
         <div style={S.scheduleViewSwitch}>
-          <button type="button" style={S.scheduleViewActive}>
+          <button
+            type="button"
+            onClick={() => setVista("dia")}
+            style={vista === "dia" ? S.scheduleViewActive : S.scheduleViewInactive}
+          >
             ☷ Día
+          </button>
+          <button
+            type="button"
+            onClick={() => setVista("semana")}
+            style={vista === "semana" ? S.scheduleViewActive : S.scheduleViewInactive}
+          >
+            ▦ Semana
           </button>
         </div>
 
@@ -1855,20 +2069,18 @@ function HorariosDia({
             type="button"
             onClick={onAnterior}
             style={S.scheduleNavButton}
-            aria-label="Día anterior"
+            aria-label={vista === "semana" ? "Semana anterior" : "Día anterior"}
           >
             ‹
           </button>
-
           <button type="button" onClick={onHoy} style={S.scheduleTodayButton}>
             Hoy
           </button>
-
           <button
             type="button"
             onClick={onSiguiente}
             style={S.scheduleNavButton}
-            aria-label="Día siguiente"
+            aria-label={vista === "semana" ? "Semana siguiente" : "Día siguiente"}
           >
             ›
           </button>
@@ -1885,18 +2097,16 @@ function HorariosDia({
           <option value="">Todos los programas</option>
           {(Array.isArray(servicios) ? servicios : []).map((servicio) => (
             <option key={servicio.id} value={String(servicio.id)}>
-              {servicio.nombre ||
-                servicio.servicio_nombre ||
-                servicio.servicio ||
-                "Clase"}
+              {servicio.nombre || servicio.servicio_nombre || servicio.servicio || "Clase"}
             </option>
           ))}
         </select>
       </label>
 
       <div style={S.scheduleDateBar}>
-        <strong>{formatearFechaAgenda(fecha)}</strong>
-
+        <strong>
+          {vista === "semana" ? formatearRangoSemanaAgenda(fecha) : formatearFechaAgenda(fecha)}
+        </strong>
         <div style={S.scheduleDateActions}>
           <input
             type="date"
@@ -1905,14 +2115,13 @@ function HorariosDia({
             style={S.scheduleHiddenDate}
             aria-label="Seleccionar fecha"
           />
-
           <button
             type="button"
             onClick={onActualizar}
             disabled={cargando || !fecha}
             style={S.scheduleRefreshButton}
           >
-            {cargando ? "Actualizando..." : "↻"}
+            {cargando ? "…" : "↻"}
           </button>
         </div>
       </div>
@@ -1923,144 +2132,87 @@ function HorariosDia({
       {cargando ? (
         <div style={S.scheduleLoading}>
           <div style={S.loader} />
-          <strong>Cargando horarios...</strong>
+          <strong>{vista === "semana" ? "Cargando semana..." : "Cargando horarios..."}</strong>
+        </div>
+      ) : vista === "semana" ? (
+        <div style={S.scheduleWeekList}>
+          {fechasSemana.map((fechaDia) => {
+            const itemsDia = listaFiltrada.filter(
+              (item) => String(item?.__fechaAgenda || "") === fechaDia
+            );
+
+            return (
+              <section key={fechaDia} style={S.scheduleWeekDayBlock}>
+                <div style={S.scheduleWeekDayTitle}>
+                  <strong>{formatearFechaAgenda(fechaDia)}</strong>
+                  <span>{itemsDia.length} clase{itemsDia.length === 1 ? "" : "s"}</span>
+                </div>
+
+                {itemsDia.length ? (
+                  <div style={S.scheduleList}>
+                    {itemsDia.map((item, index) => renderHorario(item, index, fechaDia))}
+                  </div>
+                ) : (
+                  <div style={S.scheduleWeekEmpty}>Sin clases programadas</div>
+                )}
+              </section>
+            );
+          })}
         </div>
       ) : listaFiltrada.length > 0 ? (
         <div style={S.scheduleList}>
-          {listaFiltrada.map((item, index) => {
-            const horarioId = String(
-              item?.horario_id || item?.id_horario || item?.id || index
-            ).trim();
-
-            const capacidad = capacidadHorarioAgenda(item);
-            const tieneCupos =
-              capacidad.libres === null || capacidad.libres > 0;
-
-            const yaReservado = (Array.isArray(reservas) ? reservas : []).some(
-              (reserva) => {
-                const reservaHorarioId = String(
-                  reserva?.horario_id || reserva?.id_horario || ""
-                ).trim();
-                const reservaFecha = String(
-                  reserva?.fecha_reserva || ""
-                ).slice(0, 10);
-                const estadoReserva = String(
-                  reserva?.estado || ""
-                ).toLowerCase().trim();
-
-                return (
-                  reservaHorarioId === horarioId &&
-                  reservaFecha === String(fecha || "").slice(0, 10) &&
-                  estadoReserva !== "cancelada"
-                );
-              }
-            );
-
-            const reservando =
-              String(reservandoHorarioId) === horarioId;
-
-            const instructor =
-              item?.instructor ||
-              item?.profesional_nombre ||
-              item?.coach ||
-              "Sin instructor";
-
-            const sala =
-              item?.sala_nombre ||
-              item?.sala ||
-              item?.ubicacion ||
-              item?.ubicacion_nombre ||
-              "";
-
-            return (
-              <article
-                key={`${horarioId}-${item?.hora_inicio || index}`}
-                style={S.scheduleClassCard}
-              >
-                <div style={S.scheduleTimeColumn}>
-                  <div style={S.scheduleClock}>◷</div>
-                  <strong style={S.scheduleTime}>
-                    {formatearHoraAgenda(item?.hora_inicio)}
-                  </strong>
-                </div>
-
-                <div style={S.scheduleClassMain}>
-                  <strong style={S.scheduleClassName}>
-                    {String(
-                      item?.servicio_nombre ||
-                        item?.servicio ||
-                        item?.nombre_servicio ||
-                        "Clase"
-                    ).toUpperCase()}
-                  </strong>
-
-                  <span style={S.scheduleDuration}>
-                    {duracionHorarioAgenda(item)} min
-                  </span>
-
-                  <div style={S.scheduleMetaRow}>
-                    <span>
-                      👥{" "}
-                      {capacidad.total !== null &&
-                      capacidad.ocupados !== null
-                        ? `${capacidad.ocupados} de ${capacidad.total}`
-                        : capacidad.libres !== null
-                        ? `${capacidad.libres} libres`
-                        : "Cupos disponibles"}
-                    </span>
-
-                    <span>● {instructor}</span>
-
-                    {sala && <span>➤ {sala}</span>}
-                  </div>
-                </div>
-
-                <div style={S.scheduleActions}>
-                  <button
-                    type="button"
-                    disabled={yaReservado || !tieneCupos || reservando}
-                    onClick={() => onReservar(item)}
-                    style={{
-                      ...S.scheduleReserveButton,
-                      ...(yaReservado
-                        ? S.scheduleReserveButtonReserved
-                        : !tieneCupos || reservando
-                        ? S.scheduleReserveButtonDisabled
-                        : {}),
-                    }}
-                  >
-                    {yaReservado
-                      ? "✓ Reservado"
-                      : reservando
-                      ? "Reservando..."
-                      : tieneCupos
-                      ? "Reservar"
-                      : "Sin cupos"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => onVerClase(item)}
-                    style={S.scheduleViewButton}
-                  >
-                    Ver clase
-                  </button>
-                </div>
-              </article>
-            );
-          })}
+          {listaFiltrada.map((item, index) => renderHorario(item, index, fecha))}
         </div>
       ) : (
         <div style={S.scheduleEmpty}>
           <div style={S.scheduleEmptyIcon}>◴</div>
           <strong>No hay horarios para este día</strong>
-          <span>
-            Usa las flechas para cambiar de fecha o selecciona otro programa.
-          </span>
+          <span>Usa las flechas para cambiar de fecha o selecciona otro programa.</span>
         </div>
       )}
     </section>
   );
+}
+
+function sumarDiasVista(fechaIso, dias) {
+  const [y, m, d] = String(fechaIso).split("-").map(Number);
+  const fecha = new Date(y, (m || 1) - 1, d || 1, 12, 0, 0);
+  fecha.setDate(fecha.getDate() + dias);
+  const yy = fecha.getFullYear();
+  const mm = String(fecha.getMonth() + 1).padStart(2, "0");
+  const dd = String(fecha.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+function inicioSemanaVista(fechaIso) {
+  const base = fechaIso || new Date().toISOString().slice(0, 10);
+  const [y, m, d] = String(base).split("-").map(Number);
+  const fecha = new Date(y, (m || 1) - 1, d || 1, 12, 0, 0);
+  const dia = fecha.getDay();
+  const ajuste = dia === 0 ? -6 : 1 - dia;
+  fecha.setDate(fecha.getDate() + ajuste);
+  const yy = fecha.getFullYear();
+  const mm = String(fecha.getMonth() + 1).padStart(2, "0");
+  const dd = String(fecha.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+function formatearRangoSemanaAgenda(fechaIso) {
+  const lunes = inicioSemanaVista(fechaIso);
+  const domingo = sumarDiasVista(lunes, 6);
+  const ini = new Date(`${lunes}T12:00:00`);
+  const fin = new Date(`${domingo}T12:00:00`);
+  const mismoMes = ini.getMonth() === fin.getMonth() && ini.getFullYear() === fin.getFullYear();
+  const diaIni = ini.getDate();
+  const diaFin = fin.getDate();
+  const mesIni = ini.toLocaleDateString("es-PA", { month: "long" });
+  const mesFin = fin.toLocaleDateString("es-PA", { month: "long" });
+  const anioFin = fin.getFullYear();
+
+  if (mismoMes) {
+    return `Semana del ${diaIni} al ${diaFin} de ${mesFin} de ${anioFin}`;
+  }
+  return `Semana del ${diaIni} de ${mesIni} al ${diaFin} de ${mesFin} de ${anioFin}`;
 }
 
 function ClasesAgenda({
@@ -6134,13 +6286,25 @@ const S = {
   scheduleViewActive: {
     minHeight: 42,
     padding: "0 16px",
-    border: 0,
+    border: "1px solid #0EA5A6",
     borderRadius: 9,
     background: "#0EA5A6",
     color: "#FFFFFF",
     fontSize: 10,
     fontWeight: 900,
-    cursor: "default",
+    cursor: "pointer",
+  },
+
+  scheduleViewInactive: {
+    minHeight: 42,
+    padding: "0 16px",
+    border: "1px solid #D8E1E9",
+    borderRadius: 9,
+    background: "#FFFFFF",
+    color: "#3B4652",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "pointer",
   },
 
   scheduleNavButtons: {
@@ -6239,6 +6403,43 @@ const S = {
     fontSize: 17,
     fontWeight: 900,
     cursor: "pointer",
+  },
+
+  scheduleWeekList: {
+    display: "grid",
+    gap: 12,
+  },
+
+  scheduleWeekDayBlock: {
+    display: "grid",
+    gap: 9,
+  },
+
+  scheduleWeekDayTitle: {
+    minHeight: 44,
+    padding: "0 12px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    border: "1px solid #DDE5EC",
+    borderRadius: 10,
+    background: "#F8FAFC",
+    color: "#26323F",
+    fontSize: 10,
+    textTransform: "capitalize",
+  },
+
+  scheduleWeekEmpty: {
+    minHeight: 50,
+    padding: "0 14px",
+    display: "flex",
+    alignItems: "center",
+    border: "1px dashed #D8E1E9",
+    borderRadius: 10,
+    background: "#FFFFFF",
+    color: "#87939E",
+    fontSize: 9,
   },
 
   scheduleList: {
