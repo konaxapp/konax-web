@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.11-PORTAL-ALUMNO-V22-CLASES-RESERVAS-WOD";
+const VERSION = "2026.09.12-PORTAL-ALUMNO-V23-DASHBOARD-PRINCIPAL";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
@@ -96,8 +96,8 @@ export default function PortalAlumnoInicio() {
   }, [seccion, slug, fechaClases]);
 
   useEffect(() => {
-    if (seccion !== "reservas" || !slug || !cuenta?.ok) return;
-    cargarMisReservas();
+    if (!["inicio", "reservas"].includes(seccion) || !slug || !cuenta?.ok) return;
+    cargarMisReservas({ silencioso: seccion === "inicio" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seccion, slug, cuenta?.ok]);
 
@@ -1246,6 +1246,10 @@ export default function PortalAlumnoInicio() {
             grid-template-columns: 1fr !important;
           }
 
+          .dashboard-profile-buttons {
+            grid-template-columns: 1fr !important;
+          }
+
           .whiteboard-filters {
             grid-template-columns: 1fr !important;
           }
@@ -1266,7 +1270,8 @@ export default function PortalAlumnoInicio() {
         @media (max-width: 390px) {
           .membership-grid,
           .config-grid,
-          .photo-actions {
+          .photo-actions,
+          .dashboard-steps-grid {
             grid-template-columns: 1fr !important;
           }
         }
@@ -1415,6 +1420,9 @@ export default function PortalAlumnoInicio() {
               fotoFirmada={fotoFirmada}
               iniciales={iniciales}
               membresia={membresia}
+              reservas={misReservas}
+              cargandoReservas={cargandoReservas}
+              errorReservas={errorReservas}
               checkins={cuenta?.checkins_total ?? cuenta?.checkins ?? "—"}
               fechaAlta={
                 cuenta?.fecha_alta ||
@@ -1424,11 +1432,24 @@ export default function PortalAlumnoInicio() {
                 perfil?.created_at ||
                 ""
               }
-              onActualizar={() => cargarTodo(true)}
+              empresaNombre={empresaNombre}
+              telefonoCentro={
+                cuenta?.empresa_telefono ||
+                cuenta?.telefono_empresa ||
+                portalPublico?.telefono ||
+                portalPublico?.whatsapp ||
+                portalPublico?.telefono_contacto ||
+                ""
+              }
+              onActualizar={() => {
+                cargarTodo(true);
+                cargarMisReservas({ silencioso: true });
+              }}
               actualizando={actualizando}
               onIrPerfil={() => cambiarSeccion("configuracion")}
               onIrClases={() => cambiarSeccion("clases")}
               onIrReservas={() => cambiarSeccion("reservas")}
+              onIrHorarios={() => cambiarSeccion("horarios")}
             />
           )}
 
@@ -1609,22 +1630,136 @@ function Inicio({
   fotoFirmada,
   iniciales,
   membresia,
+  reservas,
+  cargandoReservas,
+  errorReservas,
   checkins,
   fechaAlta,
+  empresaNombre,
+  telefonoCentro,
   onActualizar,
   actualizando,
   onIrPerfil,
   onIrClases,
   onIrReservas,
+  onIrHorarios,
 }) {
   const [qrAbierto, setQrAbierto] = useState(false);
 
-  return (
-    <section style={S.memberHome}>
-      <article style={S.memberProfileCard}>
-        <div style={S.memberProfileAccent} />
+  const hoy = new Date();
+  const hoyIso = `${hoy.getFullYear()}-${String(
+    hoy.getMonth() + 1
+  ).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
 
-        <div style={S.memberProfileAvatar}>
+  const reservasValidas = (Array.isArray(reservas) ? reservas : []).filter(
+    (reserva) => {
+      const estado = String(reserva?.estado || "").toLowerCase().trim();
+      return !["cancelada", "cancelado", "anulada", "anulado"].includes(estado);
+    }
+  );
+
+  const proximas = [...reservasValidas]
+    .filter(
+      (reserva) =>
+        String(reserva?.fecha_reserva || "").slice(0, 10) >= hoyIso
+    )
+    .sort((a, b) => {
+      const fa = `${String(a?.fecha_reserva || "").slice(0, 10)} ${String(
+        a?.hora_inicio || ""
+      )}`;
+      const fb = `${String(b?.fecha_reserva || "").slice(0, 10)} ${String(
+        b?.hora_inicio || ""
+      )}`;
+      return fa.localeCompare(fb);
+    });
+
+  const historial = [...(Array.isArray(reservas) ? reservas : [])]
+    .filter(
+      (reserva) =>
+        String(reserva?.fecha_reserva || "").slice(0, 10) < hoyIso ||
+        ["cancelada", "cancelado", "anulada", "anulado"].includes(
+          String(reserva?.estado || "").toLowerCase().trim()
+        )
+    )
+    .sort((a, b) => {
+      const fa = `${String(a?.fecha_reserva || "").slice(0, 10)} ${String(
+        a?.hora_inicio || ""
+      )}`;
+      const fb = `${String(b?.fecha_reserva || "").slice(0, 10)} ${String(
+        b?.hora_inicio || ""
+      )}`;
+      return fb.localeCompare(fa);
+    });
+
+  const proximaReserva = proximas[0] || null;
+  const tieneMembresia = Boolean(membresia?.plan || membresia?.id);
+
+  const anioMiembro = (() => {
+    if (!fechaAlta) return "";
+    try {
+      return new Date(String(fechaAlta).slice(0, 10) + "T12:00:00")
+        .getFullYear()
+        .toString();
+    } catch {
+      return "";
+    }
+  })();
+
+  const creditosTotales = Number(
+    membresia?.creditos_totales ??
+      membresia?.limite_clases ??
+      membresia?.clases_incluidas ??
+      membresia?.creditos ??
+      NaN
+  );
+
+  const creditosUsados = Number(
+    membresia?.creditos_usados ??
+      membresia?.clases_usadas ??
+      membresia?.reservas_usadas ??
+      NaN
+  );
+
+  const tieneCreditos =
+    Number.isFinite(creditosTotales) &&
+    creditosTotales > 0 &&
+    Number.isFinite(creditosUsados) &&
+    creditosUsados >= 0;
+
+  const progresoCreditos = tieneCreditos
+    ? Math.min(
+        100,
+        Math.max(0, (creditosUsados / creditosTotales) * 100)
+      )
+    : 0;
+
+  const pasosCompletados =
+    (tieneMembresia ? 1 : 0) + (reservasValidas.length > 0 ? 1 : 0);
+
+  const telefonoWhatsApp = String(telefonoCentro || "").replace(/\D/g, "");
+  const telefonoFinal =
+    telefonoWhatsApp.length === 8
+      ? `507${telefonoWhatsApp}`
+      : telefonoWhatsApp;
+
+  function contactarCentro() {
+    if (!telefonoFinal || typeof window === "undefined") return;
+
+    window.open(
+      `https://wa.me/${telefonoFinal}?text=${encodeURIComponent(
+        `Hola ${empresaNombre || "gimnasio"}, necesito ayuda con mi cuenta.`
+      )}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  return (
+    <section style={S.dashboardHome}>
+      <article style={S.dashboardProfileCard}>
+        <div style={S.dashboardProfileAccent} />
+
+        <div style={S.dashboardAvatar}>
           {fotoFirmada ? (
             <img
               src={fotoFirmada}
@@ -1636,89 +1771,383 @@ function Inicio({
           )}
         </div>
 
-        <h1 style={S.memberProfileName}>{nombre}</h1>
-        <span style={S.memberProfileRole}>Alumno</span>
+        <h1 style={S.dashboardName}>{nombre}</h1>
 
-        <button
-          type="button"
-          onClick={onIrPerfil}
-          style={S.memberEditButton}
-        >
-          ✎ Editar perfil
-        </button>
+        <div style={S.dashboardMemberMeta}>
+          <span style={S.dashboardActivePill}>
+            <span style={S.dashboardActiveDot} />
+            {estadoVisual || "Activo"}
+          </span>
 
-        <div style={S.memberProfileRows}>
-          <ResumenFila
-            label="Fecha de alta"
-            value={fechaAlta ? formatearFechaAgenda(fechaAlta) : "—"}
-          />
-          <ResumenFila
-            label="Estado"
-            value={estadoVisual || "Sin membresía"}
-          />
-          <ResumenFila
-            label="Membresía"
-            value={membresia?.plan || "Sin plan"}
-          />
-          <ResumenFila
-            label="Vencimiento"
-            value={
-              membresia?.fecha_vencimiento
-                ? formatearFechaAgenda(membresia.fecha_vencimiento)
-                : "—"
-            }
-          />
-          <ResumenFila label="Check-ins" value={checkins} />
+          <span style={S.dashboardMemberSince}>
+            {anioMiembro ? `Miembro desde ${anioMiembro}` : "Miembro KONAX"}
+          </span>
+        </div>
+
+        <div style={S.dashboardProfileButtons} className="dashboard-profile-buttons">
+          <button
+            type="button"
+            onClick={() => setQrAbierto(true)}
+            disabled={!qrDisponible || !qrUrl}
+            style={{
+              ...S.dashboardOutlineButton,
+              ...(!qrDisponible || !qrUrl
+                ? S.dashboardButtonDisabled
+                : {}),
+            }}
+          >
+            <span style={S.dashboardButtonIcon}>▦</span>
+            Puerta Virtual
+          </button>
+
+          <button
+            type="button"
+            onClick={contactarCentro}
+            disabled={!telefonoFinal}
+            style={{
+              ...S.dashboardOutlineButton,
+              ...(!telefonoFinal ? S.dashboardButtonDisabled : {}),
+            }}
+          >
+            <span style={S.dashboardButtonIcon}>✉</span>
+            Contacta tu centro
+          </button>
         </div>
 
         <button
           type="button"
-          onClick={() => setQrAbierto(true)}
-          disabled={!qrDisponible || !qrUrl}
-          style={{
-            ...S.memberQrButton,
-            ...(!qrDisponible || !qrUrl ? S.memberQrButtonDisabled : {}),
-          }}
+          onClick={onIrPerfil}
+          style={S.dashboardPrimaryButton}
         >
-          {qrDisponible ? "▣ Ver mi QR" : "QR no disponible"}
+          Ver mi membresía
         </button>
       </article>
 
-      <div style={S.memberHomeActions}>
-        <button
-          type="button"
-          onClick={onIrClases}
-          style={S.memberActionCard}
-        >
-          <span style={S.memberActionIcon}>▣</span>
-          <span style={S.memberActionCopy}>
-            <strong>Clases</strong>
-            <small>Consulta horarios y reserva</small>
-          </span>
-          <span style={S.memberActionArrow}>›</span>
-        </button>
+      <article style={S.dashboardSectionCard}>
+        <div style={S.dashboardSectionHead}>
+          <div>
+            <span style={S.dashboardSectionEyebrow}>PRIMEROS PASOS</span>
+            <h2 style={S.dashboardSectionTitle}>Primeros pasos</h2>
+          </div>
 
-        <button
-          type="button"
-          onClick={onIrReservas}
-          style={S.memberActionCard}
-        >
-          <span style={S.memberActionIcon}>◷</span>
-          <span style={S.memberActionCopy}>
-            <strong>Mis reservas</strong>
-            <small>Revisa tus próximas clases</small>
+          <span style={S.dashboardSectionCounter}>
+            {pasosCompletados} de 2 completados
           </span>
-          <span style={S.memberActionArrow}>›</span>
-        </button>
-      </div>
+        </div>
+
+        <div style={S.dashboardStepsGrid} className="dashboard-steps-grid">
+          <div style={S.dashboardStep}>
+            <div
+              style={{
+                ...S.dashboardStepCircle,
+                ...(tieneMembresia
+                  ? S.dashboardStepCircleDone
+                  : S.dashboardStepCirclePending),
+              }}
+            >
+              {tieneMembresia ? "✓" : "1"}
+            </div>
+
+            <strong style={S.dashboardStepTitle}>
+              Elegir una suscripción
+            </strong>
+
+            <span style={S.dashboardStepText}>
+              {tieneMembresia
+                ? "Ya tienes una membresía activa."
+                : "Selecciona una membresía para comenzar."}
+            </span>
+
+            {!tieneMembresia && (
+              <button
+                type="button"
+                onClick={onIrPerfil}
+                style={S.dashboardStepButton}
+              >
+                Ver membresías
+              </button>
+            )}
+          </div>
+
+          <div style={S.dashboardStep}>
+            <div
+              style={{
+                ...S.dashboardStepCircle,
+                ...(reservasValidas.length > 0
+                  ? S.dashboardStepCircleDone
+                  : S.dashboardStepCirclePending),
+              }}
+            >
+              {reservasValidas.length > 0 ? "✓" : "2"}
+            </div>
+
+            <strong style={S.dashboardStepTitle}>
+              Reservar la primera clase
+            </strong>
+
+            <span style={S.dashboardStepText}>
+              {reservasValidas.length > 0
+                ? "Ya tienes al menos una reserva registrada."
+                : "Elige día, horario y clase desde Horarios."}
+            </span>
+
+            {reservasValidas.length === 0 && (
+              <button
+                type="button"
+                onClick={onIrHorarios}
+                style={S.dashboardStepButton}
+              >
+                Reservar la primera clase
+              </button>
+            )}
+          </div>
+        </div>
+      </article>
+
+      <article style={S.dashboardSectionCard}>
+        {cargandoReservas ? (
+          <div style={S.dashboardLoadingState}>
+            <div style={S.loader} />
+            <strong>Cargando tus reservas...</strong>
+          </div>
+        ) : proximaReserva ? (
+          <>
+            <div style={S.dashboardSectionHead}>
+              <div>
+                <span style={S.dashboardSectionEyebrow}>PRÓXIMA CLASE</span>
+                <h2 style={S.dashboardSectionTitle}>Próxima reserva</h2>
+              </div>
+
+              <span style={S.dashboardUpcomingBadge}>
+                {etiquetaEstadoReserva(proximaReserva?.estado)}
+              </span>
+            </div>
+
+            <div style={S.dashboardNextReservation}>
+              <div style={S.dashboardNextIcon}>◷</div>
+
+              <div style={S.dashboardNextCopy}>
+                <strong style={S.dashboardNextService}>
+                  {proximaReserva?.servicio_nombre || "Clase"}
+                </strong>
+
+                <span style={S.dashboardNextDate}>
+                  {formatearFechaAgenda(proximaReserva?.fecha_reserva)}
+                </span>
+
+                <span style={S.dashboardNextTime}>
+                  {formatearHoraAgenda(proximaReserva?.hora_inicio)}
+                  {proximaReserva?.hora_fin
+                    ? ` – ${formatearHoraAgenda(
+                        proximaReserva.hora_fin
+                      )}`
+                    : ""}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onIrReservas}
+              style={S.dashboardPrimaryButton}
+            >
+              Ver mis reservas
+            </button>
+          </>
+        ) : (
+          <div style={S.dashboardEmptyBlock}>
+            <div style={S.dashboardEmptyIcon}>◷</div>
+            <h2 style={S.dashboardEmptyTitle}>No hay reservas próximas</h2>
+            <p style={S.dashboardEmptyText}>
+              Elige un horario del calendario para asegurar tu lugar en la
+              próxima clase.
+            </p>
+
+            <button
+              type="button"
+              onClick={onIrHorarios}
+              style={S.dashboardPrimaryButtonCompact}
+            >
+              Reservar una clase
+            </button>
+          </div>
+        )}
+
+        {errorReservas && (
+          <div style={S.dashboardInlineWarning}>{errorReservas}</div>
+        )}
+      </article>
+
+      <article style={S.dashboardSectionCard}>
+        <div style={S.dashboardSectionHead}>
+          <div>
+            <span style={S.dashboardSectionEyebrow}>MEMBRESÍA</span>
+            <h2 style={S.dashboardSectionTitle}>
+              Créditos y suscripción
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={onIrPerfil}
+            style={S.dashboardMiniLink}
+          >
+            Ver detalle
+          </button>
+        </div>
+
+        <div style={S.dashboardMembershipCard}>
+          <div style={S.dashboardMembershipTop}>
+            <div>
+              <strong style={S.dashboardPlanTitle}>
+                {membresia?.plan || "Sin plan activo"}
+              </strong>
+
+              <span style={S.dashboardPlanTag}>
+                {membresia?.servicio_nombre ||
+                  membresia?.programa ||
+                  membresia?.tipo ||
+                  "Membresía"}
+              </span>
+            </div>
+
+            <span
+              style={{
+                ...S.dashboardMembershipStatus,
+                ...(tieneMembresia
+                  ? S.dashboardMembershipStatusActive
+                  : S.dashboardMembershipStatusMuted),
+              }}
+            >
+              {tieneMembresia ? "● Activo" : "Sin plan"}
+            </span>
+          </div>
+
+          {tieneCreditos && (
+            <>
+              <div style={S.dashboardCreditsRow}>
+                <span>Uso de créditos</span>
+                <strong>
+                  {creditosUsados} / {creditosTotales} créditos
+                </strong>
+              </div>
+
+              <div style={S.dashboardCreditsTrack}>
+                <div
+                  style={{
+                    ...S.dashboardCreditsProgress,
+                    width: `${progresoCreditos}%`,
+                  }}
+                />
+              </div>
+            </>
+          )}
+
+          <div style={S.dashboardMembershipRows}>
+            <ResumenFila
+              label="Período"
+              value={
+                membresia?.fecha_inicio && membresia?.fecha_vencimiento
+                  ? `${formatearFechaCortaDashboard(
+                      membresia.fecha_inicio
+                    )} – ${formatearFechaCortaDashboard(
+                      membresia.fecha_vencimiento
+                    )}`
+                  : membresia?.fecha_vencimiento
+                  ? `Hasta ${formatearFechaCortaDashboard(
+                      membresia.fecha_vencimiento
+                    )}`
+                  : "No definido"
+              }
+            />
+
+            <ResumenFila
+              label="Caducidad de la suscripción"
+              value={
+                membresia?.fecha_vencimiento
+                  ? formatearFechaCortaDashboard(
+                      membresia.fecha_vencimiento
+                    )
+                  : "No definida"
+              }
+            />
+
+            <ResumenFila label="Check-ins" value={checkins} />
+          </div>
+        </div>
+      </article>
+
+      <article style={S.dashboardSectionCard}>
+        {historial.length > 0 ? (
+          <>
+            <div style={S.dashboardSectionHead}>
+              <div>
+                <span style={S.dashboardSectionEyebrow}>HISTORIAL</span>
+                <h2 style={S.dashboardSectionTitle}>
+                  Últimas reservas
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={onIrReservas}
+                style={S.dashboardMiniLink}
+              >
+                Ver todas
+              </button>
+            </div>
+
+            <div style={S.dashboardHistoryList}>
+              {historial.slice(0, 3).map((reserva) => (
+                <button
+                  key={reserva?.id}
+                  type="button"
+                  onClick={onIrReservas}
+                  style={S.dashboardHistoryItem}
+                >
+                  <div style={S.dashboardHistoryIcon}>↻</div>
+
+                  <div style={S.dashboardHistoryCopy}>
+                    <strong>
+                      {reserva?.servicio_nombre || "Clase"}
+                    </strong>
+                    <span>
+                      {formatearFechaAgenda(reserva?.fecha_reserva)}
+                    </span>
+                  </div>
+
+                  <span style={S.dashboardHistoryArrow}>›</span>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div style={S.dashboardEmptyBlock}>
+            <div style={S.dashboardEmptyIcon}>↻</div>
+            <h2 style={S.dashboardEmptyTitle}>Sin reservas todavía</h2>
+            <p style={S.dashboardEmptyText}>
+              Aquí aparecerá el historial de clases cuando se registre tu
+              primera reserva.
+            </p>
+
+            <button
+              type="button"
+              onClick={onIrHorarios}
+              style={S.dashboardPrimaryButtonCompact}
+            >
+              Ver horarios
+            </button>
+          </div>
+        )}
+      </article>
 
       <button
         type="button"
         onClick={onActualizar}
         disabled={actualizando}
-        style={S.memberRefreshButton}
+        style={S.dashboardRefreshButton}
       >
-        {actualizando ? "Actualizando..." : "↻ Actualizar mi portal"}
+        {actualizando ? "Actualizando..." : "↻ Actualizar dashboard"}
       </button>
 
       {qrAbierto && (
@@ -1738,8 +2167,8 @@ function Inicio({
           >
             <div style={S.qrModalHeader}>
               <div>
-                <span style={S.qrModalEyebrow}>CHECK-IN</span>
-                <h2 style={S.qrModalTitle}>Código QR para ingresar</h2>
+                <span style={S.qrModalEyebrow}>PUERTA VIRTUAL</span>
+                <h2 style={S.qrModalTitle}>Código QR para check-in</h2>
               </div>
 
               <button
@@ -1777,6 +2206,20 @@ function Inicio({
       )}
     </section>
   );
+}
+
+function formatearFechaCortaDashboard(fecha) {
+  if (!fecha) return "—";
+
+  try {
+    return new Intl.DateTimeFormat("es-PA", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(new Date(`${String(fecha).slice(0, 10)}T12:00:00`));
+  } catch {
+    return String(fecha);
+  }
 }
 
 function formatearHoraAgenda(hora) {
@@ -5420,6 +5863,512 @@ const S = {
     margin: "3px 0 0",
     color: "#17251D",
     fontSize: 20,
+  },
+
+  dashboardHome: {
+    display: "grid",
+    gap: 15,
+  },
+
+  dashboardProfileCard: {
+    position: "relative",
+    overflow: "hidden",
+    padding: "28px 24px 24px",
+    border: "1px solid #DEE6EA",
+    borderRadius: 18,
+    background: "#FFFFFF",
+    boxShadow: "0 8px 22px rgba(15,23,42,.05)",
+  },
+
+  dashboardProfileAccent: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+    background: "#0EA5A6",
+  },
+
+  dashboardAvatar: {
+    width: 88,
+    height: 88,
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background: "#E8EEF1",
+    border: "4px solid #D8E1E7",
+    color: "#172033",
+    fontSize: 28,
+    fontWeight: 500,
+  },
+
+  dashboardName: {
+    margin: "18px 0 7px",
+    color: "#172033",
+    fontSize: 30,
+    lineHeight: 1.05,
+  },
+
+  dashboardMemberMeta: {
+    display: "flex",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 18,
+  },
+
+  dashboardActivePill: {
+    minHeight: 26,
+    padding: "0 11px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    border: "1px solid #CDE5C7",
+    borderRadius: 999,
+    background: "#F0F8ED",
+    color: "#4E8A45",
+    fontSize: 9,
+    fontWeight: 850,
+  },
+
+  dashboardActiveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: "50%",
+    background: "#58A64E",
+  },
+
+  dashboardMemberSince: {
+    color: "#8A939C",
+    fontSize: 10,
+  },
+
+  dashboardProfileButtons: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 9,
+    marginBottom: 10,
+  },
+
+  dashboardOutlineButton: {
+    minHeight: 48,
+    padding: "0 12px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    border: "1px solid #D6DEE4",
+    borderRadius: 9,
+    background: "#FFFFFF",
+    color: "#22303D",
+    fontSize: 9.5,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  dashboardButtonIcon: {
+    fontSize: 18,
+  },
+
+  dashboardButtonDisabled: {
+    opacity: 0.48,
+    cursor: "not-allowed",
+  },
+
+  dashboardPrimaryButton: {
+    width: "100%",
+    minHeight: 48,
+    border: 0,
+    borderRadius: 9,
+    background: "#0EA5A6",
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 9px 18px rgba(14,165,166,.16)",
+  },
+
+  dashboardPrimaryButtonCompact: {
+    minHeight: 45,
+    padding: "0 22px",
+    border: 0,
+    borderRadius: 9,
+    background: "#0EA5A6",
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  dashboardSectionCard: {
+    padding: 22,
+    border: "1px solid #DEE6EA",
+    borderRadius: 18,
+    background: "#FFFFFF",
+    boxShadow: "0 8px 22px rgba(15,23,42,.04)",
+    borderTop: "4px solid #0EA5A6",
+  },
+
+  dashboardSectionHead: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 14,
+    paddingBottom: 14,
+    marginBottom: 16,
+    borderBottom: "1px solid #E8EDF1",
+  },
+
+  dashboardSectionEyebrow: {
+    display: "block",
+    marginBottom: 4,
+    color: "#0EA5A6",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: 1,
+  },
+
+  dashboardSectionTitle: {
+    margin: 0,
+    color: "#202B35",
+    fontSize: 16,
+    lineHeight: 1.15,
+  },
+
+  dashboardSectionCounter: {
+    color: "#89939D",
+    fontSize: 9,
+    whiteSpace: "nowrap",
+  },
+
+  dashboardStepsGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 14,
+  },
+
+  dashboardStep: {
+    minWidth: 0,
+    display: "grid",
+    alignContent: "start",
+    gap: 9,
+  },
+
+  dashboardStepCircle: {
+    width: 42,
+    height: 42,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    fontSize: 15,
+    fontWeight: 950,
+  },
+
+  dashboardStepCircleDone: {
+    background: "#4D9A47",
+    color: "#FFFFFF",
+  },
+
+  dashboardStepCirclePending: {
+    border: "2px solid #0EA5A6",
+    background: "#FFFFFF",
+    color: "#0EA5A6",
+  },
+
+  dashboardStepTitle: {
+    color: "#27323C",
+    fontSize: 12,
+    lineHeight: 1.25,
+  },
+
+  dashboardStepText: {
+    color: "#8A949D",
+    fontSize: 9.5,
+    lineHeight: 1.45,
+  },
+
+  dashboardStepButton: {
+    width: "fit-content",
+    minHeight: 36,
+    padding: "0 12px",
+    border: 0,
+    borderRadius: 8,
+    background: "#0EA5A6",
+    color: "#FFFFFF",
+    fontSize: 8.5,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  dashboardEmptyBlock: {
+    minHeight: 245,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 12,
+    textAlign: "center",
+  },
+
+  dashboardEmptyIcon: {
+    width: 72,
+    height: 72,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background: "#E6F7F7",
+    color: "#0EA5A6",
+    fontSize: 30,
+    fontWeight: 800,
+  },
+
+  dashboardEmptyTitle: {
+    margin: 0,
+    maxWidth: 360,
+    color: "#25313B",
+    fontSize: 27,
+    lineHeight: 1.15,
+  },
+
+  dashboardEmptyText: {
+    margin: 0,
+    maxWidth: 390,
+    color: "#8B949D",
+    fontSize: 10.5,
+    lineHeight: 1.55,
+  },
+
+  dashboardLoadingState: {
+    minHeight: 190,
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+    gap: 10,
+    color: "#70808A",
+    fontSize: 9,
+  },
+
+  dashboardUpcomingBadge: {
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#E2F7F6",
+    color: "#0B7D81",
+    fontSize: 7.5,
+    fontWeight: 900,
+  },
+
+  dashboardNextReservation: {
+    marginBottom: 14,
+    padding: 16,
+    display: "grid",
+    gridTemplateColumns: "56px minmax(0,1fr)",
+    gap: 13,
+    alignItems: "center",
+    border: "1px solid #E1E8EC",
+    borderRadius: 14,
+    background: "#F9FBFC",
+  },
+
+  dashboardNextIcon: {
+    width: 56,
+    height: 56,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background: "#E0F5F3",
+    color: "#0EA5A6",
+    fontSize: 24,
+  },
+
+  dashboardNextCopy: {
+    display: "grid",
+    gap: 3,
+    minWidth: 0,
+  },
+
+  dashboardNextService: {
+    color: "#1E2933",
+    fontSize: 14,
+  },
+
+  dashboardNextDate: {
+    color: "#687681",
+    fontSize: 9,
+    textTransform: "capitalize",
+  },
+
+  dashboardNextTime: {
+    color: "#0B7D81",
+    fontSize: 10,
+    fontWeight: 850,
+  },
+
+  dashboardInlineWarning: {
+    marginTop: 12,
+    padding: 10,
+    border: "1px solid #F0D2B6",
+    borderRadius: 9,
+    background: "#FFF8EF",
+    color: "#8A5B28",
+    fontSize: 8.5,
+    lineHeight: 1.4,
+  },
+
+  dashboardMiniLink: {
+    minHeight: 31,
+    padding: "0 9px",
+    border: "1px solid #DDE5E9",
+    borderRadius: 8,
+    background: "#FFFFFF",
+    color: "#0B7D81",
+    fontSize: 8,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  dashboardMembershipCard: {
+    padding: 16,
+    border: "1px solid #DDE5EA",
+    borderRadius: 14,
+    background: "#FFFFFF",
+    boxShadow: "0 4px 12px rgba(15,23,42,.03)",
+  },
+
+  dashboardMembershipTop: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 14,
+  },
+
+  dashboardPlanTitle: {
+    display: "block",
+    marginBottom: 7,
+    color: "#28343E",
+    fontSize: 14,
+  },
+
+  dashboardPlanTag: {
+    display: "inline-flex",
+    minHeight: 26,
+    padding: "0 9px",
+    alignItems: "center",
+    border: "1px solid #C7E8E5",
+    borderRadius: 999,
+    background: "#ECF9F8",
+    color: "#0B7D81",
+    fontSize: 8,
+    fontWeight: 850,
+  },
+
+  dashboardMembershipStatus: {
+    minHeight: 28,
+    padding: "0 10px",
+    display: "inline-flex",
+    alignItems: "center",
+    borderRadius: 999,
+    fontSize: 8.5,
+    fontWeight: 900,
+    whiteSpace: "nowrap",
+  },
+
+  dashboardMembershipStatusActive: {
+    border: "1px solid #CAE5C7",
+    background: "#F1F8EE",
+    color: "#4F8E48",
+  },
+
+  dashboardMembershipStatusMuted: {
+    border: "1px solid #DDE3E7",
+    background: "#F4F6F7",
+    color: "#7D8891",
+  },
+
+  dashboardCreditsRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 7,
+    color: "#73808A",
+    fontSize: 9,
+  },
+
+  dashboardCreditsTrack: {
+    height: 8,
+    marginBottom: 14,
+    overflow: "hidden",
+    borderRadius: 999,
+    background: "#EFF2F4",
+  },
+
+  dashboardCreditsProgress: {
+    height: "100%",
+    borderRadius: 999,
+    background: "#0EA5A6",
+  },
+
+  dashboardMembershipRows: {
+    display: "grid",
+  },
+
+  dashboardHistoryList: {
+    display: "grid",
+    gap: 8,
+  },
+
+  dashboardHistoryItem: {
+    width: "100%",
+    padding: 10,
+    display: "grid",
+    gridTemplateColumns: "42px minmax(0,1fr) 20px",
+    gap: 10,
+    alignItems: "center",
+    border: "1px solid #E3E9ED",
+    borderRadius: 11,
+    background: "#FFFFFF",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  dashboardHistoryIcon: {
+    width: 42,
+    height: 42,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background: "#E6F7F7",
+    color: "#0EA5A6",
+    fontSize: 18,
+  },
+
+  dashboardHistoryCopy: {
+    minWidth: 0,
+    display: "grid",
+    gap: 2,
+  },
+
+  dashboardHistoryCopyStrong: {
+    color: "#26323C",
+    fontSize: 10,
+  },
+
+  dashboardHistoryArrow: {
+    color: "#A3ADB5",
+    fontSize: 19,
+  },
+
+  dashboardRefreshButton: {
+    width: "100%",
+    minHeight: 42,
+    border: "1px solid #DDE5E9",
+    borderRadius: 10,
+    background: "#FFFFFF",
+    color: "#64737D",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
   },
 
   memberHome: {
