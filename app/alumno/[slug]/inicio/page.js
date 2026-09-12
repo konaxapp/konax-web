@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.11-PORTAL-ALUMNO-V18-MENU-PERFIL-QR";
+const VERSION = "2026.09.11-PORTAL-ALUMNO-V19-HORARIOS-DIA";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
   { id: "inicio", label: "Inicio", icon: "⌂" },
   { id: "clases", label: "Clases", icon: "▣" },
   { id: "reservas", label: "Mis reservas", icon: "◷" },
+  { id: "horarios", label: "Horarios", icon: "◴" },
   { id: "whiteboard", label: "Whiteboard", icon: "W" },
   { id: "resultados", label: "Resultados", icon: "★" },
   { id: "configuracion", label: "Mi perfil", icon: "●" },
@@ -63,6 +64,12 @@ export default function PortalAlumnoInicio() {
   const [cargandoReservas, setCargandoReservas] = useState(false);
   const [errorReservas, setErrorReservas] = useState("");
 
+  const [fechaHorarios, setFechaHorarios] = useState("");
+  const [horariosDia, setHorariosDia] = useState([]);
+  const [cargandoHorarios, setCargandoHorarios] = useState(false);
+  const [errorHorarios, setErrorHorarios] = useState("");
+  const [filtroServicioHorarios, setFiltroServicioHorarios] = useState("");
+
   useEffect(() => {
     cargarTodo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -91,6 +98,18 @@ export default function PortalAlumnoInicio() {
     cargarMisReservas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seccion, slug, cuenta?.ok]);
+
+  useEffect(() => {
+    if (seccion !== "horarios" || !slug || !cuenta?.ok) return;
+
+    if (!fechaHorarios) {
+      setFechaHorarios(fechaLocalIso());
+      return;
+    }
+
+    cargarHorarios(fechaHorarios);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seccion, slug, cuenta?.ok, fechaHorarios]);
 
   async function cargarTodo(modoActualizar = false) {
     if (!slug) {
@@ -635,18 +654,65 @@ export default function PortalAlumnoInicio() {
     }
   }
 
-  async function reservarClase(item) {
+  async function cargarHorarios(fechaSeleccionada = fechaHorarios) {
+    if (!fechaSeleccionada || !slug) return [];
+
+    setCargandoHorarios(true);
+    setErrorHorarios("");
+
+    try {
+      const [lista] = await Promise.all([
+        consultarDisponibilidadAgenda(fechaSeleccionada),
+        serviciosAgenda.length
+          ? Promise.resolve(serviciosAgenda)
+          : cargarServiciosAgenda(),
+        cargarMisReservas({ silencioso: true }),
+      ]);
+
+      setHorariosDia(lista);
+      return lista;
+    } catch (err) {
+      console.error("Error cargando horarios del alumno:", err);
+      setHorariosDia([]);
+      setErrorHorarios(
+        err?.message ||
+          "No se pudieron cargar los horarios creados en Agenda."
+      );
+      return [];
+    } finally {
+      setCargandoHorarios(false);
+    }
+  }
+
+  function moverDiaHorarios(dias) {
+    const base = fechaHorarios || fechaLocalIso();
+    setFechaHorarios(sumarDiasIso(base, dias));
+  }
+
+  function irHoyHorarios() {
+    setFechaHorarios(fechaLocalIso());
+  }
+
+  async function reservarClase(item, fechaReserva = fechaClases, origen = "clases") {
     const horarioId = String(
       item?.horario_id || item?.id_horario || item?.id || ""
     ).trim();
 
-    if (!horarioId || !fechaClases) {
-      setErrorClases("No se pudo identificar el horario de esta clase.");
+    const fechaObjetivo = String(fechaReserva || "").slice(0, 10);
+
+    if (!horarioId || !fechaObjetivo) {
+      const mensaje = "No se pudo identificar el horario de esta clase.";
+      if (origen === "horarios") {
+        setErrorHorarios(mensaje);
+      } else {
+        setErrorClases(mensaje);
+      }
       return;
     }
 
     setReservandoHorarioId(horarioId);
     setErrorClases("");
+    setErrorHorarios("");
     setMensajeReserva("");
 
     try {
@@ -655,7 +721,7 @@ export default function PortalAlumnoInicio() {
         {
           p_slug: slug,
           p_horario_id: horarioId,
-          p_fecha_reserva: fechaClases,
+          p_fecha_reserva: fechaObjetivo,
           p_observaciones: "Reserva creada desde Portal del Alumno",
         }
       );
@@ -676,14 +742,21 @@ export default function PortalAlumnoInicio() {
       }.`;
 
       await Promise.all([
-        cargarClases(fechaClases),
+        origen === "horarios"
+          ? cargarHorarios(fechaObjetivo)
+          : cargarClases(fechaObjetivo),
         cargarMisReservas({ silencioso: true }),
       ]);
 
       setMensajeReserva(mensajeConfirmacion);
     } catch (err) {
       console.error("Error reservando clase:", err);
-      setErrorClases(err?.message || "No se pudo reservar esta clase.");
+      const mensaje = err?.message || "No se pudo reservar esta clase.";
+      if (origen === "horarios") {
+        setErrorHorarios(mensaje);
+      } else {
+        setErrorClases(mensaje);
+      }
     } finally {
       setReservandoHorarioId("");
     }
@@ -1119,6 +1192,10 @@ export default function PortalAlumnoInicio() {
           .agenda-toolbar {
             grid-template-columns: 1fr !important;
           }
+
+          .schedule-controls {
+            grid-template-columns: 1fr !important;
+          }
         }
 
         @media (max-width: 390px) {
@@ -1317,6 +1394,33 @@ export default function PortalAlumnoInicio() {
             />
           )}
 
+          {seccion === "horarios" && (
+            <HorariosDia
+              fecha={fechaHorarios}
+              setFecha={setFechaHorarios}
+              horarios={horariosDia}
+              servicios={serviciosAgenda}
+              filtroServicio={filtroServicioHorarios}
+              setFiltroServicio={setFiltroServicioHorarios}
+              reservas={misReservas}
+              cargando={cargandoHorarios}
+              error={errorHorarios}
+              mensaje={mensajeReserva}
+              reservandoHorarioId={reservandoHorarioId}
+              onAnterior={() => moverDiaHorarios(-1)}
+              onHoy={irHoyHorarios}
+              onSiguiente={() => moverDiaHorarios(1)}
+              onActualizar={() => cargarHorarios(fechaHorarios)}
+              onReservar={(item) =>
+                reservarClase(item, fechaHorarios, "horarios")
+              }
+              onVerClase={() => {
+                setFechaClases(fechaHorarios);
+                cambiarSeccion("clases");
+              }}
+            />
+          )}
+
           {seccion === "whiteboard" && (
             <WhiteboardWod
               servicios={serviciosWod}
@@ -1386,7 +1490,7 @@ export default function PortalAlumnoInicio() {
             { id: "inicio", label: "Inicio", icon: "⌂" },
             { id: "clases", label: "Clases", icon: "▣" },
             { id: "reservas", label: "Reservas", icon: "◷" },
-            { id: "resultados", label: "Resultados", icon: "★" },
+            { id: "horarios", label: "Horarios", icon: "◴" },
             { id: "configuracion", label: "Perfil", icon: "●" },
           ].map((item) => (
             <button
@@ -1638,6 +1742,325 @@ function estiloEstadoReserva(estado) {
   }
 
   return S.reservaStatusOk;
+}
+
+
+function nombreMesAgenda(fecha) {
+  if (!fecha) return "";
+
+  try {
+    return new Intl.DateTimeFormat("es-PA", {
+      month: "long",
+      year: "numeric",
+    }).format(new Date(`${String(fecha).slice(0, 10)}T12:00:00`));
+  } catch {
+    return String(fecha);
+  }
+}
+
+function duracionHorarioAgenda(item) {
+  const directa = Number(item?.duracion_minutos || 0);
+  if (Number.isFinite(directa) && directa > 0) return directa;
+
+  try {
+    const [hi, mi] = String(item?.hora_inicio || "00:00").split(":").map(Number);
+    const [hf, mf] = String(item?.hora_fin || "00:00").split(":").map(Number);
+    const minutos = (hf * 60 + mf) - (hi * 60 + mi);
+    return minutos > 0 ? minutos : 60;
+  } catch {
+    return 60;
+  }
+}
+
+function capacidadHorarioAgenda(item) {
+  const totalRaw =
+    item?.capacidad ??
+    item?.cupo_maximo ??
+    item?.cupos_totales ??
+    item?.capacidad_maxima ??
+    item?.cupos ??
+    null;
+
+  const libresRaw =
+    item?.disponibles ??
+    item?.cupos_disponibles ??
+    null;
+
+  const total = totalRaw === null || totalRaw === undefined
+    ? null
+    : Number(totalRaw);
+
+  const libres = libresRaw === null || libresRaw === undefined
+    ? null
+    : Number(libresRaw);
+
+  const totalValido = Number.isFinite(total) && total >= 0 ? total : null;
+  const libresValido = Number.isFinite(libres) && libres >= 0 ? libres : null;
+
+  const ocupados =
+    totalValido !== null && libresValido !== null
+      ? Math.max(0, totalValido - libresValido)
+      : null;
+
+  return { total: totalValido, libres: libresValido, ocupados };
+}
+
+function HorariosDia({
+  fecha,
+  setFecha,
+  horarios,
+  servicios,
+  filtroServicio,
+  setFiltroServicio,
+  reservas,
+  cargando,
+  error,
+  mensaje,
+  reservandoHorarioId,
+  onAnterior,
+  onHoy,
+  onSiguiente,
+  onActualizar,
+  onReservar,
+  onVerClase,
+}) {
+  const listaFiltrada = (Array.isArray(horarios) ? horarios : []).filter(
+    (item) => {
+      if (!filtroServicio) return true;
+
+      const servicioItem = String(
+        item?.servicio_id ||
+          item?.id_servicio ||
+          item?.servicio?.id ||
+          ""
+      ).trim();
+
+      return servicioItem === String(filtroServicio);
+    }
+  );
+
+  return (
+    <section style={S.scheduleShell}>
+      <div style={S.scheduleMonth}>{nombreMesAgenda(fecha)}</div>
+
+      <div style={S.scheduleControls}>
+        <div style={S.scheduleViewSwitch}>
+          <button type="button" style={S.scheduleViewActive}>
+            ☷ Día
+          </button>
+        </div>
+
+        <div style={S.scheduleNavButtons}>
+          <button
+            type="button"
+            onClick={onAnterior}
+            style={S.scheduleNavButton}
+            aria-label="Día anterior"
+          >
+            ‹
+          </button>
+
+          <button type="button" onClick={onHoy} style={S.scheduleTodayButton}>
+            Hoy
+          </button>
+
+          <button
+            type="button"
+            onClick={onSiguiente}
+            style={S.scheduleNavButton}
+            aria-label="Día siguiente"
+          >
+            ›
+          </button>
+        </div>
+      </div>
+
+      <label style={S.scheduleProgramField}>
+        <span style={S.scheduleFieldLabel}>Programa</span>
+        <select
+          value={filtroServicio}
+          onChange={(e) => setFiltroServicio(e.target.value)}
+          style={S.scheduleProgramSelect}
+        >
+          <option value="">Todos los programas</option>
+          {(Array.isArray(servicios) ? servicios : []).map((servicio) => (
+            <option key={servicio.id} value={String(servicio.id)}>
+              {servicio.nombre ||
+                servicio.servicio_nombre ||
+                servicio.servicio ||
+                "Clase"}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div style={S.scheduleDateBar}>
+        <strong>{formatearFechaAgenda(fecha)}</strong>
+
+        <div style={S.scheduleDateActions}>
+          <input
+            type="date"
+            value={fecha}
+            onChange={(e) => setFecha(e.target.value)}
+            style={S.scheduleHiddenDate}
+            aria-label="Seleccionar fecha"
+          />
+
+          <button
+            type="button"
+            onClick={onActualizar}
+            disabled={cargando || !fecha}
+            style={S.scheduleRefreshButton}
+          >
+            {cargando ? "Actualizando..." : "↻"}
+          </button>
+        </div>
+      </div>
+
+      {mensaje && <div style={S.agendaSuccess}>{mensaje}</div>}
+      {error && <div style={S.agendaError}>{error}</div>}
+
+      {cargando ? (
+        <div style={S.scheduleLoading}>
+          <div style={S.loader} />
+          <strong>Cargando horarios...</strong>
+        </div>
+      ) : listaFiltrada.length > 0 ? (
+        <div style={S.scheduleList}>
+          {listaFiltrada.map((item, index) => {
+            const horarioId = String(
+              item?.horario_id || item?.id_horario || item?.id || index
+            ).trim();
+
+            const capacidad = capacidadHorarioAgenda(item);
+            const tieneCupos =
+              capacidad.libres === null || capacidad.libres > 0;
+
+            const yaReservado = (Array.isArray(reservas) ? reservas : []).some(
+              (reserva) => {
+                const reservaHorarioId = String(
+                  reserva?.horario_id || reserva?.id_horario || ""
+                ).trim();
+                const reservaFecha = String(
+                  reserva?.fecha_reserva || ""
+                ).slice(0, 10);
+                const estadoReserva = String(
+                  reserva?.estado || ""
+                ).toLowerCase().trim();
+
+                return (
+                  reservaHorarioId === horarioId &&
+                  reservaFecha === String(fecha || "").slice(0, 10) &&
+                  estadoReserva !== "cancelada"
+                );
+              }
+            );
+
+            const reservando =
+              String(reservandoHorarioId) === horarioId;
+
+            const instructor =
+              item?.instructor ||
+              item?.profesional_nombre ||
+              item?.coach ||
+              "Sin instructor";
+
+            const sala =
+              item?.sala_nombre ||
+              item?.sala ||
+              item?.ubicacion ||
+              item?.ubicacion_nombre ||
+              "";
+
+            return (
+              <article
+                key={`${horarioId}-${item?.hora_inicio || index}`}
+                style={S.scheduleClassCard}
+              >
+                <div style={S.scheduleTimeColumn}>
+                  <div style={S.scheduleClock}>◷</div>
+                  <strong style={S.scheduleTime}>
+                    {formatearHoraAgenda(item?.hora_inicio)}
+                  </strong>
+                </div>
+
+                <div style={S.scheduleClassMain}>
+                  <strong style={S.scheduleClassName}>
+                    {String(
+                      item?.servicio_nombre ||
+                        item?.servicio ||
+                        item?.nombre_servicio ||
+                        "Clase"
+                    ).toUpperCase()}
+                  </strong>
+
+                  <span style={S.scheduleDuration}>
+                    {duracionHorarioAgenda(item)} min
+                  </span>
+
+                  <div style={S.scheduleMetaRow}>
+                    <span>
+                      👥{" "}
+                      {capacidad.total !== null &&
+                      capacidad.ocupados !== null
+                        ? `${capacidad.ocupados} de ${capacidad.total}`
+                        : capacidad.libres !== null
+                        ? `${capacidad.libres} libres`
+                        : "Cupos disponibles"}
+                    </span>
+
+                    <span>● {instructor}</span>
+
+                    {sala && <span>➤ {sala}</span>}
+                  </div>
+                </div>
+
+                <div style={S.scheduleActions}>
+                  <button
+                    type="button"
+                    disabled={yaReservado || !tieneCupos || reservando}
+                    onClick={() => onReservar(item)}
+                    style={{
+                      ...S.scheduleReserveButton,
+                      ...(yaReservado
+                        ? S.scheduleReserveButtonReserved
+                        : !tieneCupos || reservando
+                        ? S.scheduleReserveButtonDisabled
+                        : {}),
+                    }}
+                  >
+                    {yaReservado
+                      ? "✓ Reservado"
+                      : reservando
+                      ? "Reservando..."
+                      : tieneCupos
+                      ? "Reservar"
+                      : "Sin cupos"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onVerClase(item)}
+                    style={S.scheduleViewButton}
+                  >
+                    Ver clase
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={S.scheduleEmpty}>
+          <div style={S.scheduleEmptyIcon}>◴</div>
+          <strong>No hay horarios para este día</strong>
+          <span>
+            Usa las flechas para cambiar de fecha o selecciona otro programa.
+          </span>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function ClasesAgenda({
@@ -5680,6 +6103,292 @@ const S = {
     color: "#788697",
     fontSize: 9,
     lineHeight: 1.5,
+  },
+
+  scheduleShell: {
+    marginBottom: 15,
+    display: "grid",
+    gap: 12,
+  },
+
+  scheduleMonth: {
+    padding: "8px 4px 2px",
+    color: "#26323F",
+    fontSize: 22,
+    textAlign: "center",
+    textTransform: "lowercase",
+  },
+
+  scheduleControls: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  scheduleViewSwitch: {
+    display: "flex",
+    alignItems: "center",
+  },
+
+  scheduleViewActive: {
+    minHeight: 42,
+    padding: "0 16px",
+    border: 0,
+    borderRadius: 9,
+    background: "#0EA5A6",
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: 900,
+    cursor: "default",
+  },
+
+  scheduleNavButtons: {
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+  },
+
+  scheduleNavButton: {
+    width: 42,
+    minHeight: 42,
+    border: "1px solid #D8E1E9",
+    borderRadius: 9,
+    background: "#FFFFFF",
+    color: "#3B4652",
+    fontSize: 26,
+    lineHeight: 1,
+    cursor: "pointer",
+  },
+
+  scheduleTodayButton: {
+    minHeight: 42,
+    padding: "0 14px",
+    border: "1px solid #D8E1E9",
+    borderRadius: 9,
+    background: "#FFFFFF",
+    color: "#3B4652",
+    fontSize: 10,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  scheduleProgramField: {
+    display: "grid",
+    gap: 5,
+  },
+
+  scheduleFieldLabel: {
+    color: "#788491",
+    fontSize: 7,
+    fontWeight: 900,
+    letterSpacing: .8,
+    textTransform: "uppercase",
+  },
+
+  scheduleProgramSelect: {
+    width: "100%",
+    minHeight: 48,
+    padding: "0 14px",
+    border: "1px solid #D8E1E9",
+    borderRadius: 11,
+    outline: "none",
+    background: "#FFFFFF",
+    color: "#26323F",
+    fontSize: 13,
+  },
+
+  scheduleDateBar: {
+    minHeight: 58,
+    padding: "0 14px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    border: "1px solid #DDE5EC",
+    borderRadius: 12,
+    background: "#FFFFFF",
+    color: "#26323F",
+    fontSize: 13,
+    textTransform: "capitalize",
+  },
+
+  scheduleDateActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+  },
+
+  scheduleHiddenDate: {
+    width: 42,
+    minHeight: 36,
+    padding: 4,
+    border: "1px solid #DCE4EA",
+    borderRadius: 8,
+    background: "#F8FAFC",
+    color: "#56616D",
+  },
+
+  scheduleRefreshButton: {
+    width: 36,
+    minHeight: 36,
+    border: "1px solid #DCE4EA",
+    borderRadius: 8,
+    background: "#F8FAFC",
+    color: "#0D667D",
+    fontSize: 17,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  scheduleList: {
+    display: "grid",
+    gap: 10,
+  },
+
+  scheduleClassCard: {
+    padding: 14,
+    display: "grid",
+    gridTemplateColumns: "64px minmax(0,1fr)",
+    gap: 12,
+    border: "1px solid #DDE5EC",
+    borderRadius: 14,
+    background: "#FFFFFF",
+    boxShadow: "0 8px 20px rgba(15,23,42,.05)",
+  },
+
+  scheduleTimeColumn: {
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "start",
+    gap: 6,
+  },
+
+  scheduleClock: {
+    width: 48,
+    height: 48,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background: "#E6F7F4",
+    color: "#0EA5A6",
+    fontSize: 21,
+    fontWeight: 950,
+  },
+
+  scheduleTime: {
+    color: "#7C8792",
+    fontSize: 10,
+  },
+
+  scheduleClassMain: {
+    minWidth: 0,
+  },
+
+  scheduleClassName: {
+    display: "block",
+    color: "#18212B",
+    fontSize: 15,
+    lineHeight: 1.2,
+  },
+
+  scheduleDuration: {
+    display: "block",
+    marginTop: 4,
+    color: "#8A949E",
+    fontSize: 10,
+  },
+
+  scheduleMetaRow: {
+    marginTop: 8,
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "5px 10px",
+    color: "#727D88",
+    fontSize: 8,
+    lineHeight: 1.4,
+  },
+
+  scheduleActions: {
+    gridColumn: "1 / -1",
+    display: "grid",
+    gap: 7,
+  },
+
+  scheduleReserveButton: {
+    width: "100%",
+    minHeight: 39,
+    border: 0,
+    borderRadius: 8,
+    background: "#0EA5A6",
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+
+  scheduleReserveButtonReserved: {
+    background: "#DCFCE7",
+    color: "#166534",
+    border: "1px solid #BBF7D0",
+    cursor: "default",
+  },
+
+  scheduleReserveButtonDisabled: {
+    background: "#D8E0E5",
+    color: "#77838D",
+    cursor: "not-allowed",
+  },
+
+  scheduleViewButton: {
+    width: "100%",
+    minHeight: 39,
+    border: "1px solid #0EA5A6",
+    borderRadius: 8,
+    background: "#FFFFFF",
+    color: "#0D7C7D",
+    fontSize: 9,
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
+  scheduleLoading: {
+    minHeight: 300,
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 10,
+    border: "1px solid #DFE7EF",
+    borderRadius: 16,
+    background: "#FFFFFF",
+    color: "#304153",
+  },
+
+  scheduleEmpty: {
+    minHeight: 280,
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 8,
+    padding: 22,
+    border: "1px solid #DFE7EF",
+    borderRadius: 16,
+    background: "#FFFFFF",
+    color: "#72808D",
+    textAlign: "center",
+    fontSize: 9,
+  },
+
+  scheduleEmptyIcon: {
+    width: 56,
+    height: 56,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background: "#E6F7F4",
+    color: "#0EA5A6",
+    fontSize: 22,
+    fontWeight: 950,
   },
 
   profileSettingsShell: {
