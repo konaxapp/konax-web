@@ -4,16 +4,16 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.09-PORTAL-ALUMNO-V17-RESULTADOS-NOTIFICACIONES";
+const VERSION = "2026.09.11-PORTAL-ALUMNO-V18-MENU-PERFIL-QR";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
-  { id: "inicio", label: "Mi QR", icon: "QR" },
+  { id: "inicio", label: "Inicio", icon: "⌂" },
   { id: "clases", label: "Clases", icon: "▣" },
   { id: "reservas", label: "Mis reservas", icon: "◷" },
-  { id: "whiteboard", label: "Whiteboard", icon: "▤" },
-  { id: "resultados", label: "Resultados", icon: "▥" },
-  { id: "configuracion", label: "Configuración", icon: "⚙" },
+  { id: "whiteboard", label: "Whiteboard", icon: "W" },
+  { id: "resultados", label: "Resultados", icon: "★" },
+  { id: "configuracion", label: "Mi perfil", icon: "●" },
 ];
 
 export default function PortalAlumnoInicio() {
@@ -41,7 +41,7 @@ export default function PortalAlumnoInicio() {
   const [mensajePerfil, setMensajePerfil] = useState("");
   const [error, setError] = useState("");
 
-  const [menuAbierto, setMenuAbierto] = useState(true);
+  const [menuAbierto, setMenuAbierto] = useState(false);
   const [seccion, setSeccion] = useState("inicio");
 
   const [serviciosWod, setServiciosWod] = useState([]);
@@ -1065,7 +1065,11 @@ export default function PortalAlumnoInicio() {
           .portal-content {
             padding-left: 15px !important;
             padding-right: 15px !important;
-            padding-bottom: 28px !important;
+            padding-bottom: 104px !important;
+          }
+
+          .mobile-bottom {
+            display: grid !important;
           }
 
           .desktop-nav {
@@ -1266,8 +1270,23 @@ export default function PortalAlumnoInicio() {
               qrUrl={qrUrl}
               nombre={cuenta?.nombre || "Alumno"}
               estadoVisual={estadoVisual}
+              fotoFirmada={fotoFirmada}
+              iniciales={iniciales}
+              membresia={membresia}
+              checkins={cuenta?.checkins_total ?? cuenta?.checkins ?? "—"}
+              fechaAlta={
+                cuenta?.fecha_alta ||
+                cuenta?.fecha_registro ||
+                cuenta?.created_at ||
+                perfil?.fecha_alta ||
+                perfil?.created_at ||
+                ""
+              }
               onActualizar={() => cargarTodo(true)}
               actualizando={actualizando}
+              onIrPerfil={() => cambiarSeccion("configuracion")}
+              onIrClases={() => cambiarSeccion("clases")}
+              onIrReservas={() => cambiarSeccion("reservas")}
             />
           )}
 
@@ -1357,6 +1376,33 @@ export default function PortalAlumnoInicio() {
             <span style={S.version}>{VERSION}</span>
           </footer>
         </div>
+
+        <nav
+          style={S.mobileBottom}
+          className="mobile-bottom"
+          aria-label="Navegación principal"
+        >
+          {[
+            { id: "inicio", label: "Inicio", icon: "⌂" },
+            { id: "clases", label: "Clases", icon: "▣" },
+            { id: "reservas", label: "Reservas", icon: "◷" },
+            { id: "resultados", label: "Resultados", icon: "★" },
+            { id: "configuracion", label: "Perfil", icon: "●" },
+          ].map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => cambiarSeccion(item.id)}
+              style={{
+                ...S.bottomItem,
+                ...(seccion === item.id ? S.bottomItemActive : {}),
+              }}
+            >
+              <span style={S.bottomIcon}>{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
       </section>
     </main>
   );
@@ -1367,71 +1413,175 @@ function Inicio({
   qrUrl,
   nombre,
   estadoVisual,
+  fotoFirmada,
+  iniciales,
+  membresia,
+  checkins,
+  fechaAlta,
   onActualizar,
   actualizando,
+  onIrPerfil,
+  onIrClases,
+  onIrReservas,
 }) {
+  const [qrAbierto, setQrAbierto] = useState(false);
+
   return (
-    <section style={S.qrSection}>
-      <div style={S.sectionHeading}>
-        <div>
-          <span style={S.qrEyebrow}>ACCESO AL GIMNASIO</span>
-          <h1 style={S.sectionTitle}>Mi código QR</h1>
-        </div>
+    <section style={S.memberHome}>
+      <article style={S.memberProfileCard}>
+        <div style={S.memberProfileAccent} />
 
-        <span
-          style={{
-            ...S.qrStatus,
-            ...(qrDisponible ? S.qrStatusActive : S.qrStatusInactive),
-          }}
-        >
-          {qrDisponible ? "QR ACTIVO" : "SIN QR"}
-        </span>
-      </div>
-
-      <div style={S.qrLayout} className="qr-layout">
-        <div>
-          {qrDisponible && qrUrl ? (
-            <div style={S.qrFrame}>
-              <img
-                src={qrUrl}
-                alt={`Código QR de ${nombre}`}
-                style={S.qrImage}
-              />
-            </div>
+        <div style={S.memberProfileAvatar}>
+          {fotoFirmada ? (
+            <img
+              src={fotoFirmada}
+              alt={nombre || "Alumno"}
+              style={S.avatarImage}
+            />
           ) : (
-            <div style={S.noQr}>
-              <div style={S.noQrIcon}>QR</div>
-              <strong>QR no disponible</strong>
-              <span>El gimnasio debe generar un QR para tu ficha de alumno.</span>
-            </div>
+            <span>{iniciales}</span>
           )}
         </div>
 
-        <div style={S.qrInstructions}>
-          <span style={S.qrInstructionEyebrow}>IDENTIFICACIÓN PERSONAL</span>
-          <h2 style={S.qrInstructionTitle}>Muéstralo al ingresar</h2>
-          <p style={S.qrInstructionText}>
-            Este código identifica tu cuenta de alumno. Preséntalo en el
-            gimnasio para registrar tu ingreso y validar tu membresía.
-          </p>
+        <h1 style={S.memberProfileName}>{nombre}</h1>
+        <span style={S.memberProfileRole}>Alumno</span>
 
-          <div style={{ marginTop: 14 }}>
-            <span style={S.qrInstructionEyebrow}>ESTADO</span>
-            <strong style={{ display: "block", marginTop: 4, color: "#1F3428", fontSize: 12 }}>
-              {estadoVisual || "Sin membresía"}
-            </strong>
-          </div>
+        <button
+          type="button"
+          onClick={onIrPerfil}
+          style={S.memberEditButton}
+        >
+          ✎ Editar perfil
+        </button>
 
+        <div style={S.memberProfileRows}>
+          <ResumenFila
+            label="Fecha de alta"
+            value={fechaAlta ? formatearFechaAgenda(fechaAlta) : "—"}
+          />
+          <ResumenFila
+            label="Estado"
+            value={estadoVisual || "Sin membresía"}
+          />
+          <ResumenFila
+            label="Membresía"
+            value={membresia?.plan || "Sin plan"}
+          />
+          <ResumenFila
+            label="Vencimiento"
+            value={
+              membresia?.fecha_vencimiento
+                ? formatearFechaAgenda(membresia.fecha_vencimiento)
+                : "—"
+            }
+          />
+          <ResumenFila label="Check-ins" value={checkins} />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setQrAbierto(true)}
+          disabled={!qrDisponible || !qrUrl}
+          style={{
+            ...S.memberQrButton,
+            ...(!qrDisponible || !qrUrl ? S.memberQrButtonDisabled : {}),
+          }}
+        >
+          {qrDisponible ? "▣ Ver mi QR" : "QR no disponible"}
+        </button>
+      </article>
+
+      <div style={S.memberHomeActions}>
+        <button
+          type="button"
+          onClick={onIrClases}
+          style={S.memberActionCard}
+        >
+          <span style={S.memberActionIcon}>▣</span>
+          <span style={S.memberActionCopy}>
+            <strong>Clases</strong>
+            <small>Consulta horarios y reserva</small>
+          </span>
+          <span style={S.memberActionArrow}>›</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={onIrReservas}
+          style={S.memberActionCard}
+        >
+          <span style={S.memberActionIcon}>◷</span>
+          <span style={S.memberActionCopy}>
+            <strong>Mis reservas</strong>
+            <small>Revisa tus próximas clases</small>
+          </span>
+          <span style={S.memberActionArrow}>›</span>
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={onActualizar}
+        disabled={actualizando}
+        style={S.memberRefreshButton}
+      >
+        {actualizando ? "Actualizando..." : "↻ Actualizar mi portal"}
+      </button>
+
+      {qrAbierto && (
+        <div style={S.qrModalOverlay} role="presentation">
           <button
             type="button"
-            onClick={onActualizar}
-            disabled={actualizando}
-            style={{ ...S.outlineSmallButton, marginTop: 16, minHeight: 38 }}
+            aria-label="Cerrar código QR"
+            onClick={() => setQrAbierto(false)}
+            style={S.qrModalBackdrop}
+          />
+
+          <div
+            style={S.qrModalCard}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Código QR para check-in"
           >
-            {actualizando ? "Actualizando..." : "Actualizar QR"}
-          </button>
+            <div style={S.qrModalHeader}>
+              <div>
+                <span style={S.qrModalEyebrow}>CHECK-IN</span>
+                <h2 style={S.qrModalTitle}>Código QR para ingresar</h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setQrAbierto(false)}
+                style={S.qrModalClose}
+                aria-label="Cerrar"
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={S.qrModalImageWrap}>
+              <img
+                src={qrUrl}
+                alt={`Código QR de ${nombre}`}
+                style={S.qrModalImage}
+              />
+            </div>
+
+            <p style={S.qrModalText}>
+              Presenta este código en recepción o en el lector del gimnasio.
+            </p>
+
+            <a
+              href={qrUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={S.qrDownloadLink}
+            >
+              Abrir / descargar QR
+            </a>
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }
@@ -4127,6 +4277,268 @@ const S = {
     margin: "3px 0 0",
     color: "#17251D",
     fontSize: 20,
+  },
+
+  memberHome: {
+    marginBottom: 15,
+    display: "grid",
+    gap: 14,
+  },
+
+  memberProfileCard: {
+    position: "relative",
+    overflow: "hidden",
+    padding: "28px 20px 20px",
+    display: "grid",
+    justifyItems: "center",
+    border: "1px solid #DDE6EE",
+    borderRadius: 20,
+    background: "#FFFFFF",
+    boxShadow: "0 12px 28px rgba(15,23,42,.06)",
+  },
+
+  memberProfileAccent: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+    background: "linear-gradient(90deg,#0EA5A6 0%,#0D506B 100%)",
+  },
+
+  memberProfileAvatar: {
+    width: 112,
+    height: 112,
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background: "#E9EEF4",
+    border: "5px solid #F5F7FA",
+    boxShadow: "0 0 0 2px #D6DEE7",
+    color: "#111827",
+    fontSize: 34,
+    fontWeight: 850,
+  },
+
+  memberProfileName: {
+    margin: "14px 0 2px",
+    maxWidth: "100%",
+    overflow: "hidden",
+    color: "#172033",
+    fontSize: 22,
+    lineHeight: 1.12,
+    textAlign: "center",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  memberProfileRole: {
+    color: "#7A8797",
+    fontSize: 10,
+  },
+
+  memberEditButton: {
+    minHeight: 40,
+    marginTop: 13,
+    padding: "0 17px",
+    border: "1px solid #D7DEE7",
+    borderRadius: 9,
+    background: "#F8FAFC",
+    color: "#3C4858",
+    fontSize: 10,
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
+  memberProfileRows: {
+    width: "100%",
+    marginTop: 20,
+    paddingTop: 3,
+    borderTop: "1px solid #E8EDF2",
+  },
+
+  memberQrButton: {
+    width: "100%",
+    minHeight: 46,
+    marginTop: 16,
+    border: 0,
+    borderRadius: 11,
+    background: "#0EA5A6",
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 10px 22px rgba(14,165,166,.18)",
+  },
+
+  memberQrButtonDisabled: {
+    background: "#D9E0E6",
+    color: "#77838F",
+    cursor: "not-allowed",
+    boxShadow: "none",
+  },
+
+  memberHomeActions: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 10,
+  },
+
+  memberActionCard: {
+    minHeight: 76,
+    padding: 12,
+    display: "grid",
+    gridTemplateColumns: "40px minmax(0,1fr) 14px",
+    alignItems: "center",
+    gap: 9,
+    border: "1px solid #DDE5EC",
+    borderRadius: 14,
+    background: "#FFFFFF",
+    textAlign: "left",
+    boxShadow: "0 7px 18px rgba(15,23,42,.04)",
+    cursor: "pointer",
+  },
+
+  memberActionIcon: {
+    width: 40,
+    height: 40,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 12,
+    background: "#E7F6F7",
+    color: "#0D6F7C",
+    fontSize: 17,
+    fontWeight: 900,
+  },
+
+  memberActionCopy: {
+    minWidth: 0,
+    display: "grid",
+    gap: 3,
+    color: "#172033",
+    fontSize: 10,
+  },
+
+  memberActionArrow: {
+    color: "#A2ADB8",
+    fontSize: 20,
+  },
+
+  memberRefreshButton: {
+    minHeight: 40,
+    border: "1px solid #DCE4EB",
+    borderRadius: 10,
+    background: "#FFFFFF",
+    color: "#536170",
+    fontSize: 9,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  qrModalOverlay: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 130,
+    display: "grid",
+    placeItems: "center",
+    padding: 18,
+  },
+
+  qrModalBackdrop: {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    border: 0,
+    background: "rgba(7,17,31,.68)",
+    backdropFilter: "blur(3px)",
+    cursor: "pointer",
+  },
+
+  qrModalCard: {
+    position: "relative",
+    zIndex: 1,
+    width: "min(430px,100%)",
+    padding: 18,
+    borderRadius: 18,
+    background: "#FFFFFF",
+    boxShadow: "0 24px 70px rgba(0,0,0,.28)",
+  },
+
+  qrModalHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 14,
+    paddingBottom: 12,
+    borderBottom: "1px solid #E8EDF2",
+  },
+
+  qrModalEyebrow: {
+    display: "block",
+    color: "#0EA5A6",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: 1,
+  },
+
+  qrModalTitle: {
+    margin: "3px 0 0",
+    color: "#172033",
+    fontSize: 20,
+    lineHeight: 1.2,
+  },
+
+  qrModalClose: {
+    width: 34,
+    height: 34,
+    flex: "0 0 auto",
+    border: 0,
+    borderRadius: 9,
+    background: "#F2F5F7",
+    color: "#7A8792",
+    fontSize: 22,
+    cursor: "pointer",
+  },
+
+  qrModalImageWrap: {
+    width: "min(300px,100%)",
+    aspectRatio: "1 / 1",
+    margin: "20px auto 14px",
+    padding: 12,
+    border: "1px solid #DDE5EC",
+    borderRadius: 16,
+    background: "#FFFFFF",
+  },
+
+  qrModalImage: {
+    width: "100%",
+    height: "100%",
+    display: "block",
+    objectFit: "contain",
+  },
+
+  qrModalText: {
+    margin: "0 auto 13px",
+    maxWidth: 320,
+    color: "#697687",
+    fontSize: 9,
+    lineHeight: 1.5,
+    textAlign: "center",
+  },
+
+  qrDownloadLink: {
+    width: "100%",
+    minHeight: 43,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 10,
+    background: "#0EA5A6",
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: 900,
+    textDecoration: "none",
   },
 
   qrSection: {
