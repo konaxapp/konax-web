@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabasePortalAlumno as supabase } from "../../../../lib/supabasePortalAlumno";
 
-const VERSION = "2026.09.11-PORTAL-ALUMNO-V20-HORARIOS-DIA-SEMANA";
+const VERSION = "2026.09.11-PORTAL-ALUMNO-V21-HORARIOS-SEMANA-CUADRICULA";
 const BUCKET_PERFIL = "alumnos-perfil";
 
 const MENU = [
@@ -1926,6 +1926,16 @@ function HorariosDia({
     sumarDiasVista(lunesSemana, index)
   );
 
+  const horasSemana = Array.from(
+    new Set(
+      listaFiltrada
+        .map((item) => normalizarHora24Agenda(item?.hora_inicio))
+        .filter(Boolean)
+    )
+  ).sort();
+
+  const hoyAgenda = fechaLocalIsoAgenda();
+
   function estaReservado(horarioId, fechaItem) {
     return (Array.isArray(reservas) ? reservas : []).some((reserva) => {
       const reservaHorarioId = String(
@@ -2135,30 +2145,165 @@ function HorariosDia({
           <strong>{vista === "semana" ? "Cargando semana..." : "Cargando horarios..."}</strong>
         </div>
       ) : vista === "semana" ? (
-        <div style={S.scheduleWeekList}>
-          {fechasSemana.map((fechaDia) => {
-            const itemsDia = listaFiltrada.filter(
-              (item) => String(item?.__fechaAgenda || "") === fechaDia
-            );
+        horasSemana.length > 0 ? (
+          <div style={S.scheduleWeekGridWrap}>
+            <div style={S.scheduleWeekGrid}>
+              <div style={S.scheduleWeekCorner}>
+                <span>HORA</span>
+              </div>
 
-            return (
-              <section key={fechaDia} style={S.scheduleWeekDayBlock}>
-                <div style={S.scheduleWeekDayTitle}>
-                  <strong>{formatearFechaAgenda(fechaDia)}</strong>
-                  <span>{itemsDia.length} clase{itemsDia.length === 1 ? "" : "s"}</span>
-                </div>
+              {fechasSemana.map((fechaDia) => {
+                const fechaObj = new Date(`${fechaDia}T12:00:00`);
+                const dia = fechaObj
+                  .toLocaleDateString("es-PA", { weekday: "short" })
+                  .replace(".", "")
+                  .toUpperCase();
+                const numero = String(fechaObj.getDate()).padStart(2, "0");
+                const esHoy = fechaDia === hoyAgenda;
 
-                {itemsDia.length ? (
-                  <div style={S.scheduleList}>
-                    {itemsDia.map((item, index) => renderHorario(item, index, fechaDia))}
+                return (
+                  <button
+                    key={`cab-${fechaDia}`}
+                    type="button"
+                    onClick={() => {
+                      setFecha(fechaDia);
+                      setVista("dia");
+                    }}
+                    style={{
+                      ...S.scheduleWeekHeaderDay,
+                      ...(esHoy ? S.scheduleWeekHeaderToday : {}),
+                    }}
+                  >
+                    <strong>{dia} {numero}</strong>
+                    {esHoy && <span>HOY</span>}
+                  </button>
+                );
+              })}
+
+              {horasSemana.map((hora) => (
+                <div key={`fila-${hora}`} style={{ display: "contents" }}>
+                  <div style={S.scheduleWeekHourCell}>
+                    <strong>{hora}</strong>
                   </div>
-                ) : (
-                  <div style={S.scheduleWeekEmpty}>Sin clases programadas</div>
-                )}
-              </section>
-            );
-          })}
-        </div>
+
+                  {fechasSemana.map((fechaDia) => {
+                    const itemsCelda = listaFiltrada.filter(
+                      (item) =>
+                        String(item?.__fechaAgenda || "") === fechaDia &&
+                        normalizarHora24Agenda(item?.hora_inicio) === hora
+                    );
+
+                    return (
+                      <div
+                        key={`${fechaDia}-${hora}`}
+                        style={S.scheduleWeekCell}
+                      >
+                        {itemsCelda.length > 0 ? (
+                          <div style={S.scheduleWeekCellStack}>
+                            {itemsCelda.map((item, index) => {
+                              const horarioId = String(
+                                item?.horario_id ||
+                                  item?.id_horario ||
+                                  item?.id ||
+                                  `${fechaDia}-${hora}-${index}`
+                              ).trim();
+
+                              const capacidad = capacidadHorarioAgenda(item);
+                              const reservado = estaReservado(
+                                horarioId,
+                                fechaDia
+                              );
+
+                              const instructor =
+                                item?.instructor ||
+                                item?.profesional_nombre ||
+                                item?.coach ||
+                                "Sin instructor";
+
+                              const sala =
+                                item?.sala_nombre ||
+                                item?.sala ||
+                                item?.ubicacion ||
+                                item?.ubicacion_nombre ||
+                                "";
+
+                              return (
+                                <button
+                                  key={`${fechaDia}-${hora}-${horarioId}-${index}`}
+                                  type="button"
+                                  onClick={() => {
+                                    setFecha(fechaDia);
+                                    setVista("dia");
+                                  }}
+                                  style={{
+                                    ...S.scheduleWeekClassCard,
+                                    ...(reservado
+                                      ? S.scheduleWeekClassReserved
+                                      : {}),
+                                  }}
+                                >
+                                  <strong style={S.scheduleWeekClassName}>
+                                    {String(
+                                      item?.servicio_nombre ||
+                                        item?.servicio ||
+                                        item?.nombre_servicio ||
+                                        "Clase"
+                                    ).toUpperCase()}
+                                  </strong>
+
+                                  <span style={S.scheduleWeekClassMeta}>
+                                    👤 {instructor}
+                                  </span>
+
+                                  <span style={S.scheduleWeekClassMeta}>
+                                    👥{" "}
+                                    {capacidad.total !== null &&
+                                    capacidad.ocupados !== null
+                                      ? `${capacidad.ocupados} de ${capacidad.total}`
+                                      : capacidad.libres !== null
+                                      ? `${capacidad.libres} libres`
+                                      : "Cupos"}
+                                  </span>
+
+                                  {sala && (
+                                    <span style={S.scheduleWeekClassMeta}>
+                                      ➤ {sala}
+                                    </span>
+                                  )}
+
+                                  {reservado && (
+                                    <span style={S.scheduleWeekReservedBadge}>
+                                      ✓ RESERVADO
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div style={S.scheduleWeekBlankCell} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+
+            <div style={S.scheduleWeekHint}>
+              Desliza horizontalmente para ver todos los días. Toca una clase
+              para abrir ese día y reservar.
+            </div>
+          </div>
+        ) : (
+          <div style={S.scheduleEmpty}>
+            <div style={S.scheduleEmptyIcon}>▦</div>
+            <strong>No hay horarios para esta semana</strong>
+            <span>
+              Usa las flechas para cambiar de semana o selecciona otro programa.
+            </span>
+          </div>
+        )
       ) : listaFiltrada.length > 0 ? (
         <div style={S.scheduleList}>
           {listaFiltrada.map((item, index) => renderHorario(item, index, fecha))}
@@ -2182,6 +2327,23 @@ function sumarDiasVista(fechaIso, dias) {
   const mm = String(fecha.getMonth() + 1).padStart(2, "0");
   const dd = String(fecha.getDate()).padStart(2, "0");
   return `${yy}-${mm}-${dd}`;
+}
+
+function normalizarHora24Agenda(valor) {
+  const texto = String(valor || "").trim();
+  const match = texto.match(/^(\d{1,2}):(\d{2})/);
+
+  if (!match) return "";
+
+  return `${String(match[1]).padStart(2, "0")}:${match[2]}`;
+}
+
+function fechaLocalIsoAgenda() {
+  const fecha = new Date();
+  const y = fecha.getFullYear();
+  const m = String(fecha.getMonth() + 1).padStart(2, "0");
+  const d = String(fecha.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function inicioSemanaVista(fechaIso) {
@@ -6405,41 +6567,148 @@ const S = {
     cursor: "pointer",
   },
 
-  scheduleWeekList: {
-    display: "grid",
-    gap: 12,
-  },
-
-  scheduleWeekDayBlock: {
-    display: "grid",
-    gap: 9,
-  },
-
-  scheduleWeekDayTitle: {
-    minHeight: 44,
-    padding: "0 12px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-    border: "1px solid #DDE5EC",
-    borderRadius: 10,
-    background: "#F8FAFC",
-    color: "#26323F",
-    fontSize: 10,
-    textTransform: "capitalize",
-  },
-
-  scheduleWeekEmpty: {
-    minHeight: 50,
-    padding: "0 14px",
-    display: "flex",
-    alignItems: "center",
-    border: "1px dashed #D8E1E9",
-    borderRadius: 10,
+  scheduleWeekGridWrap: {
+    overflowX: "auto",
+    overflowY: "hidden",
+    border: "1px solid #D7E0E8",
+    borderRadius: 12,
     background: "#FFFFFF",
-    color: "#87939E",
+    WebkitOverflowScrolling: "touch",
+  },
+
+  scheduleWeekGrid: {
+    minWidth: 1060,
+    display: "grid",
+    gridTemplateColumns: "72px repeat(7, minmax(132px, 1fr))",
+    alignItems: "stretch",
+  },
+
+  scheduleWeekCorner: {
+    minHeight: 56,
+    padding: "0 8px",
+    display: "grid",
+    placeItems: "center",
+    position: "sticky",
+    left: 0,
+    zIndex: 4,
+    borderRight: "1px solid #D7E0E8",
+    borderBottom: "1px solid #D7E0E8",
+    background: "#EEF2F6",
+    color: "#7A8792",
+    fontSize: 7,
+    fontWeight: 950,
+    letterSpacing: .8,
+  },
+
+  scheduleWeekHeaderDay: {
+    minHeight: 56,
+    padding: "8px 6px",
+    display: "grid",
+    placeItems: "center",
+    gap: 3,
+    border: 0,
+    borderRight: "1px solid #D7E0E8",
+    borderBottom: "1px solid #D7E0E8",
+    background: "#F4F7FA",
+    color: "#293642",
+    fontSize: 10,
+    cursor: "pointer",
+  },
+
+  scheduleWeekHeaderToday: {
+    background: "#DDF7F5",
+    color: "#0B7D81",
+  },
+
+  scheduleWeekHourCell: {
+    minHeight: 112,
+    padding: "10px 6px",
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "center",
+    position: "sticky",
+    left: 0,
+    zIndex: 3,
+    borderRight: "1px solid #D7E0E8",
+    borderBottom: "1px solid #D7E0E8",
+    background: "#EEF1F4",
+    color: "#56616C",
     fontSize: 9,
+  },
+
+  scheduleWeekCell: {
+    minHeight: 112,
+    padding: 6,
+    borderRight: "1px solid #E0E6EB",
+    borderBottom: "1px solid #E0E6EB",
+    background: "#FAFBFC",
+  },
+
+  scheduleWeekCellStack: {
+    display: "grid",
+    gap: 6,
+  },
+
+  scheduleWeekClassCard: {
+    width: "100%",
+    minHeight: 98,
+    padding: 9,
+    display: "grid",
+    alignContent: "start",
+    gap: 4,
+    border: "1px solid #8EDBD2",
+    borderRadius: 7,
+    background: "#BFF0E8",
+    color: "#173B3E",
+    textAlign: "left",
+    cursor: "pointer",
+    boxShadow: "0 2px 5px rgba(15,23,42,.06)",
+  },
+
+  scheduleWeekClassReserved: {
+    background: "#DDF7F5",
+    border: "2px solid #12A8AA",
+  },
+
+  scheduleWeekClassName: {
+    fontSize: 10.5,
+    lineHeight: 1.15,
+    color: "#122B30",
+  },
+
+  scheduleWeekClassMeta: {
+    fontSize: 7.5,
+    lineHeight: 1.25,
+    color: "#38575A",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  scheduleWeekReservedBadge: {
+    width: "fit-content",
+    marginTop: 2,
+    padding: "3px 5px",
+    borderRadius: 999,
+    background: "#0EA5A6",
+    color: "#FFFFFF",
+    fontSize: 6.5,
+    fontWeight: 950,
+    letterSpacing: .4,
+  },
+
+  scheduleWeekBlankCell: {
+    minHeight: 98,
+  },
+
+  scheduleWeekHint: {
+    minWidth: 1060,
+    padding: "8px 10px",
+    borderTop: "1px solid #E1E7EC",
+    background: "#FFFFFF",
+    color: "#7B8791",
+    fontSize: 7.5,
+    lineHeight: 1.4,
   },
 
   scheduleList: {
