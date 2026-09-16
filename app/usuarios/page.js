@@ -1,7 +1,7 @@
 "use client";
 
 // KONAX Usuarios y Roles
-// VERSION 2026.09.02-MODULOS-MANUALES
+// VERSION 2026.09.16-MODULOS-INDEPENDIENTES
 //
 // REGLA PRINCIPAL:
 // - plan_codigo / plan_nombre = referencia comercial.
@@ -32,12 +32,14 @@ const MODULOS_GENERALES = [
   ["caja", "Caja", "Caja", "💵"],
   ["control_caja", "Control de Caja", "Caja", "🏦"],
   ["gastos", "Gastos", "Caja", "🧮"],
+  ["reporte_financiero", "Reporte Financiero", "Caja", "📊"],
   ["recargos", "Recargos", "Caja", "⚠️"],
   ["inventario", "Inventario", "Inventario", "📦"],
   ["movimientos_inventario", "Movimientos de inventario", "Inventario", "🔄"],
   ["ventas", "Ventas", "Ventas", "🛒"],
   ["dashboard_ventas", "Centro de Ventas", "Ventas", "📈"],
   ["suscripciones", "Suscripciones", "Ventas", "🔁"],
+  ["profesionales", "Profesionales", "Administración", "👤"],
   ["usuarios", "Usuarios y Roles", "Administración", "🔐"],
   ["configuracion", "Configuración", "Administración", "⚙️"],
 ].map(([codigo, nombre, grupo, icono]) => ({
@@ -53,6 +55,7 @@ const MODULOS_LAVANDERIA = [
   ["pedidos_lavanderia", "Pedidos", "Lavandería", "🧺"],
   ["clientes", "Clientes", "Lavandería", "👥"],
   ["caja", "Caja básica", "Lavandería", "💵"],
+  ["reporte_financiero", "Reporte Financiero", "Lavandería", "📊"],
   ["historial_lavanderia", "Historial", "Lavandería", "🕘"],
   ["usuarios", "Usuarios y Roles", "Administración", "🔐"],
   ["configuracion", "Configuración", "Administración", "⚙️"],
@@ -72,6 +75,7 @@ const MODULOS_GIMNASIO = [
   ["caja", "Caja y pagos", "Gimnasio", "💵"],
   ["vista_cliente", "Historial del alumno", "Gimnasio", "🕘"],
   ["reportes", "Reportes", "Gimnasio", "📚"],
+  ["reporte_financiero", "Reporte Financiero", "Gimnasio", "📊"],
   ["usuarios", "Usuarios y Roles", "Administración", "🔐"],
   ["configuracion", "Configuración", "Administración", "⚙️"],
 ].map(([codigo, nombre, grupo, icono]) => ({
@@ -85,8 +89,8 @@ const MODULOS_GIMNASIO = [
 // Agenda, Caja, Clientes, Inventario, etc. se manejan manualmente.
 const OBLIGATORIOS_BASE = ["dashboard", "configuracion"];
 
-// Estos módulos comparten columnas en empresa_modulos.
-// Cuando dos módulos dependen de la misma columna, se activan/desactivan juntos.
+// Relación entre cada módulo y su columna en empresa_modulos.
+// Reporte Financiero y Profesionales tienen columnas propias.
 const COLUMNAS_EMPRESA = {
   agenda: "agenda",
   clientes: "clientes",
@@ -98,6 +102,8 @@ const COLUMNAS_EMPRESA = {
   dashboard_cobros: "dashboard_cobros",
   gestor_cobros: "cobranza",
   reportes: "dashboard_cobros",
+  reporte_financiero: "reporte_financiero",
+  profesionales: "profesionales",
   inventario: "inventario",
   movimientos_inventario: "inventario",
   ventas: "venta_credito",
@@ -925,6 +931,13 @@ export default function Usuarios() {
         recargos: Boolean(modulosEmpresa.recargos),
 
         egresos: Boolean(modulosEmpresa.gastos),
+
+        // Controles totalmente independientes.
+        reporte_financiero: Boolean(
+          modulosEmpresa.reporte_financiero
+        ),
+
+        profesionales: Boolean(modulosEmpresa.profesionales),
       };
 
       const { error: errorModulos } = await supabase
