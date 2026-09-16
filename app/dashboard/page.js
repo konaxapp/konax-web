@@ -2,10 +2,11 @@
 
 // DASHBOARD KONAX - GIMNASIO + SALÓN DE BELLEZA - MOBILE HEADER CLEAN - 2026-08-20
 
-// KONAX Dashboard · Gimnasio + Belleza + KONAX Agenda · Versión 2026.09.07-GYM-LOGO-EMPRESA-MOBILE
+// KONAX Dashboard · Reportes gimnasio habilitados · Versión 2026.08.07-S
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 import SidebarKonax from "../../components/SidebarKonax";
 
@@ -18,16 +19,6 @@ function normalizar(valor) {
     .toLowerCase()
     .trim()
     .replace(/\s+/g, "_");
-}
-
-function esPlanAgenda(codigoPlan) {
-  const codigo = normalizar(codigoPlan);
-
-  return [
-    "agenda",
-    "agenda_basica",
-    "konax_agenda",
-  ].includes(codigo);
 }
 
 function esTipoGimnasio(tipoNegocio, categoriaNegocio = "") {
@@ -115,7 +106,8 @@ function construirModulosPorPlan(codigoPlan) {
     control_caja: false,
 
     reportes: false,
-    reporte_financiero: false,
+    // Se controla de forma independiente desde empresa_modulos.
+    reporte_financiero: true,
 
     inventario: false,
     movimientos_inventario: false,
@@ -128,6 +120,9 @@ function construirModulosPorPlan(codigoPlan) {
     suscripciones: false,
     agenda: false,
 
+    // Módulo independiente de Configuración.
+    profesionales: true,
+
     nuevo_pedido: false,
     pedidos_lavanderia: false,
     historial_lavanderia: false,
@@ -135,19 +130,6 @@ function construirModulosPorPlan(codigoPlan) {
     usuarios: true,
     configuracion: true,
   };
-
-  // KONAX AGENDA:
-  // Plan liviano de $10. Solo habilita Agenda y Configuración.
-  // Dashboard se mantiene activo únicamente como pantalla de entrada.
-  if (esPlanAgenda(codigo)) {
-    return {
-      ...base,
-      dashboard: true,
-      agenda: true,
-      usuarios: false,
-      configuracion: true,
-    };
-  }
 
   if (codigo === "lavanderia_piloto") {
     return {
@@ -231,7 +213,8 @@ function leerModuloEmpresa(data, codigo) {
     dashboard_cobros: "dashboard_cobros",
     gestor_cobros: "cobranza",
     reportes: "dashboard_cobros",
-    reporte_financiero: "egresos",
+    reporte_financiero: "reporte_financiero",
+    profesionales: "profesionales",
     inventario: "inventario",
     movimientos_inventario: "inventario",
     ventas: "venta_credito",
@@ -859,8 +842,6 @@ export default function Dashboard() {
 
   const [empresaNombre, setEmpresaNombre] =
     useState("");
-  const [empresaLogoUrl, setEmpresaLogoUrl] =
-    useState("");
   const [planNombre, setPlanNombre] = useState("");
   const [planCodigo, setPlanCodigo] = useState("");
   const [estadoPlan, setEstadoPlan] = useState("");
@@ -904,21 +885,6 @@ export default function Dashboard() {
 
   const [alumnosGimnasio, setAlumnosGimnasio] =
     useState([]);
-
-  // DASHBOARD INTELIGENTE · BELLEZA
-  // Estos datos vienen de la RPC de solo lectura
-  // public.obtener_dashboard_inteligente_belleza(uuid).
-  const [resumenBelleza, setResumenBelleza] = useState({
-    citas_hoy: 0,
-    ingresos_programados: 0,
-    cancelaciones_30_dias: 0,
-    clientes_por_recuperar: 0,
-    mensaje_konax: "",
-  });
-  const [cargandoResumenBelleza, setCargandoResumenBelleza] =
-    useState(false);
-  const [avisoResumenBelleza, setAvisoResumenBelleza] =
-    useState("");
 
   useEffect(() => {
     cargarDashboard();
@@ -1051,7 +1017,6 @@ export default function Dashboard() {
         .select(`
           id,
           nombre,
-          logo_url,
           plan_nombre,
           plan_codigo,
           estado_plan,
@@ -1179,7 +1144,6 @@ export default function Dashboard() {
     setEmpresaNombre(
       empresa.nombre || "Empresa"
     );
-    setEmpresaLogoUrl(empresa.logo_url || "");
     setPlanNombre(
       empresa.plan_nombre || "Sin plan"
     );
@@ -1249,16 +1213,6 @@ export default function Dashboard() {
     ) {
       cargarResumenGimnasio(empresaId);
     }
-
-    if (
-      !esPlanAgenda(empresa.plan_codigo) &&
-      esTipoSalonBelleza(
-        empresa.tipo_negocio,
-        empresa.categoria_negocio
-      )
-    ) {
-      cargarResumenBelleza(empresaId);
-    }
   }
 
   async function cargarModulosEmpresa(
@@ -1316,7 +1270,6 @@ export default function Dashboard() {
             "pedidos_lavanderia",
             "historial_lavanderia",
             "gastos",
-            "reporte_financiero",
             "usuarios",
             "configuracion",
           ].includes(codigoModulo)
@@ -1418,49 +1371,6 @@ export default function Dashboard() {
     setCargandoResumenGimnasio(false);
   }
 
-  async function cargarResumenBelleza(empresaId) {
-    setCargandoResumenBelleza(true);
-    setAvisoResumenBelleza("");
-
-    const { data, error } = await supabase.rpc(
-      "obtener_dashboard_inteligente_belleza",
-      {
-        p_empresa_id: empresaId,
-      }
-    );
-
-    if (error) {
-      console.error(
-        "No se pudo cargar el Dashboard Inteligente de Belleza:",
-        error
-      );
-
-      setAvisoResumenBelleza(
-        "No fue posible actualizar el resumen del salón en este momento."
-      );
-      setCargandoResumenBelleza(false);
-      return;
-    }
-
-    const fila = Array.isArray(data) ? data[0] : data;
-
-    setResumenBelleza({
-      citas_hoy: Number(fila?.citas_hoy || 0),
-      ingresos_programados: Number(
-        fila?.ingresos_programados || 0
-      ),
-      cancelaciones_30_dias: Number(
-        fila?.cancelaciones_30_dias || 0
-      ),
-      clientes_por_recuperar: Number(
-        fila?.clientes_por_recuperar || 0
-      ),
-      mensaje_konax: String(fila?.mensaje_konax || ""),
-    });
-
-    setCargandoResumenBelleza(false);
-  }
-
   function puedeVer(
     codigoModulo,
     codigoPermiso = codigoModulo
@@ -1491,51 +1401,8 @@ export default function Dashboard() {
       normalizar(planCodigo) === "lavanderia_piloto" ||
       normalizar(tipoNegocio) === "lavanderia";
 
-    const agendaActual = esPlanAgenda(planCodigo);
-
-    /*
-      KONAX AGENDA:
-      Este plan debe permanecer aislado de las reglas especiales
-      de Gimnasio, Belleza y Lavandería. Solo permite Dashboard
-      como entrada, Agenda y Configuración.
-    */
-    if (agendaActual) {
-      if (
-        !["dashboard", "agenda", "configuracion"].includes(
-          modulo
-        )
-      ) {
-        return false;
-      }
-
-      if (!Boolean(modulos?.[modulo])) {
-        return false;
-      }
-
-      if (esAdministrador()) {
-        return true;
-      }
-
-      if (modulo === "dashboard") {
-        return true;
-      }
-
-      return permisosUsuario.includes(permiso);
-    }
-
-    /*
-      REPORTE FINANCIERO:
-      Disponible para los perfiles operativos que lo necesitan.
-      La página sigue filtrando por empresa_id, por lo que cada
-      negocio ve únicamente su propia información.
-    */
-    if (
-      modulo === "reporte_financiero" &&
-      (gimnasioActual || salonActual || lavanderiaActual) &&
-      esAdministrador()
-    ) {
-      return true;
-    }
+    // Reporte Financiero NO se fuerza para administradores.
+    // Solo aparece cuando empresa_modulos.reporte_financiero está activo.
 
     if (
       modulo === "gastos" &&
@@ -1625,8 +1492,6 @@ export default function Dashboard() {
     );
   }
 
-  const esAgenda = esPlanAgenda(planCodigo);
-
   const esLavanderia =
     normalizar(planCodigo) ===
       "lavanderia_piloto" ||
@@ -1643,23 +1508,6 @@ export default function Dashboard() {
   );
 
   const modulosMenu = useMemo(() => {
-    const listaAgenda = [
-      [
-        "Agenda",
-        "/agenda",
-        "agenda",
-        "agenda",
-        "📅",
-      ],
-      [
-        "Configuración",
-        "/admin-configuracion",
-        "configuracion",
-        "configuracion",
-        "⚙",
-      ],
-    ];
-
     const listaLavanderia = [
       [
         "Panel",
@@ -1824,8 +1672,8 @@ export default function Dashboard() {
       [
         "Profesionales",
         "/admin-configuracion?seccion=profesionales",
-        "configuracion",
-        "configuracion",
+        "profesionales",
+        "profesionales",
         "👤",
       ],
       [
@@ -1974,9 +1822,7 @@ export default function Dashboard() {
       ],
     ];
 
-    const listaBase = esAgenda
-      ? listaAgenda
-      : esLavanderia
+    const listaBase = esLavanderia
       ? listaLavanderia
       : esGimnasio
       ? listaGimnasio
@@ -1985,10 +1831,7 @@ export default function Dashboard() {
       : listaGeneral;
 
     const lista =
-      (esAgenda ||
-        esLavanderia ||
-        esGimnasio ||
-        esSalonBelleza) &&
+      (esLavanderia || esGimnasio || esSalonBelleza) &&
       !esAdministrador()
         ? listaBase.filter(
             ([, , codigo]) =>
@@ -2019,7 +1862,6 @@ export default function Dashboard() {
     permisosUsuario,
     usuarioRol,
     bloqueado,
-    esAgenda,
     esLavanderia,
     esGimnasio,
     esSalonBelleza,
@@ -2071,27 +1913,9 @@ export default function Dashboard() {
     bloqueado,
   ]);
 
-  // Evita el "flash" del Dashboard genérico después del login.
-  // Mientras todavía se valida la empresa y el tipo de negocio,
-  // no renderizamos ninguna variante del Dashboard.
-  // Así nunca aparece por milisegundos "Control total de tu negocio"
-  // antes de cargar la vista correcta (Belleza, Gimnasio, etc.).
-  if (cargando) {
-    return (
-      <div
-        aria-busy="true"
-        aria-label="Cargando Dashboard KONAX"
-        style={{
-          minHeight: "100vh",
-          width: "100%",
-          maxWidth: "100vw",
-          overflow: "hidden",
-          background:
-            "linear-gradient(180deg,#f8faf9 0%,#f1f5f2 100%)",
-        }}
-      />
-    );
-  }
+  // Pantalla completa de carga eliminada.
+  // El Dashboard renderiza directamente su estructura normal
+  // mientras se validan empresa, plan y permisos.
 
   if (bloqueado) {
     return (
@@ -2167,9 +1991,7 @@ export default function Dashboard() {
     }
   ).format(new Date());
 
-  const etiquetaPanel = esAgenda
-    ? "KONAX AGENDA"
-    : esLavanderia
+  const etiquetaPanel = esLavanderia
     ? "KONAX LAVANDERÍA"
     : esGimnasio
     ? "KONAX GIMNASIOS"
@@ -2177,14 +1999,12 @@ export default function Dashboard() {
     ? "KONAX SALÓN DE BELLEZA"
     : "PANEL EMPRESARIAL";
 
-  const subtituloPanel = esAgenda
-    ? `Agenda y reservas · ${fechaPanel}`
-    : esLavanderia
+  const subtituloPanel = esLavanderia
     ? `Operación diaria · ${fechaPanel}`
     : esGimnasio
     ? `Control de alumnos y membresías · ${fechaPanel}`
     : esSalonBelleza
-    ? fechaPanel
+    ? `Clientes, agenda y caja · ${fechaPanel}`
     : `Panel general · ${fechaPanel}`;
 
   return (
@@ -2210,10 +2030,169 @@ export default function Dashboard() {
           ...(esMovil ? s.mainMobile : {}),
         }}
       >
-        {/* Navegación móvil global:
-            en móvil se usa la barra inferior tipo app desde
-            components/KonaxMobileNav. No renderizamos un segundo
-            menú/hamburguesa dentro del Dashboard. */}
+        {/* IMPORTANTE:
+            Gimnasio usa únicamente el menú móvil global de app/layout.js.
+            El menú móvil interno del Dashboard se conserva para los demás perfiles,
+            por lo que Salón de Belleza y otros módulos no se modifican. */}
+        {esMovil && !esGimnasio && (
+          <>
+            <div style={s.mobileBar}>
+              <img
+                src="/konax-logo.png"
+                alt="KONAX"
+                style={s.mobileLogo}
+              />
+
+              <button
+                type="button"
+                onClick={() =>
+                  setMenuMovilAbierto(
+                    (actual) => !actual
+                  )
+                }
+                style={s.mobileMenuButton}
+                aria-label={
+                  menuMovilAbierto
+                    ? "Cerrar menú"
+                    : "Abrir menú"
+                }
+                aria-expanded={menuMovilAbierto}
+              >
+                <span style={s.hamburgerIcon}>
+                  {menuMovilAbierto ? "×" : "☰"}
+                </span>
+
+                {menuMovilAbierto ? "Cerrar" : "Menú"}
+              </button>
+            </div>
+
+            {menuMovilAbierto && (
+              <>
+                <div
+                  onClick={() =>
+                    setMenuMovilAbierto(false)
+                  }
+                  style={{
+                    position: "fixed",
+                    inset: 0,
+                    zIndex: 55,
+                    background: "rgba(7,16,11,.34)",
+                    backdropFilter: "blur(2px)",
+                  }}
+                  aria-hidden="true"
+                />
+
+                <nav
+                  style={s.mobileMenu}
+                  aria-label="Menú principal"
+                >
+                  <div
+                    style={{
+                      padding: "7px 8px 11px",
+                      borderBottom:
+                        "1px solid #e4ebe7",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "block",
+                        color: "#16834f",
+                        fontSize: 9,
+                        fontWeight: 900,
+                        letterSpacing: 1.2,
+                      }}
+                    >
+                      {etiquetaPanel}
+                    </span>
+
+                    <strong
+                      style={{
+                        display: "block",
+                        marginTop: 4,
+                        color: "#142019",
+                        fontSize: 16,
+                        lineHeight: 1.25,
+                      }}
+                    >
+                      {empresaNombre}
+                    </strong>
+
+                    <span
+                      style={{
+                        display: "block",
+                        marginTop: 3,
+                        color: "#78857d",
+                        fontSize: 11,
+                      }}
+                    >
+                      {usuarioNombre || "Usuario"}
+                      {" · "}
+                      {usuarioRol || "Sin rol"}
+                    </span>
+                  </div>
+
+                  {modulosMenu.map((item) => (
+                    <button
+                      key={`${item.codigo}-${item.ruta}`}
+                      type="button"
+                      onClick={() => {
+                        setMenuMovilAbierto(false);
+                        router.push(item.ruta);
+                      }}
+                      style={{
+                        ...s.mobileMenuItem,
+                        ...(item.codigo === "dashboard"
+                          ? s.mobileMenuItemActivo
+                          : {}),
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 30,
+                          height: 30,
+                          display: "grid",
+                          placeItems: "center",
+                          borderRadius: 9,
+                          background:
+                            item.codigo === "dashboard"
+                              ? "#dff3e7"
+                              : "#edf8f1",
+                          color: "#16834f",
+                          fontSize: 17,
+                          lineHeight: 1,
+                        }}
+                      >
+                        {item.icono}
+                      </span>
+
+                      <span
+                        style={{
+                          minWidth: 0,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {item.nombre}
+                      </span>
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuMovilAbierto(false);
+                      cerrarSesion();
+                    }}
+                    style={s.mobileLogout}
+                  >
+                    ↪ Cerrar sesión
+                  </button>
+                </nav>
+              </>
+            )}
+          </>
+        )}
 
         <header
           className="dashboard-topbar"
@@ -2224,165 +2203,59 @@ export default function Dashboard() {
               : {}),
           }}
         >
-          {esSalonBelleza ? (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: esMovil ? 13 : 16,
-                minWidth: 0,
-                flex: 1,
-              }}
-            >
-              <div
-                style={{
-                  width: esMovil ? 58 : 68,
-                  height: esMovil ? 58 : 68,
-                  flex: "0 0 auto",
-                  borderRadius: esMovil ? 17 : 20,
-                  overflow: "hidden",
-                  display: "grid",
-                  placeItems: "center",
-                  background: "linear-gradient(145deg,#edf9f3,#ffffff)",
-                  border: "1px solid #d9e9e0",
-                  boxShadow: "0 8px 20px rgba(15, 48, 34, .06)",
-                  color: "#0b6c4f",
-                  fontSize: esMovil ? 23 : 28,
-                  fontWeight: 950,
-                }}
-              >
-                {empresaLogoUrl ? (
-                  <img
-                    src={empresaLogoUrl}
-                    alt={`Logo de ${empresaNombre}`}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "contain",
-                      background: "#ffffff",
-                    }}
-                  />
-                ) : (
-                  "K"
-                )}
-              </div>
+          <div>
+            <span style={s.eyebrow}>
+              {etiquetaPanel}
+            </span>
 
-              <div style={{ minWidth: 0 }}>
-                <span
-                  style={{
-                    display: "block",
-                    marginBottom: 4,
-                    color: "#14835e",
-                    fontSize: esMovil ? 9.5 : 10.5,
-                    fontWeight: 900,
-                    letterSpacing: "0.11em",
-                  }}
-                >
-                  SALÓN DE BELLEZA
-                </span>
+            <h1 style={s.pageTitle}>
+              {empresaNombre}
+            </h1>
 
-                <h1
-                  style={{
-                    ...s.pageTitle,
-                    margin: 0,
-                    fontSize: esMovil ? 19 : 26,
-                    lineHeight: 1.15,
-                  }}
-                >
-                  {empresaNombre}
-                </h1>
+            <span style={s.pageSubtitle}>
+              {subtituloPanel}
+            </span>
+          </div>
 
-                <strong
-                  style={{
-                    display: "block",
-                    marginTop: 7,
-                    color: "#0f5138",
-                    fontSize: esMovil ? 17 : 21,
-                    lineHeight: 1.2,
-                    fontWeight: 900,
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {subtituloPanel}
-                </strong>
-              </div>
+          {esGimnasio && !esMovil && (
+            <div style={s.topbarGymImagenWrap}>
+              <Image
+                src="/gym-hero-fitness.png"
+                alt="Persona fitness motivada"
+                width={140}
+                height={140}
+                priority
+                style={s.topbarGymImagen}
+              />
             </div>
-          ) : (
+          )}
+
+          <div
+            style={{
+              ...s.userBox,
+              ...(esMovil
+                ? s.userBoxMobile
+                : {}),
+            }}
+          >
+            <div style={s.avatar}>
+              {String(
+                usuarioNombre || "U"
+              )
+                .charAt(0)
+                .toUpperCase()}
+            </div>
+
             <div>
-              <span style={s.eyebrow}>
-                {etiquetaPanel}
-              </span>
+              <strong style={s.userName}>
+                {usuarioNombre || "Usuario"}
+              </strong>
 
-              <h1 style={s.pageTitle}>
-                {empresaNombre}
-              </h1>
-
-              <span style={s.pageSubtitle}>
-                {subtituloPanel}
+              <span style={s.userRole}>
+                {usuarioRol || "Sin rol"}
               </span>
             </div>
-          )}
-
-          {esGimnasio && (
-            <div
-              style={{
-                ...s.topbarGymImagenWrap,
-                ...(esMovil ? s.topbarGymImagenWrapMobile : {}),
-              }}
-            >
-              {empresaLogoUrl ? (
-                <img
-                  src={empresaLogoUrl}
-                  alt={`Logo de ${empresaNombre}`}
-                  style={{
-                    ...s.topbarGymImagen,
-                    ...(esMovil ? s.topbarGymImagenMobile : {}),
-                  }}
-                />
-              ) : (
-                <span
-                  style={{
-                    color: "#16834f",
-                    fontSize: esMovil ? 25 : 36,
-                    fontWeight: 950,
-                  }}
-                >
-                  {String(empresaNombre || "G")
-                    .charAt(0)
-                    .toUpperCase()}
-                </span>
-              )}
-            </div>
-          )}
-
-          {!esSalonBelleza && (
-            <div
-              style={{
-                ...s.userBox,
-                ...(esMovil
-                  ? s.userBoxMobile
-                  : {}),
-              }}
-            >
-              <div style={s.avatar}>
-                {String(
-                  usuarioNombre || "U"
-                )
-                  .charAt(0)
-                  .toUpperCase()}
-              </div>
-
-              <div>
-                <strong style={s.userName}>
-                  {usuarioNombre || "Usuario"}
-                </strong>
-
-                <span style={s.userRole}>
-                  {usuarioRol || "Sin rol"}
-                </span>
-              </div>
-            </div>
-          )}
+          </div>
         </header>
 
         {pendienteInicio && (
@@ -2521,16 +2394,7 @@ export default function Dashboard() {
           </section>
         )}
 
-        {esAgenda ? (
-          <DashboardAgenda
-            empresaNombre={empresaNombre}
-            planNombre={planNombre}
-            esMovil={esMovil}
-            onNavigate={(ruta) =>
-              router.push(ruta)
-            }
-          />
-        ) : esLavanderia ? (
+        {esLavanderia ? (
           <>
             <section
               style={{
@@ -2636,15 +2500,6 @@ export default function Dashboard() {
             onNavigate={(ruta) =>
               router.push(ruta)
             }
-          />
-        ) : esSalonBelleza ? (
-          <DashboardBelleza
-            empresaNombre={empresaNombre}
-            empresaLogoUrl={empresaLogoUrl}
-            resumen={resumenBelleza}
-            cargandoResumen={cargandoResumenBelleza}
-            avisoResumen={avisoResumenBelleza}
-            esMovil={esMovil}
           />
         ) : (
           <>
@@ -2799,7 +2654,9 @@ export default function Dashboard() {
                 detalle="Módulos habilitados para este acceso."
               />
 
-              {esSalonBelleza && esAdministrador() && (
+              {esSalonBelleza &&
+                esAdministrador() &&
+                puedeVer("profesionales") && (
                 <article
                   className="dashboard-info-card dashboard-prof-card"
                   style={{
@@ -2853,457 +2710,6 @@ export default function Dashboard() {
         )}
       </main>
     </div>
-  );
-}
-
-function DashboardAgenda({
-  empresaNombre,
-  planNombre,
-  esMovil,
-  onNavigate,
-}) {
-  const accesos = [
-    {
-      titulo: "Agenda",
-      detalle:
-        "Consulta, crea y administra las citas y reservas del negocio.",
-      ruta: "/agenda",
-      icono: "📅",
-    },
-    {
-      titulo: "Configuración",
-      detalle:
-        "Administra negocio, servicios, profesionales, horarios y sitio de reservas.",
-      ruta: "/admin-configuracion",
-      icono: "⚙",
-    },
-  ];
-
-  return (
-    <section
-      style={{
-        maxWidth: 1440,
-        margin: "0 auto",
-        display: "grid",
-        gap: esMovil ? 13 : 18,
-      }}
-    >
-      <article
-        style={{
-          padding: esMovil ? "22px 18px" : "30px 32px",
-          border: "1px solid #d9e8df",
-          borderRadius: esMovil ? 19 : 23,
-          background:
-            "linear-gradient(135deg,#ffffff 0%,#edf9f2 100%)",
-          boxShadow:
-            "0 12px 30px rgba(17,60,38,.07)",
-        }}
-      >
-        <span
-          style={{
-            display: "inline-flex",
-            padding: "6px 10px",
-            borderRadius: 999,
-            background: "#e7f7ed",
-            color: "#137548",
-            fontSize: 9,
-            fontWeight: 950,
-            letterSpacing: 1.1,
-          }}
-        >
-          KONAX AGENDA
-        </span>
-
-        <h2
-          style={{
-            margin: "12px 0 8px",
-            color: "#142019",
-            fontSize: esMovil ? 28 : 38,
-            lineHeight: 1.05,
-            letterSpacing: "-.8px",
-          }}
-        >
-          {empresaNombre}
-        </h2>
-
-        <p
-          style={{
-            maxWidth: 680,
-            margin: 0,
-            color: "#6d7b72",
-            fontSize: esMovil ? 12.5 : 14,
-            lineHeight: 1.6,
-          }}
-        >
-          Tu plan está enfocado en agenda y reservas. Desde aquí
-          puedes abrir la agenda o configurar los datos necesarios
-          para tu sitio de reservas.
-        </p>
-
-        <div
-          style={{
-            marginTop: 14,
-            color: "#16834f",
-            fontSize: 10.5,
-            fontWeight: 850,
-          }}
-        >
-          {planNombre || "KONAX Agenda"}
-        </div>
-      </article>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: esMovil
-            ? "1fr"
-            : "repeat(2,minmax(0,1fr))",
-          gap: esMovil ? 11 : 14,
-        }}
-      >
-        {accesos.map((item) => (
-          <button
-            key={item.ruta}
-            type="button"
-            onClick={() => onNavigate(item.ruta)}
-            style={{
-              minHeight: esMovil ? 118 : 145,
-              padding: esMovil ? 16 : 20,
-              display: "grid",
-              gridTemplateColumns: "48px minmax(0,1fr)",
-              alignItems: "center",
-              gap: 14,
-              border: "1px solid #dfe7e2",
-              borderRadius: esMovil ? 17 : 20,
-              background: "#ffffff",
-              color: "#142019",
-              textAlign: "left",
-              fontFamily: "inherit",
-              cursor: "pointer",
-              boxShadow:
-                "0 10px 26px rgba(24,54,37,.05)",
-            }}
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                width: 48,
-                height: 48,
-                display: "grid",
-                placeItems: "center",
-                borderRadius: 14,
-                background: "#eaf8ef",
-                color: "#16834f",
-                fontSize: 21,
-                fontWeight: 900,
-              }}
-            >
-              {item.icono}
-            </span>
-
-            <span style={{ minWidth: 0 }}>
-              <strong
-                style={{
-                  display: "block",
-                  fontSize: esMovil ? 16 : 18,
-                  marginBottom: 5,
-                }}
-              >
-                {item.titulo}
-              </strong>
-
-              <small
-                style={{
-                  display: "block",
-                  color: "#748078",
-                  fontSize: esMovil ? 10.5 : 11.5,
-                  lineHeight: 1.45,
-                }}
-              >
-                {item.detalle}
-              </small>
-            </span>
-          </button>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function DashboardBelleza({
-  empresaNombre,
-  empresaLogoUrl,
-  resumen,
-  cargandoResumen,
-  avisoResumen,
-  esMovil,
-}) {
-  const [mostrarBienvenida, setMostrarBienvenida] = useState(true);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setMostrarBienvenida(false);
-    }, 2600);
-
-    return () => window.clearTimeout(timer);
-  }, []);
-  const dinero = (valor) => {
-    const numero = Number(valor || 0);
-
-    return new Intl.NumberFormat("es-PA", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(Number.isFinite(numero) ? numero : 0);
-  };
-
-  const tarjetas = [
-    {
-      etiqueta: "CITAS DE HOY",
-      valor: cargandoResumen ? "—" : String(resumen?.citas_hoy ?? 0),
-      detalle: "Reservas activas programadas para hoy.",
-      icono: "◷",
-    },
-    {
-      etiqueta: "INGRESOS PROGRAMADOS",
-      valor: cargandoResumen
-        ? "—"
-        : dinero(resumen?.ingresos_programados),
-      detalle: "Valor estimado de las citas de hoy.",
-      icono: "$",
-    },
-    {
-      etiqueta: "CANCELACIONES · 30 DÍAS",
-      valor: cargandoResumen
-        ? "—"
-        : String(resumen?.cancelaciones_30_dias ?? 0),
-      detalle: "Citas canceladas durante los últimos 30 días.",
-      icono: "×",
-    },
-    {
-      etiqueta: "CLIENTES POR RECUPERAR",
-      valor: cargandoResumen
-        ? "—"
-        : String(resumen?.clientes_por_recuperar ?? 0),
-      detalle: "Más de 45 días sin una cita no cancelada.",
-      icono: "↺",
-    },
-  ];
-
-  const mensaje = cargandoResumen
-    ? "Analizando la operación de hoy…"
-    : avisoResumen
-    ? avisoResumen
-    : resumen?.mensaje_konax ||
-      "KONAX todavía no tiene novedades relevantes para mostrar hoy.";
-
-  return (
-    <section
-      style={{
-        display: "grid",
-        gap: esMovil ? 14 : 18,
-      }}
-    >
-      {mostrarBienvenida && (
-        <div
-          role="status"
-          aria-live="polite"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 11,
-            border: "1px solid #d7eee3",
-            borderRadius: esMovil ? 16 : 18,
-            padding: esMovil ? "12px 14px" : "13px 16px",
-            background: "linear-gradient(135deg,#f4fff9,#ffffff)",
-            boxShadow: "0 8px 24px rgba(15, 93, 67, .06)",
-            color: "#123428",
-            animation: "konaxWelcomeIn .28s ease-out",
-          }}
-        >
-          <span
-            aria-hidden="true"
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 10,
-              display: "grid",
-              placeItems: "center",
-              background: "#0c8b62",
-              color: "#fff",
-              fontSize: 15,
-              fontWeight: 950,
-            }}
-          >
-            ✓
-          </span>
-          <strong style={{ fontSize: esMovil ? 13.5 : 15, fontWeight: 900 }}>
-            Bienvenido a KONAX
-          </strong>
-        </div>
-      )}
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: esMovil
-            ? "repeat(2, minmax(0, 1fr))"
-            : "repeat(4, minmax(0, 1fr))",
-          gap: esMovil ? 10 : 14,
-        }}
-      >
-        {tarjetas.map((item) => (
-          <article
-            key={item.etiqueta}
-            style={{
-              minWidth: 0,
-              minHeight: esMovil ? 145 : 160,
-              border: "1px solid #e5ebef",
-              borderRadius: esMovil ? 18 : 22,
-              padding: esMovil ? "15px 13px" : "19px 18px",
-              background: "#ffffff",
-              boxShadow: "0 10px 28px rgba(15, 23, 42, 0.055)",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 10,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: esMovil ? 9.5 : 10.5,
-                  lineHeight: 1.25,
-                  fontWeight: 900,
-                  letterSpacing: "0.075em",
-                  color: "#64748b",
-                }}
-              >
-                {item.etiqueta}
-              </span>
-
-              <span
-                aria-hidden="true"
-                style={{
-                  flex: "0 0 auto",
-                  width: esMovil ? 30 : 34,
-                  height: esMovil ? 30 : 34,
-                  borderRadius: 11,
-                  display: "grid",
-                  placeItems: "center",
-                  background: "#ecfdf5",
-                  color: "#087f5b",
-                  fontSize: 16,
-                  fontWeight: 950,
-                }}
-              >
-                {item.icono}
-              </span>
-            </div>
-
-            <strong
-              style={{
-                display: "block",
-                marginTop: esMovil ? 14 : 18,
-                fontSize: esMovil ? 24 : 30,
-                lineHeight: 1,
-                letterSpacing: "-0.035em",
-                color: "#0f2433",
-                fontWeight: 950,
-                overflowWrap: "anywhere",
-              }}
-            >
-              {item.valor}
-            </strong>
-
-            <p
-              style={{
-                margin: "auto 0 0",
-                paddingTop: 12,
-                fontSize: esMovil ? 10.5 : 12,
-                lineHeight: 1.45,
-                color: "#7b8794",
-              }}
-            >
-              {item.detalle}
-            </p>
-          </article>
-        ))}
-      </div>
-
-      <article
-        style={{
-          position: "relative",
-          overflow: "hidden",
-          borderRadius: esMovil ? 20 : 24,
-          border: "1px solid #d9eee7",
-          background:
-            "linear-gradient(135deg, #f5fffb 0%, #ffffff 68%)",
-          padding: esMovil ? "19px 17px" : "24px 26px",
-          boxShadow: "0 10px 28px rgba(15, 23, 42, 0.045)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: esMovil ? 12 : 16,
-          }}
-        >
-          <div
-            aria-hidden="true"
-            style={{
-              width: esMovil ? 38 : 44,
-              height: esMovil ? 38 : 44,
-              flex: "0 0 auto",
-              borderRadius: 14,
-              display: "grid",
-              placeItems: "center",
-              background: "#0d8b67",
-              color: "white",
-              fontWeight: 950,
-              fontSize: esMovil ? 17 : 19,
-              boxShadow: "0 8px 18px rgba(13, 139, 103, 0.18)",
-            }}
-          >
-            K
-          </div>
-
-          <div style={{ minWidth: 0 }}>
-            <span
-              style={{
-                display: "block",
-                color: "#0b7a5b",
-                fontSize: 10.5,
-                fontWeight: 950,
-                letterSpacing: "0.11em",
-                marginBottom: 7,
-              }}
-            >
-              KONAX TE INFORMA
-            </span>
-
-            <p
-              style={{
-                margin: 0,
-                color: avisoResumen ? "#8a5b16" : "#183746",
-                fontSize: esMovil ? 13.5 : 15,
-                lineHeight: 1.65,
-                fontWeight: 650,
-              }}
-            >
-              {mensaje}
-            </p>
-          </div>
-        </div>
-      </article>
-    </section>
   );
 }
 
@@ -4324,11 +3730,6 @@ function Info({
 
 
 const DASHBOARD_RESPONSIVE_CSS = `
-@keyframes konaxWelcomeIn {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
   .dashboard-konax-page,
   .dashboard-konax-page * {
     box-sizing: border-box;
@@ -4568,19 +3969,6 @@ const s = {
     objectFit: "cover",
     objectPosition: "center center",
     borderRadius: "50%",
-  },
-
-  topbarGymImagenWrapMobile: {
-    width: 72,
-    height: 72,
-    justifySelf: "start",
-    marginTop: -2,
-    borderWidth: 3,
-  },
-
-  topbarGymImagenMobile: {
-    objectFit: "contain",
-    background: "#ffffff",
   },
 
   userBox: {
