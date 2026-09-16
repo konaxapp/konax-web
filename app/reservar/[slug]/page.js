@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const VERSION = "2026.09.03-PORTAL-PUBLICO-PREMIUM-V14-PERFIL-INTERESES-RESENAS";
+const VERSION = "2026.09.15-PORTAL-PUBLICO-PREMIUM-V15-PAGO-MANUAL";
 
 function normalizar(valor) {
   return String(valor || "")
@@ -223,6 +223,22 @@ function formatearHoraLocalPublica(valor) {
   }).format(fecha);
 }
 
+function extensionArchivo(archivo) {
+  const nombre = String(archivo?.name || "");
+  const partes = nombre.split(".");
+  const extension = partes.length > 1 ? partes.pop() : "jpg";
+  return String(extension || "jpg")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "") || "jpg";
+}
+
+function etiquetaMetodoPago(metodo) {
+  if (metodo === "yappy") return "Yappy";
+  if (metodo === "transferencia") return "Transferencia";
+  if (metodo === "local") return "Pago en el local";
+  return "Pago";
+}
+
 export default function ReservaPublicaAutoservicioPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -273,6 +289,11 @@ export default function ReservaPublicaAutoservicioPage() {
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
   const [observaciones, setObservaciones] = useState("");
+  const [configPago, setConfigPago] = useState(null);
+  const [metodoPago, setMetodoPago] = useState("");
+  const [comprobantePago, setComprobantePago] = useState(null);
+  const [pagoRegistrado, setPagoRegistrado] = useState(null);
+  const [avisoPago, setAvisoPago] = useState("");
   const [reservaConfirmada, setReservaConfirmada] = useState(null);
   const [tokenGestion, setTokenGestion] = useState("");
 
@@ -373,6 +394,7 @@ export default function ReservaPublicaAutoservicioPage() {
       respuestaIdentidad,
       respuestaPerfilPublico,
       serviciosBase,
+      respuestaConfigPago,
     ] = await Promise.all([
       supabase.rpc(
         "obtener_identidad_empresa_publica",
@@ -387,6 +409,12 @@ export default function ReservaPublicaAutoservicioPage() {
         }
       ),
       cargarServiciosPublicos(),
+      supabase.rpc(
+        "obtener_configuracion_pago_publica",
+        {
+          p_slug: slug,
+        }
+      ),
     ]);
 
     const identidadData = respuestaIdentidad?.data;
@@ -411,6 +439,19 @@ export default function ReservaPublicaAutoservicioPage() {
 
       setPerfilPublicoLocal(
         perfil?.ok === false ? null : perfil || null
+      );
+    }
+
+    if (respuestaConfigPago?.error) {
+      console.warn(
+        "No se pudo cargar la configuración pública de pagos:",
+        respuestaConfigPago.error
+      );
+      setConfigPago(null);
+    } else {
+      const configData = respuestaConfigPago?.data;
+      setConfigPago(
+        configData?.ok === false ? null : configData || null
       );
     }
 
@@ -1210,6 +1251,10 @@ export default function ReservaPublicaAutoservicioPage() {
     setNombre("");
     setTelefono("");
     setObservaciones("");
+    setMetodoPago("");
+    setComprobantePago(null);
+    setPagoRegistrado(null);
+    setAvisoPago("");
     setError("");
 
     setTimeout(() => {
@@ -1233,8 +1278,35 @@ export default function ReservaPublicaAutoservicioPage() {
       return;
     }
 
+    const pagoManualActivo = Boolean(
+      perfilBelleza &&
+        servicioSeleccionado?.requierePago &&
+        configPago?.habilitado
+    );
+
+    if (pagoManualActivo && !metodoPago) {
+      setError("Selecciona cómo deseas pagar la reserva.");
+      return;
+    }
+
+    if (
+      pagoManualActivo &&
+      ["yappy", "transferencia"].includes(metodoPago) &&
+      !comprobantePago
+    ) {
+      setError("Adjunta el comprobante del pago para continuar.");
+      return;
+    }
+
+    if (comprobantePago && comprobantePago.size > 5 * 1024 * 1024) {
+      setError("El comprobante no puede pesar más de 5 MB.");
+      return;
+    }
+
     setGuardando(true);
     setError("");
+    setAvisoPago("");
+    setPagoRegistrado(null);
 
     const { data, error: rpcError } = await supabase.rpc(
       "crear_reserva_agenda_publica",
@@ -1260,6 +1332,76 @@ export default function ReservaPublicaAutoservicioPage() {
     }
 
     setReservaConfirmada(data);
+
+    if (pagoManualActivo && metodoPago) {
+      let comprobantePath = null;
+
+      if (["yappy", "transferencia"].includes(metodoPago)) {
+        try {
+          const extension = extensionArchivo(comprobantePago);
+          const idArchivo =
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+          comprobantePath = `${slug}/${data.reserva_id}/${idArchivo}.${extension}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from("comprobantes-pagos")
+            .upload(comprobantePath, comprobantePago, {
+              cacheControl: "3600",
+              upsert: false,
+              contentType: comprobantePago.type || undefined,
+            });
+
+          if (uploadError) {
+            console.error("No se pudo subir el comprobante:", uploadError);
+            comprobantePath = null;
+            setAvisoPago(
+              "Tu cita quedó registrada, pero no pudimos adjuntar el comprobante. Muéstralo al negocio para que pueda validar el pago."
+            );
+          }
+        } catch (uploadException) {
+          console.error(
+            "Error inesperado subiendo comprobante:",
+            uploadException
+          );
+          comprobantePath = null;
+          setAvisoPago(
+            "Tu cita quedó registrada, pero no pudimos adjuntar el comprobante. Muéstralo al negocio para que pueda validar el pago."
+          );
+        }
+      }
+
+      if (
+        metodoPago === "local" ||
+        !["yappy", "transferencia"].includes(metodoPago) ||
+        comprobantePath
+      ) {
+        const { data: pagoData, error: pagoError } = await supabase.rpc(
+          "registrar_pago_manual_reserva_publica",
+          {
+            p_slug: slug,
+            p_reserva_id: String(data.reserva_id),
+            p_metodo: metodoPago,
+            p_monto: Number(servicioSeleccionado.precio || 0),
+            p_comprobante_path: comprobantePath,
+          }
+        );
+
+        if (pagoError || !pagoData?.ok) {
+          console.error(
+            "No se pudo registrar el pago manual:",
+            pagoError || pagoData
+          );
+          setAvisoPago(
+            "Tu cita quedó registrada, pero el estado del pago no pudo guardarse. Conserva tu comprobante y muéstralo al negocio."
+          );
+        } else {
+          setPagoRegistrado(pagoData);
+        }
+      }
+    }
 
     const { data: gestion } = await supabase.rpc(
       "obtener_token_gestion_reserva_publica",
@@ -1538,6 +1680,18 @@ export default function ReservaPublicaAutoservicioPage() {
       ""
     );
   })();
+
+  const pagoManualActivo = Boolean(
+    perfilBelleza &&
+      servicioSeleccionado?.requierePago &&
+      configPago?.habilitado
+  );
+
+  const metodosPagoDisponibles = [
+    configPago?.acepta_yappy ? "yappy" : null,
+    configPago?.acepta_transferencia ? "transferencia" : null,
+    configPago?.acepta_pago_local ? "local" : null,
+  ].filter(Boolean);
 
   return (
     <main className={`kp-page ${tema === "oscuro" ? "kp-dark" : ""}`}>
@@ -2769,13 +2923,123 @@ export default function ReservaPublicaAutoservicioPage() {
                       />
                     </label>
 
+                    {pagoManualActivo && (
+                      <section className="kp-payment-box">
+                        <div className="kp-payment-heading">
+                          <div>
+                            <span className="kp-section-kicker kp-section-kicker-black">
+                              PAGO DE LA RESERVA
+                            </span>
+                            <h3>¿Cómo deseas pagar?</h3>
+                          </div>
+
+                          <strong>{dinero(servicioSeleccionado.precio)}</strong>
+                        </div>
+
+                        <div className="kp-payment-methods">
+                          {metodosPagoDisponibles.map((metodo) => (
+                            <button
+                              key={metodo}
+                              type="button"
+                              className={metodoPago === metodo ? "active" : ""}
+                              onClick={() => {
+                                setMetodoPago(metodo);
+                                setComprobantePago(null);
+                                setError("");
+                              }}
+                            >
+                              <span>
+                                {metodo === "yappy"
+                                  ? "Y"
+                                  : metodo === "transferencia"
+                                    ? "$"
+                                    : "⌂"}
+                              </span>
+                              <strong>{etiquetaMetodoPago(metodo)}</strong>
+                            </button>
+                          ))}
+                        </div>
+
+                        {metodoPago === "yappy" && (
+                          <div className="kp-payment-details">
+                            <span>Envía el Yappy a</span>
+                            <strong>{configPago?.yappy_numero || "Número no configurado"}</strong>
+                            <small>
+                              Monto exacto: {dinero(servicioSeleccionado.precio)}
+                            </small>
+                          </div>
+                        )}
+
+                        {metodoPago === "transferencia" && (
+                          <div className="kp-payment-details">
+                            <span>Datos para transferencia</span>
+                            {configPago?.banco && <strong>{configPago.banco}</strong>}
+                            {configPago?.titular && <small>Titular: {configPago.titular}</small>}
+                            {configPago?.tipo_cuenta && (
+                              <small>Tipo: {configPago.tipo_cuenta}</small>
+                            )}
+                            {configPago?.numero_cuenta && (
+                              <small>Cuenta: {configPago.numero_cuenta}</small>
+                            )}
+                            <small>
+                              Monto exacto: {dinero(servicioSeleccionado.precio)}
+                            </small>
+                          </div>
+                        )}
+
+                        {metodoPago === "local" && (
+                          <div className="kp-payment-details">
+                            <span>Pago en el local</span>
+                            <strong>{dinero(servicioSeleccionado.precio)}</strong>
+                            <small>
+                              Tu cita se registrará y el pago quedará pendiente
+                              para realizarse directamente en el negocio.
+                            </small>
+                          </div>
+                        )}
+
+                        {["yappy", "transferencia"].includes(metodoPago) && (
+                          <label className="kp-receipt-upload">
+                            <span>Adjuntar comprobante</span>
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp,application/pdf"
+                              onChange={(e) => {
+                                const archivo = e.target.files?.[0] || null;
+                                setComprobantePago(archivo);
+                                setError("");
+                              }}
+                            />
+
+                            <div>
+                              <strong>
+                                {comprobantePago
+                                  ? comprobantePago.name
+                                  : "Seleccionar comprobante"}
+                              </strong>
+                              <small>JPG, PNG, WEBP o PDF · máximo 5 MB</small>
+                            </div>
+                          </label>
+                        )}
+
+                        {["yappy", "transferencia"].includes(metodoPago) && (
+                          <p className="kp-payment-warning">
+                            La reserva queda registrada y el comprobante será
+                            validado manualmente por el negocio.
+                          </p>
+                        )}
+                      </section>
+                    )}
+
                     <button
                       className="kp-confirm"
                       disabled={guardando}
                     >
                       {guardando
                         ? "Reservando..."
-                        : "Confirmar reserva"}
+                        : pagoManualActivo && ["yappy", "transferencia"].includes(metodoPago)
+                          ? "Enviar pago y reservar"
+                          : "Confirmar reserva"}
                     </button>
                   </form>
                 </div>
@@ -2826,10 +3090,33 @@ export default function ReservaPublicaAutoservicioPage() {
                   </div>
                 )}
 
-                {reservaConfirmada.requiere_pago && (
+                {pagoRegistrado?.ok ? (
+                  <div className="kp-payment-status">
+                    <span>
+                      {pagoRegistrado.estado === "pendiente_verificacion"
+                        ? "COMPROBANTE ENVIADO"
+                        : "PAGO PENDIENTE"}
+                    </span>
+                    <strong>
+                      {etiquetaMetodoPago(pagoRegistrado.metodo)} · {dinero(
+                        pagoRegistrado.monto
+                      )}
+                    </strong>
+                    <small>
+                      {pagoRegistrado.estado === "pendiente_verificacion"
+                        ? "El negocio verificará tu comprobante antes de marcar el pago como aprobado."
+                        : "Paga directamente en el local al momento de tu cita."}
+                    </small>
+                  </div>
+                ) : reservaConfirmada.requiere_pago ? (
                   <div className="kp-info">
-                    Pago en el local:{" "}
-                    {dinero(reservaConfirmada.monto)}
+                    Pago pendiente: {dinero(reservaConfirmada.monto)}
+                  </div>
+                ) : null}
+
+                {avisoPago && (
+                  <div className="kp-payment-alert">
+                    {avisoPago}
                   </div>
                 )}
 
@@ -7457,6 +7744,270 @@ const CSS = `
   }
 
 
+
+  /* =========================================================
+     PAGO MANUAL · YAPPY / TRANSFERENCIA / LOCAL · V15
+     ========================================================= */
+
+  .kp-payment-box {
+    margin-top: 4px;
+    padding: 16px;
+    display: grid;
+    gap: 14px;
+    border: 1px solid #dcdcdc;
+    border-radius: 18px;
+    background: #fafafa;
+  }
+
+  .kp-payment-heading {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 14px;
+  }
+
+  .kp-payment-heading h3 {
+    margin: 3px 0 0;
+    color: #111111;
+    font-size: 20px;
+  }
+
+  .kp-payment-heading > strong {
+    color: #111111;
+    font-size: 21px;
+  }
+
+  .kp-payment-methods {
+    display: grid;
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 8px;
+  }
+
+  .kp-payment-methods button {
+    min-height: 80px;
+    padding: 10px 8px;
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 6px;
+    border: 1px solid #d9d9d9;
+    border-radius: 15px;
+    background: #ffffff;
+    color: #333333;
+    cursor: pointer;
+  }
+
+  .kp-payment-methods button > span {
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #f1f1f1;
+    color: #111111;
+    font-size: 13px;
+    font-weight: 950;
+  }
+
+  .kp-payment-methods button > strong {
+    font-size: 10px;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .kp-payment-methods button.active {
+    border-color: #111111;
+    background: #111111;
+    color: #ffffff;
+  }
+
+  .kp-payment-methods button.active > span {
+    background: #ffffff;
+    color: #111111;
+  }
+
+  .kp-payment-details {
+    padding: 14px;
+    display: grid;
+    gap: 4px;
+    border: 1px solid #e1e1e1;
+    border-radius: 14px;
+    background: #ffffff;
+  }
+
+  .kp-payment-details > span {
+    color: #777777;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+  }
+
+  .kp-payment-details > strong {
+    color: #111111;
+    font-size: 19px;
+  }
+
+  .kp-payment-details > small {
+    color: #626262;
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
+  .kp-receipt-upload {
+    position: relative;
+    min-height: 88px;
+    padding: 14px;
+    display: grid !important;
+    grid-template-columns: 42px minmax(0,1fr);
+    align-items: center;
+    gap: 10px !important;
+    overflow: hidden;
+    border: 1px dashed #bdbdbd;
+    border-radius: 15px;
+    background: #ffffff;
+    cursor: pointer;
+  }
+
+  .kp-receipt-upload > span {
+    grid-column: 1 / -1;
+    color: #111111 !important;
+    font-size: 11px !important;
+    font-weight: 900 !important;
+  }
+
+  .kp-receipt-upload::before {
+    content: "↑";
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    background: #111111;
+    color: #ffffff;
+    font-size: 20px;
+    font-weight: 900;
+  }
+
+  .kp-receipt-upload input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .kp-receipt-upload > div {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+
+  .kp-receipt-upload > div strong {
+    overflow: hidden;
+    color: #111111;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kp-receipt-upload > div small {
+    color: #777777;
+    font-size: 9px;
+  }
+
+  .kp-payment-warning {
+    margin: 0;
+    color: #6d6d6d;
+    font-size: 10px;
+    line-height: 1.5;
+  }
+
+  .kp-payment-status {
+    margin: 14px 0;
+    padding: 15px;
+    display: grid;
+    gap: 4px;
+    border: 1px solid #b9d9ca;
+    border-radius: 16px;
+    background: #f1faf5;
+    text-align: left;
+  }
+
+  .kp-payment-status > span {
+    color: #087a55;
+    font-size: 9px;
+    font-weight: 950;
+    letter-spacing: 1px;
+  }
+
+  .kp-payment-status > strong {
+    color: #10261d;
+    font-size: 15px;
+  }
+
+  .kp-payment-status > small {
+    color: #5d6d64;
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
+  .kp-payment-alert {
+    margin: 14px 0;
+    padding: 13px;
+    border: 1px solid #efc46a;
+    border-radius: 14px;
+    background: #fff8e7;
+    color: #7b5810;
+    font-size: 11px;
+    line-height: 1.5;
+    text-align: left;
+  }
+
+  .kp-dark .kp-payment-box,
+  .kp-dark .kp-payment-details,
+  .kp-dark .kp-receipt-upload,
+  .kp-dark .kp-payment-status {
+    border-color: #343434;
+    background: #141414;
+  }
+
+  .kp-dark .kp-payment-heading h3,
+  .kp-dark .kp-payment-heading > strong,
+  .kp-dark .kp-payment-details > strong,
+  .kp-dark .kp-receipt-upload > span,
+  .kp-dark .kp-receipt-upload > div strong,
+  .kp-dark .kp-payment-status > strong {
+    color: #ffffff !important;
+  }
+
+  .kp-dark .kp-payment-methods button {
+    border-color: #343434;
+    background: #171717;
+    color: #ffffff;
+  }
+
+  .kp-dark .kp-payment-methods button.active {
+    border-color: #ffffff;
+    background: #ffffff;
+    color: #111111;
+  }
+
+  @media (max-width: 430px) {
+    .kp-payment-methods {
+      grid-template-columns: 1fr;
+    }
+
+    .kp-payment-methods button {
+      min-height: 58px;
+      grid-template-columns: 30px minmax(0,1fr);
+      justify-items: start;
+      align-items: center;
+      padding-left: 12px;
+      text-align: left;
+    }
+  }
 
   /* =========================================================
      PERFIL PROFESIONAL V14 · INTERESES + RESEÑAS CON CLIENTE
