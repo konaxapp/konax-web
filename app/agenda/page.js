@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-const VERSION = "2026.09.06-AGENDA-BELLEZA-INTACTA-GYM-WOD-V1";
+const VERSION = "2026.09.18-AGENDA-BELLEZA-PLANTILLAS-SERVICIOS-DIAS-V2";
 
 const SERVICIO_INICIAL = {
   nombre: "",
@@ -1231,6 +1231,14 @@ export default function AgendaPage() {
       horarioForm?.servicio_id || ""
     );
 
+    // "Todos los servicios" es una plantilla rápida de horario.
+    // En ese caso mostramos todos los profesionales y, al guardar,
+    // se aplicará solamente a los servicios asignados al profesional
+    // cuando éste tenga servicio_ids configurados.
+    if (servicioId === "__todos__") {
+      return profesionalesSalon;
+    }
+
     return profesionalesSalon.filter((profesional) => {
       const servicios = Array.isArray(profesional.servicio_ids)
         ? profesional.servicio_ids.map(String)
@@ -1976,9 +1984,53 @@ export default function AgendaPage() {
     setError("");
 
     try {
+      const seleccionTodosServicios =
+        esSalonBelleza &&
+        !horarioEditandoId &&
+        String(horarioForm.servicio_id) === "__todos__";
+
+      let serviciosObjetivo = [];
+
+      if (seleccionTodosServicios) {
+        const activos = servicios.filter(
+          (servicio) => Boolean(servicio.activo)
+        );
+
+        const profesionalSeleccionado =
+          profesionalesSalon.find(
+            (profesional) =>
+              normalizar(profesional.nombre) ===
+              normalizar(horarioForm.instructor)
+          ) || null;
+
+        const idsProfesional = Array.isArray(
+          profesionalSeleccionado?.servicio_ids
+        )
+          ? profesionalSeleccionado.servicio_ids.map(String)
+          : [];
+
+        serviciosObjetivo =
+          idsProfesional.length > 0
+            ? activos.filter((servicio) =>
+                idsProfesional.includes(String(servicio.id))
+              )
+            : activos;
+
+        if (serviciosObjetivo.length === 0) {
+          throw new Error(
+            "No hay servicios activos para aplicar esta plantilla."
+          );
+        }
+      } else {
+        serviciosObjetivo = [
+          {
+            id: horarioForm.servicio_id,
+          },
+        ];
+      }
+
       const payloadBase = {
         empresa_id: empresaId,
-        servicio_id: horarioForm.servicio_id,
         hora_inicio: horarioForm.hora_inicio,
         hora_fin: horarioForm.hora_fin,
         instructor: horarioForm.instructor.trim() || null,
@@ -2005,10 +2057,6 @@ export default function AgendaPage() {
           - los días seleccionados quedan activos;
           - los días nuevos se crean;
           - los días quitados se desactivan, NO se borran.
-
-          Así conservamos cualquier reserva histórica que todavía
-          esté vinculada al horario antiguo y, al mismo tiempo,
-          permitimos cambiar los días desde la misma configuración.
         */
         const diasSeleccionados = [
           ...new Set(diasHorarioSalon.map(Number)),
@@ -2040,6 +2088,7 @@ export default function AgendaPage() {
                 .from("agenda_horarios")
                 .update({
                   ...payloadBase,
+                  servicio_id: registro.servicio_id,
                   dia_semana: dia,
                   activo:
                     diasSeleccionados.includes(dia)
@@ -2072,6 +2121,7 @@ export default function AgendaPage() {
               .insert(
                 diasNuevos.map((dia) => ({
                   ...payloadBase,
+                  servicio_id: horarioForm.servicio_id,
                   dia_semana: Number(dia),
                   activo: Boolean(
                     horarioForm.activo
@@ -2085,6 +2135,7 @@ export default function AgendaPage() {
       } else if (horarioEditandoId) {
         const payload = {
           ...payloadBase,
+          servicio_id: horarioForm.servicio_id,
           dia_semana: Number(horarioForm.dia_semana),
         };
 
@@ -2099,26 +2150,65 @@ export default function AgendaPage() {
           return orden.indexOf(a) - orden.indexOf(b);
         });
 
-        const payloads = diasOrdenados.map((dia) => ({
-          ...payloadBase,
-          dia_semana: Number(dia),
-        }));
+        const payloads = serviciosObjetivo.flatMap((servicio) =>
+          diasOrdenados.map((dia) => ({
+            ...payloadBase,
+            servicio_id: servicio.id,
+            dia_semana: Number(dia),
+          }))
+        );
 
-        respuesta = await supabase
-          .from("agenda_horarios")
-          .insert(payloads);
+        /*
+          Evita duplicar exactamente el mismo horario si el usuario
+          aplica "Todos los servicios" después de haber configurado
+          alguno de forma individual.
+        */
+        const payloadsNuevos = payloads.filter((payload) => {
+          return !horarios.some((registro) => {
+            return (
+              String(registro.servicio_id) ===
+                String(payload.servicio_id) &&
+              Number(registro.dia_semana) ===
+                Number(payload.dia_semana) &&
+              normalizar(registro.instructor || "") ===
+                normalizar(payload.instructor || "") &&
+              String(registro.hora_inicio || "").slice(0, 5) ===
+                String(payload.hora_inicio || "").slice(0, 5) &&
+              String(registro.hora_fin || "").slice(0, 5) ===
+                String(payload.hora_fin || "").slice(0, 5) &&
+              String(registro.fecha_desde || "") ===
+                String(payload.fecha_desde || "") &&
+              String(registro.fecha_hasta || "") ===
+                String(payload.fecha_hasta || "")
+            );
+          });
+        });
+
+        if (payloadsNuevos.length === 0) {
+          respuesta = { error: null };
+        } else {
+          respuesta = await supabase
+            .from("agenda_horarios")
+            .insert(payloadsNuevos);
+        }
       } else {
         respuesta = await supabase
           .from("agenda_horarios")
           .insert([
             {
               ...payloadBase,
+              servicio_id: horarioForm.servicio_id,
               dia_semana: Number(horarioForm.dia_semana),
             },
           ]);
       }
 
       if (respuesta.error) throw respuesta.error;
+
+      const cantidadServiciosAplicados =
+        seleccionTodosServicios
+          ? serviciosObjetivo.length
+          : 1;
 
       setHorarioForm(
         esSalonBelleza
@@ -2141,6 +2231,14 @@ export default function AgendaPage() {
           esSalonBelleza
             ? "Configuración actualizada para los días seleccionados."
             : "Horario actualizado."
+        );
+      } else if (seleccionTodosServicios) {
+        alert(
+          `Plantilla creada para ${cantidadServiciosAplicados} servicio${
+            cantidadServiciosAplicados === 1 ? "" : "s"
+          } en ${diasHorarioSalon.length} día${
+            diasHorarioSalon.length === 1 ? "" : "s"
+          }.`
         );
       } else if (esSalonBelleza) {
         alert(
@@ -5098,20 +5196,30 @@ export default function AgendaPage() {
                 <select
                   value={horarioForm.servicio_id}
                   onChange={(e) => {
+                    const valor = e.target.value;
                     const servicio = servicios.find(
-                      (item) => item.id === e.target.value
+                      (item) => String(item.id) === String(valor)
                     );
 
                     setHorarioForm({
                       ...horarioForm,
-                      servicio_id: e.target.value,
+                      servicio_id: valor,
                       capacidad:
-                        servicio?.capacidad_default || horarioForm.capacidad,
+                        valor === "__todos__"
+                          ? horarioForm.capacidad || 1
+                          : servicio?.capacidad_default || horarioForm.capacidad,
                     });
                   }}
                   style={s.input}
                 >
                   <option value="">Seleccionar</option>
+
+                  {esSalonBelleza && !horarioEditandoId && (
+                    <option value="__todos__">
+                      Todos los servicios
+                    </option>
+                  )}
+
                   {servicios
                     .filter((item) => item.activo)
                     .map((servicio) => (
@@ -5120,6 +5228,24 @@ export default function AgendaPage() {
                       </option>
                     ))}
                 </select>
+
+                {esSalonBelleza &&
+                  !horarioEditandoId &&
+                  horarioForm.servicio_id === "__todos__" && (
+                    <span
+                      style={{
+                        display: "block",
+                        marginTop: 6,
+                        color: "#16834f",
+                        fontSize: 10,
+                        fontWeight: 800,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      Se aplicará el mismo horario a todos los servicios
+                      activos del profesional seleccionado.
+                    </span>
+                  )}
               </Campo>
 
               <div style={s.formGrid} className={esSalonBelleza ? "agenda-horario-grid" : ""}>
@@ -5135,6 +5261,85 @@ export default function AgendaPage() {
                     <span style={s.label}>
                       Días de atención
                     </span>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 7,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {[
+                        {
+                          label: "Lun a Vie",
+                          dias: [1, 2, 3, 4, 5],
+                        },
+                        {
+                          label: "Lun a Sáb",
+                          dias: [1, 2, 3, 4, 5, 6],
+                        },
+                        {
+                          label: "Todos los días",
+                          dias: [1, 2, 3, 4, 5, 6, 0],
+                        },
+                      ].map((plantilla) => {
+                        const activa =
+                          plantilla.dias.length ===
+                            diasHorarioSalon.length &&
+                          plantilla.dias.every((dia) =>
+                            diasHorarioSalon.includes(dia)
+                          );
+
+                        return (
+                          <button
+                            key={plantilla.label}
+                            type="button"
+                            onClick={() =>
+                              setDiasHorarioSalon([
+                                ...plantilla.dias,
+                              ])
+                            }
+                            style={{
+                              minHeight: 34,
+                              padding: "0 11px",
+                              borderRadius: 9,
+                              border: activa
+                                ? "1px solid #16834f"
+                                : "1px solid #d9e2dd",
+                              background: activa
+                                ? "#eaf8f1"
+                                : "#ffffff",
+                              color: activa
+                                ? "#11623d"
+                                : "#46534c",
+                              fontSize: 10,
+                              fontWeight: 900,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {plantilla.label}
+                          </button>
+                        );
+                      })}
+
+                      <button
+                        type="button"
+                        onClick={() => setDiasHorarioSalon([])}
+                        style={{
+                          minHeight: 34,
+                          padding: "0 11px",
+                          borderRadius: 9,
+                          border: "1px solid #e3e8e5",
+                          background: "#f7f9f8",
+                          color: "#66736b",
+                          fontSize: 10,
+                          fontWeight: 900,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Limpiar
+                      </button>
+                    </div>
 
                     <div
                       style={{
@@ -5195,8 +5400,16 @@ export default function AgendaPage() {
                       {horarioEditandoId
                         ? `Días actuales: ${resumirDias(
                             diasHorarioSalon
-                          )}. Puedes agregar o quitar días antes de guardar los cambios.`
-                        : "Selecciona los días en que este profesional atiende este servicio."}
+                          )}. Puedes usar una plantilla o ajustar días manualmente.`
+                        : diasHorarioSalon.length > 0
+                        ? `Plantilla actual: ${resumirDias(
+                            diasHorarioSalon
+                          )}${
+                            diasHorarioSalon.includes(0)
+                              ? "."
+                              : " · Domingo cerrado."
+                          }`
+                        : "Usa una plantilla rápida o selecciona los días manualmente."}
                     </span>
                   </div>
                 ) : (
