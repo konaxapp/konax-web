@@ -172,6 +172,18 @@ function resumirDias(dias = []) {
     .join(", ");
 }
 
+function detectarJornadaSalon(dias = []) {
+  const normalizados = [...new Set((dias || []).map(Number))].sort();
+  const esIgual = (objetivo) =>
+    normalizados.length === objetivo.length &&
+    objetivo.every((dia) => normalizados.includes(dia));
+
+  if (normalizados.length === 0) return "";
+  if (esIgual([1, 2, 3, 4, 5])) return "lunes_viernes";
+  if (esIgual([1, 2, 3, 4, 5, 6])) return "lunes_sabado";
+  return "personalizado";
+}
+
 function formatoDuracionServicio(minutos) {
   const total = Math.max(
     0,
@@ -393,6 +405,7 @@ export default function AgendaPage() {
 
   const [horarioForm, setHorarioForm] = useState(HORARIO_INICIAL);
   const [diasHorarioSalon, setDiasHorarioSalon] = useState([]);
+  const [jornadaHorarioSalon, setJornadaHorarioSalon] = useState("");
   const [horarioEditandoId, setHorarioEditandoId] = useState(null);
   const [horarioEditandoIds, setHorarioEditandoIds] = useState([]);
 
@@ -604,6 +617,7 @@ export default function AgendaPage() {
         setServicioForm(SERVICIO_SALON_INICIAL);
         setHorarioForm(HORARIO_SALON_INICIAL);
         setDiasHorarioSalon([]);
+        setJornadaHorarioSalon("");
       }
 
       if (typeof window !== "undefined") {
@@ -2218,6 +2232,7 @@ export default function AgendaPage() {
 
       if (esSalonBelleza) {
         setDiasHorarioSalon([]);
+        setJornadaHorarioSalon("");
       }
 
       setHorarioEditandoId(null);
@@ -2265,6 +2280,7 @@ export default function AgendaPage() {
       setDiasHorarioSalon([
         Number(horario.dia_semana ?? 5),
       ]);
+      setJornadaHorarioSalon("personalizado");
     }
 
     setHorarioForm({
@@ -2298,11 +2314,12 @@ export default function AgendaPage() {
         : [base.id]
     );
 
-    setDiasHorarioSalon(
-      Array.isArray(grupo.dias)
-        ? grupo.dias
-        : [Number(base.dia_semana ?? 5)]
-    );
+    const diasGrupo = Array.isArray(grupo.dias)
+      ? grupo.dias
+      : [Number(base.dia_semana ?? 5)];
+
+    setDiasHorarioSalon(diasGrupo);
+    setJornadaHorarioSalon(detectarJornadaSalon(diasGrupo));
 
     setHorarioForm({
       servicio_id: base.servicio_id || "",
@@ -5264,153 +5281,206 @@ export default function AgendaPage() {
 
                     <div
                       style={{
-                        display: "flex",
-                        gap: 7,
-                        flexWrap: "wrap",
+                        display: "grid",
+                        gap: 10,
+                        padding: 12,
+                        border: "1px solid #dfe8e3",
+                        borderRadius: 14,
+                        background:
+                          "linear-gradient(180deg,#fbfdfc 0%,#f5f9f7 100%)",
                       }}
                     >
-                      {[
-                        {
-                          label: "Lun a Vie",
-                          dias: [1, 2, 3, 4, 5],
-                        },
-                        {
-                          label: "Lun a Sáb",
-                          dias: [1, 2, 3, 4, 5, 6],
-                        },
-                        {
-                          label: "Todos los días",
-                          dias: [1, 2, 3, 4, 5, 6, 0],
-                        },
-                      ].map((plantilla) => {
-                        const activa =
-                          plantilla.dias.length ===
-                            diasHorarioSalon.length &&
-                          plantilla.dias.every((dia) =>
-                            diasHorarioSalon.includes(dia)
-                          );
-
-                        return (
-                          <button
-                            key={plantilla.label}
-                            type="button"
-                            onClick={() =>
-                              setDiasHorarioSalon([
-                                ...plantilla.dias,
-                              ])
-                            }
-                            style={{
-                              minHeight: 34,
-                              padding: "0 11px",
-                              borderRadius: 9,
-                              border: activa
-                                ? "1px solid #16834f"
-                                : "1px solid #d9e2dd",
-                              background: activa
-                                ? "#eaf8f1"
-                                : "#ffffff",
-                              color: activa
-                                ? "#11623d"
-                                : "#46534c",
-                              fontSize: 10,
-                              fontWeight: 900,
-                              cursor: "pointer",
-                            }}
-                          >
-                            {plantilla.label}
-                          </button>
-                        );
-                      })}
-
-                      <button
-                        type="button"
-                        onClick={() => setDiasHorarioSalon([])}
+                      <div
                         style={{
-                          minHeight: 34,
-                          padding: "0 11px",
-                          borderRadius: 9,
-                          border: "1px solid #e3e8e5",
-                          background: "#f7f9f8",
-                          color: "#66736b",
-                          fontSize: 10,
-                          fontWeight: 900,
-                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 10,
+                          flexWrap: "wrap",
                         }}
                       >
-                        Limpiar
-                      </button>
-                    </div>
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(7,minmax(44px,1fr))",
-                        gap: 6,
-                      }}
-                    >
-                      {[1, 2, 3, 4, 5, 6, 0].map((dia) => {
-                        const activo =
-                          diasHorarioSalon.includes(dia);
-
-                        return (
-                          <button
-                            key={dia}
-                            type="button"
-                            onClick={() => {
-                              setDiasHorarioSalon((actual) =>
-                                actual.includes(dia)
-                                  ? actual.filter(
-                                      (item) => item !== dia
-                                    )
-                                  : [...actual, dia]
-                              );
-                            }}
+                        <div>
+                          <strong
                             style={{
-                              minHeight: 40,
-                              borderRadius: 9,
-                              border: activo
-                                ? "1px solid #16834f"
-                                : "1px solid #d9e2dd",
-                              background: activo
-                                ? "#16834f"
-                                : "#fff",
-                              color: activo
-                                ? "#fff"
-                                : "#46534c",
-                              opacity: 1,
-                              fontSize: 11,
-                              fontWeight: 900,
-                              cursor: "pointer",
+                              display: "block",
+                              color: "#21332a",
+                              fontSize: 12,
+                              marginBottom: 2,
                             }}
                           >
-                            {nombreDia(dia).slice(0, 3)}
-                          </button>
-                        );
-                      })}
-                    </div>
+                            Jornada semanal
+                          </strong>
+                          <span
+                            style={{
+                              color: "#7a877f",
+                              fontSize: 10,
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            Elige una jornada y KONAX aplicará los días automáticamente.
+                          </span>
+                        </div>
 
-                    <span
-                      style={{
-                        color: "#7a877f",
-                        fontSize: 11,
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      {horarioEditandoId
-                        ? `Días actuales: ${resumirDias(
-                            diasHorarioSalon
-                          )}. Puedes usar una plantilla o ajustar días manualmente.`
-                        : diasHorarioSalon.length > 0
-                        ? `Plantilla actual: ${resumirDias(
-                            diasHorarioSalon
-                          )}${
-                            diasHorarioSalon.includes(0)
-                              ? "."
-                              : " · Domingo cerrado."
-                          }`
-                        : "Usa una plantilla rápida o selecciona los días manualmente."}
-                    </span>
+                        {diasHorarioSalon.length > 0 && (
+                          <span
+                            style={{
+                              padding: "6px 9px",
+                              borderRadius: 999,
+                              background: "#e9f7ef",
+                              color: "#12613d",
+                              border: "1px solid #cdebdc",
+                              fontSize: 9,
+                              fontWeight: 900,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {resumirDias(diasHorarioSalon)}
+                          </span>
+                        )}
+                      </div>
+
+                      <select
+                        value={jornadaHorarioSalon}
+                        onChange={(e) => {
+                          const valor = e.target.value;
+                          setJornadaHorarioSalon(valor);
+
+                          if (valor === "lunes_viernes") {
+                            setDiasHorarioSalon([1, 2, 3, 4, 5]);
+                            return;
+                          }
+
+                          if (valor === "lunes_sabado") {
+                            setDiasHorarioSalon([1, 2, 3, 4, 5, 6]);
+                            return;
+                          }
+
+                          if (valor === "") {
+                            setDiasHorarioSalon([]);
+                          }
+                        }}
+                        style={{
+                          ...s.input,
+                          minHeight: 46,
+                          borderRadius: 11,
+                          fontWeight: 800,
+                          color: jornadaHorarioSalon
+                            ? "#263a30"
+                            : "#7b8780",
+                          background: "#ffffff",
+                        }}
+                      >
+                        <option value="">Seleccionar jornada</option>
+                        <option value="lunes_viernes">
+                          Lunes a viernes
+                        </option>
+                        <option value="lunes_sabado">
+                          Lunes a sábado
+                        </option>
+                        <option value="personalizado">
+                          Personalizar días
+                        </option>
+                      </select>
+
+                      {jornadaHorarioSalon === "personalizado" && (
+                        <div
+                          style={{
+                            display: "grid",
+                            gap: 7,
+                            paddingTop: 2,
+                          }}
+                        >
+                          <span
+                            style={{
+                              color: "#59675f",
+                              fontSize: 10,
+                              fontWeight: 800,
+                            }}
+                          >
+                            Selecciona los días
+                          </span>
+
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns:
+                                "repeat(7,minmax(44px,1fr))",
+                              gap: 6,
+                            }}
+                          >
+                            {[1, 2, 3, 4, 5, 6, 0].map((dia) => {
+                              const activo =
+                                diasHorarioSalon.includes(dia);
+
+                              return (
+                                <button
+                                  key={dia}
+                                  type="button"
+                                  onClick={() => {
+                                    setDiasHorarioSalon((actual) =>
+                                      actual.includes(dia)
+                                        ? actual.filter(
+                                            (item) => item !== dia
+                                          )
+                                        : [...actual, dia]
+                                    );
+                                  }}
+                                  style={{
+                                    minHeight: 38,
+                                    borderRadius: 9,
+                                    border: activo
+                                      ? "1px solid #16834f"
+                                      : "1px solid #d9e2dd",
+                                    background: activo
+                                      ? "#16834f"
+                                      : "#fff",
+                                    color: activo
+                                      ? "#fff"
+                                      : "#46534c",
+                                    fontSize: 10,
+                                    fontWeight: 900,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  {nombreDia(dia).slice(0, 3)}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {jornadaHorarioSalon &&
+                        jornadaHorarioSalon !== "personalizado" && (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 7,
+                              padding: "8px 10px",
+                              borderRadius: 10,
+                              background: "#ffffff",
+                              border: "1px solid #e4ebe7",
+                              color: "#647269",
+                              fontSize: 10,
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 7,
+                                height: 7,
+                                borderRadius: "50%",
+                                background: "#16834f",
+                                flex: "0 0 7px",
+                              }}
+                            />
+                            {jornadaHorarioSalon === "lunes_sabado"
+                              ? "Domingo cerrado automáticamente."
+                              : "Sábado y domingo quedan cerrados automáticamente."}
+                          </div>
+                        )}
+                    </div>
                   </div>
                 ) : (
                   <Campo label="Día">
@@ -5588,6 +5658,7 @@ export default function AgendaPage() {
                       setHorarioEditandoId(null);
                       setHorarioEditandoIds([]);
                       setDiasHorarioSalon([]);
+                      setJornadaHorarioSalon("");
                       setHorarioForm(
                         esSalonBelleza
                           ? HORARIO_SALON_INICIAL
